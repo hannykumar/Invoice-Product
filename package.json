@@ -18,7 +18,8 @@
     "db:migrate": "node --experimental-strip-types packages/platform/src/migrations.ts up",
     "db:rollback": "node --experimental-strip-types packages/platform/src/migrations.ts down",
     "db:seed": "node --experimental-strip-types packages/platform/src/seed.ts",
-    "demo:masters": "node --experimental-strip-types packages/masters/src/demo.ts"
+    "demo:masters": "node --experimental-strip-types packages/masters/src/demo.ts",
+    "demo:inbox": "node --experimental-strip-types packages/purchasing/src/demo.ts"
   },
   "dependencies": {
     "pg": "^8.16.3"

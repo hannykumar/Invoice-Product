@@ -16,7 +16,8 @@ This one command starts the local PostgreSQL container, installs development dep
 - `packages/platform`: tenancy, permissions, approvals, audit, idempotency, exceptions, migrations and external-connector contracts.
 - `packages/accounting`, `packages/sales`: GPT 1-owned modules (reserved).
 - `packages/masters`: GPT 3-owned business master data (issue #5).
-- `packages/purchasing`, `packages/gst`, `packages/transport`: GPT 3-owned modules (reserved).
+- `packages/purchasing`: GPT 3-owned purchase intake and validation (issue #15 onwards).
+- `packages/gst`, `packages/transport`: GPT 3-owned modules (reserved).
 - `docs/contracts`: versioned contracts shared across modules.
 
 The production persistence target is PostgreSQL, with a transactional outbox for asynchronous work. The development store is deliberately in-memory so modules and connector mocks can be tested without services. Production adapter and storage wiring must preserve the contracts in `docs/contracts`.
@@ -27,6 +28,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run db:migrate`, `npm run db:rollback`, `npm run db:seed` — PostgreSQL migration lifecycle commands.
 - `npm run dev` — starts the API composition root once its route layer exists.
 - `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
+- `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
 
 ## Collaboration rules
 
