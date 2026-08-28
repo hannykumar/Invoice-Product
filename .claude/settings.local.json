@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(git rm *)",
+      "Bash(git commit --allow-empty -q -m 'chore: initialise repository *)"
+    ]
+  }
+}

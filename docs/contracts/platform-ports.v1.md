@@ -5,7 +5,7 @@
 | **Owner** | GPT 2 — issues #3 (identity and permissions) and #6 (approvals, audit, idempotency) |
 | **Written by** | GPT 1 while #3 and #6 are unbuilt, so #4 could proceed. **This is a proposal, not GPT 2's final word.** |
 | **Consumed by** | GPT 1 (#4, #9, #11, #12, #20), GPT 3 (#17, #45) |
-| **Status** | **Mocked by GPT 1.** Mocks live in `packages/ledger/src/adapters/memory.ts`. |
+| **Status** | **Mocked by GPT 1**, pending reconciliation with GPT 2's published `packages/platform`. See §7. |
 
 GPT 2 may change any of this. When it does, the change lands in the port interfaces in
 `packages/ledger/src/ports.ts` and nothing in the domain or the service moves, which is the whole
@@ -102,3 +102,37 @@ owning module (#9 for sales, #17 for purchases). Recorded here so no one adds it
 | 3 | Real `IdempotencyPort` from #6 with the rollback semantics in section 4 | #4 definition of done |
 | 4 | Row-level security policies on the ledger tables from #3 | #4 security review |
 | 5 | Migration runner and CI from #2 | Running `0001_ledger.sql` anywhere but by hand |
+
+## 7. Reconciliation with GPT 2's published platform (read 28 August 2026)
+
+GPT 2 has published `packages/platform` on `codex/gpt2-platform-banking` at `dc0969d`, covering
+issues #2, #3, #6 and #8. The stack agrees with this branch: TypeScript, Node type-stripping,
+`node:test`, npm workspaces, `pg`. Adopting it is an adapter change, not a rewrite.
+
+### What lines up
+
+| Their type | My port | Fit |
+| --- | --- | --- |
+| `RequestContext { companyId, branchId, actorId, permissions, sessionId }` | `ActorContext { companyId, branchId, userId, permissions }` | Direct, with `actorId` → `userId` and their `ReadonlySet` read as an array |
+| `PlatformError` codes `FORBIDDEN`, `TENANT_ISOLATION`, `NOT_FOUND`, `IDEMPOTENCY_CONFLICT` | `DomainError` kinds `FORBIDDEN`, `NOT_FOUND`, `CONFLICT` | Direct, once `TENANT_ISOLATION` maps to `FORBIDDEN` |
+| Their payload redaction in `platform.ts` | My mock's "no secrets" rule | Theirs is stricter; **use theirs** and drop mine |
+| Approval policy by action, risk and amount | Not consumed by the ledger | Nothing to do; approvals happen before the ledger is called |
+
+### Two conflicts, raised on issue #3 and awaiting GPT 2's decision
+
+1. **`Permission` is a closed union of six strings.** The ledger needs fourteen more and every
+   other lane will add its own, so every lane's pull request would edit GPT 2's file. Proposed a
+   namespaced template type or a registry. **GPT 2 decides; this branch follows.**
+2. **Audit event shape.** Theirs carries `correlationId`, `before`, `after`, `reason`; mine
+   carries `subjectType`, `subjectId`, `summary`, `details`, `overrideReason`. Proposed keeping
+   theirs and adding `subjectType`, `subjectId` and a plain-language `summary`, which is additive
+   for them and removes a mapping layer here.
+
+### Still open from §6
+
+Their `PlatformCommandService` holds idempotency keys in a map outside any transaction, so today a
+rolled-back command would **not** free its key. This branch has a test asserting it does, so that a
+caller who fixes bad input may reuse the key. Flagged on #3.
+
+Until these are settled the ledger keeps running against the mocks in
+`packages/ledger/src/adapters/memory.ts`, and no work in the GPT 1 lane is blocked.
