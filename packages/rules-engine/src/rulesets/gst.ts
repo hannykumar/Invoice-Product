@@ -139,9 +139,9 @@ const ewayFor = (
  * a first version, a second that takes over on a later date, and a state-specific override that
  * beats both inside one state.
  */
-const ewayV1 = ewayFor('2026.04.01', '2026-04-01', '2026-06-30', PLACEHOLDER_EWB_THRESHOLD);
-const ewayV2 = ewayFor('2026.07.01', '2026-07-01', null, PLACEHOLDER_EWB_THRESHOLD_V2);
-const ewayDelhi = ewayFor('2026.04.01-DL', '2026-04-01', null, PLACEHOLDER_EWB_THRESHOLD_DELHI, '07');
+export const ewayV1 = ewayFor('2026.04.01', '2026-04-01', '2026-06-30', PLACEHOLDER_EWB_THRESHOLD);
+export const ewayV2 = ewayFor('2026.07.01', '2026-07-01', null, PLACEHOLDER_EWB_THRESHOLD_V2);
+export const ewayDelhi = ewayFor('2026.04.01-DL', '2026-04-01', null, PLACEHOLDER_EWB_THRESHOLD_DELHI, '07');
 
 export const GST_RULE_SET: RuleSet = {
   id: 'in.gst',

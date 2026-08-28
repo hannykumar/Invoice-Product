@@ -27,6 +27,7 @@ from deterministic, versioned, testable rules.
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
 | [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
 | [`packages/gst-calc`](packages/gst-calc) | #25 | Deterministic GST computation, place of supply and tax classification |
+| [`packages/compliance-register`](packages/compliance-register) | #54 | The official sources behind every compliance rule, and the gate that enforces them |
 | [`packages/ux-vocabulary`](packages/ux-vocabulary) | #46 | The only supported way to produce user-facing wording |
 | [`packages/platform`](packages/platform) | #2, #3, #6, #8, #21 | Tenancy, permissions, approvals, audit, connectors and banking import drafts |
 | [`ops/security`](ops/security) | #40 | Encryption, privacy requests, secure logging, backups and restore drills |

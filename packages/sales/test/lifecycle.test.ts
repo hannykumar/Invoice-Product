@@ -418,11 +418,28 @@ test('one business cannot see or issue another business’s bills', async () => 
   );
 });
 
-test('a services bill needs its place of supply confirmed, because no rule covers services yet', async () => {
+test('a services bill takes its place of supply from the customer, under the approved rule', async () => {
   const till = await makeTill();
   const draft = await till.service.createDraft(till.actor, {
     idempotencyKey: 'k21a',
     input: crateBill({
+      supplyKind: 'SERVICES',
+      lines: [{ lineId: 'l1', itemId: 'REPAIR', quantity: qty('1', 'JOB'), unitPrice: inr(1000), priceBasis: 'EXCLUSIVE' }],
+    }),
+  });
+  // IGST Act section 12(2), approved against the register in #54: a service to a registered
+  // customer counts where that customer is. ABC Traders is in Delhi, and so is the seller.
+  assert.equal(draft.state, 'DRAFT');
+  assert.equal(draft.pricing?.placeOfSupplyStateCode, '07');
+  assert.equal(draft.pricing?.split, 'CGST_SGST');
+});
+
+test('a services bill to a customer with no recorded state is still refused', async () => {
+  const till = await makeTill();
+  const draft = await till.service.createDraft(till.actor, {
+    idempotencyKey: 'k21c',
+    input: crateBill({
+      partyId: WALK_IN,
       supplyKind: 'SERVICES',
       lines: [{ lineId: 'l1', itemId: 'REPAIR', quantity: qty('1', 'JOB'), unitPrice: inr(1000), priceBasis: 'EXCLUSIVE' }],
     }),
@@ -448,8 +465,6 @@ test('a services bill posts to the services income account and reserves no stock
     idempotencyKey: 'k21',
     input: crateBill({
       supplyKind: 'SERVICES',
-      // The rule set has no services place-of-supply rule yet, so a person confirms it. The
-      // calculator refuses to guess rather than falling back to the delivery address.
       placeOfSupplyStateCode: '07',
       lines: [{ lineId: 'l1', itemId: 'REPAIR', quantity: qty('1', 'JOB'), unitPrice: inr(1000), priceBasis: 'EXCLUSIVE' }],
     }),

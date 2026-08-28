@@ -149,6 +149,10 @@ export class RulesEngine {
         considered.push({ ruleId: rule.id, ruleVersion: rule.version, used: false, reason: 'not-approved' });
         continue;
       }
+      if (rule.appliesWhen !== undefined && !rule.appliesWhen(input.facts)) {
+        considered.push({ ruleId: rule.id, ruleVersion: rule.version, used: false, reason: 'does-not-apply' });
+        continue;
+      }
       eligible.push(rule);
     }
 

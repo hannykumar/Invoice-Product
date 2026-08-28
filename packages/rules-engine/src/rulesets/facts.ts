@@ -47,6 +47,17 @@ export const TRANSPORT_FACTS: readonly FactDefinition[] = [
     'Short distances can be treated differently.', 'Kam doori ka niyam alag ho sakta hai.'),
 ];
 
+export const PLACE_OF_SUPPLY_FACTS: readonly FactDefinition[] = [
+  f('supply.placeOfSupplyStateName', 'text', 'The name of the state this sale counts in', 'Jis rajya ki yeh bikri hai, uska naam',
+    'The union territory tax applies only where the Union Territory GST Act says it does, and that Act names territories rather than codes.',
+    'Union territory tax wahin lagta hai jahan UTGST Act kehta hai, aur woh Act code nahin, naam batata hai.'),
+  f('supply.recipientStateCode', 'stateCode', "The customer's state", 'Customer ka rajya',
+    'A service counts where the customer is.', 'Service wahin maani jaati hai jahan customer hai.'),
+  f('supply.involvesMovement', 'boolean', 'Do the goods travel to the customer', 'Kya maal customer tak jaata hai',
+    'The rule we hold covers goods that travel; goods that do not move follow a different rule we have not added.',
+    'Hamara niyam chalte hue maal ke liye hai; jo maal nahin chalta uska niyam alag hai jo abhi joda nahin gaya.'),
+];
+
 export const MONEY_POLICY_FACTS: readonly FactDefinition[] = [
   f('invoice.totalBeforeRounding', 'money', 'Bill total before rounding', 'Round karne se pehle ka total',
     'We need the exact total to work out the rounding.', 'Rounding nikaalne ke liye sahi total chahiye.'),
@@ -72,6 +83,7 @@ export const STOCK_FACTS: readonly FactDefinition[] = [
 export const ALL_FACTS: readonly FactDefinition[] = [
   ...SUPPLY_FACTS,
   SUPPLIER_REGISTRATION_FACT,
+  ...PLACE_OF_SUPPLY_FACTS,
   ...TRANSPORT_FACTS,
   ...MONEY_POLICY_FACTS,
   ...STOCK_FACTS,

@@ -13,7 +13,7 @@ import { DomainError, fromDecimalString, isoDate, rupees, toDecimalString } from
 import { FactSet } from '../src/facts.ts';
 import { RulesEngine } from '../src/engine.ts';
 import { RuleRegistry, validateRuleSet, type RuleSet } from '../src/registry.ts';
-import { shippedRegistry, GST_RULE_SET, GST_RULE_SET_V2, POLICY_RULE_SET, GST_PLACEHOLDER_THRESHOLDS } from '../src/rulesets/index.ts';
+import { shippedRegistry, GST_RULE_SET, GST_RULE_SET_V2, GST_RULE_SET_APPROVED, POLICY_RULE_SET, GST_PLACEHOLDER_THRESHOLDS } from '../src/rulesets/index.ts';
 import { toExceptionDraft } from '../src/exceptions.ts';
 import type { Rule } from '../src/rule.ts';
 import { lintUserFacingText } from '../../ux-vocabulary/src/lint.ts';
@@ -124,7 +124,8 @@ test('a replay reports a mismatch when a released rule set has been edited', () 
     registry: new RuleRegistry()
       .register(POLICY_RULE_SET)
       .register(tamper(GST_RULE_SET))
-      .register(tamper(GST_RULE_SET_V2)),
+      .register(tamper(GST_RULE_SET_V2))
+      .register(tamper(GST_RULE_SET_APPROVED)),
     ruleSetId: 'in.gst',
     mode: 'development',
   });
@@ -261,13 +262,14 @@ test('a topic with no rule at all is refused, not approximated', () => {
 
 test('a rule can refuse a case it does not cover, rather than answering wrongly', () => {
   const engine = devEngine('in.gst');
+  // A service with no recorded customer state: the approved services rule needs it, and refuses.
   const { decision } = engine.evaluate({
     topic: 'gst.place_of_supply',
-    facts: FactSet.of({ 'supply.type': 'SERVICES', 'supply.deliveryStateCode': '06' }),
+    facts: FactSet.of({ 'supply.type': 'SERVICES', 'supply.recipientRegistered': true }),
     documentDate: isoDate('2026-05-12'),
   });
-  assert.equal(decision.outcome, 'CANNOT_DECIDE', 'services are not covered by the goods rule');
-  assert.deepEqual(decision.missingFacts.map((m) => m.factId), ['supply.placeOfSupplyStateCode']);
+  assert.equal(decision.outcome, 'CANNOT_DECIDE');
+  assert.deepEqual(decision.missingFacts.map((m) => m.factId), ['supply.recipientStateCode']);
 });
 
 test('the worked examples come out right (golden cases)', () => {
@@ -277,7 +279,11 @@ test('the worked examples come out right (golden cases)', () => {
   // Worked example 3: Delhi seller, Delhi buyer, two separate GST amounts.
   const intra = gst.evaluate({
     topic: 'gst.tax_split',
-    facts: FactSet.of({ 'supply.supplierStateCode': '07', 'supply.placeOfSupplyStateCode': '07' }),
+    facts: FactSet.of({
+      'supply.supplierStateCode': '07',
+      'supply.placeOfSupplyStateCode': '07',
+      'supply.placeOfSupplyStateName': 'Delhi',
+    }),
     documentDate: isoDate('2026-04-10'),
   });
   assert.equal(intra.decision.computed.split, 'CGST_SGST');

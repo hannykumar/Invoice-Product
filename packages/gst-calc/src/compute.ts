@@ -37,6 +37,9 @@ import {
   type ExceptionDraft,
   type ReviewState,
 } from '@invoice/rules-engine';
+// GPT 3's master data (#5). Imported by path because packages/masters declares no exports field,
+// which is the convention their lane and GPT 2's already use for cross-package imports.
+import { GST_STATE_CODES } from '../../masters/src/validation.ts';
 import type { MasterDataReader, TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
 
@@ -237,11 +240,18 @@ export class GstCalculator {
     if (placeOfSupply === null) return this.#refuse(input, reasons, decisions);
 
     // 3. Which taxes apply?
+    // The name comes from GPT 3's master data (#5). The Union Territory GST Act names territories
+    // rather than codes, so the rule needs the name, not the number.
+    const placeOfSupplyName = GST_STATE_CODES[placeOfSupply]?.name;
     const splitDecision = this.#engine.evaluate({
       topic: 'gst.tax_split',
       facts: FactSet.of(
-        { 'supply.supplierStateCode': company.stateCode, 'supply.placeOfSupplyStateCode': placeOfSupply },
-        'DERIVED',
+        {
+          'supply.supplierStateCode': company.stateCode,
+          'supply.placeOfSupplyStateCode': placeOfSupply,
+          ...(placeOfSupplyName === undefined ? {} : { 'supply.placeOfSupplyStateName': placeOfSupplyName }),
+        },
+        'MASTER_DATA',
       ),
       documentDate: input.documentDate,
       stateCode: company.stateCode,
@@ -318,7 +328,7 @@ export class GstCalculator {
 
   #resolvePlaceOfSupply(
     input: ComputeInput,
-    party: { stateCode: string | null },
+    party: { stateCode: string | null; registration: import('./master-data-port.ts').PartyRegistration },
     decisions: Decision[],
     reasons: BlockedReason[],
   ): string | null {
@@ -326,10 +336,17 @@ export class GstCalculator {
       return input.placeOfSupplyStateCode;
     }
     const deliveryState = input.deliveryStateCode ?? party.stateCode;
-    const facts =
-      deliveryState === null || deliveryState === undefined
-        ? FactSet.of({ 'supply.type': input.supplyKind }, 'USER')
-        : FactSet.of({ 'supply.type': input.supplyKind, 'supply.deliveryStateCode': deliveryState }, 'MASTER_DATA');
+    const registered =
+      party.registration === 'UNKNOWN' ? undefined : party.registration !== 'UNREGISTERED';
+    const facts = FactSet.of(
+      {
+        'supply.type': input.supplyKind,
+        ...(deliveryState === null || deliveryState === undefined ? {} : { 'supply.deliveryStateCode': deliveryState }),
+        ...(registered === undefined ? {} : { 'supply.recipientRegistered': registered }),
+        ...(party.stateCode === null ? {} : { 'supply.recipientStateCode': party.stateCode }),
+      },
+      'MASTER_DATA',
+    );
     const decision = this.#engine.evaluate({
       topic: 'gst.place_of_supply',
       facts,

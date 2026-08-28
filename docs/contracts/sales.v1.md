@@ -94,7 +94,9 @@ never unmakes a bill; it comes back as a retryable status, worded by `gov.servic
 
 ## Known limitations
 
-- Services place of supply has no rule yet, so a services bill asks a person to confirm the state
-  rather than falling back to a delivery address. Tracked with #54.
+- Services place of supply follows the general rule only (IGST Act section 12(2), approved under
+  #54). The specific services in sections 12(3) to 12(14) — immovable property, transport, events,
+  telecom and the rest — are refused, and a services bill for a customer with no recorded state
+  asks a person rather than guessing.
 - Recurring invoices, part-delivery and proforma conversion are out of scope for this issue.
 - The posting template covers domestic sales only; exports and SEZ are refused upstream in #25.

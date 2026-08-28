@@ -407,6 +407,13 @@ test('the decisions behind the numbers are returned with the answer', () => {
   for (const d of result.decisions) {
     assert.ok(d.ruleId !== null, 'every decision names the rule that made it');
     assert.ok(d.evidence.length > 0, 'every decision shows what it looked at');
-    assert.equal(d.ruleReviewState, 'DRAFT', 'these rules are not yet reviewed, and the answer says so');
   }
+  const byTopic = new Map(result.decisions.map((d) => [d.topic, d]));
+  // Place of supply and the split are approved against the register (#54) and cite a statute.
+  assert.equal(byTopic.get('gst.place_of_supply')?.ruleReviewState, 'APPROVED');
+  assert.equal(byTopic.get('gst.place_of_supply')?.sourceRef, 'igst-act-2017-s10-1-a');
+  assert.equal(byTopic.get('gst.tax_split')?.ruleReviewState, 'APPROVED');
+  assert.equal(byTopic.get('gst.tax_split')?.sourceRef, 'igst-act-2017-s8');
+  // The composition question still has no source, and the answer says so rather than hiding it.
+  assert.equal(byTopic.get('gst.composition.charging')?.ruleReviewState, 'DRAFT');
 });
