@@ -6,6 +6,7 @@
 # Reserved ownership boundaries
 /packages/accounting/ @hannykumar
 /packages/sales/ @hannykumar
+/packages/masters/ @hannykumar
 /packages/purchasing/ @hannykumar
 /packages/gst/ @hannykumar
 /packages/transport/ @hannykumar
