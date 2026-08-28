@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/rules-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #7 [E07] — deterministic, effective-dated, versioned rules that return explainable decisions. No model ever decides a legal or financial outcome.",
+  "exports": { ".": "./src/index.ts" }
+}
