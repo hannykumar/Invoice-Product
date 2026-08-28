@@ -30,6 +30,12 @@ export const SUPPLY_FACTS: readonly FactDefinition[] = [
     'A registered and an unregistered customer are treated differently.', 'Registered aur unregistered customer ka tareeka alag hai.'),
 ];
 
+export const SUPPLIER_REGISTRATION_FACT: FactDefinition = f(
+  'supply.supplierRegistration', 'enum', 'How your business is registered for GST', 'Aapka business GST mein kaise registered hai',
+  'A business on the composition scheme is billed differently.', 'Composition scheme wale business ka bill alag hota hai.',
+  ['REGULAR', 'COMPOSITION', 'UNREGISTERED'],
+);
+
 export const TRANSPORT_FACTS: readonly FactDefinition[] = [
   f('consignment.value', 'money', 'Value of the goods being moved', 'Jo maal ja raha hai uski keemat',
     'The value decides whether a permit is needed.', 'Keemat se tay hota hai permit chahiye ya nahin.'),
@@ -65,6 +71,7 @@ export const STOCK_FACTS: readonly FactDefinition[] = [
 
 export const ALL_FACTS: readonly FactDefinition[] = [
   ...SUPPLY_FACTS,
+  SUPPLIER_REGISTRATION_FACT,
   ...TRANSPORT_FACTS,
   ...MONEY_POLICY_FACTS,
   ...STOCK_FACTS,

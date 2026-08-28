@@ -13,7 +13,7 @@ import { DomainError, fromDecimalString, isoDate, rupees, toDecimalString } from
 import { FactSet } from '../src/facts.ts';
 import { RulesEngine } from '../src/engine.ts';
 import { RuleRegistry, validateRuleSet, type RuleSet } from '../src/registry.ts';
-import { shippedRegistry, GST_RULE_SET, POLICY_RULE_SET, GST_PLACEHOLDER_THRESHOLDS } from '../src/rulesets/index.ts';
+import { shippedRegistry, GST_RULE_SET, GST_RULE_SET_V2, POLICY_RULE_SET, GST_PLACEHOLDER_THRESHOLDS } from '../src/rulesets/index.ts';
 import { toExceptionDraft } from '../src/exceptions.ts';
 import type { Rule } from '../src/rule.ts';
 import { lintUserFacingText } from '../../ux-vocabulary/src/lint.ts';
@@ -112,16 +112,19 @@ test('a replay reports a mismatch when a released rule set has been edited', () 
   const original = engine.evaluate({ topic: 'gst.eway.applicability', facts, documentDate: isoDate('2026-05-12') }).decision;
 
   // Someone edits a published rule set in place instead of publishing a new version.
-  const tampered: RuleSet = {
-    ...GST_RULE_SET,
-    rules: GST_RULE_SET.rules.map((r) =>
+  const tamper = (set: RuleSet): RuleSet => ({
+    ...set,
+    rules: set.rules.map((r) =>
       r.id === 'gst.eway.applicability' && r.version === '2026.04.01'
         ? ({ ...r, evaluate: () => ({ outcome: 'NOT_REQUIRED' as const, usedFacts: [], explanationValues: { value: '0.00', threshold: '0.00', verdict: 'not needed' } }) } as Rule)
         : r,
     ),
-  };
+  });
   const tamperedEngine = new RulesEngine({
-    registry: new RuleRegistry().register(POLICY_RULE_SET).register(tampered),
+    registry: new RuleRegistry()
+      .register(POLICY_RULE_SET)
+      .register(tamper(GST_RULE_SET))
+      .register(tamper(GST_RULE_SET_V2)),
     ruleSetId: 'in.gst',
     mode: 'development',
   });
