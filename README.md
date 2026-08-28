@@ -18,7 +18,7 @@ from deterministic, versioned, testable rules.
 | Writing anything a person will read | [`docs/ux/README.md`](docs/ux/README.md) |
 | Consuming another module | [`docs/contracts/README.md`](docs/contracts/README.md) |
 
-## Packages on this branch (`codex/gpt1-accounting-sales`)
+## Packages
 
 | Package | Issue | What it is |
 | --- | --- | --- |
@@ -26,25 +26,34 @@ from deterministic, versioned, testable rules.
 | [`packages/ledger`](packages/ledger) | #4 | The double-entry ledger: the only write path into the books |
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
 | [`packages/ux-vocabulary`](packages/ux-vocabulary) | #46 | The only supported way to produce user-facing wording |
+| [`packages/platform`](packages/platform) | #2, #3, #6, #8, #21 | Tenancy, permissions, approvals, audit, connectors and banking import drafts |
 
 ## Running the checks
 
-Node 22.18 or newer. There are no runtime dependencies; TypeScript runs directly.
+## Quick start
 
-```bash
-npm install
+```sh
+npm run bootstrap
 ```
 
-```bash
-npm run check
-```
+This one command starts the local PostgreSQL container, installs development dependencies, migrates, seeds synthetic data, and runs deterministic checks. Copy `.env.example` to `.env` before running it. No production credential is needed for development or tests. Stop the local database with `docker compose down`; use `docker compose down -v` only when you intentionally want to discard local development data.
 
-That type-checks every package and runs the whole test suite: the ledger's golden postings,
-rounding, period locks, reversals, concurrency and tenant isolation; the money and quantity
-arithmetic; the plain-language rules; and the specification's own consistency checks.
+## Architecture
 
-## A note on the workspace layout
+- `apps/api`: HTTP composition root. It depends on platform contracts, never a provider SDK.
+- `packages/platform`: tenancy, permissions, approvals, audit, idempotency, exceptions, migrations and external-connector contracts.
+- `packages/accounting`, `packages/sales`: GPT 1-owned modules (reserved).
+- `packages/purchasing`, `packages/gst`, `packages/transport`: GPT 3-owned modules (reserved).
+- `docs/contracts`: versioned contracts shared across modules.
 
-The root `package.json` and `tsconfig.json` here are **provisional**. Repository architecture,
-build tooling and CI belong to issue #2, owned by GPT 2, and supersede them. They exist only so
-this branch can run its own tests while the repository is otherwise empty.
+The production persistence target is PostgreSQL, with a transactional outbox for asynchronous work. The development store is deliberately in-memory so modules and connector mocks can be tested without services. Production adapter and storage wiring must preserve the contracts in `docs/contracts`.
+
+## Commands
+
+- `npm run verify` — deterministic type checks plus unit and integration tests.
+- `npm run db:migrate`, `npm run db:rollback`, `npm run db:seed` — PostgreSQL migration lifecycle commands.
+- `npm run dev` — starts the API composition root once its route layer exists.
+
+## Collaboration rules
+
+Do not import provider-specific code from business modules. Use `PlatformCommandService` for material changes and the connector contracts for external interactions. Each command carries authenticated tenant context and an idempotency key; callers never provide a tenant identifier to select arbitrary data.

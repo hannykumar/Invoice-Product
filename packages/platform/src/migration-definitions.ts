@@ -1,0 +1,48 @@
+export interface Migration { id: string; up: string; down: string; }
+
+export const migrations: readonly Migration[] = [{
+  id: "0001_platform_foundation",
+  up: `
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    CREATE TABLE companies (id uuid PRIMARY KEY, legal_name text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE branches (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), name text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(company_id, name));
+    CREATE TABLE users (id uuid PRIMARY KEY, email text NOT NULL UNIQUE, display_name text NOT NULL, active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE memberships (company_id uuid NOT NULL REFERENCES companies(id), user_id uuid NOT NULL REFERENCES users(id), permissions jsonb NOT NULL DEFAULT '[]', active boolean NOT NULL DEFAULT true, PRIMARY KEY(company_id, user_id));
+    CREATE TABLE audit_events (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), actor_id uuid NOT NULL REFERENCES users(id), action text NOT NULL, correlation_id text NOT NULL, before_json jsonb, after_json jsonb, reason text, occurred_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE idempotency_keys (company_id uuid NOT NULL REFERENCES companies(id), action text NOT NULL, key text NOT NULL, payload_hash text NOT NULL, result_json jsonb, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(company_id, action, key));
+    CREATE TABLE exception_items (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), status text NOT NULL CHECK (status IN ('open','resolved','dismissed')), summary text NOT NULL, evidence jsonb NOT NULL DEFAULT '[]', created_at timestamptz NOT NULL DEFAULT now());
+    CREATE INDEX audit_events_company_occurred_idx ON audit_events(company_id, occurred_at DESC);
+    CREATE INDEX exception_items_company_status_idx ON exception_items(company_id, status);
+  `,
+  down: `
+    DROP TABLE IF EXISTS exception_items;
+    DROP TABLE IF EXISTS idempotency_keys;
+    DROP TABLE IF EXISTS audit_events;
+    DROP TABLE IF EXISTS memberships;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS branches;
+    DROP TABLE IF EXISTS companies;
+  `,
+}, {
+  id: "0002_authentication_sessions_and_invitations",
+  up: `
+    CREATE TABLE user_branch_access (company_id uuid NOT NULL, user_id uuid NOT NULL, branch_id uuid NOT NULL REFERENCES branches(id), PRIMARY KEY(company_id, user_id, branch_id), FOREIGN KEY(company_id, user_id) REFERENCES memberships(company_id, user_id));
+    CREATE TABLE sessions (id uuid PRIMARY KEY, company_id uuid NOT NULL, branch_id uuid NOT NULL REFERENCES branches(id), user_id uuid NOT NULL REFERENCES users(id), expires_at timestamptz NOT NULL, revoked_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE invitations (id uuid PRIMARY KEY, token_hash text NOT NULL UNIQUE, company_id uuid NOT NULL REFERENCES companies(id), branch_id uuid NOT NULL REFERENCES branches(id), email text NOT NULL, permissions jsonb NOT NULL, expires_at timestamptz NOT NULL, accepted_at timestamptz, revoked_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE INDEX sessions_active_idx ON sessions(company_id, user_id) WHERE revoked_at IS NULL;
+    CREATE INDEX invitations_active_idx ON invitations(company_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL;
+  `,
+  down: `
+    DROP TABLE IF EXISTS invitations;
+    DROP TABLE IF EXISTS sessions;
+    DROP TABLE IF EXISTS user_branch_access;
+  `,
+}, {
+  id: "0003_approvals_commands_and_exception_evidence",
+  up: `
+    CREATE TABLE command_records (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), branch_id uuid NOT NULL REFERENCES branches(id), actor_id uuid NOT NULL REFERENCES users(id), action text NOT NULL, risk text NOT NULL, amount_paise bigint, status text NOT NULL, idempotency_key text NOT NULL, payload jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(company_id, action, idempotency_key));
+    CREATE TABLE approval_policies (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), action text NOT NULL, minimum_risk text NOT NULL, minimum_amount_paise bigint, required_permission text NOT NULL, active boolean NOT NULL DEFAULT true);
+    CREATE TABLE exception_comments (id uuid PRIMARY KEY, exception_id uuid NOT NULL REFERENCES exception_items(id), actor_id uuid NOT NULL REFERENCES users(id), body text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+  `,
+  down: `DROP TABLE IF EXISTS exception_comments; DROP TABLE IF EXISTS approval_policies; DROP TABLE IF EXISTS command_records;`,
+}];

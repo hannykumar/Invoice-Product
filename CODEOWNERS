@@ -1,0 +1,12 @@
+# Platform architecture, auth, approvals, adapters, banking, communications, security and operations
+/apps/api/ @hannykumar
+/packages/platform/ @hannykumar
+/docs/contracts/ @hannykumar
+
+# Reserved ownership boundaries
+/packages/accounting/ @hannykumar
+/packages/sales/ @hannykumar
+/packages/purchasing/ @hannykumar
+/packages/gst/ @hannykumar
+/packages/transport/ @hannykumar
+
