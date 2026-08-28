@@ -4,6 +4,7 @@ export interface Migration { id: string; up: string; down: string; }
 // keeps its schema next to its code. Ordering is by position in this array, so a module
 // migration may reference platform tables but never the other way round.
 import { masterDataMigrations } from "../../masters/src/migrations.ts";
+import { notificationMigrations } from "./notification-migrations.ts";
 
 const platformMigrations: readonly Migration[] = [{
   id: "0001_platform_foundation",
@@ -65,4 +66,4 @@ const platformMigrations: readonly Migration[] = [{
   down: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text'));`,
 }];
 
-export const migrations: readonly Migration[] = [...platformMigrations, ...masterDataMigrations];
+export const migrations: readonly Migration[] = [...platformMigrations, ...masterDataMigrations, ...notificationMigrations];
