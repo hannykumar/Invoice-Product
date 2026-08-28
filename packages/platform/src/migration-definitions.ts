@@ -1,6 +1,11 @@
 export interface Migration { id: string; up: string; down: string; }
 
-export const migrations: readonly Migration[] = [{
+// Module-owned migrations are appended after the platform's own so that each module
+// keeps its schema next to its code. Ordering is by position in this array, so a module
+// migration may reference platform tables but never the other way round.
+import { masterDataMigrations } from "../../masters/src/migrations.ts";
+
+const platformMigrations: readonly Migration[] = [{
   id: "0001_platform_foundation",
   up: `
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -59,3 +64,5 @@ export const migrations: readonly Migration[] = [{
   up: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text', 'pdf'));`,
   down: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text'));`,
 }];
+
+export const migrations: readonly Migration[] = [...platformMigrations, ...masterDataMigrations];
