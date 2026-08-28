@@ -1,7 +1,9 @@
 import { createDatabase, type SqlExecutor } from "./database.ts";
 import { migrations } from "./migration-definitions.ts";
+import { validateMigrationRegistry } from "./migration-ids.ts";
 
 export async function migrate(executor: SqlExecutor): Promise<string[]> {
+  validateMigrationRegistry(migrations);
   await executor.query("CREATE TABLE IF NOT EXISTS schema_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
   const applied = new Set((await executor.query("SELECT id FROM schema_migrations")).rows.map((row) => String(row.id)));
   const executed: string[] = [];
@@ -9,6 +11,7 @@ export async function migrate(executor: SqlExecutor): Promise<string[]> {
   return executed;
 }
 export async function rollback(executor: SqlExecutor): Promise<string | null> {
+  validateMigrationRegistry(migrations);
   const rows = (await executor.query("SELECT id FROM schema_migrations ORDER BY applied_at DESC LIMIT 1")).rows;
   const id = rows[0]?.id; if (typeof id !== "string") return null;
   const migration = migrations.find((item) => item.id === id); if (!migration) throw new Error(`Unknown applied migration: ${id}`);

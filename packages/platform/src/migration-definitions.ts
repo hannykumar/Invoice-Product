@@ -1,8 +1,7 @@
 export interface Migration { id: string; up: string; down: string; }
 
-// Module-owned migrations are appended after the platform's own so that each module
-// keeps its schema next to its code. Ordering is by position in this array, so a module
-// migration may reference platform tables but never the other way round.
+// Each module keeps its schema next to its code. The combined registry is sorted by ID,
+// so generated timestamp IDs give fresh and upgraded databases the same global order.
 import { masterDataMigrations } from "../../masters/src/migrations.ts";
 import { notificationMigrations } from "./notification-migrations.ts";
 
@@ -66,4 +65,6 @@ const platformMigrations: readonly Migration[] = [{
   down: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text'));`,
 }];
 
-export const migrations: readonly Migration[] = [...platformMigrations, ...masterDataMigrations, ...notificationMigrations];
+export const migrations: readonly Migration[] = Object.freeze(
+  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+);

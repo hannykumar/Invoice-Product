@@ -54,6 +54,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 
 - `npm run verify` — deterministic type checks plus unit and integration tests.
 - `npm run db:migrate`, `npm run db:rollback`, `npm run db:seed` — PostgreSQL migration lifecycle commands.
+- `npm run db:migration:id -- <module> <description>` — generates a collision-resistant ID for a new migration.
 - `npm run dev` — starts the API composition root once its route layer exists.
 - `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
 - `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
@@ -61,3 +62,5 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 ## Collaboration rules
 
 Do not import provider-specific code from business modules. Use `PlatformCommandService` for material changes and the connector contracts for external interactions. Each command carries authenticated tenant context and an idempotency key; callers never provide a tenant identifier to select arbitrary data.
+
+Never choose the next numeric database migration ID by hand. The numeric `0001`–`0008` IDs are frozen compatibility identifiers and must not be renamed or reused. Every new migration must use `npm run db:migration:id -- <module> <description>` and paste the generated ID into its module-owned migration array. The timestamp, module name and random suffix allow GPT-1, GPT-2 and GPT-3 to create migrations concurrently. The combined registry sorts these IDs into one stable global order. Runtime validation and CI reject duplicate, malformed, out-of-order and newly invented numeric IDs before database SQL runs.
