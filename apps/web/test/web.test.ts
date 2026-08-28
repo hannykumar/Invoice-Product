@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import test from "node:test";
+import vm from "node:vm";
+import { loadWebAsset } from "../server.ts";
+
+const root = resolve(import.meta.dirname, "..");
+const read = (name: string) => readFile(resolve(root, name), "utf8");
+
+async function localeCopy(): Promise<Record<string, Record<string, string>>> {
+  const source = await read("app.js");
+  const literal = source.slice(source.indexOf("const copy = ") + "const copy = ".length, source.indexOf(";\n\nconst storage"));
+  return vm.runInNewContext(`(${literal})`) as Record<string, Record<string, string>>;
+}
+
+test("every visible and screen-reader translation key exists in English and Hindi", async () => {
+  const [html, locales] = await Promise.all([read("index.html"), localeCopy()]);
+  const keys = [...html.matchAll(/data-i18n(?:-aria)?="([^"]+)"/g)].map((match) => match[1]!);
+  assert.ok(keys.length > 70);
+  assert.deepEqual(Object.keys(locales).sort(), ["en-IN", "hi-IN"]);
+  for (const key of keys) {
+    assert.ok(locales["en-IN"]?.[key], `Missing English translation: ${key}`);
+    assert.ok(locales["hi-IN"]?.[key], `Missing Hindi translation: ${key}`);
+  }
+  assert.deepEqual(Object.keys(locales["en-IN"]!).sort(), Object.keys(locales["hi-IN"]!).sort());
+});
+
+test("sale, purchase and payment are semantic, labelled, recoverable draft flows", async () => {
+  const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
+  for (const flow of ["sale", "purchase", "payment"]) {
+    assert.match(html, new RegExp(`<form[^>]+data-draft="${flow}"`));
+    assert.match(html, new RegExp(`id="view-${flow}"[^>]+aria-labelledby=`));
+    assert.match(script, new RegExp(`karobar\\.draft\\.\\$\\{form\\.dataset\\.draft\\}`));
+  }
+  assert.match(html, /role="status"/);
+  assert.match(html, /<dialog[^>]+aria-labelledby=/);
+  assert.match(script, /Intl\.NumberFormat\(state\.locale/);
+  assert.match(script, /Intl\.DateTimeFormat\(state\.locale/);
+});
+
+test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
+  const css = await read("styles.css");
+  assert.match(css, /@media \(max-width: 760px\)/);
+  assert.match(css, /\.bottom-nav \{ position: fixed; display: grid/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(css, /:focus-visible/);
+  assert.doesNotMatch(css, /outline:\s*none/);
+});
+
+test("the local web preview serves the application shell", async () => {
+  const asset = await loadWebAsset("/");
+  assert.equal(asset.status, 200);
+  assert.match(asset.contentType, /text\/html/);
+  assert.match(asset.body.toString("utf8"), /id="view-dashboard"/);
+  assert.equal((await loadWebAsset("/../../private-file")).status, 403);
+});

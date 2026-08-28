@@ -18,7 +18,7 @@ from deterministic, versioned, testable rules.
 | Writing anything a person will read | [`docs/ux/README.md`](docs/ux/README.md) |
 | Consuming another module | [`docs/contracts/README.md`](docs/contracts/README.md) |
 
-## Packages on this branch (`codex/gpt1-accounting-sales`)
+## Packages
 
 | Package | Issue | What it is |
 | --- | --- | --- |
@@ -28,37 +28,55 @@ from deterministic, versioned, testable rules.
 | [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
 | [`packages/gst-calc`](packages/gst-calc) | #25 | Deterministic GST computation, place of supply and tax classification |
 | [`packages/ux-vocabulary`](packages/ux-vocabulary) | #46 | The only supported way to produce user-facing wording |
+| [`packages/platform`](packages/platform) | #2, #3, #6, #8, #21 | Tenancy, permissions, approvals, audit, connectors and banking import drafts |
+| [`ops/security`](ops/security) | #40 | Encryption, privacy requests, secure logging, backups and restore drills |
 
-## Running the checks
+## Quick start
 
-Node 22.18 or newer. There are no runtime dependencies; TypeScript runs directly.
-
-```bash
-npm install
+```sh
+npm run bootstrap
 ```
 
-```bash
-npm run typecheck && npm test
-```
+This one command starts the local PostgreSQL container, installs development dependencies, migrates, seeds synthetic data, and runs deterministic checks. Copy `.env.example` to `.env` before running it. No production credential is needed for development or tests. Stop the local database with `docker compose down`; use `docker compose down -v` only when you intentionally want to discard local development data.
 
-That type-checks every package and runs the whole test suite: the ledger's golden postings,
-rounding, period locks, reversals, concurrency and tenant isolation; the money and quantity
-arithmetic; the plain-language rules; and the specification's own consistency checks.
+## Architecture
 
-## A note on the workspace layout
+- `apps/api`: HTTP composition root. It depends on platform contracts, never a provider SDK.
+- `packages/platform`: tenancy, permissions, approvals, audit, idempotency, exceptions, migrations and external-connector contracts.
+- `packages/kernel`, `packages/ledger`, `packages/rules-engine`, `packages/gst-calc`,
+  `packages/sales`, `packages/ux-vocabulary`: GPT 1-owned modules.
+- `docs/product`: the canonical product specification, glossary, workflows and ownership map (#1).
+- `docs/ux`: the plain-language design system (#46).
+- `packages/masters`: GPT 3-owned business master data (issue #5).
+- `packages/purchasing`: GPT 3-owned purchase intake and validation (issue #15 onwards).
+- `packages/gst`, `packages/transport`: GPT 3-owned modules (reserved).
+- `docs/contracts`: versioned contracts shared across modules.
 
-The root `package.json` and `tsconfig.json` are **owned by issue #2 (GPT 2)** and are taken from
-`codex/codex/gpt2-platform-banking` byte for byte, so merging the lanes never conflicts on them.
+The production persistence target is PostgreSQL, with a transactional outbox for asynchronous work. The development store is deliberately in-memory so modules and connector mocks can be tested without services. Production adapter and storage wiring must preserve the contracts in `docs/contracts`.
 
-`tsconfig.strict.json` adds the extra checks this lane needs on top of the shared one — most
-importantly `erasableSyntaxOnly`, because Node runs these packages by stripping types, so any
-TypeScript that cannot simply be erased would fail at run time rather than at build time. Run it
-alongside the shared check:
+## Commands
 
-```bash
+- `npm run verify` — deterministic type checks plus unit and integration tests.
+- `npm run db:migrate`, `npm run db:rollback`, `npm run db:seed` — PostgreSQL migration lifecycle commands.
+- `npm run db:migration:id -- <module> <description>` — generates a collision-resistant ID for a new migration.
+- `npm run dev` — starts the API composition root once its route layer exists.
+- `npm run web` — starts the responsive development preview at `http://127.0.0.1:4173`.
+- `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
+- `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
+
+## Type checking the deterministic modules
+
+The shared `tsconfig.json` is owned by issue #2. `tsconfig.strict.json` extends it with the extra
+checks the deterministic financial modules need — most importantly `erasableSyntaxOnly`, because
+Node runs these packages by stripping types, so any TypeScript that cannot simply be erased would
+fail at run time rather than at build time:
+
+```sh
 npx tsc --noEmit -p tsconfig.strict.json
 ```
 
-Some root scripts (`bootstrap`, `dev`, `db:*`, `test:integration`, `verify`) belong to GPT 2's
-platform package and only run on a branch that has it. On this branch use `npm run typecheck` and
-`npm test`.
+## Collaboration rules
+
+Do not import provider-specific code from business modules. Use `PlatformCommandService` for material changes and the connector contracts for external interactions. Each command carries authenticated tenant context and an idempotency key; callers never provide a tenant identifier to select arbitrary data.
+
+Never choose the next numeric database migration ID by hand. The numeric `0001`–`0008` IDs are frozen compatibility identifiers and must not be renamed or reused. Every new migration must use `npm run db:migration:id -- <module> <description>` and paste the generated ID into its module-owned migration array. The timestamp, module name and random suffix allow GPT-1, GPT-2 and GPT-3 to create migrations concurrently. The combined registry sorts these IDs into one stable global order. Runtime validation and CI reject duplicate, malformed, out-of-order and newly invented numeric IDs before database SQL runs.

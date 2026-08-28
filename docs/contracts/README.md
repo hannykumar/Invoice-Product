@@ -13,6 +13,13 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`master-data-ports`](./master-data-ports.v1.md) | 1.0.0-draft | GPT 3 (#5) | GPT 1 (#9, #11, #12, #13, #25) | **Mocked by GPT 1** pending GPT 3 |
 | [`platform-ports`](./platform-ports.v1.md) | 1.0.0-draft | GPT 2 (#3, #6) | GPT 1, GPT 3 | **Mocked by GPT 1** pending GPT 2 |
 
+| [`platform-command`](./platform-command-v1.md) | 1.0.0 | GPT 2 (#6) | GPT 1, GPT 3 | Published |
+| [`connector`](./connector-v1.md) | 1.0.0 | GPT 2 (#8) | GPT 1, GPT 3 | Published |
+| [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
+| [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
+| [`master-data`](./master-data-v1.md) | 1.0.0 | GPT 3 (#5) | GPT 1, GPT 2, GPT 3 | Published |
+| [`purchase-intake`](./purchase-intake-v1.md) | 1.0.0 | GPT 3 (#15) | GPT 2, GPT 3 | Published |
+
 ## Rules
 
 1. A contract change is a pull request that names every affected issue.
@@ -21,3 +28,5 @@ commands and events, API surface, error model, permissions and idempotency behav
 3. Where a dependency is unfinished, the consuming agent writes the contract it needs, marks it
    `Mocked by <agent>`, and implements against a mock. The owning agent may change the contract,
    but must do so explicitly and update the contract tests.
+
+Bank statement imports (#21) are platform-owned drafts: they normalize CSV, text-PDF, base64-encoded PDF and base64-encoded XLSX source rows, retain source locations, deduplicate files and transactions per company, and surface uncertain rows or balance inconsistencies for review. They never create ledger postings.
