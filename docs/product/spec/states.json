@@ -1,0 +1,150 @@
+{
+  "$comment": "Canonical state machines for issue #1 [E01]. Modules must not invent states outside this file; propose a change here first.",
+  "version": "1.0.0",
+  "userFacingStateGroups": {
+    "draft": "Not finished yet. Nothing has been sent, posted or counted.",
+    "processing": "The app is working on it right now.",
+    "submitted": "Waiting for a person or an outside service to respond.",
+    "accepted": "Done and recorded in your books.",
+    "failed": "It did not go through. Nothing was recorded.",
+    "needs_attention": "The app stopped because it was not sure. A person must decide."
+  },
+  "machines": {
+    "voucher": {
+      "owner": "GPT1",
+      "issue": 4,
+      "states": {
+        "DRAFT": { "group": "draft", "plain": "Not in your books yet", "terminal": false },
+        "FINAL": { "group": "accepted", "plain": "Recorded in your books", "terminal": false },
+        "REVERSED": { "group": "accepted", "plain": "Cancelled by an opposite entry", "terminal": true }
+      },
+      "transitions": [
+        { "from": "DRAFT", "to": "FINAL", "event": "post", "guards": ["balanced", "period_open", "permission:ledger.post", "accounts_active"] },
+        { "from": "DRAFT", "to": "DRAFT", "event": "amendDraft", "guards": ["permission:ledger.draft.write"] },
+        { "from": "FINAL", "to": "REVERSED", "event": "reverse", "guards": ["permission:ledger.reverse", "reversal_period_open", "reason_required"] }
+      ],
+      "notes": [
+        "A DRAFT voucher may be deleted. A FINAL voucher may never be deleted or edited.",
+        "REVERSED is reached only by posting a mirrored REVERSAL voucher; both remain visible."
+      ]
+    },
+    "sales_invoice": {
+      "owner": "GPT1",
+      "issue": 9,
+      "states": {
+        "DRAFT": { "group": "draft", "plain": "Bill not finished", "terminal": false },
+        "PENDING_APPROVAL": { "group": "submitted", "plain": "Waiting for approval", "terminal": false },
+        "NEEDS_INFO": { "group": "needs_attention", "plain": "Some details are missing", "terminal": false },
+        "FINAL": { "group": "accepted", "plain": "Bill issued", "terminal": false },
+        "CANCELLED": { "group": "accepted", "plain": "Bill cancelled", "terminal": true }
+      },
+      "transitions": [
+        { "from": "DRAFT", "to": "PENDING_APPROVAL", "event": "submit", "guards": ["stock_reserved_or_override", "tax_decided", "party_resolved"] },
+        { "from": "DRAFT", "to": "NEEDS_INFO", "event": "missingFact" },
+        { "from": "NEEDS_INFO", "to": "DRAFT", "event": "factSupplied" },
+        { "from": "PENDING_APPROVAL", "to": "DRAFT", "event": "reject", "guards": ["reason_required"] },
+        { "from": "PENDING_APPROVAL", "to": "FINAL", "event": "approveAndFinalise", "guards": ["permission:sales.finalise", "number_allocated", "voucher_posted", "stock_posted"] },
+        { "from": "DRAFT", "to": "FINAL", "event": "finalise", "guards": ["approval_not_required", "permission:sales.finalise", "number_allocated", "voucher_posted", "stock_posted"] },
+        { "from": "FINAL", "to": "CANCELLED", "event": "cancel", "guards": ["permission:sales.cancel", "cancellation_policy_allows", "no_irn_or_irn_cancelled", "reason_required", "reversal_posted", "stock_reversed"] }
+      ],
+      "notes": [
+        "An invoice number is allocated only at FINAL, so drafts never consume numbers.",
+        "After the cancellation window closes, correction is by credit note, not cancellation."
+      ]
+    },
+    "payment": {
+      "owner": "GPT1",
+      "issue": 20,
+      "states": {
+        "DRAFT": { "group": "draft", "plain": "Payment not saved yet", "terminal": false },
+        "RECORDED": { "group": "accepted", "plain": "Payment recorded", "terminal": false },
+        "REVERSED": { "group": "accepted", "plain": "Payment cancelled", "terminal": true }
+      },
+      "transitions": [
+        { "from": "DRAFT", "to": "RECORDED", "event": "record", "guards": ["permission:payments.record", "allocation_within_outstanding", "period_open"] },
+        { "from": "RECORDED", "to": "REVERSED", "event": "reverse", "guards": ["permission:payments.reverse", "reason_required", "allocations_released"] }
+      ]
+    },
+    "cheque": {
+      "owner": "GPT1",
+      "issue": 20,
+      "states": {
+        "PENDING": { "group": "submitted", "plain": "Cheque received, not yet cleared", "terminal": false },
+        "DEPOSITED": { "group": "submitted", "plain": "Cheque given to the bank", "terminal": false },
+        "CLEARED": { "group": "accepted", "plain": "Money in your bank", "terminal": true },
+        "BOUNCED": { "group": "failed", "plain": "Cheque did not clear", "terminal": true },
+        "CANCELLED": { "group": "failed", "plain": "Cheque cancelled", "terminal": true }
+      },
+      "transitions": [
+        { "from": "PENDING", "to": "DEPOSITED", "event": "deposit" },
+        { "from": "DEPOSITED", "to": "CLEARED", "event": "clear", "guards": ["clearing_date_required"] },
+        { "from": "DEPOSITED", "to": "BOUNCED", "event": "bounce", "guards": ["reason_required", "reversal_posted"] },
+        { "from": "PENDING", "to": "CANCELLED", "event": "cancel", "guards": ["reason_required"] }
+      ],
+      "notes": ["A bounce never deletes history; it posts a reversal and restores the outstanding balance."]
+    },
+    "stock_reservation": {
+      "owner": "GPT1",
+      "issue": 12,
+      "states": {
+        "HELD": { "group": "submitted", "plain": "Stock held for this bill", "terminal": false },
+        "CONSUMED": { "group": "accepted", "plain": "Stock issued", "terminal": true },
+        "RELEASED": { "group": "accepted", "plain": "Stock free again", "terminal": true },
+        "EXPIRED": { "group": "failed", "plain": "Hold expired, stock free again", "terminal": true }
+      },
+      "transitions": [
+        { "from": "HELD", "to": "CONSUMED", "event": "postMovement" },
+        { "from": "HELD", "to": "RELEASED", "event": "cancelDraft" },
+        { "from": "HELD", "to": "EXPIRED", "event": "timeout" }
+      ]
+    },
+    "exception_item": {
+      "owner": "GPT1",
+      "issue": 7,
+      "states": {
+        "OPEN": { "group": "needs_attention", "plain": "Waiting for you to decide", "terminal": false },
+        "IN_REVIEW": { "group": "needs_attention", "plain": "Someone is looking at it", "terminal": false },
+        "RESOLVED": { "group": "accepted", "plain": "Sorted out", "terminal": true },
+        "DISMISSED": { "group": "accepted", "plain": "Closed without action", "terminal": true }
+      },
+      "transitions": [
+        { "from": "OPEN", "to": "IN_REVIEW", "event": "claim" },
+        { "from": "IN_REVIEW", "to": "RESOLVED", "event": "resolve", "guards": ["resolution_recorded"] },
+        { "from": "IN_REVIEW", "to": "DISMISSED", "event": "dismiss", "guards": ["reason_required", "permission:exceptions.dismiss"] },
+        { "from": "IN_REVIEW", "to": "OPEN", "event": "release" }
+      ],
+      "notes": ["Exception items are never resolved automatically by an AI component."]
+    },
+    "approval_request": {
+      "owner": "GPT2",
+      "issue": 6,
+      "consumedBy": ["GPT1"],
+      "states": {
+        "PENDING": { "group": "submitted", "plain": "Waiting for approval", "terminal": false },
+        "APPROVED": { "group": "accepted", "plain": "Approved", "terminal": true },
+        "REJECTED": { "group": "failed", "plain": "Not approved", "terminal": true },
+        "WITHDRAWN": { "group": "failed", "plain": "Request taken back", "terminal": true }
+      },
+      "transitions": [
+        { "from": "PENDING", "to": "APPROVED", "event": "approve", "guards": ["approver_permission", "approver_not_requester"] },
+        { "from": "PENDING", "to": "REJECTED", "event": "reject", "guards": ["reason_required"] },
+        { "from": "PENDING", "to": "WITHDRAWN", "event": "withdraw" }
+      ]
+    },
+    "fiscal_period": {
+      "owner": "GPT1",
+      "issue": 4,
+      "states": {
+        "OPEN": { "group": "accepted", "plain": "You can still make entries", "terminal": false },
+        "SOFT_LOCKED": { "group": "accepted", "plain": "Closed, but a manager can still allow an entry", "terminal": false },
+        "HARD_LOCKED": { "group": "accepted", "plain": "Closed for good", "terminal": true }
+      },
+      "transitions": [
+        { "from": "OPEN", "to": "SOFT_LOCKED", "event": "softLock", "guards": ["permission:periods.lock"] },
+        { "from": "SOFT_LOCKED", "to": "OPEN", "event": "reopen", "guards": ["permission:periods.reopen", "reason_required"] },
+        { "from": "SOFT_LOCKED", "to": "HARD_LOCKED", "event": "hardLock", "guards": ["permission:periods.hard_lock", "reason_required"] }
+      ],
+      "notes": ["HARD_LOCKED is deliberately irreversible so filed periods cannot move."]
+    }
+  }
+}

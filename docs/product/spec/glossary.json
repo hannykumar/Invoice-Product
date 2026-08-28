@@ -1,0 +1,1146 @@
+{
+  "$schema": "./glossary.schema.json",
+  "version": "1.0.0",
+  "effectiveFrom": "2026-01-01",
+  "locales": [
+    "en-IN",
+    "hi-IN"
+  ],
+  "terms": [
+    {
+      "id": "company",
+      "canonical": "Company",
+      "plain": {
+        "en-IN": "Your business",
+        "hi-IN": "Aapka business"
+      },
+      "definition": "One legally distinct business whose books, stock and filings are kept completely separate from every other business in the product. Every record in the product belongs to exactly one company.",
+      "example": "Sharma Fruit Traders and Sharma Logistics are two companies even if the same person owns both.",
+      "alsoCalled": [
+        "tenant",
+        "firm"
+      ],
+      "notTheSameAs": [
+        "branch"
+      ]
+    },
+    {
+      "id": "branch",
+      "canonical": "Branch",
+      "plain": {
+        "en-IN": "A shop, godown or office of your business",
+        "hi-IN": "Aapke business ki dukaan, godown ya office"
+      },
+      "definition": "A place of business inside one company. Branches share the company's books but can have their own invoice number series, stock location and users.",
+      "example": "Karol Bagh shop and Narela godown are two branches of one company.",
+      "alsoCalled": [
+        "place of business"
+      ],
+      "notTheSameAs": [
+        "company",
+        "warehouse"
+      ]
+    },
+    {
+      "id": "party",
+      "canonical": "Party",
+      "plain": {
+        "en-IN": "A customer or a supplier",
+        "hi-IN": "Customer ya supplier"
+      },
+      "definition": "Any external person or business you buy from or sell to. A party can be a customer, a supplier, or both.",
+      "example": "ABC Traders buys apples from you and also sells you crates, so ABC Traders is one party with both roles.",
+      "alsoCalled": [
+        "ledger party",
+        "account holder"
+      ],
+      "notTheSameAs": [
+        "user"
+      ]
+    },
+    {
+      "id": "customer",
+      "canonical": "Customer",
+      "plain": {
+        "en-IN": "Someone who buys from you",
+        "hi-IN": "Jo aapse kharidta hai"
+      },
+      "definition": "A party in the role of buyer. Amounts a customer has not yet paid you are receivables.",
+      "example": "ABC Traders bought 70 boxes of apples and still owes Rs 50,000.",
+      "alsoCalled": [
+        "buyer",
+        "debtor"
+      ],
+      "notTheSameAs": [
+        "supplier"
+      ]
+    },
+    {
+      "id": "supplier",
+      "canonical": "Supplier",
+      "plain": {
+        "en-IN": "Someone you buy from",
+        "hi-IN": "Jisse aap kharidte hain"
+      },
+      "definition": "A party in the role of seller to you. Amounts you have not yet paid a supplier are payables.",
+      "example": "Nashik Farms sold you 100 boxes of apples and you still owe Rs 80,000.",
+      "alsoCalled": [
+        "vendor",
+        "creditor"
+      ],
+      "notTheSameAs": [
+        "customer"
+      ]
+    },
+    {
+      "id": "item",
+      "canonical": "Item",
+      "plain": {
+        "en-IN": "A thing you buy or sell",
+        "hi-IN": "Jo cheez aap bechte ya kharidte hain"
+      },
+      "definition": "A good or a service you trade in, with a stock-keeping unit, a base unit of measure and a tax classification (HSN for goods, SAC for services).",
+      "example": "Apple Box 10kg, HSN 0808, base unit BOX.",
+      "alsoCalled": [
+        "product",
+        "stock item",
+        "SKU"
+      ],
+      "notTheSameAs": [
+        "batch"
+      ]
+    },
+    {
+      "id": "unit-of-measure",
+      "canonical": "Unit of measure",
+      "plain": {
+        "en-IN": "How you count the item",
+        "hi-IN": "Item kis mein ginte hain"
+      },
+      "definition": "The countable unit for an item, for example BOX, KG, PCS, LTR. Alternate units convert to the base unit using a fixed, recorded factor.",
+      "example": "1 BOX = 10 KG, so selling 7 BOX reduces 70 KG of stock.",
+      "alsoCalled": [
+        "UOM",
+        "unit"
+      ],
+      "notTheSameAs": [
+        "batch"
+      ]
+    },
+    {
+      "id": "voucher",
+      "canonical": "Voucher",
+      "plain": {
+        "en-IN": "One money entry in your books",
+        "hi-IN": "Hisaab ki ek entry"
+      },
+      "definition": "A single, balanced financial event recorded in the ledger. Every voucher has a type (sale, purchase, receipt, payment, journal, credit note, debit note), a date, a company, and two or more journal lines whose debits equal credits.",
+      "example": "Finalising a Rs 1,180 sale creates one sale voucher with three lines: customer +1,180 debit, sales 1,000 credit, output GST 180 credit.",
+      "alsoCalled": [
+        "accounting entry",
+        "posting"
+      ],
+      "notTheSameAs": [
+        "sales-invoice",
+        "purchase-invoice",
+        "journal-line"
+      ]
+    },
+    {
+      "id": "journal-line",
+      "canonical": "Journal line",
+      "plain": {
+        "en-IN": "One line of a money entry",
+        "hi-IN": "Entry ki ek line"
+      },
+      "definition": "One debit or credit against one account inside a voucher. A line never exists outside a voucher and is never edited after the voucher is final.",
+      "example": "Output CGST 90.00 credit is one journal line of a sale voucher.",
+      "alsoCalled": [
+        "ledger line",
+        "posting line"
+      ],
+      "notTheSameAs": [
+        "voucher"
+      ]
+    },
+    {
+      "id": "double-entry",
+      "canonical": "Double entry",
+      "plain": {
+        "en-IN": "Every entry has two sides that must match",
+        "hi-IN": "Har entry ke do pehlu, dono barabar"
+      },
+      "definition": "The rule that the total of debits equals the total of credits in every voucher. The product refuses to post a voucher that does not balance to zero.",
+      "example": "Money went to the customer's account (debit 1,180) and came from sales (1,000) plus tax owed to government (180).",
+      "alsoCalled": [
+        "double-entry bookkeeping"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "debit",
+      "canonical": "Debit",
+      "plain": {
+        "en-IN": "Value coming in or owed to you",
+        "hi-IN": "Aapko milne wala / aata hua"
+      },
+      "definition": "The left side of an entry. Debits increase assets and expenses and decrease income, liabilities and equity.",
+      "example": "When ABC Traders owes you Rs 1,180, their account is debited by Rs 1,180.",
+      "alsoCalled": [
+        "Dr"
+      ],
+      "notTheSameAs": [
+        "credit"
+      ]
+    },
+    {
+      "id": "credit",
+      "canonical": "Credit",
+      "plain": {
+        "en-IN": "Value going out or owed by you",
+        "hi-IN": "Aapse jaane wala / aapka dena"
+      },
+      "definition": "The right side of an entry. Credits increase income, liabilities and equity and decrease assets and expenses.",
+      "example": "Sales income of Rs 1,000 is credited when you raise the invoice.",
+      "alsoCalled": [
+        "Cr"
+      ],
+      "notTheSameAs": [
+        "debit",
+        "credit-limit",
+        "credit-note"
+      ]
+    },
+    {
+      "id": "account",
+      "canonical": "Account",
+      "plain": {
+        "en-IN": "A named pocket in your books",
+        "hi-IN": "Hisaab ka ek khaana"
+      },
+      "definition": "A named bucket that collects journal lines, such as Cash, Bank, Sales, Purchases, Output CGST, or one specific customer. Every account has a type that decides its normal side.",
+      "example": "Cash in hand, HDFC Current Account, Sales - Goods.",
+      "alsoCalled": [
+        "ledger account",
+        "head"
+      ],
+      "notTheSameAs": [
+        "party"
+      ]
+    },
+    {
+      "id": "chart-of-accounts",
+      "canonical": "Chart of accounts",
+      "plain": {
+        "en-IN": "The list of all pockets in your books",
+        "hi-IN": "Sabhi khaaton ki list"
+      },
+      "definition": "The complete, company-specific tree of accounts with their types and codes. The product seeds an India-ready default chart during onboarding, which the business may extend.",
+      "example": "1000 Assets > 1100 Cash and Bank > 1110 Cash in hand.",
+      "alsoCalled": [
+        "COA",
+        "account master"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "account-type",
+      "canonical": "Account type",
+      "plain": {
+        "en-IN": "What kind of pocket it is",
+        "hi-IN": "Khaate ka prakaar"
+      },
+      "definition": "One of ASSET, LIABILITY, EQUITY, INCOME, EXPENSE. The type fixes the normal balance side and where the account appears in reports.",
+      "example": "Sales is INCOME, so it normally has a credit balance and appears in profit and loss.",
+      "alsoCalled": [
+        "account class"
+      ],
+      "notTheSameAs": [
+        "voucher-type"
+      ]
+    },
+    {
+      "id": "voucher-type",
+      "canonical": "Voucher type",
+      "plain": {
+        "en-IN": "What kind of entry it is",
+        "hi-IN": "Entry ka prakaar"
+      },
+      "definition": "One of SALE, PURCHASE, RECEIPT, PAYMENT, JOURNAL, CREDIT_NOTE, DEBIT_NOTE, OPENING_BALANCE, REVERSAL. The type decides which posting template and permissions apply.",
+      "example": "Money received from a customer is a RECEIPT, not a SALE.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "account-type"
+      ]
+    },
+    {
+      "id": "sales-invoice",
+      "canonical": "Sales invoice",
+      "plain": {
+        "en-IN": "The bill you give a customer",
+        "hi-IN": "Customer ko diya gaya bill"
+      },
+      "definition": "The legal document for a sale. When finalised it gets a permanent number, reduces stock, records tax payable and creates a receivable from the customer.",
+      "example": "Invoice INV/2026-27/00042 to ABC Traders for 70 boxes of apples.",
+      "alsoCalled": [
+        "tax invoice",
+        "bill",
+        "sale bill"
+      ],
+      "notTheSameAs": [
+        "purchase-invoice",
+        "proforma",
+        "quotation"
+      ]
+    },
+    {
+      "id": "purchase-invoice",
+      "canonical": "Purchase invoice",
+      "plain": {
+        "en-IN": "The bill your supplier gives you",
+        "hi-IN": "Supplier se aaya bill"
+      },
+      "definition": "A supplier's bill that you record. When approved it increases stock, records input tax credit and creates a payable to the supplier. It never creates a sale.",
+      "example": "Nashik Farms bill NF/1187 for 100 boxes of apples increases stock by 100 boxes.",
+      "alsoCalled": [
+        "supplier invoice",
+        "inward invoice"
+      ],
+      "notTheSameAs": [
+        "sales-invoice"
+      ]
+    },
+    {
+      "id": "credit-note",
+      "canonical": "Credit note",
+      "plain": {
+        "en-IN": "You return money or value to a customer",
+        "hi-IN": "Customer ko wapas dena"
+      },
+      "definition": "A document that reduces what a customer owes you, used for sales returns, rate reductions and post-sale discounts. It reverses income, tax and, when goods come back, stock.",
+      "example": "ABC Traders returned 10 boxes, so a credit note reduces their dues by the value of 10 boxes plus tax.",
+      "alsoCalled": [
+        "CN",
+        "sales return note"
+      ],
+      "notTheSameAs": [
+        "debit-note",
+        "credit",
+        "credit-limit"
+      ]
+    },
+    {
+      "id": "debit-note",
+      "canonical": "Debit note",
+      "plain": {
+        "en-IN": "You reduce what you owe a supplier",
+        "hi-IN": "Supplier ko kam dena"
+      },
+      "definition": "A document that reduces what you owe a supplier, used for purchase returns, rate corrections and rejected goods.",
+      "example": "You returned 5 damaged boxes to Nashik Farms and raised a debit note.",
+      "alsoCalled": [
+        "DN",
+        "purchase return note"
+      ],
+      "notTheSameAs": [
+        "credit-note"
+      ]
+    },
+    {
+      "id": "receivable",
+      "canonical": "Receivable",
+      "plain": {
+        "en-IN": "Money customers still owe you",
+        "hi-IN": "Customer se lena baaki"
+      },
+      "definition": "The unpaid balance of finalised sales invoices after subtracting accepted payments, credit notes and approved write-offs.",
+      "example": "Customer still owes Rs 50,000 on a Rs 1,00,000 invoice after paying Rs 50,000.",
+      "alsoCalled": [
+        "sundry debtors",
+        "accounts receivable",
+        "outstanding"
+      ],
+      "notTheSameAs": [
+        "payable"
+      ]
+    },
+    {
+      "id": "payable",
+      "canonical": "Payable",
+      "plain": {
+        "en-IN": "Money you still owe suppliers",
+        "hi-IN": "Supplier ko dena baaki"
+      },
+      "definition": "The unpaid balance of approved purchase invoices after subtracting payments made, debit notes and approved adjustments.",
+      "example": "You still owe Nashik Farms Rs 30,000.",
+      "alsoCalled": [
+        "sundry creditors",
+        "accounts payable"
+      ],
+      "notTheSameAs": [
+        "receivable"
+      ]
+    },
+    {
+      "id": "allocation",
+      "canonical": "Allocation",
+      "plain": {
+        "en-IN": "Linking a payment to the bills it settles",
+        "hi-IN": "Payment ko bill se jodna"
+      },
+      "definition": "The recorded link between a payment and one or more invoices, with the exact amount applied to each. Unallocated money stays visible as on-account balance instead of being guessed.",
+      "example": "A Rs 50,000 cheque is allocated Rs 30,000 to invoice 41 and Rs 20,000 to invoice 42.",
+      "alsoCalled": [
+        "settlement",
+        "adjustment",
+        "knock-off"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "on-account",
+      "canonical": "On account",
+      "plain": {
+        "en-IN": "Money received but not yet matched to a bill",
+        "hi-IN": "Paisa aaya, bill se jodna baaki"
+      },
+      "definition": "A payment held against a party without being applied to specific invoices. The product never guesses which invoice it settles.",
+      "example": "ABC paid Rs 10,000 in advance before any invoice existed.",
+      "alsoCalled": [
+        "advance",
+        "unapplied receipt"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "ageing",
+      "canonical": "Ageing",
+      "plain": {
+        "en-IN": "How long money has been due",
+        "hi-IN": "Kitne dinon se baaki hai"
+      },
+      "definition": "A breakdown of outstanding balances into age buckets counted from the due date, for example 0-30, 31-60, 61-90 and over 90 days.",
+      "example": "Rs 20,000 of ABC's dues is more than 90 days old.",
+      "alsoCalled": [
+        "aging",
+        "outstanding analysis"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "fiscal-period",
+      "canonical": "Fiscal period",
+      "plain": {
+        "en-IN": "A month or year of your books",
+        "hi-IN": "Hisaab ka mahina ya saal"
+      },
+      "definition": "A dated window of the books that can be open, soft-locked or hard-locked. India's financial year runs 1 April to 31 March and is named like 2026-27.",
+      "example": "April 2026 belongs to financial year 2026-27.",
+      "alsoCalled": [
+        "accounting period",
+        "financial year",
+        "FY"
+      ],
+      "notTheSameAs": [
+        "tax-period"
+      ]
+    },
+    {
+      "id": "period-lock",
+      "canonical": "Period lock",
+      "plain": {
+        "en-IN": "Closing old months so they cannot change",
+        "hi-IN": "Purane mahine band karna"
+      },
+      "definition": "A control that prevents new or changed postings dated inside a closed period. A soft lock can be overridden by an authorised user with a recorded reason; a hard lock cannot be overridden at all.",
+      "example": "After GST for April is filed, April is hard-locked and a backdated sale is refused.",
+      "alsoCalled": [
+        "book closure",
+        "period close"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "opening-balance",
+      "canonical": "Opening balance",
+      "plain": {
+        "en-IN": "What you already had when you started using the app",
+        "hi-IN": "App shuru karte waqt jo pehle se tha"
+      },
+      "definition": "The balances of accounts, parties and stock carried into the product on the go-live date, posted as a single balanced opening voucher.",
+      "example": "On 1 April 2026 you already had Rs 2,00,000 cash and ABC owed you Rs 40,000.",
+      "alsoCalled": [
+        "opening stock",
+        "carry forward"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "reversal",
+      "canonical": "Reversal",
+      "plain": {
+        "en-IN": "Undoing an entry by making an opposite entry",
+        "hi-IN": "Ulti entry se sudhaarna"
+      },
+      "definition": "The only way to undo a final voucher. A new voucher with mirrored debits and credits is posted and both vouchers stay visible forever. Nothing is deleted.",
+      "example": "A wrongly posted Rs 5,000 payment is reversed on 12 May and the correct entry is posted separately.",
+      "alsoCalled": [
+        "contra entry",
+        "cancellation entry"
+      ],
+      "notTheSameAs": [
+        "amendment"
+      ]
+    },
+    {
+      "id": "amendment",
+      "canonical": "Amendment",
+      "plain": {
+        "en-IN": "Replacing an entry with a corrected version",
+        "hi-IN": "Sudhaari hui entry se badalna"
+      },
+      "definition": "A controlled correction that reverses the original voucher and posts a corrected one, keeping both linked to the same source document and to each other.",
+      "example": "The invoice had the wrong rate; the amendment reverses it and posts the corrected invoice with a new version number.",
+      "alsoCalled": [
+        "revision"
+      ],
+      "notTheSameAs": [
+        "reversal"
+      ]
+    },
+    {
+      "id": "audit-trail",
+      "canonical": "Audit trail",
+      "plain": {
+        "en-IN": "The permanent record of who did what and when",
+        "hi-IN": "Kisne kya kab kiya, ka permanent record"
+      },
+      "definition": "An append-only history of material actions with actor, timestamp, inputs, outputs, decision and any override reason. Secrets are never written into it.",
+      "example": "Priya finalised invoice 42 at 11:04 on 12 May 2026 and overrode the credit limit with the reason 'owner approved on call'.",
+      "alsoCalled": [
+        "activity log",
+        "history"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "idempotency-key",
+      "canonical": "Idempotency key",
+      "plain": {
+        "en-IN": "A tag that stops the same action happening twice",
+        "hi-IN": "Ek hi kaam do baar hone se rokne wala tag"
+      },
+      "definition": "A caller-supplied unique key for a command. If the same key is sent again, the product returns the original result instead of creating a second record.",
+      "example": "The app retries after a network failure; the invoice is created once, not twice.",
+      "alsoCalled": [
+        "request key",
+        "dedupe key"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "exception-queue",
+      "canonical": "Exception queue",
+      "plain": {
+        "en-IN": "The list of things the app could not decide safely",
+        "hi-IN": "Jo app khud tay nahin kar saka, uski list"
+      },
+      "definition": "A worklist of transactions the product refused to complete because a fact was missing, confidence was low or facts contradicted each other. Items wait for a person; they are never auto-posted.",
+      "example": "The place of supply is missing, so the invoice waits in the exception queue instead of guessing IGST or CGST.",
+      "alsoCalled": [
+        "review queue",
+        "needs attention"
+      ],
+      "notTheSameAs": [
+        "approval"
+      ]
+    },
+    {
+      "id": "approval",
+      "canonical": "Approval",
+      "plain": {
+        "en-IN": "A person saying yes before something important happens",
+        "hi-IN": "Zaroori kaam se pehle kisi ki haan"
+      },
+      "definition": "A required human decision, with permissions and a preview, before a sensitive action such as finalising an invoice, overriding stock or filing a return.",
+      "example": "The manager approves a sale that exceeds the customer's credit limit.",
+      "alsoCalled": [
+        "authorisation",
+        "sign-off"
+      ],
+      "notTheSameAs": [
+        "exception-queue"
+      ]
+    },
+    {
+      "id": "override",
+      "canonical": "Override",
+      "plain": {
+        "en-IN": "Going ahead despite a warning, with a recorded reason",
+        "hi-IN": "Warning ke baawajood aage badhna, kaaran likhkar"
+      },
+      "definition": "An authorised decision to proceed past a warning or block. It always requires a permission, a typed reason and an audit entry. Some blocks cannot be overridden at all.",
+      "example": "Selling below the negative-stock limit is overridden by the owner with the reason 'goods received, bill pending'.",
+      "alsoCalled": [
+        "force",
+        "bypass"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "gstin",
+      "canonical": "GSTIN",
+      "plain": {
+        "en-IN": "The 15-character GST number of a business",
+        "hi-IN": "Business ka 15 akshar ka GST number"
+      },
+      "definition": "The Goods and Services Tax Identification Number. The first two characters are the state code, the next ten are the PAN, and the last is a checksum character the product validates.",
+      "example": "07AABCU9603R1ZM is registered in Delhi (state code 07).",
+      "alsoCalled": [
+        "GST number"
+      ],
+      "notTheSameAs": [
+        "pan"
+      ]
+    },
+    {
+      "id": "pan",
+      "canonical": "PAN",
+      "plain": {
+        "en-IN": "The 10-character income-tax number",
+        "hi-IN": "10 akshar ka income tax number"
+      },
+      "definition": "Permanent Account Number issued by the income-tax department. It is embedded inside a GSTIN.",
+      "example": "AABCU9603R.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "gstin"
+      ]
+    },
+    {
+      "id": "hsn",
+      "canonical": "HSN code",
+      "plain": {
+        "en-IN": "The government's code for a type of goods",
+        "hi-IN": "Saaman ka sarkari code"
+      },
+      "definition": "Harmonised System of Nomenclature code that classifies goods for GST. The number of digits you must print depends on your turnover.",
+      "example": "Fresh apples are HSN 0808.",
+      "alsoCalled": [
+        "HSN"
+      ],
+      "notTheSameAs": [
+        "sac"
+      ]
+    },
+    {
+      "id": "sac",
+      "canonical": "SAC code",
+      "plain": {
+        "en-IN": "The government's code for a type of service",
+        "hi-IN": "Service ka sarkari code"
+      },
+      "definition": "Services Accounting Code that classifies services for GST.",
+      "example": "Goods transport by road is SAC 9965.",
+      "alsoCalled": [
+        "SAC"
+      ],
+      "notTheSameAs": [
+        "hsn"
+      ]
+    },
+    {
+      "id": "place-of-supply",
+      "canonical": "Place of supply",
+      "plain": {
+        "en-IN": "The state the sale counts as happening in",
+        "hi-IN": "Bikri kis rajya ki maani jayegi"
+      },
+      "definition": "The state whose GST applies to a supply, decided by deterministic rules from the type of supply and the recipient's details. It decides whether CGST+SGST or IGST applies. It is never guessed.",
+      "example": "Goods delivered to a Haryana address from Delhi have Haryana as the place of supply, so IGST applies.",
+      "alsoCalled": [
+        "POS"
+      ],
+      "notTheSameAs": [
+        "branch"
+      ]
+    },
+    {
+      "id": "cgst",
+      "canonical": "CGST",
+      "plain": {
+        "en-IN": "The central government's half of GST on a sale inside your state",
+        "hi-IN": "Apne rajya ki bikri par kendra ka hissa"
+      },
+      "definition": "Central Goods and Services Tax, charged together with SGST or UTGST when the supplier and the place of supply are in the same state or union territory.",
+      "example": "On a Rs 1,000 intra-state sale at 18 percent, CGST is Rs 90.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "igst"
+      ]
+    },
+    {
+      "id": "sgst",
+      "canonical": "SGST",
+      "plain": {
+        "en-IN": "The state government's half of GST on a sale inside your state",
+        "hi-IN": "Apne rajya ki bikri par rajya ka hissa"
+      },
+      "definition": "State Goods and Services Tax, charged with CGST on supplies inside one state.",
+      "example": "On a Rs 1,000 intra-state sale at 18 percent, SGST is Rs 90.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "utgst",
+        "igst"
+      ]
+    },
+    {
+      "id": "utgst",
+      "canonical": "UTGST",
+      "plain": {
+        "en-IN": "The union-territory version of SGST",
+        "hi-IN": "Union territory ke liye SGST jaisa"
+      },
+      "definition": "Union Territory Goods and Services Tax, charged with CGST for supplies inside a union territory without its own legislature.",
+      "example": "A supply within Chandigarh uses CGST and UTGST.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "sgst"
+      ]
+    },
+    {
+      "id": "igst",
+      "canonical": "IGST",
+      "plain": {
+        "en-IN": "One combined GST for a sale to another state",
+        "hi-IN": "Dusre rajya ki bikri par ek hi GST"
+      },
+      "definition": "Integrated Goods and Services Tax, charged as a single amount when the supplier's state and the place of supply differ, and on imports and supplies treated as inter-state.",
+      "example": "On a Rs 1,000 inter-state sale at 18 percent, IGST is Rs 180.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "cgst",
+        "sgst"
+      ]
+    },
+    {
+      "id": "cess",
+      "canonical": "Cess",
+      "plain": {
+        "en-IN": "An extra tax on some specific goods",
+        "hi-IN": "Kuch khaas saaman par extra tax"
+      },
+      "definition": "GST compensation cess charged in addition to GST on notified goods, either as a percentage, a fixed amount per unit, or the higher of the two.",
+      "example": "Aerated drinks carry cess over and above the GST rate.",
+      "alsoCalled": [
+        "compensation cess"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "taxable-value",
+      "canonical": "Taxable value",
+      "plain": {
+        "en-IN": "The amount tax is calculated on",
+        "hi-IN": "Jis rakam par tax lagta hai"
+      },
+      "definition": "The value of the supply after discounts and before GST. Freight and other charges that form part of the supply are included in it.",
+      "example": "70 boxes at Rs 800 less 5 percent discount gives a taxable value of Rs 53,200.",
+      "alsoCalled": [
+        "assessable value",
+        "net amount"
+      ],
+      "notTheSameAs": [
+        "invoice-value"
+      ]
+    },
+    {
+      "id": "invoice-value",
+      "canonical": "Invoice value",
+      "plain": {
+        "en-IN": "The total the customer must pay",
+        "hi-IN": "Customer ko kitna dena hai"
+      },
+      "definition": "Taxable value plus all GST and cess plus any non-taxable charges, after round-off.",
+      "example": "Taxable value Rs 1,000 plus GST Rs 180 gives an invoice value of Rs 1,180.",
+      "alsoCalled": [
+        "grand total",
+        "bill amount"
+      ],
+      "notTheSameAs": [
+        "taxable-value"
+      ]
+    },
+    {
+      "id": "tax-inclusive-price",
+      "canonical": "Tax-inclusive price",
+      "plain": {
+        "en-IN": "The price already contains GST",
+        "hi-IN": "Rate mein GST shaamil hai"
+      },
+      "definition": "A rate that already includes GST. The product works the tax backwards out of it using a fixed formula and shows both the taxable value and the tax.",
+      "example": "Rs 118 inclusive at 18 percent means Rs 100 taxable value and Rs 18 GST.",
+      "alsoCalled": [
+        "MRP-style pricing",
+        "inclusive rate"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "reverse-charge",
+      "canonical": "Reverse charge",
+      "plain": {
+        "en-IN": "You pay the GST instead of your supplier",
+        "hi-IN": "GST supplier ke bajaay aap bharte hain"
+      },
+      "definition": "A treatment where the recipient, not the supplier, must pay GST to the government on notified supplies or purchases from unregistered persons.",
+      "example": "Freight from an unregistered goods transport agency may make you liable to pay GST directly.",
+      "alsoCalled": [
+        "RCM"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "input-tax-credit",
+      "canonical": "Input tax credit",
+      "plain": {
+        "en-IN": "GST you already paid on purchases that reduces your GST bill",
+        "hi-IN": "Kharid par diya GST jo aapka GST kam karta hai"
+      },
+      "definition": "Credit for GST paid on business purchases, which is set off against GST collected on sales, subject to eligibility conditions and the supplier having reported the invoice.",
+      "example": "Rs 18,000 GST paid on purchases reduces Rs 30,000 GST collected to Rs 12,000 payable.",
+      "alsoCalled": [
+        "ITC"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "output-tax",
+      "canonical": "Output tax",
+      "plain": {
+        "en-IN": "GST you collected from customers",
+        "hi-IN": "Customer se liya GST"
+      },
+      "definition": "GST charged on your sales and held as a liability until it is paid to the government.",
+      "example": "The Rs 180 GST on a Rs 1,180 invoice is output tax.",
+      "alsoCalled": [
+        "output GST",
+        "GST payable"
+      ],
+      "notTheSameAs": [
+        "input-tax-credit"
+      ]
+    },
+    {
+      "id": "tax-period",
+      "canonical": "Tax period",
+      "plain": {
+        "en-IN": "The month or quarter a return covers",
+        "hi-IN": "Return kis mahine ya quarter ka hai"
+      },
+      "definition": "The GST return period a transaction falls into, decided by its document date and the company's filing frequency.",
+      "example": "An invoice dated 30 April 2026 belongs to the April 2026 tax period for a monthly filer.",
+      "alsoCalled": [
+        "return period",
+        "filing period"
+      ],
+      "notTheSameAs": [
+        "fiscal-period"
+      ]
+    },
+    {
+      "id": "gstr-1",
+      "canonical": "GSTR-1",
+      "plain": {
+        "en-IN": "The monthly or quarterly list of your sales sent to the GST portal",
+        "hi-IN": "Apni bikri ki list jo GST portal par jaati hai"
+      },
+      "definition": "The outward-supply return that reports your sales invoices, credit notes and debit notes for a tax period.",
+      "example": "April's 42 sales invoices are reported in April's GSTR-1.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "gstr-3b"
+      ]
+    },
+    {
+      "id": "gstr-3b",
+      "canonical": "GSTR-3B",
+      "plain": {
+        "en-IN": "The summary return where you pay GST",
+        "hi-IN": "Summary return jismein GST bharte hain"
+      },
+      "definition": "The summary return that declares total outward tax, input tax credit claimed and the net GST paid for a tax period.",
+      "example": "April's GSTR-3B shows Rs 30,000 output tax less Rs 18,000 credit, so Rs 12,000 is paid.",
+      "alsoCalled": [],
+      "notTheSameAs": [
+        "gstr-1"
+      ]
+    },
+    {
+      "id": "gstr-2b",
+      "canonical": "GSTR-2B",
+      "plain": {
+        "en-IN": "The government's statement of purchases your suppliers reported",
+        "hi-IN": "Supplier ne jo bill report kiye, unki sarkari list"
+      },
+      "definition": "A static, auto-drafted statement of input tax credit available for a tax period, generated from what your suppliers filed. It is compared with your own purchase records.",
+      "example": "One supplier did not file, so their Rs 9,000 credit is not in GSTR-2B and is held back.",
+      "alsoCalled": [
+        "IMS statement"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "e-invoice",
+      "canonical": "E-invoice",
+      "plain": {
+        "en-IN": "An invoice registered with the government portal",
+        "hi-IN": "Sarkari portal par registered invoice"
+      },
+      "definition": "An invoice whose details are reported to the Invoice Registration Portal, which returns an Invoice Reference Number and a signed QR code. A styled PDF is not an e-invoice by itself.",
+      "example": "Invoice 42 received IRN 6f2c... and a QR code that must be printed.",
+      "alsoCalled": [
+        "IRN invoice"
+      ],
+      "notTheSameAs": [
+        "sales-invoice"
+      ]
+    },
+    {
+      "id": "irn",
+      "canonical": "IRN",
+      "plain": {
+        "en-IN": "The government's unique reference for a registered invoice",
+        "hi-IN": "Registered invoice ka sarkari unique number"
+      },
+      "definition": "Invoice Reference Number returned by the Invoice Registration Portal. Generating it twice for the same invoice is a duplicate the product must prevent.",
+      "example": "IRN is printed with the QR code on the invoice.",
+      "alsoCalled": [],
+      "notTheSameAs": []
+    },
+    {
+      "id": "e-way-bill",
+      "canonical": "E-way bill",
+      "plain": {
+        "en-IN": "The government permit needed to move goods",
+        "hi-IN": "Maal le jaane ka sarkari permit"
+      },
+      "definition": "An electronic document required for the movement of goods above notified value and distance conditions, carrying transporter and vehicle details and a validity period.",
+      "example": "Moving Rs 80,000 of apples to another state generally needs an e-way bill before the truck leaves.",
+      "alsoCalled": [
+        "EWB"
+      ],
+      "notTheSameAs": [
+        "e-invoice"
+      ]
+    },
+    {
+      "id": "stock-movement",
+      "canonical": "Stock movement",
+      "plain": {
+        "en-IN": "One in or out of goods",
+        "hi-IN": "Maal ka ek aana ya jaana"
+      },
+      "definition": "An append-only record of quantity entering or leaving a warehouse for an item, batch and unit, always linked to its source document. Stock on hand is the sum of movements, never a stored number that is edited.",
+      "example": "Purchase of 100 boxes is one movement in; sale of 70 boxes is one movement out; 30 remain.",
+      "alsoCalled": [
+        "stock ledger entry",
+        "inventory transaction"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "available-quantity",
+      "canonical": "Available quantity",
+      "plain": {
+        "en-IN": "How much you can still sell right now",
+        "hi-IN": "Abhi kitna bech sakte hain"
+      },
+      "definition": "Physical quantity minus quantity reserved by drafts and pending approvals. Sales are checked against available quantity, not physical quantity.",
+      "example": "100 boxes physically present with 70 reserved by a pending invoice leaves 30 available.",
+      "alsoCalled": [
+        "free stock"
+      ],
+      "notTheSameAs": [
+        "physical-quantity"
+      ]
+    },
+    {
+      "id": "physical-quantity",
+      "canonical": "Physical quantity",
+      "plain": {
+        "en-IN": "How much is actually lying in the godown",
+        "hi-IN": "Godown mein asal mein kitna hai"
+      },
+      "definition": "The quantity actually held, derived from posted stock movements only.",
+      "example": "100 boxes are in the godown even though 70 are promised to a customer.",
+      "alsoCalled": [
+        "stock on hand",
+        "closing stock"
+      ],
+      "notTheSameAs": [
+        "available-quantity"
+      ]
+    },
+    {
+      "id": "reservation",
+      "canonical": "Reservation",
+      "plain": {
+        "en-IN": "Stock held aside for a draft bill",
+        "hi-IN": "Draft bill ke liye rakha gaya maal"
+      },
+      "definition": "A temporary hold on quantity created when a sale is drafted or sent for approval, released on cancellation, expiry or conversion to a posted movement.",
+      "example": "A draft invoice for 70 boxes reserves them so a second user cannot sell the same 70.",
+      "alsoCalled": [
+        "hold",
+        "commitment"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "batch",
+      "canonical": "Batch",
+      "plain": {
+        "en-IN": "A specific lot of the same item",
+        "hi-IN": "Ek hi item ka alag lot"
+      },
+      "definition": "A tracked group of units of an item sharing a lot number, manufacture or expiry date. Batches keep cost and expiry separate within one item.",
+      "example": "Apple boxes from 2 May expire earlier than those from 9 May.",
+      "alsoCalled": [
+        "lot"
+      ],
+      "notTheSameAs": [
+        "item"
+      ]
+    },
+    {
+      "id": "warehouse",
+      "canonical": "Warehouse",
+      "plain": {
+        "en-IN": "A place where stock is kept",
+        "hi-IN": "Jahan maal rakha hai"
+      },
+      "definition": "A stock location belonging to a company and usually to a branch. Stock balances are always per warehouse.",
+      "example": "Narela godown and the shop counter are two warehouses.",
+      "alsoCalled": [
+        "godown",
+        "store",
+        "location"
+      ],
+      "notTheSameAs": [
+        "branch"
+      ]
+    },
+    {
+      "id": "credit-limit",
+      "canonical": "Credit limit",
+      "plain": {
+        "en-IN": "The most a customer may owe you at one time",
+        "hi-IN": "Customer se zyada se zyada kitna baaki rakh sakte hain"
+      },
+      "definition": "A per-customer ceiling on total outstanding plus pending transactions. Crossing it warns or blocks according to policy and can only be overridden with permission and a reason.",
+      "example": "ABC's limit is Rs 1,00,000 and a new Rs 60,000 invoice on Rs 50,000 outstanding crosses it.",
+      "alsoCalled": [
+        "credit ceiling"
+      ],
+      "notTheSameAs": [
+        "credit",
+        "credit-note"
+      ]
+    },
+    {
+      "id": "round-off",
+      "canonical": "Round-off",
+      "plain": {
+        "en-IN": "The few paise added or removed to reach a neat total",
+        "hi-IN": "Total seedha karne ke liye chhota adjustment"
+      },
+      "definition": "The small difference posted to a dedicated account so the invoice total reaches the configured rounding, keeping the voucher balanced.",
+      "example": "Rs 1,179.60 is shown as Rs 1,180 with Rs 0.40 posted to round-off.",
+      "alsoCalled": [
+        "rounding adjustment"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "rule-version",
+      "canonical": "Rule version",
+      "plain": {
+        "en-IN": "Which version of the rulebook decided this",
+        "hi-IN": "Kis version ke niyam se faisla hua"
+      },
+      "definition": "The identifier of the deterministic rule set used for a decision, stored with the decision so the same result can be reproduced later.",
+      "example": "The e-way decision on 12 May 2026 used rule set gst-ewb 2026.04.01.",
+      "alsoCalled": [
+        "ruleset version"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "effective-date",
+      "canonical": "Effective date",
+      "plain": {
+        "en-IN": "The date from which a rule or rate applies",
+        "hi-IN": "Niyam ya rate kis taarikh se laagu hai"
+      },
+      "definition": "The date range for which a rate, threshold or rule is valid. Transactions are always evaluated with the rule effective on their own document date.",
+      "example": "A rate change from 1 July does not change a bill dated 30 June.",
+      "alsoCalled": [
+        "applicable from"
+      ],
+      "notTheSameAs": []
+    },
+    {
+      "id": "user",
+      "canonical": "User",
+      "plain": {
+        "en-IN": "A person who logs in to the app",
+        "hi-IN": "App mein login karne wala vyakti"
+      },
+      "definition": "A person with a login who acts inside one or more companies. A user has roles and permissions per company and every action they take is recorded against them.",
+      "example": "Priya is a billing user at the Karol Bagh shop and can create invoices but not reopen a closed month.",
+      "alsoCalled": [
+        "operator",
+        "staff member"
+      ],
+      "notTheSameAs": [
+        "party"
+      ]
+    },
+    {
+      "id": "quotation",
+      "canonical": "Quotation",
+      "plain": {
+        "en-IN": "A price offer, not a bill",
+        "hi-IN": "Rate ka offer, bill nahin"
+      },
+      "definition": "A priced offer sent to a customer before a sale. It creates no entry in the books, no tax liability and no stock movement, and it may be converted into a sales invoice.",
+      "example": "You quote ABC Traders Rs 800 per box; nothing is recorded in your books until they order.",
+      "alsoCalled": [
+        "estimate",
+        "quote"
+      ],
+      "notTheSameAs": [
+        "sales-invoice",
+        "proforma"
+      ]
+    },
+    {
+      "id": "proforma",
+      "canonical": "Proforma invoice",
+      "plain": {
+        "en-IN": "A draft bill sent before payment",
+        "hi-IN": "Payment se pehle bheja gaya draft bill"
+      },
+      "definition": "A document that looks like an invoice and is used to request advance payment, but is not a tax invoice. It creates no ledger entry, no tax liability and no invoice number in the legal series.",
+      "example": "You send a proforma for Rs 1,00,000 so the customer can arrange the transfer before dispatch.",
+      "alsoCalled": [
+        "proforma"
+      ],
+      "notTheSameAs": [
+        "sales-invoice",
+        "quotation"
+      ]
+    }
+  ]
+}

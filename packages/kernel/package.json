@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/kernel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Money-safe primitives shared by every module: exact amounts, exact quantities, rounding, identifiers and the error model.",
+  "exports": { ".": "./src/index.ts" }
+}

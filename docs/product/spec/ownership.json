@@ -1,0 +1,513 @@
+{
+  "$comment": "Canonical issue ownership map for issue #1 [E01]. Every later issue links here.",
+  "version": "1.0.0",
+  "specification": "docs/product/README.md",
+  "agents": {
+    "GPT1": "Accounting, sales, deterministic financial and compliance rules, reporting and user experience",
+    "GPT2": "Platform, banking, communications, security and operations",
+    "GPT3": "Purchasing, GST returns, transport and government integrations"
+  },
+  "issues": [
+    {
+      "issue": 1,
+      "title": "[E01] Define the product specification, workflows and financial glossary",
+      "owner": "GPT1",
+      "module": "docs/product/",
+      "scope": "Canonical product specification, glossary, workflows and ownership map.",
+      "dependsOn": [],
+      "wave": "weeks-1-2"
+    },
+    {
+      "issue": 2,
+      "title": "[E02] Establish repository architecture, development environment and CI",
+      "owner": "GPT2",
+      "module": "(repository root, build and CI)",
+      "scope": "Repository architecture, development environment, build tooling and CI pipelines."
+    },
+    {
+      "issue": 3,
+      "title": "[E03] Implement multi-company authentication, branches, users and permissions",
+      "owner": "GPT2",
+      "module": "packages/identity/",
+      "scope": "Companies, branches, users, roles, permissions and tenant isolation."
+    },
+    {
+      "issue": 4,
+      "title": "[E04] Build the core double-entry accounting ledger",
+      "owner": "GPT1",
+      "module": "packages/ledger/",
+      "scope": "Double-entry ledger: accounts, vouchers, journal lines, periods, reversals, balances.",
+      "dependsOn": [
+        1,
+        2
+      ],
+      "wave": "weeks-1-2"
+    },
+    {
+      "issue": 5,
+      "title": "[E05] Build business master data for parties, items, tax and logistics",
+      "owner": "GPT3",
+      "module": "packages/master-data/",
+      "scope": "Parties, items, units, tax master data and logistics master data."
+    },
+    {
+      "issue": 6,
+      "title": "[E06] Implement approvals, immutable audit history and idempotent commands",
+      "owner": "GPT2",
+      "module": "packages/workflow-audit/",
+      "scope": "Approval workflows, immutable audit history and idempotent command handling."
+    },
+    {
+      "issue": 7,
+      "title": "[E07] Create the versioned compliance and financial rules engine",
+      "owner": "GPT1",
+      "module": "packages/rules-engine/",
+      "scope": "Deterministic, effective-dated compliance and financial rule evaluation with explanations.",
+      "dependsOn": [
+        1,
+        4,
+        5,
+        6
+      ],
+      "wave": "weeks-3-5"
+    },
+    {
+      "issue": 8,
+      "title": "[E08] Build replaceable external-service connector contracts",
+      "owner": "GPT2",
+      "module": "packages/connectors/",
+      "scope": "Replaceable external-service connector contracts, mocks and sandbox adapters."
+    },
+    {
+      "issue": 9,
+      "title": "[E09] Implement the complete sales invoice lifecycle",
+      "owner": "GPT1",
+      "module": "packages/sales/",
+      "scope": "Sales invoice lifecycle: draft, approval, finalisation, numbering, cancellation, posting.",
+      "dependsOn": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "wave": "weeks-3-5"
+    },
+    {
+      "issue": 10,
+      "title": "[E10] Build the multilingual voice and text transaction assistant",
+      "owner": "GPT1",
+      "module": "packages/voice-assistant/",
+      "scope": "Multilingual voice/text to structured draft with per-field confidence and confirmation.",
+      "dependsOn": [
+        5,
+        6,
+        9
+      ],
+      "wave": "weeks-6-8"
+    },
+    {
+      "issue": 11,
+      "title": "[E11] Add pricing, discounts, customer credit and overdue controls",
+      "owner": "GPT1",
+      "module": "packages/pricing-credit/",
+      "scope": "Price lists, price history, discount authority, credit limits and overdue controls.",
+      "dependsOn": [
+        5,
+        6,
+        9,
+        20
+      ],
+      "wave": "weeks-9-11"
+    },
+    {
+      "issue": 12,
+      "title": "[E12] Implement inventory availability, reservations and negative-stock prevention",
+      "owner": "GPT1",
+      "module": "packages/inventory/",
+      "scope": "Stock movement ledger, availability, reservations, negative-stock policy and overrides.",
+      "dependsOn": [
+        4,
+        5,
+        6,
+        9
+      ],
+      "wave": "weeks-3-5"
+    },
+    {
+      "issue": 13,
+      "title": "[E13] Build the AI Fancy Invoice designer and rendering engine",
+      "owner": "GPT1",
+      "module": "packages/invoice-templates/",
+      "scope": "Fancy Invoice template designer, compliance-locked sections and renderers.",
+      "dependsOn": [
+        5,
+        9
+      ],
+      "wave": "weeks-3-5"
+    },
+    {
+      "issue": 14,
+      "title": "[E14] Deliver invoices and track customer communications",
+      "owner": "GPT2",
+      "module": "packages/delivery/",
+      "scope": "Invoice delivery over email, WhatsApp and SMS with tracking."
+    },
+    {
+      "issue": 15,
+      "title": "[E15] Build an omnichannel purchase-invoice inbox with OCR",
+      "owner": "GPT3",
+      "module": "packages/purchase-inbox/",
+      "scope": "Omnichannel purchase-invoice intake and OCR extraction."
+    },
+    {
+      "issue": 16,
+      "title": "[E16] Validate supplier invoices and detect duplicates",
+      "owner": "GPT3",
+      "module": "packages/purchase-validation/",
+      "scope": "Supplier invoice validation and duplicate detection."
+    },
+    {
+      "issue": 17,
+      "title": "[E17] Post approved purchases to inventory, ledger and supplier payable",
+      "owner": "GPT3",
+      "module": "packages/purchase-posting/",
+      "scope": "Posting approved purchases to inventory, ledger and supplier payable."
+    },
+    {
+      "issue": 18,
+      "title": "[E18] Implement purchase orders, goods receipt and three-way matching",
+      "owner": "GPT3",
+      "module": "packages/procurement/",
+      "scope": "Purchase orders, goods receipt and three-way matching."
+    },
+    {
+      "issue": 19,
+      "title": "[E19] Build explainable supplier GST and payment-risk warnings",
+      "owner": "GPT3",
+      "module": "packages/supplier-risk/",
+      "scope": "Explainable supplier GST and payment-risk warnings."
+    },
+    {
+      "issue": 20,
+      "title": "[E20] Implement receivables, payables and payment allocation",
+      "owner": "GPT1",
+      "module": "packages/receivables-payables/",
+      "scope": "Payments, allocation, cheque lifecycle, ageing, statements, write-offs.",
+      "dependsOn": [
+        4,
+        5,
+        6,
+        9,
+        17
+      ],
+      "wave": "weeks-6-8"
+    },
+    {
+      "issue": 21,
+      "title": "[E21] Import and normalize bank statements",
+      "owner": "GPT2",
+      "module": "packages/bank-import/",
+      "scope": "Bank statement import and normalisation."
+    },
+    {
+      "issue": 22,
+      "title": "[E22] Build automatic bank reconciliation and exception handling",
+      "owner": "GPT2",
+      "module": "packages/bank-reconciliation/",
+      "scope": "Automatic bank reconciliation and reconciliation exceptions."
+    },
+    {
+      "issue": 23,
+      "title": "[E23] Add payment reminders and collection tracking",
+      "owner": "GPT2",
+      "module": "packages/collections/",
+      "scope": "Payment reminders and collection tracking."
+    },
+    {
+      "issue": 24,
+      "title": "[E24] Add live bank feeds through replaceable authorised adapters",
+      "owner": "GPT2",
+      "module": "packages/bank-feeds/",
+      "scope": "Live bank feeds through authorised adapters."
+    },
+    {
+      "issue": 25,
+      "title": "[E25] Implement GST calculation, place of supply and tax classification",
+      "owner": "GPT1",
+      "module": "packages/gst-calc/",
+      "scope": "Deterministic GST computation, place of supply, classification and rounding.",
+      "dependsOn": [
+        5,
+        7
+      ],
+      "wave": "weeks-3-5"
+    },
+    {
+      "issue": 26,
+      "title": "[E26] Implement e-invoice applicability and the complete IRN lifecycle",
+      "owner": "GPT3",
+      "module": "packages/e-invoice/",
+      "scope": "E-invoice applicability and IRN lifecycle."
+    },
+    {
+      "issue": 27,
+      "title": "[E27] Implement e-way-bill applicability and full lifecycle",
+      "owner": "GPT3",
+      "module": "packages/e-way-bill/",
+      "scope": "E-way-bill applicability and lifecycle."
+    },
+    {
+      "issue": 28,
+      "title": "[E28] Implement transport details and vehicle suitability controls",
+      "owner": "GPT3",
+      "module": "packages/transport/",
+      "scope": "Transport details and vehicle suitability controls."
+    },
+    {
+      "issue": 29,
+      "title": "[E29] Integrate authorised vehicle-record verification",
+      "owner": "GPT3",
+      "module": "packages/vehicle-verification/",
+      "scope": "Authorised vehicle-record verification."
+    },
+    {
+      "issue": 30,
+      "title": "[E30] Build the GSTR-1 and GSTR-3B preparation workspace",
+      "owner": "GPT3",
+      "module": "packages/gst-returns/",
+      "scope": "GSTR-1 and GSTR-3B preparation workspace."
+    },
+    {
+      "issue": 31,
+      "title": "[E31] Implement IMS/GSTR-2B reconciliation and ITC controls",
+      "owner": "GPT3",
+      "module": "packages/ims-reconciliation/",
+      "scope": "IMS/GSTR-2B reconciliation and input tax credit controls."
+    },
+    {
+      "issue": 32,
+      "title": "[E32] Build the compliance calendar and preventive alert engine",
+      "owner": "GPT3",
+      "module": "packages/compliance-calendar/",
+      "scope": "Compliance calendar and preventive alerts."
+    },
+    {
+      "issue": 33,
+      "title": "[E33] Integrate GSP/IRP customer onboarding and production GST operations",
+      "owner": "GPT3",
+      "module": "packages/gsp-integration/",
+      "scope": "GSP/IRP onboarding and production GST operations."
+    },
+    {
+      "issue": 34,
+      "title": "[E34] Build the AI business and legal-knowledge assistant",
+      "owner": "GPT1",
+      "module": "packages/knowledge-assistant/",
+      "scope": "Permission-aware business and compliance question answering over canonical reports.",
+      "dependsOn": [
+        5,
+        7,
+        32,
+        35
+      ],
+      "wave": "weeks-9-11"
+    },
+    {
+      "issue": 35,
+      "title": "[E35] Build financial, inventory and operational reports",
+      "owner": "GPT1",
+      "module": "packages/reports/",
+      "scope": "Trial balance, P&L, balance sheet, stock, ageing, GST and exception reports with drill-down.",
+      "dependsOn": [
+        4,
+        9,
+        12,
+        17,
+        20,
+        25
+      ],
+      "wave": "weeks-6-8"
+    },
+    {
+      "issue": 36,
+      "title": "[E36] Build guided business onboarding and opening balances",
+      "owner": "GPT1",
+      "module": "packages/onboarding/",
+      "scope": "Guided company setup, business-type defaults, opening balances and checklists.",
+      "dependsOn": [
+        3,
+        4,
+        5,
+        13,
+        46
+      ],
+      "wave": "weeks-6-8"
+    },
+    {
+      "issue": 37,
+      "title": "[E37] Implement Excel/CSV migration from existing accounting tools",
+      "owner": "GPT1",
+      "module": "packages/migration-import/",
+      "scope": "Excel/CSV mapping, validation, preview, commit, rollback and reconciliation.",
+      "dependsOn": [
+        4,
+        5,
+        12,
+        36
+      ],
+      "wave": "weeks-9-11"
+    },
+    {
+      "issue": 38,
+      "title": "[E38] Implement multilingual, mobile-responsive product foundations",
+      "owner": "GPT2",
+      "module": "apps/web/ + apps/mobile/",
+      "scope": "Multilingual, mobile-responsive client application foundations."
+    },
+    {
+      "issue": 39,
+      "title": "[E39] Build notification infrastructure",
+      "owner": "GPT2",
+      "module": "packages/notifications/",
+      "scope": "Notification infrastructure and channel routing."
+    },
+    {
+      "issue": 40,
+      "title": "[E40] Implement security, privacy, backup and disaster recovery",
+      "owner": "GPT2",
+      "module": "ops/security/",
+      "scope": "Security, privacy, backup and disaster recovery."
+    },
+    {
+      "issue": 41,
+      "title": "[E41] Build monitoring, support and operational administration",
+      "owner": "GPT2",
+      "module": "ops/monitoring/",
+      "scope": "Monitoring, support tooling and operational administration."
+    },
+    {
+      "issue": 42,
+      "title": "[E42] Implement subscriptions, entitlements and usage measurement",
+      "owner": "GPT2",
+      "module": "packages/subscriptions/",
+      "scope": "Subscriptions, entitlements and usage measurement."
+    },
+    {
+      "issue": 43,
+      "title": "[E43] Create a financial and compliance golden-test dataset",
+      "owner": "GPT1",
+      "module": "fixtures/golden/",
+      "scope": "Versioned synthetic businesses with expected ledger, stock, tax and warning outputs.",
+      "dependsOn": [
+        1,
+        4,
+        7,
+        25
+      ],
+      "wave": "weeks-9-11"
+    },
+    {
+      "issue": 44,
+      "title": "[E44] Build end-to-end workflow and failure testing",
+      "owner": "GPT3",
+      "module": "tests/e2e/",
+      "scope": "End-to-end workflow and failure testing."
+    },
+    {
+      "issue": 45,
+      "title": "[E45] Implement sales/purchase returns and transaction adjustments",
+      "owner": "GPT3",
+      "module": "packages/returns/",
+      "scope": "Sales and purchase returns and transaction adjustments."
+    },
+    {
+      "issue": 46,
+      "title": "[E46] Create a zero-training, non-accountant user experience",
+      "owner": "GPT1",
+      "module": "docs/ux/ + packages/ux-vocabulary/",
+      "scope": "Plain-language design system, vocabulary, states and message catalogue.",
+      "dependsOn": [
+        1,
+        2,
+        3
+      ],
+      "wave": "weeks-1-2"
+    },
+    {
+      "issue": 47,
+      "title": "[E47] Build a safe AI action agent for in-app assistance",
+      "owner": "GPT2",
+      "module": "packages/action-agent/",
+      "scope": "Safe in-app AI action agent with preview and approval."
+    },
+    {
+      "issue": 48,
+      "title": "[E48] Establish financial correctness release gates",
+      "owner": "GPT1",
+      "module": "tools/release-gates/",
+      "scope": "Cross-module financial invariants, required test classes and release checklist.",
+      "dependsOn": [
+        4,
+        6,
+        7,
+        43,
+        44
+      ],
+      "wave": "weeks-12-14"
+    },
+    {
+      "issue": 49,
+      "title": "[X01] Incorporate the company and assemble vendor-onboarding documents",
+      "owner": "GPT2",
+      "module": "docs/business/",
+      "scope": "Company incorporation and vendor-onboarding documents."
+    },
+    {
+      "issue": 50,
+      "title": "[X02] Compare GSP/IRP providers and obtain sandbox access",
+      "owner": "GPT3",
+      "module": "docs/business/",
+      "scope": "GSP/IRP provider comparison and sandbox access."
+    },
+    {
+      "issue": 51,
+      "title": "[X03] Complete GSP/IRP production contracting and onboarding",
+      "owner": "GPT3",
+      "module": "docs/business/",
+      "scope": "GSP/IRP production contracting and onboarding."
+    },
+    {
+      "issue": 52,
+      "title": "[X04] Research and obtain bank-feed sandbox/partnership access",
+      "owner": "GPT2",
+      "module": "docs/business/",
+      "scope": "Bank-feed sandbox and partnership access."
+    },
+    {
+      "issue": 53,
+      "title": "[X05] Apply for authorised vehicle-data access",
+      "owner": "GPT3",
+      "module": "docs/business/",
+      "scope": "Authorised vehicle-data access application."
+    },
+    {
+      "issue": 54,
+      "title": "[X06] Maintain the official compliance-source register",
+      "owner": "GPT1",
+      "module": "docs/compliance/ + packages/compliance-register/",
+      "scope": "Official source catalogue, rule-to-source mapping and review queue.",
+      "dependsOn": [
+        1,
+        7
+      ],
+      "wave": "weeks-9-11"
+    },
+    {
+      "issue": 55,
+      "title": "[X07] Prepare privacy, terms, consent and pilot agreements",
+      "owner": "GPT2",
+      "module": "docs/legal/",
+      "scope": "Privacy, terms, consent and pilot agreements."
+    }
+  ]
+}

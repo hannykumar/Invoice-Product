@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/ledger",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #4 [E04] — the double-entry ledger: the financial source of truth for vouchers, journal lines, balances, periods and reversals.",
+  "exports": { ".": "./src/index.ts" }
+}
