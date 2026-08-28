@@ -45,4 +45,13 @@ export const migrations: readonly Migration[] = [{
     CREATE TABLE exception_comments (id uuid PRIMARY KEY, exception_id uuid NOT NULL REFERENCES exception_items(id), actor_id uuid NOT NULL REFERENCES users(id), body text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
   `,
   down: `DROP TABLE IF EXISTS exception_comments; DROP TABLE IF EXISTS approval_policies; DROP TABLE IF EXISTS command_records;`,
+}, {
+  id: "0004_bank_statement_imports",
+  up: `
+    CREATE TABLE bank_statement_imports (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), file_name text NOT NULL, source_format text NOT NULL CHECK (source_format IN ('csv', 'xlsx', 'pdf-text')), file_fingerprint text NOT NULL, opening_balance_paise bigint, closing_balance_paise bigint, computed_closing_balance_paise bigint, balance_status text NOT NULL CHECK (balance_status IN ('not-provided', 'matched', 'mismatch')), review_reasons jsonb NOT NULL DEFAULT '[]', created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(company_id, file_fingerprint));
+    CREATE TABLE bank_statement_transactions (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), statement_import_id uuid NOT NULL REFERENCES bank_statement_imports(id), booked_on date NOT NULL, description text NOT NULL, debit_paise bigint NOT NULL DEFAULT 0 CHECK (debit_paise >= 0), credit_paise bigint NOT NULL DEFAULT 0 CHECK (credit_paise >= 0), reference text, source_location text NOT NULL, fingerprint text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), CHECK ((debit_paise = 0) <> (credit_paise = 0)), UNIQUE(company_id, fingerprint));
+    CREATE INDEX bank_statement_transactions_import_idx ON bank_statement_transactions(statement_import_id, booked_on);
+    CREATE INDEX bank_statement_imports_company_created_idx ON bank_statement_imports(company_id, created_at DESC);
+  `,
+  down: `DROP TABLE IF EXISTS bank_statement_transactions; DROP TABLE IF EXISTS bank_statement_imports;`,
 }];
