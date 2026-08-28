@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/ux-vocabulary",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #46 [E46] — plain-language vocabulary, state labels and message catalogue shared by every user-facing surface.",
+  "exports": { ".": "./src/index.ts", "./lint": "./src/lint.ts" }
+}

@@ -1,0 +1,429 @@
+{
+  "$comment": "Issue #46 [E46] — every message a person can see while doing money work. A screen must reference a message id; it must never write its own sentence.",
+  "version": "1.0.0",
+  "locales": ["en-IN", "hi-IN"],
+  "messages": [
+    {
+      "id": "stock.not_enough",
+      "severity": "block",
+      "surface": ["sale"],
+      "placeholders": ["itemName", "warehouseName", "available", "required", "shortfall", "unit"],
+      "text": {
+        "en-IN": "Not enough stock. You have {available} {unit} of {itemName} at {warehouseName}. This bill needs {required} {unit}, so {shortfall} {unit} are missing.",
+        "hi-IN": "Stock kam hai. {warehouseName} mein {itemName} ke {available} {unit} hain. Is bill ke liye {required} {unit} chahiye, yaani {shortfall} {unit} kam hain."
+      },
+      "why": {
+        "en-IN": "We count what you can sell as what is lying in the godown minus what is already kept aside for other bills.",
+        "hi-IN": "Bech sakne wala maal = godown ka maal, minus doosre bill ke liye rakha hua maal."
+      },
+      "nextSteps": [
+        { "id": "reduce", "label": { "en-IN": "Reduce the quantity to {available}", "hi-IN": "Quantity ghata kar {available} karein" } },
+        { "id": "other_warehouse", "label": { "en-IN": "Pick a different godown", "hi-IN": "Doosra godown chunein" } },
+        { "id": "record_purchase", "label": { "en-IN": "Record the purchase that brought this stock in", "hi-IN": "Jis kharid se maal aaya, use darj karein" } },
+        { "id": "override", "label": { "en-IN": "Ask someone with permission to allow it and give a reason", "hi-IN": "Permission wale se ijaazat lein aur kaaran likhein" }, "requiresPermission": "inventory.override_negative" }
+      ]
+    },
+    {
+      "id": "stock.reserved_by_other_bill",
+      "severity": "warn",
+      "surface": ["sale"],
+      "placeholders": ["reserved", "unit", "itemName"],
+      "text": {
+        "en-IN": "{reserved} {unit} of {itemName} are kept aside for bills that are not finished yet.",
+        "hi-IN": "{itemName} ke {reserved} {unit} un bills ke liye rakhe hain jo abhi poore nahin hue."
+      },
+      "why": {
+        "en-IN": "Stock is held from the moment a bill is started, so two people cannot sell the same goods.",
+        "hi-IN": "Bill shuru hote hi maal rakh liya jaata hai, taaki do log ek hi maal na bech dein."
+      },
+      "nextSteps": [
+        { "id": "view_holds", "label": { "en-IN": "See which bills are holding it", "hi-IN": "Dekhein kaunse bill rok rahe hain" } }
+      ]
+    },
+    {
+      "id": "tax.place_of_supply_missing",
+      "severity": "block",
+      "surface": ["sale", "purchase"],
+      "placeholders": ["partyName"],
+      "text": {
+        "en-IN": "We cannot work out the GST yet. We do not know which state this sale counts in for {partyName}.",
+        "hi-IN": "GST abhi tay nahin ho sakta. Pata nahin ki {partyName} ki yeh bikri kis rajya ki maani jayegi."
+      },
+      "why": {
+        "en-IN": "The state decides whether one combined GST applies or two separate ones. We will not guess it, because a wrong choice has to be corrected with the government later.",
+        "hi-IN": "Rajya se hi tay hota hai ki ek GST lagega ya do. Hum andaaza nahin lagayenge, kyunki galti baad mein sarkar ke saath sudhaarni padti hai."
+      },
+      "nextSteps": [
+        { "id": "add_state", "label": { "en-IN": "Add the delivery state for {partyName}", "hi-IN": "{partyName} ka delivery rajya bharein" } },
+        { "id": "add_gstin", "label": { "en-IN": "Add the customer's GST number", "hi-IN": "Customer ka GST number bharein" } }
+      ]
+    },
+    {
+      "id": "tax.scenario_not_supported",
+      "severity": "block",
+      "surface": ["sale", "purchase"],
+      "placeholders": ["scenario"],
+      "text": {
+        "en-IN": "This app does not handle {scenario} yet, so we will not put a GST figure on this bill.",
+        "hi-IN": "Yeh app abhi {scenario} nahin sambhaalti, isliye is bill par GST nahin lagayenge."
+      },
+      "why": {
+        "en-IN": "We only calculate tax for the situations we have checked against official rules. Saying nothing is safer than saying something wrong.",
+        "hi-IN": "Hum sirf un halaton ka tax nikaalte hain jinhe sarkari niyamon se jaancha hai. Galat batane se behtar hai kuch na batana."
+      },
+      "nextSteps": [
+        { "id": "ask_expert", "label": { "en-IN": "Check with your tax advisor and record the bill outside this app", "hi-IN": "Apne tax salahkaar se poochein aur bill is app ke bahar rakhein" } }
+      ]
+    },
+    {
+      "id": "credit.limit_crossed",
+      "severity": "warn",
+      "surface": ["sale"],
+      "placeholders": ["partyName", "limit", "outstanding", "billValue", "excess"],
+      "text": {
+        "en-IN": "{partyName} would owe you more than you allow. Their limit is {limit}, they already owe {outstanding}, and this bill of {billValue} takes them {excess} over.",
+        "hi-IN": "{partyName} par aapki tay seema se zyada baaki ho jayega. Seema {limit} hai, pehle se {outstanding} baaki hai, aur {billValue} ka yeh bill unhe {excess} zyada le jaata hai."
+      },
+      "why": {
+        "en-IN": "We add up unpaid bills and bills that are not finished yet, so the figure does not surprise you later.",
+        "hi-IN": "Hum bina chukaye bill aur adhoore bill dono jodte hain, taaki baad mein hairaani na ho."
+      },
+      "nextSteps": [
+        { "id": "collect", "label": { "en-IN": "Record a payment from {partyName} first", "hi-IN": "Pehle {partyName} ka payment darj karein" } },
+        { "id": "reduce_bill", "label": { "en-IN": "Reduce this bill", "hi-IN": "Yeh bill chhota karein" } },
+        { "id": "override", "label": { "en-IN": "Allow it anyway and give a reason", "hi-IN": "Phir bhi ijaazat dein aur kaaran likhein" }, "requiresPermission": "sales.override_credit_limit" }
+      ]
+    },
+    {
+      "id": "period.closed",
+      "severity": "block",
+      "surface": ["sale", "purchase", "payment", "journal"],
+      "placeholders": ["periodName", "documentDate"],
+      "text": {
+        "en-IN": "{periodName} is closed, so this entry cannot be dated {documentDate}.",
+        "hi-IN": "{periodName} band hai, isliye is entry ki taarikh {documentDate} nahin ho sakti."
+      },
+      "why": {
+        "en-IN": "Once a month is closed, its figures have usually been reported. Changing them would make your reports and your filings disagree.",
+        "hi-IN": "Mahina band hone ke baad uske aankde aam taur par report ho chuke hote hain. Unhe badalne se report aur filing alag ho jayenge."
+      },
+      "nextSteps": [
+        { "id": "change_date", "label": { "en-IN": "Use a date in an open month", "hi-IN": "Khule mahine ki taarikh lagayein" } },
+        { "id": "request_reopen", "label": { "en-IN": "Ask someone with permission to reopen {periodName}", "hi-IN": "Permission wale se {periodName} kholne ko kahein" }, "requiresPermission": "periods.reopen" }
+      ]
+    },
+    {
+      "id": "period.closed_permanently",
+      "severity": "block",
+      "surface": ["sale", "purchase", "payment", "journal"],
+      "placeholders": ["periodName"],
+      "text": {
+        "en-IN": "{periodName} is closed for good and cannot be reopened.",
+        "hi-IN": "{periodName} hamesha ke liye band hai, dobara nahin khulega."
+      },
+      "why": {
+        "en-IN": "This month has been filed. Correcting it now is done with a fresh entry in an open month, linked to the old one.",
+        "hi-IN": "Yeh mahina file ho chuka hai. Sudhaar ab khule mahine mein nayi entry se hota hai, jo purani se judi rehti hai."
+      },
+      "nextSteps": [
+        { "id": "correct_forward", "label": { "en-IN": "Make the correction in the current month", "hi-IN": "Sudhaar is mahine mein karein" } }
+      ]
+    },
+    {
+      "id": "duplicate.already_done",
+      "severity": "info",
+      "surface": ["sale", "purchase", "payment"],
+      "placeholders": ["documentNumber"],
+      "text": {
+        "en-IN": "This was already saved a moment ago as {documentNumber}, so we opened it instead of making a second one.",
+        "hi-IN": "Yeh abhi thodi der pehle {documentNumber} ke roop mein save ho chuka tha, isliye naya banane ke bajaay wahi khola gaya."
+      },
+      "why": {
+        "en-IN": "A slow network can make one tap look like two. We check before creating anything.",
+        "hi-IN": "Slow network mein ek tap do jaisa lag sakta hai. Isliye banane se pehle jaanch hoti hai."
+      },
+      "nextSteps": [
+        { "id": "open", "label": { "en-IN": "Open {documentNumber}", "hi-IN": "{documentNumber} kholein" } }
+      ]
+    },
+    {
+      "id": "duplicate.supplier_bill",
+      "severity": "block",
+      "surface": ["purchase"],
+      "placeholders": ["supplierName", "supplierBillNumber", "existingDocument"],
+      "text": {
+        "en-IN": "Bill {supplierBillNumber} from {supplierName} is already in your books as {existingDocument}.",
+        "hi-IN": "{supplierName} ka bill {supplierBillNumber} pehle se {existingDocument} ke roop mein darj hai."
+      },
+      "why": {
+        "en-IN": "Recording the same supplier bill twice would double your stock, your dues and the GST you can claim later.",
+        "hi-IN": "Ek hi supplier bill do baar darj karne se stock, dena aur baad mein milne wala GST dogune ho jaate hain."
+      },
+      "nextSteps": [
+        { "id": "open_existing", "label": { "en-IN": "Open {existingDocument}", "hi-IN": "{existingDocument} kholein" } },
+        { "id": "different_bill", "label": { "en-IN": "This is a different bill, change the bill number", "hi-IN": "Yeh alag bill hai, bill number badlein" } }
+      ]
+    },
+    {
+      "id": "payment.partly_paid",
+      "severity": "info",
+      "surface": ["payment", "sale"],
+      "placeholders": ["partyName", "paid", "outstanding", "documentNumber"],
+      "text": {
+        "en-IN": "{partyName} has paid {paid} against {documentNumber}. {outstanding} is still due.",
+        "hi-IN": "{partyName} ne {documentNumber} ke liye {paid} de diya hai. {outstanding} abhi baaki hai."
+      },
+      "why": {
+        "en-IN": "A bill is marked paid only when the whole amount has been received.",
+        "hi-IN": "Bill tabhi chukta maana jaata hai jab poori rakam mil jaaye."
+      },
+      "nextSteps": [
+        { "id": "record_more", "label": { "en-IN": "Record another payment", "hi-IN": "Aur payment darj karein" } },
+        { "id": "send_reminder", "label": { "en-IN": "Send a reminder", "hi-IN": "Yaad dilayein" } }
+      ]
+    },
+    {
+      "id": "payment.extra_on_account",
+      "severity": "info",
+      "surface": ["payment"],
+      "placeholders": ["partyName", "extra"],
+      "text": {
+        "en-IN": "{extra} extra was received from {partyName}. It is kept for them and is not linked to any bill yet.",
+        "hi-IN": "{partyName} se {extra} zyada mila. Woh unke naam rakha hai, abhi kisi bill se juda nahin."
+      },
+      "why": {
+        "en-IN": "We never decide on your behalf which bill extra money belongs to.",
+        "hi-IN": "Zyada paisa kis bill ka hai, yeh hum aapki taraf se tay nahin karte."
+      },
+      "nextSteps": [
+        { "id": "link_later", "label": { "en-IN": "Link it to a bill now", "hi-IN": "Abhi kisi bill se jodein" } },
+        { "id": "keep", "label": { "en-IN": "Keep it for later", "hi-IN": "Baad ke liye rakhein" } }
+      ]
+    },
+    {
+      "id": "cheque.bounced",
+      "severity": "warn",
+      "surface": ["payment"],
+      "placeholders": ["partyName", "amount", "chequeNumber", "restoredOutstanding"],
+      "text": {
+        "en-IN": "Cheque {chequeNumber} from {partyName} for {amount} did not clear. Their dues are back to {restoredOutstanding}.",
+        "hi-IN": "{partyName} ka {amount} ka cheque {chequeNumber} clear nahin hua. Unka baaki phir se {restoredOutstanding} ho gaya."
+      },
+      "why": {
+        "en-IN": "We do not delete the old record. We add an opposite entry, so you can always see what happened.",
+        "hi-IN": "Purana record mitaaya nahin jaata. Ulti entry jodi jaati hai, taaki hamesha dikhe ki kya hua."
+      },
+      "nextSteps": [
+        { "id": "contact", "label": { "en-IN": "Call {partyName}", "hi-IN": "{partyName} ko call karein" } },
+        { "id": "record_new", "label": { "en-IN": "Record a new payment", "hi-IN": "Naya payment darj karein" } }
+      ]
+    },
+    {
+      "id": "voice.confirm_draft",
+      "severity": "info",
+      "surface": ["voice"],
+      "placeholders": ["partyName", "quantity", "unit", "itemName", "rate", "taxBasis", "stockAfter"],
+      "text": {
+        "en-IN": "Please check: sell {quantity} {unit} of {itemName} to {partyName} at {rate} per {unit}, price {taxBasis}. After this you will have {stockAfter} left.",
+        "hi-IN": "Zara jaanch lein: {partyName} ko {itemName} ke {quantity} {unit}, {rate} prati {unit}, rate {taxBasis}. Iske baad {stockAfter} bachega."
+      },
+      "why": {
+        "en-IN": "We repeat what we understood before anything is recorded, because a misheard number costs real money.",
+        "hi-IN": "Kuch darj karne se pehle hum samjhi hui baat dohraate hain, kyunki galat suna hua number asli nuksaan karta hai."
+      },
+      "nextSteps": [
+        { "id": "confirm", "label": { "en-IN": "Yes, this is right", "hi-IN": "Haan, sahi hai" } },
+        { "id": "fix_field", "label": { "en-IN": "Change one thing", "hi-IN": "Ek cheez badlein" } },
+        { "id": "start_over", "label": { "en-IN": "Say it again", "hi-IN": "Dobara boliye" } }
+      ]
+    },
+    {
+      "id": "voice.unclear_field",
+      "severity": "block",
+      "surface": ["voice"],
+      "placeholders": ["fieldLabel", "heardValue"],
+      "text": {
+        "en-IN": "We are not sure about the {fieldLabel}. We heard \"{heardValue}\".",
+        "hi-IN": "{fieldLabel} ke baare mein pakka nahin hai. Humne \"{heardValue}\" suna."
+      },
+      "why": {
+        "en-IN": "Numbers like seventeen and seventy sound alike. We ask instead of choosing one.",
+        "hi-IN": "Satrah aur sattar jaise number milte-julte lagte hain. Isliye hum chunne ke bajaay poochte hain."
+      },
+      "nextSteps": [
+        { "id": "pick", "label": { "en-IN": "Pick the right one", "hi-IN": "Sahi wala chunein" } },
+        { "id": "type", "label": { "en-IN": "Type it instead", "hi-IN": "Type kar dein" } }
+      ]
+    },
+    {
+      "id": "party.similar_names",
+      "severity": "block",
+      "surface": ["voice", "sale"],
+      "placeholders": ["spokenName", "optionCount"],
+      "text": {
+        "en-IN": "{optionCount} customers have names like \"{spokenName}\". Which one did you mean?",
+        "hi-IN": "\"{spokenName}\" jaise naam wale {optionCount} customer hain. Aapka matlab kaunsa tha?"
+      },
+      "why": {
+        "en-IN": "Billing the wrong customer moves money to the wrong account and is slow to correct.",
+        "hi-IN": "Galat customer ka bill banne se paisa galat khaate mein jaata hai aur sudhaarna mushkil hota hai."
+      },
+      "nextSteps": [
+        { "id": "choose", "label": { "en-IN": "Choose the customer", "hi-IN": "Customer chunein" } },
+        { "id": "new_party", "label": { "en-IN": "This is a new customer", "hi-IN": "Yeh naya customer hai" } }
+      ]
+    },
+    {
+      "id": "approval.needed",
+      "severity": "info",
+      "surface": ["sale", "purchase", "payment"],
+      "placeholders": ["reason", "approverRole"],
+      "text": {
+        "en-IN": "This needs approval from {approverRole} because {reason}.",
+        "hi-IN": "Iske liye {approverRole} ki manzoori chahiye kyunki {reason}."
+      },
+      "why": {
+        "en-IN": "Your business asked for a second pair of eyes on this kind of entry.",
+        "hi-IN": "Aapke business ne is tarah ki entry par doosri nazar maangi hai."
+      },
+      "nextSteps": [
+        { "id": "send", "label": { "en-IN": "Send for approval", "hi-IN": "Manzoori ke liye bhejein" } },
+        { "id": "edit", "label": { "en-IN": "Change it so approval is not needed", "hi-IN": "Aisa badlein ki manzoori na chahiye" } }
+      ]
+    },
+    {
+      "id": "permission.not_allowed",
+      "severity": "block",
+      "surface": ["sale", "purchase", "payment", "reports", "settings"],
+      "placeholders": ["actionLabel"],
+      "text": {
+        "en-IN": "You cannot {actionLabel} with your current access.",
+        "hi-IN": "Aapke maujooda access se aap {actionLabel} nahin kar sakte."
+      },
+      "why": {
+        "en-IN": "Access is set by the business owner so that money work stays with the right people.",
+        "hi-IN": "Access maalik tay karte hain, taaki paise ka kaam sahi logon ke paas rahe."
+      },
+      "nextSteps": [
+        { "id": "ask_owner", "label": { "en-IN": "Ask the owner for access", "hi-IN": "Maalik se access maangein" } }
+      ]
+    },
+    {
+      "id": "override.reason_required",
+      "severity": "block",
+      "surface": ["sale", "purchase", "inventory"],
+      "placeholders": [],
+      "text": {
+        "en-IN": "Please write why you are going ahead. This is saved with your name and the time.",
+        "hi-IN": "Kripya likhein ki aap kyun aage badh rahe hain. Yeh aapke naam aur samay ke saath save hoga."
+      },
+      "why": {
+        "en-IN": "Later, someone will ask why this was allowed. The answer should be in the record, not in memory.",
+        "hi-IN": "Baad mein koi poochega ki yeh kyun hone diya. Jawab record mein hona chahiye, yaad par nahin."
+      },
+      "nextSteps": [
+        { "id": "write_reason", "label": { "en-IN": "Write the reason", "hi-IN": "Kaaran likhein" } },
+        { "id": "cancel", "label": { "en-IN": "Do not go ahead", "hi-IN": "Aage na badhein" } }
+      ]
+    },
+    {
+      "id": "final.cannot_edit",
+      "severity": "block",
+      "surface": ["sale", "purchase"],
+      "placeholders": ["documentNumber"],
+      "text": {
+        "en-IN": "{documentNumber} has already been issued, so it cannot be changed.",
+        "hi-IN": "{documentNumber} jaari ho chuka hai, isliye badla nahin ja sakta."
+      },
+      "why": {
+        "en-IN": "The customer and the government may already have this bill. Corrections are made with a new linked document, so both versions stay visible.",
+        "hi-IN": "Yeh bill customer aur sarkar ke paas ja chuka ho sakta hai. Sudhaar naye jude hue document se hota hai, taaki dono dikhein."
+      },
+      "nextSteps": [
+        { "id": "credit_note", "label": { "en-IN": "Make a return note", "hi-IN": "Wapsi note banayein" } },
+        { "id": "cancel_doc", "label": { "en-IN": "Cancel {documentNumber}", "hi-IN": "{documentNumber} radd karein" }, "requiresPermission": "sales.cancel" }
+      ]
+    },
+    {
+      "id": "gov.service_unavailable",
+      "severity": "warn",
+      "surface": ["sale", "transport"],
+      "placeholders": ["serviceName", "documentNumber"],
+      "text": {
+        "en-IN": "{documentNumber} is saved in your books, but {serviceName} is not responding right now.",
+        "hi-IN": "{documentNumber} aapke hisaab mein save hai, lekin {serviceName} abhi jawab nahin de raha."
+      },
+      "why": {
+        "en-IN": "Your books do not wait for a government service. We will keep trying and never create a second one.",
+        "hi-IN": "Aapka hisaab sarkari service ka intezaar nahin karta. Hum koshish karte rahenge aur doosra kabhi nahin banayenge."
+      },
+      "nextSteps": [
+        { "id": "retry", "label": { "en-IN": "Try again now", "hi-IN": "Abhi dobara koshish karein" } },
+        { "id": "later", "label": { "en-IN": "Leave it, we will keep trying", "hi-IN": "Rehne dein, hum koshish karte rahenge" } }
+      ]
+    },
+    {
+      "id": "vehicle.too_small",
+      "severity": "warn",
+      "surface": ["transport"],
+      "placeholders": ["loadKg", "vehicleClass", "vehicleNumber"],
+      "text": {
+        "en-IN": "This vehicle looks too small. The goods weigh about {loadKg} kg, but {vehicleNumber} is registered as a {vehicleClass}.",
+        "hi-IN": "Yeh gaadi chhoti lag rahi hai. Maal ka wazan lagbhag {loadKg} kg hai, lekin {vehicleNumber} {vehicleClass} ke roop mein registered hai."
+      },
+      "why": {
+        "en-IN": "A vehicle that cannot carry the load is usually a typing mistake, and it can be questioned on the road.",
+        "hi-IN": "Jo gaadi itna maal utha hi nahin sakti, wahan aam taur par typing ki galti hoti hai, aur raaste mein sawaal ho sakta hai."
+      },
+      "nextSteps": [
+        { "id": "fix_number", "label": { "en-IN": "Check the vehicle number", "hi-IN": "Gaadi ka number jaanchein" } },
+        { "id": "confirm_vehicle", "label": { "en-IN": "This is correct, go ahead", "hi-IN": "Yeh sahi hai, aage badhein" }, "requiresPermission": "transport.override_vehicle_check" }
+      ]
+    },
+    {
+      "id": "state.saving",
+      "severity": "progress",
+      "surface": ["sale", "purchase", "payment"],
+      "placeholders": [],
+      "text": { "en-IN": "Saving…", "hi-IN": "Save ho raha hai…" },
+      "why": { "en-IN": "Nothing is recorded until this finishes.", "hi-IN": "Jab tak yeh poora na ho, kuch darj nahin hota." },
+      "nextSteps": []
+    },
+    {
+      "id": "state.saved",
+      "severity": "success",
+      "surface": ["sale", "purchase", "payment"],
+      "placeholders": ["documentNumber"],
+      "text": { "en-IN": "Done. {documentNumber} is recorded in your books.", "hi-IN": "Ho gaya. {documentNumber} aapke hisaab mein darj hai." },
+      "why": { "en-IN": "Your stock, your dues and your GST have all been updated together.", "hi-IN": "Aapka stock, dena-lena aur GST sab ek saath update ho gaye." },
+      "nextSteps": [
+        { "id": "share", "label": { "en-IN": "Send it to the customer", "hi-IN": "Customer ko bhejein" } },
+        { "id": "print", "label": { "en-IN": "Print", "hi-IN": "Print karein" } },
+        { "id": "new", "label": { "en-IN": "Make another bill", "hi-IN": "Ek aur bill banayein" } }
+      ]
+    },
+    {
+      "id": "state.failed_nothing_saved",
+      "severity": "block",
+      "surface": ["sale", "purchase", "payment"],
+      "placeholders": [],
+      "text": { "en-IN": "It did not go through. Nothing was recorded, so you can safely try again.", "hi-IN": "Yeh nahin hua. Kuch darj nahin hua, isliye aap bina fikar dobara koshish kar sakte hain." },
+      "why": { "en-IN": "We save the whole entry or none of it. There is no half-saved bill.", "hi-IN": "Ya poori entry save hoti hai ya bilkul nahin. Aadha bill jaisa kuch nahin hota." },
+      "nextSteps": [
+        { "id": "retry", "label": { "en-IN": "Try again", "hi-IN": "Dobara koshish karein" } },
+        { "id": "keep_draft", "label": { "en-IN": "Keep it as an unfinished bill", "hi-IN": "Adhoore bill ki tarah rakhein" } }
+      ]
+    },
+    {
+      "id": "offline.saved_on_device",
+      "severity": "warn",
+      "surface": ["sale", "purchase", "payment"],
+      "placeholders": [],
+      "text": { "en-IN": "You are offline. This is kept on your phone as an unfinished bill and is not in your books yet.", "hi-IN": "Aap offline hain. Yeh aapke phone par adhoore bill ki tarah rakha hai, hisaab mein abhi nahin gaya." },
+      "why": { "en-IN": "Stock, numbering and GST are checked on the server, so a bill becomes final only when your phone reaches it.", "hi-IN": "Stock, number aur GST server par jaanche jaate hain, isliye bill tabhi poora hota hai jab phone server tak pahunche." },
+      "nextSteps": [
+        { "id": "wait", "label": { "en-IN": "We will finish it when you are back online", "hi-IN": "Online aate hi hum ise poora kar denge" } }
+      ]
+    }
+  ]
+}

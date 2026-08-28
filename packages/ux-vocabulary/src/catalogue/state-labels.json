@@ -1,0 +1,160 @@
+{
+  "$comment": "Issue #46 [E46] — the exact words shown for every state in docs/product/spec/states.json. Screens must not invent their own labels.",
+  "version": "1.0.0",
+  "locales": [
+    "en-IN",
+    "hi-IN"
+  ],
+  "groupLabels": {
+    "draft": {
+      "en-IN": "Not finished",
+      "hi-IN": "Adhoora"
+    },
+    "processing": {
+      "en-IN": "Working on it",
+      "hi-IN": "Kaam chal raha hai"
+    },
+    "submitted": {
+      "en-IN": "Waiting",
+      "hi-IN": "Intezaar"
+    },
+    "accepted": {
+      "en-IN": "Done",
+      "hi-IN": "Ho gaya"
+    },
+    "failed": {
+      "en-IN": "Did not go through",
+      "hi-IN": "Nahin hua"
+    },
+    "needs_attention": {
+      "en-IN": "Needs your attention",
+      "hi-IN": "Aapke dhyaan ki zaroorat"
+    }
+  },
+  "stateLabels": {
+    "voucher.DRAFT": {
+      "en-IN": "Not in your books yet",
+      "hi-IN": "Abhi hisaab mein nahin"
+    },
+    "voucher.FINAL": {
+      "en-IN": "Recorded in your books",
+      "hi-IN": "Hisaab mein darj"
+    },
+    "voucher.REVERSED": {
+      "en-IN": "Undone with an opposite entry",
+      "hi-IN": "Ulti entry se hataya gaya"
+    },
+    "sales_invoice.DRAFT": {
+      "en-IN": "Bill not finished",
+      "hi-IN": "Bill adhoora"
+    },
+    "sales_invoice.PENDING_APPROVAL": {
+      "en-IN": "Waiting for approval",
+      "hi-IN": "Manzoori ka intezaar"
+    },
+    "sales_invoice.NEEDS_INFO": {
+      "en-IN": "Some details are missing",
+      "hi-IN": "Kuch jaankari baaki hai"
+    },
+    "sales_invoice.FINAL": {
+      "en-IN": "Bill issued",
+      "hi-IN": "Bill ban gaya"
+    },
+    "sales_invoice.CANCELLED": {
+      "en-IN": "Bill cancelled",
+      "hi-IN": "Bill radd"
+    },
+    "payment.DRAFT": {
+      "en-IN": "Payment not saved yet",
+      "hi-IN": "Payment abhi save nahin"
+    },
+    "payment.RECORDED": {
+      "en-IN": "Payment recorded",
+      "hi-IN": "Payment darj"
+    },
+    "payment.REVERSED": {
+      "en-IN": "Payment undone",
+      "hi-IN": "Payment hataya gaya"
+    },
+    "cheque.PENDING": {
+      "en-IN": "Cheque received, not cleared yet",
+      "hi-IN": "Cheque mila, abhi clear nahin"
+    },
+    "cheque.DEPOSITED": {
+      "en-IN": "Cheque given to the bank",
+      "hi-IN": "Cheque bank mein diya"
+    },
+    "cheque.CLEARED": {
+      "en-IN": "Money in your bank",
+      "hi-IN": "Paisa bank mein aa gaya"
+    },
+    "cheque.BOUNCED": {
+      "en-IN": "Cheque did not clear",
+      "hi-IN": "Cheque clear nahin hua"
+    },
+    "cheque.CANCELLED": {
+      "en-IN": "Cheque cancelled",
+      "hi-IN": "Cheque radd"
+    },
+    "stock_reservation.HELD": {
+      "en-IN": "Kept aside for a bill",
+      "hi-IN": "Ek bill ke liye rakha hua"
+    },
+    "stock_reservation.CONSUMED": {
+      "en-IN": "Goods issued",
+      "hi-IN": "Maal nikal gaya"
+    },
+    "stock_reservation.RELEASED": {
+      "en-IN": "Free to sell again",
+      "hi-IN": "Dobara bechne ke liye khaali"
+    },
+    "stock_reservation.EXPIRED": {
+      "en-IN": "Hold expired, free to sell again",
+      "hi-IN": "Hold khatam, dobara bech sakte hain"
+    },
+    "exception_item.OPEN": {
+      "en-IN": "Needs your attention",
+      "hi-IN": "Aapke dhyaan ki zaroorat"
+    },
+    "exception_item.IN_REVIEW": {
+      "en-IN": "Someone is looking at it",
+      "hi-IN": "Koi dekh raha hai"
+    },
+    "exception_item.RESOLVED": {
+      "en-IN": "Sorted out",
+      "hi-IN": "Sulajh gaya"
+    },
+    "exception_item.DISMISSED": {
+      "en-IN": "Closed without any change",
+      "hi-IN": "Bina badlaav band kiya"
+    },
+    "approval_request.PENDING": {
+      "en-IN": "Waiting for approval",
+      "hi-IN": "Manzoori ka intezaar"
+    },
+    "approval_request.APPROVED": {
+      "en-IN": "Approved",
+      "hi-IN": "Manzoor"
+    },
+    "approval_request.REJECTED": {
+      "en-IN": "Not approved",
+      "hi-IN": "Manzoor nahin"
+    },
+    "approval_request.WITHDRAWN": {
+      "en-IN": "Request taken back",
+      "hi-IN": "Request wapas li"
+    },
+    "fiscal_period.OPEN": {
+      "en-IN": "Open for entries",
+      "hi-IN": "Entry ke liye khula"
+    },
+    "fiscal_period.SOFT_LOCKED": {
+      "en-IN": "Closed, a manager can still allow an entry",
+      "hi-IN": "Band, lekin manager abhi bhi entry de sakta hai"
+    },
+    "fiscal_period.HARD_LOCKED": {
+      "en-IN": "Closed for good",
+      "hi-IN": "Hamesha ke liye band"
+    }
+  }
+}

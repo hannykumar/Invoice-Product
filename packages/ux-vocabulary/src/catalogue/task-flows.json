@@ -1,0 +1,222 @@
+{
+  "$comment": "Issue #46 [E46] — the step budget for everyday work. A 'step' is one screen the person must complete. Confirmations that protect money are part of a step, never an extra one, and are never removed to hit the budget. `safetyConfirmations` are the checks that stop or warn; `mustTellUser` are facts the person must be shown so they do not form a wrong belief about their money.",
+  "version": "1.0.0",
+  "stepBudget": 3,
+  "tasks": [
+    {
+      "id": "first_sale",
+      "name": {
+        "en-IN": "Make a bill",
+        "hi-IN": "Bill banayein"
+      },
+      "everyday": true,
+      "steps": [
+        {
+          "n": 1,
+          "name": {
+            "en-IN": "Who and what",
+            "hi-IN": "Kisko aur kya"
+          },
+          "does": "Pick the customer, the item, the quantity and the rate. Speaking it counts as this step.",
+          "defaults": [
+            "last customer used",
+            "last rate agreed with this customer",
+            "the item's usual unit",
+            "today's date"
+          ],
+          "hiddenUntilAsked": [
+            "discount",
+            "freight",
+            "other charges",
+            "due date",
+            "narration"
+          ]
+        },
+        {
+          "n": 2,
+          "name": {
+            "en-IN": "Check",
+            "hi-IN": "Jaanchein"
+          },
+          "does": "See the total, the GST, the stock left after this bill, and anything that needs attention. Approve if approval is required.",
+          "showsAlways": [
+            "invoice value",
+            "GST split in plain words",
+            "stock left after this bill",
+            "what the customer will owe in total"
+          ],
+          "safetyConfirmations": [
+            "stock.not_enough",
+            "credit.limit_crossed",
+            "tax.place_of_supply_missing"
+          ]
+        },
+        {
+          "n": 3,
+          "name": {
+            "en-IN": "Give the bill",
+            "hi-IN": "Bill dein"
+          },
+          "does": "Save, then print or send.",
+          "resultMessage": "state.saved"
+        }
+      ]
+    },
+    {
+      "id": "first_purchase",
+      "name": {
+        "en-IN": "Record a supplier bill",
+        "hi-IN": "Supplier ka bill darj karein"
+      },
+      "everyday": true,
+      "steps": [
+        {
+          "n": 1,
+          "name": {
+            "en-IN": "The bill",
+            "hi-IN": "Bill"
+          },
+          "does": "Photograph or type the supplier's bill. Supplier, bill number, date, items and amounts are filled in for you to check.",
+          "defaults": [
+            "supplier from the bill",
+            "today's date if the bill has none"
+          ],
+          "hiddenUntilAsked": [
+            "purchase order link",
+            "godown",
+            "batch"
+          ]
+        },
+        {
+          "n": 2,
+          "name": {
+            "en-IN": "Check",
+            "hi-IN": "Jaanchein"
+          },
+          "does": "Confirm the amounts, see the stock that will be added and the GST you can claim later.",
+          "showsAlways": [
+            "bill total",
+            "stock that will be added",
+            "GST you already paid on this purchase"
+          ],
+          "safetyConfirmations": [
+            "duplicate.supplier_bill",
+            "period.closed"
+          ]
+        },
+        {
+          "n": 3,
+          "name": {
+            "en-IN": "Save",
+            "hi-IN": "Save karein"
+          },
+          "does": "Save it into the books.",
+          "resultMessage": "state.saved"
+        }
+      ]
+    },
+    {
+      "id": "first_payment",
+      "name": {
+        "en-IN": "Record money received",
+        "hi-IN": "Aaya hua paisa darj karein"
+      },
+      "everyday": true,
+      "steps": [
+        {
+          "n": 1,
+          "name": {
+            "en-IN": "Who paid and how much",
+            "hi-IN": "Kisne kitna diya"
+          },
+          "does": "Pick the customer, enter the amount and how it came: cash, cheque, bank or UPI.",
+          "defaults": [
+            "cash",
+            "today's date",
+            "the oldest unpaid bill offered first"
+          ],
+          "hiddenUntilAsked": [
+            "bank account",
+            "reference number",
+            "cheque date"
+          ]
+        },
+        {
+          "n": 2,
+          "name": {
+            "en-IN": "Which bills",
+            "hi-IN": "Kaunse bill"
+          },
+          "does": "Confirm which bills this settles. Anything left over is kept for the customer and clearly shown.",
+          "showsAlways": [
+            "amount applied to each bill",
+            "amount still due after this",
+            "any extra kept for later"
+          ],
+          "safetyConfirmations": [
+            "period.closed"
+          ],
+          "mustTellUser": [
+            "payment.partly_paid",
+            "payment.extra_on_account"
+          ]
+        },
+        {
+          "n": 3,
+          "name": {
+            "en-IN": "Save",
+            "hi-IN": "Save karein"
+          },
+          "does": "Save it into the books.",
+          "resultMessage": "state.saved"
+        }
+      ]
+    },
+    {
+      "id": "see_who_owes_me",
+      "name": {
+        "en-IN": "See who owes me money",
+        "hi-IN": "Dekhein kisse paisa lena hai"
+      },
+      "everyday": true,
+      "steps": [
+        {
+          "n": 1,
+          "name": {
+            "en-IN": "Open the list",
+            "hi-IN": "List kholein"
+          },
+          "does": "One tap from the home screen shows every customer who owes money, biggest and oldest first.",
+          "showsAlways": [
+            "what each customer owes",
+            "how long it has been due",
+            "a call and a reminder button"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "see_stock_left",
+      "name": {
+        "en-IN": "See what is left in the godown",
+        "hi-IN": "Dekhein godown mein kya bacha hai"
+      },
+      "everyday": true,
+      "steps": [
+        {
+          "n": 1,
+          "name": {
+            "en-IN": "Open the list",
+            "hi-IN": "List kholein"
+          },
+          "does": "One tap shows every item with what you can sell right now and what is kept aside.",
+          "showsAlways": [
+            "what you can sell",
+            "what is kept aside for unfinished bills",
+            "which godown"
+          ]
+        }
+      ]
+    }
+  ]
+}
