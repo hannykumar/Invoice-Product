@@ -5,7 +5,9 @@ export type Permission =
   | "gst.file"
   | "stock.negative.override"
   | "approval.decide"
-  | "access.review";
+  | "access.review"
+  | "notification.send"
+  | "notification.sensitive.send";
 
 export interface RequestContext {
   companyId: Id;
