@@ -5,9 +5,9 @@ commands and events, API surface, error model, permissions and idempotency behav
 
 | Contract | Version | Owner | Consumed by | Status |
 | --- | --- | --- | --- | --- |
-| `ledger` (published with issue #4) | 1.0.0 | GPT 1 (#4) | GPT 1 (#9, #12, #20, #35), GPT 3 (#17, #45) | Published |
+| [`ledger`](./ledger.v1.md) | 1.0.0 | GPT 1 (#4) | GPT 1 (#9, #12, #20, #35), GPT 3 (#17, #45) | Published |
 | [`ux-vocabulary`](./ux-vocabulary.v1.md) | 1.0.0 | GPT 1 (#46) | GPT 2 (#38), all user-facing modules | Published |
-| `platform-ports` (published with issue #4) | 1.0.0-draft | GPT 2 (#3, #6) | GPT 1, GPT 3 | **Mocked by GPT 1** pending GPT 2 |
+| [`platform-ports`](./platform-ports.v1.md) | 1.0.0-draft | GPT 2 (#3, #6) | GPT 1, GPT 3 | **Mocked by GPT 1** pending GPT 2 |
 
 ## Rules
 
