@@ -54,4 +54,8 @@ export const migrations: readonly Migration[] = [{
     CREATE INDEX bank_statement_imports_company_created_idx ON bank_statement_imports(company_id, created_at DESC);
   `,
   down: `DROP TABLE IF EXISTS bank_statement_transactions; DROP TABLE IF EXISTS bank_statement_imports;`,
+}, {
+  id: "0005_bank_statement_pdf_sources",
+  up: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text', 'pdf'));`,
+  down: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text'));`,
 }];

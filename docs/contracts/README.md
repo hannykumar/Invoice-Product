@@ -22,4 +22,4 @@ commands and events, API surface, error model, permissions and idempotency behav
    `Mocked by <agent>`, and implements against a mock. The owning agent may change the contract,
    but must do so explicitly and update the contract tests.
 
-Bank statement imports (#21) are platform-owned drafts: they normalize CSV, text-PDF and base64-encoded XLSX source rows, retain source locations, deduplicate files and transactions per company, and surface uncertain rows or balance inconsistencies for review. They never create ledger postings.
+Bank statement imports (#21) are platform-owned drafts: they normalize CSV, text-PDF, base64-encoded PDF and base64-encoded XLSX source rows, retain source locations, deduplicate files and transactions per company, and surface uncertain rows or balance inconsistencies for review. They never create ledger postings.
