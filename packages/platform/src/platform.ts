@@ -9,7 +9,7 @@ const transitions: Readonly<Record<CommandStatus, readonly CommandStatus[]>> = {
 };
 const redactValue = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(redactValue);
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, /secret|password|token|pin|private.?key/i.test(key) ? "[REDACTED]" : redactValue(item)]));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, /credential|authorization|cookie|secret|password|token|pin|private.?key|session|raw|content|document|attachment|pdf|bank.?statement/i.test(key) ? "[REDACTED]" : redactValue(item)]));
   return value;
 };
 const redact = (value: Record<string, unknown>): Record<string, unknown> => redactValue(value) as Record<string, unknown>;

@@ -3,6 +3,7 @@ export interface Migration { id: string; up: string; down: string; }
 // Each module keeps its schema next to its code. The combined registry is sorted by ID,
 // so generated timestamp IDs give fresh and upgraded databases the same global order.
 import { masterDataMigrations } from "../../masters/src/migrations.ts";
+import { securityMigrations } from "../../../ops/security/src/migrations.ts";
 import { notificationMigrations } from "./notification-migrations.ts";
 
 const platformMigrations: readonly Migration[] = [{
@@ -66,5 +67,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );

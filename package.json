@@ -9,6 +9,7 @@
   "description": "India-first accounting and business operations platform",
   "workspaces": [
     "apps/*",
+    "ops/*",
     "packages/*"
   ],
   "scripts": {
@@ -17,8 +18,9 @@
     "web": "node --experimental-strip-types apps/web/server.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
+    "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
     "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
+    "security:drill": "node --test --experimental-strip-types ops/security/test/security.test.ts",
     "verify": "npm run lint && npm run test && npm run test:integration",
     "check": "npm run verify",
     "db:migrate": "node --experimental-strip-types packages/platform/src/migrations.ts up",

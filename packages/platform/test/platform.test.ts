@@ -30,13 +30,14 @@ test("idempotency returns the same record and rejects divergent retries", () => 
 
 test("approval policy and audit trail prevent finalisation bypass", () => {
   const { access, audit, commands } = setup(); const context = access.context("company-a", "branch-a", "owner-a", "session-a");
-  const record = commands.create(context, { action: "sale.finalise", risk: "medium", idempotencyKey: "sale-2", payload: { overrideReason: "manager approved", token: "do-not-log" } });
+  const record = commands.create(context, { action: "sale.finalise", risk: "medium", idempotencyKey: "sale-2", payload: { overrideReason: "manager approved", token: "do-not-log", documentContent: "invoice-body-must-not-log" } });
   commands.transition(context, record.id, "submitted");
   assert.throws(() => commands.transition(context, record.id, "finalised"), /Cannot move submitted/);
   commands.transition(context, record.id, "approved", "Reviewed inventory override");
   assert.equal(commands.transition(context, record.id, "finalised").status, "finalised");
   const created = audit.forCompany(context)[0]!;
   assert.equal(created.after?.payload && (created.after.payload as Record<string, unknown>).token, "[REDACTED]");
+  assert.equal(created.after?.payload && (created.after.payload as Record<string, unknown>).documentContent, "[REDACTED]");
   assert.throws(() => { (created.after as Record<string, unknown>).status = "tampered"; }, TypeError);
 });
 

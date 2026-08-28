@@ -19,10 +19,12 @@ test("parallel modules generate collision-resistant migration ids without a shar
   assert.notEqual(platform, masters);
 });
 test("the registry rejects duplicate, malformed and new numeric migration ids", () => {
-  const valid = { id: createMigrationId("platform", "outbox", new Date("2026-08-28T12:34:56.789Z"), "0123456789ab"), up: "SELECT 1", down: "SELECT 1" };
+  const valid = { id: createMigrationId("platform", "outbox", new Date("2099-12-31T23:59:59.999Z"), "0123456789ab"), up: "SELECT 1", down: "SELECT 1" };
   assert.doesNotThrow(() => validateMigrationRegistry([...migrations, valid]));
   assert.throws(() => validateMigrationRegistry([...migrations, valid, valid]), /Duplicate migration id/);
-  assert.throws(() => validateMigrationRegistry([...migrations, { ...valid, id: "0009_outbox" }]), /New numeric migration ids are not allowed/);
+  const numericInsertion = migrations.findIndex((migration) => migration.id > "0009_outbox");
+  const withNumeric = [...migrations.slice(0, numericInsertion), { ...valid, id: "0009_outbox" }, ...migrations.slice(numericInsertion)];
+  assert.throws(() => validateMigrationRegistry(withNumeric), /New numeric migration ids are not allowed/);
   assert.throws(() => validateMigrationRegistry([...migrations, { ...valid, id: "tomorrow_outbox" }]), /Invalid migration id/);
   assert.throws(() => validateMigrationRegistry([...migrations].reverse()), /Migration registry is out of order/);
 });
