@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#173f35" />
+    <meta name="description" content="Invoice Product development workspace" />
+    <title>Karobar workspace</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main" data-i18n="skip"></a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation" data-i18n-aria="primaryNavigation">
+        <a class="brand" href="#dashboard" aria-label="Karobar home" data-i18n-aria="companyHome">
+          <span class="brand-mark" aria-hidden="true">क</span>
+          <span><strong>Karobar</strong><small data-i18n="brandSubtitle"></small></span>
+        </a>
+        <nav class="nav-list" aria-label="Workspace" data-i18n-aria="workspaceNavigation">
+          <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span><span data-i18n="navHome"></span></button>
+          <button class="nav-item" data-view="sale"><span aria-hidden="true">＋</span><span data-i18n="navSale"></span></button>
+          <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
+          <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
+          <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="status-dot" aria-hidden="true"></span>
+          <div><strong data-i18n="deviceReady"></strong><small data-i18n="draftProtection"></small></div>
+        </div>
+      </aside>
+
+      <header class="topbar">
+        <button class="icon-button mobile-only" id="menu-button" aria-label="Open navigation" data-i18n-aria="menuOpen" aria-expanded="false">☰</button>
+        <div class="company-switcher">
+          <span class="company-avatar" aria-hidden="true">SF</span>
+          <span><strong>Sharma Fruit Traders</strong><small data-i18n="companyLocation"></small></span>
+        </div>
+        <div class="topbar-actions">
+          <label class="language-control">
+            <span class="sr-only" data-i18n="language"></span>
+            <select id="locale" aria-label="Language" data-i18n-aria="language">
+              <option value="en-IN">English</option>
+              <option value="hi-IN">हिन्दी</option>
+            </select>
+          </label>
+          <button class="icon-button" aria-label="Notifications" data-i18n-aria="notifications">●</button>
+          <span class="user-avatar" aria-label="Signed in as Hanny Kumar" data-i18n-aria="signedIn">HK</span>
+        </div>
+      </header>
+
+      <main id="main" tabindex="-1">
+        <div class="demo-banner" role="status">
+          <span aria-hidden="true">◉</span>
+          <span><strong data-i18n="demoTitle"></strong> <span data-i18n="demoBody"></span></span>
+        </div>
+
+        <section class="view active" id="view-dashboard" aria-labelledby="dashboard-title">
+          <div class="page-heading">
+            <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" data-i18n="welcome"></h1><p data-i18n="welcomeBody"></p></div>
+            <button class="primary-button" data-open="sale"><span aria-hidden="true">＋</span><span data-i18n="newSale"></span></button>
+          </div>
+
+          <div class="metric-grid" aria-label="Business summary" data-i18n-aria="businessSummary">
+            <article class="metric-card accent-green"><div class="metric-icon" aria-hidden="true">₹</div><p data-i18n="salesToday"></p><strong data-money="48250">₹48,250.00</strong><small class="positive" data-i18n="salesChange"></small></article>
+            <article class="metric-card accent-amber"><div class="metric-icon" aria-hidden="true">↗</div><p data-i18n="customersOwe"></p><strong data-money="128400">₹1,28,400.00</strong><small data-i18n="fromCustomers"></small></article>
+            <article class="metric-card accent-blue"><div class="metric-icon" aria-hidden="true">▣</div><p data-i18n="purchasesMonth"></p><strong data-money="76420">₹76,420.00</strong><small data-i18n="purchaseCount"></small></article>
+            <article class="metric-card accent-red"><div class="metric-icon" aria-hidden="true">!</div><p data-i18n="needsAttention"></p><strong>3</strong><small data-i18n="attentionBody"></small></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel activity-panel">
+              <div class="panel-heading"><div><h2 data-i18n="recentActivity"></h2><p data-i18n="recentBody"></p></div><button class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
+              <div class="activity-list">
+                <div class="activity-row"><span class="activity-icon green" aria-hidden="true">✓</span><div><strong>INV-1042 · Mehta Stores</strong><small data-i18n="saleIssued"></small></div><div class="activity-value"><strong data-money="12450">₹12,450.00</strong><span class="pill done" data-i18n="done"></span></div></div>
+                <div class="activity-row"><span class="activity-icon blue" aria-hidden="true">↓</span><div><strong data-i18n="purchaseFrom"></strong><small data-i18n="purchaseSaved"></small></div><div class="activity-value"><strong data-money="8280">₹8,280.00</strong><span class="pill waiting" data-i18n="waiting"></span></div></div>
+                <div class="activity-row"><span class="activity-icon amber" aria-hidden="true">₹</span><div><strong data-i18n="paymentFrom"></strong><small>UPI · 10:15 AM</small></div><div class="activity-value"><strong data-money="5000">₹5,000.00</strong><span class="pill done" data-i18n="recorded"></span></div></div>
+              </div>
+            </article>
+
+            <aside class="panel attention-panel">
+              <div class="panel-heading"><div><h2 data-i18n="yourAttention"></h2><p data-i18n="attentionHelp"></p></div></div>
+              <button class="attention-item"><span class="attention-symbol red" aria-hidden="true">!</span><span><strong data-i18n="lowStock"></strong><small data-i18n="lowStockBody"></small></span><span aria-hidden="true">›</span></button>
+              <button class="attention-item"><span class="attention-symbol amber" aria-hidden="true">◷</span><span><strong data-i18n="approvalWaiting"></strong><small data-i18n="approvalBody"></small></span><span aria-hidden="true">›</span></button>
+              <button class="attention-item"><span class="attention-symbol blue" aria-hidden="true">i</span><span><strong data-i18n="gstReminder"></strong><small data-i18n="gstBody"></small></span><span aria-hidden="true">›</span></button>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-sale" aria-labelledby="sale-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="sale-title" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <form class="transaction-layout draft-form" data-draft="sale">
+            <article class="panel form-panel">
+              <div class="field-grid">
+                <label><span data-i18n="customer"></span><input name="party" autocomplete="organization" placeholder="Mehta Stores" required /></label>
+                <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="item"></span><input name="item" placeholder="Apple box, 10 kg" required /></label>
+                <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input name="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-i18n="boxes"></span></span></label>
+                <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
+                <label><span data-i18n="paymentTerms"></span><select name="terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
+              </div>
+              <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
+            </article>
+            <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">₹0.00</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+          </form>
+        </section>
+
+        <section class="view" id="view-purchase" aria-labelledby="purchase-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <form class="transaction-layout draft-form" data-draft="purchase">
+            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="supplier"></span><input name="party" placeholder="Fresh Farms Pvt Ltd" required /></label><label><span data-i18n="supplierBill"></span><input name="reference" placeholder="FF-2048" required /></label><label><span data-i18n="billDate"></span><input name="date" type="date" required /></label><label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" required /></span></label><label class="full-field"><span data-i18n="uploadBill"></span><input name="attachment" type="file" accept="image/*,.pdf" /><small data-i18n="uploadHelp"></small></label></div></article>
+            <aside class="panel summary-card"><h2 data-i18n="beforeSaving"></h2><ol class="check-list"><li data-i18n="checkSupplier"></li><li data-i18n="checkDuplicate"></li><li data-i18n="checkTax"></li></ol><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPurchase"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+          </form>
+        </section>
+
+        <section class="view" id="view-payment" aria-labelledby="payment-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="payment-title" data-i18n="paymentTitle"></h1><p data-i18n="paymentHelp"></p></div><span class="save-state" id="payment-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <form class="transaction-layout draft-form" data-draft="payment">
+            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" placeholder="Mehta Stores" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice"><option value="" data-i18n="chooseLater"></option><option>INV-1042 · ₹12,450.00</option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
+            <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+          </form>
+        </section>
+
+        <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel empty-state"><span aria-hidden="true">◷</span><h2 data-i18n="demoHistory"></h2><p data-i18n="demoHistoryBody"></p><button class="primary-button" data-open="sale" data-i18n="createFirstSale"></button></article></section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
+        <button class="active" data-view="dashboard"><span aria-hidden="true">⌂</span><small data-i18n="navHome"></small></button>
+        <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
+        <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
+        <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
+      </nav>
+    </div>
+
+    <dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="draftReady"></h2><p data-i18n="draftReadyBody"></p><div class="dialog-actions"><button class="secondary-button" value="cancel" data-i18n="keepEditing"></button><button class="primary-button" value="confirm" data-i18n="understand"></button></div></dialog>
+  </body>
+</html>

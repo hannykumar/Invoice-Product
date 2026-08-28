@@ -14,9 +14,10 @@
   "scripts": {
     "bootstrap": "docker compose up -d --wait db && npm install && npm run db:migrate && npm run db:seed && npm run verify",
     "dev": "node --experimental-strip-types apps/api/src/server.ts",
+    "web": "node --experimental-strip-types apps/web/server.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types \"packages/*/test/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
+    "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
     "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
     "verify": "npm run lint && npm run test && npm run test:integration",
     "check": "npm run verify",

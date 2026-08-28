@@ -56,6 +56,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run db:migrate`, `npm run db:rollback`, `npm run db:seed` — PostgreSQL migration lifecycle commands.
 - `npm run db:migration:id -- <module> <description>` — generates a collision-resistant ID for a new migration.
 - `npm run dev` — starts the API composition root once its route layer exists.
+- `npm run web` — starts the responsive development preview at `http://127.0.0.1:4173`.
 - `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
 - `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
 
