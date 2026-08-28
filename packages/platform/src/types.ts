@@ -7,7 +7,12 @@ export type Permission =
   | "approval.decide"
   | "access.review"
   | "notification.send"
-  | "notification.sensitive.send";
+  | "notification.sensitive.send"
+  | "privacy.manage"
+  | "privacy.export"
+  | "privacy.delete"
+  | "backup.manage"
+  | "backup.restore";
 
 export interface RequestContext {
   companyId: Id;

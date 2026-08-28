@@ -1,0 +1,5 @@
+{
+  "name": "@invoice/security-operations",
+  "private": true,
+  "type": "module"
+}

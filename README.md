@@ -27,6 +27,7 @@ from deterministic, versioned, testable rules.
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
 | [`packages/ux-vocabulary`](packages/ux-vocabulary) | #46 | The only supported way to produce user-facing wording |
 | [`packages/platform`](packages/platform) | #2, #3, #6, #8, #21 | Tenancy, permissions, approvals, audit, connectors and banking import drafts |
+| [`ops/security`](ops/security) | #40 | Encryption, privacy requests, secure logging, backups and restore drills |
 
 ## Running the checks
 
