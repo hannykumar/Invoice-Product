@@ -258,12 +258,40 @@ export class LedgerService {
 
   /** Posts a balanced, final entry. This is the only write path into the books. */
   async postVoucher(actor: ActorContext, command: PostVoucherCommand): Promise<PostResult> {
+    const outcome = await this.#store.transaction(actor.companyId, (uow) => this.#post(uow, actor, command));
+    if (!outcome.deduplicated) {
+      await this.#recordPosted(actor, outcome.voucher, command.periodOverride?.reason);
+    }
+    return outcome;
+  }
+
+  /**
+   * Posts inside a transaction the caller already opened.
+   *
+   * A module that owns a document — sales (#9), purchases (#17), returns (#45) — must allocate its
+   * document number, write its own record and post to the ledger **as one unit of work**, or a
+   * crash between the steps leaves a numbered invoice with no entry in the books. Those modules
+   * call this; everyone else calls `postVoucher`.
+   *
+   * The audit event is the caller's responsibility here, via `recordPosted`, because only the
+   * caller knows whether its own transaction actually committed.
+   */
+  async postVoucherIn(uow: UnitOfWork, actor: ActorContext, command: PostVoucherCommand): Promise<PostResult> {
+    return this.#post(uow, actor, command);
+  }
+
+  /** Writes the audit event for a posting whose transaction has committed. */
+  async recordPosted(actor: ActorContext, voucher: Voucher, overrideReason?: string): Promise<void> {
+    await this.#recordPosted(actor, voucher, overrideReason);
+  }
+
+  async #post(uow: UnitOfWork, actor: ActorContext, command: PostVoucherCommand): Promise<PostResult> {
     if (command.idempotencyKey.trim().length === 0) {
       throw invalid('LEDGER_IDEMPOTENCY_KEY_REQUIRED', 'Every entry needs a key so a retry cannot create a second one.');
     }
     this.#permissions.require(actor, POST_PERMISSION[command.type], 'record this entry');
 
-    const outcome = await this.#store.transaction(actor.companyId, async (uow): Promise<PostResult> => {
+    const run = async (): Promise<PostResult> => {
       const alreadyDone = await uow.idempotency.lookup(actor.companyId, command.idempotencyKey);
       if (alreadyDone !== null) {
         const existing = await uow.vouchers.findById(actor.companyId, alreadyDone as VoucherId);
@@ -293,12 +321,8 @@ export class LedgerService {
       await uow.vouchers.insert(voucher);
       await uow.idempotency.remember(actor.companyId, command.idempotencyKey, voucher.id);
       return { voucher, deduplicated: false };
-    });
-
-    if (!outcome.deduplicated) {
-      await this.#recordPosted(actor, outcome.voucher, command.periodOverride?.reason);
-    }
-    return outcome;
+    };
+    return run();
   }
 
   async #recordPosted(actor: ActorContext, voucher: Voucher, overrideReason?: string): Promise<void> {

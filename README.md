@@ -25,6 +25,7 @@ from deterministic, versioned, testable rules.
 | [`packages/kernel`](packages/kernel) | #4 | Exact money, exact quantities, rounding, identifiers, dates, the error model |
 | [`packages/ledger`](packages/ledger) | #4 | The double-entry ledger: the only write path into the books |
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
+| [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
 | [`packages/gst-calc`](packages/gst-calc) | #25 | Deterministic GST computation, place of supply and tax classification |
 | [`packages/ux-vocabulary`](packages/ux-vocabulary) | #46 | The only supported way to produce user-facing wording |
 
