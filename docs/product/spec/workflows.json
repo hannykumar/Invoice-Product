@@ -1,0 +1,155 @@
+{
+  "$comment": "End-to-end business workflows for issue #1 [E01]. Each step names the owning module so no agent has to guess responsibilities.",
+  "version": "1.0.0",
+  "workflows": [
+    {
+      "id": "sale",
+      "name": "Sale",
+      "plain": "Sell something and give the customer a bill",
+      "trigger": "A user types, speaks or scans a sale instruction, or an approved quotation is converted.",
+      "steps": [
+        { "n": 1, "step": "Capture the instruction", "actor": "user", "module": "packages/voice-assistant", "issue": 10, "output": "Draft sale request with a confidence score for every extracted field.", "rules": ["Low-confidence party, item, quantity, unit or price is confirmed with the user, never assumed."] },
+        { "n": 2, "step": "Resolve the customer and items", "actor": "system", "module": "packages/master-data", "issue": 5, "output": "Party id, item ids, units, HSN/SAC, tax profile.", "rules": ["Two similar names must be disambiguated by the user.", "An unknown customer is created only after the user confirms the details."] },
+        { "n": 3, "step": "Apply price and check credit", "actor": "system", "module": "packages/pricing-credit", "issue": 11, "output": "Rate with its source, discount authority check, credit-limit decision (allow, warn, block).", "rules": ["The price source is always shown.", "Credit uses outstanding plus pending transactions."] },
+        { "n": 4, "step": "Check and reserve stock", "actor": "system", "module": "packages/inventory", "issue": 12, "output": "Reservation or a shortage block.", "rules": ["Availability is physical minus reserved.", "Overselling requires an authorised override with a reason."] },
+        { "n": 5, "step": "Calculate GST", "actor": "system", "module": "packages/gst-calc", "issue": 25, "output": "Tax lines with place of supply, rate, CGST/SGST/UTGST/IGST split, cess and the rule version used.", "rules": ["A missing place-of-supply fact blocks the sale and opens an exception item.", "An LLM never chooses the rate."] },
+        { "n": 6, "step": "Show a preview and take approval", "actor": "user", "module": "packages/workflow-audit", "issue": 6, "output": "Approval decision recorded with actor and time.", "rules": ["Preview repeats customer, quantity, unit, price, tax basis and stock impact in plain words."] },
+        { "n": 7, "step": "Finalise the invoice", "actor": "system", "module": "packages/sales", "issue": 9, "output": "Permanent invoice number, immutable invoice record.", "rules": ["Numbering is unique per company, branch and financial year and is concurrency safe.", "The same idempotency key never creates a second invoice."] },
+        { "n": 8, "step": "Post to the ledger", "actor": "system", "module": "packages/ledger", "issue": 4, "output": "Balanced SALE voucher: customer debit, income credit, output tax credit, round-off.", "rules": ["The voucher must balance to zero or nothing is written."] },
+        { "n": 9, "step": "Post the stock issue", "actor": "system", "module": "packages/inventory", "issue": 12, "output": "Stock movements out, reservation consumed.", "rules": ["Ledger posting and stock posting succeed or fail together."] },
+        { "n": 10, "step": "Register the e-invoice if applicable", "actor": "system", "module": "packages/e-invoice", "issue": 26, "output": "IRN and signed QR, or a clearly failed state.", "rules": ["Retries must not create a second IRN."] },
+        { "n": 11, "step": "Create the e-way bill if applicable", "actor": "system", "module": "packages/e-way-bill", "issue": 27, "output": "E-way bill number and validity, or a documented not-required decision.", "rules": ["Applicability is a deterministic rule decision with evidence."] },
+        { "n": 12, "step": "Render and deliver", "actor": "system", "module": "packages/invoice-templates + packages/delivery", "issue": 13, "output": "PDF or print output and a delivery record.", "rules": ["Mandatory legal fields cannot be removed by any template."] },
+        { "n": 13, "step": "Track the receivable", "actor": "system", "module": "packages/receivables-payables", "issue": 20, "output": "Open receivable with due date and ageing bucket.", "rules": [] }
+      ],
+      "failureModes": [
+        { "case": "Stock short", "behaviour": "Block with the exact shortfall and offer reduce quantity, choose another warehouse, or authorised override." },
+        { "case": "Place of supply unknown", "behaviour": "Move to the exception queue; never post a guessed tax split." },
+        { "case": "IRP or e-way service down", "behaviour": "Invoice stays FINAL and correct in the books; the government step shows a retryable failed state." },
+        { "case": "Duplicate submit after timeout", "behaviour": "The idempotency key returns the original invoice." }
+      ]
+    },
+    {
+      "id": "purchase",
+      "name": "Purchase",
+      "plain": "Record a supplier's bill, add stock and record what you owe",
+      "steps": [
+        { "n": 1, "step": "Receive the supplier bill", "actor": "supplier", "module": "packages/purchase-inbox", "issue": 15, "output": "Captured document with extracted fields and confidence.", "rules": [] },
+        { "n": 2, "step": "Validate and detect duplicates", "actor": "system", "module": "packages/purchase-validation", "issue": 16, "output": "Validation result, duplicate verdict, supplier GSTIN check.", "rules": ["A suspected duplicate is never posted silently."] },
+        { "n": 3, "step": "Match to purchase order and goods receipt", "actor": "system", "module": "packages/procurement", "issue": 18, "output": "Three-way match result with tolerances.", "rules": [] },
+        { "n": 4, "step": "Approve", "actor": "user", "module": "packages/workflow-audit", "issue": 6, "output": "Approval record.", "rules": [] },
+        { "n": 5, "step": "Post the purchase", "actor": "system", "module": "packages/purchase-posting", "issue": 17, "output": "PURCHASE voucher: purchases debit, input tax debit, supplier credit; stock movements in.", "rules": ["Increases stock and creates a payable; it never creates a sale or a receivable."] },
+        { "n": 6, "step": "Track input tax credit", "actor": "system", "module": "packages/ims-reconciliation", "issue": 31, "output": "Credit marked provisional until it appears in GSTR-2B.", "rules": [] }
+      ],
+      "failureModes": [
+        { "case": "Same supplier invoice number arrives twice", "behaviour": "Blocked as duplicate with a link to the existing record." },
+        { "case": "Bill total does not match line totals", "behaviour": "Exception item; the difference is shown, never absorbed." }
+      ]
+    },
+    {
+      "id": "return",
+      "name": "Return",
+      "plain": "Goods come back, or a bill has to be reduced",
+      "steps": [
+        { "n": 1, "step": "Choose the original document", "actor": "user", "module": "packages/returns", "issue": 45, "output": "Linked original invoice and returnable quantities.", "rules": ["Return quantity can never exceed the original quantity less earlier returns."] },
+        { "n": 2, "step": "Decide the tax treatment", "actor": "system", "module": "packages/gst-calc", "issue": 25, "output": "Tax reversal lines using the original invoice's rule version.", "rules": ["A return uses the tax treatment effective for the original supply."] },
+        { "n": 3, "step": "Approve and issue the note", "actor": "user", "module": "packages/returns", "issue": 45, "output": "Credit note for a sales return, debit note for a purchase return.", "rules": [] },
+        { "n": 4, "step": "Post the reversal", "actor": "system", "module": "packages/ledger + packages/inventory", "issue": 4, "output": "CREDIT_NOTE or DEBIT_NOTE voucher plus reversing stock movements.", "rules": ["Party balance, tax and stock all move together or not at all."] }
+      ],
+      "failureModes": [
+        { "case": "Original period already hard-locked", "behaviour": "The note is dated in the current open period and linked to the original document." },
+        { "case": "Goods not physically returned", "behaviour": "A value-only note is issued with no stock movement, and this is stated on the note."}
+      ]
+    },
+    {
+      "id": "payment",
+      "name": "Payment",
+      "plain": "Money comes in from a customer or goes out to a supplier",
+      "steps": [
+        { "n": 1, "step": "Record the money", "actor": "user", "module": "packages/receivables-payables", "issue": 20, "output": "Receipt or payment with mode: cash, cheque, bank transfer, UPI, other.", "rules": ["Cheques start as PENDING and are not treated as cleared money."] },
+        { "n": 2, "step": "Allocate to bills", "actor": "user", "module": "packages/receivables-payables", "issue": 20, "output": "Allocation lines per invoice; the remainder stays on account.", "rules": ["Partial payment never marks an invoice paid.", "Unallocated money is visible, not assumed."] },
+        { "n": 3, "step": "Post to the ledger", "actor": "system", "module": "packages/ledger", "issue": 4, "output": "RECEIPT or PAYMENT voucher.", "rules": [] },
+        { "n": 4, "step": "Update outstanding and ageing", "actor": "system", "module": "packages/receivables-payables", "issue": 20, "output": "Recomputed outstanding and ageing buckets.", "rules": ["Outstanding equals invoice value less accepted allocations."] }
+      ],
+      "failureModes": [
+        { "case": "Cheque bounces", "behaviour": "Post a reversal, restore the outstanding, keep the full cheque history, and notify." },
+        { "case": "Customer pays more than the bills", "behaviour": "Excess is held on account, not silently written off." }
+      ]
+    },
+    {
+      "id": "banking",
+      "name": "Banking",
+      "plain": "Match your bank statement with your books",
+      "steps": [
+        { "n": 1, "step": "Import or fetch statement lines", "actor": "system", "module": "packages/bank-import + packages/bank-feeds", "issue": 21, "output": "Normalised bank lines.", "rules": ["Re-importing the same file must not double-count lines."] },
+        { "n": 2, "step": "Suggest matches", "actor": "system", "module": "packages/bank-reconciliation", "issue": 22, "output": "Suggested links to receipts, payments and invoices with confidence.", "rules": ["A suggestion is never posted without confirmation."] },
+        { "n": 3, "step": "Confirm or create entries", "actor": "user", "module": "packages/bank-reconciliation", "issue": 22, "output": "Confirmed reconciliation or a new voucher.", "rules": [] },
+        { "n": 4, "step": "Report unmatched items", "actor": "system", "module": "packages/bank-reconciliation", "issue": 22, "output": "Reconciliation exception list.", "rules": [] }
+      ],
+      "failureModes": [
+        { "case": "One bank credit covers three invoices", "behaviour": "The user splits the allocation; the product does not choose." }
+      ]
+    },
+    {
+      "id": "inventory",
+      "name": "Inventory",
+      "plain": "Keep the godown count right",
+      "steps": [
+        { "n": 1, "step": "Record every movement", "actor": "system", "module": "packages/inventory", "issue": 12, "output": "Append-only movement rows linked to a source document.", "rules": ["Stock is always derived from movements; no balance is edited directly."] },
+        { "n": 2, "step": "Maintain availability", "actor": "system", "module": "packages/inventory", "issue": 12, "output": "Physical, reserved, available per item, warehouse and batch.", "rules": [] },
+        { "n": 3, "step": "Handle transfers and adjustments", "actor": "user", "module": "packages/inventory", "issue": 12, "output": "Transfer and adjustment documents with reasons.", "rules": ["Every adjustment needs a reason and, above a threshold, an approval."] },
+        { "n": 4, "step": "Value the stock", "actor": "system", "module": "packages/inventory + packages/ledger", "issue": 12, "output": "Valuation postings using the configured method.", "rules": ["The valuation method is fixed per company and changing it is an audited event."] }
+      ],
+      "failureModes": [
+        { "case": "Two users sell the last 30 boxes at the same time", "behaviour": "One succeeds; the other is blocked with the corrected availability." },
+        { "case": "Backdated movement into a locked period", "behaviour": "Blocked unless the period lock policy allows an audited override." }
+      ]
+    },
+    {
+      "id": "gst",
+      "name": "GST",
+      "plain": "Work out and file your GST correctly",
+      "steps": [
+        { "n": 1, "step": "Classify each line", "actor": "system", "module": "packages/gst-calc", "issue": 25, "output": "HSN or SAC, rate, exemption or nil treatment, reverse-charge flag.", "rules": ["Effective-dated tax data with a source reference."] },
+        { "n": 2, "step": "Decide the place of supply", "actor": "system", "module": "packages/gst-calc", "issue": 25, "output": "Place of supply and intra or inter-state conclusion.", "rules": ["Unsupported scenarios are refused with an explanation, not approximated."] },
+        { "n": 3, "step": "Prepare returns", "actor": "system", "module": "packages/gst-returns", "issue": 30, "output": "GSTR-1 and GSTR-3B working papers with exception lists.", "rules": [] },
+        { "n": 4, "step": "Reconcile purchases with GSTR-2B", "actor": "system", "module": "packages/ims-reconciliation", "issue": 31, "output": "Matched, missing and mismatched credit lines.", "rules": ["Credit is claimed only for eligible, reconciled lines."] },
+        { "n": 5, "step": "File and record", "actor": "user", "module": "packages/gsp-integration", "issue": 33, "output": "Filed acknowledgement stored against the tax period.", "rules": ["Filing requires explicit human approval and is idempotent on retry."] }
+      ],
+      "failureModes": [
+        { "case": "Rate changes mid-period", "behaviour": "Each invoice uses the rate effective on its own document date." },
+        { "case": "Supplier has not filed", "behaviour": "Credit is held as unavailable with the supplier and amount shown." }
+      ]
+    },
+    {
+      "id": "transport",
+      "name": "Transport",
+      "plain": "Move the goods legally and safely",
+      "steps": [
+        { "n": 1, "step": "Decide e-way applicability", "actor": "system", "module": "packages/rules-engine + packages/e-way-bill", "issue": 27, "output": "Required or not required with the facts and rule version used.", "rules": [] },
+        { "n": 2, "step": "Capture transporter and vehicle", "actor": "user", "module": "packages/transport", "issue": 28, "output": "Transporter id, vehicle number, mode, distance.", "rules": ["An implausible vehicle for the load warns or blocks."] },
+        { "n": 3, "step": "Verify the vehicle record", "actor": "system", "module": "packages/vehicle-verification", "issue": 29, "output": "Vehicle class and capacity check result.", "rules": [] },
+        { "n": 4, "step": "Generate, update and close the e-way bill", "actor": "system", "module": "packages/e-way-bill", "issue": 27, "output": "E-way bill with validity, vehicle updates and closure.", "rules": ["Retries must not create a second e-way bill."] }
+      ],
+      "failureModes": [
+        { "case": "Two-wheeler entered for a multi-ton load", "behaviour": "Warn or block with the capacity evidence." },
+        { "case": "Vehicle changes in transit", "behaviour": "Record a Part-B update against the same e-way bill." }
+      ]
+    },
+    {
+      "id": "approval",
+      "name": "Approval and exceptions",
+      "plain": "A person checks anything risky before it happens",
+      "steps": [
+        { "n": 1, "step": "Detect that approval is needed", "actor": "system", "module": "packages/workflow-audit", "issue": 6, "output": "Approval request with the reason and a plain-language preview.", "rules": ["Thresholds are configuration, not code."] },
+        { "n": 2, "step": "Preview the exact effect", "actor": "user", "module": "owning module", "issue": 6, "output": "What will change in books, stock, tax and money.", "rules": ["The preview must be understandable without accounting training."] },
+        { "n": 3, "step": "Approve, reject or override", "actor": "user", "module": "packages/workflow-audit", "issue": 6, "output": "Decision with actor, time and typed reason.", "rules": ["The requester cannot approve their own request unless the company explicitly allows it."] },
+        { "n": 4, "step": "Record in the audit trail", "actor": "system", "module": "packages/workflow-audit", "issue": 6, "output": "Append-only audit entry without secrets.", "rules": [] }
+      ],
+      "failureModes": [
+        { "case": "Approver is unavailable", "behaviour": "The item waits in a clearly visible queue; it is never auto-approved by time-out." },
+        { "case": "AI proposes an action", "behaviour": "It enters the same approval path as manual entry, with no shortcut." }
+      ]
+    }
+  ]
+}
