@@ -65,5 +65,6 @@ export class AccessControl {
   #members = new Map<string, Member>();
   grant(member: Member): void { this.#members.set(`${member.companyId}:${member.userId}`, member); }
   revoke(companyId: Id, userId: Id): void { const key = `${companyId}:${userId}`; const member = this.#members.get(key); if (member) this.#members.set(key, { ...member, active: false }); }
+  members(companyId: Id): readonly Member[] { return [...this.#members.values()].filter((member) => member.companyId === companyId); }
   context(companyId: Id, branchId: Id, userId: Id, sessionId: Id): RequestContext { const member = this.#members.get(`${companyId}:${userId}`); if (!member || !member.active || !member.branchIds.has(branchId)) throw new PlatformError("SESSION_REVOKED", "Your access is no longer active."); return { companyId, branchId, actorId: userId, sessionId, permissions: member.permissions }; }
 }
