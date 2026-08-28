@@ -23,4 +23,18 @@ export const migrations: readonly Migration[] = [{
     DROP TABLE IF EXISTS branches;
     DROP TABLE IF EXISTS companies;
   `,
+}, {
+  id: "0002_authentication_sessions_and_invitations",
+  up: `
+    CREATE TABLE user_branch_access (company_id uuid NOT NULL, user_id uuid NOT NULL, branch_id uuid NOT NULL REFERENCES branches(id), PRIMARY KEY(company_id, user_id, branch_id), FOREIGN KEY(company_id, user_id) REFERENCES memberships(company_id, user_id));
+    CREATE TABLE sessions (id uuid PRIMARY KEY, company_id uuid NOT NULL, branch_id uuid NOT NULL REFERENCES branches(id), user_id uuid NOT NULL REFERENCES users(id), expires_at timestamptz NOT NULL, revoked_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE TABLE invitations (id uuid PRIMARY KEY, token_hash text NOT NULL UNIQUE, company_id uuid NOT NULL REFERENCES companies(id), branch_id uuid NOT NULL REFERENCES branches(id), email text NOT NULL, permissions jsonb NOT NULL, expires_at timestamptz NOT NULL, accepted_at timestamptz, revoked_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
+    CREATE INDEX sessions_active_idx ON sessions(company_id, user_id) WHERE revoked_at IS NULL;
+    CREATE INDEX invitations_active_idx ON invitations(company_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL;
+  `,
+  down: `
+    DROP TABLE IF EXISTS invitations;
+    DROP TABLE IF EXISTS sessions;
+    DROP TABLE IF EXISTS user_branch_access;
+  `,
 }];
