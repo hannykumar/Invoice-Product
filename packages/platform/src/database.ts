@@ -3,8 +3,7 @@ import { Pool, type PoolClient } from "pg";
 export interface SqlExecutor { query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>; }
 export interface TransactionalExecutor extends SqlExecutor { transaction<T>(work: (executor: SqlExecutor) => Promise<T>): Promise<T>; close(): Promise<void>; }
 
-export function createDatabase(connectionString = process.env.DATABASE_URL): TransactionalExecutor {
-  if (!connectionString) throw new Error("DATABASE_URL is required for database commands.");
+export function createDatabase(connectionString = process.env.DATABASE_URL ?? "postgresql://invoice:invoice@localhost:5432/invoice"): TransactionalExecutor {
   const pool = new Pool({ connectionString, max: 5 });
   return {
     query: (sql, values) => pool.query(sql, values as unknown[]),
@@ -17,4 +16,3 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
     close: () => pool.end(),
   };
 }
-
