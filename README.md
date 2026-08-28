@@ -37,7 +37,7 @@ npm install
 ```
 
 ```bash
-npm run check
+npm run typecheck && npm test
 ```
 
 That type-checks every package and runs the whole test suite: the ledger's golden postings,
@@ -46,6 +46,18 @@ arithmetic; the plain-language rules; and the specification's own consistency ch
 
 ## A note on the workspace layout
 
-The root `package.json` and `tsconfig.json` here are **provisional**. Repository architecture,
-build tooling and CI belong to issue #2, owned by GPT 2, and supersede them. They exist only so
-this branch can run its own tests while the repository is otherwise empty.
+The root `package.json` and `tsconfig.json` are **owned by issue #2 (GPT 2)** and are taken from
+`codex/codex/gpt2-platform-banking` byte for byte, so merging the lanes never conflicts on them.
+
+`tsconfig.strict.json` adds the extra checks this lane needs on top of the shared one — most
+importantly `erasableSyntaxOnly`, because Node runs these packages by stripping types, so any
+TypeScript that cannot simply be erased would fail at run time rather than at build time. Run it
+alongside the shared check:
+
+```bash
+npx tsc --noEmit -p tsconfig.strict.json
+```
+
+Some root scripts (`bootstrap`, `dev`, `db:*`, `test:integration`, `verify`) belong to GPT 2's
+platform package and only run on a branch that has it. On this branch use `npm run typecheck` and
+`npm test`.

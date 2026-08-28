@@ -3,16 +3,26 @@
   "private": true,
   "type": "module",
   "engines": { "node": ">=22.18" },
-  "workspaces": [
-    "packages/*"
-  ],
+  "version": "0.1.0",
+  "description": "India-first accounting and business operations platform",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "typecheck": "tsc --build --force",
+    "bootstrap": "docker compose up -d --wait db && npm install && npm run db:migrate && npm run db:seed && npm run verify",
+    "dev": "node --experimental-strip-types apps/api/src/server.ts",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types \"packages/*/test/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
-    "check": "npm run typecheck && npm test"
+    "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
+    "verify": "npm run lint && npm run test && npm run test:integration",
+    "check": "npm run verify",
+    "db:migrate": "node --experimental-strip-types packages/platform/src/migrations.ts up",
+    "db:rollback": "node --experimental-strip-types packages/platform/src/migrations.ts down",
+    "db:seed": "node --experimental-strip-types packages/platform/src/seed.ts"
   },
+  "dependencies": { "pg": "^8.16.3" },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "@types/node": "^22.7.0"
+    "@types/pg": "^8.15.5",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
   }
 }
