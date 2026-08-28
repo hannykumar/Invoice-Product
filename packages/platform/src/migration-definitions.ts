@@ -37,4 +37,12 @@ export const migrations: readonly Migration[] = [{
     DROP TABLE IF EXISTS sessions;
     DROP TABLE IF EXISTS user_branch_access;
   `,
+}, {
+  id: "0003_approvals_commands_and_exception_evidence",
+  up: `
+    CREATE TABLE command_records (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), branch_id uuid NOT NULL REFERENCES branches(id), actor_id uuid NOT NULL REFERENCES users(id), action text NOT NULL, risk text NOT NULL, amount_paise bigint, status text NOT NULL, idempotency_key text NOT NULL, payload jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(company_id, action, idempotency_key));
+    CREATE TABLE approval_policies (id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), action text NOT NULL, minimum_risk text NOT NULL, minimum_amount_paise bigint, required_permission text NOT NULL, active boolean NOT NULL DEFAULT true);
+    CREATE TABLE exception_comments (id uuid PRIMARY KEY, exception_id uuid NOT NULL REFERENCES exception_items(id), actor_id uuid NOT NULL REFERENCES users(id), body text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+  `,
+  down: `DROP TABLE IF EXISTS exception_comments; DROP TABLE IF EXISTS approval_policies; DROP TABLE IF EXISTS command_records;`,
 }];
