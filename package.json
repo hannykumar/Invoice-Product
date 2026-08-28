@@ -1,0 +1,24 @@
+{
+  "name": "invoice-product",
+  "private": true,
+  "version": "0.1.0",
+  "description": "India-first accounting and business operations platform",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "bootstrap": "npm install && npm run verify",
+    "dev": "node --experimental-strip-types apps/api/src/server.ts",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test packages/platform/test/*.test.ts",
+    "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
+    "verify": "npm run lint && npm run test && npm run test:integration",
+    "db:migrate": "node --experimental-strip-types packages/platform/src/migrations.ts up",
+    "db:rollback": "node --experimental-strip-types packages/platform/src/migrations.ts down",
+    "db:seed": "node --experimental-strip-types packages/platform/src/seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
+
