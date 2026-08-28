@@ -11,6 +11,43 @@ export interface ConnectorRequest { tenantId: Id; operation: string; payload: Re
 export interface ConnectorResponse { providerRequestId: string; status: "accepted" | "completed"; payload: Readonly<Record<string, unknown>>; }
 export interface ExternalConnector { readonly kind: ConnectorKind; execute(request: ConnectorRequest): Promise<ConnectorResponse>; health(): Promise<"healthy" | "degraded" | "unavailable">; }
 export interface CredentialVault { credentialReference(tenantId: Id, connector: ConnectorKind): Promise<string>; }
+export interface ConnectorWebhook { readonly eventId: string; readonly providerRequestId: string; readonly occurredAt: string; readonly payload: Readonly<Record<string, unknown>>; }
+export interface WebhookVerifier { verify(kind: ConnectorKind, body: string, signature: string): Promise<ConnectorWebhook>; }
+
+export class ConnectorGateway {
+  #failures = new Map<string, number>();
+  #seenWebhooks = new Set<string>();
+  private readonly connectors: ReadonlyMap<ConnectorKind, ExternalConnector>;
+  private readonly vault: CredentialVault;
+  private readonly verifier: WebhookVerifier;
+  private readonly failureThreshold: number;
+  constructor(connectors: readonly ExternalConnector[], vault: CredentialVault, verifier: WebhookVerifier, failureThreshold = 3) {
+    this.connectors = new Map(connectors.map((connector) => [connector.kind, connector])); this.vault = vault; this.verifier = verifier; this.failureThreshold = failureThreshold;
+  }
+  async execute(kind: ConnectorKind, request: ConnectorRequest, attempts = 2): Promise<ConnectorResponse> {
+    if (!request.tenantId || !request.idempotencyKey || !request.correlationId) throw new ConnectorError("INVALID_REQUEST", false);
+    const connector = this.connectors.get(kind); if (!connector) throw new ConnectorError("INVALID_REQUEST", false);
+    const key = `${kind}:${request.tenantId}`; if ((this.#failures.get(key) ?? 0) >= this.failureThreshold) throw new ConnectorError("OUTAGE", true);
+    await this.vault.credentialReference(request.tenantId, kind);
+    for (let attempt = 1; ; attempt += 1) try {
+      const result = await connector.execute(request); this.#failures.delete(key); return result;
+    } catch (error) {
+      const normalized = error instanceof ConnectorError ? error : new ConnectorError("OUTAGE", true);
+      if (!normalized.retryable || attempt >= attempts) { this.#failures.set(key, (this.#failures.get(key) ?? 0) + 1); throw normalized; }
+    }
+  }
+  async health(kind: ConnectorKind): Promise<"healthy" | "degraded" | "unavailable"> { const connector = this.connectors.get(kind); if (!connector) return "unavailable"; return connector.health(); }
+  async receiveWebhook(kind: ConnectorKind, body: string, signature: string): Promise<{ readonly webhook: ConnectorWebhook; readonly duplicate: boolean }> {
+    const webhook = await this.verifier.verify(kind, body, signature); const key = `${kind}:${webhook.eventId}`; const duplicate = this.#seenWebhooks.has(key); this.#seenWebhooks.add(key); return { webhook, duplicate };
+  }
+}
+
+export class StaticWebhookVerifier implements WebhookVerifier {
+  async verify(_kind: ConnectorKind, body: string, signature: string): Promise<ConnectorWebhook> {
+    if (signature !== "test-signature") throw new ConnectorError("UNAUTHORIZED", false);
+    return JSON.parse(body) as ConnectorWebhook;
+  }
+}
 export class MockConnector implements ExternalConnector {
   readonly #responses = new Map<string, ConnectorResponse>();
   public readonly kind: ConnectorKind;
