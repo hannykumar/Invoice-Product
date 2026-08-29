@@ -1,0 +1,80 @@
+{
+  "id": "transport-correction",
+  "version": "1.0.0",
+  "describes": "A Delhi transporter that bills a freight job, then cancels it because the load never moved. It is the correction case: the cancelled bill is reversed rather than erased, so both entries stay visible, the customer ends up owing nothing, and the books still balance.",
+  "company": {
+    "companyId": "golden-transport",
+    "name": "Azadpur Carriers",
+    "kind": "TRANSPORT",
+    "stateCode": "07",
+    "gstin": "07EEEEE4444E1ZP",
+    "booksStartDate": "2026-04-01",
+    "warehouseId": "yard",
+    "warehouseName": "Azadpur yard"
+  },
+  "parties": [
+    {
+      "partyId": "khari-baoli",
+      "name": "Khari Baoli Spices",
+      "role": "CUSTOMER",
+      "gstin": "07FFFFF5555F1ZL",
+      "stateCode": "07",
+      "accountCode": "1201"
+    }
+  ],
+  "items": [
+    {
+      "itemId": "FREIGHT",
+      "name": "Road freight, Delhi to Jaipur",
+      "kind": "SERVICES",
+      "baseUnit": "JOB",
+      "hsnOrSac": "9965",
+      "treatment": "TAXABLE",
+      "ratePercent": 5
+    }
+  ],
+  "events": [
+    {
+      "kind": "sale",
+      "ref": "TRIP-1",
+      "on": "2026-04-11",
+      "partyId": "khari-baoli",
+      "dueOn": "2026-05-11",
+      "lines": [{ "itemId": "FREIGHT", "quantity": "1", "unit": "JOB", "unitPrice": "12000.00" }]
+    },
+    {
+      "kind": "cancel_sale",
+      "ref": "TRIP-1-CANCELLED",
+      "on": "2026-04-12",
+      "cancels": "TRIP-1",
+      "reason": "The load was never picked up, so the trip did not happen."
+    }
+  ],
+  "expected": {
+    "trialBalanceBalanced": true,
+    "totalDebits": "25200.00",
+    "totalCredits": "25200.00",
+    "accounts": [
+      { "code": "1201", "name": "Khari Baoli Spices", "balance": "0.00" },
+      { "code": "2210", "name": "Output CGST", "balance": "0.00" },
+      { "code": "2220", "name": "Output SGST or UTGST", "balance": "0.00" },
+      { "code": "4200", "name": "Sales of services", "balance": "0.00" }
+    ],
+    "stock": [],
+    "tax": {
+      "taxableValue": "0.00",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "igst": "0.00",
+      "total": "0.00",
+      "provenance": {
+        "ruleId": "gst.tax_split",
+        "ruleVersion": "2026.04.01",
+        "sourceRef": "policy:place-of-supply-v1",
+        "effectiveFrom": "2026-04-01",
+        "note": "The cancelled bill is not counted as a sale, so no tax is reported for it. The entries that raised and reversed it both remain in the books, which is why the totals are 25,200 while every balance is zero. Changing this means changing how a cancellation corrects a bill."
+      }
+    },
+    "refusals": []
+  }
+}

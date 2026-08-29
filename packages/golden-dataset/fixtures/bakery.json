@@ -1,0 +1,91 @@
+{
+  "id": "bakery-jaipur",
+  "version": "1.0.0",
+  "describes": "A Jaipur bakery selling within its own state, so the tax splits into central and state halves. It proves the ordinary intra-state case: a 5% declared rate on ₹6,000 of cake becomes ₹150 CGST and ₹150 SGST, and the customer owes the value plus both halves.",
+  "company": {
+    "companyId": "golden-bakery",
+    "name": "Meera Bakers",
+    "kind": "BAKERY",
+    "stateCode": "08",
+    "gstin": "08AAAAA0000A1Z2",
+    "booksStartDate": "2026-04-01",
+    "warehouseId": "shop",
+    "warehouseName": "Nehru Bazar shop"
+  },
+  "parties": [
+    {
+      "partyId": "hotel-rajmahal",
+      "name": "Hotel Rajmahal",
+      "role": "CUSTOMER",
+      "gstin": "08BBBBB1111B1Z0",
+      "stateCode": "08",
+      "accountCode": "1201"
+    }
+  ],
+  "items": [
+    {
+      "itemId": "CAKE-500",
+      "name": "Chocolate cake, 500 g",
+      "kind": "GOODS",
+      "baseUnit": "PCS",
+      "hsnOrSac": "1905",
+      "treatment": "TAXABLE",
+      "ratePercent": 5
+    }
+  ],
+  "events": [
+    {
+      "kind": "stock_in",
+      "ref": "BAKE-40",
+      "on": "2026-04-05",
+      "itemId": "CAKE-500",
+      "quantity": "40",
+      "unit": "PCS",
+      "unitCost": "180.00"
+    },
+    {
+      "kind": "sale",
+      "ref": "CAKE-SALE",
+      "on": "2026-04-08",
+      "partyId": "hotel-rajmahal",
+      "dueOn": "2026-05-08",
+      "lines": [{ "itemId": "CAKE-500", "quantity": "20", "unit": "PCS", "unitPrice": "300.00" }]
+    },
+    {
+      "kind": "payment",
+      "ref": "CAKE-PAID",
+      "on": "2026-04-15",
+      "partyId": "hotel-rajmahal",
+      "amount": "6300.00",
+      "againstRef": "CAKE-SALE"
+    }
+  ],
+  "expected": {
+    "trialBalanceBalanced": true,
+    "totalDebits": "12600.00",
+    "totalCredits": "12600.00",
+    "accounts": [
+      { "code": "1110", "name": "Cash in hand", "balance": "6300.00" },
+      { "code": "1201", "name": "Hotel Rajmahal", "balance": "0.00" },
+      { "code": "2210", "name": "Output CGST", "balance": "150.00" },
+      { "code": "2220", "name": "Output SGST or UTGST", "balance": "150.00" },
+      { "code": "4100", "name": "Sales of goods", "balance": "6000.00" }
+    ],
+    "stock": [{ "itemId": "CAKE-500", "physical": "20", "unit": "PCS" }],
+    "tax": {
+      "taxableValue": "6000.00",
+      "cgst": "150.00",
+      "sgst": "150.00",
+      "igst": "0.00",
+      "total": "300.00",
+      "provenance": {
+        "ruleId": "gst.tax_split",
+        "ruleVersion": "2026.04.01",
+        "sourceRef": "policy:place-of-supply-v1",
+        "effectiveFrom": "2026-04-01",
+        "note": "Seller and buyer are both in state 08, so the supply is intra-state and the 5% the business declared splits in half as central and state GST. Changing this split means changing the place-of-supply rule, which rests on the notification behind it."
+      }
+    },
+    "refusals": []
+  }
+}
