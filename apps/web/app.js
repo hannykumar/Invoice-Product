@@ -10,6 +10,50 @@ const copy = {
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", supplierState: "Where the supplier is", stateOther: "Another state", stateSame: "Same state as your godown", supplierStateHelp: "This decides whether the bill carries IGST, or CGST and SGST.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "If you choose later, the payment remains clearly marked as not matched to a bill.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     workspace: "Workspace", activityTitle: "All activity", activityHelp: "Every completed action will appear here with its status and time.", demoHistory: "This preview has sample activity", demoHistoryBody: "Connect the application services to show the company's full history. You can still test the draft flows now.", createFirstSale: "Create a sale",
+    setupTitle: "Set up a business",
+    setupHelp: "Answer a few questions and we open a real set of books for it. Your GST number and opening figures are checked, not assumed.",
+    setupAbout: "About the business",
+    setupName: "What is it called?",
+    setupKind: "What kind of work?",
+    setupChoose: "Choose one",
+    setupRetail: "Retail shop",
+    setupWholesale: "Wholesale",
+    setupBakery: "Bakery",
+    setupServices: "Services",
+    setupTransport: "Transport",
+    setupManufacturing: "Manufacturing",
+    setupState: "Which state?",
+    setupPhone: "Phone (optional)",
+    setupGstBooks: "GST and books",
+    setupRegistered: "Registered for GST?",
+    setupRegular: "Yes, regular",
+    setupComposition: "Yes, composition",
+    setupUnregistered: "Not registered",
+    setupGstin: "GST number",
+    setupFiling: "How often do you file GST?",
+    setupMonthly: "Every month",
+    setupQuarterly: "Every three months",
+    setupBooksFrom: "Keep books from",
+    setupOneThing: "One thing you sell",
+    setupItemName: "Its name",
+    setupGoodsOrService: "Goods or a service?",
+    setupGoods: "Goods",
+    setupService: "Service",
+    setupCounted: "How is it counted?",
+    setupHsn: "HSN or SAC code (optional)",
+    setupRateLegend: "Optional — the GST you charge",
+    setupRateHint: "If you tell us a rate, we record it as yours and say so on the bill. We never pick one for you.",
+    setupRateCode: "For which goods or service code?",
+    setupRatePercent: "What rate, in per cent?",
+    setupRateBasis: "Where does the rate come from?",
+    setupMoneyLegend: "Optional — money on day one",
+    setupMoneyHint: "The cash you started with. We record it against your own money in the business, so the books balance.",
+    setupOpeningCash: "Cash in hand on day one",
+    setupCheck: "Check setup",
+    setupCreate: "Create the business",
+    reportsTitle: "Reports",
+    reportsHelp: "Every figure below is computed live from this company's ledger, sales, stock and receivables. Nothing is typed in.",
+    reportsLoading: "Loading reports from the live company…",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -23,6 +67,50 @@ const copy = {
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", supplierState: "Supplier kahan hai", stateOther: "Doosre rajya mein", stateSame: "Aapke godown wale rajya mein", supplierStateHelp: "Isse tay hota hai ki bill par IGST lagega ya CGST aur SGST.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Baad mein chunne par payment saaf taur par bina bill ke dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     workspace: "Kaam ki jagah", activityTitle: "Saara kaam", activityHelp: "Har poora kaam uske samay aur sthiti ke saath yahan dikhega.", demoHistory: "Is preview mein sample kaam hai", demoHistoryBody: "Company ka poora itihaas dikhane ke liye services jodni hongi. Abhi draft flows check kar sakte hain.", createFirstSale: "Bikri banayen",
+    setupTitle: "Business set up karein",
+    setupHelp: "Kuch sawaalon ke jawab dein, hum uske liye asli books khol denge. Aapka GST number aur shuruaati aankde jaanche jaate hain, maane nahin jaate.",
+    setupAbout: "Business ke baare mein",
+    setupName: "Iska naam kya hai?",
+    setupKind: "Kis tarah ka kaam?",
+    setupChoose: "Ek chunein",
+    setupRetail: "Retail dukaan",
+    setupWholesale: "Thok",
+    setupBakery: "Bakery",
+    setupServices: "Services",
+    setupTransport: "Transport",
+    setupManufacturing: "Manufacturing",
+    setupState: "Kaunsa rajya?",
+    setupPhone: "Phone (marzi se)",
+    setupGstBooks: "GST aur books",
+    setupRegistered: "GST mein registered hain?",
+    setupRegular: "Haan, regular",
+    setupComposition: "Haan, composition",
+    setupUnregistered: "Registered nahin",
+    setupGstin: "GST number",
+    setupFiling: "GST kitni baar bharte hain?",
+    setupMonthly: "Har mahine",
+    setupQuarterly: "Teen mahine mein",
+    setupBooksFrom: "Hisaab kab se rakhein",
+    setupOneThing: "Ek cheez jo aap bechte hain",
+    setupItemName: "Iska naam",
+    setupGoodsOrService: "Maal ya service?",
+    setupGoods: "Maal",
+    setupService: "Service",
+    setupCounted: "Ise kaise ginte hain?",
+    setupHsn: "HSN ya SAC code (marzi se)",
+    setupRateLegend: "Marzi se — aap jo GST lete hain",
+    setupRateHint: "Aap rate batayenge to hum use aapka rate likhenge aur bill par bhi yahi likha jayega. Hum khud kabhi nahin chunte.",
+    setupRateCode: "Kis maal ya service ke code ke liye?",
+    setupRatePercent: "Kitne pratishat ka rate?",
+    setupRateBasis: "Yeh rate kahan se aaya?",
+    setupMoneyLegend: "Marzi se — pehle din ka paisa",
+    setupMoneyHint: "Jis cash se aapne shuru kiya. Hum use aapke apne paise ke saamne likhte hain, taaki hisaab barabar rahe.",
+    setupOpeningCash: "Pehle din haath mein cash",
+    setupCheck: "Setup jaanchein",
+    setupCreate: "Business banayein",
+    reportsTitle: "Report",
+    reportsHelp: "Neeche ka har aankda is company ke ledger, bikri, stock aur lena-dena se abhi nikala gaya hai. Kuch bhi likh kar nahin daala gaya.",
+    reportsLoading: "Live company se report aa rahi hai…",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -38,6 +126,65 @@ const storage = (() => {
 
 const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null, sessionId: storage?.getItem("karobar.session") ?? null };
 if (!(state.locale in copy)) state.locale = "en-IN";
+
+const REPORT_TEXT = {
+  account: { "en-IN": "Account", "hi-IN": "Account" },
+  amount: { "en-IN": "Amount", "hi-IN": "Rakam" },
+  balanceCol: { "en-IN": "Balance", "hi-IN": "Baaki" },
+  balanced: { "en-IN": "Balanced", "hi-IN": "Barabar hai" },
+  booksFrom: { "en-IN": "Books from", "hi-IN": "Hisaab kab se" },
+  bothSides: { "en-IN": "Both sides", "hi-IN": "Dono taraf" },
+  business: { "en-IN": "Business", "hi-IN": "Business" },
+  businessCreated: { "en-IN": "Business created", "hi-IN": "Business ban gaya" },
+  canBeSold: { "en-IN": "Can be sold", "hi-IN": "Bech sakte hain" },
+  cashDayOne: { "en-IN": "Cash on day one", "hi-IN": "Pehle din ka cash" },
+  checking: { "en-IN": "Checking…", "hi-IN": "Jaanch ho rahi hai…" },
+  claimsOnIt: { "en-IN": "Claims on it", "hi-IN": "Uspar dawe" },
+  codeCol: { "en-IN": "Code", "hi-IN": "Code" },
+  creating: { "en-IN": "Creating…", "hi-IN": "Ban raha hai…" },
+  customer: { "en-IN": "Customer", "hi-IN": "Customer" },
+  dateCol: { "en-IN": "Date", "hi-IN": "Tareekh" },
+  doesNotBalance: { "en-IN": "Does not balance — look below", "hi-IN": "Barabar nahin — neeche dekhein" },
+  everythingEarned: { "en-IN": "Everything you earned", "hi-IN": "Jo kuch kamaya" },
+  firstItem: { "en-IN": "First item", "hi-IN": "Pehla item" },
+  ratesDeclaredLabel: { "en-IN": "GST rates you declared", "hi-IN": "Aapke bataye GST rate" },
+  gstCollected: { "en-IN": "GST you collected", "hi-IN": "Aapne jo GST liya" },
+  gstPaid: { "en-IN": "GST you had already paid", "hi-IN": "Aap pehle jo GST de chuke the" },
+  godown: { "en-IN": "Godown", "hi-IN": "Godown" },
+  goodsValue: { "en-IN": "Goods value", "hi-IN": "Maal ki keemat" },
+  itemCol: { "en-IN": "Item", "hi-IN": "Item" },
+  leftCol: { "en-IN": "Left", "hi-IN": "Bacha" },
+  moneyNoBill: { "en-IN": "Money with no bill", "hi-IN": "Bina bill ka paisa" },
+  numberCol: { "en-IN": "Number", "hi-IN": "Number" },
+  oldestLate: { "en-IN": "Oldest days late", "hi-IN": "Sabse purana kitne din late" },
+  openingEntry: { "en-IN": "Opening entry posted", "hi-IN": "Shuruaati entry darj hui" },
+  owedEarned: { "en-IN": "Owed or earned", "hi-IN": "Dena ya kamai" },
+  ownedSpent: { "en-IN": "Owned or spent", "hi-IN": "Apna ya kharch" },
+  ownsMatch: { "en-IN": "Owns and owes match", "hi-IN": "Jo hai aur jo dena hai, dono mil rahe hain" },
+  rateDeclared: { "en-IN": "Rate you declared", "hi-IN": "Aapka bataya rate" },
+  readyToCreate: { "en-IN": "Ready to create", "hi-IN": "Banane ke liye taiyar" },
+  sideCol: { "en-IN": "Side", "hi-IN": "Taraf" },
+  stillOwed: { "en-IN": "Still owed", "hi-IN": "Abhi baaki" },
+  supplier: { "en-IN": "Supplier", "hi-IN": "Supplier" },
+  booksBalance: { "en-IN": "The books balance", "hi-IN": "Hisaab barabar hai" },
+  booksDoNotBalance: { "en-IN": "The books do not balance", "hi-IN": "Hisaab barabar nahin hai" },
+  twoSidesSame: { "en-IN": "The two sides come to the same figure.", "hi-IN": "Dono taraf ka jod barabar hai." },
+  twoSidesDiffer: { "en-IN": "The two sides do not match.", "hi-IN": "Dono taraf ka jod barabar nahin hai." },
+  total: { "en-IN": "Total", "hi-IN": "Kul" },
+  whatIsLeft: { "en-IN": "What is left", "hi-IN": "Kya bacha" },
+  whatItWas: { "en-IN": "What it was", "hi-IN": "Kya tha" },
+  businessOwns: { "en-IN": "What the business owns", "hi-IN": "Business ke paas kya hai" },
+  oweSuppliers: { "en-IN": "What you owe suppliers", "hi-IN": "Suppliers ko kya dena hai" },
+  worth: { "en-IN": "Worth", "hi-IN": "Keemat" },
+  openingBooks: { "en-IN": "Its opening books, straight from the ledger", "hi-IN": "Iski shuruaati books, seedha ledger se" },
+  nothingCreated: { "en-IN": "Nothing was created. Fix these and check again.", "hi-IN": "Kuch nahin bana. Inhein theek karke dobara jaanchein." },
+  needsALook: { "en-IN": "A few things need a look", "hi-IN": "Kuch cheezein dekhni hain" },
+  checkOut: { "en-IN": "These check out. Nothing is saved until you create the business.", "hi-IN": "Yeh theek hain. Jab tak business nahin banate, kuch save nahin hota." },
+  booksStartEmpty: { "en-IN": "none — books start empty", "hi-IN": "koi nahin — books khaali shuru hoti hain" },
+};
+
+/** Text the API returns in both languages. The reader's choice decides, with English as the fallback. */
+const t = (value) => (value === null || typeof value !== "object" ? (value ?? "") : (value[state.locale] ?? value["en-IN"] ?? ""));
 
 const money = (amount) => new Intl.NumberFormat(state.locale, { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(amount) || 0);
 const dateInput = () => {
@@ -268,7 +415,7 @@ function drillDetails(label, total, rows) {
   summary.append(name, value);
   details.append(summary);
   details.append(reportTable(
-    [{ label: "Date" }, { label: "Number" }, { label: "What it was" }, { label: "Amount", numeric: true }],
+    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.whatItWas) }, { label: t(REPORT_TEXT.amount), numeric: true }],
     rows.map((r) => [r.date, r.number ?? "", r.description, money(r.amount)]),
   ));
   return details;
@@ -279,15 +426,15 @@ function renderReports(data) {
   content.replaceChildren();
 
   // Things worth a second look come first: what a person must check before trusting the rest.
-  const exceptions = reportCard(data.exceptions.title, data.exceptions.sentence);
+  const exceptions = reportCard(t(data.exceptions.title), t(data.exceptions.sentence));
   if (!data.exceptions.clean) {
     data.exceptions.items.forEach((item) => {
       const flag = document.createElement("div");
       flag.className = `report-flag ${item.severity === "BLOCKING" ? "blocking" : ""}`;
       const strong = document.createElement("strong");
-      strong.textContent = item.amount === null ? item.what : `${item.what} (${money(item.amount)})`;
+      strong.textContent = item.amount === null ? t(item.what) : `${t(item.what)} (${money(item.amount)})`;
       const why = document.createElement("span");
-      why.textContent = item.why;
+      why.textContent = t(item.why);
       flag.append(strong, why);
       exceptions.append(flag);
     });
@@ -295,80 +442,80 @@ function renderReports(data) {
   content.append(exceptions);
 
   // Profit and loss, with the income total openable into the bills behind it.
-  const pnl = reportCard(data.profitAndLoss.title, data.profitAndLoss.sentence);
+  const pnl = reportCard(t(data.profitAndLoss.title), t(data.profitAndLoss.sentence));
   pnl.append(reportTable(
-    [{ label: "Account" }, { label: "Amount", numeric: true }],
+    [{ label: t(REPORT_TEXT.account) }, { label: t(REPORT_TEXT.amount), numeric: true }],
     [
       ...data.profitAndLoss.income.rows.map((r) => [r.name, money(r.amount)]),
       ...data.profitAndLoss.expenses.rows.map((r) => [r.name, money(r.amount)]),
     ],
   ));
-  pnl.append(drillDetails("Everything you earned", data.profitAndLoss.income.total, data.profitAndLoss.income.drill));
-  pnl.append(reportTotalRow("What is left", data.profitAndLoss.result));
+  pnl.append(drillDetails(t(REPORT_TEXT.everythingEarned), data.profitAndLoss.income.total, data.profitAndLoss.income.drill));
+  pnl.append(reportTotalRow(t(REPORT_TEXT.whatIsLeft), data.profitAndLoss.result));
   content.append(pnl);
 
   // Balance sheet with the balanced badge.
-  const sheet = reportCard(data.balanceSheet.title, data.balanceSheet.sentence);
+  const sheet = reportCard(t(data.balanceSheet.title), t(data.balanceSheet.sentence));
   const badge = document.createElement("span");
   badge.className = `pill ${data.balanceSheet.balanced ? "done" : "warn"}`;
-  badge.textContent = data.balanceSheet.balanced ? "Owns and owes match" : "Does not balance — look below";
+  badge.textContent = data.balanceSheet.balanced ? t(REPORT_TEXT.ownsMatch) : t(REPORT_TEXT.doesNotBalance);
   sheet.append(badge);
-  sheet.append(reportTotalRow("What the business owns", data.balanceSheet.totalAssets));
-  sheet.append(reportTotalRow("Claims on it", data.balanceSheet.totalClaims));
+  sheet.append(reportTotalRow(t(REPORT_TEXT.businessOwns), data.balanceSheet.totalAssets));
+  sheet.append(reportTotalRow(t(REPORT_TEXT.claimsOnIt), data.balanceSheet.totalClaims));
   content.append(sheet);
 
   // Trial balance.
-  const trial = reportCard(data.trialBalance.title, data.trialBalance.balanced ? "The two sides come to the same figure." : "The two sides do not match.");
+  const trial = reportCard(t(data.trialBalance.title), data.trialBalance.balanced ? t(REPORT_TEXT.twoSidesSame) : t(REPORT_TEXT.twoSidesDiffer));
   const trialBadge = document.createElement("span");
   trialBadge.className = `pill ${data.trialBalance.balanced ? "done" : "warn"}`;
-  trialBadge.textContent = data.trialBalance.balanced ? "Balanced" : `Off by ${money(data.trialBalance.difference)}`;
+  trialBadge.textContent = data.trialBalance.balanced ? t(REPORT_TEXT.balanced) : `Off by ${money(data.trialBalance.difference)}`;
   trial.append(trialBadge);
   trial.append(reportTable(
-    [{ label: "Code" }, { label: "Account" }, { label: "Balance", numeric: true }, { label: "Side" }],
-    data.trialBalance.rows.map((r) => [r.code, r.name, money(r.closing), r.side === "DEBIT" ? "Owned or spent" : "Owed or earned"]),
+    [{ label: t(REPORT_TEXT.codeCol) }, { label: t(REPORT_TEXT.account) }, { label: t(REPORT_TEXT.balanceCol), numeric: true }, { label: t(REPORT_TEXT.sideCol) }],
+    data.trialBalance.rows.map((r) => [r.code, r.name, money(r.closing), r.side === "DEBIT" ? t(REPORT_TEXT.ownedSpent) : t(REPORT_TEXT.owedEarned)]),
   ));
   content.append(trial);
 
   // Sales register.
-  const sales = reportCard(data.sales.title, data.sales.sentence);
+  const sales = reportCard(t(data.sales.title), t(data.sales.sentence));
   if (data.sales.rows.length > 0) sales.append(reportTable(
-    [{ label: "Date" }, { label: "Number" }, { label: "Customer" }, { label: "Goods value", numeric: true }, { label: "Total", numeric: true }],
+    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
     data.sales.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.total)]),
   ));
   content.append(sales);
 
   // Purchase register — real here, because purchases post bills.
-  const purchases = reportCard(data.purchases.title, data.purchases.sentence);
+  const purchases = reportCard(t(data.purchases.title), t(data.purchases.sentence));
   if (data.purchases.rows.length > 0) purchases.append(reportTable(
-    [{ label: "Date" }, { label: "Number" }, { label: "Supplier" }, { label: "Goods value", numeric: true }, { label: "Total", numeric: true }],
+    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.supplier) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
     data.purchases.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.total)]),
   ));
   content.append(purchases);
 
   // What is left in the godown.
-  const stock = reportCard(data.stock.title, data.stock.sentence);
+  const stock = reportCard(t(data.stock.title), t(data.stock.sentence));
   if (data.stock.rows.length > 0) stock.append(reportTable(
-    [{ label: "Item" }, { label: "Godown" }, { label: "Left" }, { label: "Can be sold" }, { label: "Worth", numeric: true }],
+    [{ label: t(REPORT_TEXT.itemCol) }, { label: t(REPORT_TEXT.godown) }, { label: t(REPORT_TEXT.leftCol) }, { label: t(REPORT_TEXT.canBeSold) }, { label: t(REPORT_TEXT.worth), numeric: true }],
     data.stock.rows.map((r) => [r.item, r.warehouse, `${r.closing} ${r.unit}`, `${r.available} ${r.unit}`, money(r.value)]),
   ));
   content.append(stock);
 
   // Who owes whom.
-  const dues = reportCard(data.dues.receivables.title, data.dues.receivables.sentence);
+  const dues = reportCard(t(data.dues.receivables.title), t(data.dues.receivables.sentence));
   if (data.dues.receivables.rows.length > 0) dues.append(reportTable(
-    [{ label: "Customer" }, { label: "Still owed", numeric: true }, { label: "Money with no bill", numeric: true }, { label: "Oldest days late", numeric: true }],
+    [{ label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.stillOwed), numeric: true }, { label: t(REPORT_TEXT.moneyNoBill), numeric: true }, { label: t(REPORT_TEXT.oldestLate), numeric: true }],
     data.dues.receivables.rows.map((r) => [r.party, money(r.outstanding), money(r.onAccount), String(r.oldestDaysOverdue)]),
   ));
-  dues.append(reportTotalRow("What you owe suppliers", data.dues.payables.total));
+  dues.append(reportTotalRow(t(REPORT_TEXT.oweSuppliers), data.dues.payables.total));
   content.append(dues);
 
   // GST collected and paid.
-  const gst = reportCard(data.gst.title, data.gst.sentence);
-  gst.append(reportTotalRow("GST you collected", data.gst.collected));
-  gst.append(reportTotalRow("GST you had already paid", data.gst.alreadyPaid));
+  const gst = reportCard(t(data.gst.title), t(data.gst.sentence));
+  gst.append(reportTotalRow(t(REPORT_TEXT.gstCollected), data.gst.collected));
+  gst.append(reportTotalRow(t(REPORT_TEXT.gstPaid), data.gst.alreadyPaid));
   const caution = document.createElement("p");
   caution.className = "report-caution";
-  caution.textContent = data.gst.caution;
+  caution.textContent = t(data.gst.caution);
   gst.append(caution);
   content.append(gst);
 }
@@ -394,7 +541,7 @@ function setupData() {
 function renderSetupProblems(problems) {
   const box = document.querySelector("#setup-result");
   box.replaceChildren();
-  const card = reportCard("A few things need a look", "Nothing was created. Fix these and check again.");
+  const card = reportCard(t(REPORT_TEXT.needsALook), t(REPORT_TEXT.nothingCreated));
   problems.forEach((problem) => {
     const flag = document.createElement("div");
     flag.className = "report-flag";
@@ -410,15 +557,15 @@ function renderSetupProblems(problems) {
 function renderSetupReady(summary) {
   const box = document.querySelector("#setup-result");
   box.replaceChildren();
-  const card = reportCard("Ready to create", "These check out. Nothing is saved until you create the business.");
+  const card = reportCard(t(REPORT_TEXT.readyToCreate), t(REPORT_TEXT.checkOut));
   const rows = [
-    ["Business", `${summary.businessName} · ${summary.businessType ?? ""}`],
+    [t(REPORT_TEXT.business), `${summary.businessName} · ${summary.businessType ?? ""}`],
     ["GST", summary.registration ?? ""],
-    ["Books from", summary.booksStartDate],
-    ["First item", summary.itemName],
+    [t(REPORT_TEXT.booksFrom), summary.booksStartDate],
+    [t(REPORT_TEXT.firstItem), summary.itemName],
   ];
-  if (summary.declaredRate) rows.push(["Rate you declared", summary.declaredRate]);
-  if (summary.openingCash !== null) rows.push(["Cash on day one", money(summary.openingCash)]);
+  if (summary.declaredRate) rows.push([t(REPORT_TEXT.rateDeclared), summary.declaredRate]);
+  if (summary.openingCash !== null) rows.push([t(REPORT_TEXT.cashDayOne), money(summary.openingCash)]);
   card.append(reportTable([{ label: "" }, { label: "" }], rows));
   box.append(card);
   document.querySelector("#setup-create").hidden = false;
@@ -427,26 +574,26 @@ function renderSetupReady(summary) {
 function renderSetupResult(result) {
   const box = document.querySelector("#setup-result");
   box.replaceChildren();
-  const card = reportCard("Business created", result.sentence);
+  const card = reportCard(t(REPORT_TEXT.businessCreated), result.sentence);
   const badge = document.createElement("span");
   badge.className = `pill ${result.trialBalance.balanced ? "done" : "warn"}`;
-  badge.textContent = result.trialBalance.balanced ? "The books balance" : "The books do not balance";
+  badge.textContent = result.trialBalance.balanced ? t(REPORT_TEXT.booksBalance) : t(REPORT_TEXT.booksDoNotBalance);
   card.append(badge);
   const facts = [
-    ["Opening entry posted", result.openingVoucherId ?? "none — books start empty"],
-    ["GST rates you declared", String(result.ratesDeclared)],
+    [t(REPORT_TEXT.openingEntry), result.openingVoucherId ?? t(REPORT_TEXT.booksStartEmpty)],
+    [t(REPORT_TEXT.ratesDeclaredLabel), String(result.ratesDeclared)],
   ];
   card.append(reportTable([{ label: "" }, { label: "" }], facts));
   if (result.trialBalance.rows.length > 0) {
     const heading = document.createElement("h3");
     heading.className = "setup-subheading";
-    heading.textContent = "Its opening books, straight from the ledger";
+    heading.textContent = t(REPORT_TEXT.openingBooks);
     card.append(heading);
     card.append(reportTable(
-      [{ label: "Account" }, { label: "Owned or spent", numeric: true }, { label: "Owed or earned", numeric: true }],
+      [{ label: t(REPORT_TEXT.account) }, { label: t(REPORT_TEXT.ownedSpent), numeric: true }, { label: t(REPORT_TEXT.owedEarned), numeric: true }],
       result.trialBalance.rows.map((r) => [r.name, r.debit ? money(r.debit) : "", r.credit ? money(r.credit) : ""]),
     ));
-    card.append(reportTotalRow("Both sides", result.trialBalance.totalDebits));
+    card.append(reportTotalRow(t(REPORT_TEXT.bothSides), result.trialBalance.totalDebits));
   }
   box.append(card);
   document.querySelector("#setup-create").hidden = true;
@@ -456,7 +603,7 @@ async function checkSetup() {
   const button = document.querySelector("#setup-check");
   button.disabled = true;
   const previous = button.textContent;
-  button.textContent = "Checking…";
+  button.textContent = t(REPORT_TEXT.checking);
   try {
     const result = await api("/api/onboarding/preview", { method: "POST", body: JSON.stringify(setupData()) });
     if (result.ok) renderSetupReady(result.summary); else renderSetupProblems(result.problems);
@@ -472,7 +619,7 @@ async function createSetup() {
   const button = document.querySelector("#setup-create");
   button.disabled = true;
   const previous = button.textContent;
-  button.textContent = "Creating…";
+  button.textContent = t(REPORT_TEXT.creating);
   try {
     const result = await api("/api/onboarding/finish", { method: "POST", body: JSON.stringify(setupData()) });
     if (result.ok && result.result) renderSetupResult(result.result); else renderSetupProblems(result.problems);

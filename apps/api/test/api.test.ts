@@ -122,11 +122,20 @@ test('reports require a session and are computed from that company alone', async
   assert.equal(reports.body.purchases.available, true);
   assert.ok(reports.body.purchases.total > 0);
 
-  // Every exception carries a machine code and a plain-language explanation.
+  // Every exception carries a machine code and a plain-language explanation in both languages.
+  // The code is for callers; the wording is for the person, and neither language may be missing.
   assert.ok(Array.isArray(reports.body.exceptions.items));
-  for (const item of reports.body.exceptions.items as { code: string; what: string }[]) {
+  for (const item of reports.body.exceptions.items as { code: string; what: Record<string, string> }[]) {
     assert.equal(typeof item.code, 'string');
-    assert.equal(typeof item.what, 'string');
+    assert.equal(typeof item.what['en-IN'], 'string');
+    assert.equal(typeof item.what['hi-IN'], 'string');
+  }
+
+  // Nothing on the page is served in one language only: a Hindi reader gets a Hindi report.
+  for (const heading of [reports.body.profitAndLoss.title, reports.body.stock.sentence, reports.body.gst.caution]) {
+    assert.equal(typeof heading['en-IN'], 'string');
+    assert.equal(typeof heading['hi-IN'], 'string');
+    assert.notEqual(heading['hi-IN'], heading['en-IN'], 'the two languages should not be the same string');
   }
 });
 
