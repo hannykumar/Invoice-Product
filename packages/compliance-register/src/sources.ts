@@ -134,6 +134,26 @@ export const SOURCES: readonly ComplianceSource[] = [
       'This is the text as enacted in 2017. It has since been amended: Dadra and Nagar Haveli and Daman and Diu were merged, and Ladakh was added. The amended text could not be retrieved first-hand (the publisher\'s updated-Act host refused the connection), so Ladakh is deliberately NOT treated as a UTGST territory by any rule — a supply inside Ladakh is refused instead. See decision log entry `dl-ladakh-utgst`.',
   }),
   source({
+    id: 'cgst-act-2017-s10-4',
+    title: 'The Central Goods and Services Tax Act, 2017 — composition levy, no tax collected from the recipient',
+    authority: 'STATUTE',
+    publisher: 'Parliament of India, published by CBIC',
+    url: 'https://cbic-gst.gov.in/hindi/CGST-bill-e.html',
+    provision: 'Section 10(4)',
+    quotedText:
+      'A taxable person to whom the provisions of sub-section (1) apply shall not collect any tax from the recipient on supplies made by him nor shall he be entitled to any credit of input tax.',
+    effectiveFrom: isoDate('2017-07-01'),
+    effectiveTo: null,
+    retrievedOn: isoDate('2026-08-29'),
+    verification: 'FIRST_HAND',
+    state: 'ACTIVE',
+    supersededBy: null,
+    reviewedBy: GPT1,
+    reviewedOn: isoDate('2026-08-29'),
+    notes:
+      'Basis for a composition dealer charging no GST on its bill. The turnover threshold in sub-section (1) has been raised by later amendments and is deliberately NOT relied on here: this rule takes the registration status recorded in master data and does not decide eligibility.',
+  }),
+  source({
     id: 'gst-council-56th-press-release',
     title: 'Recommendations of the 56th Meeting of the GST Council',
     authority: 'PRESS_RELEASE',

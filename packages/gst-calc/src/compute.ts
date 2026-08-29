@@ -42,8 +42,18 @@ import {
 import { GST_STATE_CODES } from '../../masters/src/validation.ts';
 import type { MasterDataReader, TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
+import type { DeclaredRateReader } from './declared-rates.ts';
 
 export type PriceBasis = 'EXCLUSIVE' | 'INCLUSIVE';
+
+/**
+ * Where the rate on a line came from.
+ *
+ * `REGISTER` means a notification, checked and recorded under issue #54. `BUSINESS_DECLARED` means
+ * the business told us. The difference is never hidden: it reaches the invoice, the reports and
+ * the GST return working papers.
+ */
+export type RateBasis = 'REGISTER' | 'BUSINESS_DECLARED';
 export type TaxSplit = 'CGST_SGST' | 'CGST_UTGST' | 'IGST';
 
 export type Discount =
@@ -100,6 +110,11 @@ export interface ComputedTaxLine {
   readonly reverseCharge: boolean;
   readonly rateSourceRef: string | null;
   readonly rateReviewState: ReviewState | null;
+  /** `null` on a line that carries no rate at all, such as a nil-rated or exempt supply. */
+  readonly rateBasis: RateBasis | null;
+  /** Set only when the business declared the rate itself: who said so, and on what footing. */
+  readonly rateDeclaredBy: string | null;
+  readonly rateDeclaredBasis: string | null;
   readonly explanation: { readonly 'en-IN': string; readonly 'hi-IN': string };
 }
 
@@ -149,6 +164,10 @@ export type ComputeResult =
       readonly totals: TaxTotals;
       readonly decisions: readonly Decision[];
       readonly explanation: { readonly 'en-IN': string; readonly 'hi-IN': string };
+      /** True when any line's rate came from the business rather than from a checked notification. */
+      readonly usesBusinessDeclaredRates: boolean;
+      /** One sentence for the bill and the screen, when the previous flag is true. */
+      readonly declaredRateNotice: { readonly 'en-IN': string; readonly 'hi-IN': string } | null;
     }
   | {
       readonly status: 'CANNOT_COMPUTE';
@@ -163,6 +182,11 @@ export interface GstCalculatorDeps {
   readonly rates: RateTable;
   readonly gstEngine: RulesEngine;
   readonly mode: EngineMode;
+  /**
+   * Rates the business set for itself. Consulted only when the register has nothing approved, and
+   * every figure that comes from here is labelled all the way to the printed bill.
+   */
+  readonly declaredRates?: DeclaredRateReader;
 }
 
 const INR = 'INR' as const;
@@ -182,12 +206,14 @@ export class GstCalculator {
   readonly #rates: RateTable;
   readonly #engine: RulesEngine;
   readonly #mode: EngineMode;
+  readonly #declaredRates: DeclaredRateReader | undefined;
 
   constructor(deps: GstCalculatorDeps) {
     this.#masterData = deps.masterData;
     this.#rates = deps.rates;
     this.#engine = deps.gstEngine;
     this.#mode = deps.mode;
+    this.#declaredRates = deps.declaredRates;
   }
 
   compute(input: ComputeInput): ComputeResult {
@@ -314,8 +340,17 @@ export class GstCalculator {
     if (reasons.length > 0) return this.#refuse(input, reasons, decisions);
 
     const totals = this.#totals(computedLines, input.roundToWholeRupee ?? true);
+    const declaredLines = computedLines.filter((l) => l.rateBasis === 'BUSINESS_DECLARED');
     return {
       status: 'COMPUTED',
+      usesBusinessDeclaredRates: declaredLines.length > 0,
+      declaredRateNotice:
+        declaredLines.length === 0
+          ? null
+          : {
+              'en-IN': 'The GST rates on this bill are the ones your business set. We have not checked them against a government notification.',
+              'hi-IN': 'Is bill ke GST rate aapke business ne tay kiye hain. Humne inhe sarkari notification se nahin jaancha.',
+            },
       placeOfSupplyStateCode: placeOfSupply,
       split,
       mayChargeGst,
@@ -380,7 +415,7 @@ export class GstCalculator {
     const notTaxed = item.treatment !== 'TAXABLE' || !mayChargeGst;
 
     if (notTaxed) {
-      return this.#assemble(line, item, prepared, chargesShare, base, null, nil(), nil(), nil(), nil(), nil(), null, null, split, mayChargeGst);
+      return this.#assemble(line, item, prepared, chargesShare, base, null, nil(), nil(), nil(), nil(), nil(), null, null, split, mayChargeGst, null, null, null);
     }
 
     if (item.hsnOrSac === null) {
@@ -391,21 +426,22 @@ export class GstCalculator {
       return null;
     }
 
-    const lookup = this.#rates.find(item.hsnOrSac, item.kind, input.documentDate, this.#mode);
-    if (!lookup.found) {
+    const resolved = this.#resolveRate(input, item);
+    if (resolved === null) {
+      const lookup = this.#rates.find(item.hsnOrSac, item.kind, input.documentDate, this.#mode);
       reasons.push(
-        lookup.reason === 'NOT_REVIEWED'
+        !lookup.found && lookup.reason === 'NOT_REVIEWED'
           ? blocked(
               'RATE_NOT_REVIEWED',
-              `The GST rate we hold for "${item.name}" has not been checked against an official source yet, so we will not use it.`,
-              `"${item.name}" ka GST rate abhi sarkari source se jaancha nahin gaya, isliye hum use nahin karenge.`,
+              `The GST rate we hold for "${item.name}" has not been checked against an official notification yet, so we will not use it. You can enter the rate you charge.`,
+              `"${item.name}" ka GST rate abhi sarkari notification se jaancha nahin gaya, isliye hum use nahin karenge. Aap apna rate bhar sakte hain.`,
               undefined,
               line.lineId,
             )
           : blocked(
               'RATE_NOT_FOUND',
-              `We do not have a GST rate for "${item.name}".`,
-              `"${item.name}" ka GST rate hamare paas nahin hai.`,
+              `We do not have a GST rate for "${item.name}". You can enter the rate you charge.`,
+              `"${item.name}" ka GST rate hamare paas nahin hai. Aap apna rate bhar sakte hain.`,
               undefined,
               line.lineId,
             ),
@@ -413,7 +449,7 @@ export class GstCalculator {
       return null;
     }
 
-    const entry = lookup.entry;
+    const entry = resolved.entry;
     const hasCess = entry.cess !== undefined;
     if (line.priceBasis === 'INCLUSIVE' && hasCess) {
       reasons.push(
@@ -489,7 +525,51 @@ export class GstCalculator {
       entry.reviewState,
       split,
       mayChargeGst,
+      resolved.basis,
+      resolved.declaredBy,
+      resolved.declaredBasis,
     );
+  }
+
+  /**
+   * A checked notification first; the business's own declaration second; nothing third.
+   *
+   * The order matters. A rate the register vouches for always wins, so declaring a rate can never
+   * override the law once we know it — a business's figure fills a gap, it does not replace a
+   * source.
+   */
+  #resolveRate(
+    input: ComputeInput,
+    item: import('./master-data-port.ts').ItemTaxClassification,
+  ): {
+    entry: import('./rate-table.ts').RateEntry;
+    basis: RateBasis;
+    declaredBy: string | null;
+    declaredBasis: string | null;
+  } | null {
+    const fromRegister = this.#rates.find(item.hsnOrSac, item.kind, input.documentDate, this.#mode);
+    if (fromRegister.found) {
+      return { entry: fromRegister.entry, basis: 'REGISTER', declaredBy: null, declaredBasis: null };
+    }
+    if (this.#declaredRates === undefined || item.hsnOrSac === null) return null;
+    const declared = this.#declaredRates.find(input.companyId, item.hsnOrSac, item.kind, input.documentDate);
+    if (declared === undefined) return null;
+    return {
+      entry: {
+        code: declared.code,
+        kind: declared.kind,
+        description: `Rate set by the business on ${declared.declaredOn}`,
+        ratePercentTimes100: declared.ratePercentTimes100,
+        ...(declared.cess === undefined ? {} : { cess: declared.cess }),
+        effectiveFrom: declared.effectiveFrom,
+        effectiveTo: declared.effectiveTo,
+        sourceRef: null,
+        reviewState: 'DRAFT',
+      },
+      basis: 'BUSINESS_DECLARED',
+      declaredBy: declared.declaredBy,
+      declaredBasis: declared.basis,
+    };
   }
 
   #cess(rule: import('./rate-table.ts').CessRule | undefined, taxableValue: Money, quantity: Quantity): Money {
@@ -521,6 +601,9 @@ export class GstCalculator {
     reviewState: ReviewState | null,
     split: TaxSplit,
     mayChargeGst: boolean,
+    rateBasis: RateBasis | null,
+    rateDeclaredBy: string | null,
+    rateDeclaredBasis: string | null,
   ): ComputedTaxLine {
     const totalTax = sum([cgst, sgst, utgst, igst, cess]);
     const reverseCharge = item.reverseCharge;
@@ -548,7 +631,10 @@ export class GstCalculator {
       reverseCharge,
       rateSourceRef: sourceRef,
       rateReviewState: reviewState,
-      explanation: explainLine(item, taxableValue, rate, split, totalTax, reverseCharge, mayChargeGst),
+      rateBasis,
+      rateDeclaredBy,
+      rateDeclaredBasis,
+      explanation: explainLine(item, taxableValue, rate, split, totalTax, reverseCharge, mayChargeGst, rateBasis),
     };
   }
 
@@ -644,6 +730,7 @@ const explainLine = (
   totalTax: Money,
   reverseCharge: boolean,
   mayChargeGst: boolean,
+  rateBasis: RateBasis | null,
 ) => {
   if (!mayChargeGst) {
     return {
@@ -662,8 +749,12 @@ const explainLine = (
     ? { en: ' You pay this GST to the government yourself, so it is not on the bill.', hi: ' Yeh GST aap khud sarkar ko bharenge, isliye bill par nahin hai.' }
     : { en: '', hi: '' };
   const kind = split === 'IGST' ? { en: 'one combined GST', hi: 'ek hi GST' } : { en: 'two separate GST amounts', hi: 'do alag GST' };
+  const whose =
+    rateBasis === 'BUSINESS_DECLARED'
+      ? { en: ' This is the rate your business set.', hi: ' Yeh rate aapke business ne tay kiya hai.' }
+      : { en: '', hi: '' };
   return {
-    'en-IN': `${item.name}: ${toDecimalString(taxableValue)} at ${percent} gives ${toDecimalString(totalTax)} as ${kind.en}.${who.en}`,
-    'hi-IN': `${item.name}: ${toDecimalString(taxableValue)} par ${percent} se ${toDecimalString(totalTax)} bana, ${kind.hi} ke roop mein.${who.hi}`,
+    'en-IN': `${item.name}: ${toDecimalString(taxableValue)} at ${percent} gives ${toDecimalString(totalTax)} as ${kind.en}.${who.en}${whose.en}`,
+    'hi-IN': `${item.name}: ${toDecimalString(taxableValue)} par ${percent} se ${toDecimalString(totalTax)} bana, ${kind.hi} ke roop mein.${who.hi}${whose.hi}`,
   };
 };

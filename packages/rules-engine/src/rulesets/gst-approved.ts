@@ -19,6 +19,7 @@ import { SUPPLY_FACTS, SUPPLIER_REGISTRATION_FACT, TRANSPORT_FACTS, PLACE_OF_SUP
 import type { Rule, RuleOutcome } from '../rule.ts';
 import type { RuleSet } from '../registry.ts';
 import { compositionCharging, ewayDelhi, ewayV1, ewayV2 } from './gst.ts';
+import type { RuleOutcome as _RuleOutcome } from '../rule.ts';
 
 const APPROVED_VERSION = '2026.08.29';
 
@@ -216,11 +217,32 @@ export const taxSplitApproved: Rule = {
 };
 
 /**
+ * CGST Act section 10(4): a person paying tax under the composition levy does not collect tax
+ * from the recipient.
+ *
+ * This rule takes the registration recorded in master data and says what follows from it. It does
+ * **not** decide whether the business is eligible for the scheme — that turns on turnover
+ * thresholds which have been amended repeatedly, and getting it wrong would be worse than not
+ * answering. Eligibility is the business's own declaration.
+ */
+export const compositionChargingApproved: Rule = {
+  ...compositionCharging,
+  version: APPROVED_VERSION,
+  sourceRef: 'cgst-act-2017-s10-4',
+  reviewState: 'APPROVED',
+  priority: 200,
+  explanation: {
+    'en-IN': 'Your business is registered as {registration}, so GST {verdict} be charged on this bill.',
+    'hi-IN': 'Aapka business {registration} ke roop mein registered hai, isliye is bill par GST {verdict}.',
+  },
+};
+
+/**
  * The rule set a production engine uses.
  *
- * Place of supply and the tax split are APPROVED. E-way applicability and the composition question
- * are carried over unchanged and remain DRAFT, so production still refuses them — that is not an
- * oversight, it is the register saying their numbers have no source.
+ * Place of supply, the tax split and the composition question are APPROVED. E-way applicability is
+ * carried over unchanged and remains DRAFT, so production still refuses it — that is not an
+ * oversight, it is the register saying its numbers have no source.
  */
 export const GST_RULE_SET_APPROVED: RuleSet = {
   id: 'in.gst',
@@ -231,7 +253,7 @@ export const GST_RULE_SET_APPROVED: RuleSet = {
     placeOfSupplyGoodsApproved,
     placeOfSupplyServicesApproved,
     taxSplitApproved,
-    compositionCharging,
+    compositionChargingApproved,
     ewayV1,
     ewayV2,
     ewayDelhi,

@@ -27,6 +27,16 @@ export const RULE_SOURCE_LINKS: readonly RuleSourceLink[] = [
     ],
   },
   {
+    ruleId: 'gst.composition.charging',
+    ruleVersion: '2026.08.29',
+    sourceIds: ['cgst-act-2017-s10-4'],
+    tests: [
+      'packages/rules-engine/test/approved-gst.test.ts › a business on the composition scheme charges no tax',
+      'packages/rules-engine/test/approved-gst.test.ts › an ordinary registered business charges tax normally',
+      'packages/gst-calc/test/compute.test.ts › a business on the composition scheme charges no GST, and the bill says so',
+    ],
+  },
+  {
     ruleId: 'gst.tax_split',
     ruleVersion: '2026.08.29',
     sourceIds: ['igst-act-2017-s7', 'igst-act-2017-s8', 'utgst-act-2017-s7'],

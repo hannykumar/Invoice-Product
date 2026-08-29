@@ -414,6 +414,7 @@ test('the decisions behind the numbers are returned with the answer', () => {
   assert.equal(byTopic.get('gst.place_of_supply')?.sourceRef, 'igst-act-2017-s10-1-a');
   assert.equal(byTopic.get('gst.tax_split')?.ruleReviewState, 'APPROVED');
   assert.equal(byTopic.get('gst.tax_split')?.sourceRef, 'igst-act-2017-s8');
-  // The composition question still has no source, and the answer says so rather than hiding it.
-  assert.equal(byTopic.get('gst.composition.charging')?.ruleReviewState, 'DRAFT');
+  // The composition question is now approved too, against CGST Act section 10(4).
+  assert.equal(byTopic.get('gst.composition.charging')?.ruleReviewState, 'APPROVED');
+  assert.equal(byTopic.get('gst.composition.charging')?.sourceRef, 'cgst-act-2017-s10-4');
 });
