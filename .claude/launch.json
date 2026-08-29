@@ -1,17 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "web"],
-      "port": 4173
-    },
-    {
-      "name": "api",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
-    }
+    { "name": "web", "runtimeExecutable": "/Users/samaykochhar/.nvm/versions/node/v22.23.1/bin/node", "runtimeArgs": ["--experimental-strip-types", "apps/web/server.ts"], "port": 4173 }
   ]
 }
