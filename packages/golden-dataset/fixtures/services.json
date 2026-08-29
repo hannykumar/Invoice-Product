@@ -1,0 +1,81 @@
+{
+  "id": "services-interstate",
+  "version": "1.0.0",
+  "describes": "A Bengaluru design studio billing a client in Maharashtra. Because the two are in different states the tax is one IGST amount rather than two halves, and because a service moves no goods the stock section stays empty.",
+  "company": {
+    "companyId": "golden-services",
+    "name": "Peenya Design Works",
+    "kind": "SERVICES",
+    "stateCode": "29",
+    "gstin": "29AAAAA0000A1ZR",
+    "booksStartDate": "2026-04-01",
+    "warehouseId": "studio",
+    "warehouseName": "Peenya studio"
+  },
+  "parties": [
+    {
+      "partyId": "mumbai-mills",
+      "name": "Mumbai Mills Limited",
+      "role": "CUSTOMER",
+      "gstin": "27CCCCC2222C1Z6",
+      "stateCode": "27",
+      "accountCode": "1201"
+    }
+  ],
+  "items": [
+    {
+      "itemId": "DESIGN",
+      "name": "Packaging design work",
+      "kind": "SERVICES",
+      "baseUnit": "JOB",
+      "hsnOrSac": "9983",
+      "treatment": "TAXABLE",
+      "ratePercent": 18
+    }
+  ],
+  "events": [
+    {
+      "kind": "sale",
+      "ref": "DESIGN-JOB",
+      "on": "2026-04-18",
+      "partyId": "mumbai-mills",
+      "dueOn": "2026-05-18",
+      "lines": [{ "itemId": "DESIGN", "quantity": "1", "unit": "JOB", "unitPrice": "50000.00" }]
+    },
+    {
+      "kind": "payment",
+      "ref": "DESIGN-PART",
+      "on": "2026-05-02",
+      "partyId": "mumbai-mills",
+      "amount": "30000.00",
+      "againstRef": "DESIGN-JOB"
+    }
+  ],
+  "expected": {
+    "trialBalanceBalanced": true,
+    "totalDebits": "89000.00",
+    "totalCredits": "89000.00",
+    "accounts": [
+      { "code": "1110", "name": "Cash in hand", "balance": "30000.00" },
+      { "code": "1201", "name": "Mumbai Mills Limited", "balance": "29000.00" },
+      { "code": "2230", "name": "Output IGST", "balance": "9000.00" },
+      { "code": "4200", "name": "Sales of services", "balance": "50000.00" }
+    ],
+    "stock": [],
+    "tax": {
+      "taxableValue": "50000.00",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "igst": "9000.00",
+      "total": "9000.00",
+      "provenance": {
+        "ruleId": "gst.tax_split",
+        "ruleVersion": "2026.04.01",
+        "sourceRef": "policy:place-of-supply-v1",
+        "effectiveFrom": "2026-04-01",
+        "note": "The supplier is in state 29 and the buyer in state 27, so the supply crosses a state line and the whole 18% is one IGST amount rather than two halves. Changing this needs the place-of-supply rule and the notification behind it reviewed."
+      }
+    },
+    "refusals": []
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/golden-dataset",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #43 [E43] — versioned example businesses and the outputs every module is expected to produce for them.",
+  "exports": { ".": "./src/index.ts" }
+}

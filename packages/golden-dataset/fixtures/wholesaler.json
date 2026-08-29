@@ -1,0 +1,133 @@
+{
+  "id": "wholesaler-apples",
+  "version": "1.0.0",
+  "describes": "The example from issue #43: an apple wholesaler buys 100 boxes, sells 70, is refused an oversale of 50 more, and takes a part payment. Apples are nil-rated, so this business proves that a bill with no tax on it still balances and still reports.",
+  "company": {
+    "companyId": "golden-wholesaler",
+    "name": "Sharma Fruit Traders",
+    "kind": "WHOLESALER",
+    "stateCode": "07",
+    "gstin": "07AAAAA0000A1Z4",
+    "booksStartDate": "2026-04-01",
+    "warehouseId": "narela",
+    "warehouseName": "Narela godown"
+  },
+  "parties": [
+    {
+      "partyId": "abc-traders",
+      "name": "ABC Traders",
+      "role": "CUSTOMER",
+      "gstin": "07DDDDD3333D1ZV",
+      "stateCode": "07",
+      "accountCode": "1201"
+    }
+  ],
+  "items": [
+    {
+      "itemId": "APL-BOX-10",
+      "name": "Apple box, 10 kg",
+      "kind": "GOODS",
+      "baseUnit": "BOX",
+      "hsnOrSac": "0808",
+      "treatment": "NIL_RATED"
+    }
+  ],
+  "events": [
+    {
+      "kind": "stock_in",
+      "ref": "BUY-100",
+      "on": "2026-04-02",
+      "itemId": "APL-BOX-10",
+      "quantity": "100",
+      "unit": "BOX",
+      "unitCost": "300.00"
+    },
+    {
+      "kind": "sale",
+      "ref": "SELL-70",
+      "on": "2026-04-10",
+      "partyId": "abc-traders",
+      "dueOn": "2026-05-10",
+      "lines": [
+        {
+          "itemId": "APL-BOX-10",
+          "quantity": "70",
+          "unit": "BOX",
+          "unitPrice": "500.00"
+        }
+      ]
+    },
+    {
+      "kind": "sale_refused",
+      "ref": "OVERSELL-50",
+      "on": "2026-04-12",
+      "partyId": "abc-traders",
+      "dueOn": "2026-05-12",
+      "lines": [
+        {
+          "itemId": "APL-BOX-10",
+          "quantity": "50",
+          "unit": "BOX",
+          "unitPrice": "500.00"
+        }
+      ],
+      "expectedCode": "SALES_NEEDS_INFO",
+      "why": "Only 30 boxes are left. Selling 50 would promise goods that are not there, and the product refuses rather than letting stock go negative.",
+      "expectedMessageContains": "so 20.000 BOX are missing"
+    },
+    {
+      "kind": "payment",
+      "ref": "PART-PAY",
+      "on": "2026-04-20",
+      "partyId": "abc-traders",
+      "amount": "20000.00",
+      "againstRef": "SELL-70"
+    }
+  ],
+  "expected": {
+    "trialBalanceBalanced": true,
+    "totalDebits": "55000.00",
+    "totalCredits": "55000.00",
+    "accounts": [
+      {
+        "code": "1110",
+        "name": "Cash in hand",
+        "balance": "20000.00"
+      },
+      {
+        "code": "1201",
+        "name": "ABC Traders",
+        "balance": "15000.00"
+      },
+      {
+        "code": "4100",
+        "name": "Sales of goods",
+        "balance": "35000.00"
+      }
+    ],
+    "stock": [
+      {
+        "itemId": "APL-BOX-10",
+        "physical": "30",
+        "unit": "BOX"
+      }
+    ],
+    "tax": {
+      "taxableValue": "35000.00",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "igst": "0.00",
+      "total": "0.00",
+      "provenance": {
+        "ruleId": "gst.item.treatment",
+        "ruleVersion": "2026.04.01",
+        "sourceRef": "policy:item-classification-v1",
+        "effectiveFrom": "2026-04-01",
+        "note": "Fresh apples are recorded as nil-rated by this business, so no GST is charged and the taxable value carries no tax. Changing this figure means changing the item's classification, which needs the notification behind it."
+      }
+    },
+    "refusals": [
+      "SALES_NEEDS_INFO"
+    ]
+  }
+}
