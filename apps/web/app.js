@@ -36,7 +36,7 @@ const storage = (() => {
   } catch { return undefined; }
 })();
 
-const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null };
+const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null, sessionId: storage?.getItem("karobar.session") ?? null };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const money = (amount) => new Intl.NumberFormat(state.locale, { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(amount) || 0);
@@ -104,11 +104,26 @@ function saveDraft(form) {
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
-    headers: { "content-type": "application/json", ...(options.headers || {}) },
+    headers: { "content-type": "application/json", ...(state.sessionId ? { authorization: `Bearer ${state.sessionId}` } : {}), ...(options.headers || {}) },
   });
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.message || "The application could not complete that request.");
+  if (!response.ok) {
+    const error = new Error(payload.message || "The application could not complete that request.");
+    error.status = response.status;
+    error.code = payload.code;
+    if (response.status === 401 && path !== "/api/auth/login") {
+      state.sessionId = null;
+      storage?.removeItem("karobar.session");
+      showLogin();
+    }
+    throw error;
+  }
   return payload;
+}
+
+function showLogin() {
+  const dialog = document.querySelector("#login-dialog");
+  if (!dialog.open) dialog.showModal();
 }
 
 function activityRow(item) {
@@ -149,7 +164,7 @@ function renderDashboard(data) {
   document.querySelector("#customer-summary").textContent = `${data.customer.documents.length} open customer document${data.customer.documents.length === 1 ? "" : "s"}`;
   document.querySelector("#supplier-summary").textContent = `${data.supplier.documents.length} posted supplier bill${data.supplier.documents.length === 1 ? "" : "s"}`;
   document.querySelector("#stock-title").textContent = `${data.stock.name}: ${data.stock.quantity} ${data.stock.unit}`;
-  document.querySelector("#stock-detail").textContent = "Physical balance in Peenya godown";
+  document.querySelector("#stock-detail").textContent = `Physical balance in ${dashboard.company.location}`;
   document.querySelector("#supplier-title").textContent = `${data.supplier.name}: ${money(data.supplier.outstanding)} due`;
   document.querySelector("#supplier-detail").textContent = `${data.supplier.documents.length} open supplier document${data.supplier.documents.length === 1 ? "" : "s"}`;
 
@@ -184,8 +199,8 @@ async function loadDashboard() {
     banner.classList.remove("failed");
   } catch (error) {
     banner.classList.add("failed");
-    banner.querySelector("strong").textContent = "Nothing was saved.";
-    banner.querySelector("span span").textContent = ` The demo services could not be reached: ${error.message}`;
+    banner.querySelector("strong").textContent = error.status === 401 ? "Sign in required." : "Nothing was saved.";
+    banner.querySelector("span span").textContent = ` ${error.message}`;
   }
 }
 
@@ -252,6 +267,28 @@ document.querySelectorAll("[data-view]").forEach((button) => button.addEventList
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); });
 document.querySelector("#menu-button").addEventListener("click", (event) => { const open = !document.body.classList.contains("menu-open"); document.body.classList.toggle("menu-open", open); event.currentTarget.setAttribute("aria-expanded", String(open)); });
+document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
+  const email = document.querySelector('#login-form [name="email"]');
+  email.value = event.target.value.endsWith("11") ? "owner@konkan.example.invalid" : "owner@sampoorna.example.invalid";
+});
+document.querySelector("#login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#login-error");
+  error.textContent = "";
+  try {
+    const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    state.sessionId = result.sessionId;
+    storage?.setItem("karobar.session", state.sessionId);
+    document.querySelector("#login-dialog").close("signed-in");
+    await loadDashboard();
+  } catch (failure) { error.textContent = failure.message; }
+});
+document.querySelector("#sign-out").addEventListener("click", () => {
+  state.sessionId = null;
+  storage?.removeItem("karobar.session");
+  showLogin();
+});
 document.querySelector("#review-cancel").addEventListener("click", () => document.querySelector("#review-dialog").close("cancel"));
 document.querySelector("#review-confirm").addEventListener("click", async (event) => {
   if (!state.pendingForm || !state.pendingInput) return;
@@ -271,4 +308,4 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-loadDashboard();
+if (state.sessionId) loadDashboard(); else showLogin();
