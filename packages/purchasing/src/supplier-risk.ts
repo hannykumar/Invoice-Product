@@ -17,8 +17,8 @@ import { ageInDays, maskAccount, readableDate, safeMessage } from "./supplier-ri
 import { DEFAULT_RISK_POLICY } from "./supplier-risk-types.ts";
 import type {
   AssessmentConfidence, Evidence, EvidenceSource, GstinLookupOutcome, GstinRecord, Gstr2bSignal,
-  ModelHint, RiskLevel, RiskPolicy, SourceStatus, SupplierHistory, SupplierRiskAssessment,
-  SupplierRiskCode, SupplierRiskWarning,
+  LightColour, ModelHint, RiskLevel, RiskLight, RiskPolicy, SourceStatus, SupplierHistory,
+  SupplierRiskAssessment, SupplierRiskCode, SupplierRiskWarning,
 } from "./supplier-risk-types.ts";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
 
@@ -357,6 +357,7 @@ export const assessSupplierRisk = (
     sources.every((source) => !source.consulted || (source.answered && !source.stale)) ? "COMPLETE" : "PARTIAL";
 
   const ordered = [...warnings].sort((left, right) => LEVEL_RANK[left.level] - LEVEL_RANK[right.level]);
+  const lights = buildLights(ordered, gstAnswered, input);
   const assessedAt = clock().toISOString();
 
   return {
@@ -368,6 +369,7 @@ export const assessSupplierRisk = (
     ...(input.invoiceDate === undefined ? {} : { invoiceDate: input.invoiceDate }),
     level,
     warnings: ordered,
+    lights,
     sources,
     confidence,
     policy,
@@ -375,6 +377,86 @@ export const assessSupplierRisk = (
     summary: summarise(input.supplierName, level, ordered, confidence),
     assessedAt,
   };
+};
+
+/**
+ * Codes that describe the state of our own checking rather than anything about the supplier.
+ *
+ * None of them may colour a light: "we could not reach the GST department" is a fact about us, and
+ * a model's guess is not evidence at all. Both are shown in the list; neither is a verdict.
+ */
+const NOT_A_VERDICT = new Set<SupplierRiskCode>([
+  "GOVERNMENT_DATA_UNAVAILABLE", "GOVERNMENT_DATA_STALE", "GSTR2B_NOT_CHECKED", "MODEL_HINT",
+]);
+
+const COLOUR_OF: Record<RiskLevel, LightColour> = { SERIOUS: "RED", CAUTION: "AMBER", INFORMATION: "GREEN" };
+
+const HEADLINE_OF: Record<LightColour, string> = {
+  RED: "Stop and check before you pay",
+  AMBER: "Worth a look",
+  GREEN: "Looks fine",
+  GREY: "We could not check",
+};
+
+/**
+ * Issue #99 — two lights, so a person who is not looking for a problem still sees one.
+ *
+ * A warning belongs to the government light when any of its evidence came from the GST department
+ * or from GSTR-2B; otherwise it belongs to our own. That attribution is read from the evidence
+ * itself rather than from a hand-kept list, so a new warning cannot quietly land on the wrong one.
+ */
+const buildLights = (
+  warnings: readonly SupplierRiskWarning[],
+  gstAnswered: boolean,
+  input: SupplierRiskInput,
+): RiskLight[] => {
+  const counts = warnings.filter((warning) => !NOT_A_VERDICT.has(warning.code));
+  const fromGovernment = counts.filter((warning) =>
+    warning.evidence.some((evidence) => evidence.source === "GST_PORTAL" || evidence.source === "IMS_GSTR2B"));
+  const fromOurs = counts.filter((warning) => !fromGovernment.includes(warning));
+
+  // Grey, not green. "We checked and it was fine" and "we could not check" are different answers,
+  // and showing the second as the first is the one mistake this light must never make.
+  const governmentColour: LightColour = !gstAnswered ? "GREY" : COLOUR_OF[worst(fromGovernment.map((warning) => warning.level))];
+  const oursColour: LightColour = COLOUR_OF[worst(fromOurs.map((warning) => warning.level))];
+
+  // The warning's own message already names its source, so a "the GST department raised…" prefix
+  // would say it twice. Only the count is worth adding, and only when there is more than one.
+  const lead = (found: readonly SupplierRiskWarning[]): string => {
+    const first = found[0]?.message ?? "";
+    return found.length > 1 ? `${found.length} things to check. ${first}` : first;
+  };
+
+  const governmentDetail = governmentColour === "GREY"
+    ? input.gstin === undefined
+      ? "No GST number is saved for this supplier, so the GST department was not asked."
+      : "The GST department could not be reached, so nothing here has been checked with them."
+    : governmentColour === "GREEN"
+      ? "The GST department's records show nothing wrong with this supplier's registration."
+      : lead(fromGovernment);
+
+  const oursDetail = oursColour === "GREEN"
+    ? "Nothing in your own books needs attention on this supplier."
+    : lead(fromOurs);
+
+  return [
+    {
+      scope: "GOVERNMENT",
+      colour: governmentColour,
+      title: "The GST department's records",
+      headline: HEADLINE_OF[governmentColour],
+      detail: safeMessage(governmentDetail),
+      warningCount: fromGovernment.length,
+    },
+    {
+      scope: "OUR_RECORDS",
+      colour: oursColour,
+      title: "Your own records",
+      headline: HEADLINE_OF[oursColour],
+      detail: safeMessage(oursDetail),
+      warningCount: fromOurs.length,
+    },
+  ];
 };
 
 /** Which sources were asked, which answered, and how fresh each answer was. */

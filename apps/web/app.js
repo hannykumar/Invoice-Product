@@ -1014,10 +1014,46 @@ function renderSupplier(result) {
   panel.hidden = false;
   document.querySelector("#supplier-result-title").textContent = result.title;
   document.querySelector("#supplier-result-message").textContent = result.message;
+  // The badge says the same thing as the lights, in the fewest words. "information" told a
+  // shopkeeper nothing, which is what prompted issue #99.
   const badge = document.querySelector("#supplier-level");
   const stopping = result.level === "SERIOUS" && !result.cleared;
-  badge.textContent = stopping ? "check before paying" : result.level === "SERIOUS" ? "accepted" : result.level.toLowerCase();
-  badge.className = `pill ${stopping ? "hold" : result.level === "CAUTION" ? "warn" : "done"}`;
+  const worstLight = (result.lights || []).some((light) => light.colour === "RED") ? "RED"
+    : (result.lights || []).some((light) => light.colour === "AMBER") ? "AMBER"
+    : (result.lights || []).some((light) => light.colour === "GREY") ? "GREY" : "GREEN";
+  badge.textContent = stopping ? "check before paying"
+    : result.level === "SERIOUS" ? "accepted"
+    : worstLight === "AMBER" ? "worth a look"
+    : worstLight === "GREY" ? "could not check fully"
+    : "looks fine";
+  badge.className = `pill ${stopping ? "hold" : worstLight === "AMBER" ? "warn" : "done"}`;
+
+  // Issue #99 — two lights, before the detail. Someone who reads nothing else must still get
+  // the answer, and must be able to tell the government's verdict from our own.
+  const lights = document.querySelector("#supplier-lights");
+  lights.replaceChildren();
+  (result.lights || []).forEach((light) => {
+    const card = document.createElement("div");
+    card.className = `light-card ${light.colour.toLowerCase()}`;
+    const top = document.createElement("div");
+    top.className = "light-top";
+    const dot = document.createElement("span");
+    dot.className = "light-dot";
+    dot.setAttribute("aria-hidden", "true");
+    const title = document.createElement("span");
+    title.className = "light-title";
+    title.textContent = light.title;
+    top.append(dot, title);
+    const headline = document.createElement("strong");
+    headline.className = "light-headline";
+    // Screen readers get the colour in words; sighted users get it as a colour.
+    headline.textContent = light.headline;
+    const detail = document.createElement("span");
+    detail.className = "light-detail";
+    detail.textContent = light.detail;
+    card.append(top, headline, detail);
+    lights.append(card);
+  });
 
   const list = document.querySelector("#supplier-warnings");
   list.replaceChildren();

@@ -81,6 +81,37 @@ Only `SERIOUS` blocks anything, and only until someone with `supplier.risk.ackno
 it with a reason. `CAUTION` and `INFORMATION` are shown and never block — a warning that stops
 work is one people learn to click past.
 
+## Two lights (issue #99)
+
+Every assessment carries exactly two lights, so someone who is not looking for a problem still
+sees one:
+
+| Light | Based on |
+| --- | --- |
+| "The GST department's records" | Only what the GST portal says — registration status, filings |
+| "Your own records" | Only this business's books — bank changes, disputes, money overdue |
+
+| Colour | Headline | Meaning |
+| --- | --- | --- |
+| Red | "Stop and check before you pay" | Something real is wrong |
+| Amber | "Worth a look" | Worth knowing, does not stop you |
+| Green | "Looks fine" | Nothing to flag |
+| Grey | "We could not check" | The source could not answer |
+
+The split matters. A supplier's bank account changing is the most common way a business loses
+money, so it must be able to show red — but on the second light. The government has no complaint
+in that case, and making its light red would misrepresent it. Conversely a cancelled GSTIN reddens
+the first light and leaves the second green.
+
+**Grey is not green.** If the GST service is down, the first light is grey. "We checked and it was
+fine" and "we could not check" are different answers and the buyer must be able to tell them apart.
+
+A warning is attributed to a light by reading its own evidence — anything sourced from
+`GST_PORTAL` or `IMS_GSTR2B` belongs to the government light — so a warning added later cannot
+quietly land on the wrong one. The meta-warnings (`GOVERNMENT_DATA_UNAVAILABLE`,
+`GOVERNMENT_DATA_STALE`, `GSTR2B_NOT_CHECKED`) and `MODEL_HINT` colour nothing: the first three
+describe the state of our own checking, and a model's guess is not evidence.
+
 ## Data sources and outages
 
 The GST department sits behind `connector-v1` (#8). The adapter:
