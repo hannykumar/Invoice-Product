@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/transport",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #27 [E27] — e-way bill applicability and the full lifecycle.",
+  "exports": { ".": "./src/index.ts" }
+}

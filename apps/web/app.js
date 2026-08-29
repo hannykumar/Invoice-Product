@@ -69,6 +69,22 @@ const copy = {
     sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
     cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
     cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
+    navEway: "E-way bill",
+    ewayTitle: "Do these goods need an e-way bill?", ewayHelp: "An e-way bill is a permit for moving goods, not a tax paper. Most small consignments need none. We work it out from what is on the lorry, where it is going and which state's rule applies, and show you the rule that decided it.",
+    whyMoving: "Why are the goods moving?", moveSupply: "A sale", moveJobWork: "Going out for job work", moveBranch: "Moving between your own places", moveReturn: "Coming back from a customer",
+    deliveryState: "Delivery state code", deliveryStateHelp: "Only if the goods go somewhere other than the buyer's own address. 27 is Maharashtra, 36 is Telangana.",
+    deliveryPlace: "Delivery town or city",
+    distanceKm: "Road distance (km)", distanceHelp: "This decides how many days the bill lasts: one day for every 200 km, or part of it.",
+    vehicleNumber: "Vehicle number", vehicleHelp: "Leave blank to raise Part A now and add the lorry later. Goods may not move until it is added.",
+    oversized: "Is it an oversized load?", answerYes: "Yes", answerNo: "No", answerNotSaid: "Not said",
+    sameCity: "Does it stay inside one city?", sameCityHelp: "Some states, such as Gujarat, ask for no e-way bill at all inside one city. Leave it as 'not said' if you are unsure — we will ask rather than guess.",
+    checkMovement: "Check this movement", ewaySafety: "Checking sends nothing. Nothing reaches the portal until you press the raise button.",
+    raiseEway: "Raise the e-way bill", askPortal: "Ask the portal what it has",
+    vehicleChangeReason: "Why this vehicle?", changeFirst: "It is the first one", changeBreakdown: "The last one broke down", changeTransshipment: "Goods moved to another lorry", changeNote: "Say what happened", fromPlace: "Picking up from",
+    addVehicle: "Put this vehicle on the bill",
+    currentPlace: "Where is the vehicle now?", currentState: "Which state code?", remainingKm: "Kilometres still to go", extendWhy: "Why is it taking longer?", extendValidity: "Extend the e-way bill",
+    cancelEway: "Cancel with the portal",
+    onTheRoad: "On the road right now", onTheRoadHelp: "Every consignment with a running e-way bill, and how long each one has left.",
     navSupplier: "Supplier check",
     supplierTitle: "Check a supplier before you pay", supplierHelp: "We show you what the GST department says and what your own books say, with the date and source of every single thing. We never tell you what kind of business someone is — only what the records show.",
     theirGstin: "Their GST number", theirGstinHelp: "We check this with the GST department.",
@@ -163,6 +179,22 @@ const copy = {
     sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
     cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
     cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
+    navEway: "E-way bill",
+    ewayTitle: "Kya is maal ko e-way bill chahiye?", ewayHelp: "E-way bill maal le jaane ka parwana hai, tax ka kagaz nahin. Chhoti kheponi ko aksar zaroorat nahin hoti. Hum gaadi par kya hai, kahan ja raha hai aur kis rajya ka niyam lagta hai, isse tay karte hain aur wahi niyam aapko dikhate hain.",
+    whyMoving: "Maal kyon ja raha hai?", moveSupply: "Bikri", moveJobWork: "Job work ke liye ja raha hai", moveBranch: "Apni hi jagah par ja raha hai", moveReturn: "Customer se wapas aa raha hai",
+    deliveryState: "Delivery rajya ka code", deliveryStateHelp: "Sirf tab jab maal kharidar ke apne pate ke alawa kahin ja raha ho. 27 Maharashtra hai, 36 Telangana.",
+    deliveryPlace: "Delivery ka shehar",
+    distanceKm: "Sadak ki doori (km)", distanceHelp: "Isse tay hota hai bill kitne din chalega: har 200 km ya uske hisse par ek din.",
+    vehicleNumber: "Gaadi ka number", vehicleHelp: "Khali chhod den to abhi Part A ban jayega aur gaadi baad mein jodi ja sakti hai. Gaadi jude bina maal nahin hil sakta.",
+    oversized: "Kya load bahut bada hai?", answerYes: "Haan", answerNo: "Nahin", answerNotSaid: "Bataya nahin",
+    sameCity: "Kya maal ek hi shehar mein reh raha hai?", sameCityHelp: "Kuch rajya, jaise Gujarat, ek hi shehar ke andar koi e-way bill nahin maangte. Pakka nahin to 'bataya nahin' rehne den — hum poochenge, andaza nahin lagayenge.",
+    checkMovement: "Yeh movement jaanchen", ewaySafety: "Jaanchne se kuch nahin jata. Banane ka button dabane tak portal tak kuch nahin pahunchta.",
+    raiseEway: "E-way bill banayein", askPortal: "Portal se poochen unke paas kya hai",
+    vehicleChangeReason: "Yeh gaadi kyon?", changeFirst: "Yeh pehli hai", changeBreakdown: "Pichhli kharab ho gayi", changeTransshipment: "Maal doosri gaadi par gaya", changeNote: "Kya hua, batayein", fromPlace: "Kahan se utha raha hai",
+    addVehicle: "Yeh gaadi bill par lagayein",
+    currentPlace: "Gaadi abhi kahan hai?", currentState: "Kaunsa rajya code?", remainingKm: "Kitne kilometre baaki hain", extendWhy: "Der kyon ho rahi hai?", extendValidity: "E-way bill ki avdhi badhayein",
+    cancelEway: "Portal ke saath radd karen",
+    onTheRoad: "Abhi sadak par", onTheRoadHelp: "Har khep jiska e-way bill chal raha hai, aur har ek ke paas kitna samay bacha hai.",
     navSupplier: "Supplier jaanch",
     supplierTitle: "Paisa dene se pehle supplier jaanchen", supplierHelp: "Hum dikhate hain ki GST vibhag kya kehta hai aur aapki apni bahi kya kehti hai — har baat ki tareekh aur source ke saath. Hum kabhi nahin batate ki koi kaisa hai; sirf yeh ki record mein kya likha hai.",
     theirGstin: "Unka GST number", theirGstinHelp: "Hum ise GST vibhag se jaanchte hain.",
@@ -860,6 +892,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     loadSupplierChoices();
     loadIssuedInvoices();
     loadReturnDocuments();
+    loadEwayRoad();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -1326,7 +1359,7 @@ function renderEInvoice(result, mode) {
       detail.append(detailRow("Government acknowledgement", `${result.ackNumber} on ${result.ackDate}`));
       detail.append(detailRow("Signed QR code", `${String(result.signedQrCode).slice(0, 32)}…`, "Kept exactly as the government sent it. This goes on the customer's copy."));
     }
-    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntil));
+    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntilLabel ?? result.cancellableUntil, "The portal allows 24 hours, and not a minute more."));
     if (result.failure) detail.append(detailRow("What went wrong", result.failure.message, result.failure.retryable ? "Worth trying again." : "Trying again unchanged will not help."));
   }
 
@@ -1408,8 +1441,148 @@ async function loadIssuedInvoices() {
   } catch { /* the picker is a convenience; the rest of the page still works */ }
 }
 
+
+// ------------------------------------------------ issue #27: e-way bills for goods on the road
+//
+// The screen leads with the decision and the facts behind it, because most consignments a small
+// business moves need no e-way bill at all. Raising one is offered only after the answer is yes,
+// and a bill with no vehicle on it is never shown as permission to move: Part A and Part B are two
+// different states here exactly as they are on the portal.
+
+function renderEway(result, mode) {
+  const panel = document.querySelector("#eway-panel");
+  panel.hidden = false;
+  document.querySelector("#eway-result-title").textContent = result.title;
+  document.querySelector("#eway-result-message").textContent = result.message;
+
+  const badge = document.querySelector("#eway-status");
+  const status = mode === "preview" ? result.outcome : result.status;
+  badge.textContent = String(status).replace(/_/g, " ").toLowerCase();
+  badge.className = `pill ${status === "ACTIVE" ? "done" : status === "FAILED" || status === "EXPIRED" || status === "CANNOT_DECIDE" ? "hold" : status === "REQUIRED" || status === "PART_A_ONLY" ? "warn" : "done"}`;
+
+  const detail = document.querySelector("#eway-detail");
+  detail.replaceChildren();
+
+  const applicability = mode === "preview" ? result : result.applicability;
+  detail.append(detailRow("The rule that decided it", applicability.ruleId, applicability.sourceRef || undefined));
+  detail.append(detailRow("Why", applicability.reason));
+  // The facts the rules actually used, listed as they were applied rather than summarised after.
+  (applicability.facts ?? []).forEach((fact) => detail.append(detailRow(fact.label, fact.value)));
+
+  if (mode === "preview") {
+    if (result.threshold) detail.append(detailRow("Limit compared against", money(result.threshold.amount), result.threshold.note || undefined));
+    if (result.validityDays) detail.append(detailRow("Days it would be valid for", String(result.validityDays), "One day for every 200 km, or part of it. The clock starts when a vehicle goes on."));
+    result.problems.forEach((problem) => detail.append(detailRow("Missing", problem.message, problem.field)));
+  } else {
+    if (result.ewayBillNumber) detail.append(detailRow("E-way bill number", result.ewayBillNumber, "Keep this number with the driver."));
+    if (result.validUntil) detail.append(detailRow("Valid until", result.validUntilLabel ?? result.validUntil, result.timeLeft || undefined));
+    if (result.vehicles.length) detail.append(detailRow("Vehicles", result.vehicles.map((vehicle) => vehicle.number).join(" → ")));
+    if (result.consolidatedTripNumber) detail.append(detailRow("On trip sheet", result.consolidatedTripNumber));
+    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntilLabel ?? result.cancellableUntil, "The portal allows 24 hours, and not a minute more."));
+    if (result.failure) detail.append(detailRow("What went wrong", result.failure.message, result.failure.retryable ? "Worth trying again." : "Trying again unchanged will not help."));
+  }
+
+  // Only offer what makes sense for where this consignment actually is.
+  const required = mode === "preview" ? result.outcome === "REQUIRED" : result.applicability.outcome === "REQUIRED";
+  const raised = mode !== "preview" && ["PART_A_ONLY", "ACTIVE", "EXPIRED"].includes(result.status);
+  document.querySelector("#eway-raise").hidden = !(required && (mode === "preview" ? result.ready : result.status === "FAILED"));
+  document.querySelector("#eway-offline").hidden = !required;
+  document.querySelector("#eway-reconcile").hidden = !(mode !== "preview" && (result.status === "FAILED" || result.status === "PENDING"));
+  // A vehicle can go on while the bill is live, and only then.
+  document.querySelector("#eway-vehicle-form").hidden = !(raised && result.status !== "EXPIRED");
+  document.querySelector("#eway-extend-form").hidden = !(mode !== "preview" && (result.status === "ACTIVE" || result.status === "EXPIRED"));
+  document.querySelector("#eway-cancel-form").hidden = !(raised && result.status !== "EXPIRED");
+}
+
+const ewayInput = () => formValues(document.querySelector("#eway-form"));
+
+submitStep("#eway-form", async () => {
+  try {
+    renderEway(await api("/api/eway/preview", { method: "POST", body: JSON.stringify(ewayInput()) }), "preview");
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+const ewayAction = (selector, path) => {
+  const button = document.querySelector(selector);
+  if (!button) return;
+  button.addEventListener("click", async () => {
+    try {
+      renderEway(await api(path, { method: "POST", body: JSON.stringify(ewayInput()) }), "record");
+      await loadEwayRoad();
+    } catch (error) {
+      showDialog({ title: "Nothing was raised", message: error.message }, "failed");
+    }
+  });
+};
+
+ewayAction("#eway-raise", "/api/eway/generate");
+ewayAction("#eway-reconcile", "/api/eway/reconcile");
+
+const ewayForm = (selector, path, failureTitle) => submitStep(selector, async (form) => {
+  try {
+    renderEway(await api(path, {
+      method: "POST", body: JSON.stringify({ ...ewayInput(), ...formValues(form) }),
+    }), "record");
+    await loadEwayRoad();
+  } catch (error) {
+    showDialog({ title: failureTitle, message: error.message }, "failed");
+  }
+});
+
+ewayForm("#eway-vehicle-form", "/api/eway/vehicle", "The vehicle was not added");
+ewayForm("#eway-extend-form", "/api/eway/extend", "Nothing was extended");
+ewayForm("#eway-cancel-form", "/api/eway/cancel", "Nothing was cancelled");
+
+// The offline file matters most when the portal is down and the lorry still has to leave.
+document.querySelector("#eway-offline")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/eway/offline", { method: "POST", body: JSON.stringify(ewayInput()) });
+    showDialog({
+      title: "File ready",
+      message: `${result.fileName} — this is what would be sent. It is not an e-way bill, and goods must not move on it.`,
+      effects: String(result.json).split("\n").slice(0, 12),
+    }, "recorded");
+  } catch (error) {
+    showDialog({ title: "Nothing to export", message: error.message }, "failed");
+  }
+});
+
+async function loadEwayRoad() {
+  const list = document.querySelector("#eway-road");
+  const select = document.querySelector("#eway-invoices");
+  if (!list || !select) return;
+  try {
+    const { invoices } = await api("/api/einvoices/invoices");
+    const chosen = select.value;
+    select.replaceChildren();
+    invoices.forEach((invoice) => {
+      const option = document.createElement("option");
+      option.value = invoice.id;
+      option.textContent = `${invoice.number} · ${money(invoice.amount)}`;
+      select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+
+    const { consignments } = await api("/api/eway/on-the-road");
+    list.replaceChildren();
+    if (consignments.length === 0) {
+      list.append(detailRow("Nothing is on the road", "No consignment has a running e-way bill right now."));
+      return;
+    }
+    consignments.forEach((row) => {
+      list.append(detailRow(
+        `${row.documentNumber} · ${row.ewayBillNumber ?? "no number yet"}`,
+        row.vehicle ?? "no vehicle yet — the goods may not move",
+        row.timeLeft,
+      ));
+    });
+  } catch { /* the picker and the list are conveniences; the rest of the page still works */ }
+}
+
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); } else showLogin();

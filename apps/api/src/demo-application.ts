@@ -42,6 +42,10 @@ import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/su
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
+import type {
+  ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
+} from '../../../packages/transport/src/types.ts';
+import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
@@ -1012,6 +1016,259 @@ export class DemoApplication {
       document, applicability: this.applicabilityFor(document, input),
     });
     return { state: 'offline' as const, fileName: `einvoice-${document.documentNumber.replace(/\//g, '-')}.json`, json };
+  }
+
+  // ------------------------------------------------ issue #27: e-way bills for goods on the road
+
+  /**
+   * Turns a sales invoice and what the dispatch clerk typed into one movement of goods.
+   *
+   * The bill and the lorry are deliberately separate things. The invoice says who is being charged;
+   * the form says where the goods are actually going, how far, and on which vehicle. Both go in,
+   * and the rules decide from the movement rather than from the bill.
+   */
+  private async movementFor(actor: ActorContext, invoiceId: string, input: Record<string, unknown>): Promise<Movement> {
+    const companyId = this.companyOf(actor);
+    const invoice = await this.salesRepository.findById(companyId, invoiceId);
+    if (invoice === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    if (invoice.state !== 'FINAL' || invoice.number === null) {
+      throw invalid('API_INVOICE_NOT_FINAL', 'This bill has not been issued yet, so there is nothing to move against it.');
+    }
+    const pricing = invoice.pricing;
+    if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
+
+    const consignor: MovementParty = {
+      legalName: this.config.name,
+      gstin: this.config.gstin,
+      address1: this.config.location,
+      place: this.config.location.split('·')[0]?.trim() ?? this.config.location,
+      pincode: '560058',
+      stateCode: this.config.gstin.slice(0, 2),
+    };
+    const billTo: MovementParty = {
+      legalName: this.config.customerName,
+      gstin: this.config.customerGstin,
+      address1: 'Customer address on file',
+      place: 'Bengaluru',
+      pincode: '560001',
+      stateCode: this.config.customerGstin.slice(0, 2),
+    };
+
+    // Where the goods really go. Left off entirely when the form did not say, so the rules read the
+    // buyer's own address rather than a made-up delivery address.
+    const shipToState = String(input.shipToState ?? '').trim();
+    const shipToPlace = String(input.shipToPlace ?? '').trim();
+    const shipTo: MovementParty | undefined = shipToState === '' ? undefined : {
+      legalName: `${this.config.customerName} — delivery address`,
+      gstin: this.config.customerGstin,
+      address1: 'Delivery address given on the movement',
+      place: shipToPlace === '' ? 'Delivery address' : shipToPlace,
+      pincode: '500037',
+      stateCode: shipToState,
+    };
+
+    const lines: ConsignmentLine[] = pricing.lines.map((line) => ({
+      description: line.itemName,
+      hsnCode: line.hsnOrSac ?? '',
+      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
+      unit: line.quantity.unit,
+      taxableValuePaise: line.taxableValue.minor,
+      cgstPaise: line.cgst.minor,
+      sgstPaise: line.sgst.minor,
+      igstPaise: line.igst.minor,
+      cessPaise: line.cess.minor,
+    }));
+
+    const distance = String(input.distanceKm ?? '').trim();
+    const vehicleNumber = String(input.vehicle ?? '').trim();
+    const withinSameCity = String(input.withinSameCity ?? '').trim();
+    const vehicle: VehicleAssignment | undefined = vehicleNumber === '' ? undefined : {
+      registrationNumber: vehicleNumber,
+      vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
+      fromPlace: consignor.place,
+      fromStateCode: consignor.stateCode,
+    };
+
+    return {
+      movementId: invoice.id,
+      reason: (String(input.reason ?? 'SUPPLY') as MovementReason),
+      consignor,
+      billTo,
+      ...(shipTo === undefined ? {} : { shipTo }),
+      documents: [{
+        documentId: invoice.id,
+        documentType: 'TAX_INVOICE',
+        documentNumber: invoice.number,
+        documentDate: invoice.documentDate,
+        lines,
+      }],
+      transportMode: 'ROAD',
+      vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
+      conveyance: 'OWN_VEHICLE',
+      // Blank means "we have not been told", which stays a question rather than becoming a zero.
+      ...(distance === '' ? {} : { approximateDistanceKm: Number(distance) }),
+      ...(withinSameCity === '' ? {} : { withinSameCity: withinSameCity === 'yes' }),
+      ...(vehicle === undefined ? {} : { vehicle }),
+    };
+  }
+
+  private static ewayJson(record: EwayBillRecord, now: Date) {
+    return {
+      state: 'eway' as const,
+      status: record.status,
+      title: record.status === 'ACTIVE'
+        ? 'The goods may move'
+        : record.status === 'PART_A_ONLY'
+          ? 'Raised, but no vehicle yet'
+          : record.status === 'EXPIRED'
+            ? 'This e-way bill has run out'
+            : record.status === 'CANCELLED'
+              ? 'Cancelled with the portal'
+              : record.status === 'REJECTED'
+                ? 'Marked as not your consignment'
+                : record.status === 'PENDING'
+                  ? 'Waiting for the portal'
+                  : 'No e-way bill',
+      message: record.message,
+      documentNumber: record.documentNumber,
+      applicability: {
+        outcome: record.applicability.outcome,
+        reason: record.applicability.reason,
+        ruleId: record.applicability.ruleId,
+        sourceRef: record.applicability.sourceRef ?? null,
+        effectiveFrom: record.applicability.effectiveFrom ?? null,
+        facts: record.applicability.appliedFacts.map((fact) => ({ label: fact.label, value: fact.value })),
+      },
+      ewayBillNumber: record.acknowledgement?.ewayBillNumber ?? null,
+      generatedAt: record.acknowledgement?.generatedAt ?? null,
+      validUntil: record.acknowledgement?.validUntil ?? null,
+      // The same moment written the way a driver reads it: Indian wall-clock, not a UTC stamp.
+      validUntilLabel: record.acknowledgement?.validUntil === undefined ? null : describeExpiry(record.acknowledgement.validUntil),
+      cancellableUntilLabel: record.cancellableUntil === undefined ? null : describeExpiry(record.cancellableUntil),
+      timeLeft: record.acknowledgement?.validUntil === undefined || record.status !== 'ACTIVE'
+        ? null
+        : describeTimeLeft(record.acknowledgement.validUntil, now),
+      consignmentValue: jsonAmount(record.consignmentValuePaise),
+      vehicles: record.vehicleLegs.map((leg) => ({
+        number: leg.registrationNumber, from: leg.fromPlace, reason: leg.reason, at: leg.recordedAt,
+      })),
+      cancellableUntil: record.cancellableUntil ?? null,
+      consolidatedTripNumber: record.consolidatedTripNumber ?? null,
+      failure: record.failure ?? null,
+      raw: record,
+    };
+  }
+
+  /** Whether these goods need an e-way bill at all, and what would be sent. Writes nothing. */
+  async previewEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const preview = await this.shop.ewayBill.preview(actor, movement);
+    return {
+      state: 'preview' as const,
+      title: preview.applicability.outcome === 'REQUIRED'
+        ? (preview.ready ? (preview.vehicleReady ? 'Ready to raise' : 'Ready, but no vehicle yet') : 'Something is missing')
+        : preview.applicability.outcome === 'CANNOT_DECIDE' ? 'We need one more fact' : 'No e-way bill needed',
+      message: preview.summary,
+      outcome: preview.applicability.outcome,
+      reason: preview.applicability.reason,
+      ruleId: preview.applicability.ruleId,
+      sourceRef: preview.applicability.sourceRef ?? null,
+      effectiveFrom: preview.applicability.effectiveFrom ?? null,
+      facts: preview.applicability.appliedFacts.map((fact) => ({ label: fact.label, value: fact.value })),
+      threshold: preview.applicability.thresholdApplied === undefined ? null : {
+        scope: preview.applicability.thresholdApplied.scope,
+        amount: jsonAmount(preview.applicability.thresholdApplied.thresholdPaise),
+        note: preview.applicability.thresholdApplied.note ?? null,
+      },
+      ready: preview.ready,
+      vehicleReady: preview.vehicleReady,
+      validityDays: preview.validityDays ?? null,
+      consignmentValue: jsonAmount(preview.consignmentValuePaise),
+      problems: preview.problems.map((problem) => ({ field: problem.field, message: problem.message })),
+      documentNumber: movement.documents[0]?.documentNumber ?? '',
+    };
+  }
+
+  /** Raises the e-way bill with the portal, once. */
+  async generateEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const record = await this.shop.ewayBill.generate(actor, movement);
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /** Part B: the lorry going on, or a different lorry after a breakdown. */
+  async updateEwayVehicle(actor: ActorContext, input: Record<string, unknown>) {
+    const number = String(input.vehicle ?? '').trim();
+    if (number === '') throw invalid('API_VEHICLE_REQUIRED', 'Enter the vehicle number that is carrying the goods.');
+    const vehicle: VehicleAssignment = {
+      registrationNumber: number,
+      vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
+      fromPlace: String(input.fromPlace ?? this.config.location.split('·')[0]?.trim() ?? 'Bengaluru'),
+      fromStateCode: String(input.fromState ?? this.config.gstin.slice(0, 2)),
+      ...(String(input.changeReason ?? '') === '' ? {} : { reason: String(input.changeReason) as NonNullable<VehicleAssignment['reason']> }),
+      ...(String(input.changeNote ?? '') === '' ? {} : { reasonNote: String(input.changeNote) }),
+    };
+    const record = await this.shop.ewayBill.updateVehicle(actor, String(input.invoice ?? ''), vehicle);
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  async extendEwayValidity(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.extendValidity(actor, String(input.invoice ?? ''), {
+      currentPlace: String(input.currentPlace ?? ''),
+      currentStateCode: String(input.currentState ?? ''),
+      remainingDistanceKm: Number(String(input.remainingKm ?? '0')),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  async cancelEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.cancel(actor, String(input.invoice ?? ''), {
+      reasonCode: (String(input.reasonCode ?? 'OTHERS') as 'OTHERS'),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  async rejectEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.reject(actor, String(input.invoice ?? ''), {
+      reasonCode: (String(input.reasonCode ?? 'NOT_MY_CONSIGNMENT') as 'NOT_MY_CONSIGNMENT'),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /** Asks the portal what it actually holds, for when a call timed out. */
+  async reconcileEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.reconcile(actor, String(input.invoice ?? ''));
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /** Part A as a file, for the day the portal is down and the lorry still has to leave. */
+  async ewayOfflineJson(actor: ActorContext, input: Record<string, unknown>) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const json = await this.shop.ewayBill.offlineJson(actor, movement);
+    return {
+      state: 'offline' as const,
+      fileName: `ewaybill-${(movement.documents[0]?.documentNumber ?? 'movement').replace(/\//g, '-')}.json`,
+      json,
+    };
+  }
+
+  /** What is on the road right now, for the dispatch desk. */
+  async ewayBillsOnTheRoad(actor: ActorContext) {
+    const rows = await this.shop.ewayBill.onTheRoad(actor);
+    return {
+      consignments: rows.map((row) => ({
+        movementId: row.record.movementId,
+        documentNumber: row.record.documentNumber,
+        ewayBillNumber: row.record.acknowledgement?.ewayBillNumber ?? null,
+        status: row.record.status,
+        vehicle: row.record.vehicleLegs[row.record.vehicleLegs.length - 1]?.registrationNumber ?? null,
+        validUntil: row.record.acknowledgement?.validUntil ?? null,
+        timeLeft: row.timeLeft,
+      })),
+    };
   }
 
   // -------------------------------------------------------- issue #19: supplier risk warnings

@@ -30,6 +30,11 @@ import { EInvoiceService } from '../../../packages/gst/src/einvoice-service.ts';
 import {
   InMemoryEInvoicePolicies, InMemoryEInvoiceStore, SyntheticIrp, irpAdapter,
 } from '../../../packages/gst/src/einvoice-adapters.ts';
+import { EwayBillService } from '../../../packages/transport/src/service.ts';
+import {
+  InMemoryConsolidatedTripStore, InMemoryEwayBillPolicies, InMemoryEwayBillStore,
+  SyntheticEwayBillPortal, ewayBillAdapter,
+} from '../../../packages/transport/src/adapters.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -113,6 +118,7 @@ const SETUP_PERMISSIONS = [
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
+  'eway.view', 'eway.generate', 'eway.update', 'eway.cancel',
 ];
 
 export async function createCompanyShop(seed: CompanySeed) {
@@ -238,6 +244,25 @@ export async function createCompanyShop(seed: CompanySeed) {
     policy: eInvoicePolicies,
     idFactory: () => `${seed.companyId}:einv:${sequence += 1}`,
   });
+  // Issue #27. The e-way bill portal behind the same gateway; development runs against a synthetic
+  // one that enforces the real windows, so expiry and the 24-hour cancellation are genuinely tried.
+  const ewayPortal = new SyntheticEwayBillPortal(() => clock.now());
+  const ewayBills = new InMemoryEwayBillStore();
+  const ewayTrips = new InMemoryConsolidatedTripStore();
+  const ewayPolicies = new InMemoryEwayBillPolicies();
+  store.join(ewayBills).join(ewayTrips);
+  const ewayBill = new EwayBillService({
+    portal: ewayBillAdapter({
+      gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      clock: () => clock.now(),
+    }),
+    records: ewayBills,
+    trips: ewayTrips,
+    audit,
+    clock,
+    policy: ewayPolicies,
+    idFactory: () => `${seed.companyId}:ewb:${sequence += 1}`,
+  });
   const setupActor: ActorContext = {
     companyId: seed.companyId,
     branchId: seed.branchId,
@@ -258,8 +283,9 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
   return {
-    store, inventory, inventoryService, bills, orders, receipts, approvals, audit, ledger, posting,
+    store, inventory, inventoryService, bills, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
-    eInvoice, eInvoices, eInvoicePolicies, irpPortal, setupActor,
+    eInvoice, eInvoices, eInvoicePolicies, irpPortal,
+    ewayBill, ewayBills, ewayTrips, ewayPolicies, ewayPortal, setupActor,
   };
 }
