@@ -33,8 +33,8 @@
       <header class="topbar">
         <button class="icon-button mobile-only" id="menu-button" aria-label="Open navigation" data-i18n-aria="menuOpen" aria-expanded="false">☰</button>
         <div class="company-switcher">
-          <span class="company-avatar" aria-hidden="true">SF</span>
-          <span><strong>Sharma Fruit Traders</strong><small data-i18n="companyLocation"></small></span>
+          <span class="company-avatar" id="company-avatar" aria-hidden="true">ST</span>
+          <span><strong id="company-name">Sampoorna Traders</strong><small id="company-location">Bengaluru · Peenya godown</small></span>
         </div>
         <div class="topbar-actions">
           <label class="language-control">
@@ -50,39 +50,34 @@
       </header>
 
       <main id="main" tabindex="-1">
-        <div class="demo-banner" role="status">
+        <div class="demo-banner" id="connection-banner" role="status">
           <span aria-hidden="true">◉</span>
           <span><strong data-i18n="demoTitle"></strong> <span data-i18n="demoBody"></span></span>
         </div>
 
         <section class="view active" id="view-dashboard" aria-labelledby="dashboard-title">
           <div class="page-heading">
-            <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" data-i18n="welcome"></h1><p data-i18n="welcomeBody"></p></div>
+            <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" data-i18n="welcome"></h1><p id="welcome-body" data-i18n="welcomeBody"></p></div>
             <button class="primary-button" data-open="sale"><span aria-hidden="true">＋</span><span data-i18n="newSale"></span></button>
           </div>
 
           <div class="metric-grid" aria-label="Business summary" data-i18n-aria="businessSummary">
-            <article class="metric-card accent-green"><div class="metric-icon" aria-hidden="true">₹</div><p data-i18n="salesToday"></p><strong data-money="48250">₹48,250.00</strong><small class="positive" data-i18n="salesChange"></small></article>
-            <article class="metric-card accent-amber"><div class="metric-icon" aria-hidden="true">↗</div><p data-i18n="customersOwe"></p><strong data-money="128400">₹1,28,400.00</strong><small data-i18n="fromCustomers"></small></article>
-            <article class="metric-card accent-blue"><div class="metric-icon" aria-hidden="true">▣</div><p data-i18n="purchasesMonth"></p><strong data-money="76420">₹76,420.00</strong><small data-i18n="purchaseCount"></small></article>
-            <article class="metric-card accent-red"><div class="metric-icon" aria-hidden="true">!</div><p data-i18n="needsAttention"></p><strong>3</strong><small data-i18n="attentionBody"></small></article>
+            <article class="metric-card accent-green"><div class="metric-icon" aria-hidden="true">₹</div><p data-i18n="salesToday"></p><strong id="metric-sales">—</strong><small class="positive">Issued from the sales module</small></article>
+            <article class="metric-card accent-amber"><div class="metric-icon" aria-hidden="true">↗</div><p data-i18n="customersOwe"></p><strong id="metric-receivable">—</strong><small id="customer-summary">From open sales invoices</small></article>
+            <article class="metric-card accent-blue"><div class="metric-icon" aria-hidden="true">▣</div><p data-i18n="purchasesMonth"></p><strong id="metric-purchases">—</strong><small id="supplier-summary">From posted supplier bills</small></article>
+            <article class="metric-card accent-red"><div class="metric-icon" aria-hidden="true">!</div><p data-i18n="needsAttention"></p><strong id="metric-attention">—</strong><small>Calculated from live company state</small></article>
           </div>
 
           <div class="dashboard-grid">
             <article class="panel activity-panel">
               <div class="panel-heading"><div><h2 data-i18n="recentActivity"></h2><p data-i18n="recentBody"></p></div><button class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
-              <div class="activity-list">
-                <div class="activity-row"><span class="activity-icon green" aria-hidden="true">✓</span><div><strong>INV-1042 · Mehta Stores</strong><small data-i18n="saleIssued"></small></div><div class="activity-value"><strong data-money="12450">₹12,450.00</strong><span class="pill done" data-i18n="done"></span></div></div>
-                <div class="activity-row"><span class="activity-icon blue" aria-hidden="true">↓</span><div><strong data-i18n="purchaseFrom"></strong><small data-i18n="purchaseSaved"></small></div><div class="activity-value"><strong data-money="8280">₹8,280.00</strong><span class="pill waiting" data-i18n="waiting"></span></div></div>
-                <div class="activity-row"><span class="activity-icon amber" aria-hidden="true">₹</span><div><strong data-i18n="paymentFrom"></strong><small>UPI · 10:15 AM</small></div><div class="activity-value"><strong data-money="5000">₹5,000.00</strong><span class="pill done" data-i18n="recorded"></span></div></div>
-              </div>
+              <div class="activity-list" id="recent-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div>
             </article>
 
             <aside class="panel attention-panel">
               <div class="panel-heading"><div><h2 data-i18n="yourAttention"></h2><p data-i18n="attentionHelp"></p></div></div>
-              <button class="attention-item"><span class="attention-symbol red" aria-hidden="true">!</span><span><strong data-i18n="lowStock"></strong><small data-i18n="lowStockBody"></small></span><span aria-hidden="true">›</span></button>
-              <button class="attention-item"><span class="attention-symbol amber" aria-hidden="true">◷</span><span><strong data-i18n="approvalWaiting"></strong><small data-i18n="approvalBody"></small></span><span aria-hidden="true">›</span></button>
-              <button class="attention-item"><span class="attention-symbol blue" aria-hidden="true">i</span><span><strong data-i18n="gstReminder"></strong><small data-i18n="gstBody"></small></span><span aria-hidden="true">›</span></button>
+              <div class="attention-item"><span class="attention-symbol green" aria-hidden="true">▦</span><span><strong id="stock-title">Loading stock…</strong><small id="stock-detail">Reading the inventory module</small></span></div>
+              <div class="attention-item"><span class="attention-symbol amber" aria-hidden="true">₹</span><span><strong id="supplier-title">Loading supplier balance…</strong><small id="supplier-detail">Reading the receivables module</small></span></div>
             </aside>
           </div>
         </section>
@@ -116,12 +111,12 @@
         <section class="view" id="view-payment" aria-labelledby="payment-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="payment-title" data-i18n="paymentTitle"></h1><p data-i18n="paymentHelp"></p></div><span class="save-state" id="payment-save-state" role="status" data-i18n="savedDevice"></span></div>
           <form class="transaction-layout draft-form" data-draft="payment">
-            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" placeholder="Mehta Stores" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice"><option value="" data-i18n="chooseLater"></option><option>INV-1042 · ₹12,450.00</option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
+            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" placeholder="ABC Traders" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
         </section>
 
-        <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel empty-state"><span aria-hidden="true">◷</span><h2 data-i18n="demoHistory"></h2><p data-i18n="demoHistoryBody"></p><button class="primary-button" data-open="sale" data-i18n="createFirstSale"></button></article></section>
+        <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div></article></section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -132,6 +127,6 @@
       </nav>
     </div>
 
-    <dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="draftReady"></h2><p data-i18n="draftReadyBody"></p><div class="dialog-actions"><button class="secondary-button" value="cancel" data-i18n="keepEditing"></button><button class="primary-button" value="confirm" data-i18n="understand"></button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title">Checking…</h2><p id="review-body">The application services are validating this entry.</p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="primary-button" id="review-confirm" value="confirm">Record once</button></div></dialog>
   </body>
 </html>

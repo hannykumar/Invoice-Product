@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { serveApi } from "../api/src/server.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.WEB_PORT ?? 4173);
@@ -28,6 +29,7 @@ export async function loadWebAsset(pathname: string): Promise<WebAsset> {
 
 export const webServer = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
+  if (url.pathname.startsWith('/api/')) return serveApi(request, response);
   const asset = await loadWebAsset(url.pathname);
   response.writeHead(asset.status, { "content-type": asset.contentType, "cache-control": "no-store" });
   response.end(asset.body);
