@@ -56,6 +56,7 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
   { code: '5200', name: 'Goods returned by customers', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'SALES_RETURNS' },
   { code: '5300', name: 'Freight paid on sales', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'FREIGHT_OUTWARD' },
   { code: '5400', name: 'Discount given', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'DISCOUNT_ALLOWED' },
+  { code: '5500', name: 'Money we could not collect', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'BAD_DEBTS' },
   { code: '5900', name: 'Other business costs', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
 ];
 
