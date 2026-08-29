@@ -12,6 +12,9 @@ import { InMemorySalesRepository, noComplianceHooks, permissiveInventory, SalesS
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import { DEFAULT_SALES_POLICY } from '../../../packages/sales/src/policy.ts';
 import { COMPANY, SUPPLIER, ALL_PERMISSIONS as PURCHASE_PERMISSIONS, actorWith, clearedVerdict, makeShop, purchase, steelLine } from '../../../packages/purchasing/src/posting-fixtures.ts';
+import { lineTaxableValue, taxOn } from '../../../packages/purchasing/src/recompute.ts';
+import { formatQuantity } from '../../../packages/masters/src/units.ts';
+import type { PurchasePostingPreview } from '../../../packages/purchasing/src/posting-types.ts';
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 
@@ -39,6 +42,23 @@ const daysAfter = (date: string, days: number): string => {
 };
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
+
+/** The three things a purchase will do, taken from the preview rather than written by hand. */
+const previewEffects = (preview: PurchasePostingPreview): string[] => {
+  const tax = preview.tax;
+  const claimable = tax.cgstPaise + tax.sgstPaise + tax.igstPaise + tax.cessPaise;
+  const effects = preview.receipts.map((receipt) => `Stock: +${formatQuantity(receipt.quantity)} in Peenya godown`);
+  if (effects.length === 0) effects.push('Stock: nothing, this is a service');
+  effects.push(
+    tax.reverseCharge
+      ? `GST: ${jsonAmount(claimable).toFixed(2)} payable by you under reverse charge`
+      : `GST you can claim back: ${jsonAmount(claimable).toFixed(2)} (${tax.intraState ? 'CGST + SGST' : 'IGST'})`,
+  );
+  effects.push(`Supplier due: ${jsonAmount(preview.totalPaise).toFixed(2)}`);
+  effects.push(`Due date: ${preview.dueDate}`);
+  if (preview.roundOffPaise !== 0n) effects.push(`Rounding recorded separately: ${jsonAmount(preview.roundOffPaise < 0n ? -preview.roundOffPaise : preview.roundOffPaise).toFixed(2)}`);
+  return effects;
+};
 
 export class DemoApplication {
   private readonly shop: Awaited<ReturnType<typeof makeShop>>;
@@ -140,7 +160,7 @@ export class DemoApplication {
   previewPurchase(input: Record<string, unknown>) {
     const approved = this.purchaseInput(input);
     const preview = this.shop.posting.preview(this.actor, approved);
-    return { state: 'preview', title: 'Ready to record', message: preview.summary, amount: jsonAmount(preview.totalPaise), effects: [`Stock: +1 KGS in Peenya godown`, `Supplier due: ${jsonAmount(preview.totalPaise).toFixed(2)}`, `Due date: ${preview.dueDate}`], token: approved.id };
+    return { state: 'preview', title: 'Ready to record', message: preview.summary, amount: jsonAmount(preview.totalPaise), effects: previewEffects(preview), token: approved.id };
   }
 
   async recordPurchase(input: Record<string, unknown>) {
@@ -178,13 +198,77 @@ export class DemoApplication {
     return { state: 'recorded', title: 'Payment recorded', message: `₹${jsonAmount(payment.amount.minor).toFixed(2)} was recorded once.`, paymentId: payment.id, customerOutstanding: jsonAmount(position.totalOutstanding.minor) };
   }
 
+  /**
+   * Builds a real purchase line from what the person actually typed.
+   *
+   * The GST rate, the item and the supplier's state all come from the form, so the tax split,
+   * the stock receipt and the "this total does not match its own lines" refusal are the real
+   * ones from #17 rather than a fixed line that always adds up.
+   */
   private purchaseInput(input: Record<string, unknown>) {
-    const total = paise(input.amount);
     const reference = String(input.reference ?? '').trim();
     if (!reference) throw new Error('Enter the supplier bill number.');
     const date = String(input.date ?? '');
     isoDate(date);
-    return purchase({ id: `web-purchase:${reference}`, sourceDocumentId: `web-document:${reference}`, verdict: clearedVerdict({ draftId: `web:${reference}`, fingerprint: `web:${reference}` }), supplierName: String(input.party || 'Shree Ram Steels Private Limited'), invoiceNumber: reference, invoiceDate: date, invoiceTotalPaise: total, creditDays: 30, lines: [steelLine({ quantity: quantity('1', 'KGS'), ratePaise: total, taxableValuePaise: total, gstRateBasisPoints: 0 })] });
+
+    const itemId = String(input.item ?? 'TMT12');
+    const catalogue: Record<string, { description: string; hsnSac: string; unit: string; kind: 'GOODS' | 'SERVICES'; batchId?: string }> = {
+      TMT12: { description: 'TMT Steel Bar 12mm', hsnSac: '72142090', unit: 'KGS', kind: 'GOODS' },
+      SOAP: { description: 'Herbal Bath Soap 100g', hsnSac: '34011190', unit: 'BOX', kind: 'GOODS', batchId: 'batch-web' },
+      FRT: { description: 'Inward freight', hsnSac: '996511', unit: 'NOS', kind: 'SERVICES' },
+    };
+    const item = catalogue[itemId] ?? catalogue.TMT12!;
+
+    const gstBasisPoints = Number(input.gst ?? 0);
+    const intraState = String(input.supplierState ?? 'other') === 'same';
+    // A blank bill total is allowed once a price per unit is given: the lines decide it.
+    const typedTotal = String(input.amount ?? '').trim() === '' ? 0n : paise(input.amount);
+
+    // A caller that sends only a bill amount — the older shape, and anything scripted against it —
+    // gets one line for that amount. A caller that sends a price and a quantity gets a real line.
+    const pricePerUnit = String(input.rate ?? '').trim() !== '';
+    const qty = pricePerUnit ? quantity(String(input.quantity ?? '1'), item.unit) : quantity('1', item.unit);
+    const rate = pricePerUnit ? paise(input.rate) : typedTotal;
+    if (rate <= 0n) throw new Error('Enter either the bill amount, or the price of one and how many.');
+
+    // Exactly the arithmetic #16 and #17 both use, so the figure on screen is the posted one.
+    const taxable = lineTaxableValue(qty.micro, rate);
+    const tax = taxOn(taxable, gstBasisPoints);
+    // A typed bill total is checked against what the lines come to; a blank one is taken from them.
+    const total = pricePerUnit && typedTotal > 0n ? typedTotal : taxable + tax;
+
+    return purchase({
+      id: `web-purchase:${reference}`,
+      sourceDocumentId: `web-document:${reference}`,
+      verdict: clearedVerdict({
+        draftId: `web:${reference}`,
+        fingerprint: `web:${reference}`,
+        taxCheck: {
+          basis: 'RULES_ENGINE',
+          intraState,
+          ruleSetVersion: 'gst-2026.1',
+          ruleId: intraState ? 'POS.INTRASTATE' : 'POS.INTERSTATE',
+          explanation: intraState ? 'The supplier and the godown are in the same state.' : 'The supplier is in another state.',
+        },
+      }),
+      supplierName: String(input.party || 'Shree Ram Steels Private Limited'),
+      invoiceNumber: reference,
+      invoiceDate: date,
+      invoiceTotalPaise: total,
+      creditDays: 30,
+      lines: [steelLine({
+        itemId,
+        description: item.description,
+        hsnSac: item.hsnSac,
+        supplyKind: item.kind,
+        warehouseId: item.kind === 'GOODS' ? 'wh-main' : undefined,
+        batchId: item.batchId,
+        quantity: qty,
+        ratePaise: rate,
+        taxableValuePaise: taxable,
+        gstRateBasisPoints: gstBasisPoints,
+      })],
+    });
   }
 
   private saleInput(input: Record<string, unknown>) {
