@@ -39,6 +39,10 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
   { code: '2220', name: 'Output SGST or UTGST', type: 'LIABILITY', parentCode: '2200', isGroup: false, systemRole: 'OUTPUT_SGST' },
   { code: '2230', name: 'Output IGST', type: 'LIABILITY', parentCode: '2200', isGroup: false, systemRole: 'OUTPUT_IGST' },
   { code: '2240', name: 'Output cess', type: 'LIABILITY', parentCode: '2200', isGroup: false, systemRole: 'OUTPUT_CESS' },
+  // Deliberately outside the "GST you collected" heading above: on a reverse-charge bill nobody
+  // collected this from anyone. The business owes it to the government directly, and a shopkeeper
+  // reading the two under one heading would draw the wrong conclusion about what they hold.
+  { code: '2300', name: 'GST you owe the government yourself', type: 'LIABILITY', parentCode: '2000', isGroup: false, systemRole: 'REVERSE_CHARGE_PAYABLE' },
 
   { code: '3000', name: "The owner's money in the business", type: 'EQUITY', parentCode: null, isGroup: true, systemRole: null },
   { code: '3100', name: 'Capital', type: 'EQUITY', parentCode: '3000', isGroup: false, systemRole: null },
@@ -52,6 +56,7 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
 
   { code: '5000', name: 'Money going out', type: 'EXPENSE', parentCode: null, isGroup: true, systemRole: null },
   { code: '5100', name: 'Purchases of goods', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'PURCHASES_GOODS' },
+  { code: '5120', name: 'Services and expenses bought', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'PURCHASES_SERVICES' },
   { code: '5150', name: 'Goods returned to suppliers', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'PURCHASE_RETURNS' },
   { code: '5200', name: 'Goods returned by customers', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'SALES_RETURNS' },
   { code: '5300', name: 'Freight paid on sales', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'FREIGHT_OUTWARD' },
