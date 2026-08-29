@@ -64,6 +64,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run web` — starts the responsive development preview at `http://127.0.0.1:4173`.
 - `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
 - `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
+- `npm run demo:validate` — prints a walkthrough of purchase validation: what posts, what needs a person and what is stopped.
 
 ## Type checking the deterministic modules
 

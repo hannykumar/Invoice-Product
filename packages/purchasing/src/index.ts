@@ -6,3 +6,8 @@ export * from "./einvoice.ts";
 export * from "./ocr.ts";
 export * from "./extraction.ts";
 export * from "./inbox.ts";
+export * from "./validation-types.ts";
+export * from "./recompute.ts";
+export * from "./duplicates.ts";
+export * from "./validate.ts";
+export * from "./rules-adapter.ts";
