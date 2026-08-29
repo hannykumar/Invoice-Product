@@ -112,5 +112,5 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
-  return { store, inventoryService, bills, audit, ledger, posting, setupActor };
+  return { store, inventory, inventoryService, bills, audit, ledger, posting, setupActor };
 }

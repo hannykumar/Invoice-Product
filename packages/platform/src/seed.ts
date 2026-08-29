@@ -6,6 +6,8 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "ledger.post.payment", "ledger.post.journal", "ledger.reverse", "inventory.move", "inventory.adjust",
   "inventory.override_negative", "sales.draft.write", "sales.finalise", "sales.approve", "sales.cancel",
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",
+  "reports.view.financial", "reports.view.sales", "reports.view.purchase", "reports.view.stock",
+  "reports.view.dues", "reports.view.gst", "reports.view.exceptions", "reports.export",
 ];
 
 export const SYNTHETIC_PLATFORM_COMPANIES = [

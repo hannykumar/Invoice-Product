@@ -9,6 +9,18 @@ import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { InMemorySalesRepository, noComplianceHooks, permissiveInventory, SalesService } from '@invoice/sales';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
+import {
+  ReportService,
+  duesFrom,
+  namesFrom,
+  type Figure,
+  type PurchaseDocument,
+  type PurchaseReadPort,
+  type ReportFilter,
+} from '@invoice/reports';
+import { createDefaultUnitRegistry } from '../../../packages/masters/src/units.ts';
+import type { IsoDate } from '@invoice/kernel';
+import type { InventoryStore, StockItem, StockMasterData, Warehouse } from '@invoice/inventory';
 import { DEFAULT_SALES_POLICY } from '../../../packages/sales/src/policy.ts';
 import { lineTaxableValue, taxOn } from '../../../packages/purchasing/src/recompute.ts';
 import { formatQuantity } from '../../../packages/masters/src/units.ts';
@@ -35,6 +47,52 @@ const daysAfter = (date: string, days: number): string => {
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
+/**
+ * The slice of master data the stock report needs to name things. Item and warehouse names come
+ * from `namesFrom` in the report service; this only has to satisfy the interface and supply a unit
+ * registry, so it returns the ids and lets the names layer do the naming.
+ */
+const demoStockMasterData = (): StockMasterData => {
+  const registry = createDefaultUnitRegistry();
+  return {
+    item(_companyId, _itemId): StockItem | undefined { return undefined; },
+    warehouse(_companyId, _warehouseId): Warehouse | undefined { return undefined; },
+    units() { return registry; },
+  };
+};
+
+/**
+ * The purchase side of the reports, read live from the posted bills.
+ *
+ * Every field a register prints is already on a posted bill — the supplier, the invoice number,
+ * the tax split, the total — so this is a rename, not a second source of truth. Only POSTED bills
+ * count; a draft is not a purchase.
+ */
+const livePurchaseReadPort = (shop: Awaited<ReturnType<typeof createCompanyShop>>): PurchaseReadPort => ({
+  available: true,
+  async list(companyId, from: IsoDate, to: IsoDate): Promise<readonly PurchaseDocument[]> {
+    const bills = await shop.bills.list(companyId as Parameters<typeof shop.bills.list>[0]);
+    return bills
+      .filter((bill) => bill.state === 'POSTED' && String(bill.invoiceDate) >= from && String(bill.invoiceDate) <= to)
+      .map((bill) => ({
+        documentId: bill.id,
+        number: bill.invoiceNumber,
+        supplierId: bill.supplierPartyId as unknown as PartyId,
+        supplierName: bill.supplierName,
+        date: isoDate(String(bill.invoiceDate)),
+        branchId: null,
+        taxableValue: money(bill.tax.taxableValuePaise),
+        cgst: money(bill.tax.cgstPaise),
+        sgst: money(bill.tax.sgstPaise),
+        igst: money(bill.tax.igstPaise),
+        cess: money(bill.tax.cessPaise),
+        invoiceValue: money(bill.totalPaise),
+        ineligibleInputTax: money(bill.tax.ineligibleItcPaise),
+        reverseCharge: bill.tax.reverseCharge,
+      }));
+  },
+});
+
 /** The three things a purchase will do, taken from the preview rather than written by hand. */
 const previewEffects = (preview: PurchasePostingPreview, location: string): string[] => {
   const tax = preview.tax;
@@ -60,6 +118,7 @@ export class DemoApplication {
   private readonly payments: ReceivablesService;
   private readonly paymentRepository: InMemoryPaymentRepository;
   private readonly documents: DocumentLedgerPort;
+  private readonly reportService: ReportService;
 
   private constructor(
     config: CompanySeed,
@@ -69,6 +128,7 @@ export class DemoApplication {
     payments: ReceivablesService,
     paymentRepository: InMemoryPaymentRepository,
     documents: DocumentLedgerPort,
+    reportService: ReportService,
   ) {
     this.config = config;
     this.shop = shop;
@@ -77,6 +137,7 @@ export class DemoApplication {
     this.payments = payments;
     this.paymentRepository = paymentRepository;
     this.documents = documents;
+    this.reportService = reportService;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -103,7 +164,27 @@ export class DemoApplication {
       async nameOf(companyId, partyId) { return partyId === config.customerId ? config.customerName : purchases.nameOf(companyId, partyId); },
     };
     const payments = new ReceivablesService({ store: shop.store, ledger: shop.ledger, repository: paymentRepository, documents, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() } });
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents);
+
+    // Reports read the same live company: the ledger every module posts to, the sales invoices
+    // sales issues, the stock movements purchases receive, the positions receivables derives.
+    const reportService = new ReportService({
+      store: shop.store,
+      sales: salesRepository,
+      inventory: shop.inventory,
+      stockMasterData: demoStockMasterData(),
+      dues: duesFrom(documents, payments),
+      purchases: livePurchaseReadPort(shop),
+      names: namesFrom({
+        parties: { [config.customerId]: config.customerName, [config.supplierId]: config.supplierName },
+        items: { TMT12: 'TMT Steel Bar 12mm', SOAP: 'Herbal Bath Soap 100g' },
+        warehouses: { 'wh-main': config.location },
+      }),
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      clock: { now: () => new Date() },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService);
     await app.seed();
     return app;
   }
@@ -137,6 +218,82 @@ export class DemoApplication {
         ...purchases.map((bill) => ({ id: bill.id, kind: 'purchase', title: `${bill.invoiceNumber} · ${bill.supplierName}`, amount: jsonAmount(bill.totalPaise), status: bill.state === 'POSTED' ? 'Recorded' : bill.state })),
         ...payments.map((payment) => ({ id: payment.id, kind: 'payment', title: `${payment.mode.replace('_', ' ')} · ${this.config.customerName}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
       ].reverse(),
+    };
+  }
+
+  /**
+   * The report pack over the company's first year, as figures a screen can render. Every number is
+   * folded from the same records the dashboard and the forms mutate; drill rows are carried so a
+   * total on screen can be opened into the entries behind it. The company comes from the session.
+   */
+  async reports(actor: ActorContext) {
+    this.companyOf(actor);
+    const filter: ReportFilter = { from: isoDate('2026-04-01'), to: isoDate('2027-03-31') };
+    const pack = await this.reportService.pack(actor, filter);
+    const drill = (figure: Figure) =>
+      figure.contributors.map((c) => ({ date: c.date, number: c.sourceNumber, description: c.description, amount: jsonAmount(c.amount.minor) }));
+
+    return {
+      period: { from: filter.from, to: filter.to },
+      trialBalance: {
+        title: pack.trialBalance.header.title['en-IN'],
+        balanced: pack.trialBalance.body.balanced,
+        totalDebits: jsonAmount(pack.trialBalance.body.totalDebits.amount.minor),
+        totalCredits: jsonAmount(pack.trialBalance.body.totalCredits.amount.minor),
+        difference: jsonAmount(pack.trialBalance.body.difference.minor),
+        rows: pack.trialBalance.body.rows.map((r) => ({ code: r.code, name: r.name, closing: jsonAmount(r.closing.amount.minor), side: r.side })),
+      },
+      profitAndLoss: {
+        title: pack.profitAndLoss.header.title['en-IN'],
+        sentence: pack.profitAndLoss.body.sentence['en-IN'],
+        income: { total: jsonAmount(pack.profitAndLoss.body.income.total.amount.minor), rows: pack.profitAndLoss.body.income.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })), drill: drill(pack.profitAndLoss.body.income.total) },
+        expenses: { total: jsonAmount(pack.profitAndLoss.body.expenses.total.amount.minor), rows: pack.profitAndLoss.body.expenses.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })) },
+        result: jsonAmount(pack.profitAndLoss.body.result.amount.minor),
+      },
+      balanceSheet: {
+        title: pack.balanceSheet.header.title['en-IN'],
+        sentence: pack.balanceSheet.body.sentence['en-IN'],
+        balanced: pack.balanceSheet.body.balanced,
+        totalAssets: jsonAmount(pack.balanceSheet.body.totalAssets.amount.minor),
+        totalClaims: jsonAmount(pack.balanceSheet.body.totalClaims.amount.minor),
+      },
+      sales: {
+        title: pack.sales.header.title['en-IN'],
+        sentence: pack.sales.body.sentence['en-IN'],
+        total: jsonAmount(pack.sales.body.total.amount.minor),
+        rows: pack.sales.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), total: jsonAmount(r.total.minor) })),
+      },
+      purchases: {
+        title: pack.purchases.header.title['en-IN'],
+        sentence: pack.purchases.body.sentence['en-IN'],
+        available: pack.purchases.body.available,
+        total: jsonAmount(pack.purchases.body.total.amount.minor),
+        rows: pack.purchases.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), total: jsonAmount(r.total.minor) })),
+      },
+      stock: {
+        title: pack.stock.header.title['en-IN'],
+        sentence: pack.stock.body.sentence['en-IN'],
+        value: jsonAmount(pack.stock.body.value.amount.minor),
+        rows: pack.stock.body.rows.map((r) => ({ item: r.itemName, warehouse: r.warehouseName, unit: r.unitCode, closing: r.closing, available: r.available, value: jsonAmount(r.value.minor) })),
+      },
+      dues: {
+        receivables: { title: pack.receivables.header.title['en-IN'], sentence: pack.receivables.body.sentence['en-IN'], total: jsonAmount(pack.receivables.body.total.amount.minor), rows: pack.receivables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), onAccount: jsonAmount(r.onAccount.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
+        payables: { sentence: pack.payables.body.sentence['en-IN'], total: jsonAmount(pack.payables.body.total.amount.minor), rows: pack.payables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
+      },
+      gst: {
+        title: pack.gst.header.title['en-IN'],
+        sentence: pack.gst.body.sentence['en-IN'],
+        collected: jsonAmount(pack.gst.body.totalCollected.amount.minor),
+        alreadyPaid: jsonAmount(pack.gst.body.totalAlreadyPaid.amount.minor),
+        difference: jsonAmount(pack.gst.body.difference.minor),
+        caution: pack.gst.body.caution['en-IN'],
+      },
+      exceptions: {
+        title: pack.exceptions.header.title['en-IN'],
+        clean: pack.exceptions.body.clean,
+        sentence: pack.exceptions.body.sentence['en-IN'],
+        items: pack.exceptions.body.exceptions.map((e) => ({ code: e.code, severity: e.severity, what: e.what['en-IN'], why: e.why['en-IN'], amount: e.amount === null ? null : jsonAmount(e.amount.minor) })),
+      },
     };
   }
 

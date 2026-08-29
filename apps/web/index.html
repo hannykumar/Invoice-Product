@@ -23,6 +23,8 @@
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
+          <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
+          <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
         </nav>
         <div class="sidebar-note">
           <span class="status-dot" aria-hidden="true"></span>
@@ -118,6 +120,96 @@
         </section>
 
         <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div></article></section>
+
+        <section class="view" id="view-reports" aria-labelledby="reports-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navReports"></p><h1 id="reports-title" tabindex="-1">Reports</h1><p>Every figure below is computed live from this company's ledger, sales, stock and receivables. Nothing is typed in.</p></div></div>
+          <div id="reports-content" aria-live="polite"><p class="loading-copy">Loading reports from the live company…</p></div>
+        </section>
+
+        <section class="view" id="view-setup" aria-labelledby="setup-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navSetup"></p><h1 id="setup-title" tabindex="-1">Set up a business</h1><p>Answer a few questions and we open a real set of books for it. Your GST number and opening figures are checked, not assumed.</p></div></div>
+          <form id="setup-form" class="panel setup-form" novalidate>
+            <fieldset>
+              <legend>About the business</legend>
+              <label>What is it called?<input name="legalName" required placeholder="e.g. Meera Bakers"></label>
+              <label>What kind of work?
+                <select name="businessType" required>
+                  <option value="">Choose one</option>
+                  <option value="RETAIL">Retail shop</option>
+                  <option value="WHOLESALE">Wholesale</option>
+                  <option value="BAKERY">Bakery</option>
+                  <option value="SERVICES">Services</option>
+                  <option value="TRANSPORT">Transport</option>
+                  <option value="MANUFACTURING">Manufacturing</option>
+                </select>
+              </label>
+              <label>Which state?
+                <select name="stateCode" required>
+                  <option value="">Choose one</option>
+                  <option value="07">Delhi (07)</option>
+                  <option value="27">Maharashtra (27)</option>
+                  <option value="29">Karnataka (29)</option>
+                  <option value="08">Rajasthan (08)</option>
+                  <option value="09">Uttar Pradesh (09)</option>
+                  <option value="24">Gujarat (24)</option>
+                  <option value="33">Tamil Nadu (33)</option>
+                  <option value="19">West Bengal (19)</option>
+                  <option value="06">Haryana (06)</option>
+                  <option value="23">Madhya Pradesh (23)</option>
+                  <option value="36">Telangana (36)</option>
+                  <option value="03">Punjab (03)</option>
+                </select>
+              </label>
+              <label>Phone (optional)<input name="phone" placeholder="98290 11223"></label>
+            </fieldset>
+            <fieldset>
+              <legend>GST and books</legend>
+              <label>Registered for GST?
+                <select name="registration" required>
+                  <option value="">Choose one</option>
+                  <option value="REGULAR">Yes, regular</option>
+                  <option value="COMPOSITION">Yes, composition</option>
+                  <option value="UNREGISTERED">Not registered</option>
+                </select>
+              </label>
+              <label>GST number<input name="gstin" placeholder="08AAAAA0000A1Z2"></label>
+              <label>How often do you file GST?
+                <select name="filingFrequency">
+                  <option value="">Choose one</option>
+                  <option value="MONTHLY">Every month</option>
+                  <option value="QUARTERLY">Every three months</option>
+                </select>
+              </label>
+              <label>Keep books from<input type="date" name="booksStartDate" value="2026-04-01"></label>
+            </fieldset>
+            <fieldset>
+              <legend>One thing you sell</legend>
+              <label>Its name<input name="itemName" required placeholder="Chocolate cake 500g"></label>
+              <label>Goods or a service?
+                <select name="itemKind"><option value="GOODS">Goods</option><option value="SERVICES">Service</option></select>
+              </label>
+              <label>How is it counted?<input name="itemUnit" value="PCS" placeholder="PCS, KGS, BOX"></label>
+              <label>HSN or SAC code (optional)<input name="itemHsn" placeholder="1905"></label>
+            </fieldset>
+            <fieldset>
+              <legend>Optional — the GST you charge</legend>
+              <p class="setup-hint">If you tell us a rate, we record it as yours and say so on the bill. We never pick one for you.</p>
+              <label>For which goods or service code?<input name="rateCode" placeholder="1905"></label>
+              <label>What rate, in per cent?<input name="ratePercent" inputmode="decimal" placeholder="5"></label>
+              <label>Where does the rate come from?<input name="rateBasis" placeholder="The rate my accountant has always used"></label>
+            </fieldset>
+            <fieldset>
+              <legend>Optional — money on day one</legend>
+              <p class="setup-hint">The cash you started with. We record it against your own money in the business, so the books balance.</p>
+              <label>Cash in hand on day one<input name="openingCash" inputmode="decimal" placeholder="8000"></label>
+            </fieldset>
+            <div class="setup-actions">
+              <button type="submit" class="primary-button" id="setup-check">Check setup</button>
+              <button type="button" class="primary-button" id="setup-create" hidden>Create the business</button>
+            </div>
+          </form>
+          <div id="setup-result" aria-live="polite"></div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -125,6 +217,7 @@
         <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
         <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
+        <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
       </nav>
     </div>
 

@@ -1,6 +1,6 @@
 const copy = {
   "en-IN": {
-    skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Payment", navActivity: "Activity", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
+    skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Payment", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft protection is on", draftProtection: "Your unfinished work stays on this device.", companyLocation: "Delhi · Main shop", language: "Language",
     demoTitle: "Connected demo company.", demoBody: "Preview checks are read-only. Recording uses the real sales, purchasing, inventory, ledger and receivables modules.", today: "Today", welcome: "Good to see you, Hanny", welcomeBody: "Live company state from Sampoorna Traders.", newSale: "New sale",
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
@@ -13,7 +13,7 @@ const copy = {
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
-    skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Payment", navActivity: "Kaam", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
+    skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Payment", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft surakshit hai", draftProtection: "Adhura kaam isi device par rahega.", companyLocation: "Delhi · Mukhya dukaan", language: "Bhasha",
     demoTitle: "Connected demo company.", demoBody: "Preview sirf jaanch karta hai. Record karne par asli sales, purchasing, inventory, ledger aur receivables modules chalte hain.", today: "Aaj", welcome: "Namaste Hanny", welcomeBody: "Sampoorna Traders ki live company state.", newSale: "Nayi bikri",
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
@@ -77,6 +77,7 @@ function openView(view) {
   document.body.classList.remove("menu-open");
   document.querySelector("#menu-button").setAttribute("aria-expanded", "false");
   document.querySelector(`#view-${target} h1`)?.focus?.();
+  if (target === "reports") loadReports();
 }
 
 function draftData(form) {
@@ -206,6 +207,283 @@ async function loadDashboard() {
   }
 }
 
+function reportCard(title, sentence) {
+  const card = document.createElement("article");
+  card.className = "panel report-card";
+  const heading = document.createElement("div");
+  heading.className = "panel-heading";
+  const headingText = document.createElement("div");
+  const h2 = document.createElement("h2");
+  h2.textContent = title;
+  headingText.append(h2);
+  if (sentence) {
+    const p = document.createElement("p");
+    p.textContent = sentence;
+    headingText.append(p);
+  }
+  heading.append(headingText);
+  card.append(heading);
+  return card;
+}
+
+function reportTable(columns, rows) {
+  const wrap = document.createElement("div");
+  wrap.className = "report-scroll";
+  const table = document.createElement("table");
+  table.className = "report-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  columns.forEach((column) => { const th = document.createElement("th"); th.textContent = column.label; if (column.numeric) th.className = "numeric"; headRow.append(th); });
+  thead.append(headRow);
+  const tbody = document.createElement("tbody");
+  rows.forEach((cells) => {
+    const tr = document.createElement("tr");
+    cells.forEach((cell, index) => { const td = document.createElement("td"); td.textContent = cell; if (columns[index]?.numeric) td.className = "numeric"; tr.append(td); });
+    tbody.append(tr);
+  });
+  table.append(thead, tbody);
+  wrap.append(table);
+  return wrap;
+}
+
+function reportTotalRow(label, amount) {
+  const row = document.createElement("div");
+  row.className = "report-total";
+  const name = document.createElement("span");
+  name.textContent = label;
+  const value = document.createElement("strong");
+  value.textContent = money(amount);
+  row.append(name, value);
+  return row;
+}
+
+function drillDetails(label, total, rows) {
+  const details = document.createElement("details");
+  details.className = "report-drill";
+  const summary = document.createElement("summary");
+  const name = document.createElement("span");
+  name.textContent = label;
+  const value = document.createElement("strong");
+  value.textContent = money(total);
+  summary.append(name, value);
+  details.append(summary);
+  details.append(reportTable(
+    [{ label: "Date" }, { label: "Number" }, { label: "What it was" }, { label: "Amount", numeric: true }],
+    rows.map((r) => [r.date, r.number ?? "", r.description, money(r.amount)]),
+  ));
+  return details;
+}
+
+function renderReports(data) {
+  const content = document.querySelector("#reports-content");
+  content.replaceChildren();
+
+  // Things worth a second look come first: what a person must check before trusting the rest.
+  const exceptions = reportCard(data.exceptions.title, data.exceptions.sentence);
+  if (!data.exceptions.clean) {
+    data.exceptions.items.forEach((item) => {
+      const flag = document.createElement("div");
+      flag.className = `report-flag ${item.severity === "BLOCKING" ? "blocking" : ""}`;
+      const strong = document.createElement("strong");
+      strong.textContent = item.amount === null ? item.what : `${item.what} (${money(item.amount)})`;
+      const why = document.createElement("span");
+      why.textContent = item.why;
+      flag.append(strong, why);
+      exceptions.append(flag);
+    });
+  }
+  content.append(exceptions);
+
+  // Profit and loss, with the income total openable into the bills behind it.
+  const pnl = reportCard(data.profitAndLoss.title, data.profitAndLoss.sentence);
+  pnl.append(reportTable(
+    [{ label: "Account" }, { label: "Amount", numeric: true }],
+    [
+      ...data.profitAndLoss.income.rows.map((r) => [r.name, money(r.amount)]),
+      ...data.profitAndLoss.expenses.rows.map((r) => [r.name, money(r.amount)]),
+    ],
+  ));
+  pnl.append(drillDetails("Everything you earned", data.profitAndLoss.income.total, data.profitAndLoss.income.drill));
+  pnl.append(reportTotalRow("What is left", data.profitAndLoss.result));
+  content.append(pnl);
+
+  // Balance sheet with the balanced badge.
+  const sheet = reportCard(data.balanceSheet.title, data.balanceSheet.sentence);
+  const badge = document.createElement("span");
+  badge.className = `pill ${data.balanceSheet.balanced ? "done" : "warn"}`;
+  badge.textContent = data.balanceSheet.balanced ? "Owns and owes match" : "Does not balance — look below";
+  sheet.append(badge);
+  sheet.append(reportTotalRow("What the business owns", data.balanceSheet.totalAssets));
+  sheet.append(reportTotalRow("Claims on it", data.balanceSheet.totalClaims));
+  content.append(sheet);
+
+  // Trial balance.
+  const trial = reportCard(data.trialBalance.title, data.trialBalance.balanced ? "The two sides come to the same figure." : "The two sides do not match.");
+  const trialBadge = document.createElement("span");
+  trialBadge.className = `pill ${data.trialBalance.balanced ? "done" : "warn"}`;
+  trialBadge.textContent = data.trialBalance.balanced ? "Balanced" : `Off by ${money(data.trialBalance.difference)}`;
+  trial.append(trialBadge);
+  trial.append(reportTable(
+    [{ label: "Code" }, { label: "Account" }, { label: "Balance", numeric: true }, { label: "Side" }],
+    data.trialBalance.rows.map((r) => [r.code, r.name, money(r.closing), r.side === "DEBIT" ? "Owned or spent" : "Owed or earned"]),
+  ));
+  content.append(trial);
+
+  // Sales register.
+  const sales = reportCard(data.sales.title, data.sales.sentence);
+  if (data.sales.rows.length > 0) sales.append(reportTable(
+    [{ label: "Date" }, { label: "Number" }, { label: "Customer" }, { label: "Goods value", numeric: true }, { label: "Total", numeric: true }],
+    data.sales.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.total)]),
+  ));
+  content.append(sales);
+
+  // Purchase register — real here, because purchases post bills.
+  const purchases = reportCard(data.purchases.title, data.purchases.sentence);
+  if (data.purchases.rows.length > 0) purchases.append(reportTable(
+    [{ label: "Date" }, { label: "Number" }, { label: "Supplier" }, { label: "Goods value", numeric: true }, { label: "Total", numeric: true }],
+    data.purchases.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.total)]),
+  ));
+  content.append(purchases);
+
+  // What is left in the godown.
+  const stock = reportCard(data.stock.title, data.stock.sentence);
+  if (data.stock.rows.length > 0) stock.append(reportTable(
+    [{ label: "Item" }, { label: "Godown" }, { label: "Left" }, { label: "Can be sold" }, { label: "Worth", numeric: true }],
+    data.stock.rows.map((r) => [r.item, r.warehouse, `${r.closing} ${r.unit}`, `${r.available} ${r.unit}`, money(r.value)]),
+  ));
+  content.append(stock);
+
+  // Who owes whom.
+  const dues = reportCard(data.dues.receivables.title, data.dues.receivables.sentence);
+  if (data.dues.receivables.rows.length > 0) dues.append(reportTable(
+    [{ label: "Customer" }, { label: "Still owed", numeric: true }, { label: "Money with no bill", numeric: true }, { label: "Oldest days late", numeric: true }],
+    data.dues.receivables.rows.map((r) => [r.party, money(r.outstanding), money(r.onAccount), String(r.oldestDaysOverdue)]),
+  ));
+  dues.append(reportTotalRow("What you owe suppliers", data.dues.payables.total));
+  content.append(dues);
+
+  // GST collected and paid.
+  const gst = reportCard(data.gst.title, data.gst.sentence);
+  gst.append(reportTotalRow("GST you collected", data.gst.collected));
+  gst.append(reportTotalRow("GST you had already paid", data.gst.alreadyPaid));
+  const caution = document.createElement("p");
+  caution.className = "report-caution";
+  caution.textContent = data.gst.caution;
+  gst.append(caution);
+  content.append(gst);
+}
+
+async function loadReports() {
+  const content = document.querySelector("#reports-content");
+  try {
+    renderReports(await api("/api/reports"));
+  } catch (error) {
+    content.replaceChildren();
+    const message = document.createElement("p");
+    message.className = "loading-copy";
+    message.textContent = `The reports could not be reached: ${error.message}`;
+    content.append(message);
+  }
+}
+
+function setupData() {
+  const form = document.querySelector("#setup-form");
+  return Object.fromEntries([...new FormData(form).entries()].filter(([, value]) => typeof value === "string"));
+}
+
+function renderSetupProblems(problems) {
+  const box = document.querySelector("#setup-result");
+  box.replaceChildren();
+  const card = reportCard("A few things need a look", "Nothing was created. Fix these and check again.");
+  problems.forEach((problem) => {
+    const flag = document.createElement("div");
+    flag.className = "report-flag";
+    const strong = document.createElement("strong");
+    strong.textContent = problem.message;
+    flag.append(strong);
+    card.append(flag);
+  });
+  box.append(card);
+  document.querySelector("#setup-create").hidden = true;
+}
+
+function renderSetupReady(summary) {
+  const box = document.querySelector("#setup-result");
+  box.replaceChildren();
+  const card = reportCard("Ready to create", "These check out. Nothing is saved until you create the business.");
+  const rows = [
+    ["Business", `${summary.businessName} · ${summary.businessType ?? ""}`],
+    ["GST", summary.registration ?? ""],
+    ["Books from", summary.booksStartDate],
+    ["First item", summary.itemName],
+  ];
+  if (summary.declaredRate) rows.push(["Rate you declared", summary.declaredRate]);
+  if (summary.openingCash !== null) rows.push(["Cash on day one", money(summary.openingCash)]);
+  card.append(reportTable([{ label: "" }, { label: "" }], rows));
+  box.append(card);
+  document.querySelector("#setup-create").hidden = false;
+}
+
+function renderSetupResult(result) {
+  const box = document.querySelector("#setup-result");
+  box.replaceChildren();
+  const card = reportCard("Business created", result.sentence);
+  const badge = document.createElement("span");
+  badge.className = `pill ${result.trialBalance.balanced ? "done" : "warn"}`;
+  badge.textContent = result.trialBalance.balanced ? "The books balance" : "The books do not balance";
+  card.append(badge);
+  const facts = [
+    ["Opening entry posted", result.openingVoucherId ?? "none — books start empty"],
+    ["GST rates you declared", String(result.ratesDeclared)],
+  ];
+  card.append(reportTable([{ label: "" }, { label: "" }], facts));
+  if (result.trialBalance.rows.length > 0) {
+    const heading = document.createElement("h3");
+    heading.className = "setup-subheading";
+    heading.textContent = "Its opening books, straight from the ledger";
+    card.append(heading);
+    card.append(reportTable(
+      [{ label: "Account" }, { label: "Owned or spent", numeric: true }, { label: "Owed or earned", numeric: true }],
+      result.trialBalance.rows.map((r) => [r.name, r.debit ? money(r.debit) : "", r.credit ? money(r.credit) : ""]),
+    ));
+    card.append(reportTotalRow("Both sides", result.trialBalance.totalDebits));
+  }
+  box.append(card);
+  document.querySelector("#setup-create").hidden = true;
+}
+
+async function checkSetup() {
+  const button = document.querySelector("#setup-check");
+  button.disabled = true;
+  const previous = button.textContent;
+  button.textContent = "Checking…";
+  try {
+    const result = await api("/api/onboarding/preview", { method: "POST", body: JSON.stringify(setupData()) });
+    if (result.ok) renderSetupReady(result.summary); else renderSetupProblems(result.problems);
+  } catch (error) {
+    renderSetupProblems([{ message: error.message }]);
+  } finally {
+    button.disabled = false;
+    button.textContent = previous;
+  }
+}
+
+async function createSetup() {
+  const button = document.querySelector("#setup-create");
+  button.disabled = true;
+  const previous = button.textContent;
+  button.textContent = "Creating…";
+  try {
+    const result = await api("/api/onboarding/finish", { method: "POST", body: JSON.stringify(setupData()) });
+    if (result.ok && result.result) renderSetupResult(result.result); else renderSetupProblems(result.problems);
+  } catch (error) {
+    renderSetupProblems([{ message: error.message }]);
+  } finally {
+    button.disabled = false;
+    button.textContent = previous;
+  }
+}
+
 function showDialog(result, mode) {
   const dialog = document.querySelector("#review-dialog");
   document.querySelector("#review-title").textContent = result.title;
@@ -265,6 +543,9 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     updateCalculations();
   });
 });
+document.querySelector("#setup-form")?.addEventListener("submit", (event) => { event.preventDefault(); checkSetup(); });
+document.querySelector("#setup-form")?.addEventListener("input", () => { document.querySelector("#setup-create").hidden = true; });
+document.querySelector("#setup-create")?.addEventListener("click", createSetup);
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); });

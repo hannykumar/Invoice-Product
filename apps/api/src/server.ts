@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { DomainError } from '@invoice/kernel';
 import { PlatformError } from '../../../packages/platform/src/index.ts';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
+import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 
 const json = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
 
@@ -35,6 +36,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     const app = await runtime.application(context);
     if (method === 'GET' && pathname === '/api/session') return json(200, { company: runtime.companySummary(context.companyId), userId: context.actorId, permissions: [...context.permissions] });
     if (method === 'GET' && pathname === '/api/dashboard') return json(200, await app.dashboard(actor));
+    if (method === 'GET' && pathname === '/api/reports') return json(200, await app.reports(actor));
+    // Setting up a business runs against its own fresh company, so it needs a signed-in session but
+    // not the session's company. Gated by authentication above, like the rest of the app.
+    if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
+    if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
     const purchaseMatch = /^\/api\/purchases\/([^/]+)$/.exec(pathname);
     if (method === 'GET' && purchaseMatch?.[1] !== undefined) return json(200, await app.purchase(actor, decodeURIComponent(purchaseMatch[1])));
     if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, app.previewPurchase(actor, body));

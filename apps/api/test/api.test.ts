@@ -91,3 +91,79 @@ test('authenticated sales and customer payments still reach their service module
   const payment = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: '50', date: '2026-08-29', reference: 'AUTH-PAY-80', invoice: recorded.body.invoice.id }, owner);
   assert.equal(payment.body.state, 'recorded');
 });
+
+test('reports require a session and are computed from that company alone', async () => {
+  // Without a session the reports are refused, like every other company surface.
+  assert.equal((await request('GET', '/api/reports')).status, 401);
+
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  // Record a real purchase and a real sale into this company, then read the reports.
+  await request('POST', '/api/purchases/record', { party: 'Shree Ram Steels Private Limited', reference: 'REPORTS-35-BUY', date: '2026-08-29', amount: '1750.50' }, owner);
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '3', rate: '400', date: '2026-08-29', terms: '15', reference: 'WEB-REPORTS-35' };
+  const recorded = await request('POST', '/api/sales/record', sale, owner);
+  assert.equal(recorded.body.state, 'recorded');
+
+  const reports = await request('GET', '/api/reports', {}, owner);
+  assert.equal(reports.status, 200);
+
+  // The books hold together, and the report says so from the real ledger, not a stored flag.
+  assert.equal(reports.body.trialBalance.balanced, true);
+  assert.equal(reports.body.trialBalance.totalDebits, reports.body.trialBalance.totalCredits);
+
+  // What the owner earned reconciles to the bills that produced it — the acceptance criterion.
+  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.total);
+
+  // The sale just recorded is in the register and in the drill-down behind the income total.
+  assert.ok(reports.body.sales.rows.some((row: { number: string }) => row.number === recorded.body.invoice.number));
+  assert.ok(reports.body.profitAndLoss.income.drill.some((entry: { number: string | null }) => entry.number === recorded.body.invoice.number));
+
+  // A purchase was recorded earlier in this file against the same singleton company, so the
+  // purchase side is real and present rather than the "not built yet" placeholder.
+  assert.equal(reports.body.purchases.available, true);
+  assert.ok(reports.body.purchases.total > 0);
+
+  // Every exception carries a machine code and a plain-language explanation.
+  assert.ok(Array.isArray(reports.body.exceptions.items));
+  for (const item of reports.body.exceptions.items as { code: string; what: string }[]) {
+    assert.equal(typeof item.code, 'string');
+    assert.equal(typeof item.what, 'string');
+  }
+});
+
+test('business setup runs the real onboarding service and opens a balanced set of books', async () => {
+  // Setting up a business needs a signed-in session, like the rest of the app.
+  assert.equal((await request('POST', '/api/onboarding/preview', {})).status, 401);
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+
+  // A mistyped GST number is caught by the real validator and nothing is created.
+  const mistyped = await request('POST', '/api/onboarding/preview', {
+    legalName: 'Meera Bakers', businessType: 'BAKERY', stateCode: '08',
+    registration: 'REGULAR', gstin: '08AAAAA0000A1Z9', filingFrequency: 'QUARTERLY',
+    booksStartDate: '2026-04-01', itemName: 'Chocolate cake 500g',
+  }, owner);
+  assert.equal(mistyped.body.ok, false);
+  assert.ok(mistyped.body.problems.some((p: { field: string | null }) => p.field === 'gstin'));
+
+  // The corrected setup passes the check without creating anything yet.
+  const good = {
+    legalName: 'Meera Bakers', businessType: 'BAKERY', stateCode: '08',
+    registration: 'REGULAR', gstin: '08AAAAA0000A1Z2', filingFrequency: 'QUARTERLY',
+    booksStartDate: '2026-04-01', itemName: 'Chocolate cake 500g', itemKind: 'GOODS', itemUnit: 'PCS', itemHsn: '1905',
+    rateCode: '1905', ratePercent: '5', rateBasis: 'The rate my accountant has always used',
+    openingCash: '8000',
+  };
+  const preview = await request('POST', '/api/onboarding/preview', good, owner);
+  assert.equal(preview.body.ok, true);
+  assert.equal(preview.body.result, undefined, 'a preview creates nothing');
+
+  // Finishing runs the real service: it posts an opening voucher, declares the rate, and the new
+  // company's own trial balance — read back from the ledger — balances.
+  const finished = await request('POST', '/api/onboarding/finish', good, owner);
+  assert.equal(finished.body.ok, true);
+  const result = finished.body.result;
+  assert.ok(result.openingVoucherId, 'an opening balance voucher was posted');
+  assert.equal(result.ratesDeclared, 1);
+  assert.equal(result.trialBalance.balanced, true);
+  assert.equal(result.trialBalance.totalDebits, result.trialBalance.totalCredits);
+  assert.equal(result.trialBalance.totalDebits, 8000);
+});

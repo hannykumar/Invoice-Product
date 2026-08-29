@@ -32,7 +32,16 @@ export type Permission =
   | "privacy.export"
   | "privacy.delete"
   | "backup.manage"
-  | "backup.restore";
+  | "backup.restore"
+  // Reports (issue #35, GPT 1). Added to the union so an owner's session can be granted them.
+  | "reports.view.financial"
+  | "reports.view.sales"
+  | "reports.view.purchase"
+  | "reports.view.stock"
+  | "reports.view.dues"
+  | "reports.view.gst"
+  | "reports.view.exceptions"
+  | "reports.export";
 
 export interface RequestContext {
   companyId: Id;
