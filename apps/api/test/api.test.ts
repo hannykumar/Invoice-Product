@@ -391,3 +391,77 @@ test('supplier checks are scoped to the signed-in company', async () => {
   assert.equal(checked.body.supplier, 'Western Coast Supplies');
   assert.equal(checked.body.raw.companyId, COMPANY_B);
 });
+
+/**
+ * Issue #26 — e-invoice applicability and the IRN lifecycle over the HTTP surface.
+ */
+test('the HTTP surface refuses to assume every bill needs an IRN', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const { invoices } = (await request('GET', '/api/einvoices/invoices', {}, session)).body;
+  const invoice = invoices[0].id;
+  assert.equal(invoices[0].eInvoiceStatus, 'NOT_SENT', "the bill's state and the government's are separate");
+
+  // A small trader is told plainly that nothing needs sending, with the rule that decided it.
+  const small = await request('POST', '/api/einvoices/preview', { invoice, turnover: '9000000' }, session);
+  assert.equal(small.body.outcome, 'NOT_APPLICABLE');
+  assert.equal(small.body.ready, false);
+  assert.equal(small.body.ruleId, 'EINV.THRESHOLD.5CR');
+  assert.match(small.body.sourceRef, /Notification 10\/2023/);
+  assert.match(small.body.reason, /It is an ordinary GST bill/);
+
+  // A turnover we were never given is a question, not a guess in either direction.
+  const unknown = await request('POST', '/api/einvoices/preview', { invoice }, session);
+  assert.equal(unknown.body.outcome, 'CANNOT_DECIDE');
+  assert.equal(unknown.body.ready, false);
+
+  // And sending one that does not need it is refused outright.
+  const refused = await request('POST', '/api/einvoices/register', { invoice, turnover: '9000000' }, session);
+  assert.equal(refused.status, 409);
+  assert.match(refused.body.message, /does not need an e-invoice number/);
+});
+
+test('the HTTP surface registers once, verifies the reply, and cannot make a second IRN', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const { invoices } = (await request('GET', '/api/einvoices/invoices', {}, session)).body;
+  const invoice = invoices[0].id;
+
+  const preview = await request('POST', '/api/einvoices/preview', { invoice, turnover: '80000000' }, session);
+  assert.equal(preview.body.outcome, 'APPLICABLE');
+  assert.equal(preview.body.ready, true);
+  assert.match(preview.body.expectedIrn, /^[0-9a-f]{64}$/);
+  assert.equal(preview.body.reportableUntil.length, 10);
+
+  const registered = await request('POST', '/api/einvoices/register', { invoice, turnover: '80000000' }, session);
+  assert.equal(registered.body.status, 'REGISTERED');
+  // What we predicted is what came back, which is the verification working end to end.
+  assert.equal(registered.body.irn, preview.body.expectedIrn);
+  assert.ok(registered.body.ackNumber.length > 0);
+  assert.ok(registered.body.signedQrCode.length > 0, 'the signed QR is kept for the customer copy');
+  assert.ok(registered.body.cancellableUntil.length > 0);
+
+  const again = await request('POST', '/api/einvoices/register', { invoice, turnover: '80000000' }, session);
+  assert.equal(again.body.irn, registered.body.irn, 'a retry never produces a second IRN');
+
+  const cancelled = await request('POST', '/api/einvoices/cancel', {
+    invoice, turnover: '80000000', reasonCode: 'DATA_ENTRY_MISTAKE', reason: "The buyer's GST number was typed wrong",
+  }, session);
+  assert.equal(cancelled.body.status, 'CANCELLED');
+  assert.match(cancelled.body.message, /The bill in your books is unchanged/);
+});
+
+test('the offline export is offered and says it is not yet an e-invoice', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const { invoices } = (await request('GET', '/api/einvoices/invoices', {}, session)).body;
+  const exported = await request('POST', '/api/einvoices/offline', { invoice: invoices[0].id, turnover: '80000000' }, session);
+  assert.equal(exported.status, 200);
+  assert.match(exported.body.fileName, /^einvoice-.*\.json$/);
+  const file = JSON.parse(exported.body.json);
+  assert.equal(file.InvoiceList.length, 1);
+  assert.match(file._karobar.note, /not an e-invoice until the government returns an IRN/);
+});
+
+test('e-invoices belong to the signed-in company alone', async () => {
+  const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const stolen = await request('POST', '/api/einvoices/preview', { invoice: 'not-ours', turnover: '80000000' }, konkan);
+  assert.equal(stolen.status, 404);
+});

@@ -42,6 +42,13 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // not the session's company. Gated by authentication above, like the rest of the app.
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
+    // Issue #26 — does this bill need an IRN, and its life with the government.
+    if (method === 'GET' && pathname === '/api/einvoices/invoices') return json(200, await app.issuedInvoices(actor));
+    if (method === 'POST' && pathname === '/api/einvoices/preview') return json(200, await app.previewEInvoice(actor, body));
+    if (method === 'POST' && pathname === '/api/einvoices/register') return json(200, await app.registerEInvoice(actor, body));
+    if (method === 'POST' && pathname === '/api/einvoices/reconcile') return json(200, await app.reconcileEInvoice(actor, body));
+    if (method === 'POST' && pathname === '/api/einvoices/cancel') return json(200, await app.cancelEInvoice(actor, body));
+    if (method === 'POST' && pathname === '/api/einvoices/offline') return json(200, await app.eInvoiceOfflineJson(actor, body));
     // Issue #19 — what we know about a supplier, and the evidence behind each warning.
     if (method === 'GET' && pathname === '/api/suppliers/choices') return json(200, { choices: DemoApplication.supplierChoices() });
     if (method === 'POST' && pathname === '/api/suppliers/check') return json(200, await app.checkSupplier(actor, body));

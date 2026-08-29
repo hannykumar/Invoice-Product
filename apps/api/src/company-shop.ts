@@ -26,6 +26,10 @@ import {
   SyntheticCredentialVault, SyntheticGstConnector, gstinStatusAdapter,
 } from '../../../packages/purchasing/src/supplier-risk-adapters.ts';
 import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platform/src/connectors.ts';
+import { EInvoiceService } from '../../../packages/gst/src/einvoice-service.ts';
+import {
+  InMemoryEInvoicePolicies, InMemoryEInvoiceStore, SyntheticIrp, irpAdapter,
+} from '../../../packages/gst/src/einvoice-adapters.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -107,6 +111,7 @@ const SETUP_PERMISSIONS = [
   'payments.reverse', 'payments.write_off', 'dashboard.read',
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
   'supplier.risk.view', 'supplier.risk.acknowledge',
+  'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
 ];
 
 export async function createCompanyShop(seed: CompanySeed) {
@@ -215,6 +220,23 @@ export async function createCompanyShop(seed: CompanySeed) {
     clock,
     // No `gstr2b` port: #31 has not shipped, so every assessment says so plainly.
   });
+  // Issue #26. The Invoice Registration Portal behind #8's gateway; development runs against a
+  // synthetic one that computes real IRNs, so the verification in `irn.ts` is genuinely exercised.
+  const irpPortal = new SyntheticIrp(() => clock.now());
+  const eInvoices = new InMemoryEInvoiceStore();
+  const eInvoicePolicies = new InMemoryEInvoicePolicies();
+  store.join(eInvoices);
+  const eInvoice = new EInvoiceService({
+    irp: irpAdapter({
+      gateway: new ConnectorGateway([irpPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      clock: () => clock.now(),
+    }),
+    records: eInvoices,
+    audit,
+    clock,
+    policy: eInvoicePolicies,
+    idFactory: () => `${seed.companyId}:einv:${sequence += 1}`,
+  });
   const setupActor: ActorContext = {
     companyId: seed.companyId,
     branchId: seed.branchId,
@@ -236,6 +258,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
   return {
     store, inventory, inventoryService, bills, orders, receipts, approvals, audit, ledger, posting,
-    matching, masters, risk, portal, riskAssessments, riskAcknowledgements, setupActor,
+    matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
+    eInvoice, eInvoices, eInvoicePolicies, irpPortal, setupActor,
   };
 }

@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/gst",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #26 [E26] — e-invoice applicability and the complete IRN lifecycle.",
+  "exports": { ".": "./src/index.ts" }
+}
