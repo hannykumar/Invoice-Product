@@ -86,7 +86,7 @@ export class PurchasePostingService {
     const dueDate = addDays(approved.invoiceDate, approved.creditDays ?? 0);
     const receipts = approved.lines
       .map((line, index) => ({ line, cost: totals.lineCostPaise[index] ?? 0n }))
-      .filter((entry) => entry.line.supplyKind === "GOODS" && entry.line.warehouseId !== undefined)
+      .filter((entry) => entry.line.supplyKind === "GOODS" && entry.line.warehouseId !== undefined && entry.line.receivedAgainstReceiptId === undefined)
       .map((entry) => ({
         itemId: entry.line.itemId,
         warehouseId: entry.line.warehouseId as string,
@@ -138,6 +138,9 @@ export class PurchasePostingService {
     const dueDate = addDays(approved.invoiceDate, approved.creditDays ?? 0);
     const at = this.#clock.now().toISOString();
     const billId = this.#newId();
+    const receivedByReceiptIds = [...new Set(
+      approved.lines.map((line) => line.receivedAgainstReceiptId).filter((id): id is string => id !== undefined),
+    )];
 
     const outcome = await this.#store.transaction(actor.companyId, async (uow) => {
       const lines = await buildPurchasePosting(uow.accounts, actor.companyId, approved, totals, this.#codes);
@@ -155,6 +158,9 @@ export class PurchasePostingService {
       const receipts: PurchaseBillReceipt[] = [];
       for (const [index, line] of approved.lines.entries()) {
         if (line.supplyKind !== "GOODS" || line.warehouseId === undefined) continue;
+        // The delivery already moved these goods, by the quantity the godown accepted. Receiving
+        // them again here would put the supplier's claimed quantity on the shelf a second time.
+        if (line.receivedAgainstReceiptId !== undefined) continue;
         const cost = totals.lineCostPaise[index] ?? 0n;
         const movement = await this.#inventory.receiveIn(actor, {
           idempotencyKey: `purchase:receive:${approved.id}:${line.lineNumber}`,
@@ -194,6 +200,7 @@ export class PurchasePostingService {
         state: "POSTED",
         voucherId: posted.voucher.id,
         receipts,
+        ...(receivedByReceiptIds.length === 0 ? {} : { receivedByReceiptIds }),
         postedBy: actor.userId,
         postedAt: at,
         idempotencyKey,
@@ -335,7 +342,14 @@ export class PurchasePostingService {
 
   #summarise(approved: ApprovedPurchase, dueDate: IsoDate, tax: PurchaseBill["tax"], receipts: number): string {
     const claimable = tax.cgstPaise + tax.sgstPaise + tax.igstPaise + tax.cessPaise;
-    const stock = receipts === 0 ? "nothing was added to your stock" : `${receipts} item${receipts === 1 ? "" : "s"} went into your stock`;
+    // Goods that came in on a confirmed delivery are already on the shelf; saying "nothing was
+    // added to your stock" would read as though the delivery had been lost.
+    const alreadyIn = approved.lines.some((line) => line.receivedAgainstReceiptId !== undefined);
+    const stock = receipts > 0
+      ? `${receipts} item${receipts === 1 ? "" : "s"} went into your stock`
+      : alreadyIn
+        ? "the goods were already put into your stock when the delivery was confirmed"
+        : "nothing was added to your stock";
     const claim = claimable > 0n && !tax.reverseCharge ? `${formatPaise(claimable)} of GST can be claimed back, and ` : "";
     return `${formatPaise(approved.invoiceTotalPaise)} is now owed to ${approved.supplierName} for bill ${approved.invoiceNumber}, due on ${dueDate}. ${claim}${stock}.`;
   }

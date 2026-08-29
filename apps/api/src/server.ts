@@ -41,6 +41,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // not the session's company. Gated by authentication above, like the rest of the app.
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
+    // Issue #18 — the order, the delivery and the comparison between them and the bill.
+    if (method === 'POST' && pathname === '/api/purchase-orders') return json(200, await app.recordOrder(actor, body));
+    if (method === 'POST' && pathname === '/api/goods-receipts') return json(200, await app.recordReceipt(actor, body));
+    if (method === 'POST' && pathname === '/api/purchases/match') return json(200, await app.matchPurchaseBill(actor, body));
+    if (method === 'POST' && pathname === '/api/purchases/match/approve') return json(200, await app.approvePurchaseMatch(actor, body));
     const purchaseMatch = /^\/api\/purchases\/([^/]+)$/.exec(pathname);
     if (method === 'GET' && purchaseMatch?.[1] !== undefined) return json(200, await app.purchase(actor, decodeURIComponent(purchaseMatch[1])));
     if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, app.previewPurchase(actor, body));

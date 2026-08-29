@@ -86,8 +86,13 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
     const label = `Line ${line.lineNumber} (${line.description})`;
     if (line.quantity.scaled <= 0n) problems.push(`${label} has a quantity of zero or less, which cannot be received.`);
     if (line.ratePaise < 0n) problems.push(`${label} has a price below zero.`);
-    if (line.supplyKind === "GOODS" && line.warehouseId === undefined) {
+    // A line whose goods already arrived on a confirmed delivery note needs no godown here: the
+    // delivery named one when it put them on the shelf, and this bill only records the money.
+    if (line.supplyKind === "GOODS" && line.warehouseId === undefined && line.receivedAgainstReceiptId === undefined) {
       problems.push(`${label} is goods, but no godown was chosen, so the stock cannot be received. Please pick where it was delivered.`);
+    }
+    if (line.receivedAgainstReceiptId !== undefined) {
+      warnings.push(`${label} was already put into your stock when the delivery was confirmed, so recording this bill adds the money you owe and nothing more.`);
     }
     if (line.supplyKind === "SERVICES" && line.warehouseId !== undefined) {
       warnings.push(`${label} is a service, so it has been recorded as a cost and no stock was received for it.`);

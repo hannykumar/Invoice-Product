@@ -22,6 +22,7 @@
           <button class="nav-item" data-view="sale"><span aria-hidden="true">＋</span><span data-i18n="navSale"></span></button>
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
+          <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -117,6 +118,92 @@
             <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" data-i18n-placeholder="paymentCustomerPlaceholder" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
+        </section>
+
+        <section class="view" id="view-deliveries" aria-labelledby="deliveries-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="deliveries-title" data-i18n="deliveriesTitle"></h1>
+              <p data-i18n="deliveriesHelp"></p>
+            </div>
+            <span class="save-state" id="stock-now" role="status">—</span>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel form-panel">
+              <div class="panel-heading"><div><h2 data-i18n="stepOrder"></h2><p data-i18n="stepOrderHelp"></p></div></div>
+              <form id="order-form">
+                <div class="field-grid">
+                  <label><span data-i18n="orderNumber"></span><input name="orderNumber" value="PO/2026/0117" required /></label>
+                  <label><span data-i18n="orderDate"></span><input name="date" type="date" required /></label>
+                  <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                  <label><span data-i18n="orderedQty"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
+                  <label><span data-i18n="agreedRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" required /></span></label>
+                  <label><span data-i18n="gstRate"></span><select name="gst"><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option></select></label>
+                </div>
+                <button type="submit" class="primary-button wide" data-i18n="placeOrder"></button>
+                <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="orderSafety"></span></p>
+                <p class="loading-copy" id="order-result"></p>
+              </form>
+            </article>
+
+            <article class="panel form-panel">
+              <div class="panel-heading"><div><h2 data-i18n="stepReceipt"></h2><p data-i18n="stepReceiptHelp"></p></div></div>
+              <form id="receipt-form">
+                <div class="field-grid">
+                  <label><span data-i18n="receiptNumber"></span><input name="receiptNumber" value="GRN/2026/0304" required /></label>
+                  <label><span data-i18n="deliveryDate"></span><input name="date" type="date" required /></label>
+                  <label><span data-i18n="againstOrder"></span><input name="orderNumber" value="PO/2026/0117" /><small data-i18n="againstOrderHelp"></small></label>
+                  <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                  <label><span data-i18n="arrivedQty"></span><input name="received" type="number" min="0.001" step="0.001" value="100" required /></label>
+                  <label><span data-i18n="keptQty"></span><input name="accepted" type="number" min="0" step="0.001" value="90" required /><small data-i18n="keptQtyHelp"></small></label>
+                  <label><span data-i18n="rateIfNoOrder"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" /></span></label>
+                  <label class="full-field"><span data-i18n="whyRejected"></span><input name="rejectionNote" value="10 boxes soaked in the rain, cartons torn" /></label>
+                </div>
+                <button type="submit" class="primary-button wide" data-i18n="confirmGoods"></button>
+                <p class="safety-note"><span aria-hidden="true">◎</span><span data-i18n="receiptSafety"></span></p>
+                <p class="loading-copy" id="receipt-result"></p>
+              </form>
+            </article>
+          </div>
+
+          <article class="panel form-panel">
+            <div class="panel-heading"><div><h2 data-i18n="stepMatch"></h2><p data-i18n="stepMatchHelp"></p></div></div>
+            <form id="match-form">
+              <div class="field-grid">
+                <label><span data-i18n="supplierBill"></span><input name="reference" value="SRS/2026/0088" required /></label>
+                <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="againstOrder"></span><input name="orderNumber" value="PO/2026/0117" /></label>
+                <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                <label><span data-i18n="billedQty"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
+                <label><span data-i18n="billedRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" required /></span></label>
+                <label><span data-i18n="gstRate"></span><select name="gst"><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option></select></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkBill"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="matchSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="match-panel" hidden>
+            <div class="panel-heading"><div><h2 id="match-title">—</h2><p id="match-message"></p></div><span class="pill" id="match-outcome">—</span></div>
+            <div style="overflow-x:auto">
+              <table class="match-table" id="match-table">
+                <thead><tr>
+                  <th data-i18n="colItem"></th><th data-i18n="colOrdered"></th><th data-i18n="colArrived"></th>
+                  <th data-i18n="colKept"></th><th data-i18n="colTurnedAway"></th><th data-i18n="colBilled"></th>
+                  <th data-i18n="colAgreedPrice"></th><th data-i18n="colBilledPrice"></th>
+                </tr></thead>
+                <tbody id="match-rows"></tbody>
+              </table>
+            </div>
+            <h3 data-i18n="differencesTitle"></h3>
+            <div id="match-findings" class="activity-list"></div>
+            <form id="approve-form" hidden>
+              <div class="field-grid"><label class="full-field"><span data-i18n="approveReason"></span><input name="reason" placeholder="Supplier agreed to send the 10 boxes free next week" required /></label></div>
+              <button type="submit" class="secondary-button wide" data-i18n="approveDifferences"></button>
+            </form>
+          </article>
         </section>
 
         <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" tabindex="-1" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy" data-i18n="loadingActivity"></p></div></article></section>
@@ -219,6 +306,7 @@
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
+        <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
       </nav>
     </div>
 
