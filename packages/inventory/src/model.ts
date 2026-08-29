@@ -106,7 +106,16 @@ export interface StockKey {
 export interface StockBalance {
   readonly itemId: string;
   readonly warehouseId: string;
+  /** The batch this figure is for, or `null` when it is not about one batch. */
   readonly batchId: string | null;
+  /**
+   * True when no batch filter was applied, so this is every batch added together.
+   *
+   * It exists because `batchId: null` alone cannot tell "all the stock" from "the stock that is in
+   * no batch", and answering the wrong one of those with a confident zero is how a batch-tracked
+   * item reads as out of stock (issue #86).
+   */
+  readonly coversAllBatches: boolean;
   readonly unitCode: string;
   /** What is actually in the godown, from posted movements only. */
   readonly physical: Quantity;

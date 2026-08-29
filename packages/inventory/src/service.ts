@@ -140,11 +140,14 @@ export class InventoryService {
     companyId: CompanyId,
     itemId: string,
     warehouseId: string,
-    batchId: string | null,
+    batchId: string | null | undefined,
     unitCode: string,
   ): Promise<StockBalance> {
-    const movements = await this.#inventory.movements.list(companyId, { itemId, warehouseId, batchId });
-    const held = await this.#inventory.reservations.listHeld(companyId, { itemId, warehouseId, batchId });
+    // Omitting the key is how "every batch" is asked for; setting it to undefined is not the same
+    // thing under exactOptionalPropertyTypes, and the repositories read the absence, not the value.
+    const scope = batchId === undefined ? {} : { batchId };
+    const movements = await this.#inventory.movements.list(companyId, { itemId, warehouseId, ...scope });
+    const held = await this.#inventory.reservations.listHeld(companyId, { itemId, warehouseId, ...scope });
     return buildBalance(itemId, warehouseId, batchId, unitCode, movements, held);
   }
 
@@ -155,7 +158,16 @@ export class InventoryService {
   ): Promise<StockBalance> {
     const item = this.#masterData.item(actor.companyId, key.itemId);
     if (item === undefined) throw notFound('STOCK_ITEM_UNKNOWN', 'We do not have details for that item.');
-    return this.#balanceIn(actor.companyId, key.itemId, key.warehouseId, key.batchId ?? null, item.baseUnit);
+    // `?? null` here would turn "the caller did not name a batch" into "the batch is null", which
+    // matches only unbatched movements and answers zero for a batch-tracked item (issue #86). The
+    // repositories already distinguish the two, so the caller's intent is passed through intact.
+    return this.#balanceIn(
+      actor.companyId,
+      key.itemId,
+      key.warehouseId,
+      'batchId' in key ? key.batchId : undefined,
+      item.baseUnit,
+    );
   }
 
   /** Every movement behind a figure, so a total can always be drilled into. */
