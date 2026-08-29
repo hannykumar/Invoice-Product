@@ -20,6 +20,12 @@ import { ThreeWayMatchingService } from '../../../packages/purchasing/src/matchi
 import {
   InMemoryGoodsReceiptStore, InMemoryMatchApprovalStore, InMemoryMatchTolerances, InMemoryPurchaseOrderStore,
 } from '../../../packages/purchasing/src/matching-adapters.ts';
+import { SupplierRiskService } from '../../../packages/purchasing/src/supplier-risk-service.ts';
+import {
+  InMemoryGstinCache, InMemoryRiskAcknowledgementStore, InMemoryRiskAssessmentStore,
+  SyntheticCredentialVault, SyntheticGstConnector, gstinStatusAdapter,
+} from '../../../packages/purchasing/src/supplier-risk-adapters.ts';
+import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platform/src/connectors.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -33,6 +39,8 @@ export interface CompanySeed {
   readonly customerGstin: string;
   readonly supplierId: ReturnType<typeof asId<'Party'>>;
   readonly supplierName: string;
+  /** Synthetic throughout — built by `syntheticGstin`, belonging to no real taxpayer. */
+  readonly supplierGstin?: string;
 }
 
 const ITEMS: readonly StockItem[] = [
@@ -55,12 +63,50 @@ class CompanyMasters implements StockMasterData {
   units(): UnitRegistry { return this.#units; }
 }
 
+/**
+ * Invented registrations so every branch of #19 can be seen on screen without a real credential.
+ * The GST numbers are structurally valid and belong to nobody.
+ */
+export const DEMO_REGISTRATIONS = [
+  {
+    label: 'Deccan Hardware Traders — registration cancelled in March',
+    gstin: '29AAFCD1234K1ZN', name: 'Deccan Hardware Traders',
+    payload: {
+      status: 'CANCELLED', legalName: 'Deccan Hardware Traders', stateCode: '29',
+      registeredOn: '2018-04-02', statusChangedOn: '2026-03-12',
+      filings: [{ period: '02-2026', returnType: 'GSTR3B', status: 'NOT_FILED' }],
+    },
+  },
+  {
+    label: 'Konkan Packaging LLP — suspended, and behind on returns',
+    gstin: '27AABFK9012M1Z6', name: 'Konkan Packaging LLP',
+    payload: {
+      status: 'SUSPENDED', legalName: 'Konkan Packaging LLP', stateCode: '27',
+      registeredOn: '2021-01-19', statusChangedOn: '2026-07-01',
+      filings: [
+        { period: '06-2026', returnType: 'GSTR3B', status: 'NOT_FILED' },
+        { period: '07-2026', returnType: 'GSTR3B', status: 'NOT_FILED' },
+        { period: '07-2026', returnType: 'GSTR1', status: 'NOT_FILED' },
+      ],
+    },
+  },
+  {
+    label: 'Nilgiri Chemicals — new registration, must issue e-invoices',
+    gstin: '33AAGCN3456P1Z1', name: 'Nilgiri Chemicals Private Limited',
+    payload: {
+      status: 'ACTIVE', legalName: 'Nilgiri Chemicals Private Limited', stateCode: '33',
+      registeredOn: '2026-06-20', eInvoiceEnabled: true, filings: [],
+    },
+  },
+] as const;
+
 const SETUP_PERMISSIONS = [
   'ledger.setup', 'ledger.post.purchase', 'ledger.post.sale', 'ledger.post.receipt', 'ledger.post.payment',
   'ledger.post.journal', 'ledger.reverse', 'inventory.move', 'inventory.adjust', 'inventory.override_negative',
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
+  'supplier.risk.view', 'supplier.risk.acknowledge',
 ];
 
 export async function createCompanyShop(seed: CompanySeed) {
@@ -108,6 +154,67 @@ export async function createCompanyShop(seed: CompanySeed) {
     tolerance: new InMemoryMatchTolerances(),
     idFactory: () => `${seed.companyId}:doc:${sequence += 1}`,
   });
+  const riskAssessments = new InMemoryRiskAssessmentStore();
+  const riskAcknowledgements = new InMemoryRiskAcknowledgementStore();
+  store.join(riskAssessments).join(riskAcknowledgements);
+
+  /**
+   * What our own books say about a supplier, read from the bills #17 actually posted.
+   *
+   * Real data, not a fixture: "first time supplier" on the screen means this company genuinely has
+   * no earlier bill from them. Bank-detail changes come from #5's master version history, which
+   * the demo company does not populate, so that list is empty here rather than invented.
+   */
+  const supplierHistory = {
+    async historyFor(companyId: CompanyId, partyId: string, on: string) {
+      const posted = (await bills.listForParty(companyId, partyId)).filter((bill) => bill.state === 'POSTED');
+      const overdue = posted.filter((bill) => bill.dueDate < on);
+      const oldest = overdue.reduce((days, bill) => {
+        const late = Math.floor((new Date(`${on}T00:00:00Z`).getTime() - new Date(`${bill.dueDate}T00:00:00Z`).getTime()) / 86_400_000);
+        return late > days ? late : days;
+      }, 0);
+      const dates = posted.map((bill) => bill.invoiceDate).sort();
+      return {
+        billsRecorded: posted.length,
+        ...(dates[0] === undefined ? {} : { firstBillDate: dates[0] }),
+        totalOutstandingPaise: posted.reduce((sum, bill) => sum + bill.totalPaise, 0n),
+        overdueDocuments: overdue.length,
+        oldestOverdueDays: oldest,
+        openDisputes: [],
+        bankDetailChanges: [],
+      };
+    },
+  };
+
+  // Issue #19. The GST department sits behind #8's gateway even here: development runs against a
+  // synthetic portal whose GST numbers belong to nobody, so no credential is needed to try this.
+  const portal = new SyntheticGstConnector();
+  // Four registrations the Deliveries and Supplier-check screens can be tried against. Every
+  // number is invented; nothing here corresponds to a real taxpayer.
+  if (seed.supplierGstin !== undefined) {
+    portal.put(seed.supplierGstin, {
+      status: 'ACTIVE', legalName: seed.supplierName, stateCode: seed.supplierGstin.slice(0, 2),
+      registeredOn: '2019-08-14', eInvoiceEnabled: false,
+      filings: [
+        { period: '07-2026', returnType: 'GSTR1', status: 'FILED', filedOn: '2026-08-11' },
+        { period: '07-2026', returnType: 'GSTR3B', status: 'FILED', filedOn: '2026-08-20' },
+      ],
+    });
+  }
+  for (const demo of DEMO_REGISTRATIONS) portal.put(demo.gstin, demo.payload);
+  const risk = new SupplierRiskService({
+    gstin: gstinStatusAdapter({
+      gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      cache: new InMemoryGstinCache(),
+      clock: () => clock.now(),
+    }),
+    history: supplierHistory,
+    assessments: riskAssessments,
+    acknowledgements: riskAcknowledgements,
+    audit,
+    clock,
+    // No `gstr2b` port: #31 has not shipped, so every assessment says so plainly.
+  });
   const setupActor: ActorContext = {
     companyId: seed.companyId,
     branchId: seed.branchId,
@@ -127,5 +234,8 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
-  return { store, inventory, inventoryService, bills, orders, receipts, approvals, audit, ledger, posting, matching, masters, setupActor };
+  return {
+    store, inventory, inventoryService, bills, orders, receipts, approvals, audit, ledger, posting,
+    matching, masters, risk, portal, riskAssessments, riskAcknowledgements, setupActor,
+  };
 }

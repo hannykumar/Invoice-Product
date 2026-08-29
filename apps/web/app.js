@@ -60,6 +60,13 @@ const copy = {
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
     saleChecked: "Sale checked", saleCheckedBody: "The checked sale comes to {amount}.", saleEffectInvoice: "A numbered invoice will be issued.", saleEffectBalance: "The customer balance will increase.", purchaseChecked: "Purchase checked", purchaseCheckedBody: "The checked supplier bill comes to {amount}.", purchaseEffectStock: "Stock will update from this purchase.", purchaseEffectBooks: "GST and the supplier balance will post together.", paymentChecked: "Payment checked", paymentCheckedBody: "A receipt of {amount} is ready to record.", paymentEffectBalance: "The customer balance will reduce when this is recorded.", saleRecorded: "Sale recorded", saleRecordedBody: "Invoice {number} was issued.", purchaseRecorded: "Purchase recorded", purchaseRecordedBody: "Stock, GST and the supplier balance were recorded together.", paymentRecorded: "Payment recorded", paymentRecordedBody: "The customer receipt was recorded once.", amountInvalid: "Enter a valid amount greater than zero.", referenceRequired: "Enter the supplier bill number.", rateRequired: "Enter a price and quantity.", permissionDenied: "You do not have permission to do this work.",
+    navSupplier: "Supplier check",
+    supplierTitle: "Check a supplier before you pay", supplierHelp: "We show you what the GST department says and what your own books say, with the date and source of every single thing. We never tell you what kind of business someone is — only what the records show.",
+    theirGstin: "Their GST number", theirGstinHelp: "We check this with the GST department.",
+    trySomeone: "Or try one of these", checkSupplier: "Check this supplier",
+    supplierSafety: "This only looks things up. Nothing is recorded against the supplier and no money moves.",
+    whatWeFound: "What we found", whereFrom: "Where each answer came from",
+    ackReason: "Why is it alright to go ahead?", ackButton: "Accept and go ahead",
     navDeliveries: "Deliveries", orderDate: "Order date", deliveryDate: "Delivery date",
     deliveriesTitle: "Orders, deliveries and the supplier's bill", deliveriesHelp: "Check what you ordered against what actually arrived and what you are being charged for. None of it is forced — if you never raise orders, skip the first box.",
     stepOrder: "1 · What you ordered", stepOrderHelp: "Only if you work with orders. This buys nothing and changes no stock.",
@@ -138,6 +145,13 @@ const copy = {
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
     saleChecked: "Bikri jaanch li", saleCheckedBody: "Jaanchi hui bikri {amount} ki hai.", saleEffectInvoice: "Number wali invoice jaari hogi.", saleEffectBalance: "Customer ka baki paisa badhega.", purchaseChecked: "Kharid jaanch li", purchaseCheckedBody: "Jaancha hua supplier bill {amount} ka hai.", purchaseEffectStock: "Is kharid se stock update hoga.", purchaseEffectBooks: "GST aur supplier balance ek saath darj honge.", paymentChecked: "Payment jaanch li", paymentCheckedBody: "{amount} ki receipt darj karne ke liye taiyar hai.", paymentEffectBalance: "Darj hone par customer ka baki paisa kam hoga.", saleRecorded: "Bikri darj hui", saleRecordedBody: "Invoice {number} jaari hui.", purchaseRecorded: "Kharid darj hui", purchaseRecordedBody: "Stock, GST aur supplier balance ek saath darj hue.", paymentRecorded: "Payment darj hua", paymentRecordedBody: "Customer receipt ek baar darj hui.", amountInvalid: "Zero se badi sahi rakam bharen.", referenceRequired: "Supplier bill number bharen.", rateRequired: "Daam aur matra bharen.", permissionDenied: "Aapko yeh kaam karne ki permission nahin hai.",
+    navSupplier: "Supplier jaanch",
+    supplierTitle: "Paisa dene se pehle supplier jaanchen", supplierHelp: "Hum dikhate hain ki GST vibhag kya kehta hai aur aapki apni bahi kya kehti hai — har baat ki tareekh aur source ke saath. Hum kabhi nahin batate ki koi kaisa hai; sirf yeh ki record mein kya likha hai.",
+    theirGstin: "Unka GST number", theirGstinHelp: "Hum ise GST vibhag se jaanchte hain.",
+    trySomeone: "Ya inme se koi dekhen", checkSupplier: "Yeh supplier jaanchen",
+    supplierSafety: "Yeh sirf dekhta hai. Supplier ke khaate mein kuch darj nahin hota aur paisa nahin hilta.",
+    whatWeFound: "Humein kya mila", whereFrom: "Har jawab kahan se aaya",
+    ackReason: "Aage badhna kyon theek hai?", ackButton: "Sweekar karke aage badhein",
     navDeliveries: "Delivery", orderDate: "Order ki tareekh", deliveryDate: "Delivery ki tareekh",
     deliveriesTitle: "Order, delivery aur supplier ka bill", deliveriesHelp: "Jo mangaya, jo asli mein aaya, aur jiska paisa maanga ja raha hai — teenon milaen. Kuch zaroori nahi hai — agar aap order nahi banate, pehla box chhod den.",
     stepOrder: "1 · Aapne kya mangaya", stepOrderHelp: "Sirf agar aap order banate hain. Isse kuch khareeda nahi jata aur stock nahi badalta.",
@@ -808,6 +822,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     storage?.setItem("karobar.session", state.sessionId);
     document.querySelector("#login-dialog").close("signed-in");
     await loadDashboard();
+    loadSupplierChoices();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -952,8 +967,134 @@ submitStep("#approve-form", async (form) => {
   }
 });
 
+
+// ---------------------------------------------------------- issue #19: supplier risk warnings
+//
+// Every warning is shown with the evidence under it — the source, what it said, the date it took
+// effect and the date we read it. That is the acceptance criterion, and it is also the only
+// honest way to show this: the buyer draws their own conclusion from facts, and the product
+// never tells them what sort of business someone is.
+
+const SOURCE_NAMES = {
+  GST_PORTAL: "The GST department",
+  IMS_GSTR2B: "Your GSTR-2B",
+  OUR_RECORDS: "Your own books",
+  SUPPLIER_DOCUMENT: "The supplier's own bill",
+};
+
+function evidenceLine(evidence) {
+  const bits = [SOURCE_NAMES[evidence.source] ?? evidence.source];
+  if (evidence.effectiveFrom) bits.push(`in force from ${evidence.effectiveFrom}`);
+  if (evidence.observedAt) bits.push(`read on ${String(evidence.observedAt).slice(0, 10)}`);
+  if (evidence.ageInDays !== null && evidence.ageInDays > 0) bits.push(`${evidence.ageInDays} days old`);
+  if (evidence.stale) bits.push("may be out of date");
+  if (evidence.unavailable) bits.push(`could not be reached (${evidence.unavailable})`);
+  return bits.join(" · ");
+}
+
+function renderSupplier(result) {
+  const panel = document.querySelector("#supplier-panel");
+  panel.hidden = false;
+  document.querySelector("#supplier-result-title").textContent = result.title;
+  document.querySelector("#supplier-result-message").textContent = result.message;
+  const badge = document.querySelector("#supplier-level");
+  const stopping = result.level === "SERIOUS" && !result.cleared;
+  badge.textContent = stopping ? "check before paying" : result.level === "SERIOUS" ? "accepted" : result.level.toLowerCase();
+  badge.className = `pill ${stopping ? "hold" : result.level === "CAUTION" ? "warn" : "done"}`;
+
+  const list = document.querySelector("#supplier-warnings");
+  list.replaceChildren();
+  result.warnings.forEach((warning) => {
+    const row = document.createElement("div");
+    row.className = "activity-row";
+    const icon = document.createElement("span");
+    icon.className = `activity-icon ${warning.level === "SERIOUS" ? "red" : warning.level === "CAUTION" ? "amber" : "blue"}`;
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = warning.level === "SERIOUS" ? "!" : warning.level === "CAUTION" ? "?" : "i";
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = warning.message;
+    const action = document.createElement("small");
+    action.textContent = `What to do: ${warning.action}`;
+    body.append(title, action);
+    // The evidence, spelled out, is the point of the whole screen.
+    warning.evidence.forEach((evidence) => {
+      const line = document.createElement("small");
+      line.className = "evidence-line";
+      line.textContent = `${evidence.statement} — ${evidenceLine(evidence)}`;
+      body.append(line);
+    });
+    row.append(icon, body);
+    list.append(row);
+  });
+
+  const sources = document.querySelector("#supplier-sources");
+  sources.replaceChildren();
+  result.sources.forEach((source) => {
+    const row = document.createElement("div");
+    row.className = "activity-row";
+    const icon = document.createElement("span");
+    icon.className = `activity-icon ${source.answered && !source.stale ? "green" : "amber"}`;
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = source.answered && !source.stale ? "✓" : "—";
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = SOURCE_NAMES[source.source] ?? source.source;
+    const note = document.createElement("small");
+    note.textContent = source.note;
+    body.append(title, note);
+    row.append(icon, body);
+    sources.append(row);
+  });
+
+  document.querySelector("#supplier-ack-form").hidden = result.level === "INFORMATION" || result.cleared;
+}
+
+submitStep("#supplier-form", async (form) => {
+  state.lastSupplierInput = formValues(form);
+  try {
+    renderSupplier(await api("/api/suppliers/check", { method: "POST", body: JSON.stringify(state.lastSupplierInput) }));
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+submitStep("#supplier-ack-form", async (form) => {
+  try {
+    renderSupplier(await api("/api/suppliers/check/acknowledge", {
+      method: "POST",
+      body: JSON.stringify({ ...state.lastSupplierInput, reason: formValues(form).reason }),
+    }));
+  } catch (error) {
+    showDialog({ title: "Nothing was accepted", message: error.message }, "failed");
+  }
+});
+
+// The invented registrations this screen can be tried against, so every branch can be seen.
+async function loadSupplierChoices() {
+  const select = document.querySelector("#supplier-choices");
+  if (!select) return;
+  try {
+    const { choices } = await api("/api/suppliers/choices");
+    choices.forEach((choice) => {
+      const option = document.createElement("option");
+      option.value = choice.gstin;
+      option.dataset.name = choice.name;
+      option.textContent = choice.label;
+      select.append(option);
+    });
+    select.addEventListener("change", (event) => {
+      const option = event.target.selectedOptions[0];
+      if (!option?.value) return;
+      const form = document.querySelector("#supplier-form");
+      form.elements.gstin.value = option.value;
+      form.elements.party.value = option.dataset.name ?? "";
+    });
+  } catch { /* the picker is a convenience; the form works without it */ }
+}
+
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) loadDashboard(); else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); } else showLogin();

@@ -5,6 +5,7 @@ export interface Migration { id: string; up: string; down: string; }
 import { masterDataMigrations } from "../../masters/src/migrations.ts";
 import { purchasePostingMigrations } from "../../purchasing/src/posting-migrations.ts";
 import { purchaseMatchingMigrations } from "../../purchasing/src/matching-migrations.ts";
+import { supplierRiskMigrations } from "../../purchasing/src/supplier-risk-migrations.ts";
 import { securityMigrations } from "../../../ops/security/src/migrations.ts";
 import { notificationMigrations } from "./notification-migrations.ts";
 
@@ -73,5 +74,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );

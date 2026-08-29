@@ -23,11 +23,13 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
     name: 'Sampoorna Traders', location: 'Bengaluru · Peenya godown', gstin: '29AAAAA0000A1ZR',
     customerId: asId<'Party'>('sampoorna:party:customer'), customerName: 'ABC Traders', customerGstin: '29BBBBB1111B1Z4',
     supplierId: asId<'Party'>('sampoorna:party:supplier'), supplierName: 'Shree Ram Steels Private Limited',
+    supplierGstin: '27AAECS5678D1ZK',
   },
   '00000000-0000-4000-8000-000000000011': {
     name: 'Konkan Fresh Foods', location: 'Panaji · Market godown', gstin: '30AAAAA0000A1ZQ',
     customerId: asId<'Party'>('konkan:party:customer'), customerName: 'Mapusa Family Stores', customerGstin: '30BBBBB1111B1Z3',
     supplierId: asId<'Party'>('konkan:party:supplier'), supplierName: 'Western Coast Supplies',
+    supplierGstin: '30AAFCW7788Q1ZP',
   },
 };
 

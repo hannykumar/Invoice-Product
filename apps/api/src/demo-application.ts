@@ -38,6 +38,8 @@ import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
 import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
+import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
+import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 
 const paise = (value: unknown): bigint => {
@@ -721,6 +723,89 @@ export class DemoApplication {
         overDelivery: match.policy.allowOverDelivery ? 'allowed' : 'needs approval',
       },
       raw: match,
+    };
+  }
+
+  // -------------------------------------------------------- issue #19: supplier risk warnings
+
+  /** The invented registrations this screen can be tried against, for the picker. */
+  static supplierChoices() {
+    return DEMO_REGISTRATIONS.map((demo) => ({ gstin: demo.gstin, name: demo.name, label: demo.label }));
+  }
+
+  /**
+   * Checks a supplier and explains what was found, evidence by evidence.
+   *
+   * Reads only. Nothing is recorded against the supplier and no money moves — the whole output is
+   * an explanation, which is what a person needs before they pay.
+   */
+  async checkSupplier(actor: ActorContext, input: Record<string, unknown>) {
+    const gstin = String(input.gstin ?? '').replace(/\s/g, '').toUpperCase();
+    const name = String(input.party ?? '').trim() || this.config.supplierName;
+    const assessment = await this.shop.risk.assess(actor, {
+      supplierPartyId: this.config.supplierId,
+      supplierName: name,
+      ...(gstin === '' ? {} : { gstin }),
+      ...(input.stateCode ? { expectedStateCode: String(input.stateCode) } : {}),
+      ...(input.reference ? { invoiceNumber: String(input.reference) } : {}),
+      ...(input.date ? { invoiceDate: String(input.date) } : {}),
+      ...(input.refresh === true ? { refresh: true } : {}),
+      // A model's guess is accepted here only to prove it can never change the level.
+      ...(input.modelHint
+        ? { modelHint: { label: String(input.modelHint), score: 0.97, explanation: 'Shown to demonstrate that a score cannot change the level.', modelVersion: 'demo-v0' } }
+        : {}),
+    });
+    const cleared = await this.shop.risk.isClearedToProceed(actor, assessment);
+    return DemoApplication.riskJson(assessment, cleared);
+  }
+
+  /** A person deciding to go ahead, with the reason kept beside the supplier. */
+  async acknowledgeSupplierRisk(actor: ActorContext, input: Record<string, unknown>) {
+    const reason = String(input.reason ?? '').trim();
+    const rebuilt = await this.checkSupplier(actor, input);
+    if (rebuilt.level === 'INFORMATION') {
+      return { ...rebuilt, title: 'Nothing to accept', message: 'There is nothing on this supplier that needs accepting.' };
+    }
+    await this.shop.risk.acknowledge(actor, rebuilt.raw, reason);
+    const cleared = await this.shop.risk.isClearedToProceed(actor, rebuilt.raw);
+    return { ...DemoApplication.riskJson(rebuilt.raw, cleared), title: 'Accepted', message: cleared.reason };
+  }
+
+  /** The assessment as a screen needs it: every warning with the evidence behind it. */
+  private static riskJson(assessment: SupplierRiskAssessment, cleared: { cleared: boolean; reason: string }) {
+    return {
+      state: 'risk' as const,
+      level: assessment.level,
+      confidence: assessment.confidence,
+      cleared: cleared.cleared,
+      title: assessment.level === 'SERIOUS'
+        ? 'Worth checking before you pay'
+        : assessment.level === 'CAUTION'
+          ? 'A few things worth knowing'
+          : 'Nothing needs your attention',
+      message: assessment.summary,
+      supplier: assessment.supplierName,
+      gstin: assessment.gstin ?? null,
+      warnings: assessment.warnings.map((warning) => ({
+        code: warning.code,
+        level: warning.level,
+        message: warning.message,
+        action: warning.suggestedAction,
+        evidence: warning.evidence.map((evidence) => ({
+          source: evidence.source,
+          statement: evidence.statement,
+          effectiveFrom: evidence.effectiveFrom ?? null,
+          observedAt: evidence.observedAt ?? null,
+          ageInDays: evidence.ageInDays ?? null,
+          stale: evidence.stale,
+          unavailable: evidence.unavailable?.reason ?? null,
+        })),
+      })),
+      sources: assessment.sources.map((source) => ({
+        source: source.source, consulted: source.consulted, answered: source.answered,
+        stale: source.stale, note: source.note,
+      })),
+      raw: assessment,
     };
   }
 
