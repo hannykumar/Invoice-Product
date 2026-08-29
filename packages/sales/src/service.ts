@@ -322,7 +322,7 @@ export class SalesService {
 
   async #reserve(actor: ActorContext, invoice: SalesInvoice): Promise<SalesInvoice> {
     if (invoice.supplyKind === 'SERVICES') return invoice;
-    const result = await this.#inventory.reserve({
+    const result = await this.#inventory.reserve(actor, {
       companyId: invoice.companyId,
       documentId: invoice.id,
       documentDate: invoice.documentDate,
@@ -407,6 +407,22 @@ export class SalesService {
       }
     }
 
+    // Hold the stock before issuing.
+    //
+    // A bill that needs no approval goes straight from draft to final, so nothing has held its
+    // goods yet. Without this, such a bill would be issued and post no stock movement at all —
+    // the books would say the goods were sold and the godown would say they were still there.
+    // Re-holding is idempotent: it replaces this document's own hold rather than stacking on it.
+    if (priced.supplyKind === 'GOODS') {
+      const reserved = await this.#reserve(actor, priced);
+      if (reserved.state === 'NEEDS_INFO') {
+        throw notAllowed(
+          'SALES_NEEDS_INFO',
+          `This bill cannot be issued yet. ${reserved.problems.map((p) => p.message['en-IN']).join(' ')}`,
+        );
+      }
+    }
+
     // Totals must still be what the person looked at. If a rate or a rule moved underneath them,
     // stop rather than issue a bill they never saw.
     const recomputed = this.#compute(priced);
@@ -475,7 +491,7 @@ export class SalesService {
     // The books are already safe. Stock and the government come after, and a failure there never
     // unmakes the bill — it shows as a retryable state (issue #46, `gov.service_unavailable`).
     if (outcome.final.supplyKind === 'GOODS') {
-      await this.#inventory.issue(actor.companyId, outcome.final.id);
+      await this.#inventory.issue(actor, outcome.final.id, outcome.final.documentDate, outcome.final.number);
     }
     const registrations = await this.#compliance.onInvoiceFinalised(outcome.final);
 
@@ -540,7 +556,7 @@ export class SalesService {
     });
 
     if (invoice.supplyKind === 'GOODS') {
-      await this.#inventory.returnToStock(actor.companyId, invoice.id);
+      await this.#inventory.returnToStock(actor, invoice.id, command.today, command.reason);
     }
     await this.#compliance.onInvoiceCancelled(cancelled);
     await this.#audit.record({
