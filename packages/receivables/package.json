@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/receivables",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #20 [E20] — what customers owe and what the business owes: payments, allocation, cheque lifecycle, ageing and statements.",
+  "exports": { ".": "./src/index.ts" }
+}

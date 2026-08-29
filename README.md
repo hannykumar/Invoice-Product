@@ -26,6 +26,7 @@ from deterministic, versioned, testable rules.
 | [`packages/ledger`](packages/ledger) | #4 | The double-entry ledger: the only write path into the books |
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
 | [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
+| [`packages/receivables`](packages/receivables) | #20 | Payments, allocation, cheque lifecycle, ageing and party statements |
 | [`packages/voice-assistant`](packages/voice-assistant) | #10 | Spoken or typed instructions to a confirmed draft, never a guess |
 | [`packages/inventory`](packages/inventory) | #12 | Stock from an append-only movement ledger, reservations, negative-stock control |
 | [`packages/onboarding`](packages/onboarding) | #36 | Guided setup: profile, defaults, declared rates, opening balances, resumable checklist |

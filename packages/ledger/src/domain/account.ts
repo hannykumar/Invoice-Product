@@ -30,6 +30,7 @@ export type SystemAccountRole =
   | 'SALES_GOODS'
   | 'SALES_SERVICES'
   | 'SALES_RETURNS'
+  | 'BAD_DEBTS'
   | 'PURCHASES_GOODS'
   | 'PURCHASE_RETURNS'
   | 'OUTPUT_CGST'

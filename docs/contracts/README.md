@@ -10,6 +10,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`rules-engine`](./rules-engine.v1.md) | 1.0.0 | GPT 1 (#7) | GPT 1 (#9, #11, #12, #25, #34), GPT 3 (#19, #26–#31) | Published |
 | [`gst-calc`](./gst-calc.v1.md) | 1.0.0 | GPT 1 (#25) | GPT 1 (#9, #13, #35), GPT 3 (#17, #30, #45) | Published |
 | [`compliance-register`](../compliance/README.md) | 1.0.0 | GPT 1 (#54) | GPT 1 (#7, #25), GPT 3 (#16, #17, #30, #31) | Published |
+| [`receivables`](./receivables.v1.md) | 1.0.0 | GPT 1 (#20) | GPT 1 (#11, #34, #35), GPT 2 (#22, #23) | Published |
 | [`voice-assistant`](./voice-assistant.v1.md) | 1.0.0 | GPT 1 (#10) | GPT 2 (#38, #47), GPT 1 (#9, #34) | Published |
 | [`inventory`](./inventory.v1.md) | 1.0.0 | GPT 1 (#12) | GPT 1 (#9, #35, #36, #37), GPT 3 (#17, #18, #45) | Published |
 | [`onboarding`](./onboarding.v1.md) | 1.0.0 | GPT 1 (#36) | GPT 2 (#38, #3), GPT 1 (#37) | Published |
