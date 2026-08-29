@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/trade-terms",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #11 [E11] — the terms of a sale: what price was agreed, how much discount is allowed, and whether this customer should be given more credit.",
+  "exports": { ".": "./src/index.ts" }
+}

@@ -33,6 +33,8 @@ export type Permission =
   | "privacy.delete"
   | "backup.manage"
   | "backup.restore"
+  // Approving a discount larger than the business allows (issue #11, GPT 1).
+  | "sales.approve_discount"
   // Reports (issue #35, GPT 1). Added to the union so an owner's session can be granted them.
   | "reports.view.financial"
   | "reports.view.sales"

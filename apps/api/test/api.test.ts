@@ -176,3 +176,30 @@ test('business setup runs the real onboarding service and opens a balanced set o
   assert.equal(result.trialBalance.totalDebits, result.trialBalance.totalCredits);
   assert.equal(result.trialBalance.totalDebits, 8000);
 });
+
+test('a sale preview carries the agreed price and the credit warning from the real terms service', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+
+  // The company is seeded with one issued sale, so this customer has a price on record.
+  const small = await request('POST', '/api/sales/preview', {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250',
+    date: '2026-08-29', terms: '30', reference: 'TERMS-11-SMALL',
+  }, owner);
+  assert.equal(small.status, 200);
+  assert.equal(small.body.terms.lines[0].priceSource, 'LAST_AGREED', 'what they last paid, not a guess');
+  assert.match(small.body.terms.lines[0].priceSentence['en-IN'], /Last time you charged them/);
+  assert.equal(small.body.terms.credit.outcome, 'ALLOW');
+
+  // A bill far beyond the limit is warned about, with the excess worked out from real positions.
+  const big = await request('POST', '/api/sales/preview', {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '40', rate: '250',
+    date: '2026-08-29', terms: '30', reference: 'TERMS-11-BIG',
+  }, owner);
+  assert.equal(big.body.terms.credit.outcome, 'WARN');
+  assert.ok(big.body.terms.credit.excess > 0, 'the amount over the limit is stated');
+  assert.match(big.body.terms.credit.sentence['en-IN'], /more than you allow/);
+  assert.equal(typeof big.body.terms.credit.sentence['hi-IN'], 'string', 'both languages, like every other page');
+
+  // Unissued drafts count towards the limit: that is what stops two tills spending it twice.
+  assert.ok(big.body.terms.credit.pending > 0, "an earlier unfinished bill is counted");
+});
