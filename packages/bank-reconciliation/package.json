@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/bank-reconciliation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #22 [E22] — automatic bank matching, review exceptions and audited confirmation.",
+  "exports": { ".": "./src/index.ts" }
+}
