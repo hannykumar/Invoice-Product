@@ -72,7 +72,7 @@ const copy = {
     navEway: "E-way bill",
     ewayTitle: "Do these goods need an e-way bill?", ewayHelp: "An e-way bill is a permit for moving goods, not a tax paper. Most small consignments need none. We work it out from what is on the lorry, where it is going and which state's rule applies, and show you the rule that decided it.",
     whyMoving: "Why are the goods moving?", moveSupply: "A sale", moveJobWork: "Going out for job work", moveBranch: "Moving between your own places", moveReturn: "Coming back from a customer",
-    deliveryState: "Delivery state code", deliveryStateHelp: "Only if the goods go somewhere other than the buyer's own address. 27 is Maharashtra, 36 is Telangana.",
+    deliveryState: "Which state are the goods going to?", deliveryStateHelp: "Every state's own limit is built in. Leave it on the buyer's own state unless the goods are being delivered somewhere else.", buyerOwnState: "Wherever the buyer is",
     deliveryPlace: "Delivery town or city",
     distanceKm: "Road distance (km)", distanceHelp: "This decides how many days the bill lasts: one day for every 200 km, or part of it.",
     vehicleNumber: "Vehicle number", vehicleHelp: "Leave blank to raise Part A now and add the lorry later. Goods may not move until it is added.",
@@ -182,7 +182,7 @@ const copy = {
     navEway: "E-way bill",
     ewayTitle: "Kya is maal ko e-way bill chahiye?", ewayHelp: "E-way bill maal le jaane ka parwana hai, tax ka kagaz nahin. Chhoti kheponi ko aksar zaroorat nahin hoti. Hum gaadi par kya hai, kahan ja raha hai aur kis rajya ka niyam lagta hai, isse tay karte hain aur wahi niyam aapko dikhate hain.",
     whyMoving: "Maal kyon ja raha hai?", moveSupply: "Bikri", moveJobWork: "Job work ke liye ja raha hai", moveBranch: "Apni hi jagah par ja raha hai", moveReturn: "Customer se wapas aa raha hai",
-    deliveryState: "Delivery rajya ka code", deliveryStateHelp: "Sirf tab jab maal kharidar ke apne pate ke alawa kahin ja raha ho. 27 Maharashtra hai, 36 Telangana.",
+    deliveryState: "Maal kis rajya mein ja raha hai?", deliveryStateHelp: "Har rajya ki apni limit isme bani hui hai. Agar maal kharidar ke apne pate par hi ja raha hai to ise waise hi rehne den.", buyerOwnState: "Jahan kharidar hai",
     deliveryPlace: "Delivery ka shehar",
     distanceKm: "Sadak ki doori (km)", distanceHelp: "Isse tay hota hai bill kitne din chalega: har 200 km ya uske hisse par ek din.",
     vehicleNumber: "Gaadi ka number", vehicleHelp: "Khali chhod den to abhi Part A ban jayega aur gaadi baad mein jodi ja sakti hai. Gaadi jude bina maal nahin hil sakta.",
@@ -893,6 +893,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     loadIssuedInvoices();
     loadReturnDocuments();
     loadEwayRoad();
+    loadEwayStates();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -1549,6 +1550,47 @@ document.querySelector("#eway-offline")?.addEventListener("click", async () => {
   }
 });
 
+// Every state, with its own limit, straight from the rule table the decision uses — so what the
+// picker shows and what decides the movement can never drift apart.
+async function loadEwayStates() {
+  const select = document.querySelector("#eway-states");
+  if (!select) return;
+  try {
+    const { states } = await api("/api/eway/states");
+    select.replaceChildren();
+    const anywhere = document.createElement("option");
+    anywhere.value = "";
+    anywhere.textContent = copy[state.locale].buyerOwnState;
+    select.append(anywhere);
+    states.forEach((row) => {
+      const option = document.createElement("option");
+      option.value = row.code;
+      option.textContent = `${row.name} · ${money(row.limit)}`;
+      option.dataset.limit = String(row.limit);
+      option.dataset.from = row.effectiveFrom;
+      option.dataset.source = row.sourceRef;
+      option.dataset.confirmed = String(row.sourceConfirmed);
+      option.dataset.note = row.note ?? "";
+      select.append(option);
+    });
+    select.addEventListener("change", showEwayStateRule);
+    showEwayStateRule();
+  } catch { /* the picker is a convenience; the check still works without it */ }
+}
+
+// The chosen state's own rule, shown before anything is checked, so the limit is never a surprise.
+function showEwayStateRule() {
+  const select = document.querySelector("#eway-states");
+  const line = document.querySelector("#eway-state-rule");
+  if (!select || !line) return;
+  const option = select.selectedOptions[0];
+  if (!option?.value) { line.textContent = ""; return; }
+  const parts = [`Inside ${option.textContent.split(" · ")[0]} the limit is ${money(Number(option.dataset.limit))}, from ${option.dataset.from}.`];
+  if (option.dataset.note) parts.push(option.dataset.note);
+  parts.push(option.dataset.confirmed === "true" ? option.dataset.source : `${option.dataset.source}`);
+  line.textContent = parts.join(" ");
+}
+
 async function loadEwayRoad() {
   const list = document.querySelector("#eway-road");
   const select = document.querySelector("#eway-invoices");
@@ -1585,4 +1627,4 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); } else showLogin();

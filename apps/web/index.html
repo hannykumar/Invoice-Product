@@ -206,7 +206,7 @@
               <div class="field-grid">
                 <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="eway-invoices" required></select></label>
                 <label><span data-i18n="whyMoving"></span><select name="reason"><option value="SUPPLY" data-i18n="moveSupply"></option><option value="JOB_WORK" data-i18n="moveJobWork"></option><option value="BRANCH_TRANSFER" data-i18n="moveBranch"></option><option value="SALES_RETURN" data-i18n="moveReturn"></option></select></label>
-                <label><span data-i18n="deliveryState"></span><input name="shipToState" maxlength="2" placeholder="36" /><small data-i18n="deliveryStateHelp"></small></label>
+                <label><span data-i18n="deliveryState"></span><select name="shipToState" id="eway-states"></select><small data-i18n="deliveryStateHelp"></small><small id="eway-state-rule"></small></label>
                 <label><span data-i18n="deliveryPlace"></span><input name="shipToPlace" placeholder="Hyderabad" /></label>
                 <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /><small data-i18n="distanceHelp"></small></label>
                 <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA01AB1234" /><small data-i18n="vehicleHelp"></small></label>

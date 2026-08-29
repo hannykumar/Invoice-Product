@@ -8,6 +8,7 @@
  */
 import { formatPaise } from "../../purchasing/src/money.ts";
 import { decideEwayApplicability } from "./applicability.ts";
+import { ALL_STATE_RULES } from "./rules.ts";
 import { describeExpiry, describeTimeLeft, validityDays } from "./validity.ts";
 import { toOfflineJson } from "./payload.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
@@ -57,6 +58,17 @@ showDecision("The same ₹82,600 moving inside Karnataka:", decideEwayApplicabil
 })));
 console.log("\n  Same goods, same value, same day — two different answers, because ₹1 lakh is");
 console.log("  Maharashtra's limit and not the country's, and neither of them is 'per day'.");
+
+heading("2b. Every state is in the table, so picking a state applies that state's rule");
+const lakh = ALL_STATE_RULES.filter((rule) => rule.thresholdPaise === 1_00_000_00n);
+const special = ALL_STATE_RULES.filter((rule) => rule.intraCityExemptAnyValue === true || rule.notifiedGoodsOnly === true);
+console.log(`States and union territories covered: ${ALL_STATE_RULES.length}`);
+console.log(`Limit of ₹1,00,000 inside the state (${lakh.length}): ${lakh.map((rule) => rule.stateName).join(", ")}`);
+console.log(`Limit of ₹50,000 inside the state: every other state.`);
+console.log("Rules that are not only about money:");
+for (const rule of special) console.log(`  · ${rule.stateName}: ${rule.note}`);
+console.log(`Rows carrying the state's own notification number: ${ALL_STATE_RULES.filter((rule) => rule.sourceConfirmed).length} of ${ALL_STATE_RULES.length};`);
+console.log("  the rest say so in their own source line, so nobody mistakes a shipped default for a checked citation.");
 
 heading("3. The ₹50,000 boundary itself");
 const at = (paise: bigint) => decideEwayApplicability(interStateMovement({

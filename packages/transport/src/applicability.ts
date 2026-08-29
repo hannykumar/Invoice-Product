@@ -9,7 +9,7 @@
 // makes a decision re-runnable and arguable rather than a moment in a log.
 
 import { formatPaise } from "../../purchasing/src/money.ts";
-import { EWAY_RULE_SET_VERSION, INTER_STATE_THRESHOLD, exemptGoodsFor, intraStateRuleFor } from "./rules.ts";
+import { EWAY_RULE_SET_VERSION, INTER_STATE_THRESHOLD, exemptGoodsFor, intraStateRuleFor, stateName } from "./rules.ts";
 import type {
   AppliedFact, ConsignmentDocument, ConsignmentLine, EwayApplicabilityDecision, Movement,
   ValueThreshold,
@@ -116,8 +116,8 @@ export const decideEwayApplicability = (
 
   const facts: AppliedFact[] = [
     fact("Why the goods are moving", MOVEMENT_LABELS[movement.reason] ?? movement.reason),
-    fact("From", `${route.fromPlace || "—"} (state ${route.fromStateCode || "not known"})`),
-    fact("To", `${route.toPlace || "—"} (state ${route.toStateCode || "not known"})`),
+    fact("From", `${route.fromPlace || "—"}${route.fromStateCode === "" ? " (state not known)" : ` (${stateName(route.fromStateCode)})`}`),
+    fact("To", `${route.toPlace || "—"}${route.toStateCode === "" ? " (state not known)" : ` (${stateName(route.toStateCode)})`}`),
     fact("Consignment value, tax included", formatPaise(value.valuePaise)),
     fact("How the goods travel", movement.transportMode.toLowerCase().replace(/_/g, " ")),
   ];
@@ -175,7 +175,7 @@ export const decideEwayApplicability = (
     return {
       ...base, outcome: "REQUIRED", ruleId: "EWB.ANY_VALUE.INTER_STATE_JOB_WORK",
       sourceRef: "First proviso to Rule 138(1), CGST Rules 2017", effectiveFrom: "2018-04-01",
-      reason: `These goods are going to ${route.toStateCode === "" ? "another state" : `state ${route.toStateCode}`} for job work. Goods sent to another state for job work need an e-way bill however little they are worth, so ${formatPaise(value.valuePaise)} does not matter here.`,
+      reason: `These goods are going to ${route.toStateCode === "" ? "another state" : stateName(route.toStateCode)} for job work. Goods sent to another state for job work need an e-way bill however little they are worth, so ${formatPaise(value.valuePaise)} does not matter here.`,
     };
   }
 
@@ -197,14 +197,23 @@ export const decideEwayApplicability = (
   }
 
   if (interState) {
+    const crossing = `These goods are going from ${stateName(route.fromStateCode)} to ${stateName(route.toStateCode)}, so the ₹50,000 limit for goods crossing a state border applies`;
     return decideAgainst(base, INTER_STATE_THRESHOLD, value.valuePaise, {
-      required: `These goods are going from state ${route.fromStateCode} to state ${route.toStateCode}, so the ₹50,000 limit for goods crossing a state border applies. This consignment is worth ${formatPaise(value.valuePaise)} including tax, which is above it, so it needs an e-way bill before the vehicle leaves.`,
-      notRequired: `These goods are going from state ${route.fromStateCode} to state ${route.toStateCode}, so the ₹50,000 limit for goods crossing a state border applies. This consignment is worth ${formatPaise(value.valuePaise)} including tax, which is not above it, so no e-way bill is needed.`,
+      required: `${crossing}. This consignment is worth ${formatPaise(value.valuePaise)} including tax, which is above it, so it needs an e-way bill before the vehicle leaves.`,
+      notRequired: `${crossing}. This consignment is worth ${formatPaise(value.valuePaise)} including tax, which is not above it, so no e-way bill is needed.`,
     });
   }
 
   const rule = intraStateRuleFor(route.fromStateCode, on);
-  facts.push(fact("Limit that applies", `${formatPaise(rule.thresholdPaise)} — ${rule.scope === "IN" ? "the national limit" : `state ${route.fromStateCode}, from ${rule.effectiveFrom}`}`));
+  // A row from the state table, as against the national figure standing in for a state that had no
+  // rule of its own yet or a code that is not a state at all.
+  const ownRule = rule.stateName !== undefined;
+  facts.push(fact(
+    "Limit that applies",
+    ownRule
+      ? `${formatPaise(rule.thresholdPaise)} — ${rule.stateName}'s own limit, from ${rule.effectiveFrom}`
+      : `${formatPaise(rule.thresholdPaise)} — the national limit`,
+  ));
 
   // Gujarat's rule turns on a fact about the route rather than on money, and we will not assume it.
   if (rule.intraCityExemptAnyValue === true) {
@@ -212,7 +221,7 @@ export const decideEwayApplicability = (
       return {
         ...base, outcome: "CANNOT_DECIDE", ruleId: `EWB.INTRA_CITY_UNKNOWN.${route.fromStateCode}`,
         sourceRef: rule.sourceRef, effectiveFrom: rule.effectiveFrom,
-        reason: `${rule.note ?? "This state exempts movement within one city."} We have not been told whether this delivery stays inside one city, so we cannot say yet whether an e-way bill is needed.`,
+        reason: `${rule.note ?? `${rule.stateName ?? "This state"} exempts movement within one city.`} We have not been told whether this delivery stays inside one city, so we cannot say yet whether an e-way bill is needed.`,
         missingFacts: ["withinSameCity"],
         thresholdApplied: rule,
       };
@@ -221,19 +230,22 @@ export const decideEwayApplicability = (
       return {
         ...base, outcome: "NOT_REQUIRED", ruleId: `EWB.EXEMPT.INTRA_CITY.${route.fromStateCode}`,
         sourceRef: rule.sourceRef, effectiveFrom: rule.effectiveFrom,
-        reason: `${rule.note ?? "This state exempts movement within one city."} This delivery stays inside ${route.fromPlace || "one city"}, so no e-way bill is needed even though the goods are worth ${formatPaise(value.valuePaise)}.`,
+        reason: `${rule.note ?? `${rule.stateName ?? "This state"} exempts movement within one city.`} This delivery stays inside ${route.fromPlace || "one city"}, so no e-way bill is needed even though the goods are worth ${formatPaise(value.valuePaise)}.`,
         thresholdApplied: rule,
       };
     }
   }
 
-  const where = rule.scope === "IN"
-    ? `We hold no separate order for state ${route.fromStateCode}, so the national ₹50,000 limit has been used`
-    : `Inside state ${route.fromStateCode} the limit is ${formatPaise(rule.thresholdPaise)}, set by that state from ${rule.effectiveFrom} — it is that state's limit, not a national one`;
+  const where = ownRule
+    ? `Inside ${rule.stateName} the limit is ${formatPaise(rule.thresholdPaise)}, set by that state from ${rule.effectiveFrom} — it is that state's limit, not a national one`
+    : rule.note ?? `The national ₹50,000 limit has been used`;
 
   return decideAgainst(base, rule, value.valuePaise, {
     required: `${where}. This consignment is worth ${formatPaise(value.valuePaise)} including tax, which is above it, so it needs an e-way bill before the vehicle leaves.`,
     notRequired: `${where}. This consignment is worth ${formatPaise(value.valuePaise)} including tax, which is not above it, so no e-way bill is needed.`,
+    // Some states ask for a bill only for goods on their own list, so a "yes" there is a "yes
+    // unless these goods are off the list" — said out loud rather than left for someone to discover.
+    ...(rule.notifiedGoodsOnly === true && rule.note !== undefined ? { caveat: rule.note } : {}),
   });
 };
 
@@ -248,13 +260,16 @@ const decideAgainst = (
   base: { ruleSetVersion: string; appliedFacts: readonly AppliedFact[]; consignmentValuePaise: Paise },
   threshold: ValueThreshold,
   valuePaise: Paise,
-  words: { readonly required: string; readonly notRequired: string },
-): EwayApplicabilityDecision => ({
-  ...base,
-  outcome: valuePaise > threshold.thresholdPaise ? "REQUIRED" : "NOT_REQUIRED",
-  ruleId: threshold.ruleId,
-  sourceRef: threshold.sourceRef,
-  effectiveFrom: threshold.effectiveFrom,
-  reason: valuePaise > threshold.thresholdPaise ? words.required : words.notRequired,
-  thresholdApplied: threshold,
-});
+  words: { readonly required: string; readonly notRequired: string; readonly caveat?: string },
+): EwayApplicabilityDecision => {
+  const required = valuePaise > threshold.thresholdPaise;
+  return {
+    ...base,
+    outcome: required ? "REQUIRED" : "NOT_REQUIRED",
+    ruleId: threshold.ruleId,
+    sourceRef: threshold.sourceRef,
+    effectiveFrom: threshold.effectiveFrom,
+    reason: required && words.caveat !== undefined ? `${words.required} ${words.caveat}` : required ? words.required : words.notRequired,
+    thresholdApplied: threshold,
+  };
+};

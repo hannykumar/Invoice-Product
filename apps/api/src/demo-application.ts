@@ -46,6 +46,7 @@ import type {
   ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
 } from '../../../packages/transport/src/types.ts';
 import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
+import { ALL_STATE_RULES } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
@@ -1252,6 +1253,26 @@ export class DemoApplication {
       state: 'offline' as const,
       fileName: `ewaybill-${(movement.documents[0]?.documentNumber ?? 'movement').replace(/\//g, '-')}.json`,
       json,
+    };
+  }
+
+  /**
+   * Every state and its own e-way bill limit, for the picker on the screen.
+   *
+   * The list is the rule table itself, so choosing a state on screen and the rule that decides the
+   * movement can never drift apart.
+   */
+  static ewayStates() {
+    return {
+      states: ALL_STATE_RULES.map((rule) => ({
+        code: rule.scope,
+        name: rule.stateName,
+        limit: jsonAmount(rule.thresholdPaise),
+        effectiveFrom: rule.effectiveFrom,
+        sourceRef: rule.sourceRef,
+        sourceConfirmed: rule.sourceConfirmed,
+        note: rule.note ?? null,
+      })),
     };
   }
 

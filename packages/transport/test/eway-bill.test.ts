@@ -12,7 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DomainError } from "@invoice/kernel";
 import { consignmentValueOf, decideEwayApplicability } from "../src/applicability.ts";
-import { INTRA_STATE_RULES, intraStateRuleFor } from "../src/rules.ts";
+import { ALL_STATE_RULES, INTRA_STATE_RULES, STATE_NAMES, intraStateRuleFor } from "../src/rules.ts";
 import { buildPartA, buildPartB, toOfflineJson, toRupees } from "../src/payload.ts";
 import {
   canExtendNow, describeTimeLeft, readPortalTimestamp, validUntilFrom, validityDays,
@@ -66,22 +66,88 @@ test("a state's own order only applies from the day it came into force", () => {
   const before = intraStateRuleFor("27", "2018-05-01");
   const after = intraStateRuleFor("27", "2018-08-01");
   assert.equal(before.thresholdPaise, 50_000_00n);
-  assert.equal(before.ruleId, "EWB.THRESHOLD.INTRA_STATE.NATIONAL_FALLBACK");
+  assert.equal(before.ruleId, "EWB.THRESHOLD.INTRA_STATE.BEFORE_STATE_RULE");
+  assert.match(before.note ?? "", /Maharashtra had no e-way bill rule of its own until 2018-07-01/);
   assert.equal(after.thresholdPaise, 1_00_000_00n);
 });
 
-test("a state we hold no order for says so rather than claiming the state set ₹50,000", () => {
-  const rule = intraStateRuleFor("23", "2026-08-21");
+test("a code that is not a state says so rather than pretending to be a state rule", () => {
+  const rule = intraStateRuleFor("99", "2026-08-21");
   assert.equal(rule.thresholdPaise, 50_000_00n);
-  assert.match(rule.note ?? "", /We hold no separate order for this state/);
+  assert.equal(rule.ruleId, "EWB.THRESHOLD.INTRA_STATE.UNKNOWN_STATE");
+  assert.match(rule.note ?? "", /is not a GST state code we know/);
 });
 
-test("every state rule carries the order it came from", () => {
-  for (const [code, rule] of Object.entries(INTRA_STATE_RULES)) {
+test("every state and union territory has its own row, named, dated and sourced", () => {
+  // Every code the portal can be given, other than "outside India", which is not a state.
+  const codes = Object.keys(STATE_NAMES).filter((code) => code !== "96");
+  // 01 to 38, plus 97 "Other Territory".
+  assert.equal(codes.length, 39);
+  for (const code of codes) {
+    const rule = INTRA_STATE_RULES[code];
+    assert.ok(rule !== undefined, `no rule for state ${code}`);
     assert.equal(rule.scope, code);
+    assert.equal(rule.stateName, STATE_NAMES[code]);
     assert.notEqual(rule.sourceRef.trim(), "", `state ${code} has no source`);
     assert.match(rule.effectiveFrom, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(rule.thresholdPaise > 0n);
   }
+  assert.equal(ALL_STATE_RULES.length, codes.length);
+});
+
+test("a row without its notification number says so where anyone can read it", () => {
+  for (const rule of ALL_STATE_RULES) {
+    if (rule.sourceConfirmed) assert.doesNotMatch(rule.sourceRef, /does not hold the notification number/);
+    else assert.match(rule.sourceRef, /confirm it with the state before relying on it/);
+  }
+  assert.equal(INTRA_STATE_RULES["29"]?.sourceConfirmed, true);
+  assert.equal(INTRA_STATE_RULES["36"]?.sourceConfirmed, false);
+});
+
+test("picking any state applies that state's own limit, on both sides of it", () => {
+  // Table-driven over every state: a rupee under the limit needs nothing, a rupee over needs a bill.
+  for (const rule of ALL_STATE_RULES) {
+    const inside = (paise: bigint) => decideEwayApplicability(intraStateMovement({
+      consignor: { ...intraStateMovement().consignor, stateCode: rule.scope },
+      billTo: { ...intraStateMovement().billTo, stateCode: rule.scope },
+      documents: [worth(paise)],
+      // Gujarat's rule turns on this fact before money is looked at, so it is stated for everyone.
+      withinSameCity: false,
+    }));
+    assert.equal(inside(rule.thresholdPaise).outcome, "NOT_REQUIRED", `${rule.stateName} at exactly its limit`);
+    assert.equal(inside(rule.thresholdPaise + 1n).outcome, "REQUIRED", `${rule.stateName} a paisa over its limit`);
+    assert.match(inside(rule.thresholdPaise + 1n).reason, new RegExp(`Inside ${rule.stateName.replace(/[()]/g, "\\$&")} the limit is`));
+  }
+});
+
+test("the nine states that set ₹1 lakh are exactly the ones that set it", () => {
+  const lakh = ALL_STATE_RULES.filter((rule) => rule.thresholdPaise === 1_00_000_00n).map((rule) => rule.scope);
+  assert.deepEqual(lakh, ["03", "04", "07", "08", "10", "19", "20", "27", "33"]);
+});
+
+test("a state that asks only for its own notified goods says so on a 'yes'", () => {
+  const decision = decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Indore", stateCode: "23" },
+    billTo: { ...intraStateMovement().billTo, place: "Bhopal", stateCode: "23" },
+    documents: [worth(80_000_00n)],
+  }));
+  assert.equal(decision.outcome, "REQUIRED");
+  assert.match(decision.reason, /only for the goods on its own notified list/);
+  // And a "no" is not cluttered with a caveat that changes nothing.
+  const small = decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Indore", stateCode: "23" },
+    billTo: { ...intraStateMovement().billTo, place: "Bhopal", stateCode: "23" },
+    documents: [worth(10_000_00n)],
+  }));
+  assert.equal(small.outcome, "NOT_REQUIRED");
+  assert.doesNotMatch(small.reason, /notified list/);
+});
+
+test("states are named, not numbered, in everything a person reads", () => {
+  const decision = decideEwayApplicability(interStateMovement());
+  assert.match(decision.reason, /from Karnataka to Maharashtra/);
+  assert.equal(decision.appliedFacts.find((fact) => fact.label === "To")?.value, "Pune (Maharashtra)");
+  assert.doesNotMatch(decision.reason, /state 2\d/);
 });
 
 // ------------------------------------------- every decision lists its facts and its source
@@ -184,7 +250,7 @@ test("the movement follows the goods, not the bill", () => {
   const decision = decideEwayApplicability(movement);
   const to = decision.appliedFacts.find((fact) => fact.label === "To");
   // Billed to Maharashtra, delivered to Telangana: the route is the one the lorry takes.
-  assert.match(to?.value ?? "", /Hyderabad \(state 36\)/);
+  assert.match(to?.value ?? "", /Hyderabad \(Telangana\)/);
   assert.equal(decision.outcome, "REQUIRED");
 
   const partA = buildPartA(movement);

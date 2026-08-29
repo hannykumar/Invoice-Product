@@ -57,14 +57,37 @@ The comparison is a strict `>`: **exactly ₹50,000 does not need a bill**, beca
 
 ### The state table
 
-`INTRA_STATE_RULES` in `rules.ts`, by GST state code, each with its own effective date and the
-state order it came from. A state we hold no order for falls back to ₹50,000 and **says so** —
-which is different from claiming that state set ₹50,000, and is written differently.
+`INTRA_STATE_RULES` in `rules.ts` holds **every state and union territory** — all 39 GST state
+codes from 01 to 38 plus 97 "Other Territory" — each with its own limit, the date its rule came
+into force, and the order it came from. Choosing a state anywhere in the product applies that
+state's row; nothing falls through to a national approximation. `ALL_STATE_RULES` is the same table
+in code order, and it is what the screen's state picker is built from, so what a person picks and
+what decides the movement cannot drift apart.
 
-Gujarat is in the table with `intraCityExemptAnyValue`, because its rule turns on a fact rather
-than on money: no e-way bill at all inside one city, at any value. When we have not been told
-whether a delivery stays inside one city, a Gujarat movement gets `CANNOT_DECIDE` with
-`withinSameCity` named as the missing fact.
+**₹1,00,000 inside the state** (9): Punjab, Chandigarh, Delhi, Rajasthan, Bihar, West Bengal,
+Jharkhand, Maharashtra, Tamil Nadu. **₹50,000 inside the state**: everywhere else.
+
+Three states' rules are not only about money, and the table says so rather than flattening them:
+
+| State | What is different |
+| --- | --- |
+| Gujarat | `intraCityExemptAnyValue` — no e-way bill at all inside one city, at any value. A movement there with `withinSameCity` unknown gets `CANNOT_DECIDE` naming that fact |
+| Madhya Pradesh, Chhattisgarh, Goa, Jharkhand | `notifiedGoodsOnly` — the state asks only for goods on its own notified list, so a "yes" carries the caveat that the list has to be checked |
+
+Two codes carry a note because they are historical: 25 (old Daman and Diu, replaced by 26 in 2020)
+and 28 (undivided Andhra Pradesh, now 36 and 37).
+
+**`sourceConfirmed`** marks the rows that carry the state's actual notification number — 13 of 39
+today. The other 26 hold the state's figure and date, and their `sourceRef` says in words that the
+notification number is not held and should be confirmed with the state. That sentence reaches the
+screen, so nobody mistakes a shipped default for a checked citation.
+
+The national ₹50,000 still stands in for two cases, and each says which it is: a code that is not a
+GST state code at all (`EWB.THRESHOLD.INTRA_STATE.UNKNOWN_STATE`), and a movement dated before that
+state had a rule of its own (`EWB.THRESHOLD.INTRA_STATE.BEFORE_STATE_RULE`).
+
+States are **named, not numbered**, in every sentence a person reads: "from Karnataka to
+Maharashtra", not "from state 29 to state 27".
 
 ## Part A and Part B
 
@@ -158,11 +181,11 @@ eight-hour extension window. No production credential is needed to run or test a
 
 ## Assumptions recorded
 
-1. **The state figures and dates are transcribed from the state orders named against each entry.**
-   They are the values this product ships with, not values it discovered. Before a business in a
-   given state relies on it, that entry should be checked against the state's current order — every
-   row carries its `sourceRef` so the check is a lookup rather than an investigation, and a change
-   is a change to the table rather than to any code.
+1. **The state figures and dates are transcribed, not discovered.** They are the values this
+   product ships with. Before a business in a given state relies on one, the row should be checked
+   against that state's current order; every row carries a `sourceRef` and a `sourceConfirmed` flag
+   so the check is a lookup rather than an investigation, and a change is a change to the table
+   rather than to any code.
 2. **Distance is supplied, not computed.** The portal can work it out from pin codes when it is
    left at zero; this product does not compute road distance, and a blank one is left blank rather
    than guessed. Validity days are only shown once a distance is known.
@@ -172,10 +195,14 @@ eight-hour extension window. No production credential is needed to run or test a
 
 ## Known limitations
 
-1. **Only the union of state rules we hold is modelled.** States not in `INTRA_STATE_RULES` get the
-   national limit with a note saying that is what happened.
-2. **Some states restrict their intra-state limit to specified goods.** That refinement is not
-   modelled; those states currently carry a plain threshold and their source reference.
+1. **26 of the 39 rows do not carry their notification number.** The figure and the date are there;
+   the citation is not, and each such row says so in its own source line. Confirm with the state
+   before a business there relies on it.
+2. **The notified-goods lists themselves are not held.** Madhya Pradesh, Chhattisgarh, Goa and
+   Jharkhand ask for a bill only for goods on their own lists. The decision applies the money limit
+   and attaches the caveat in plain words, which errs towards raising a permit that was not needed
+   — harmless, since an unneeded e-way bill simply expires — rather than towards moving goods
+   without one.
 3. **No automatic e-way bill from an IRN.** #26 stores the number when the IRP returns one
    alongside an e-invoice; joining the two records is not done yet.
 4. **Distance-based expiry does not know about journey type changes.** Switching from road to ship

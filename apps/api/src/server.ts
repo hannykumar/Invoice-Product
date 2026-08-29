@@ -50,6 +50,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/einvoices/cancel') return json(200, await app.cancelEInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/einvoices/offline') return json(200, await app.eInvoiceOfflineJson(actor, body));
     // Issue #27 — do these goods need an e-way bill, and its life with the portal.
+    if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
     if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
     if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/generate') return json(200, await app.generateEwayBill(actor, body));
