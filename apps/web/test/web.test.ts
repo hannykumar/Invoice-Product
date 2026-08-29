@@ -45,6 +45,8 @@ test("sale, purchase and payment are semantic, labelled, recoverable draft flows
   assert.match(script, /authorization: `Bearer \$\{state\.sessionId\}`/);
   assert.match(script, /\/api\/auth\/login/);
   assert.match(script, /karobar\.session/);
+  assert.match(script, /Physical balance in \$\{data\.company\.location\}/);
+  assert.match(script, /copy\[state\.locale\]\.demoTitle/);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

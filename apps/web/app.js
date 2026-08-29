@@ -164,7 +164,7 @@ function renderDashboard(data) {
   document.querySelector("#customer-summary").textContent = `${data.customer.documents.length} open customer document${data.customer.documents.length === 1 ? "" : "s"}`;
   document.querySelector("#supplier-summary").textContent = `${data.supplier.documents.length} posted supplier bill${data.supplier.documents.length === 1 ? "" : "s"}`;
   document.querySelector("#stock-title").textContent = `${data.stock.name}: ${data.stock.quantity} ${data.stock.unit}`;
-  document.querySelector("#stock-detail").textContent = `Physical balance in ${dashboard.company.location}`;
+  document.querySelector("#stock-detail").textContent = `Physical balance in ${data.company.location}`;
   document.querySelector("#supplier-title").textContent = `${data.supplier.name}: ${money(data.supplier.outstanding)} due`;
   document.querySelector("#supplier-detail").textContent = `${data.supplier.documents.length} open supplier document${data.supplier.documents.length === 1 ? "" : "s"}`;
 
@@ -197,6 +197,8 @@ async function loadDashboard() {
   try {
     renderDashboard(await api("/api/dashboard"));
     banner.classList.remove("failed");
+    banner.querySelector("strong").textContent = copy[state.locale].demoTitle;
+    banner.querySelector("span span").textContent = ` ${copy[state.locale].demoBody}`;
   } catch (error) {
     banner.classList.add("failed");
     banner.querySelector("strong").textContent = error.status === 401 ? "Sign in required." : "Nothing was saved.";
