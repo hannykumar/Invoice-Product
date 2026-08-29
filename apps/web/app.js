@@ -6,7 +6,7 @@ const copy = {
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
     recentActivity: "Recent activity", recentBody: "The latest work in this demo company", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
-    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", boxes: "boxes", rate: "Rate per box", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items", gstEstimate: "GST estimate", amountCustomerPays: "Customer pays", taxSafety: "This preview uses a demo GST rate. The final product will use the approved tax rule for the item and sale date.", reviewSale: "Review sale", discardDraft: "Discard draft",
+    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", boxes: "boxes", rate: "Rate per box", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", supplierState: "Where the supplier is", stateOther: "Another state", stateSame: "Same state as your godown", supplierStateHelp: "This decides whether the bill carries IGST, or CGST and SGST.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "If you choose later, the payment remains clearly marked as not matched to a bill.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     workspace: "Workspace", activityTitle: "All activity", activityHelp: "Every completed action will appear here with its status and time.", demoHistory: "This preview has sample activity", demoHistoryBody: "Connect the application services to show the company's full history. You can still test the draft flows now.", createFirstSale: "Create a sale",
@@ -54,6 +54,12 @@ const copy = {
     reportsTitle: "Reports",
     reportsHelp: "Every figure below is computed live from this company's ledger, sales, stock and receivables. Nothing is typed in.",
     reportsLoading: "Loading reports from the live company…",
+    signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Your session chooses the company and the work you are allowed to do.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Synthetic local credentials are filled in for this development workspace.",
+    salesFromModule: "Issued from the sales module", openSalesInvoices: "From open sales invoices", postedSupplierBills: "From posted supplier bills", calculatedLive: "Calculated from live company state", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Reading the inventory module", loadingSupplier: "Loading supplier balance…", readingReceivables: "Reading the receivables module",
+    saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
+    liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
+    checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
+    saleChecked: "Sale checked", saleCheckedBody: "The checked sale comes to {amount}.", saleEffectInvoice: "A numbered invoice will be issued.", saleEffectBalance: "The customer balance will increase.", purchaseChecked: "Purchase checked", purchaseCheckedBody: "The checked supplier bill comes to {amount}.", purchaseEffectStock: "Stock will update from this purchase.", purchaseEffectBooks: "GST and the supplier balance will post together.", paymentChecked: "Payment checked", paymentCheckedBody: "A receipt of {amount} is ready to record.", paymentEffectBalance: "The customer balance will reduce when this is recorded.", saleRecorded: "Sale recorded", saleRecordedBody: "Invoice {number} was issued.", purchaseRecorded: "Purchase recorded", purchaseRecordedBody: "Stock, GST and the supplier balance were recorded together.", paymentRecorded: "Payment recorded", paymentRecordedBody: "The customer receipt was recorded once.", amountInvalid: "Enter a valid amount greater than zero.", referenceRequired: "Enter the supplier bill number.", rateRequired: "Enter a price and quantity.", permissionDenied: "You do not have permission to do this work.",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -63,7 +69,7 @@ const copy = {
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
     recentActivity: "Abhi ka kaam", recentBody: "Demo company mein hua naya kaam", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
-    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", boxes: "boxes", rate: "Har box ka daam", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "Saman", gstEstimate: "GST ka andaaza", amountCustomerPays: "Customer dega", taxSafety: "Yeh preview demo GST rate dikhata hai. Final product saman aur tareekh ke approved tax rule ka use karega.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
+    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", boxes: "boxes", rate: "Har box ka daam", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", supplierState: "Supplier kahan hai", stateOther: "Doosre rajya mein", stateSame: "Aapke godown wale rajya mein", supplierStateHelp: "Isse tay hota hai ki bill par IGST lagega ya CGST aur SGST.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Baad mein chunne par payment saaf taur par bina bill ke dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     workspace: "Kaam ki jagah", activityTitle: "Saara kaam", activityHelp: "Har poora kaam uske samay aur sthiti ke saath yahan dikhega.", demoHistory: "Is preview mein sample kaam hai", demoHistoryBody: "Company ka poora itihaas dikhane ke liye services jodni hongi. Abhi draft flows check kar sakte hain.", createFirstSale: "Bikri banayen",
@@ -111,6 +117,12 @@ const copy = {
     reportsTitle: "Report",
     reportsHelp: "Neeche ka har aankda is company ke ledger, bikri, stock aur lena-dena se abhi nikala gaya hai. Kuch bhi likh kar nahin daala gaya.",
     reportsLoading: "Live company se report aa rahi hai…",
+    signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Aapka session company aur aapke kaam ki permission chunta hai.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Is development workspace ke synthetic local credentials pehle se bhare hain.",
+    salesFromModule: "Sales module se jaari", openSalesInvoices: "Khule sales invoices se", postedSupplierBills: "Darj supplier bills se", calculatedLive: "Live company state se hisaab", loadingActivity: "Darj kaam load ho raha hai…", loadingStock: "Stock load ho raha hai…", readingInventory: "Inventory module padh rahe hain", loadingSupplier: "Supplier balance load ho raha hai…", readingReceivables: "Receivables module padh rahe hain",
+    saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
+    liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
+    checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
+    saleChecked: "Bikri jaanch li", saleCheckedBody: "Jaanchi hui bikri {amount} ki hai.", saleEffectInvoice: "Number wali invoice jaari hogi.", saleEffectBalance: "Customer ka baki paisa badhega.", purchaseChecked: "Kharid jaanch li", purchaseCheckedBody: "Jaancha hua supplier bill {amount} ka hai.", purchaseEffectStock: "Is kharid se stock update hoga.", purchaseEffectBooks: "GST aur supplier balance ek saath darj honge.", paymentChecked: "Payment jaanch li", paymentCheckedBody: "{amount} ki receipt darj karne ke liye taiyar hai.", paymentEffectBalance: "Darj hone par customer ka baki paisa kam hoga.", saleRecorded: "Bikri darj hui", saleRecordedBody: "Invoice {number} jaari hui.", purchaseRecorded: "Kharid darj hui", purchaseRecordedBody: "Stock, GST aur supplier balance ek saath darj hue.", paymentRecorded: "Payment darj hua", paymentRecordedBody: "Customer receipt ek baar darj hui.", amountInvalid: "Zero se badi sahi rakam bharen.", referenceRequired: "Supplier bill number bharen.", rateRequired: "Daam aur matra bharen.", permissionDenied: "Aapko yeh kaam karne ki permission nahin hai.",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -124,7 +136,7 @@ const storage = (() => {
   } catch { return undefined; }
 })();
 
-const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null, sessionId: storage?.getItem("karobar.session") ?? null };
+const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null, sessionId: storage?.getItem("karobar.session") ?? null, draftStatuses: {} };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const REPORT_TEXT = {
@@ -186,6 +198,7 @@ const REPORT_TEXT = {
 /** Text the API returns in both languages. The reader's choice decides, with English as the fallback. */
 const t = (value) => (value === null || typeof value !== "object" ? (value ?? "") : (value[state.locale] ?? value["en-IN"] ?? ""));
 
+const text = (key, values = {}) => Object.entries(values).reduce((message, [name, value]) => message.replaceAll(`{${name}}`, String(value)), copy[state.locale][key]);
 const money = (amount) => new Intl.NumberFormat(state.locale, { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(amount) || 0);
 const dateInput = () => {
   const now = new Date();
@@ -204,11 +217,18 @@ function translate() {
     if (value === undefined) throw new Error(`Missing ${state.locale} translation: ${element.dataset.i18nAria}`);
     element.setAttribute("aria-label", value);
   });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+    const value = copy[state.locale][element.dataset.i18nPlaceholder];
+    if (value === undefined) throw new Error(`Missing ${state.locale} translation: ${element.dataset.i18nPlaceholder}`);
+    element.setAttribute("placeholder", value);
+  });
   document.querySelectorAll("[data-money]").forEach((element) => { element.textContent = money(element.dataset.money); });
   const today = document.querySelector('[data-i18n="today"]');
   if (today) today.textContent = `${copy[state.locale].today} · ${new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric" }).format(new Date())}`;
   document.querySelector("#locale").value = state.locale;
+  document.querySelectorAll(".draft-form").forEach((form) => setDraftStatus(form, state.draftStatuses[form.dataset.draft] ?? "savedDevice"));
   updateCalculations();
+  if (state.dashboard) renderDashboard(state.dashboard);
 }
 
 function openView(view) {
@@ -231,6 +251,12 @@ function draftData(form) {
   return Object.fromEntries([...new FormData(form).entries()].filter(([, value]) => typeof value === "string"));
 }
 
+function setDraftStatus(form, key) {
+  state.draftStatuses[form.dataset.draft] = key;
+  const status = document.querySelector(`#${form.dataset.draft}-save-state`);
+  if (status) status.textContent = copy[state.locale][key];
+}
+
 function restoreDraft(form) {
   const saved = storage?.getItem(`karobar.draft.${form.dataset.draft}`);
   if (!saved) return;
@@ -240,13 +266,13 @@ function restoreDraft(form) {
       const field = form.elements.namedItem(name);
       if (field && "value" in field && typeof value === "string") field.value = value;
     });
+    setDraftStatus(form, "draftRestored");
   } catch { storage?.removeItem(`karobar.draft.${form.dataset.draft}`); }
 }
 
 function saveDraft(form) {
   storage?.setItem(`karobar.draft.${form.dataset.draft}`, JSON.stringify(draftData(form)));
-  const status = document.querySelector(`#${form.dataset.draft}-save-state`);
-  if (status) status.textContent = copy[state.locale].savedDevice;
+  setDraftStatus(form, "savedDevice");
 }
 
 async function api(path, options = {}) {
@@ -256,7 +282,7 @@ async function api(path, options = {}) {
   });
   const payload = await response.json();
   if (!response.ok) {
-    const error = new Error(payload.message || "The application could not complete that request.");
+    const error = new Error(payload.message || copy[state.locale].requestFailed);
     error.status = response.status;
     error.code = payload.code;
     if (response.status === 401 && path !== "/api/auth/login") {
@@ -285,7 +311,7 @@ function activityRow(item) {
   const title = document.createElement("strong");
   title.textContent = item.title;
   const detail = document.createElement("small");
-  detail.textContent = item.kind === "purchase" ? "Purchase and stock posted together" : item.kind === "payment" ? "Customer receipt posted to the ledger" : "Numbered sales invoice issued";
+  detail.textContent = item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale].paymentActivity : copy[state.locale].saleActivity;
   description.append(title, detail);
   const value = document.createElement("div");
   value.className = "activity-value";
@@ -293,7 +319,7 @@ function activityRow(item) {
   amount.textContent = money(item.amount);
   const status = document.createElement("span");
   status.className = "pill done";
-  status.textContent = item.status;
+  status.textContent = item.status === "Recorded" ? copy[state.locale].recorded : item.status;
   value.append(amount, status);
   row.append(icon, description, value);
   return row;
@@ -304,17 +330,17 @@ function renderDashboard(data) {
   document.querySelector("#company-name").textContent = data.company.name;
   document.querySelector("#company-location").textContent = data.company.location;
   document.querySelector("#company-avatar").textContent = data.company.name.split(/\s+/).map((word) => word[0]).slice(0, 2).join("");
-  document.querySelector("#welcome-body").textContent = `Live company state from ${data.company.name}.`;
+  document.querySelector("#welcome-body").textContent = text("liveCompany", { company: data.company.name });
   document.querySelector("#metric-sales").textContent = money(data.metrics.salesToday);
   document.querySelector("#metric-receivable").textContent = money(data.metrics.customersOwe);
   document.querySelector("#metric-purchases").textContent = money(data.metrics.purchasesMonth);
   document.querySelector("#metric-attention").textContent = String(data.metrics.needsAttention);
-  document.querySelector("#customer-summary").textContent = `${data.customer.documents.length} open customer document${data.customer.documents.length === 1 ? "" : "s"}`;
-  document.querySelector("#supplier-summary").textContent = `${data.supplier.documents.length} posted supplier bill${data.supplier.documents.length === 1 ? "" : "s"}`;
+  document.querySelector("#customer-summary").textContent = text(data.customer.documents.length === 1 ? "customerDocumentsOne" : "customerDocumentsMany", { count: data.customer.documents.length });
+  document.querySelector("#supplier-summary").textContent = text(data.supplier.documents.length === 1 ? "supplierBillsOne" : "supplierBillsMany", { count: data.supplier.documents.length });
   document.querySelector("#stock-title").textContent = `${data.stock.name}: ${data.stock.quantity} ${data.stock.unit}`;
-  document.querySelector("#stock-detail").textContent = `Physical balance in ${data.company.location}`;
-  document.querySelector("#supplier-title").textContent = `${data.supplier.name}: ${money(data.supplier.outstanding)} due`;
-  document.querySelector("#supplier-detail").textContent = `${data.supplier.documents.length} open supplier document${data.supplier.documents.length === 1 ? "" : "s"}`;
+  document.querySelector("#stock-detail").textContent = text("physicalBalance", { location: data.company.location });
+  document.querySelector("#supplier-title").textContent = text("supplierDue", { supplier: data.supplier.name, amount: money(data.supplier.outstanding) });
+  document.querySelector("#supplier-detail").textContent = text(data.supplier.documents.length === 1 ? "supplierDocumentsOne" : "supplierDocumentsMany", { count: data.supplier.documents.length });
 
   for (const selector of ["#recent-activity", "#all-activity"]) {
     const list = document.querySelector(selector);
@@ -323,7 +349,7 @@ function renderDashboard(data) {
     if (items.length === 0) {
       const empty = document.createElement("p");
       empty.className = "loading-copy";
-      empty.textContent = "No recorded activity yet.";
+      empty.textContent = copy[state.locale].noActivity;
       list.append(empty);
     } else items.forEach((item) => list.append(activityRow(item)));
   }
@@ -349,8 +375,8 @@ async function loadDashboard() {
     banner.querySelector("span span").textContent = ` ${copy[state.locale].demoBody}`;
   } catch (error) {
     banner.classList.add("failed");
-    banner.querySelector("strong").textContent = error.status === 401 ? "Sign in required." : "Nothing was saved.";
-    banner.querySelector("span span").textContent = ` ${error.message}`;
+    banner.querySelector("strong").textContent = error.status === 401 ? copy[state.locale].signInRequired : copy[state.locale].nothingSaved;
+    banner.querySelector("span span").textContent = ` ${error.status === 401 ? copy[state.locale].signInAgain : copy[state.locale].requestFailed}`;
   }
 }
 
@@ -631,6 +657,29 @@ async function createSetup() {
   }
 }
 
+function localizedError(error) {
+  if (state.locale === "en-IN") return error.message || copy[state.locale].requestFailed;
+  const key = {
+    API_AMOUNT_INVALID: "amountInvalid",
+    API_REFERENCE_REQUIRED: "referenceRequired",
+    API_RATE_REQUIRED: "rateRequired",
+    PERMISSION_DENIED: "permissionDenied",
+  }[error.code];
+  return key ? copy[state.locale][key] : copy[state.locale].requestFailed;
+}
+
+function localizeResult(result, flow, mode) {
+  if (state.locale === "en-IN") return result;
+  if (mode === "preview") {
+    if (flow === "sale") return { ...result, title: copy[state.locale].saleChecked, message: text("saleCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].saleEffectInvoice, copy[state.locale].saleEffectBalance] };
+    if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseChecked, message: text("purchaseCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].purchaseEffectStock, copy[state.locale].purchaseEffectBooks] };
+    return { ...result, title: copy[state.locale].paymentChecked, message: text("paymentCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].paymentEffectBalance] };
+  }
+  if (flow === "sale") return { ...result, title: copy[state.locale].saleRecorded, message: text("saleRecordedBody", { number: result.invoice?.number ?? "—" }) };
+  if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseRecorded, message: copy[state.locale].purchaseRecordedBody };
+  return { ...result, title: copy[state.locale].paymentRecorded, message: copy[state.locale].paymentRecordedBody };
+}
+
 function showDialog(result, mode) {
   const dialog = document.querySelector("#review-dialog");
   document.querySelector("#review-title").textContent = result.title;
@@ -643,12 +692,24 @@ function showDialog(result, mode) {
   }));
   const cancel = document.querySelector("#review-cancel");
   const confirm = document.querySelector("#review-confirm");
-  cancel.textContent = mode === "preview" ? copy[state.locale].keepEditing : "Close";
+  cancel.textContent = mode === "preview" ? copy[state.locale].keepEditing : copy[state.locale].close;
+  cancel.disabled = mode === "loading";
   confirm.hidden = mode !== "preview";
   confirm.disabled = false;
-  confirm.textContent = "Record once";
+  confirm.textContent = copy[state.locale].recordOnce;
   dialog.dataset.mode = mode;
+  dialog.setAttribute("aria-busy", String(mode === "loading"));
   if (!dialog.open) dialog.showModal();
+}
+
+function setFormBusy(form, busy) {
+  form.setAttribute("aria-busy", String(busy));
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) {
+    submit.disabled = busy;
+    if (busy) submit.textContent = copy[state.locale].working;
+    else submit.textContent = copy[state.locale][`review${form.dataset.draft[0].toUpperCase()}${form.dataset.draft.slice(1)}`];
+  }
 }
 
 function updateCalculations() {
@@ -656,10 +717,9 @@ function updateCalculations() {
   const quantity = Number(sale.elements.namedItem("quantity").value) || 0;
   const rate = Number(sale.elements.namedItem("rate").value) || 0;
   const subtotal = quantity * rate;
-  const tax = Math.round(subtotal * .05 * 100) / 100;
   sale.querySelector('[data-calculated="subtotal"]').textContent = money(subtotal);
-  sale.querySelector('[data-calculated="tax"]').textContent = money(tax);
-  sale.querySelector('[data-calculated="total"]').textContent = money(subtotal + tax);
+  sale.querySelector('[data-calculated="tax"]').textContent = "—";
+  sale.querySelector('[data-calculated="total"]').textContent = "—";
   const payment = Number(document.querySelector('[data-draft="payment"] [name="amount"]').value) || 0;
   document.querySelector("[data-payment-total]").textContent = money(payment);
 }
@@ -675,18 +735,21 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     const input = draftData(form);
     state.pendingForm = form;
     state.pendingInput = input;
-    showDialog({ title: "Checking this entry…", message: "The application services are validating the draft." }, "loading");
+    setFormBusy(form, true);
+    showDialog({ title: copy[state.locale].checking, message: copy[state.locale].checkingBody }, "loading");
     try {
       const result = await api(`/api/${form.dataset.draft}s/preview`, { method: "POST", body: JSON.stringify(input) });
-      showDialog(result, "preview");
+      showDialog(localizeResult(result, form.dataset.draft, "preview"), "preview");
     } catch (error) {
-      showDialog({ title: "Nothing was saved", message: error.message }, "failed");
-    }
+      showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+    } finally { setFormBusy(form, false); }
   });
   form.querySelector(".clear-draft").addEventListener("click", () => {
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
     form.reset();
-    form.querySelector('input[type="date"]')?.setAttribute("value", dateInput());
+    const date = form.querySelector('input[type="date"]');
+    if (date) date.value = dateInput();
+    setDraftStatus(form, "draftCleared");
     updateCalculations();
   });
 });
@@ -705,14 +768,18 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
   event.preventDefault();
   const form = event.currentTarget;
   const error = document.querySelector("#login-error");
+  const button = form.querySelector('button[type="submit"]');
   error.textContent = "";
+  button.disabled = true;
+  button.textContent = copy[state.locale].working;
   try {
     const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
     state.sessionId = result.sessionId;
     storage?.setItem("karobar.session", state.sessionId);
     document.querySelector("#login-dialog").close("signed-in");
     await loadDashboard();
-  } catch (failure) { error.textContent = failure.message; }
+  } catch { error.textContent = copy[state.locale].loginInvalid; }
+  finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
 document.querySelector("#sign-out").addEventListener("click", () => {
   state.sessionId = null;
@@ -724,14 +791,14 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
   if (!state.pendingForm || !state.pendingInput) return;
   const button = event.currentTarget;
   button.disabled = true;
-  button.textContent = "Recording…";
+  button.textContent = copy[state.locale].recording;
   try {
     const result = await api(`/api/${state.pendingForm.dataset.draft}s/record`, { method: "POST", body: JSON.stringify(state.pendingInput) });
     storage?.removeItem(`karobar.draft.${state.pendingForm.dataset.draft}`);
-    showDialog(result, "recorded");
+    showDialog(localizeResult(result, state.pendingForm.dataset.draft, "recorded"), "recorded");
     await loadDashboard();
   } catch (error) {
-    showDialog({ title: "Nothing was saved", message: error.message }, "failed");
+    showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
   }
 });
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));

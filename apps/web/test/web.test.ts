@@ -16,7 +16,7 @@ async function localeCopy(): Promise<Record<string, Record<string, string>>> {
 
 test("every visible and screen-reader translation key exists in English and Hindi", async () => {
   const [html, locales] = await Promise.all([read("index.html"), localeCopy()]);
-  const keys = [...html.matchAll(/data-i18n(?:-aria)?="([^"]+)"/g)].map((match) => match[1]!);
+  const keys = [...html.matchAll(/data-i18n(?:-aria|-placeholder)?="([^"]+)"/g)].map((match) => match[1]!);
   assert.ok(keys.length > 70);
   assert.deepEqual(Object.keys(locales).sort(), ["en-IN", "hi-IN"]);
   for (const key of keys) {
@@ -24,6 +24,15 @@ test("every visible and screen-reader translation key exists in English and Hind
     assert.ok(locales["hi-IN"]?.[key], `Missing Hindi translation: ${key}`);
   }
   assert.deepEqual(Object.keys(locales["en-IN"]!).sort(), Object.keys(locales["hi-IN"]!).sort());
+});
+
+test("critical runtime states have distinct English and Hindi wording", async () => {
+  const locales = await localeCopy();
+  for (const key of ["loginTitle", "signOut", "saleChecked", "purchaseChecked", "paymentChecked", "draftRestored", "nothingSaved", "physicalBalance", "recordOnce"]) {
+    assert.notEqual(locales["en-IN"]?.[key], locales["hi-IN"]?.[key], `${key} must not fall back to English`);
+  }
+  assert.match(locales["en-IN"]!.physicalBalance!, /\{location\}/);
+  assert.match(locales["hi-IN"]!.saleCheckedBody!, /\{amount\}/);
 });
 
 test("sale, purchase and payment are semantic, labelled, recoverable draft flows", async () => {
@@ -45,8 +54,22 @@ test("sale, purchase and payment are semantic, labelled, recoverable draft flows
   assert.match(script, /authorization: `Bearer \$\{state\.sessionId\}`/);
   assert.match(script, /\/api\/auth\/login/);
   assert.match(script, /karobar\.session/);
-  assert.match(script, /Physical balance in \$\{data\.company\.location\}/);
+  assert.match(script, /text\("physicalBalance", \{ location: data\.company\.location \}\)/);
   assert.match(script, /copy\[state\.locale\]\.demoTitle/);
+  assert.match(script, /setFormBusy\(form, true\)/);
+  assert.match(script, /draftRestored/);
+  assert.match(script, /customerDocumentsOne/);
+  assert.match(script, /copy\[state\.locale\]\.loginInvalid/);
+  assert.doesNotMatch(script, /subtotal \* \.05/);
+  assert.match(script, /data-calculated="tax"\]\'\)\.textContent = "—"/);
+  assert.match(script, /localizeResult\(result, form\.dataset\.draft, "preview"\)/);
+  assert.match(script, /form\.setAttribute\("aria-busy", String\(busy\)\)/);
+  assert.match(script, /cancel\.disabled = mode === "loading"/);
+  assert.match(script, /dialog\.setAttribute\("aria-busy", String\(mode === "loading"\)\)/);
+  assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
+  assert.match(html, /aria-describedby="login-help"/);
+  assert.match(html, /aria-describedby="review-body"/);
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 7);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -56,6 +79,10 @@ test("responsive CSS includes phone navigation, reduced motion and visible focus
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(css, /:focus-visible/);
   assert.doesNotMatch(css, /outline:\s*none/);
+  assert.doesNotMatch(css, /\.save-state \{ display: none/);
+  assert.match(css, /\.topbar-actions \.user-avatar \{ display: none/);
+  assert.match(css, /\.bottom-nav \{[^}]*grid-auto-flow: column; grid-auto-columns: 1fr/);
+  assert.match(css, /\.bottom-nav button small \{[^}]*text-overflow: ellipsis/);
 });
 
 test("the local web preview serves the application shell", async () => {
