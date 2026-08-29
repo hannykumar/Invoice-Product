@@ -2,7 +2,7 @@ const copy = {
   "en-IN": {
     skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Payment", navActivity: "Activity", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft protection is on", draftProtection: "Your unfinished work stays on this device.", companyLocation: "Delhi · Main shop", language: "Language",
-    demoTitle: "Development preview.", demoBody: "Nothing on this screen changes your books. Drafts are stored only on this device.", today: "Today", welcome: "Good to see you, Hanny", welcomeBody: "Here is what needs your attention at Sharma Fruit Traders.", newSale: "New sale",
+    demoTitle: "Connected demo company.", demoBody: "Preview checks are read-only. Recording uses the real sales, purchasing, inventory, ledger and receivables modules.", today: "Today", welcome: "Good to see you, Hanny", welcomeBody: "Live company state from Sampoorna Traders.", newSale: "New sale",
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
     recentActivity: "Recent activity", recentBody: "The latest work in this demo company", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
@@ -15,7 +15,7 @@ const copy = {
   "hi-IN": {
     skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Payment", navActivity: "Kaam", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft surakshit hai", draftProtection: "Adhura kaam isi device par rahega.", companyLocation: "Delhi · Mukhya dukaan", language: "Bhasha",
-    demoTitle: "Development preview.", demoBody: "Is screen se aapki books nahi badalti. Draft sirf isi device par save hain.", today: "Aaj", welcome: "Namaste Hanny", welcomeBody: "Sharma Fruit Traders mein aaj kya dekhna hai.", newSale: "Nayi bikri",
+    demoTitle: "Connected demo company.", demoBody: "Preview sirf jaanch karta hai. Record karne par asli sales, purchasing, inventory, ledger aur receivables modules chalte hain.", today: "Aaj", welcome: "Namaste Hanny", welcomeBody: "Sampoorna Traders ki live company state.", newSale: "Nayi bikri",
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
     recentActivity: "Abhi ka kaam", recentBody: "Demo company mein hua naya kaam", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
@@ -36,7 +36,7 @@ const storage = (() => {
   } catch { return undefined; }
 })();
 
-const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard" };
+const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const money = (amount) => new Intl.NumberFormat(state.locale, { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(amount) || 0);
@@ -101,6 +101,114 @@ function saveDraft(form) {
   if (status) status.textContent = copy[state.locale].savedDevice;
 }
 
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.message || "The application could not complete that request.");
+  return payload;
+}
+
+function activityRow(item) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = `activity-icon ${item.kind === "purchase" ? "blue" : item.kind === "payment" ? "amber" : "green"}`;
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = item.kind === "purchase" ? "↓" : item.kind === "payment" ? "₹" : "✓";
+  const description = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = item.title;
+  const detail = document.createElement("small");
+  detail.textContent = item.kind === "purchase" ? "Purchase and stock posted together" : item.kind === "payment" ? "Customer receipt posted to the ledger" : "Numbered sales invoice issued";
+  description.append(title, detail);
+  const value = document.createElement("div");
+  value.className = "activity-value";
+  const amount = document.createElement("strong");
+  amount.textContent = money(item.amount);
+  const status = document.createElement("span");
+  status.className = "pill done";
+  status.textContent = item.status;
+  value.append(amount, status);
+  row.append(icon, description, value);
+  return row;
+}
+
+function renderDashboard(data) {
+  state.dashboard = data;
+  document.querySelector("#company-name").textContent = data.company.name;
+  document.querySelector("#company-location").textContent = data.company.location;
+  document.querySelector("#company-avatar").textContent = data.company.name.split(/\s+/).map((word) => word[0]).slice(0, 2).join("");
+  document.querySelector("#welcome-body").textContent = `Live company state from ${data.company.name}.`;
+  document.querySelector("#metric-sales").textContent = money(data.metrics.salesToday);
+  document.querySelector("#metric-receivable").textContent = money(data.metrics.customersOwe);
+  document.querySelector("#metric-purchases").textContent = money(data.metrics.purchasesMonth);
+  document.querySelector("#metric-attention").textContent = String(data.metrics.needsAttention);
+  document.querySelector("#customer-summary").textContent = `${data.customer.documents.length} open customer document${data.customer.documents.length === 1 ? "" : "s"}`;
+  document.querySelector("#supplier-summary").textContent = `${data.supplier.documents.length} posted supplier bill${data.supplier.documents.length === 1 ? "" : "s"}`;
+  document.querySelector("#stock-title").textContent = `${data.stock.name}: ${data.stock.quantity} ${data.stock.unit}`;
+  document.querySelector("#stock-detail").textContent = "Physical balance in Peenya godown";
+  document.querySelector("#supplier-title").textContent = `${data.supplier.name}: ${money(data.supplier.outstanding)} due`;
+  document.querySelector("#supplier-detail").textContent = `${data.supplier.documents.length} open supplier document${data.supplier.documents.length === 1 ? "" : "s"}`;
+
+  for (const selector of ["#recent-activity", "#all-activity"]) {
+    const list = document.querySelector(selector);
+    list.replaceChildren();
+    const items = selector === "#recent-activity" ? data.activity.slice(0, 4) : data.activity;
+    if (items.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "loading-copy";
+      empty.textContent = "No recorded activity yet.";
+      list.append(empty);
+    } else items.forEach((item) => list.append(activityRow(item)));
+  }
+
+  const invoiceSelect = document.querySelector("#payment-invoice");
+  const selected = invoiceSelect.value;
+  invoiceSelect.querySelectorAll("option:not(:first-child)").forEach((option) => option.remove());
+  data.customer.documents.forEach((openDocument) => {
+    const option = document.createElement("option");
+    option.value = openDocument.id;
+    option.textContent = `${openDocument.number} · ${money(openDocument.outstanding)}`;
+    invoiceSelect.append(option);
+  });
+  if ([...invoiceSelect.options].some((option) => option.value === selected)) invoiceSelect.value = selected;
+}
+
+async function loadDashboard() {
+  const banner = document.querySelector("#connection-banner");
+  try {
+    renderDashboard(await api("/api/dashboard"));
+    banner.classList.remove("failed");
+  } catch (error) {
+    banner.classList.add("failed");
+    banner.querySelector("strong").textContent = "Nothing was saved.";
+    banner.querySelector("span span").textContent = ` The demo services could not be reached: ${error.message}`;
+  }
+}
+
+function showDialog(result, mode) {
+  const dialog = document.querySelector("#review-dialog");
+  document.querySelector("#review-title").textContent = result.title;
+  document.querySelector("#review-body").textContent = result.message;
+  document.querySelector("#review-icon").textContent = mode === "failed" ? "!" : mode === "recorded" ? "✓" : "→";
+  document.querySelector("#review-effects").replaceChildren(...(result.effects || []).map((effect) => {
+    const item = document.createElement("li");
+    item.textContent = effect;
+    return item;
+  }));
+  const cancel = document.querySelector("#review-cancel");
+  const confirm = document.querySelector("#review-confirm");
+  cancel.textContent = mode === "preview" ? copy[state.locale].keepEditing : "Close";
+  confirm.hidden = mode !== "preview";
+  confirm.disabled = false;
+  confirm.textContent = "Record once";
+  dialog.dataset.mode = mode;
+  if (!dialog.open) dialog.showModal();
+}
+
 function updateCalculations() {
   const sale = document.querySelector('[data-draft="sale"]');
   const quantity = Number(sale.elements.namedItem("quantity").value) || 0;
@@ -119,10 +227,19 @@ document.querySelectorAll(".draft-form").forEach((form) => {
   restoreDraft(form);
   form.addEventListener("input", () => { saveDraft(form); updateCalculations(); });
   form.addEventListener("change", () => saveDraft(form));
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     saveDraft(form);
-    document.querySelector("#review-dialog").showModal();
+    const input = draftData(form);
+    state.pendingForm = form;
+    state.pendingInput = input;
+    showDialog({ title: "Checking this entry…", message: "The application services are validating the draft." }, "loading");
+    try {
+      const result = await api(`/api/${form.dataset.draft}s/preview`, { method: "POST", body: JSON.stringify(input) });
+      showDialog(result, "preview");
+    } catch (error) {
+      showDialog({ title: "Nothing was saved", message: error.message }, "failed");
+    }
   });
   form.querySelector(".clear-draft").addEventListener("click", () => {
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
@@ -135,8 +252,23 @@ document.querySelectorAll("[data-view]").forEach((button) => button.addEventList
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); });
 document.querySelector("#menu-button").addEventListener("click", (event) => { const open = !document.body.classList.contains("menu-open"); document.body.classList.toggle("menu-open", open); event.currentTarget.setAttribute("aria-expanded", String(open)); });
-document.querySelectorAll("#review-dialog button").forEach((button) => button.addEventListener("click", () => document.querySelector("#review-dialog").close(button.value)));
+document.querySelector("#review-cancel").addEventListener("click", () => document.querySelector("#review-dialog").close("cancel"));
+document.querySelector("#review-confirm").addEventListener("click", async (event) => {
+  if (!state.pendingForm || !state.pendingInput) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = "Recording…";
+  try {
+    const result = await api(`/api/${state.pendingForm.dataset.draft}s/record`, { method: "POST", body: JSON.stringify(state.pendingInput) });
+    storage?.removeItem(`karobar.draft.${state.pendingForm.dataset.draft}`);
+    showDialog(result, "recorded");
+    await loadDashboard();
+  } catch (error) {
+    showDialog({ title: "Nothing was saved", message: error.message }, "failed");
+  }
+});
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
+loadDashboard();

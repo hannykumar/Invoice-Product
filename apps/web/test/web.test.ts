@@ -37,6 +37,10 @@ test("sale, purchase and payment are semantic, labelled, recoverable draft flows
   assert.match(html, /<dialog[^>]+aria-labelledby=/);
   assert.match(script, /Intl\.NumberFormat\(state\.locale/);
   assert.match(script, /Intl\.DateTimeFormat\(state\.locale/);
+  assert.match(script, /\/api\/\$\{form\.dataset\.draft\}s\/preview/);
+  assert.match(script, /\/api\/\$\{state\.pendingForm\.dataset\.draft\}s\/record/);
+  assert.match(script, /Nothing was saved/);
+  assert.match(script, /Record once/);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
