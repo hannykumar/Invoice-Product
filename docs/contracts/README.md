@@ -25,9 +25,11 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
 | [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
 | [`bank-import`](./bank-import-v1.md) | 1.0.0 | GPT 2 (#21) | GPT 2 (#22, #38) | Published |
+| [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.0.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
 | [`master-data`](./master-data-v1.md) | 1.0.0 | GPT 3 (#5) | GPT 1, GPT 2, GPT 3 | Published |
 | [`purchase-intake`](./purchase-intake-v1.md) | 1.0.0 | GPT 3 (#15) | GPT 2, GPT 3 | Published |
 | [`purchase-validation`](./purchase-validation-v1.md) | 1.0.0 | GPT 3 (#16) | GPT 3 (#17, #18, #31), GPT 1 (#45) | Published |
+- [`purchase-posting-v1.md`](purchase-posting-v1.md): approved bill to ledger entry, stock receipts and supplier payable; atomicity, tax split, idempotency and reversal.
 
 ## Rules
 
