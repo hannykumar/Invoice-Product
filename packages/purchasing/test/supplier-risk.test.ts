@@ -686,3 +686,131 @@ test("warnings come back worst first, so the screen leads with what matters", ()
 test("the permissions this module needs are the ones it checks", () => {
   assert.deepEqual([...RISK_PERMISSIONS].sort(), ["supplier.risk.acknowledge", "supplier.risk.view"]);
 });
+
+// ------------------------------------------------ issue #99: two lights, red / amber / green
+
+const lightOf = (assessment: SupplierRiskAssessment, scope: "GOVERNMENT" | "OUR_RECORDS") =>
+  assessment.lights.find((light) => light.scope === scope)!;
+
+test("a cancelled GST number turns the government light red, and leaves our own light green", () => {
+  const assessment = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({ status: "CANCELLED", statusChangedOn: "2026-03-12" }) },
+    invoiceNumber: "DHW/1", invoiceDate: "2026-07-04",
+  }));
+
+  const government = lightOf(assessment, "GOVERNMENT");
+  assert.equal(government.colour, "RED");
+  assert.equal(government.headline, "Stop and check before you pay");
+  assert.match(government.detail, /cancelled on 12 March 2026/);
+  // The warning already names its source, so the light must not repeat it.
+  assert.equal(/GST department/g.test(government.detail), true);
+  assert.equal((government.detail.match(/The GST department's records/g) ?? []).length, 1);
+
+  // Nothing is wrong in our own books, and the second light says so rather than echoing the first.
+  const ours = lightOf(assessment, "OUR_RECORDS");
+  assert.equal(ours.colour, "GREEN");
+  assert.equal(ours.headline, "Looks fine");
+});
+
+test("a recent bank change turns our own light red, and leaves the government light green", () => {
+  const assessment = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({ status: "ACTIVE", legalName: GOOD_SUPPLIER.name }) },
+    history: cleanHistory({ bankDetailChanges: [{
+      bankAccountId: "bank-1", changedOn: "2026-08-20", recordedAt: "2026-08-20T10:00:00.000Z",
+      recordedBy: "ravi", previousAccountMasked: "****4411", currentAccountMasked: "****9087",
+    }] }),
+  }));
+
+  // This is the whole reason the owner asked for two lights: the government has no complaint,
+  // and it must not be made to look as though it does.
+  assert.equal(lightOf(assessment, "GOVERNMENT").colour, "GREEN");
+  const ours = lightOf(assessment, "OUR_RECORDS");
+  assert.equal(ours.colour, "RED");
+  assert.match(ours.detail, /\*\*\*\*4411 to \*\*\*\*9087/);
+});
+
+test("a supplier with nothing wrong shows two green lights and says 'Looks fine'", () => {
+  const assessment = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({ status: "ACTIVE", legalName: GOOD_SUPPLIER.name, registeredOn: "2019-08-14" }) },
+  }));
+  assert.equal(assessment.lights.length, 2);
+  for (const light of assessment.lights) {
+    assert.equal(light.colour, "GREEN");
+    assert.equal(light.headline, "Looks fine");
+  }
+  assert.match(lightOf(assessment, "GOVERNMENT").detail, /nothing wrong with this supplier's registration/);
+});
+
+test("when the GST department cannot be reached the light is grey, never green", () => {
+  const assessment = assessSupplierRisk(input({
+    gstin_lookup: { kind: "UNAVAILABLE", reason: "PROVIDER_OUTAGE", retryable: true, explanation: "Not responding." },
+  }));
+  const government = lightOf(assessment, "GOVERNMENT");
+  assert.equal(government.colour, "GREY", "'we could not check' must never look like 'we checked and it was fine'");
+  assert.equal(government.headline, "We could not check");
+  assert.match(government.detail, /could not be reached/);
+  // Our own books were still readable, so that light is honest and green.
+  assert.equal(lightOf(assessment, "OUR_RECORDS").colour, "GREEN");
+});
+
+test("a supplier with no GST number saved shows grey, with the reason", () => {
+  const assessment = assessSupplierRisk(input({ gstin: undefined }));
+  const government = lightOf(assessment, "GOVERNMENT");
+  assert.equal(government.colour, "GREY");
+  assert.match(government.detail, /No GST number is saved/);
+});
+
+test("unfiled returns are amber, not red — worth knowing, not a reason to stop", () => {
+  const assessment = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({
+      status: "ACTIVE", legalName: GOOD_SUPPLIER.name,
+      filings: [
+        { period: "06-2026", returnType: "GSTR3B", status: "NOT_FILED" },
+        { period: "07-2026", returnType: "GSTR3B", status: "NOT_FILED" },
+      ],
+    }) },
+  }));
+  const government = lightOf(assessment, "GOVERNMENT");
+  assert.equal(government.colour, "AMBER");
+  assert.equal(government.headline, "Worth a look");
+});
+
+test("a model's guess cannot colour either light, even at the top of its range", () => {
+  const clean = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({ status: "ACTIVE", legalName: GOOD_SUPPLIER.name }) },
+  }));
+  const scored = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({ status: "ACTIVE", legalName: GOOD_SUPPLIER.name }) },
+    modelHint: { label: "high risk", score: 1, explanation: "Every signal fired.", modelVersion: "v9" },
+  }));
+  assert.deepEqual(
+    scored.lights.map((light) => light.colour),
+    clean.lights.map((light) => light.colour),
+    "a score of 1.0 must change nothing",
+  );
+  assert.equal(lightOf(scored, "OUR_RECORDS").colour, "GREEN");
+});
+
+test("stale government data cannot turn a light red", () => {
+  const assessment = assessSupplierRisk(input({
+    gstin_lookup: { kind: "FOUND", record: record({ status: "ACTIVE", legalName: GOOD_SUPPLIER.name, observedAt: "2026-07-01T09:00:00.000Z" }) },
+  }));
+  assert.ok(codes(assessment).includes("GOVERNMENT_DATA_STALE"), "the age is still reported");
+  assert.equal(lightOf(assessment, "GOVERNMENT").colour, "GREEN", "old but clean is not a red light");
+});
+
+test("both lights carry plain words that pass the wording guard", () => {
+  const assessments = [
+    assessSupplierRisk(input({ gstin_lookup: { kind: "FOUND", record: record({ status: "CANCELLED", statusChangedOn: "2026-03-12" }) }, invoiceDate: "2026-07-04", invoiceNumber: "A/1" })),
+    assessSupplierRisk(input({ gstin_lookup: { kind: "UNAVAILABLE", reason: "TIMEOUT", retryable: true, explanation: "x" } })),
+    assessSupplierRisk(input({ history: cleanHistory({ openDisputes: [{ documentNumber: "A/9", raisedOn: "2026-06-02", note: "Short delivery" }] }) })),
+  ];
+  for (const assessment of assessments) {
+    assert.equal(assessment.lights.length, 2);
+    for (const light of assessment.lights) {
+      assert.equal(unsafeTermIn(light.detail), null, light.detail);
+      assert.equal(unsafeTermIn(light.headline), null, light.headline);
+      assert.ok(light.title.length > 0);
+    }
+  }
+});

@@ -235,6 +235,35 @@ export interface SourceStatus {
  */
 export type AssessmentConfidence = "COMPLETE" | "PARTIAL";
 
+/**
+ * Issue #99 — the answer at a glance.
+ *
+ * Two lights rather than one, because the two answers come from completely different places and a
+ * single light hides which is which. "The GST department says their registration is cancelled" and
+ * "their bank account changed last week" are both serious, but a buyer arguing with a supplier
+ * needs to know which of the two they are holding.
+ */
+export type LightColour = "GREEN" | "AMBER" | "RED" | "GREY";
+
+export type LightScope =
+  /** Only what the GST department's records say. Nothing of ours reaches this one. */
+  | "GOVERNMENT"
+  /** Only this business's own books: bank changes, disputes, money overdue. */
+  | "OUR_RECORDS";
+
+export interface RiskLight {
+  readonly scope: LightScope;
+  readonly colour: LightColour;
+  /** What this light is about, e.g. "The GST department's records". */
+  readonly title: string;
+  /** Four words a person reads without stopping, e.g. "Stop and check before you pay". */
+  readonly headline: string;
+  /** One sentence saying why it is this colour. */
+  readonly detail: string;
+  /** How many warnings sit behind this light. */
+  readonly warningCount: number;
+}
+
 export interface SupplierRiskAssessment {
   readonly companyId: Id;
   readonly supplierPartyId: Id;
@@ -246,6 +275,8 @@ export interface SupplierRiskAssessment {
   /** The highest level among the warnings. `INFORMATION` when there is nothing to flag. */
   readonly level: RiskLevel;
   readonly warnings: readonly SupplierRiskWarning[];
+  /** Issue #99. Always exactly two: the government's answer, then our own. */
+  readonly lights: readonly RiskLight[];
   readonly sources: readonly SourceStatus[];
   readonly confidence: AssessmentConfidence;
   readonly policy: RiskPolicy;

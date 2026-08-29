@@ -986,6 +986,11 @@ export class DemoApplication {
       message: assessment.summary,
       supplier: assessment.supplierName,
       gstin: assessment.gstin ?? null,
+      // Issue #99. Two lights: what the government says, and what our own books say.
+      lights: assessment.lights.map((light) => ({
+        scope: light.scope, colour: light.colour, title: light.title,
+        headline: light.headline, detail: light.detail, warningCount: light.warningCount,
+      })),
       warnings: assessment.warnings.map((warning) => ({
         code: warning.code,
         level: warning.level,
