@@ -62,3 +62,37 @@ test('sales and customer payments reach their real service modules', async () =>
   assert.equal(payment.body.state, 'recorded');
   assert.ok(payment.body.customerOutstanding >= 0);
 });
+
+test('the reports surface is computed from the same live company the other calls mutate', async () => {
+  // Record a real sale, then read the reports. Nothing about the pack is typed in; every figure is
+  // folded from the ledger, sales, stock and receivables that this same demo application drives.
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '3', rate: '400', date: '2026-08-29', terms: '15', reference: 'WEB-REPORTS-35' };
+  const recorded = await request('POST', '/api/sales/record', sale);
+  assert.equal(recorded.body.state, 'recorded');
+
+  const reports = await request('GET', '/api/reports');
+  assert.equal(reports.status, 200);
+
+  // The books hold together, and the report says so from the real ledger, not a stored flag.
+  assert.equal(reports.body.trialBalance.balanced, true);
+  assert.equal(reports.body.trialBalance.totalDebits, reports.body.trialBalance.totalCredits);
+
+  // What the owner earned reconciles to the bills that produced it — the acceptance criterion.
+  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.total);
+
+  // The sale just recorded is in the register and in the drill-down behind the income total.
+  assert.ok(reports.body.sales.rows.some((row: { number: string }) => row.number === recorded.body.invoice.number));
+  assert.ok(reports.body.profitAndLoss.income.drill.some((entry: { number: string | null }) => entry.number === recorded.body.invoice.number));
+
+  // A purchase was recorded earlier in this file against the same singleton company, so the
+  // purchase side is real and present rather than the "not built yet" placeholder.
+  assert.equal(reports.body.purchases.available, true);
+  assert.ok(reports.body.purchases.total > 0);
+
+  // Every exception carries a machine code and a plain-language explanation.
+  assert.ok(Array.isArray(reports.body.exceptions.items));
+  for (const item of reports.body.exceptions.items as { code: string; what: string }[]) {
+    assert.equal(typeof item.code, 'string');
+    assert.equal(typeof item.what, 'string');
+  }
+});

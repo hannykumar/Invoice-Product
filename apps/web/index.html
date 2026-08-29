@@ -23,6 +23,7 @@
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
+          <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
         </nav>
         <div class="sidebar-note">
           <span class="status-dot" aria-hidden="true"></span>
@@ -117,6 +118,11 @@
         </section>
 
         <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div></article></section>
+
+        <section class="view" id="view-reports" aria-labelledby="reports-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navReports"></p><h1 id="reports-title" tabindex="-1">Reports</h1><p>Every figure below is computed live from this company's ledger, sales, stock and receivables. Nothing is typed in.</p></div></div>
+          <div id="reports-content" aria-live="polite"><p class="loading-copy">Loading reports from the live company…</p></div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -124,6 +130,7 @@
         <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
         <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
+        <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
       </nav>
     </div>
 

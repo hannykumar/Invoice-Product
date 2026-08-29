@@ -11,6 +11,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
   try {
     const app = await demoApplication();
     if (method === 'GET' && pathname === '/api/dashboard') return json(200, await app.dashboard());
+    if (method === 'GET' && pathname === '/api/reports') return json(200, await app.reports());
     if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, app.previewPurchase(body));
     if (method === 'POST' && pathname === '/api/purchases/record') return json(200, await app.recordPurchase(body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(body));

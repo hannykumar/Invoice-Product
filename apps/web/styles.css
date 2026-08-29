@@ -130,3 +130,26 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 }
 @media (max-width: 390px) { .metric-grid { grid-template-columns: 1fr; }.page-heading { display: block; }.page-heading .primary-button { margin-top: .8rem; }.activity-panel { padding: .85rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+
+/* Issue #35 — the reports view. Real figures from the live company, each total drillable. */
+#view-reports #reports-content { display: grid; gap: 1.1rem; }
+.report-card { padding: 1.15rem 1.25rem; display: grid; gap: .8rem; }
+.report-card .panel-heading h2 { margin: 0; font-size: 1.05rem; }
+.report-card .panel-heading p { margin: .25rem 0 0; color: var(--muted); font-size: .86rem; }
+.report-scroll { overflow-x: auto; }
+.report-table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+.report-table th, .report-table td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.report-table th { color: var(--muted); font-weight: 650; }
+.report-table td:nth-child(3), .report-table th:nth-child(3) { white-space: normal; }
+.report-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.report-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: .55rem; }
+.report-total strong { font-size: 1rem; letter-spacing: -.01em; }
+.report-drill { border-top: 1px solid var(--line); padding-top: .55rem; }
+.report-drill summary { display: flex; justify-content: space-between; cursor: pointer; font-weight: 700; }
+.report-drill[open] summary { margin-bottom: .5rem; }
+.report-flag { display: grid; gap: .15rem; background: var(--amber-bg); border: 1px solid #f0d9b0; border-radius: 9px; padding: .7rem .8rem; }
+.report-flag.blocking { background: var(--red-bg); border-color: #efc3c0; }
+.report-flag strong { font-size: .9rem; }
+.report-flag span { color: var(--muted); font-size: .82rem; }
+.report-caution { color: var(--muted); font-size: .8rem; margin: 0; }
+.pill.warn { color: var(--amber); background: var(--amber-bg); }
