@@ -5,22 +5,13 @@
  * it asked for `reserve`, `release`, `issue` and `returnToStock`, and now gets stock that actually
  * exists rather than an adapter that always says yes.
  *
- * The one translation this file performs is between two `Quantity` types that mean the same thing:
- * the kernel's `{ scaled, unit }` and master data's `{ micro, unitCode }`. Both are integer
- * micro-units, so the conversion is a rename and nothing is lost. That duplication is a
- * shared-contract wrinkle worth removing; it is raised with GPT 3 rather than papered over here.
+ * This file used to translate between two `Quantity` types that meant the same thing. There is now
+ * one, in `@invoice/kernel`, so a sale line's quantity is handed straight to the godown (#77).
  */
-import type { IsoDate, Quantity as KernelQuantity } from '@invoice/kernel';
+import type { IsoDate } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
 import type { InventoryPort, ReservationRequest, ReservationResult } from '@invoice/sales';
-import type { Quantity as MasterQuantity } from '../../masters/src/units.ts';
 import type { InventoryService } from './service.ts';
-
-/** Kernel quantity to master-data quantity. Same integer, different field names. */
-export const toMasterQuantity = (q: KernelQuantity): MasterQuantity => ({ micro: q.scaled, unitCode: q.unit });
-
-/** Master-data quantity to kernel quantity. */
-export const toKernelQuantity = (q: MasterQuantity): KernelQuantity => ({ scaled: q.micro, unit: q.unitCode });
 
 export interface SalesInventoryAdapterOptions {
   /** Used when a sale line does not name one. Most small businesses have exactly one godown. */
@@ -39,7 +30,7 @@ export const salesInventoryAdapter = (
         lineId: line.lineId,
         itemId: line.itemId,
         warehouseId: line.warehouseId ?? options.defaultWarehouseId,
-        quantity: toMasterQuantity(line.quantity),
+        quantity: line.quantity,
       })),
     });
     if (result.ok) return { ok: true, reservationId: request.documentId };

@@ -10,23 +10,23 @@ test("decimal quantities are parsed without floating point error", () => {
 
 test("universal conversions are exact in both directions", () => {
   const units = createDefaultUnitRegistry();
-  assert.equal(units.convertExact(quantity("2.5", "KGS"), "GMS").micro, toMicro("2500"));
-  assert.equal(units.convertExact(quantity("2500", "GMS"), "KGS").micro, toMicro("2.5"));
-  assert.equal(units.convertExact(quantity("1", "TON"), "KGS").micro, toMicro("1000"));
-  assert.equal(units.convertExact(quantity("3", "DOZ"), "PCS").micro, toMicro("36"));
+  assert.equal(units.convertExact(quantity("2.5", "KGS"), "GMS").scaled, toMicro("2500"));
+  assert.equal(units.convertExact(quantity("2500", "GMS"), "KGS").scaled, toMicro("2.5"));
+  assert.equal(units.convertExact(quantity("1", "TON"), "KGS").scaled, toMicro("1000"));
+  assert.equal(units.convertExact(quantity("3", "DOZ"), "PCS").scaled, toMicro("36"));
 });
 
 test("an item pack size applies only to that item", () => {
   const units = createDefaultUnitRegistry();
   units.registerConversion({ fromUnit: "BOX", toUnit: "PCS", numerator: 24n, denominator: 1n, itemId: "soap" });
-  assert.equal(units.convertExact(quantity("2", "BOX"), "PCS", "soap").micro, toMicro("48"));
+  assert.equal(units.convertExact(quantity("2", "BOX"), "PCS", "soap").scaled, toMicro("48"));
   assert.throws(() => units.convert(quantity("2", "BOX"), "PCS", "cement"), (error: unknown) => error instanceof UnitConversionError && error.code === "NO_CONVERSION_PATH");
 });
 
 test("multi-hop conversions compose exactly", () => {
   const units = createDefaultUnitRegistry();
   // TON to GMS goes TON -> QTL -> KGS -> GMS with no rounding at any step.
-  assert.equal(units.convertExact(quantity("1", "TON"), "GMS").micro, toMicro("1000000"));
+  assert.equal(units.convertExact(quantity("1", "TON"), "GMS").scaled, toMicro("1000000"));
 });
 
 test("a conversion that cannot land on a whole quantity is refused, not rounded", () => {

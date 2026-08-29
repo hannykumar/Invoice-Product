@@ -25,10 +25,17 @@ export interface UnitOfMeasure {
   readonly uqc?: string;
 }
 
-export interface Quantity {
-  readonly micro: bigint;
-  readonly unitCode: string;
-}
+/**
+ * There is one `Quantity` in this product and it lives in `@invoice/kernel`.
+ *
+ * This module used to declare a second one, `{ micro, unitCode }`, meaning exactly the same
+ * integer in the same six-decimal scale. Every crossing between the two needed a rename, and a
+ * rename that has to be remembered is a rename that eventually is not — on a stock figure, which
+ * is the one number that must never drift. The registry and the exact-conversion rules below stay
+ * here, because unit conversion is master data's; only the shape is shared.
+ */
+import type { Quantity } from "@invoice/kernel";
+export type { Quantity };
 
 /** 1 `fromUnit` equals `numerator / denominator` `toUnit`, optionally only for one item. */
 export interface UnitConversion {
@@ -40,7 +47,7 @@ export interface UnitConversion {
   readonly itemId?: string;
 }
 
-export const quantity = (value: string | number | bigint, unitCode: string): Quantity => ({ micro: toMicro(value), unitCode: unitCode.toUpperCase() });
+export const quantity = (value: string | number | bigint, unit: string): Quantity => ({ scaled: toMicro(value), unit: unit.toUpperCase() });
 
 /** Parses a decimal string without floating point, so "0.001" stays exact. */
 export function toMicro(value: string | number | bigint): bigint {
@@ -56,12 +63,12 @@ export function toMicro(value: string | number | bigint): bigint {
 }
 
 export function formatQuantity(value: Quantity, decimals = 3): string {
-  const negative = value.micro < 0n;
-  const absolute = negative ? -value.micro : value.micro;
+  const negative = value.scaled < 0n;
+  const absolute = negative ? -value.scaled : value.scaled;
   const whole = absolute / MICRO;
   const fraction = (absolute % MICRO).toString().padStart(6, "0").slice(0, decimals);
   const text = decimals > 0 ? `${whole}.${fraction}` : String(whole);
-  return `${negative ? "-" : ""}${text} ${value.unitCode}`;
+  return `${negative ? "-" : ""}${text} ${value.unit}`;
 }
 
 /**
@@ -145,12 +152,12 @@ export class UnitRegistry {
    */
   convert(value: Quantity, toUnit: string, itemId?: string): { quantity: Quantity; exact: boolean } {
     const target = toUnit.toUpperCase();
-    const ratio = this.factor(value.unitCode, target, itemId);
-    if (!ratio) throw new UnitConversionError("NO_CONVERSION_PATH", `There is no set-up relationship between ${value.unitCode} and ${target}.`);
-    const scaled = value.micro * ratio.numerator;
+    const ratio = this.factor(value.unit, target, itemId);
+    if (!ratio) throw new UnitConversionError("NO_CONVERSION_PATH", `There is no set-up relationship between ${value.unit} and ${target}.`);
+    const scaled = value.scaled * ratio.numerator;
     const converted = scaled / ratio.denominator;
     const exact = scaled % ratio.denominator === 0n;
-    return { quantity: { micro: converted, unitCode: target }, exact };
+    return { quantity: { scaled: converted, unit: target }, exact };
   }
 
   /** Convert, or refuse when the result would not be exact. Used on stock movements. */

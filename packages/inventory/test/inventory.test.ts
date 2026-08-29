@@ -240,7 +240,7 @@ test('a transfer moves goods between godowns without changing the total', async 
   const shop = await g.service.balance(g.actor, { itemId: 'APL-BOX-10', warehouseId: 'shop' });
   assert.equal(formatQuantity(narela.physical), '60.000 KGS');
   assert.equal(formatQuantity(shop.physical), '40.000 KGS');
-  assert.equal(narela.physical.micro + shop.physical.micro, 100_000000n, 'the business still has the same goods');
+  assert.equal(narela.physical.scaled + shop.physical.scaled, 100_000000n, 'the business still has the same goods');
 
   await assert.rejects(
     () =>
@@ -495,7 +495,7 @@ test('permission is checked for moving, adjusting and transferring separately', 
 });
 
 test('available never quietly means physical', () => {
-  const physical = { micro: 100_000000n, unitCode: 'KGS' };
-  const reserved = { micro: 70_000000n, unitCode: 'KGS' };
+  const physical = { scaled: 100_000000n, unit: 'KGS' };
+  const reserved = { scaled: 70_000000n, unit: 'KGS' };
   assert.equal(formatQuantity(availableQuantity(physical, reserved)), '30.000 KGS');
 });

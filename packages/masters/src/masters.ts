@@ -404,7 +404,7 @@ export class MasterDataService {
     const started = this.#begin(context, "masters.opening_stock.set", options, input);
     if (started.existingRecordId) return this.#retried(context, this.#stores.openingStock, started);
     const item = this.item(context, input.itemId);
-    if (input.quantity.micro < 0n) throw new MasterDataError("VALIDATION_FAILED", "Opening stock cannot be negative.");
+    if (input.quantity.scaled < 0n) throw new MasterDataError("VALIDATION_FAILED", "Opening stock cannot be negative.");
     // Stored in the item's base unit so every later movement compares like with like.
     const inBaseUnit = this.units.convertExact(input.quantity, item.baseUnit, item.id);
     const opening: OpeningStock = { ...input, quantity: inBaseUnit, id: input.id ?? randomUUID(), companyId: context.companyId };
@@ -441,13 +441,13 @@ export class MasterDataService {
     const entries = this.#stores.priceEntries.list(context.companyId, asOf).filter((entry) => entry.priceListId === priceListId && entry.itemId === itemId);
     const applicable = entries.filter((entry) => {
       if (!entry.minimumQuantity) return true;
-      const threshold = this.units.convert(entry.minimumQuantity, orderQuantity.unitCode, itemId);
-      return orderQuantity.micro >= threshold.quantity.micro;
+      const threshold = this.units.convert(entry.minimumQuantity, orderQuantity.unit, itemId);
+      return orderQuantity.scaled >= threshold.quantity.scaled;
     });
     if (applicable.length === 0) return null;
     const best = applicable.reduce((winner, candidate) => {
-      const winnerMinimum = winner.minimumQuantity ? this.units.convert(winner.minimumQuantity, orderQuantity.unitCode, itemId).quantity.micro : 0n;
-      const candidateMinimum = candidate.minimumQuantity ? this.units.convert(candidate.minimumQuantity, orderQuantity.unitCode, itemId).quantity.micro : 0n;
+      const winnerMinimum = winner.minimumQuantity ? this.units.convert(winner.minimumQuantity, orderQuantity.unit, itemId).quantity.scaled : 0n;
+      const candidateMinimum = candidate.minimumQuantity ? this.units.convert(candidate.minimumQuantity, orderQuantity.unit, itemId).quantity.scaled : 0n;
       return candidateMinimum > winnerMinimum ? candidate : winner;
     });
     const converted = this.units.factor(best.unit, unit, itemId);

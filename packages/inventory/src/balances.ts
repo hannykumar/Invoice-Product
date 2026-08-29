@@ -17,8 +17,8 @@ import { DIRECTION_OF, type Reservation, type StockBalance, type StockMovement }
  * {available} {unit} of {itemName}" — so putting it in both would print "30.000 KGS boxes".
  */
 export const amountOf = (q: Quantity, decimals = 3): string => {
-  const negative = q.micro < 0n;
-  const absolute = negative ? -q.micro : q.micro;
+  const negative = q.scaled < 0n;
+  const absolute = negative ? -q.scaled : q.scaled;
   const whole = absolute / MICRO;
   const fraction = (absolute % MICRO).toString().padStart(6, '0').slice(0, decimals);
   return `${negative ? '-' : ''}${decimals > 0 ? `${whole}.${fraction}` : whole}`;
@@ -31,7 +31,7 @@ export interface AsOf {
 const inRange = (movement: StockMovement, asOf: AsOf): boolean =>
   asOf.on === undefined || compareDates(movement.documentDate, asOf.on) <= 0;
 
-const q = (micro: bigint, unitCode: string): Quantity => ({ micro, unitCode });
+const q = (scaled: bigint, unitCode: string): Quantity => ({ scaled, unit: unitCode });
 
 /** Physical stock: what is in the godown, from posted movements only. */
 export const physicalQuantity = (
@@ -42,14 +42,14 @@ export const physicalQuantity = (
   q(
     movements
       .filter((m) => inRange(m, asOf))
-      .reduce((total, m) => (DIRECTION_OF[m.kind] === 'IN' ? total + m.quantity.micro : total - m.quantity.micro), 0n),
+      .reduce((total, m) => (DIRECTION_OF[m.kind] === 'IN' ? total + m.quantity.scaled : total - m.quantity.scaled), 0n),
     unitCode,
   );
 
 /** What unfinished bills are holding. Only `HELD` reservations count. */
 export const reservedQuantity = (reservations: readonly Reservation[], unitCode: string): Quantity =>
   q(
-    reservations.filter((r) => r.state === 'HELD').reduce((total, r) => total + r.quantity.micro, 0n),
+    reservations.filter((r) => r.state === 'HELD').reduce((total, r) => total + r.quantity.scaled, 0n),
     unitCode,
   );
 
@@ -61,7 +61,7 @@ export const reservedQuantity = (reservations: readonly Reservation[], unitCode:
  * shopkeeper otherwise is how the same goods get sold twice.
  */
 export const availableQuantity = (physical: Quantity, reserved: Quantity): Quantity =>
-  q(physical.micro - reserved.micro, physical.unitCode);
+  q(physical.scaled - reserved.scaled, physical.unit);
 
 export const buildBalance = (
   itemId: string,
@@ -110,16 +110,16 @@ export const valueStock = (movements: readonly StockMovement[], asOf: AsOf = {})
   let unitCode = 'PCS';
 
   for (const movement of ordered) {
-    unitCode = movement.quantity.unitCode;
+    unitCode = movement.quantity.unit;
     if (DIRECTION_OF[movement.kind] === 'IN') {
       const cost = movement.unitCost?.minor ?? 0n;
-      quantityMicro += movement.quantity.micro;
-      valuePaise += (cost * movement.quantity.micro) / MICRO;
+      quantityMicro += movement.quantity.scaled;
+      valuePaise += (cost * movement.quantity.scaled) / MICRO;
     } else {
       // Out at the running average, so the cost of what is left does not jump when goods leave.
       const average = quantityMicro === 0n ? 0n : (valuePaise * MICRO) / quantityMicro;
-      const removed = (average * movement.quantity.micro) / MICRO;
-      quantityMicro -= movement.quantity.micro;
+      const removed = (average * movement.quantity.scaled) / MICRO;
+      quantityMicro -= movement.quantity.scaled;
       valuePaise -= removed;
     }
   }

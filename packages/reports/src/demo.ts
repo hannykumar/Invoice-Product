@@ -243,7 +243,7 @@ const main = async (): Promise<void> => {
       itemId,
       warehouseId,
       kind: 'PURCHASE_IN',
-      quantity: { micro: quantityFromString(amount, unit).scaled, unitCode: unit },
+      quantity: { scaled: quantityFromString(amount, unit).scaled, unit: unit },
       documentDate: isoDate(when),
       source: { kind: 'purchase_invoice', id: key, number: key.toUpperCase() },
       unitCost: cost,

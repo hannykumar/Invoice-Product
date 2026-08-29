@@ -75,8 +75,8 @@ export const purchaseInventoryPort = (
     const item = masterData.item(actor.companyId, command.itemId);
     if (item === undefined) return null; // the godown will refuse it by name in a moment
     const base = masterData.units(actor.companyId).convertExact(command.quantity, item.baseUnit, command.itemId);
-    if (base.micro === 0n) return null;
-    return money(divideRoundHalfUp(command.lineCostPaise * MICRO, base.micro));
+    if (base.scaled === 0n) return null;
+    return money(divideRoundHalfUp(command.lineCostPaise * MICRO, base.scaled));
   };
 
   return {

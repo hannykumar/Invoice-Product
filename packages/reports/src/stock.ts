@@ -57,7 +57,7 @@ export interface StockBody {
 const valueOf = (movement: StockMovement): Money =>
   movement.unitCost === null
     ? zero('INR')
-    : { currency: 'INR', minor: (movement.unitCost.minor * movement.quantity.micro) / MICRO };
+    : { currency: 'INR', minor: (movement.unitCost.minor * movement.quantity.scaled) / MICRO };
 
 const movementContribution = (movement: StockMovement, itemName: string): Contribution => {
   const direction = DIRECTION_OF[movement.kind];
@@ -69,13 +69,13 @@ const movementContribution = (movement: StockMovement, itemName: string): Contri
     date: movement.documentDate,
     branchId: null,
     partyId: null,
-    description: `${direction === 'IN' ? 'Came in' : 'Went out'}: ${amountOf(movement.quantity)} ${movement.quantity.unitCode} of ${itemName}`,
+    description: `${direction === 'IN' ? 'Came in' : 'Went out'}: ${amountOf(movement.quantity)} ${movement.quantity.unit} of ${itemName}`,
     amount: direction === 'IN' ? value : { currency: 'INR', minor: -value.minor },
   };
 };
 
 const totalMicro = (movements: readonly StockMovement[]): bigint =>
-  movements.reduce((running, m) => running + m.quantity.micro, 0n);
+  movements.reduce((running, m) => running + m.quantity.scaled, 0n);
 
 /**
  * Stock is counted per item and godown, which is the pair a person walks up to and checks. Batches
@@ -105,7 +105,7 @@ export const stockReportBody = async (
     const { itemId, warehouseId, movements } = group;
     const item = masterData.item(companyId, itemId);
     const itemName = nameOr(item?.name ?? names.item(companyId, itemId), itemId);
-    const unitCode = movements[0]?.quantity.unitCode ?? item?.baseUnit ?? 'PCS';
+    const unitCode = movements[0]?.quantity.unit ?? item?.baseUnit ?? 'PCS';
     const held = await inventory.reservations.listHeld(companyId, { itemId, warehouseId });
 
     const before = movements.filter((m) => m.documentDate < filter.from);
@@ -125,11 +125,11 @@ export const stockReportBody = async (
       ),
       unitCode,
       opening: amountOf(opening),
-      received: amountOf({ micro: totalMicro(during.filter((m) => DIRECTION_OF[m.kind] === 'IN')), unitCode }),
-      issued: amountOf({ micro: totalMicro(during.filter((m) => DIRECTION_OF[m.kind] === 'OUT')), unitCode }),
+      received: amountOf({ scaled: totalMicro(during.filter((m) => DIRECTION_OF[m.kind] === 'IN')), unit: unitCode }),
+      issued: amountOf({ scaled: totalMicro(during.filter((m) => DIRECTION_OF[m.kind] === 'OUT')), unit: unitCode }),
       closing: amountOf(closing),
       reserved: amountOf(reserved),
-      available: amountOf({ micro: closing.micro - reserved.micro, unitCode }),
+      available: amountOf({ scaled: closing.scaled - reserved.scaled, unit: unitCode }),
       value: valued.value,
       averageUnitCost: valued.averageUnitCost,
       movements: movements.map((m) => movementContribution(m, itemName)),
