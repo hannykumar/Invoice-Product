@@ -81,7 +81,9 @@ and audit are theirs — do not write a second implementation of any of them.
 | #5 master data | **Done, tests green** | `packages/masters`. Parties/addresses/GSTINs, items/HSN/UoM, warehouses/batches/serials/opening stock, price lists, tax defaults, transporters, vehicles, bank accounts, duplicate control, merges, effective-dated versions, document snapshots, PostgreSQL migration `0003_master_data`. |
 | #15 purchase inbox | **Done, tests green** | `packages/purchasing`. WhatsApp/email/camera/upload/e-invoice-JSON intake, attachment screening, company routing, file and channel dedup, OCR behind `connector-v1`, per-field confidence and evidence, quarantine. Posts nothing. |
 | #50 GSP/IRP comparison | **Blocked on the owner** | Needs a real company to request quotations and sandbox access from IRIS, MasterGST, Clear and FinAGG. The checklist, RFP text, scoring matrix and sandbox conformance harness can be built without them. |
-| #16, #17, #18, #29 | Next | #16 validation and duplicate detection consumes `ExtractionDraft` and `logicalKey()`. #17 needs GPT 1's ledger and stock interface — mock it against their documented contract. |
+| #16 validation | **Done, tests green** | `packages/purchasing`. Verdict, findings, duplicate assessment, recomputed totals, tolerance policy. |
+| #17 purchase posting | **Done, tests green** | `packages/purchasing`. Approved bill to ledger entry, stock receipts and supplier payable, all in one transaction. CGST/SGST/IGST/cess split from the rules engine, reverse charge, blocked ITC into cost, ₹1 rounding, preview, purchase-keyed idempotency, whole-bill reversal. Feeds #20 through `purchaseDocumentLedger`. Consumes GPT 1's real ledger (#4) and inventory (#12) — no mocks left. |
+| #18, #29 | Next | #18 three-way matching builds on #17's bill record and receipts. |
 | #19, #26–#33, #44, #45, #51, #53 | Later waves | See `docs/gpt3-handbook.md` section 6. |
 
 Known local limitation: `npm install` may be blocked in some sandboxes, so `npm run lint` (tsc)

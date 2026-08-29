@@ -178,65 +178,76 @@ export class InventoryService {
    * zero unless the business's policy allows it and an authorised person has said why.
    */
   async recordMovement(actor: ActorContext, command: RecordMovementCommand): Promise<StockMovement> {
+    return this.#store.transaction(actor.companyId, () => this.recordMovementIn(actor, command));
+  }
+
+  /**
+   * Records a movement inside a transaction the caller already opened.
+   *
+   * A module that owns a document and must move stock as part of the same decision — purchase
+   * posting (#17) receives goods, books the bill and credits the supplier, or does none of them —
+   * calls this, exactly as it calls `LedgerService.postVoucherIn`. Everyone else calls
+   * `recordMovement`. The in-memory store joins the ledger store as a transaction participant, so
+   * a failure after this point unwinds the movement too.
+   */
+  async recordMovementIn(actor: ActorContext, command: RecordMovementCommand): Promise<StockMovement> {
     this.#permissions.require(actor, INVENTORY_PERMISSIONS.move, 'record a stock movement');
     if (command.idempotencyKey.trim() === '') {
       throw invalid('STOCK_IDEMPOTENCY_KEY_REQUIRED', 'Every stock movement needs a key so a retry cannot record it twice.');
     }
 
-    return this.#store.transaction(actor.companyId, async () => {
-      const existing = await this.#inventory.movements.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
-      if (existing !== null) return existing;
+    const existing = await this.#inventory.movements.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
+    if (existing !== null) return existing;
 
-      const item = this.#masterData.item(actor.companyId, command.itemId);
-      if (item === undefined) throw notFound('STOCK_ITEM_UNKNOWN', 'We do not have details for that item.');
-      if (this.#masterData.warehouse(actor.companyId, command.warehouseId) === undefined) {
-        throw notFound('STOCK_WAREHOUSE_UNKNOWN', 'We do not have that godown.');
-      }
-      const batchId = command.batchId ?? null;
-      if (item.tracksBatches && batchId === null) {
-        throw invalid(
-          'STOCK_BATCH_REQUIRED',
-          `"${item.name}" is kept in batches, so please say which batch this is.`,
-        );
-      }
-      const serials = command.serialNumbers ?? [];
-      const base = this.#toBaseUnit(actor.companyId, command.itemId, command.quantity);
-      if (base.micro <= 0n) {
-        throw invalid('STOCK_QUANTITY_NOT_POSITIVE', 'A stock movement needs a quantity greater than zero.');
-      }
-      if (item.tracksSerials && BigInt(serials.length) * 1000000n !== base.micro) {
-        throw invalid(
-          'STOCK_SERIALS_MISMATCH',
-          `"${item.name}" is tracked piece by piece, so the number of serial numbers must match the quantity.`,
-        );
-      }
+    const item = this.#masterData.item(actor.companyId, command.itemId);
+    if (item === undefined) throw notFound('STOCK_ITEM_UNKNOWN', 'We do not have details for that item.');
+    if (this.#masterData.warehouse(actor.companyId, command.warehouseId) === undefined) {
+      throw notFound('STOCK_WAREHOUSE_UNKNOWN', 'We do not have that godown.');
+    }
+    const batchId = command.batchId ?? null;
+    if (item.tracksBatches && batchId === null) {
+      throw invalid(
+        'STOCK_BATCH_REQUIRED',
+        `"${item.name}" is kept in batches, so please say which batch this is.`,
+      );
+    }
+    const serials = command.serialNumbers ?? [];
+    const base = this.#toBaseUnit(actor.companyId, command.itemId, command.quantity);
+    if (base.micro <= 0n) {
+      throw invalid('STOCK_QUANTITY_NOT_POSITIVE', 'A stock movement needs a quantity greater than zero.');
+    }
+    if (item.tracksSerials && BigInt(serials.length) * 1000000n !== base.micro) {
+      throw invalid(
+        'STOCK_SERIALS_MISMATCH',
+        `"${item.name}" is tracked piece by piece, so the number of serial numbers must match the quantity.`,
+      );
+    }
 
-      const overridden = await this.#guardNegative(actor, command, item.baseUnit, base, batchId, item.name);
+    const overridden = await this.#guardNegative(actor, command, item.baseUnit, base, batchId, item.name);
 
-      const movement: StockMovement = {
-        id: this.#newId(),
-        companyId: actor.companyId,
-        itemId: command.itemId,
-        warehouseId: command.warehouseId,
-        batchId,
-        serialNumbers: serials,
-        kind: command.kind,
-        direction: DIRECTION_OF[command.kind],
-        quantity: base,
-        enteredQuantity: command.quantity,
-        unitCost: command.unitCost ?? null,
-        documentDate: command.documentDate,
-        source: command.source,
-        postedBy: actor.userId,
-        postedAt: this.#clock.now().toISOString(),
-        idempotencyKey: command.idempotencyKey,
-        reversesMovementId: null,
-        reason: command.reason ?? null,
-        negativeOverride: overridden,
-      };
-      await this.#inventory.movements.insert(movement);
-      return movement;
-    });
+    const movement: StockMovement = {
+      id: this.#newId(),
+      companyId: actor.companyId,
+      itemId: command.itemId,
+      warehouseId: command.warehouseId,
+      batchId,
+      serialNumbers: serials,
+      kind: command.kind,
+      direction: DIRECTION_OF[command.kind],
+      quantity: base,
+      enteredQuantity: command.quantity,
+      unitCost: command.unitCost ?? null,
+      documentDate: command.documentDate,
+      source: command.source,
+      postedBy: actor.userId,
+      postedAt: this.#clock.now().toISOString(),
+      idempotencyKey: command.idempotencyKey,
+      reversesMovementId: null,
+      reason: command.reason ?? null,
+      negativeOverride: overridden,
+    };
+    await this.#inventory.movements.insert(movement);
+    return movement;
   }
 
   async #guardNegative(
