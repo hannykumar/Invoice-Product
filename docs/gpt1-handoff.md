@@ -2,7 +2,7 @@
 
 **Lane:** accounting, sales, deterministic financial and compliance rules, reporting, user experience.
 **Branch:** `codex/gpt1-accounting-sales`. **Base:** `main`.
-**Last updated:** 29 August 2026, after #20 merged.
+**Last updated:** 29 August 2026, after #35 merged.
 
 Read this, then `docs/product/README.md`. The authoritative requirements are the GitHub issue text
 and `~/Downloads/Invoice_Product_GPT_1_Delivery_Handbook.docx`, in that order. Where a handbook and
@@ -12,22 +12,21 @@ an issue disagree, raise it rather than choosing silently.
 
 ## 1. State of the lane
 
-**Closed (12):** #1 spec · #4 ledger · #7 rules engine · #9 sales · #10 voice assistant ·
-#12 inventory · #13 invoice templates · #20 receivables · #25 GST calculation · #36 onboarding ·
-#46 UX · #54 compliance register.
+**Closed (13):** #1 spec · #4 ledger · #7 rules engine · #9 sales · #10 voice assistant ·
+#12 inventory · #13 invoice templates · #20 receivables · #25 GST calculation · #35 reports ·
+#36 onboarding · #46 UX · #54 compliance register.
 
-**Open (6):**
+**Open (5):**
 
 | Issue | What it is | Ready? |
 | --- | --- | --- |
-| **#35** | Financial, inventory and operational reports | **Yes — recommended next.** #4, #9, #12, #20, #25 all closed. #17 (GPT 3 purchase posting) is the only gap; mock it. |
-| **#11** | Pricing, discounts, customer credit, overdue controls | Yes. Needs #5 ✓, #9 ✓, #20 ✓. The credit-limit rule already exists in `in.policy`. |
+| **#11** | Pricing, discounts, customer credit, overdue controls | **Yes — recommended next.** Needs #5 ✓, #9 ✓, #20 ✓. The credit-limit rule already exists in `in.policy`. |
+| **#43** | Golden test dataset | Yes. Needs #1 ✓, #4 ✓, #7 ✓, #25 ✓. `packages/reports/test/fixtures.ts` is most of one already — a business built through the real services rather than by hand. Start there. |
 | **#37** | Excel/CSV migration from other tools | Yes. Needs #4 ✓, #5 ✓, #12 ✓, #36 ✓. |
-| **#43** | Golden test dataset | Yes. Needs #1 ✓, #4 ✓, #7 ✓, #25 ✓. |
-| **#34** | AI business and legal knowledge assistant | After #35. Also wants #32 (GPT 3). |
-| **#48** | Financial correctness release gates | After #43. Also wants #44 (GPT 3). |
+| **#34** | AI business and legal knowledge assistant | Ready now that #35 is in: the assistant answers from reports rather than from the ledger. Also wants #32 (GPT 3). |
+| **#48** | Financial correctness release gates | After #43. Also wants #44 (GPT 3). `trialBalanceBody().balanced` and `reconciles()` are the two gates it should hang off. |
 
-**452 tests pass.** `npm run typecheck && npm test`, plus `npx tsc --noEmit -p tsconfig.strict.json`.
+**486 tests pass.** `npm run typecheck && npm test`, plus `npx tsc --noEmit -p tsconfig.strict.json`.
 
 ---
 
@@ -45,6 +44,7 @@ Demos that produce something to look at:
 ```bash
 npm run demo:invoice      # real bills into tmp/invoices/ — A4, thermal, mobile, 100-line
 npm run demo:onboarding   # a bakery set up, interrupted, resumed, into tmp/onboarding/
+npm run demo:reports      # two months of trading, reported, into tmp/reports/ — click a total
 ```
 
 ### The working agreement
@@ -87,6 +87,7 @@ npm run demo:onboarding   # a bakery set up, interrupted, resumed, into tmp/onbo
 | `invoice-templates` | #13 | Templates and rendering: A4, thermal, mobile, print |
 | `onboarding` | #36 | Guided setup, declared rates, opening balances, resumable checklist |
 | `voice-assistant` | #10 | Spoken or typed instruction to a confirmed draft |
+| `reports` | #35 | Every report, composed from the modules that own the facts, each total drillable |
 | `ux-vocabulary` | #46 | The only supported way to produce user-facing wording |
 
 Contracts for all of them are in `docs/contracts/`.
@@ -161,8 +162,11 @@ by #54; `gst.tax_split` now answers in production. Two things raised with them:
 
 - **Production still cannot rate a taxable line** unless the business declared a rate (option C).
   E-way applicability and Ladakh's UTGST status also return `CANNOT_DECIDE`, deliberately.
-- **Stock value is computed but not posted to the ledger.** Those entries belong with #17 and #35 —
-  **relevant to whoever picks up #35.**
+- **Stock value is computed but not posted to the ledger.** Those entries belong with #17. #35 does
+  not paper over it: the balance sheet shows the ledger's stock account, the stock report shows the
+  movements' valuation, and the difference is raised as `STOCK_VALUE_NOT_IN_BOOKS` with its records.
+  The same gap makes the profit figure flattering, and the profit and loss says so in words
+  (`costOfGoodsInBooks`). All of it disappears when #17 posts purchases.
 - **Period locks are not enforced on a stock movement date**, only on the ledger entry.
 - Everything runs against in-memory stores. `packages/ledger/migrations/0001_ledger.sql` is the
   real schema; no Postgres adapter is written yet.
@@ -171,23 +175,29 @@ by #54; `gst.tax_split` now answers in production. Two things raised with them:
 
 ---
 
-## 8. Starting #35 (the recommended next issue)
+## 8. Starting #11 (the recommended next issue)
 
 Read the issue text first, then:
 
-- **Everything it needs exists.** Trial balance and account balances are in
-  `packages/ledger/src/balances.ts`; stock and valuation in `packages/inventory/src/balances.ts`;
-  ageing and statements in `packages/receivables`. Reports should **compose these, not re-derive
-  them** — that is what makes totals reconcile.
-- The acceptance criteria are: totals reconcile to the ledger, **every total drills to the records
-  that produced it**, and period/company/branch filters are explicit.
-- The drill-down requirement is the interesting one. Nothing stores a balance, so every figure
-  already has its contributing rows available — carry them through rather than recomputing.
-- Purchase-side figures need GPT 3's #17. Mock it behind a narrow port and record the assumption.
-- It is also the last of the owner's frontend list, so produce something visible: a `demo:reports`
-  writing rendered pages to `tmp/`, in the same spirit as `demo:invoice`.
+- **The credit-limit rule already exists** in `in.policy` and the sales service already calls it;
+  #11 is about the rest — price lists, discount rules, and what happens when a customer is over
+  their limit or badly overdue.
+- `packages/receivables` already answers "how much do they owe and how late are they"
+  (`position`, `overdueSummaries`). Consume it; do not work out lateness a second time.
+- Master data's price lists are GPT 3's #5 and are built. Read
+  `docs/contracts/master-data-v1.md` before defining a price-list type of your own.
+- The hard part is the same as everywhere else in this lane: a discount a person did not
+  authorise must not be applied, and a blocked sale must say what would unblock it. Message ids go
+  in `packages/ux-vocabulary`, not in the service.
 
----
+### What #35 left for others
+
+- **`PurchaseReadPort`** in `packages/reports/src/ports.ts` is the shape the purchase register,
+  the input-tax figures and the payables ageing need from GPT 3's #17. When #17 lands, write the
+  adapter; nothing else in the package changes.
+- **`Contribution.description` is one language.** Everything else on a report is bilingual. Making
+  it bilingual needs the contributing modules to supply bilingual descriptions.
+- **`ReportService.pack()` requires every report permission**, because it is every report.
 
 ## 9. First commands in a new session
 
