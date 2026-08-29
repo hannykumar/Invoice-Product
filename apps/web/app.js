@@ -60,6 +60,14 @@ const copy = {
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
     saleChecked: "Sale checked", saleCheckedBody: "The checked sale comes to {amount}.", saleEffectInvoice: "A numbered invoice will be issued.", saleEffectBalance: "The customer balance will increase.", purchaseChecked: "Purchase checked", purchaseCheckedBody: "The checked supplier bill comes to {amount}.", purchaseEffectStock: "Stock will update from this purchase.", purchaseEffectBooks: "GST and the supplier balance will post together.", paymentChecked: "Payment checked", paymentCheckedBody: "A receipt of {amount} is ready to record.", paymentEffectBalance: "The customer balance will reduce when this is recorded.", saleRecorded: "Sale recorded", saleRecordedBody: "Invoice {number} was issued.", purchaseRecorded: "Purchase recorded", purchaseRecordedBody: "Stock, GST and the supplier balance were recorded together.", paymentRecorded: "Payment recorded", paymentRecordedBody: "The customer receipt was recorded once.", amountInvalid: "Enter a valid amount greater than zero.", referenceRequired: "Enter the supplier bill number.", rateRequired: "Enter a price and quantity.", permissionDenied: "You do not have permission to do this work.",
+    navEInvoice: "E-invoice",
+    einvoiceTitle: "Does this bill need a government e-invoice number?", einvoiceHelp: "Most bills do not. We work it out from your turnover and who the bill is for, tell you which rule decided it, and only then offer to send it.",
+    whichBill: "Which bill", yourTurnover: "Your yearly turnover", turnoverHelp: "Leave this blank if you are not sure — we will ask rather than guess.",
+    exemptCategory: "Is your business exempt?", notExempt: "No", exemptBank: "A bank or finance company", exemptGta: "A goods transport agency", exemptSez: "A unit in an SEZ",
+    checkNeeded: "Check this bill", einvoiceSafety: "Checking sends nothing. Nothing reaches the government until you press the send button.",
+    sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
+    cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
+    cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
     navSupplier: "Supplier check",
     supplierTitle: "Check a supplier before you pay", supplierHelp: "We show you what the GST department says and what your own books say, with the date and source of every single thing. We never tell you what kind of business someone is — only what the records show.",
     theirGstin: "Their GST number", theirGstinHelp: "We check this with the GST department.",
@@ -145,6 +153,14 @@ const copy = {
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
     saleChecked: "Bikri jaanch li", saleCheckedBody: "Jaanchi hui bikri {amount} ki hai.", saleEffectInvoice: "Number wali invoice jaari hogi.", saleEffectBalance: "Customer ka baki paisa badhega.", purchaseChecked: "Kharid jaanch li", purchaseCheckedBody: "Jaancha hua supplier bill {amount} ka hai.", purchaseEffectStock: "Is kharid se stock update hoga.", purchaseEffectBooks: "GST aur supplier balance ek saath darj honge.", paymentChecked: "Payment jaanch li", paymentCheckedBody: "{amount} ki receipt darj karne ke liye taiyar hai.", paymentEffectBalance: "Darj hone par customer ka baki paisa kam hoga.", saleRecorded: "Bikri darj hui", saleRecordedBody: "Invoice {number} jaari hui.", purchaseRecorded: "Kharid darj hui", purchaseRecordedBody: "Stock, GST aur supplier balance ek saath darj hue.", paymentRecorded: "Payment darj hua", paymentRecordedBody: "Customer receipt ek baar darj hui.", amountInvalid: "Zero se badi sahi rakam bharen.", referenceRequired: "Supplier bill number bharen.", rateRequired: "Daam aur matra bharen.", permissionDenied: "Aapko yeh kaam karne ki permission nahin hai.",
+    navEInvoice: "E-invoice",
+    einvoiceTitle: "Kya is bill ko sarkari e-invoice number chahiye?", einvoiceHelp: "Zyadatar bills ko nahin chahiye. Hum aapke turnover aur bill kiske liye hai, isse tay karte hain, batate hain kaunsa niyam laga, aur tabhi bhejne ko kehte hain.",
+    whichBill: "Kaunsa bill", yourTurnover: "Aapka saalana turnover", turnoverHelp: "Pakka nahin to khali chhod den — hum poochenge, andaza nahin lagayenge.",
+    exemptCategory: "Kya aapka business chhoot mein hai?", notExempt: "Nahin", exemptBank: "Bank ya finance company", exemptGta: "Maal dhulai agency", exemptSez: "SEZ ki unit",
+    checkNeeded: "Yeh bill jaanchen", einvoiceSafety: "Jaanchne se kuch nahin jata. Bhejne ka button dabane tak sarkar tak kuch nahin pahunchta.",
+    sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
+    cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
+    cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
     navSupplier: "Supplier jaanch",
     supplierTitle: "Paisa dene se pehle supplier jaanchen", supplierHelp: "Hum dikhate hain ki GST vibhag kya kehta hai aur aapki apni bahi kya kehti hai — har baat ki tareekh aur source ke saath. Hum kabhi nahin batate ki koi kaisa hai; sirf yeh ki record mein kya likha hai.",
     theirGstin: "Unka GST number", theirGstinHelp: "Hum ise GST vibhag se jaanchte hain.",
@@ -823,6 +839,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     document.querySelector("#login-dialog").close("signed-in");
     await loadDashboard();
     loadSupplierChoices();
+    loadIssuedInvoices();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -1093,8 +1110,144 @@ async function loadSupplierChoices() {
   } catch { /* the picker is a convenience; the form works without it */ }
 }
 
+
+// ------------------------------------------------ issue #26: e-invoice applicability and the IRN
+//
+// The screen leads with the decision, not with a send button: most bills need no IRN, and the
+// product's job is to say so with the rule that decided it. Sending is offered only once the
+// answer is "yes", and a registered e-invoice is shown as a different thing from the bill itself.
+
+function detailRow(label, value, note) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = "activity-icon blue";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "·";
+  const body = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = `${label}: ${value}`;
+  body.append(strong);
+  if (note) {
+    const small = document.createElement("small");
+    small.textContent = note;
+    body.append(small);
+  }
+  row.append(icon, body);
+  return row;
+}
+
+function renderEInvoice(result, mode) {
+  const panel = document.querySelector("#einvoice-panel");
+  panel.hidden = false;
+  document.querySelector("#einvoice-result-title").textContent = result.title;
+  document.querySelector("#einvoice-result-message").textContent = result.message;
+
+  const badge = document.querySelector("#einvoice-status");
+  const status = mode === "preview" ? result.outcome : result.status;
+  badge.textContent = String(status).replace(/_/g, " ").toLowerCase();
+  badge.className = `pill ${status === "REGISTERED" ? "done" : status === "FAILED" || status === "CANNOT_DECIDE" ? "hold" : status === "APPLICABLE" ? "warn" : "done"}`;
+
+  const detail = document.querySelector("#einvoice-detail");
+  detail.replaceChildren();
+
+  if (mode === "preview") {
+    detail.append(detailRow("The rule that decided it", result.ruleId, result.sourceRef || undefined));
+    detail.append(detailRow("Why", result.reason));
+    if (result.expectedIrn) detail.append(detailRow("The number this bill will get", `${result.expectedIrn.slice(0, 24)}…`, "Worked out before sending, and checked against what comes back."));
+    if (result.reportableUntil) detail.append(detailRow("Must be reported by", result.reportableUntil));
+    result.problems.forEach((problem) => detail.append(detailRow("Missing", problem.message, problem.field)));
+  } else {
+    detail.append(detailRow("The rule that decided it", result.applicability.ruleId, result.applicability.sourceRef || undefined));
+    if (result.irn) {
+      detail.append(detailRow("E-invoice number (IRN)", result.irn));
+      detail.append(detailRow("Government acknowledgement", `${result.ackNumber} on ${result.ackDate}`));
+      detail.append(detailRow("Signed QR code", `${String(result.signedQrCode).slice(0, 32)}…`, "Kept exactly as the government sent it. This goes on the customer's copy."));
+    }
+    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntil));
+    if (result.failure) detail.append(detailRow("What went wrong", result.failure.message, result.failure.retryable ? "Worth trying again." : "Trying again unchanged will not help."));
+  }
+
+  // Only offer what makes sense for where this bill actually is.
+  const applicable = mode === "preview" ? result.outcome === "APPLICABLE" : result.applicability.outcome === "APPLICABLE";
+  const registered = mode !== "preview" && result.status === "REGISTERED";
+  document.querySelector("#einvoice-send").hidden = !(applicable && !registered && (mode === "preview" ? result.ready : result.status === "FAILED"));
+  document.querySelector("#einvoice-offline").hidden = !applicable;
+  document.querySelector("#einvoice-reconcile").hidden = !(mode !== "preview" && result.status === "FAILED");
+  document.querySelector("#einvoice-cancel-form").hidden = !registered;
+}
+
+const eInvoiceInput = () => formValues(document.querySelector("#einvoice-form"));
+
+submitStep("#einvoice-form", async () => {
+  try {
+    renderEInvoice(await api("/api/einvoices/preview", { method: "POST", body: JSON.stringify(eInvoiceInput()) }), "preview");
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+const eInvoiceAction = (selector, path, extra = () => ({})) => {
+  const button = document.querySelector(selector);
+  if (!button) return;
+  button.addEventListener("click", async () => {
+    try {
+      renderEInvoice(await api(path, { method: "POST", body: JSON.stringify({ ...eInvoiceInput(), ...extra() }) }), "record");
+      await loadIssuedInvoices();
+    } catch (error) {
+      showDialog({ title: "Nothing was sent", message: error.message }, "failed");
+    }
+  });
+};
+
+eInvoiceAction("#einvoice-send", "/api/einvoices/register");
+eInvoiceAction("#einvoice-reconcile", "/api/einvoices/reconcile");
+
+submitStep("#einvoice-cancel-form", async (form) => {
+  try {
+    renderEInvoice(await api("/api/einvoices/cancel", {
+      method: "POST", body: JSON.stringify({ ...eInvoiceInput(), ...formValues(form) }),
+    }), "record");
+    await loadIssuedInvoices();
+  } catch (error) {
+    showDialog({ title: "Nothing was cancelled", message: error.message }, "failed");
+  }
+});
+
+// The offline file matters most when the portal is down and a bill still has to go out.
+document.querySelector("#einvoice-offline")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/einvoices/offline", { method: "POST", body: JSON.stringify(eInvoiceInput()) });
+    showDialog({
+      title: "File ready",
+      message: `${result.fileName} — this is what would be sent. It is not an e-invoice until the government gives it a number.`,
+      effects: String(result.json).split("\n").slice(0, 12),
+    }, "recorded");
+  } catch (error) {
+    showDialog({ title: "Nothing to export", message: error.message }, "failed");
+  }
+});
+
+async function loadIssuedInvoices() {
+  const select = document.querySelector("#einvoice-invoices");
+  if (!select) return;
+  try {
+    const { invoices } = await api("/api/einvoices/invoices");
+    const chosen = select.value;
+    select.replaceChildren();
+    invoices.forEach((invoice) => {
+      const option = document.createElement("option");
+      option.value = invoice.id;
+      // The bill's number and the government's state, side by side and never merged.
+      option.textContent = `${invoice.number} · ${money(invoice.amount)} · ${invoice.eInvoiceStatus === "NOT_SENT" ? "not sent to the government" : invoice.eInvoiceStatus.toLowerCase()}`;
+      select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+  } catch { /* the picker is a convenience; the rest of the page still works */ }
+}
+
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); } else showLogin();

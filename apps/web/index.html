@@ -24,6 +24,7 @@
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
+          <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -119,6 +120,48 @@
             <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" data-i18n-placeholder="paymentCustomerPlaceholder" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
+        </section>
+
+        <section class="view" id="view-einvoice" aria-labelledby="einvoice-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="einvoice-title" tabindex="-1" data-i18n="einvoiceTitle"></h1>
+              <p data-i18n="einvoiceHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="einvoice-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="einvoice-invoices" required></select></label>
+                <label><span data-i18n="yourTurnover"></span><span class="input-with-prefix"><span>₹</span><input name="turnover" type="number" min="0" step="1" placeholder="80000000" /></span><small data-i18n="turnoverHelp"></small></label>
+                <label><span data-i18n="exemptCategory"></span><select name="exempt"><option value="" data-i18n="notExempt"></option><option value="BANKING_OR_NBFC" data-i18n="exemptBank"></option><option value="GOODS_TRANSPORT_AGENCY" data-i18n="exemptGta"></option><option value="SEZ_UNIT" data-i18n="exemptSez"></option></select></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkNeeded"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="einvoiceSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="einvoice-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="einvoice-result-title">—</h2><p id="einvoice-result-message"></p></div>
+              <span class="pill" id="einvoice-status">—</span>
+            </div>
+            <div class="activity-list" id="einvoice-detail"></div>
+            <div class="dialog-actions" id="einvoice-actions">
+              <button type="button" class="primary-button" id="einvoice-send" hidden data-i18n="sendToGovernment"></button>
+              <button type="button" class="secondary-button" id="einvoice-offline" hidden data-i18n="downloadOffline"></button>
+              <button type="button" class="secondary-button" id="einvoice-reconcile" hidden data-i18n="askGovernment"></button>
+            </div>
+            <form id="einvoice-cancel-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="cancelReasonKind"></span><select name="reasonCode"><option value="DATA_ENTRY_MISTAKE" data-i18n="reasonMistake"></option><option value="DUPLICATE" data-i18n="reasonDuplicate"></option><option value="ORDER_CANCELLED" data-i18n="reasonOrderOff"></option><option value="OTHER" data-i18n="reasonOther"></option></select></label>
+                <label><span data-i18n="cancelReasonWhy"></span><input name="reason" placeholder="The buyer's GST number was typed wrong" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="cancelEInvoice"></button>
+            </form>
+          </article>
         </section>
 
         <section class="view" id="view-supplier" aria-labelledby="supplier-check-title">
@@ -348,6 +391,7 @@
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
+        <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
       </nav>
     </div>
 

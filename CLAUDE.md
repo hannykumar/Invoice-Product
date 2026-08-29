@@ -18,7 +18,8 @@ disagree, raise it rather than choosing silently.
 | **GPT 3** | **Purchasing, GST, transport, government integrations** | **5, 15, 16, 17, 18, 19, 26, 27, 28, 29, 30, 31, 32, 33, 44, 45, 50, 51, 53** |
 
 GPT 3 works on branch `codex/gpt3-purchase-gst` and owns `packages/masters`,
-`packages/purchasing`, `packages/gst` and `packages/transport`.
+`packages/purchasing`, `packages/gst` and `packages/transport`. `packages/gst` was created by #26
+and holds the GST-compliance lane; `packages/gst-calc` is GPT 1's (#25) and is a different module.
 
 **Do not reimplement another agent's module.** If an assigned issue needs the ledger,
 authentication, notifications or a generic connector, consume the documented contract or build a
@@ -72,6 +73,7 @@ reverse.
 | `docs/contracts/purchase-intake-v1.md` | GPT 3 | Inbox lifecycle, routing precedence, dedup layers, field evidence and confidence |
 | `docs/contracts/purchase-matching-v1.md` | GPT 3 | Order/receipt lifecycles, per-item matching, findings and severities, tolerances, approvals |
 | `docs/contracts/supplier-risk-v1.md` | GPT 3 | Evidence shape, warning codes and levels, wording rules, the optional `Gstr2bPort` for #31 |
+| `docs/contracts/einvoice-v1.md` | GPT 3 | Applicability outcomes and rules, IRN formula and verification, statuses, idempotency, `IrpPort` |
 
 Every GPT 3 write goes through GPT 2's `PlatformCommandService`. Tenant isolation, idempotency
 and audit are theirs — do not write a second implementation of any of them.
@@ -87,6 +89,7 @@ and audit are theirs — do not write a second implementation of any of them.
 | #17 purchase posting | **Done, tests green** | `packages/purchasing`. Approved bill to ledger entry, stock receipts and supplier payable, all in one transaction. CGST/SGST/IGST/cess split from the rules engine, reverse charge, blocked ITC into cost, ₹1 rounding, preview, purchase-keyed idempotency, whole-bill reversal. Feeds #20 through `purchaseDocumentLedger`. Consumes GPT 1's real ledger (#4) and inventory (#12) — no mocks left. |
 | #18 matching | **Done, tests green** | `packages/purchasing`. Purchase-order lifecycle, goods receipt with accepted/rejected quantities and quality evidence, PO vs GRN vs invoice matching per item, effective-dated quantity/price/tax tolerances, one-step goods-confirmed flow with no order, held-match approvals pinned to a fingerprint, migration `…_three_way_matching`. **Only the accepted quantity moves stock**, and #17 skips re-receiving a line a receipt already brought in. Demonstrable on the web app's Deliveries screen. |
 | #19 supplier risk | **Done, tests green** | `packages/purchasing`. GSTIN status and effective dates behind #8's connector, filing status, e-invoice eligibility, bank-detail changes read from #5's version history, overdue and dispute signals, evidence-bearing warnings with three levels, acknowledgements pinned to a fingerprint, migration `…_supplier_risk_warnings`. Wording is defamation-safe **by machinery**: `safeMessage()` throws on an accusation, and a test drives every branch. A model score can never change the level. #31's GSTR-2B signal is an optional port; without it every assessment says so. Demonstrable on the web app's Supplier check screen. |
+| #26 e-invoice | **Done, tests green** | New `packages/gst`. Effective-dated applicability with turnover/document/recipient/exempt rules naming their notifications, government-schema payload and offline JSON, IRN generate/fetch/cancel behind #8's connector, signed QR kept verbatim, 24-hour cancellation window and 30-day reporting deadline, migration `…_einvoice_irn_lifecycle`. The IRN is a hash of four fields we know, so the government's reply is **verified** against a locally computed IRN before anything is marked registered. Idempotent three ways, including treating the portal's duplicate error as success. Demonstrable on the web app's E-invoice screen. |
 | #29 | Next | Authorised vehicle-record verification. |
 | #19, #26–#33, #44, #45, #51, #53 | Later waves | See `docs/gpt3-handbook.md` section 6. |
 
@@ -102,5 +105,6 @@ npm run demo:masters  # master data walkthrough with synthetic Indian sample dat
 npm run demo:inbox    # five documents through four channels: routing, duplicates, quarantine
 npm run demo:matching # ordered 100, received 90, billed 100 — held, explained, then approved
 npm run demo:risk     # four suppliers, four stories, and a GST-department outage
+npm run demo:einvoice # who needs an IRN, sending one, retrying, an outage, and cancelling
 npm run web           # the browser workspace, including the Deliveries screen for #18
 ```

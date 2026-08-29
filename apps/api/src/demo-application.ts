@@ -40,6 +40,8 @@ import { createCompanyShop, type CompanySeed } from './company-shop.ts';
 import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
 import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
+import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
+import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 
 const paise = (value: unknown): bigint => {
@@ -724,6 +726,204 @@ export class DemoApplication {
       },
       raw: match,
     };
+  }
+
+  // ------------------------------------------------ issue #26: e-invoice applicability and IRN
+
+  /**
+   * Turns a sales invoice this company actually issued into the government's document shape.
+   *
+   * Every figure comes from what #9 and #25 already worked out. Nothing is recomputed here, so
+   * what is reported to the government is what is in the books, to the paisa.
+   */
+  private async eInvoiceDocumentFor(actor: ActorContext, invoiceId: string): Promise<EInvoiceDocument> {
+    const companyId = this.companyOf(actor);
+    const invoice = await this.salesRepository.findById(companyId, invoiceId);
+    if (invoice === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    if (invoice.state !== 'FINAL' || invoice.number === null) {
+      throw invalid('API_INVOICE_NOT_FINAL', 'This bill has not been issued yet, so there is nothing to report to the government.');
+    }
+    const pricing = invoice.pricing;
+    if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
+
+    const seller: PartyDetails = {
+      gstin: this.config.gstin,
+      legalName: this.config.name,
+      address1: this.config.location,
+      location: this.config.location.split('·')[0]?.trim() ?? this.config.location,
+      pincode: '560058',
+      stateCode: this.config.gstin.slice(0, 2),
+    };
+    const buyer: PartyDetails = {
+      gstin: this.config.customerGstin,
+      legalName: this.config.customerName,
+      address1: 'Customer address on file',
+      location: 'Bengaluru',
+      pincode: '560001',
+      stateCode: this.config.customerGstin.slice(0, 2),
+    };
+
+    const lines: EInvoiceLine[] = pricing.lines.map((line, index) => ({
+      lineNumber: index + 1,
+      description: line.itemName,
+      isService: invoice.supplyKind === 'SERVICES',
+      hsnOrSac: line.hsnOrSac ?? '',
+      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
+      unit: line.quantity.unit,
+      unitPricePaise: line.unitPrice.minor,
+      grossAmountPaise: line.grossAmount.minor,
+      discountPaise: line.discountAmount.minor,
+      taxableValuePaise: line.taxableValue.minor,
+      gstRatePercentTimes100: line.ratePercentTimes100 ?? 0n,
+      cgstPaise: line.cgst.minor,
+      sgstPaise: line.sgst.minor,
+      igstPaise: line.igst.minor,
+      cessPaise: line.cess.minor,
+      lineTotalPaise: line.lineTotal.minor,
+    }));
+
+    return {
+      documentId: invoice.id,
+      documentType: 'INVOICE',
+      documentNumber: invoice.number,
+      documentDate: invoice.documentDate,
+      recipientKind: invoice.customerType === 'B2B' ? 'B2B' : 'B2C',
+      supplier: seller,
+      recipient: buyer,
+      placeOfSupplyStateCode: pricing.placeOfSupplyStateCode,
+      reverseCharge: false,
+      lines,
+      totalTaxableValuePaise: pricing.totals.taxableValue.minor,
+      totalCgstPaise: pricing.totals.cgst.minor,
+      totalSgstPaise: pricing.totals.sgst.minor,
+      totalIgstPaise: pricing.totals.igst.minor,
+      totalCessPaise: pricing.totals.cess.minor,
+      roundOffPaise: pricing.totals.roundOff.minor,
+      invoiceValuePaise: pricing.totals.invoiceValue.minor,
+    };
+  }
+
+  /** The turnover and category facts the applicability rules need, as the form supplies them. */
+  private applicabilityFor(document: EInvoiceDocument, input: Record<string, unknown>) {
+    const turnover = String(input.turnover ?? '').trim();
+    return {
+      documentType: document.documentType,
+      documentDate: document.documentDate,
+      recipientKind: document.recipientKind,
+      ...(document.recipient.gstin === '' ? {} : { recipientGstin: document.recipient.gstin }),
+      supplier: {
+        gstin: document.supplier.gstin,
+        // Blank means "we have not been told", which is a question, not a zero.
+        ...(turnover === '' ? {} : { aggregateTurnoverPaise: paise(turnover) }),
+        ...(input.exempt ? { exemptCategories: [String(input.exempt)] as never } : {}),
+      },
+    };
+  }
+
+  /** The invoices this company has issued, for the picker on the e-invoice screen. */
+  async issuedInvoices(actor: ActorContext) {
+    const companyId = this.companyOf(actor);
+    const invoices = await this.salesRepository.list(companyId, { state: 'FINAL' });
+    const records = await this.shop.eInvoice.list(actor);
+    return {
+      invoices: invoices.map((invoice) => {
+        const record = records.find((candidate) => candidate.documentId === invoice.id);
+        return {
+          id: invoice.id,
+          number: invoice.number,
+          date: invoice.documentDate,
+          amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n),
+          // The bill's own state and the government's are shown separately, never merged.
+          eInvoiceStatus: record?.status ?? 'NOT_SENT',
+        };
+      }),
+    };
+  }
+
+  private static eInvoiceJson(record: EInvoiceRecord) {
+    return {
+      state: 'einvoice' as const,
+      status: record.status,
+      title: record.status === 'REGISTERED'
+        ? 'Registered with the government'
+        : record.status === 'CANCELLED'
+          ? 'Cancelled with the government'
+          : record.status === 'PENDING'
+            ? 'Waiting for the government'
+            : 'Not registered',
+      message: record.message,
+      documentNumber: record.documentNumber,
+      applicability: {
+        outcome: record.applicability.outcome,
+        reason: record.applicability.reason,
+        ruleId: record.applicability.ruleId,
+        sourceRef: record.applicability.sourceRef ?? null,
+      },
+      irn: record.acknowledgement?.irn ?? null,
+      ackNumber: record.acknowledgement?.ackNumber ?? null,
+      ackDate: record.acknowledgement?.ackDate ?? null,
+      signedQrCode: record.acknowledgement?.signedQrCode ?? null,
+      cancellableUntil: record.cancellableUntil ?? null,
+      reportableUntil: record.reportableUntil ?? null,
+      failure: record.failure ?? null,
+      raw: record,
+    };
+  }
+
+  /** Whether this bill needs an IRN, and what would be sent. Writes nothing, sends nothing. */
+  async previewEInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    const document = await this.eInvoiceDocumentFor(actor, String(input.invoice ?? ''));
+    const preview = await this.shop.eInvoice.preview(actor, {
+      document, applicability: this.applicabilityFor(document, input),
+    });
+    return {
+      state: 'preview' as const,
+      title: preview.applicability.outcome === 'APPLICABLE'
+        ? (preview.ready ? 'Ready to send' : 'Something is missing')
+        : preview.applicability.outcome === 'CANNOT_DECIDE' ? 'We need one more fact' : 'No e-invoice needed',
+      message: preview.summary,
+      outcome: preview.applicability.outcome,
+      reason: preview.applicability.reason,
+      ruleId: preview.applicability.ruleId,
+      sourceRef: preview.applicability.sourceRef ?? null,
+      ready: preview.ready,
+      expectedIrn: preview.expectedIrn ?? null,
+      reportableUntil: preview.reportableUntil ?? null,
+      problems: preview.problems.map((problem) => ({ field: problem.field, message: problem.message })),
+      documentNumber: document.documentNumber,
+    };
+  }
+
+  /** Sends the bill to the government, once. */
+  async registerEInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    const document = await this.eInvoiceDocumentFor(actor, String(input.invoice ?? ''));
+    const record = await this.shop.eInvoice.register(actor, {
+      document, applicability: this.applicabilityFor(document, input),
+    });
+    return DemoApplication.eInvoiceJson(record);
+  }
+
+  /** Asks the government what it actually holds, for when a call timed out. */
+  async reconcileEInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.eInvoice.reconcile(actor, String(input.invoice ?? ''));
+    return DemoApplication.eInvoiceJson(record);
+  }
+
+  async cancelEInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.eInvoice.cancel(actor, String(input.invoice ?? ''), {
+      reasonCode: (String(input.reasonCode ?? 'OTHER') as 'OTHER'),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.eInvoiceJson(record);
+  }
+
+  /** The payload as a file, for the day the portal is down and a bill still has to go out. */
+  async eInvoiceOfflineJson(actor: ActorContext, input: Record<string, unknown>) {
+    const document = await this.eInvoiceDocumentFor(actor, String(input.invoice ?? ''));
+    const json = await this.shop.eInvoice.offlineJson(actor, {
+      document, applicability: this.applicabilityFor(document, input),
+    });
+    return { state: 'offline' as const, fileName: `einvoice-${document.documentNumber.replace(/\//g, '-')}.json`, json };
   }
 
   // -------------------------------------------------------- issue #19: supplier risk warnings
