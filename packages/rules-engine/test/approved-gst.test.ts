@@ -171,6 +171,29 @@ test('Ladakh is refused rather than guessed', () => {
   assert.match(entry.whatWouldResolveIt, /amended by the Finance Act 2020/);
 });
 
+test('a business on the composition scheme charges no tax', () => {
+  const { decision } = production().evaluate({
+    topic: 'gst.composition.charging',
+    facts: FactSet.of({ 'supply.supplierRegistration': 'COMPOSITION' }, 'MASTER_DATA'),
+    documentDate: APRIL,
+  });
+  assert.equal(decision.outcome, 'BLOCK');
+  assert.equal(decision.computed.mayChargeGst, 'false');
+  assert.equal(decision.sourceRef, 'cgst-act-2017-s10-4');
+  assert.equal(decision.ruleReviewState, 'APPROVED');
+  assert.match(decision.explanation['en-IN'], /GST cannot be charged/);
+});
+
+test('an ordinary registered business charges tax normally', () => {
+  const { decision } = production().evaluate({
+    topic: 'gst.composition.charging',
+    facts: FactSet.of({ 'supply.supplierRegistration': 'REGULAR' }, 'MASTER_DATA'),
+    documentDate: APRIL,
+  });
+  assert.equal(decision.outcome, 'ALLOW');
+  assert.equal(decision.computed.mayChargeGst, 'true');
+});
+
 test('the e-way rule is still refused in production, because its numbers have no source', () => {
   const { decision } = production().evaluate({
     topic: 'gst.eway.applicability',
