@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/inventory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #12 [E12] — stock derived from an append-only movement ledger, with reservations, unit conversion and negative-stock control.",
+  "exports": { ".": "./src/index.ts" }
+}

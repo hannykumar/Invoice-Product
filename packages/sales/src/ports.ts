@@ -6,6 +6,7 @@
  * tested now and the real modules drop in without touching this file.
  */
 import type { CompanyId, IsoDate, Quantity } from '@invoice/kernel';
+import type { ActorContext } from '@invoice/ledger';
 import type { SalesInvoice } from './model.ts';
 
 export interface SalesRepository {
@@ -54,11 +55,11 @@ export type ReservationResult =
  * tills cannot promise the same goods; issuing happens when it becomes final.
  */
 export interface InventoryPort {
-  reserve(request: ReservationRequest): Promise<ReservationResult>;
-  release(companyId: CompanyId, documentId: string): Promise<void>;
-  issue(companyId: CompanyId, documentId: string): Promise<void>;
+  reserve(actor: ActorContext, request: ReservationRequest): Promise<ReservationResult>;
+  release(actor: ActorContext, documentId: string): Promise<void>;
+  issue(actor: ActorContext, documentId: string, documentDate: IsoDate, number: string | null): Promise<void>;
   /** Puts the goods back when a final invoice is cancelled. */
-  returnToStock(companyId: CompanyId, documentId: string): Promise<void>;
+  returnToStock(actor: ActorContext, documentId: string, documentDate: IsoDate, reason: string): Promise<void>;
 }
 
 export type GovernmentRegistrationStatus = 'NOT_APPLICABLE' | 'PENDING' | 'REGISTERED' | 'FAILED';
@@ -81,7 +82,7 @@ export interface ComplianceHookPort {
 
 /** A no-op inventory adapter for tests and for lanes that do not track stock. */
 export const permissiveInventory: InventoryPort = {
-  async reserve(request) {
+  async reserve(_actor, request) {
     return { ok: true, reservationId: `mock:${request.documentId}` };
   },
   async release() {},
