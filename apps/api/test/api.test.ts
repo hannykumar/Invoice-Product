@@ -96,3 +96,37 @@ test('the reports surface is computed from the same live company the other calls
     assert.equal(typeof item.what, 'string');
   }
 });
+
+test('business setup runs the real onboarding service and opens a balanced set of books', async () => {
+  // A mistyped GST number is caught by the real validator and nothing is created.
+  const mistyped = await request('POST', '/api/onboarding/preview', {
+    legalName: 'Meera Bakers', businessType: 'BAKERY', stateCode: '08',
+    registration: 'REGULAR', gstin: '08AAAAA0000A1Z9', filingFrequency: 'QUARTERLY',
+    booksStartDate: '2026-04-01', itemName: 'Chocolate cake 500g',
+  });
+  assert.equal(mistyped.body.ok, false);
+  assert.ok(mistyped.body.problems.some((p: { field: string | null }) => p.field === 'gstin'));
+
+  // The corrected setup passes the check without creating anything yet.
+  const good = {
+    legalName: 'Meera Bakers', businessType: 'BAKERY', stateCode: '08',
+    registration: 'REGULAR', gstin: '08AAAAA0000A1Z2', filingFrequency: 'QUARTERLY',
+    booksStartDate: '2026-04-01', itemName: 'Chocolate cake 500g', itemKind: 'GOODS', itemUnit: 'PCS', itemHsn: '1905',
+    rateCode: '1905', ratePercent: '5', rateBasis: 'The rate my accountant has always used',
+    openingCash: '8000',
+  };
+  const preview = await request('POST', '/api/onboarding/preview', good);
+  assert.equal(preview.body.ok, true);
+  assert.equal(preview.body.result, undefined, 'a preview creates nothing');
+
+  // Finishing runs the real service: it posts an opening voucher, declares the rate, and the new
+  // company's own trial balance — read back from the ledger — balances.
+  const finished = await request('POST', '/api/onboarding/finish', good);
+  assert.equal(finished.body.ok, true);
+  const result = finished.body.result;
+  assert.ok(result.openingVoucherId, 'an opening balance voucher was posted');
+  assert.equal(result.ratesDeclared, 1);
+  assert.equal(result.trialBalance.balanced, true);
+  assert.equal(result.trialBalance.totalDebits, result.trialBalance.totalCredits);
+  assert.equal(result.trialBalance.totalDebits, 8000);
+});

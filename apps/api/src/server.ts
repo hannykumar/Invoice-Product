@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { demoApplication } from './demo-application.ts';
+import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 
 const json = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
 
@@ -18,6 +19,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(body));
+    if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
+    if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
     return json(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
   } catch (error) {
     return json(400, { state: 'failed', title: 'Nothing was saved', message: error instanceof Error ? error.message : 'The request could not be completed.' });
