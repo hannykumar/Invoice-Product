@@ -28,7 +28,8 @@
     "db:migration:id": "node --experimental-strip-types tools/migrations/new-id.ts",
     "db:seed": "node --experimental-strip-types packages/platform/src/seed.ts",
     "demo:masters": "node --experimental-strip-types packages/masters/src/demo.ts",
-    "demo:inbox": "node --experimental-strip-types packages/purchasing/src/demo.ts"
+    "demo:inbox": "node --experimental-strip-types packages/purchasing/src/demo.ts",
+    "demo:invoice": "node --experimental-strip-types packages/invoice-templates/src/demo.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",

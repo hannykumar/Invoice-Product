@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/invoice-templates",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #13 [E13] — invoice templates and the rendering engine. Styling is the business's; the legally required section is not.",
+  "exports": { ".": "./src/index.ts" }
+}

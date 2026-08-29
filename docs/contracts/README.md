@@ -10,6 +10,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`rules-engine`](./rules-engine.v1.md) | 1.0.0 | GPT 1 (#7) | GPT 1 (#9, #11, #12, #25, #34), GPT 3 (#19, #26–#31) | Published |
 | [`gst-calc`](./gst-calc.v1.md) | 1.0.0 | GPT 1 (#25) | GPT 1 (#9, #13, #35), GPT 3 (#17, #30, #45) | Published |
 | [`compliance-register`](../compliance/README.md) | 1.0.0 | GPT 1 (#54) | GPT 1 (#7, #25), GPT 3 (#16, #17, #30, #31) | Published |
+| [`invoice-templates`](./invoice-templates.v1.md) | 1.0.0 | GPT 1 (#13) | GPT 1 (#9, #36), GPT 2 (#14, #38), GPT 3 (#26, #45) | Published |
 | [`sales`](./sales.v1.md) | 1.0.0 | GPT 1 (#9) | GPT 1 (#10, #11, #12, #13, #20, #35), GPT 2 (#14), GPT 3 (#26, #27, #45) | Published |
 | [`master-data-ports`](./master-data-ports.v1.md) | 1.0.0-draft | GPT 3 (#5) | GPT 1 (#9, #11, #12, #13, #25) | **Mocked by GPT 1** pending GPT 3 |
 | [`platform-ports`](./platform-ports.v1.md) | 1.0.0-draft | GPT 2 (#3, #6) | GPT 1, GPT 3 | **Mocked by GPT 1** pending GPT 2 |
