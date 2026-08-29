@@ -144,9 +144,9 @@ export class DemoApplication {
         salesToday: jsonAmount(sales.reduce((sum, invoice) => sum + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n)),
         customersOwe: jsonAmount(customer.totalOutstanding.minor),
         purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED').reduce((sum, bill) => sum + bill.totalPaise, 0n)),
-        needsAttention: (stock.physical.micro <= 0n ? 1 : 0) + supplier.documents.filter((position) => position.daysOverdue > 0).length,
+        needsAttention: (stock.physical.scaled <= 0n ? 1 : 0) + supplier.documents.filter((position) => position.daysOverdue > 0).length,
       },
-      stock: { itemId: 'TMT12', name: 'TMT Steel Bar 12mm', quantity: Number(stock.physical.micro) / 1_000_000, unit: stock.physical.unitCode },
+      stock: { itemId: 'TMT12', name: 'TMT Steel Bar 12mm', quantity: Number(stock.physical.scaled) / 1_000_000, unit: stock.physical.unit },
       supplier: { id: SUPPLIER, name: 'Shree Ram Steels Private Limited', outstanding: jsonAmount(supplier.totalOutstanding.minor), documents: supplier.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
       customer: { id: CUSTOMER, name: 'ABC Traders', outstanding: jsonAmount(customer.totalOutstanding.minor), documents: customer.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
       activity: [
@@ -232,7 +232,7 @@ export class DemoApplication {
     if (rate <= 0n) throw new Error('Enter either the bill amount, or the price of one and how many.');
 
     // Exactly the arithmetic #16 and #17 both use, so the figure on screen is the posted one.
-    const taxable = lineTaxableValue(qty.micro, rate);
+    const taxable = lineTaxableValue(qty.scaled, rate);
     const tax = taxOn(taxable, gstBasisPoints);
     // A typed bill total is checked against what the lines come to; a blank one is taken from them.
     const total = pricePerUnit && typedTotal > 0n ? typedTotal : taxable + tax;

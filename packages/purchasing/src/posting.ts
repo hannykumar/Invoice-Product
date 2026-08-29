@@ -84,7 +84,7 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
 
   for (const line of approved.lines) {
     const label = `Line ${line.lineNumber} (${line.description})`;
-    if (line.quantity.micro <= 0n) problems.push(`${label} has a quantity of zero or less, which cannot be received.`);
+    if (line.quantity.scaled <= 0n) problems.push(`${label} has a quantity of zero or less, which cannot be received.`);
     if (line.ratePaise < 0n) problems.push(`${label} has a price below zero.`);
     if (line.supplyKind === "GOODS" && line.warehouseId === undefined) {
       problems.push(`${label} is goods, but no godown was chosen, so the stock cannot be received. Please pick where it was delivered.`);

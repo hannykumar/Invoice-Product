@@ -335,7 +335,7 @@ export const buyStock = async (
     itemId: input.itemId,
     warehouseId: input.warehouseId,
     kind: 'PURCHASE_IN',
-    quantity: { micro: quantityFromString(input.quantity, input.unit).scaled, unitCode: input.unit },
+    quantity: { scaled: quantityFromString(input.quantity, input.unit).scaled, unit: input.unit },
     documentDate: isoDate(input.on),
     source: { kind: 'purchase_invoice', id: input.key, number: input.key },
     unitCost: input.unitCost,

@@ -125,12 +125,12 @@ export class InventoryService {
     if (item === undefined) {
       throw notFound('STOCK_ITEM_UNKNOWN', 'We do not have details for that item.');
     }
-    if (quantity.unitCode === item.baseUnit) return quantity;
+    if (quantity.unit === item.baseUnit) return quantity;
     try {
       return this.#masterData.units(companyId).convertExact(quantity, item.baseUnit, itemId);
     } catch (error) {
       if (error instanceof UnitConversionError) {
-        throw invalid('STOCK_UNIT_CONVERSION', error.message, { details: { unit: quantity.unitCode } });
+        throw invalid('STOCK_UNIT_CONVERSION', error.message, { details: { unit: quantity.unit } });
       }
       throw error;
     }
@@ -213,10 +213,10 @@ export class InventoryService {
     }
     const serials = command.serialNumbers ?? [];
     const base = this.#toBaseUnit(actor.companyId, command.itemId, command.quantity);
-    if (base.micro <= 0n) {
+    if (base.scaled <= 0n) {
       throw invalid('STOCK_QUANTITY_NOT_POSITIVE', 'A stock movement needs a quantity greater than zero.');
     }
-    if (item.tracksSerials && BigInt(serials.length) * 1000000n !== base.micro) {
+    if (item.tracksSerials && BigInt(serials.length) * 1000000n !== base.scaled) {
       throw invalid(
         'STOCK_SERIALS_MISMATCH',
         `"${item.name}" is tracked piece by piece, so the number of serial numbers must match the quantity.`,
@@ -260,9 +260,9 @@ export class InventoryService {
   ): Promise<{ reason: string; allowedBy: UserId } | null> {
     if (DIRECTION_OF[command.kind] === 'IN') return null;
     const balance = await this.#balanceIn(actor.companyId, command.itemId, command.warehouseId, batchId, baseUnit);
-    if (balance.physical.micro >= base.micro) return null;
+    if (balance.physical.scaled >= base.scaled) return null;
 
-    const shortfall = { micro: base.micro - balance.physical.micro, unitCode: baseUnit };
+    const shortfall = { scaled: base.scaled - balance.physical.scaled, unit: baseUnit };
     if (this.#policy.negativeStock === 'BLOCK') {
       throw notAllowed(
         'STOCK_WOULD_GO_NEGATIVE',
@@ -332,24 +332,24 @@ export class InventoryService {
         const key = `${line.itemId}|${line.warehouseId}|${batchId ?? ''}`;
         const balance = await this.#balanceIn(actor.companyId, line.itemId, line.warehouseId, batchId, item.baseUnit);
         const alreadyClaimed = claimed.get(key) ?? 0n;
-        const available = balance.available.micro - alreadyClaimed;
+        const available = balance.available.scaled - alreadyClaimed;
 
-        if (available < base.micro) {
+        if (available < base.scaled) {
           shortfalls.push({
             lineId: line.lineId,
             itemId: line.itemId,
             itemName: item.name,
             warehouseName: warehouse.name,
             // Numbers only: the message that shows these supplies the unit separately.
-            available: amountOf({ micro: available < 0n ? 0n : available, unitCode: item.baseUnit }),
+            available: amountOf({ scaled: available < 0n ? 0n : available, unit: item.baseUnit }),
             required: amountOf(base),
-            shortfall: amountOf({ micro: base.micro - available, unitCode: item.baseUnit }),
+            shortfall: amountOf({ scaled: base.scaled - available, unit: item.baseUnit }),
             unit: item.baseUnit,
           });
           continue;
         }
 
-        claimed.set(key, alreadyClaimed + base.micro);
+        claimed.set(key, alreadyClaimed + base.scaled);
         const at = this.#clock.now();
         taken.push({
           id: this.#newId(),

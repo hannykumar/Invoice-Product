@@ -118,8 +118,8 @@ test("opening stock is stored in the item's base unit and refuses to round", () 
   const item = masters.createItem(a, { name: "Sona Masoori Rice", kind: "goods", hsnSac: "10063020", baseUnit: "KGS", trackBatches: false, trackSerials: false }, { idempotencyKey: key() });
   const warehouse = masters.createWarehouse(a, { code: "BLR", name: "Bengaluru Main", addressLine: "14 Avenue Road", city: "Bengaluru", stateCode: "29", pincode: "560001" }, { idempotencyKey: key() });
   const opening = masters.setOpeningStock(a, { itemId: item.record.id, warehouseId: warehouse.record.id, asOn: "2026-04-01", quantity: quantity("2", "QTL"), valuePaise: 1_200_000n }, { idempotencyKey: key() });
-  assert.equal(opening.record.quantity.unitCode, "KGS");
-  assert.equal(opening.record.quantity.micro, toMicro("200"));
+  assert.equal(opening.record.quantity.unit, "KGS");
+  assert.equal(opening.record.quantity.scaled, toMicro("200"));
 });
 
 test("prices follow slabs and convert to the unit the customer is buying in", () => {
