@@ -64,6 +64,10 @@ const platformMigrations: readonly Migration[] = [{
   id: "0005_bank_statement_pdf_sources",
   up: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text', 'pdf'));`,
   down: `ALTER TABLE bank_statement_imports DROP CONSTRAINT bank_statement_imports_source_format_check; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_source_format_check CHECK (source_format IN ('csv', 'xlsx', 'pdf-text'));`,
+}, {
+  id: "20260829T011306950Z_platform_44b9a0b0746b_bank_import_status",
+  up: `ALTER TABLE bank_statement_imports ADD COLUMN status text; UPDATE bank_statement_imports SET status = CASE WHEN jsonb_array_length(review_reasons) > 0 THEN 'needs-review' ELSE 'ready' END; ALTER TABLE bank_statement_imports ALTER COLUMN status SET NOT NULL; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_status_check CHECK (status IN ('ready', 'needs-review'));`,
+  down: `ALTER TABLE bank_statement_imports DROP COLUMN status;`,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(

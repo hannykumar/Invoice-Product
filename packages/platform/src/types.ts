@@ -2,6 +2,7 @@ export type Id = string;
 export type Permission =
   | "sale.draft.create"
   | "bank.balance.read"
+  | "bank.statement.import"
   | "gst.file"
   | "stock.negative.override"
   | "approval.decide"
