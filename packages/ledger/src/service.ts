@@ -401,50 +401,7 @@ export class LedgerService {
     }
     this.#permissions.require(actor, REVERSE_PERMISSION, 'undo an entry');
 
-    const outcome = await this.#store.transaction(actor.companyId, async (uow): Promise<PostResult> => {
-      const alreadyDone = await uow.idempotency.lookup(actor.companyId, command.idempotencyKey);
-      if (alreadyDone !== null) {
-        const existing = await uow.vouchers.findById(actor.companyId, alreadyDone as VoucherId);
-        if (existing === null) {
-          throw conflict('LEDGER_IDEMPOTENCY_DANGLING', 'This correction was being saved a moment ago. Please try again.');
-        }
-        return { voucher: existing, deduplicated: true };
-      }
-
-      const original = await uow.vouchers.findById(actor.companyId, command.voucherId);
-      if (original === null) throw notFound('LEDGER_VOUCHER_NOT_FOUND', 'That entry does not exist in this business.');
-      this.#sameCompany(actor, original.companyId);
-      if (original.state === 'DRAFT') {
-        throw notAllowed('LEDGER_REVERSE_DRAFT', 'An unfinished entry is deleted, not undone.');
-      }
-      if (original.state === 'REVERSED' || original.reversedByVoucherId !== null) {
-        throw notAllowed(
-          'LEDGER_ALREADY_REVERSED',
-          `${original.number} has already been undone. Look at the correction that was made instead.`,
-        );
-      }
-
-      await this.#checkDatePostable(uow, actor, command.date, command.periodOverride);
-      const mirrored = mirrorLines(original.lines.map((l) => ({
-        accountId: l.accountId as string,
-        partyId: l.partyId,
-        debit: l.debit,
-        credit: l.credit,
-        narration: l.narration,
-      })));
-
-      const reversal = await this.#buildVoucher(uow, actor, 'REVERSAL', command.date, mirrored, {
-        narration: `Undoes ${original.number}`,
-        source: original.source,
-        idempotencyKey: command.idempotencyKey,
-        reversesVoucherId: original.id,
-        reason: command.reason,
-      });
-      await uow.vouchers.insert(reversal);
-      await uow.vouchers.markReversed(actor.companyId, original.id, reversal.id, command.reason);
-      await uow.idempotency.remember(actor.companyId, command.idempotencyKey, reversal.id);
-      return { voucher: reversal, deduplicated: false };
-    });
+    const outcome = await this.#store.transaction(actor.companyId, (uow) => this.reverseVoucherIn(uow, actor, command));
 
     if (!outcome.deduplicated) {
       await this.#audit.record({
@@ -460,6 +417,80 @@ export class LedgerService {
       });
     }
     return outcome;
+  }
+
+  /**
+   * Undoes an entry inside a transaction the caller already opened.
+   *
+   * A module that owns a document undoes its own record, its stock and the entry as one unit of
+   * work — purchase posting (#17) reverses a bill, puts the goods back and closes what was owed,
+   * or does none of them. The audit event is the caller's, via `recordReversed`, because only the
+   * caller knows whether its transaction committed.
+   */
+  async reverseVoucherIn(uow: UnitOfWork, actor: ActorContext, command: ReverseVoucherCommand): Promise<PostResult> {
+    if (command.reason.trim().length === 0) {
+      throw invalid('LEDGER_REASON_REQUIRED', 'Please write why this entry is being undone.', {
+        messageId: 'override.reason_required',
+      });
+    }
+    this.#permissions.require(actor, REVERSE_PERMISSION, 'undo an entry');
+    const alreadyDone = await uow.idempotency.lookup(actor.companyId, command.idempotencyKey);
+    if (alreadyDone !== null) {
+      const existing = await uow.vouchers.findById(actor.companyId, alreadyDone as VoucherId);
+      if (existing === null) {
+        throw conflict('LEDGER_IDEMPOTENCY_DANGLING', 'This correction was being saved a moment ago. Please try again.');
+      }
+      return { voucher: existing, deduplicated: true };
+    }
+
+    const original = await uow.vouchers.findById(actor.companyId, command.voucherId);
+    if (original === null) throw notFound('LEDGER_VOUCHER_NOT_FOUND', 'That entry does not exist in this business.');
+    this.#sameCompany(actor, original.companyId);
+    if (original.state === 'DRAFT') {
+      throw notAllowed('LEDGER_REVERSE_DRAFT', 'An unfinished entry is deleted, not undone.');
+    }
+    if (original.state === 'REVERSED' || original.reversedByVoucherId !== null) {
+      throw notAllowed(
+        'LEDGER_ALREADY_REVERSED',
+        `${original.number} has already been undone. Look at the correction that was made instead.`,
+      );
+    }
+
+    await this.#checkDatePostable(uow, actor, command.date, command.periodOverride);
+    const mirrored = mirrorLines(original.lines.map((l) => ({
+      accountId: l.accountId as string,
+      partyId: l.partyId,
+      debit: l.debit,
+      credit: l.credit,
+      narration: l.narration,
+    })));
+
+    const reversal = await this.#buildVoucher(uow, actor, 'REVERSAL', command.date, mirrored, {
+      narration: `Undoes ${original.number}`,
+      source: original.source,
+      idempotencyKey: command.idempotencyKey,
+      reversesVoucherId: original.id,
+      reason: command.reason,
+    });
+    await uow.vouchers.insert(reversal);
+    await uow.vouchers.markReversed(actor.companyId, original.id, reversal.id, command.reason);
+    await uow.idempotency.remember(actor.companyId, command.idempotencyKey, reversal.id);
+    return { voucher: reversal, deduplicated: false };
+  }
+
+  /** Writes the audit event for a reversal whose transaction has committed. */
+  async recordReversed(actor: ActorContext, originalVoucherId: VoucherId, reversal: Voucher, reason: string): Promise<void> {
+    await this.#audit.record({
+      companyId: actor.companyId,
+      actorId: actor.userId,
+      at: this.#clock.now().toISOString(),
+      action: 'ledger.voucher_reversed',
+      subjectType: 'voucher',
+      subjectId: originalVoucherId,
+      summary: `${originalVoucherId} undone by ${reversal.number}.`,
+      details: { reversalId: reversal.id, reversalNumber: reversal.number },
+      overrideReason: reason,
+    });
   }
 
   /**

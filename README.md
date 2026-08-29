@@ -72,6 +72,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run demo:invoice` — issues a real bill through the ledger and prints it on A4, thermal and mobile into `tmp/invoices/`.
 - `npm run demo:onboarding` — sets up a bakery, interrupted halfway and resumed, into `tmp/onboarding/`.
 - `npm run demo:validate` — prints a walkthrough of purchase validation: what posts, what needs a person and what is stopped.
+- `npm run demo:posting` — prints a walkthrough of purchase posting: the books, the godown and the supplier's account moving together.
 
 ## Type checking the deterministic modules
 
