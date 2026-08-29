@@ -56,6 +56,16 @@ export interface ReplayResult {
   readonly accounts: readonly { code: string; name: string; balance: string }[];
   readonly stock: readonly { itemId: string; physical: string; unit: string }[];
   readonly tax: { taxableValue: string; cgst: string; sgst: string; igst: string; total: string };
+  /**
+   * Tax per invoice line, in paise. The document totals are re-summed from the components, so a
+   * line whose own parts disagree with its own total is invisible at that level — this is the
+   * granularity a correctness gate has to look at (issue #48).
+   */
+  readonly taxLines: readonly {
+    documentNumber: string;
+    lineId: string;
+    cgst: bigint; sgst: bigint; utgst: bigint; igst: bigint; cess: bigint; totalTax: bigint;
+  }[];
   readonly refusals: readonly string[];
   /** Each refusal with the reason it gave, so a fixture can pin why and not merely that. */
   readonly refusalDetails: readonly { ref: string; code: string; message: string }[];
@@ -366,6 +376,19 @@ export const replay = async (fixture: GoldenFixture): Promise<ReplayResult> => {
     return toDecimalString({ currency: 'INR', minor: total });
   };
 
+  const taxLines = finalInvoices.flatMap((invoice) =>
+    (invoice.pricing?.lines ?? []).map((line) => ({
+      documentNumber: invoice.number ?? invoice.id,
+      lineId: line.lineId,
+      cgst: line.cgst.minor,
+      sgst: line.sgst.minor,
+      utgst: line.utgst.minor,
+      igst: line.igst.minor,
+      cess: line.cess.minor,
+      totalTax: line.totalTax.minor,
+    })),
+  );
+
   return {
     trialBalanceBalanced: balances.balanced,
     totalDebits: toDecimalString(balances.totalDebit),
@@ -379,6 +402,7 @@ export const replay = async (fixture: GoldenFixture): Promise<ReplayResult> => {
       igst: sumOf((t) => t.igst),
       total: sumOf((t) => t.totalTax),
     },
+    taxLines,
     refusals,
     refusalDetails,
     issued,
