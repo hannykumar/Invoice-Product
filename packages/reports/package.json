@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/reports",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #35 [E35] — financial, inventory and operational reports, every total traceable to the records that produced it.",
+  "exports": { ".": "./src/index.ts" }
+}
