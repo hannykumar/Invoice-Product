@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/delivery",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #14 [E14] — invoice delivery, recipient preferences and delivery evidence.",
+  "exports": { ".": "./src/index.ts" }
+}
