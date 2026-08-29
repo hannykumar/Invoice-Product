@@ -25,11 +25,12 @@ from deterministic, versioned, testable rules.
 | [`packages/kernel`](packages/kernel) | #4 | Exact money, exact quantities, rounding, identifiers, dates, the error model |
 | [`packages/ledger`](packages/ledger) | #4 | The double-entry ledger: the only write path into the books |
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
+| [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
+| [`packages/gst-calc`](packages/gst-calc) | #25 | Deterministic GST computation, place of supply and tax classification |
+| [`packages/compliance-register`](packages/compliance-register) | #54 | The official sources behind every compliance rule, and the gate that enforces them |
 | [`packages/ux-vocabulary`](packages/ux-vocabulary) | #46 | The only supported way to produce user-facing wording |
 | [`packages/platform`](packages/platform) | #2, #3, #6, #8, #21 | Tenancy, permissions, approvals, audit, connectors and banking import drafts |
 | [`ops/security`](ops/security) | #40 | Encryption, privacy requests, secure logging, backups and restore drills |
-
-## Running the checks
 
 ## Quick start
 
@@ -43,7 +44,10 @@ This one command starts the local PostgreSQL container, installs development dep
 
 - `apps/api`: HTTP composition root. It depends on platform contracts, never a provider SDK.
 - `packages/platform`: tenancy, permissions, approvals, audit, idempotency, exceptions, migrations and external-connector contracts.
-- `packages/accounting`, `packages/sales`: GPT 1-owned modules (reserved).
+- `packages/kernel`, `packages/ledger`, `packages/rules-engine`, `packages/gst-calc`,
+  `packages/sales`, `packages/ux-vocabulary`: GPT 1-owned modules.
+- `docs/product`: the canonical product specification, glossary, workflows and ownership map (#1).
+- `docs/ux`: the plain-language design system (#46).
 - `packages/masters`: GPT 3-owned business master data (issue #5).
 - `packages/purchasing`: GPT 3-owned purchase intake and validation (issue #15 onwards).
 - `packages/gst`, `packages/transport`: GPT 3-owned modules (reserved).
@@ -60,6 +64,17 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run web` — starts the responsive development preview at `http://127.0.0.1:4173`.
 - `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
 - `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
+
+## Type checking the deterministic modules
+
+The shared `tsconfig.json` is owned by issue #2. `tsconfig.strict.json` extends it with the extra
+checks the deterministic financial modules need — most importantly `erasableSyntaxOnly`, because
+Node runs these packages by stripping types, so any TypeScript that cannot simply be erased would
+fail at run time rather than at build time:
+
+```sh
+npx tsc --noEmit -p tsconfig.strict.json
+```
 
 ## Collaboration rules
 

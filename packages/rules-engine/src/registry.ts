@@ -6,6 +6,7 @@
  * exactly as it was made.
  */
 import { invalid, notFound, type IsoDate } from '@invoice/kernel';
+import { defaultRegister, type ComplianceRegister } from '@invoice/compliance-register';
 import type { FactDefinition } from './facts.ts';
 import type { Rule } from './rule.ts';
 
@@ -27,7 +28,7 @@ const placeholdersIn = (text: string): string[] => [...text.matchAll(PLACEHOLDER
  * These are refusals to load, not warnings. A rule set that reaches the engine has already been
  * proved to be well formed, so no decision path has to defend against a malformed rule.
  */
-export const validateRuleSet = (set: RuleSet): void => {
+export const validateRuleSet = (set: RuleSet, register: ComplianceRegister | null = defaultRegister()): void => {
   const seen = new Set<string>();
   const factIds = new Set(set.facts.map((f) => f.id));
 
@@ -36,11 +37,24 @@ export const validateRuleSet = (set: RuleSet): void => {
     if (seen.has(key)) throw invalid('RULES_DUPLICATE_RULE', `${key} appears twice in rule set ${set.id}.`);
     seen.add(key);
 
-    if (rule.kind === 'COMPLIANCE' && rule.reviewState === 'APPROVED' && (rule.sourceRef ?? '') === '') {
-      throw invalid(
-        'RULES_APPROVED_WITHOUT_SOURCE',
-        `${key} claims to state the law but names no official source. Approve it in the compliance-source register (issue #54) first.`,
-      );
+    if (rule.kind === 'COMPLIANCE' && rule.reviewState === 'APPROVED') {
+      if ((rule.sourceRef ?? '') === '') {
+        throw invalid(
+          'RULES_APPROVED_WITHOUT_SOURCE',
+          `${key} claims to state the law but names no official source. Approve it in the compliance-source register (issue #54) first.`,
+        );
+      }
+      // The register is the gate, not this file. A rule that says APPROVED but that the register
+      // will not vouch for never reaches an engine.
+      if (register !== null) {
+        const verdict = register.mayApprove(rule.id, rule.version, set.publishedOn);
+        if (!verdict.approved) {
+          throw invalid(
+            'RULES_REGISTER_WILL_NOT_APPROVE',
+            `${key} is marked APPROVED but the compliance-source register refuses it: ${verdict.reasons.join(' ')}`,
+          );
+        }
+      }
     }
 
     for (const factId of rule.requires) {
@@ -67,8 +81,8 @@ export const validateRuleSet = (set: RuleSet): void => {
 export class RuleRegistry {
   readonly #sets = new Map<string, RuleSet>();
 
-  register(set: RuleSet): this {
-    validateRuleSet(set);
+  register(set: RuleSet, complianceRegister: ComplianceRegister | null = defaultRegister()): this {
+    validateRuleSet(set, complianceRegister);
     const key = `${set.id}@${set.version}`;
     if (this.#sets.has(key)) throw invalid('RULES_DUPLICATE_RULE_SET', `Rule set ${key} is already registered.`);
     this.#sets.set(key, Object.freeze(set));

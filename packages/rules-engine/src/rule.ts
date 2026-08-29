@@ -75,6 +75,14 @@ export interface Rule {
     readonly 'en-IN': string;
     readonly 'hi-IN': string;
   };
+  /**
+   * An optional guard deciding whether this rule is in the running at all.
+   *
+   * Two rules can answer the same question for different facts — the place of supply of goods and
+   * of services, say. Without a guard they would look like a tie and the engine would refuse to
+   * choose, which is right in general and wrong here. The guard is pure, like `evaluate`.
+   */
+  readonly appliesWhen?: (facts: FactSet) => boolean;
   /** Pure. Same facts in, same outcome out, for ever. */
   readonly evaluate: (facts: FactSet) => RuleOutcome;
 }

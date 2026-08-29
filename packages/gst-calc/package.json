@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/gst-calc",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #25 [E25] — deterministic GST computation, place of supply and tax classification. Never an LLM, never a default rate.",
+  "exports": { ".": "./src/index.ts" }
+}

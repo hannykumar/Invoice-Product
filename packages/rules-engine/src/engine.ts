@@ -87,9 +87,13 @@ export class RulesEngine {
 
   /** Decide, with the full trace of what was considered and why. */
   evaluate(input: EvaluateInput): DecisionWithTrace {
+    // The newest published rulebook, not the one that existed on the document date. Effective
+    // dating is a property of each *rule*, so a correction published today must still apply to a
+    // bill dated in April. Reproducing what we would have said in April is `replay`, which
+    // reloads the rule-set version the original decision recorded.
     const set =
       input.ruleSetVersion === undefined
-        ? this.#registry.latest(this.#ruleSetId, input.documentDate)
+        ? this.#registry.latest(this.#ruleSetId)
         : this.#registry.get(this.#ruleSetId, input.ruleSetVersion);
     return this.#decide(set, input);
   }
@@ -143,6 +147,10 @@ export class RulesEngine {
       }
       if (rule.reviewState === 'WITHDRAWN' || rule.reviewState === 'SUPERSEDED') {
         considered.push({ ruleId: rule.id, ruleVersion: rule.version, used: false, reason: 'not-approved' });
+        continue;
+      }
+      if (rule.appliesWhen !== undefined && !rule.appliesWhen(input.facts)) {
+        considered.push({ ruleId: rule.id, ruleVersion: rule.version, used: false, reason: 'does-not-apply' });
         continue;
       }
       eligible.push(rule);

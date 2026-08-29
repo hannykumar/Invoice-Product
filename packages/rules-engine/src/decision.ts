@@ -27,6 +27,7 @@ export interface ConsideredRule {
     | 'not-effective-on-this-date'
     | 'different-state'
     | 'not-approved'
+    | 'does-not-apply'
     | 'lower-priority'
     | 'less-specific'
     | 'different-topic';

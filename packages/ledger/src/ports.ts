@@ -58,6 +58,8 @@ export interface AccountRepository {
   findManyByIds(companyId: CompanyId, ids: readonly AccountId[]): Promise<Account[]>;
   findByCode(companyId: CompanyId, code: string): Promise<Account | null>;
   findBySystemRole(companyId: CompanyId, role: string): Promise<Account | null>;
+  /** The account that belongs to one customer or supplier, so party balances fold from lines. */
+  findByPartyId(companyId: CompanyId, partyId: string): Promise<Account | null>;
   listAll(companyId: CompanyId): Promise<Account[]>;
   insertMany(accounts: readonly Account[]): Promise<void>;
 }

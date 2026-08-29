@@ -80,6 +80,9 @@ const makeUnitOfWork = (state: State): UnitOfWork => {
     async findBySystemRole(companyId, role) {
       return state.accounts.find((a) => a.companyId === companyId && a.systemRole === role) ?? null;
     },
+    async findByPartyId(companyId, partyId) {
+      return state.accounts.find((a) => a.companyId === companyId && a.partyId === partyId) ?? null;
+    },
     async listAll(companyId) {
       return state.accounts.filter((a) => a.companyId === companyId);
     },
@@ -182,19 +185,40 @@ const makeUnitOfWork = (state: State): UnitOfWork => {
   return { accounts, vouchers, periods, sequences, settings, idempotency };
 };
 
+/**
+ * Something else that must roll back with a ledger transaction.
+ *
+ * A module that owns a document writes its own record in the same unit of work as the posting —
+ * see `LedgerService.postVoucherIn`. In Postgres that is one transaction and nothing extra is
+ * needed. In memory, the other store registers itself here so a failure undoes its writes too.
+ */
+export interface TransactionParticipant {
+  snapshot(): unknown;
+  restore(taken: unknown): void;
+}
+
 export class InMemoryLedgerStore implements LedgerStore {
   readonly #state: State = emptyState();
   /** One promise chain per company, so two commands for one business never interleave. */
   readonly #locks = new Map<string, Promise<unknown>>();
+  readonly #participants: TransactionParticipant[] = [];
+
+  /** Registers another in-memory store to roll back alongside this one. */
+  join(participant: TransactionParticipant): this {
+    this.#participants.push(participant);
+    return this;
+  }
 
   async transaction<T>(companyId: CompanyId, work: (uow: UnitOfWork) => Promise<T>): Promise<T> {
     const previous = this.#locks.get(companyId) ?? Promise.resolve();
     const run = previous.then(async () => {
       const before = snapshot(this.#state);
+      const joined = this.#participants.map((p) => ({ participant: p, taken: p.snapshot() }));
       try {
         return await work(makeUnitOfWork(this.#state));
       } catch (error) {
         restore(this.#state, before);
+        for (const { participant, taken } of joined) participant.restore(taken);
         throw error;
       }
     });

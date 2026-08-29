@@ -1,0 +1,16 @@
+{
+  "//": "Issue #4/#7/#25 (GPT 1) — extra checks over the shared tsconfig.json, which is owned by issue #2 (GPT 2). Kept in a separate file so the shared one stays byte-identical across branches and never conflicts on merge. `erasableSyntaxOnly` is the important one: Node runs these packages by stripping types, so any TypeScript that cannot simply be erased (a parameter property, an enum) would fail at run time rather than at build time.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true
+  },
+  "include": ["packages/**/*.ts", "tools/**/*.ts"],
+  "exclude": ["node_modules", "**/dist", "packages/platform/**", "apps/**"]
+}

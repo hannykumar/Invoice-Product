@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/sales",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #9 [E09] — the sales invoice lifecycle: draft, approval, finalisation, numbering, posting and cancellation.",
+  "exports": { ".": "./src/index.ts" }
+}
