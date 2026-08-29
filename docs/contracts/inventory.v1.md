@@ -51,6 +51,22 @@ the person typed and the base-unit figure, so a bill can be explained years late
 A batched item must name its batch; batches are counted separately, so milk in stock does not make
 an empty batch sellable. A serialised item needs one serial number per piece.
 
+**Asking for a balance is a different thing from taking stock out.** `balance()` reads the batch
+the way the repositories do:
+
+| `batchId` | Question it asks |
+| --- | --- |
+| omitted | every batch added together — "how much is in the godown?" |
+| `null` | only stock that is in no batch |
+| a string | that one batch |
+
+The answer carries `coversAllBatches` so a caller can tell the first from the second, because
+`batchId: null` alone cannot. Collapsing the omitted case into `null` made a batch-tracked item
+report **zero** while its shelves were full (issue #86), and zero is the most dangerous wrong
+answer stock can give: it reads as "we are out", which is what a reorder prompt or a low-stock
+warning would act on. Taking stock out is unchanged and still judged against the named batch
+alone.
+
 ## Returns, cancellations and transfers
 
 - **Cancellation and returns** mirror the original movements. Nothing is deleted, so the stock

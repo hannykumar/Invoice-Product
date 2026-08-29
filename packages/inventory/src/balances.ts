@@ -63,10 +63,14 @@ export const reservedQuantity = (reservations: readonly Reservation[], unitCode:
 export const availableQuantity = (physical: Quantity, reserved: Quantity): Quantity =>
   q(physical.scaled - reserved.scaled, physical.unit);
 
+/**
+ * `batchId` follows the repositories: `undefined` is every batch, `null` is the stock held in no
+ * batch, and a string is that one batch. Flattening `undefined` into `null` is issue #86.
+ */
 export const buildBalance = (
   itemId: string,
   warehouseId: string,
-  batchId: string | null,
+  batchId: string | null | undefined,
   unitCode: string,
   movements: readonly StockMovement[],
   reservations: readonly Reservation[],
@@ -77,7 +81,8 @@ export const buildBalance = (
   return {
     itemId,
     warehouseId,
-    batchId,
+    batchId: batchId ?? null,
+    coversAllBatches: batchId === undefined,
     unitCode,
     physical,
     reserved,

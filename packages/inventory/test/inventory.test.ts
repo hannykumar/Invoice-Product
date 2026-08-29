@@ -499,3 +499,74 @@ test('available never quietly means physical', () => {
   const reserved = { scaled: 70_000000n, unit: 'KGS' };
   assert.equal(formatQuantity(availableQuantity(physical, reserved)), '30.000 KGS');
 });
+
+test('stock in batches is counted, whether or not the caller knows the batch (issue #86)', async () => {
+  const godown = makeGodown();
+  const actor = actorWith(ALL_PERMISSIONS);
+  const receive = (key: string, batchId: string, amount: string) =>
+    godown.service.recordMovement(actor, {
+      idempotencyKey: key,
+      itemId: 'MILK-1L',
+      warehouseId: 'narela',
+      batchId,
+      kind: 'PURCHASE_IN',
+      quantity: qty(amount, 'PCS'),
+      documentDate: on('2026-08-01'),
+      source: { kind: 'purchase_invoice', id: key, number: key },
+      unitCost: inr(50),
+    });
+
+  await receive('milk-aug', 'batch-aug', '90');
+  await receive('milk-sep', 'batch-sep', '60');
+
+  // "How much milk is in the Narela godown?" — the commonest stock question there is. It used to
+  // answer zero, because not naming a batch was read as naming the empty one.
+  const everything = await godown.service.balance(actor, { itemId: 'MILK-1L', warehouseId: 'narela' });
+  assert.equal(everything.physical.scaled, qty('150', 'PCS').scaled, 'both batches added together');
+  assert.equal(everything.coversAllBatches, true, 'and the answer says it covered every batch');
+  assert.equal(everything.batchId, null);
+
+  // Naming a batch still narrows to that batch.
+  const august = await godown.service.balance(actor, { itemId: 'MILK-1L', warehouseId: 'narela', batchId: 'batch-aug' });
+  assert.equal(august.physical.scaled, qty('90', 'PCS').scaled);
+  assert.equal(august.coversAllBatches, false);
+  assert.equal(august.batchId, 'batch-aug');
+
+  // And asking for the stock that is in no batch is a different question with its own answer.
+  const unbatched = await godown.service.balance(actor, { itemId: 'MILK-1L', warehouseId: 'narela', batchId: null });
+  assert.equal(unbatched.physical.scaled, 0n);
+  assert.equal(unbatched.coversAllBatches, false, 'a deliberate null is not "everything"');
+});
+
+test('taking stock out of one batch is still judged against that batch alone (issue #86)', async () => {
+  const godown = makeGodown();
+  const actor = actorWith(ALL_PERMISSIONS);
+  await godown.service.recordMovement(actor, {
+    idempotencyKey: 'milk-aug',
+    itemId: 'MILK-1L',
+    warehouseId: 'narela',
+    batchId: 'batch-aug',
+    kind: 'PURCHASE_IN',
+    quantity: qty('10', 'PCS'),
+    documentDate: on('2026-08-01'),
+    source: { kind: 'purchase_invoice', id: 'p1', number: 'P1' },
+    unitCost: inr(50),
+  });
+
+  // The fix widened the *question*, not the guard: an empty batch cannot be emptied further just
+  // because another batch has stock in it.
+  await assert.rejects(
+    () =>
+      godown.service.recordMovement(actor, {
+        idempotencyKey: 'milk-out',
+        itemId: 'MILK-1L',
+        warehouseId: 'narela',
+        batchId: 'batch-sep',
+        kind: 'SALE_OUT',
+        quantity: qty('5', 'PCS'),
+        documentDate: on('2026-08-02'),
+        source: { kind: 'sales_invoice', id: 's1', number: 'S1' },
+      }),
+    (error: unknown) => error instanceof DomainError && error.code === 'STOCK_WOULD_GO_NEGATIVE',
+  );
+});

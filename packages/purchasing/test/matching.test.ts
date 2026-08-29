@@ -23,14 +23,14 @@ const box = (value: string) => quantityFromString(value, "BOX");
 /**
  * The soap on the shelf in the Peenya godown, in pieces (one box is twenty-four).
  *
- * The batch is named because #12's `balance` treats a missing batch as "the unbatched stock",
- * not as "all batches" — see issue #86. Once that is fixed, the batch argument can go.
+ * No batch is named: asking without one now means every batch, which is what "how much soap is
+ * there" has always meant. Issue #86 fixed the reading that made this answer zero.
  */
 const stockOf = async (
   yard: Awaited<ReturnType<typeof makeYard>>,
-  { itemId = "SOAP", batchId = "batch-aug" }: { itemId?: string; batchId?: string | null } = {},
+  { itemId = "SOAP" }: { itemId?: string } = {},
 ): Promise<string> => {
-  const balance = await yard.inventoryService.balance(yard.actor, { itemId, warehouseId: "wh-main", batchId });
+  const balance = await yard.inventoryService.balance(yard.actor, { itemId, warehouseId: "wh-main" });
   return showQuantity(balance.physical);
 };
 
