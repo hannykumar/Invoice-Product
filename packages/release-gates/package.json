@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/release-gates",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #48 [E48] — the financial invariants a release must satisfy, checked in CI and failing closed.",
+  "exports": { ".": "./src/index.ts" }
+}
