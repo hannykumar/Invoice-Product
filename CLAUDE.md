@@ -70,6 +70,7 @@ reverse.
 | `docs/contracts/connector-v1.md` | GPT 2 | External adapters, `ConnectorError` with retryability, `CredentialVault`, mock conformance |
 | `docs/contracts/master-data-v1.md` | GPT 3 | Master ids, document snapshots, resolution outcomes, duplicate verdicts, money/quantity types |
 | `docs/contracts/purchase-intake-v1.md` | GPT 3 | Inbox lifecycle, routing precedence, dedup layers, field evidence and confidence |
+| `docs/contracts/purchase-matching-v1.md` | GPT 3 | Order/receipt lifecycles, per-item matching, findings and severities, tolerances, approvals |
 
 Every GPT 3 write goes through GPT 2's `PlatformCommandService`. Tenant isolation, idempotency
 and audit are theirs — do not write a second implementation of any of them.
@@ -83,7 +84,8 @@ and audit are theirs — do not write a second implementation of any of them.
 | #50 GSP/IRP comparison | **Blocked on the owner** | Needs a real company to request quotations and sandbox access from IRIS, MasterGST, Clear and FinAGG. The checklist, RFP text, scoring matrix and sandbox conformance harness can be built without them. |
 | #16 validation | **Done, tests green** | `packages/purchasing`. Verdict, findings, duplicate assessment, recomputed totals, tolerance policy. |
 | #17 purchase posting | **Done, tests green** | `packages/purchasing`. Approved bill to ledger entry, stock receipts and supplier payable, all in one transaction. CGST/SGST/IGST/cess split from the rules engine, reverse charge, blocked ITC into cost, ₹1 rounding, preview, purchase-keyed idempotency, whole-bill reversal. Feeds #20 through `purchaseDocumentLedger`. Consumes GPT 1's real ledger (#4) and inventory (#12) — no mocks left. |
-| #18, #29 | Next | #18 three-way matching builds on #17's bill record and receipts. |
+| #18 matching | **Done, tests green** | `packages/purchasing`. Purchase-order lifecycle, goods receipt with accepted/rejected quantities and quality evidence, PO vs GRN vs invoice matching per item, effective-dated quantity/price/tax tolerances, one-step goods-confirmed flow with no order, held-match approvals pinned to a fingerprint, migration `…_three_way_matching`. **Only the accepted quantity moves stock**, and #17 skips re-receiving a line a receipt already brought in. Demonstrable on the web app's Deliveries screen. |
+| #29 | Next | Authorised vehicle-record verification. |
 | #19, #26–#33, #44, #45, #51, #53 | Later waves | See `docs/gpt3-handbook.md` section 6. |
 
 Known local limitation: `npm install` may be blocked in some sandboxes, so `npm run lint` (tsc)
@@ -96,4 +98,6 @@ must stay green. CI runs the full `npm run verify`.
 npm test              # every module's unit tests, no dependencies needed
 npm run demo:masters  # master data walkthrough with synthetic Indian sample data
 npm run demo:inbox    # five documents through four channels: routing, duplicates, quarantine
+npm run demo:matching # ordered 100, received 90, billed 100 — held, explained, then approved
+npm run web           # the browser workspace, including the Deliveries screen for #18
 ```

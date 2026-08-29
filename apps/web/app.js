@@ -60,6 +60,21 @@ const copy = {
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
     saleChecked: "Sale checked", saleCheckedBody: "The checked sale comes to {amount}.", saleEffectInvoice: "A numbered invoice will be issued.", saleEffectBalance: "The customer balance will increase.", purchaseChecked: "Purchase checked", purchaseCheckedBody: "The checked supplier bill comes to {amount}.", purchaseEffectStock: "Stock will update from this purchase.", purchaseEffectBooks: "GST and the supplier balance will post together.", paymentChecked: "Payment checked", paymentCheckedBody: "A receipt of {amount} is ready to record.", paymentEffectBalance: "The customer balance will reduce when this is recorded.", saleRecorded: "Sale recorded", saleRecordedBody: "Invoice {number} was issued.", purchaseRecorded: "Purchase recorded", purchaseRecordedBody: "Stock, GST and the supplier balance were recorded together.", paymentRecorded: "Payment recorded", paymentRecordedBody: "The customer receipt was recorded once.", amountInvalid: "Enter a valid amount greater than zero.", referenceRequired: "Enter the supplier bill number.", rateRequired: "Enter a price and quantity.", permissionDenied: "You do not have permission to do this work.",
+    navDeliveries: "Deliveries", orderDate: "Order date", deliveryDate: "Delivery date",
+    deliveriesTitle: "Orders, deliveries and the supplier's bill", deliveriesHelp: "Check what you ordered against what actually arrived and what you are being charged for. None of it is forced — if you never raise orders, skip the first box.",
+    stepOrder: "1 · What you ordered", stepOrderHelp: "Only if you work with orders. This buys nothing and changes no stock.",
+    orderNumber: "Order number", orderedQty: "How many you ordered", agreedRate: "Agreed price of one, before GST",
+    placeOrder: "Place this order", orderSafety: "An order is a promise, not a purchase. Nothing goes into your books or your godown until goods actually arrive.",
+    stepReceipt: "2 · What actually arrived", stepReceiptHelp: "Count it at the gate. Only what you keep goes into your stock.",
+    receiptNumber: "Delivery number", againstOrder: "Against which order", againstOrderHelp: "Leave this blank if there was no order.",
+    arrivedQty: "How many arrived", keptQty: "How many you kept", keptQtyHelp: "Anything less than what arrived needs a reason.",
+    rateIfNoOrder: "Price of one (used when there is no order)", whyRejected: "Why the rest was not kept",
+    confirmGoods: "Confirm the goods", receiptSafety: "Confirming puts the kept quantity into your godown straight away. The rest never enters stock, so you are not holding goods you turned away.",
+    stepMatch: "3 · The supplier's bill", stepMatchHelp: "We hold the three side by side and tell you exactly what disagrees.",
+    billedQty: "How many the bill charges for", billedRate: "Price of one on the bill", checkBill: "Check this bill",
+    matchSafety: "This only compares. Nothing is recorded in your books and no stock moves.",
+    colItem: "Item", colOrdered: "Ordered", colArrived: "Arrived", colKept: "Kept", colTurnedAway: "Turned away", colBilled: "Billed", colAgreedPrice: "Agreed price", colBilledPrice: "Billed price",
+    differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -123,6 +138,21 @@ const copy = {
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
     saleChecked: "Bikri jaanch li", saleCheckedBody: "Jaanchi hui bikri {amount} ki hai.", saleEffectInvoice: "Number wali invoice jaari hogi.", saleEffectBalance: "Customer ka baki paisa badhega.", purchaseChecked: "Kharid jaanch li", purchaseCheckedBody: "Jaancha hua supplier bill {amount} ka hai.", purchaseEffectStock: "Is kharid se stock update hoga.", purchaseEffectBooks: "GST aur supplier balance ek saath darj honge.", paymentChecked: "Payment jaanch li", paymentCheckedBody: "{amount} ki receipt darj karne ke liye taiyar hai.", paymentEffectBalance: "Darj hone par customer ka baki paisa kam hoga.", saleRecorded: "Bikri darj hui", saleRecordedBody: "Invoice {number} jaari hui.", purchaseRecorded: "Kharid darj hui", purchaseRecordedBody: "Stock, GST aur supplier balance ek saath darj hue.", paymentRecorded: "Payment darj hua", paymentRecordedBody: "Customer receipt ek baar darj hui.", amountInvalid: "Zero se badi sahi rakam bharen.", referenceRequired: "Supplier bill number bharen.", rateRequired: "Daam aur matra bharen.", permissionDenied: "Aapko yeh kaam karne ki permission nahin hai.",
+    navDeliveries: "Delivery", orderDate: "Order ki tareekh", deliveryDate: "Delivery ki tareekh",
+    deliveriesTitle: "Order, delivery aur supplier ka bill", deliveriesHelp: "Jo mangaya, jo asli mein aaya, aur jiska paisa maanga ja raha hai — teenon milaen. Kuch zaroori nahi hai — agar aap order nahi banate, pehla box chhod den.",
+    stepOrder: "1 · Aapne kya mangaya", stepOrderHelp: "Sirf agar aap order banate hain. Isse kuch khareeda nahi jata aur stock nahi badalta.",
+    orderNumber: "Order number", orderedQty: "Kitna mangaya", agreedRate: "Ek ka tay daam, GST se pehle",
+    placeOrder: "Order bhejen", orderSafety: "Order ek vaada hai, kharid nahi. Jab tak saman nahi aata, bahi ya godown mein kuch nahi jata.",
+    stepReceipt: "2 · Asli mein kya aaya", stepReceiptHelp: "Gate par ginen. Sirf jo aap rakhte hain wahi stock mein jata hai.",
+    receiptNumber: "Delivery number", againstOrder: "Kis order ke against", againstOrderHelp: "Agar koi order nahi tha to khali chhod den.",
+    arrivedQty: "Kitna aaya", keptQty: "Kitna rakha", keptQtyHelp: "Aaye hue se kam rakhne par wajah batani hogi.",
+    rateIfNoOrder: "Ek ka daam (jab order na ho)", whyRejected: "Baaki kyon nahi rakha",
+    confirmGoods: "Saman pakka karen", receiptSafety: "Pakka karte hi rakha hua saman turant godown mein chala jata hai. Baaki kabhi stock mein nahi aata, to lautaya hua maal aapke khate mein nahi rehta.",
+    stepMatch: "3 · Supplier ka bill", stepMatchHelp: "Hum teenon ko saath rakh kar batate hain ki thik kya nahi mil raha.",
+    billedQty: "Bill kitne ka paisa maang raha hai", billedRate: "Bill par ek ka daam", checkBill: "Yeh bill jaanchen",
+    matchSafety: "Yeh sirf milan hai. Bahi mein kuch darj nahi hota aur stock nahi hilta.",
+    colItem: "Saman", colOrdered: "Mangaya", colArrived: "Aaya", colKept: "Rakha", colTurnedAway: "Wapas kiya", colBilled: "Bill mein", colAgreedPrice: "Tay daam", colBilledPrice: "Bill ka daam",
+    differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -801,6 +831,127 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
   }
 });
+
+// ------------------------------------------------------- issue #18: orders, deliveries, matching
+//
+// Three small forms rather than one wizard, because the three things happen on three different
+// days: the order on Monday, the lorry on Thursday, the bill the week after. Each posts to the
+// real service, so what appears here is what the module actually decided.
+
+const formValues = (form) => Object.fromEntries([...new FormData(form).entries()].filter(([, value]) => typeof value === "string"));
+
+/** Shows the plain-language line the service returned, or the plain-language refusal. */
+function showStep(id, text, failed) {
+  const target = document.querySelector(id);
+  target.textContent = text;
+  target.classList.toggle("failed-copy", Boolean(failed));
+}
+
+function refreshStock(stock) {
+  if (!stock) return;
+  document.querySelector("#stock-now").textContent = `${stock.name}: ${stock.onShelf} in the godown`;
+}
+
+const cell = (value) => {
+  const td = document.createElement("td");
+  td.textContent = value === null || value === undefined ? "—" : String(value);
+  return td;
+};
+
+function renderMatch(result) {
+  const panel = document.querySelector("#match-panel");
+  panel.hidden = false;
+  document.querySelector("#match-title").textContent = result.title;
+  document.querySelector("#match-message").textContent = result.message;
+  // A held bill that somebody has accepted keeps its findings — they are still true — but it is
+  // no longer stopping anything, and the badge has to say so or the screen reads as unresolved.
+  const stopping = !result.cleared;
+  const badge = document.querySelector("#match-outcome");
+  badge.textContent = stopping ? result.outcome.replace(/_/g, " ").toLowerCase() : result.outcome === "HOLD_FOR_APPROVAL" ? "accepted" : "ok to record";
+  badge.className = `pill ${stopping ? "hold" : "done"}`;
+
+  const body = document.querySelector("#match-rows");
+  body.replaceChildren();
+  result.rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.append(
+      cell(row.description), cell(row.ordered), cell(row.received), cell(row.accepted),
+      cell(row.rejected), cell(row.invoiced),
+      cell(row.orderedRate === null ? null : money(row.orderedRate)),
+      cell(row.invoicedRate === null ? null : money(row.invoicedRate)),
+    );
+    body.append(tr);
+  });
+
+  // Every finding, worst first, with the field it is about — that is the acceptance criterion.
+  const list = document.querySelector("#match-findings");
+  list.replaceChildren();
+  result.findings.forEach((finding) => {
+    const row = document.createElement("div");
+    row.className = "activity-row";
+    const icon = document.createElement("span");
+    icon.className = `activity-icon ${finding.severity === "HOLD" ? "red" : finding.severity === "REVIEW" ? "amber" : "blue"}`;
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = finding.severity === "HOLD" ? "!" : finding.severity === "REVIEW" ? "?" : "i";
+    const description = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = finding.message;
+    const detail = document.createElement("small");
+    const parts = [`Field: ${finding.field}`];
+    if (finding.orderSays) parts.push(`order says ${finding.orderSays}`);
+    if (finding.receiptSays) parts.push(`delivery says ${finding.receiptSays}`);
+    if (finding.invoiceSays) parts.push(`bill says ${finding.invoiceSays}`);
+    if (finding.difference) parts.push(`difference ${finding.difference}`);
+    detail.textContent = parts.join(" · ");
+    description.append(title, detail);
+    row.append(icon, description);
+    list.append(row);
+  });
+
+  document.querySelector("#approve-form").hidden = result.outcome !== "HOLD_FOR_APPROVAL" || result.cleared;
+  refreshStock(result.stock);
+}
+
+const submitStep = (selector, handler) => {
+  const form = document.querySelector(selector);
+  if (form) form.addEventListener("submit", async (event) => { event.preventDefault(); await handler(form); });
+};
+
+submitStep("#order-form", async (form) => {
+  try {
+    const result = await api("/api/purchase-orders", { method: "POST", body: JSON.stringify(formValues(form)) });
+    showStep("#order-result", result.message, false);
+    refreshStock(result.stock);
+  } catch (error) { showStep("#order-result", error.message, true); }
+});
+
+submitStep("#receipt-form", async (form) => {
+  try {
+    const result = await api("/api/goods-receipts", { method: "POST", body: JSON.stringify(formValues(form)) });
+    showStep("#receipt-result", result.message, false);
+    refreshStock(result.stock);
+    await loadDashboard();
+  } catch (error) { showStep("#receipt-result", error.message, true); }
+});
+
+submitStep("#match-form", async (form) => {
+  state.lastMatchInput = formValues(form);
+  try {
+    renderMatch(await api("/api/purchases/match", { method: "POST", body: JSON.stringify(state.lastMatchInput) }));
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+submitStep("#approve-form", async (form) => {
+  const reason = formValues(form).reason;
+  try {
+    renderMatch(await api("/api/purchases/match/approve", { method: "POST", body: JSON.stringify({ ...state.lastMatchInput, reason }) }));
+  } catch (error) {
+    showDialog({ title: "Nothing was accepted", message: error.message }, "failed");
+  }
+});
+
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();

@@ -16,6 +16,10 @@ import type { StockItem, StockMasterData, Warehouse } from '../../../packages/in
 import { UnitRegistry, createDefaultUnitRegistry } from '../../../packages/masters/src/units.ts';
 import { InMemoryPurchaseBillStore, purchaseInventoryPort } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { PurchasePostingService } from '../../../packages/purchasing/src/posting-service.ts';
+import { ThreeWayMatchingService } from '../../../packages/purchasing/src/matching-service.ts';
+import {
+  InMemoryGoodsReceiptStore, InMemoryMatchApprovalStore, InMemoryMatchTolerances, InMemoryPurchaseOrderStore,
+} from '../../../packages/purchasing/src/matching-adapters.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -56,13 +60,17 @@ const SETUP_PERMISSIONS = [
   'ledger.post.journal', 'ledger.reverse', 'inventory.move', 'inventory.adjust', 'inventory.override_negative',
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
+  'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
 ];
 
 export async function createCompanyShop(seed: CompanySeed) {
   const store = new InMemoryLedgerStore();
   const inventory = new InMemoryInventoryStore();
   const bills = new InMemoryPurchaseBillStore();
-  store.join(inventory).join(bills);
+  const orders = new InMemoryPurchaseOrderStore();
+  const receipts = new InMemoryGoodsReceiptStore();
+  const approvals = new InMemoryMatchApprovalStore();
+  store.join(inventory).join(bills).join(orders).join(receipts).join(approvals);
   const audit = new InMemoryAuditPort();
   const clock = fixedClock('2026-08-29T10:00:00.000Z');
   const masters = new CompanyMasters(seed.location);
@@ -89,6 +97,17 @@ export async function createCompanyShop(seed: CompanySeed) {
     // standard chart, and the posting service finds them by role.
     idFactory: () => `${seed.companyId}:bill:${sequence += 1}`,
   });
+  // Issue #18. One per company, sharing this company's store and godown, so an order raised on
+  // the screen and the stock it later moves are the same records the tests exercise.
+  const matching = new ThreeWayMatchingService({
+    store,
+    inventory: purchaseInventoryPort(inventoryService, masters),
+    orders, receipts, approvals,
+    audit,
+    clock,
+    tolerance: new InMemoryMatchTolerances(),
+    idFactory: () => `${seed.companyId}:doc:${sequence += 1}`,
+  });
   const setupActor: ActorContext = {
     companyId: seed.companyId,
     branchId: seed.branchId,
@@ -108,5 +127,5 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
-  return { store, inventory, inventoryService, bills, audit, ledger, posting, setupActor };
+  return { store, inventory, inventoryService, bills, orders, receipts, approvals, audit, ledger, posting, matching, masters, setupActor };
 }

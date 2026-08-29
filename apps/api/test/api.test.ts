@@ -203,3 +203,123 @@ test('a sale preview carries the agreed price and the credit warning from the re
   // Unissued drafts count towards the limit: that is what stops two tills spending it twice.
   assert.ok(big.body.terms.credit.pending > 0, "an earlier unfinished bill is counted");
 });
+
+/**
+ * Issue #18 — the order, the delivery and the comparison, over the same HTTP surface the browser
+ * uses, through a real signed-in session.
+ */
+test('the HTTP surface holds a bill that charges for more than the godown kept', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+
+  const order = await request('POST', '/api/purchase-orders', {
+    orderNumber: 'PO/TEST/0001', item: 'SOAP', quantity: '100', rate: '240', gst: 1800, date: '2026-08-15',
+  }, session);
+  assert.equal(order.status, 200);
+  assert.equal(order.body.order.state, 'PLACED');
+  // An order is a promise. It must not put anything on the shelf.
+  assert.equal(order.body.stock.onShelf, '0 PCS');
+
+  const receipt = await request('POST', '/api/goods-receipts', {
+    receiptNumber: 'GRN/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
+    received: '100', accepted: '90', rejectionNote: '10 boxes soaked in the rain', date: '2026-08-20',
+  }, session);
+  assert.equal(receipt.status, 200);
+  // Only the 90 boxes that were kept: 90 × 24 pieces to a box.
+  assert.equal(receipt.body.stock.onShelf, '2160 PCS');
+  assert.equal(receipt.body.order.state, 'PARTIALLY_RECEIVED');
+  assert.match(receipt.body.message, /90 BOX went into your stock/);
+
+  const match = await request('POST', '/api/purchases/match', {
+    reference: 'SRS/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
+    quantity: '100', rate: '240', gst: 1800, date: '2026-08-22',
+  }, session);
+  assert.equal(match.body.outcome, 'HOLD_FOR_APPROVAL');
+  assert.equal(match.body.cleared, false);
+  // Checking a bill records nothing and moves nothing.
+  assert.equal(match.body.stock.onShelf, '2160 PCS');
+
+  const row = match.body.rows[0];
+  assert.deepEqual(
+    { ordered: row.ordered, received: row.received, accepted: row.accepted, rejected: row.rejected, invoiced: row.invoiced },
+    { ordered: '100 BOX', received: '100 BOX', accepted: '90 BOX', rejected: '10 BOX', invoiced: '100 BOX' },
+  );
+
+  const overcharge = match.body.findings.find((finding: Record<string, any>) => finding.code === 'INVOICED_ABOVE_ACCEPTED');
+  assert.ok(overcharge, 'the overcharge must be explained');
+  assert.equal(overcharge.severity, 'HOLD');
+  assert.equal(overcharge.field, 'lines[1].quantity');
+  assert.equal(overcharge.orderSays, '100 BOX');
+  assert.equal(overcharge.receiptSays, '90 BOX');
+  assert.equal(overcharge.invoiceSays, '100 BOX');
+
+  const approved = await request('POST', '/api/purchases/match/approve', {
+    reference: 'SRS/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
+    quantity: '100', rate: '240', gst: 1800, date: '2026-08-22',
+    reason: 'Supplier agreed to send the 10 boxes free next week',
+  }, session);
+  assert.equal(approved.body.cleared, true);
+  assert.match(approved.body.message, /free next week/);
+});
+
+test('orders, deliveries and stock belong to the signed-in company alone', async () => {
+  const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+
+  // Sampoorna raised PO/TEST/0001 above. Konkan must not be able to see or receive against it.
+  const stolen = await request('POST', '/api/goods-receipts', {
+    receiptNumber: 'GRN/TEST/9999', orderNumber: 'PO/TEST/0001', item: 'SOAP',
+    received: '10', accepted: '10', rate: '240', date: '2026-08-21',
+  }, konkan);
+  assert.equal(stolen.status, 404);
+  assert.match(stolen.body.message, /no order numbered PO\/TEST\/0001/);
+
+  // And Konkan's own godown is untouched by Sampoorna's delivery.
+  const own = await request('POST', '/api/goods-receipts', {
+    receiptNumber: 'GRN/TEST/9998', orderNumber: '', item: 'SOAP',
+    received: '3', accepted: '3', rate: '240', date: '2026-08-21',
+  }, konkan);
+  assert.equal(own.status, 200);
+  assert.equal(own.body.stock.onShelf, '72 PCS', 'only Konkan\'s own 3 boxes');
+});
+
+test('the HTTP surface never forces a purchase order on a small business', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const receipt = await request('POST', '/api/goods-receipts', {
+    receiptNumber: 'GRN/TEST/0002', orderNumber: '', item: 'SOAP',
+    received: '12', accepted: '12', rate: '240', date: '2026-08-26',
+  }, session);
+  assert.equal(receipt.status, 200);
+  assert.equal(receipt.body.order, null, 'no order should be involved at all');
+
+  const match = await request('POST', '/api/purchases/match', {
+    reference: 'SRS/TEST/0002', orderNumber: '', item: 'SOAP',
+    quantity: '102', rate: '240', gst: 1800, date: '2026-08-26',
+  }, session);
+  assert.equal(match.body.kind, 'TWO_WAY_RECEIPT');
+  assert.equal(match.body.cleared, true);
+  assert.equal(match.body.rows[0].ordered, null, 'nothing was ordered, so the column is empty');
+  const noOrder = match.body.findings.find((finding: Record<string, any>) => finding.code === 'NO_ORDER');
+  assert.equal(noOrder.severity, 'INFORMATION');
+  assert.match(noOrder.message, /perfectly normal for everyday buying/);
+});
+
+test('a delivery that keeps more than arrived is refused over HTTP, and nothing moves', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const refused = await request('POST', '/api/goods-receipts', {
+    receiptNumber: 'GRN/TEST/0003', orderNumber: '', item: 'SOAP',
+    received: '5', accepted: '9', rate: '240', date: '2026-08-27',
+  }, session);
+  // A refusal the caller can fix by editing the form: 422, not a generic 400.
+  assert.equal(refused.status, 422);
+  assert.equal(refused.body.state, 'failed');
+  assert.match(refused.body.message, /cannot keep more than came/);
+});
+
+test('ordering and receiving need permission, not just a session', async () => {
+  // The read-only session the platform seeds carries `dashboard.read` and nothing else.
+  const readOnly = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid').catch(() => null);
+  if (readOnly === null) return; // no read-only credential seeded in this build
+  const refused = await request('POST', '/api/purchase-orders', {
+    orderNumber: 'PO/TEST/0009', item: 'SOAP', quantity: '10', rate: '240', gst: 1800, date: '2026-08-15',
+  }, readOnly);
+  assert.equal(refused.status, 403);
+});

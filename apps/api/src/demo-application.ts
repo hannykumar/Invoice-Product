@@ -37,6 +37,8 @@ import type { PurchaseVerdict } from '../../../packages/purchasing/src/validatio
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
+import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
+import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -473,6 +475,253 @@ export class DemoApplication {
     const payment = await this.payments.recordPayment(actor, { idempotencyKey: `web-payment:${String(input.reference || `${input.date}:${amountMinor}`)}`, direction: 'RECEIPT', partyId: this.config.customerId, mode: 'CASH', amount: money(amountMinor), date: isoDate(String(input.date)), reference: String(input.reference || '') || null, ...(open === undefined ? {} : { allocations: [{ documentId: open.documentId, documentNumber: open.number, amount: money(amountToAllocate) }] }) });
     const position = await this.payments.position(actor, this.config.customerId, isoDate(String(input.date)));
     return { state: 'recorded', title: 'Payment recorded', message: `₹${jsonAmount(payment.amount.minor).toFixed(2)} was recorded once.`, paymentId: payment.id, customerOutstanding: jsonAmount(position.totalOutstanding.minor) };
+  }
+
+  // ------------------------------------------------- issue #18: order, delivery, three-way match
+
+  /** The catalogue the purchase screens share, so an item means the same thing on all of them. */
+  private static readonly CATALOGUE: Record<string, { description: string; hsnSac: string; unit: string; kind: 'GOODS' | 'SERVICES'; batchId?: string }> = {
+    TMT12: { description: 'TMT Steel Bar 12mm', hsnSac: '72142090', unit: 'KGS', kind: 'GOODS' },
+    SOAP: { description: 'Herbal Bath Soap 100g', hsnSac: '34011190', unit: 'BOX', kind: 'GOODS', batchId: 'batch-web' },
+    FRT: { description: 'Inward freight', hsnSac: '996511', unit: 'NOS', kind: 'SERVICES' },
+  };
+
+  private catalogueItem(id: unknown) {
+    const key = String(id ?? 'SOAP');
+    return { id: key, ...(DemoApplication.CATALOGUE[key] ?? DemoApplication.CATALOGUE.SOAP!) };
+  }
+
+  /** Reads a typed quantity into micro-units without letting a float near it. */
+  private typedQuantity(value: unknown, unit: string) {
+    const text = String(value ?? '').trim();
+    if (!/^\d+(?:\.\d{1,6})?$/.test(text)) throw invalid('API_QUANTITY_INVALID', 'Enter a quantity, for example 100.');
+    return quantity(text, unit);
+  }
+
+  /** How much of an item is actually on the shelf, which is the figure #18 has to get right. */
+  private async stockOf(actor: ActorContext, itemId: string) {
+    const item = this.catalogueItem(itemId);
+    const balance = await this.shop.inventoryService.balance(actor, {
+      itemId: item.id, warehouseId: 'wh-main', batchId: item.batchId ?? null,
+    });
+    return { itemId: item.id, name: item.description, onShelf: showQuantity(balance.physical) };
+  }
+
+  private orderJson(order: PurchaseOrder) {
+    return {
+      id: order.id, number: order.orderNumber, state: order.state,
+      supplier: order.supplierName, date: order.orderDate,
+      value: jsonAmount(order.orderedValuePaise),
+      lines: order.lines.map((line) => ({
+        item: line.itemId, description: line.description,
+        quantity: showQuantity(line.quantity), rate: jsonAmount(line.ratePaise),
+        gst: line.gstRateBasisPoints / 100,
+      })),
+      summary: order.summary,
+    };
+  }
+
+  private receiptJson(receipt: GoodsReceipt) {
+    return {
+      id: receipt.id, number: receipt.receiptNumber, state: receipt.state,
+      date: receipt.receiptDate, supplier: receipt.supplierName,
+      lines: receipt.lines.map((line) => ({
+        description: line.description,
+        received: showQuantity(line.receivedQuantity),
+        accepted: showQuantity(line.acceptedQuantity),
+        rejected: showQuantity({ scaled: line.receivedQuantity.scaled - line.acceptedQuantity.scaled, unit: line.receivedQuantity.unit }),
+        reason: line.rejectionReason ?? null,
+        note: line.rejectionNote ?? null,
+      })),
+      stockMoved: receipt.movements.map((movement) => showQuantity(movement.quantity)),
+      summary: receipt.summary,
+    };
+  }
+
+  private async orderNumbered(actor: ActorContext, orderNumber: string) {
+    const found = (await this.shop.matching.orders(actor)).find((candidate) => candidate.orderNumber === orderNumber);
+    if (found === undefined) throw notFound('API_ORDER_NOT_FOUND', `There is no order numbered ${orderNumber}. Place it first, or leave the order blank.`);
+    return found;
+  }
+
+  /** Raises an order and places it in one step: on this screen the two are the same action. */
+  async recordOrder(actor: ActorContext, input: Record<string, unknown>) {
+    const number = String(input.orderNumber ?? '').trim();
+    if (!number) throw invalid('API_ORDER_NUMBER_REQUIRED', 'Enter an order number, for example PO/2026/0117.');
+    const item = this.catalogueItem(input.item);
+    const created = await this.shop.matching.createOrder(actor, {
+      orderNumber: number,
+      supplierPartyId: this.config.supplierId,
+      supplierName: String(input.party || this.config.supplierName),
+      orderDate: String(input.date ?? ''),
+      lines: [{
+        lineNumber: 1, itemId: item.id, description: item.description, hsnSac: item.hsnSac,
+        quantity: this.typedQuantity(input.quantity, item.unit), ratePaise: paise(input.rate),
+        gstRateBasisPoints: Number(input.gst ?? 1800), supplyKind: item.kind,
+        ...(item.kind === 'GOODS' ? { warehouseId: 'wh-main' } : {}),
+      }],
+    });
+    const order = created.state === 'DRAFT' ? await this.shop.matching.placeOrder(actor, created.id) : created;
+    return {
+      state: 'recorded', title: 'Order placed', message: order.summary,
+      order: this.orderJson(order), stock: await this.stockOf(actor, item.id),
+    };
+  }
+
+  /**
+   * Records what arrived and confirms it, which is the moment stock moves.
+   *
+   * Only the accepted quantity goes onto the shelf. That is issue #18's central promise and it is
+   * visible on this screen: the stock figure after the call rises by what was kept, never by what
+   * was delivered and never by what the supplier later charges for.
+   */
+  async recordReceipt(actor: ActorContext, input: Record<string, unknown>) {
+    const number = String(input.receiptNumber ?? '').trim();
+    if (!number) throw invalid('API_RECEIPT_NUMBER_REQUIRED', 'Enter a delivery number, for example GRN/2026/0304.');
+    const item = this.catalogueItem(input.item);
+    const orderNumber = String(input.orderNumber ?? '').trim();
+    const order = orderNumber === '' ? null : await this.orderNumbered(actor, orderNumber);
+
+    const received = this.typedQuantity(input.received, item.unit);
+    const accepted = this.typedQuantity(input.accepted, item.unit);
+    const rate = order?.lines[0]?.ratePaise ?? paise(input.rate);
+    const shortfall = received.scaled - accepted.scaled;
+
+    const details = {
+      receiptNumber: number,
+      supplierPartyId: this.config.supplierId,
+      supplierName: String(input.party || order?.supplierName || this.config.supplierName),
+      receiptDate: String(input.date ?? ''),
+      ...(input.deliveryNote ? { deliveryNote: String(input.deliveryNote) } : {}),
+      lines: [{
+        lineNumber: 1, itemId: item.id, description: item.description, warehouseId: 'wh-main',
+        ...(item.batchId ? { batchId: item.batchId } : {}),
+        receivedQuantity: received, acceptedQuantity: accepted, ratePaise: rate,
+        ...(shortfall > 0n
+          ? {
+              rejectionReason: (String(input.rejectionReason || 'DAMAGED') as 'DAMAGED'),
+              rejectionNote: String(input.rejectionNote || 'Turned away at the gate'),
+              evidence: { checkedBy: actor.userId, checkedAt: new Date().toISOString(), note: String(input.rejectionNote || 'Checked at the gate') },
+            }
+          : {}),
+      }],
+    };
+
+    // With no order this is the one-step small-business path; with one, the receipt is linked to
+    // it first so confirming it also walks the order along to part-delivered or complete.
+    const confirmed = order === null
+      ? await this.shop.matching.goodsConfirmed(actor, details)
+      : await this.shop.matching.confirmReceipt(
+          actor,
+          (await this.shop.matching.recordReceipt(actor, { ...details, orderId: order.id })).id,
+        );
+
+    return {
+      state: 'recorded',
+      title: shortfall > 0n ? 'Delivery confirmed, part of it turned away' : 'Delivery confirmed',
+      message: confirmed.summary,
+      receipt: this.receiptJson(confirmed),
+      stock: await this.stockOf(actor, item.id),
+      order: order === null ? null : this.orderJson((await this.shop.matching.order(actor, order.id))!),
+    };
+  }
+
+  /**
+   * Compares the supplier's bill with the order and the deliveries. Reads only: nothing is
+   * recorded and no stock moves, which is what lets a person look before deciding.
+   */
+  async matchPurchaseBill(actor: ActorContext, input: Record<string, unknown>) {
+    const item = this.catalogueItem(input.item);
+    const invoiceNumber = String(input.reference ?? '').trim();
+    if (!invoiceNumber) throw invalid('API_REFERENCE_REQUIRED', 'Enter the supplier bill number.');
+    const orderNumber = String(input.orderNumber ?? '').trim();
+    const order = orderNumber === '' ? null : await this.orderNumbered(actor, orderNumber);
+
+    // With no order, every confirmed delivery from this supplier is what the bill is checked on.
+    const receipts = order === null
+      ? (await this.shop.matching.receiptsForParty(actor, this.config.supplierId)).filter((receipt) => receipt.state === 'CONFIRMED')
+      : [];
+
+    const match = await this.shop.matching.matchForInvoice(actor, {
+      purchaseId: `web-purchase:${invoiceNumber}`,
+      invoiceNumber,
+      supplierPartyId: this.config.supplierId,
+      lines: [{
+        lineNumber: 1, itemId: item.id, description: item.description,
+        quantity: this.typedQuantity(input.quantity, item.unit), ratePaise: paise(input.rate),
+        gstRateBasisPoints: Number(input.gst ?? 1800),
+      }],
+    }, {
+      ...(order === null ? { receiptIds: receipts.map((receipt) => receipt.id) } : { orderId: order.id }),
+      on: String(input.date ?? new Date().toISOString().slice(0, 10)),
+    });
+
+    const cleared = await this.shop.matching.isClearedToPost(actor, match);
+    return { ...DemoApplication.matchJson(match, cleared), stock: await this.stockOf(actor, item.id) };
+  }
+
+  /** A person accepting the differences, with the reason kept beside them. */
+  async approvePurchaseMatch(actor: ActorContext, input: Record<string, unknown>) {
+    const reason = String(input.reason ?? '').trim();
+    const rebuilt = await this.matchPurchaseBill(actor, input);
+    if (rebuilt.outcome !== 'HOLD_FOR_APPROVAL') {
+      return { ...rebuilt, title: 'Nothing to approve', message: 'This bill is not on hold, so there is nothing to accept.' };
+    }
+    const match = rebuilt.raw;
+    await this.shop.matching.approveMatch(actor, match, reason);
+    const cleared = await this.shop.matching.isClearedToPost(actor, match);
+    return {
+      ...DemoApplication.matchJson(match, cleared),
+      title: 'Differences accepted',
+      message: cleared.reason,
+      stock: rebuilt.stock,
+    };
+  }
+
+  /** The comparison as a screen needs it: one row per item, with every finding spelled out. */
+  private static matchJson(match: MatchResult, cleared: { cleared: boolean; reason: string }) {
+    return {
+      state: 'match' as const,
+      outcome: match.outcome,
+      kind: match.kind,
+      cleared: cleared.cleared,
+      title: match.outcome === 'MATCHED'
+        ? 'Everything agrees'
+        : match.outcome === 'WITHIN_TOLERANCE'
+          ? 'Small differences, nothing blocking'
+          : match.outcome === 'BLOCKED'
+            ? 'These cannot be compared yet'
+            : 'Held for your approval',
+      message: match.summary,
+      order: match.orderNumber ?? null,
+      invoice: match.invoiceNumber,
+      receipts: match.receiptIds.length,
+      rows: match.lines.map((line) => ({
+        item: line.itemId,
+        description: line.description,
+        ordered: line.orderedQuantity === undefined ? null : showQuantity(line.orderedQuantity),
+        received: line.receivedQuantity === undefined ? null : showQuantity(line.receivedQuantity),
+        accepted: line.acceptedQuantity === undefined ? null : showQuantity(line.acceptedQuantity),
+        rejected: line.rejectedQuantity === undefined ? null : showQuantity(line.rejectedQuantity),
+        invoiced: line.invoicedQuantity === undefined ? null : showQuantity(line.invoicedQuantity),
+        orderedRate: line.orderedRatePaise === undefined ? null : jsonAmount(line.orderedRatePaise),
+        invoicedRate: line.invoicedRatePaise === undefined ? null : jsonAmount(line.invoicedRatePaise),
+      })),
+      findings: match.findings.map((finding) => ({
+        code: finding.code, severity: finding.severity, field: finding.field,
+        message: finding.message, withinTolerance: finding.withinTolerance,
+        orderSays: finding.orderSays ?? null,
+        receiptSays: finding.receiptSays ?? null,
+        invoiceSays: finding.invoiceSays ?? null,
+        difference: finding.difference ?? null,
+      })),
+      tolerance: {
+        quantity: `${match.policy.quantityBasisPoints / 100}%`,
+        price: `${match.policy.priceBasisPoints / 100}%`,
+        overDelivery: match.policy.allowOverDelivery ? 'allowed' : 'needs approval',
+      },
+      raw: match,
+    };
   }
 
   /**

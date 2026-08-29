@@ -43,6 +43,14 @@ export interface ApprovedPurchaseLine {
   readonly warehouseId?: Id;
   readonly batchId?: Id;
   readonly serialNumbers?: readonly string[];
+  /**
+   * Set when a confirmed goods receipt (#18) already put these goods on the shelf.
+   *
+   * The bill then records the money and nothing else. Receiving stock again here would count the
+   * same delivery twice, and it would count it at the invoiced quantity rather than the quantity
+   * the godown actually accepted — which is exactly the figure #18 exists to keep apart.
+   */
+  readonly receivedAgainstReceiptId?: Id;
 }
 
 /**
@@ -122,6 +130,8 @@ export interface PurchaseBill {
   readonly state: PurchaseBillState;
   readonly voucherId: string;
   readonly receipts: readonly PurchaseBillReceipt[];
+  /** Deliveries whose goods this bill pays for, and which already moved the stock themselves. */
+  readonly receivedByReceiptIds?: readonly Id[];
   readonly postedBy: Id;
   readonly postedAt: string;
   readonly idempotencyKey: string;
