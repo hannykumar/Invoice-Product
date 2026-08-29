@@ -109,6 +109,11 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .dialog-effects:empty { display: none; }
 .dialog-actions button[hidden] { display: none; }
 .dialog-actions:has(button[hidden]) { grid-template-columns: 1fr; }
+.login-form { display: grid; gap: .85rem; margin-top: 1.1rem; text-align: left; }
+.login-form label { display: grid; gap: .35rem; color: #34443f; font-size: .75rem; font-weight: 700; }
+.login-form input, .login-form select { width: 100%; border: 1px solid #ced9d4; border-radius: 8px; padding: .72rem .78rem; background: white; color: var(--ink); }
+.login-error { min-height: 1.2rem; margin: 0; color: var(--red); }
+.demo-credential { margin-bottom: 0; font-size: .68rem; }
 
 @media (max-width: 1040px) {
   .metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }

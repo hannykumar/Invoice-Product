@@ -47,6 +47,7 @@
             </select>
           </label>
           <button class="icon-button" aria-label="Notifications" data-i18n-aria="notifications">●</button>
+          <button class="text-button" id="sign-out" type="button">Sign out</button>
           <span class="user-avatar" aria-label="Signed in as Hanny Kumar" data-i18n-aria="signedIn">HK</span>
         </div>
       </header>
@@ -220,6 +221,19 @@
       </nav>
     </div>
 
+    <dialog id="login-dialog" aria-labelledby="login-title" data-static>
+      <div class="dialog-icon" aria-hidden="true">क</div>
+      <h2 id="login-title">Sign in to Karobar</h2>
+      <p>Your session chooses the company and the work you are allowed to do.</p>
+      <form id="login-form" class="login-form">
+        <label><span>Company</span><select name="companyId"><option value="00000000-0000-4000-8000-000000000001">Sampoorna Traders</option><option value="00000000-0000-4000-8000-000000000011">Konkan Fresh Foods</option></select></label>
+        <label><span>Email</span><input name="email" type="email" value="owner@sampoorna.example.invalid" autocomplete="username" required /></label>
+        <label><span>Password</span><input name="password" type="password" value="karobar-demo" autocomplete="current-password" required /></label>
+        <p class="login-error" id="login-error" role="alert"></p>
+        <button class="primary-button" type="submit">Sign in</button>
+      </form>
+      <p class="demo-credential">Synthetic local credentials are filled in for this development workspace.</p>
+    </dialog>
     <dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title">Checking…</h2><p id="review-body">The application services are validating this entry.</p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="primary-button" id="review-confirm" value="confirm">Record once</button></div></dialog>
   </body>
 </html>

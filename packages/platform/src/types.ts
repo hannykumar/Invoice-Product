@@ -1,6 +1,25 @@
 export type Id = string;
 export type Permission =
   | "sale.draft.create"
+  | "dashboard.read"
+  | "ledger.setup"
+  | "ledger.post.purchase"
+  | "ledger.post.sale"
+  | "ledger.post.receipt"
+  | "ledger.post.payment"
+  | "ledger.post.journal"
+  | "ledger.reverse"
+  | "inventory.move"
+  | "inventory.adjust"
+  | "inventory.override_negative"
+  | "sales.draft.write"
+  | "sales.finalise"
+  | "sales.approve"
+  | "sales.cancel"
+  | "payments.record"
+  | "payments.allocate"
+  | "payments.reverse"
+  | "payments.write_off"
   | "bank.balance.read"
   | "bank.statement.import"
   | "gst.file"
@@ -13,7 +32,16 @@ export type Permission =
   | "privacy.export"
   | "privacy.delete"
   | "backup.manage"
-  | "backup.restore";
+  | "backup.restore"
+  // Reports (issue #35, GPT 1). Added to the union so an owner's session can be granted them.
+  | "reports.view.financial"
+  | "reports.view.sales"
+  | "reports.view.purchase"
+  | "reports.view.stock"
+  | "reports.view.dues"
+  | "reports.view.gst"
+  | "reports.view.exceptions"
+  | "reports.export";
 
 export interface RequestContext {
   companyId: Id;
@@ -60,9 +88,9 @@ export interface ApprovalPolicy {
 export interface ExceptionItem { id: Id; companyId: Id; status: "open" | "resolved" | "dismissed"; summary: string; evidence: readonly string[]; comments: readonly { actorId: Id; body: string; createdAt: string }[]; }
 
 export class PlatformError extends Error {
-  public readonly code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED";
+  public readonly code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED" | "SESSION_EXPIRED";
   constructor(
-    code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED",
+    code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED" | "SESSION_EXPIRED",
     message: string,
   ) { super(message); this.code = code; }
 }

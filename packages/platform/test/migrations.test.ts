@@ -28,4 +28,4 @@ test("the registry rejects duplicate, malformed and new numeric migration ids", 
   assert.throws(() => validateMigrationRegistry([...migrations, { ...valid, id: "tomorrow_outbox" }]), /Invalid migration id/);
   assert.throws(() => validateMigrationRegistry([...migrations].reverse()), /Migration registry is out of order/);
 });
-test("synthetic seed is deterministic and uses no production identifiers", async () => { const db = new FakeSql(); await seed(db); await seed(db); assert.equal(db.statements.filter((sql) => sql.startsWith("INSERT INTO companies")).length, 2); assert.ok(db.statements.every((sql) => !sql.includes("password"))); });
+test("synthetic seed is deterministic, multi-company and uses no production identifiers", async () => { const db = new FakeSql(); await seed(db); await seed(db); assert.equal(db.statements.filter((sql) => sql.startsWith("INSERT INTO companies")).length, 4); assert.ok(db.statements.every((sql) => !sql.includes("password"))); });
