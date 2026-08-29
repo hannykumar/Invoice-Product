@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #36 [E36] — guided setup for a business that has never used accounting software: profile, defaults, rates, opening balances and a resumable checklist.",
+  "exports": { ".": "./src/index.ts" }
+}
