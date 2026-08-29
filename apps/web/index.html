@@ -47,7 +47,7 @@
             </select>
           </label>
           <button class="icon-button" aria-label="Notifications" data-i18n-aria="notifications">●</button>
-          <button class="text-button" id="sign-out" type="button">Sign out</button>
+          <button class="text-button" id="sign-out" type="button" data-i18n="signOut"></button>
           <span class="user-avatar" aria-label="Signed in as Hanny Kumar" data-i18n-aria="signedIn">HK</span>
         </div>
       </header>
@@ -60,66 +60,66 @@
 
         <section class="view active" id="view-dashboard" aria-labelledby="dashboard-title">
           <div class="page-heading">
-            <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" data-i18n="welcome"></h1><p id="welcome-body" data-i18n="welcomeBody"></p></div>
+            <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" tabindex="-1" data-i18n="welcome"></h1><p id="welcome-body" data-i18n="welcomeBody"></p></div>
             <button class="primary-button" data-open="sale"><span aria-hidden="true">＋</span><span data-i18n="newSale"></span></button>
           </div>
 
           <div class="metric-grid" aria-label="Business summary" data-i18n-aria="businessSummary">
-            <article class="metric-card accent-green"><div class="metric-icon" aria-hidden="true">₹</div><p data-i18n="salesToday"></p><strong id="metric-sales">—</strong><small class="positive">Issued from the sales module</small></article>
-            <article class="metric-card accent-amber"><div class="metric-icon" aria-hidden="true">↗</div><p data-i18n="customersOwe"></p><strong id="metric-receivable">—</strong><small id="customer-summary">From open sales invoices</small></article>
-            <article class="metric-card accent-blue"><div class="metric-icon" aria-hidden="true">▣</div><p data-i18n="purchasesMonth"></p><strong id="metric-purchases">—</strong><small id="supplier-summary">From posted supplier bills</small></article>
-            <article class="metric-card accent-red"><div class="metric-icon" aria-hidden="true">!</div><p data-i18n="needsAttention"></p><strong id="metric-attention">—</strong><small>Calculated from live company state</small></article>
+            <article class="metric-card accent-green"><div class="metric-icon" aria-hidden="true">₹</div><p data-i18n="salesToday"></p><strong id="metric-sales">—</strong><small class="positive" data-i18n="salesFromModule"></small></article>
+            <article class="metric-card accent-amber"><div class="metric-icon" aria-hidden="true">↗</div><p data-i18n="customersOwe"></p><strong id="metric-receivable">—</strong><small id="customer-summary" data-i18n="openSalesInvoices"></small></article>
+            <article class="metric-card accent-blue"><div class="metric-icon" aria-hidden="true">▣</div><p data-i18n="purchasesMonth"></p><strong id="metric-purchases">—</strong><small id="supplier-summary" data-i18n="postedSupplierBills"></small></article>
+            <article class="metric-card accent-red"><div class="metric-icon" aria-hidden="true">!</div><p data-i18n="needsAttention"></p><strong id="metric-attention">—</strong><small data-i18n="calculatedLive"></small></article>
           </div>
 
           <div class="dashboard-grid">
             <article class="panel activity-panel">
               <div class="panel-heading"><div><h2 data-i18n="recentActivity"></h2><p data-i18n="recentBody"></p></div><button class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
-              <div class="activity-list" id="recent-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div>
+              <div class="activity-list" id="recent-activity" aria-live="polite"><p class="loading-copy" data-i18n="loadingActivity"></p></div>
             </article>
 
             <aside class="panel attention-panel">
               <div class="panel-heading"><div><h2 data-i18n="yourAttention"></h2><p data-i18n="attentionHelp"></p></div></div>
-              <div class="attention-item"><span class="attention-symbol green" aria-hidden="true">▦</span><span><strong id="stock-title">Loading stock…</strong><small id="stock-detail">Reading the inventory module</small></span></div>
-              <div class="attention-item"><span class="attention-symbol amber" aria-hidden="true">₹</span><span><strong id="supplier-title">Loading supplier balance…</strong><small id="supplier-detail">Reading the receivables module</small></span></div>
+              <div class="attention-item"><span class="attention-symbol green" aria-hidden="true">▦</span><span><strong id="stock-title" data-i18n="loadingStock"></strong><small id="stock-detail" data-i18n="readingInventory"></small></span></div>
+              <div class="attention-item"><span class="attention-symbol amber" aria-hidden="true">₹</span><span><strong id="supplier-title" data-i18n="loadingSupplier"></strong><small id="supplier-detail" data-i18n="readingReceivables"></small></span></div>
             </aside>
           </div>
         </section>
 
         <section class="view" id="view-sale" aria-labelledby="sale-title">
-          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="sale-title" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span></div>
           <form class="transaction-layout draft-form" data-draft="sale">
             <article class="panel form-panel">
               <div class="field-grid">
-                <label><span data-i18n="customer"></span><input name="party" autocomplete="organization" placeholder="Mehta Stores" required /></label>
+                <label><span data-i18n="customer"></span><input name="party" autocomplete="organization" data-i18n-placeholder="saleCustomerPlaceholder" required /></label>
                 <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
-                <label><span data-i18n="item"></span><input name="item" placeholder="Apple box, 10 kg" required /></label>
+                <label><span data-i18n="item"></span><input name="item" data-i18n-placeholder="saleItemPlaceholder" required /></label>
                 <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input name="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-i18n="boxes"></span></span></label>
                 <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
                 <label><span data-i18n="paymentTerms"></span><select name="terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
               </div>
               <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
             </article>
-            <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">₹0.00</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+            <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">—</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
         </section>
 
         <section class="view" id="view-purchase" aria-labelledby="purchase-title">
-          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" tabindex="-1" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
           <form class="transaction-layout draft-form" data-draft="purchase">
-            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="supplier"></span><input name="party" placeholder="Fresh Farms Pvt Ltd" required /></label><label><span data-i18n="supplierBill"></span><input name="reference" placeholder="FF-2048" required /></label><label><span data-i18n="billDate"></span><input name="date" type="date" required /></label><label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label><label><span data-i18n="whatYouBought"></span><select name="item"><option value="TMT12" data-i18n="itemSteel"></option><option value="SOAP" data-i18n="itemSoap"></option><option value="FRT" data-i18n="itemFreight"></option></select></label><label><span data-i18n="howMany"></span><input name="quantity" type="number" min="0" step="0.001" value="500" required /></label><label><span data-i18n="ratePerUnit"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="64" required /></span></label><label><span data-i18n="gstRate"></span><select name="gst"><option value="0">0%</option><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option><option value="2800">28%</option></select></label><label><span data-i18n="supplierState"></span><select name="supplierState"><option value="other" data-i18n="stateOther"></option><option value="same" data-i18n="stateSame"></option></select><small data-i18n="supplierStateHelp"></small></label><label class="full-field"><span data-i18n="uploadBill"></span><input name="attachment" type="file" accept="image/*,.pdf" /><small data-i18n="uploadHelp"></small></label></div></article>
+            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="supplier"></span><input name="party" data-i18n-placeholder="supplierPlaceholder" required /></label><label><span data-i18n="supplierBill"></span><input name="reference" data-i18n-placeholder="supplierBillPlaceholder" required /></label><label><span data-i18n="billDate"></span><input name="date" type="date" required /></label><label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label><label><span data-i18n="whatYouBought"></span><select name="item"><option value="TMT12" data-i18n="itemSteel"></option><option value="SOAP" data-i18n="itemSoap"></option><option value="FRT" data-i18n="itemFreight"></option></select></label><label><span data-i18n="howMany"></span><input name="quantity" type="number" min="0" step="0.001" value="500" required /></label><label><span data-i18n="ratePerUnit"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="64" required /></span></label><label><span data-i18n="gstRate"></span><select name="gst"><option value="0">0%</option><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option><option value="2800">28%</option></select></label><label><span data-i18n="supplierState"></span><select name="supplierState"><option value="other" data-i18n="stateOther"></option><option value="same" data-i18n="stateSame"></option></select><small data-i18n="supplierStateHelp"></small></label><label class="full-field"><span data-i18n="uploadBill"></span><input name="attachment" type="file" accept="image/*,.pdf" /><small data-i18n="uploadHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="beforeSaving"></h2><ol class="check-list"><li data-i18n="checkSupplier"></li><li data-i18n="checkDuplicate"></li><li data-i18n="checkTax"></li></ol><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseSafety"></span></p><h2 data-i18n="postingTitle"></h2><ol class="check-list"><li data-i18n="postingStock"></li><li data-i18n="postingBooks"></li><li data-i18n="postingOwed"></li></ol><p class="safety-note"><span aria-hidden="true">◎</span><span data-i18n="postingTogether"></span></p><p class="safety-note"><span aria-hidden="true">↻</span><span data-i18n="postingRetrySafe"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPurchase"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
         </section>
 
         <section class="view" id="view-payment" aria-labelledby="payment-title">
-          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="payment-title" data-i18n="paymentTitle"></h1><p data-i18n="paymentHelp"></p></div><span class="save-state" id="payment-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="payment-title" tabindex="-1" data-i18n="paymentTitle"></h1><p data-i18n="paymentHelp"></p></div><span class="save-state" id="payment-save-state" role="status" data-i18n="savedDevice"></span></div>
           <form class="transaction-layout draft-form" data-draft="payment">
-            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" placeholder="ABC Traders" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
+            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" data-i18n-placeholder="paymentCustomerPlaceholder" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
         </section>
 
-        <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div></article></section>
+        <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" tabindex="-1" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy" data-i18n="loadingActivity"></p></div></article></section>
 
         <section class="view" id="view-reports" aria-labelledby="reports-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="navReports"></p><h1 id="reports-title" tabindex="-1" data-i18n="reportsTitle"></h1><p data-i18n="reportsHelp"></p></div></div>
@@ -222,19 +222,19 @@
       </nav>
     </div>
 
-    <dialog id="login-dialog" aria-labelledby="login-title" data-static>
+    <dialog id="login-dialog" aria-labelledby="login-title" aria-describedby="login-help" data-static>
       <div class="dialog-icon" aria-hidden="true">क</div>
-      <h2 id="login-title">Sign in to Karobar</h2>
-      <p>Your session chooses the company and the work you are allowed to do.</p>
+      <h2 id="login-title" data-i18n="loginTitle"></h2>
+      <p id="login-help" data-i18n="loginHelp"></p>
       <form id="login-form" class="login-form">
-        <label><span>Company</span><select name="companyId"><option value="00000000-0000-4000-8000-000000000001">Sampoorna Traders</option><option value="00000000-0000-4000-8000-000000000011">Konkan Fresh Foods</option></select></label>
-        <label><span>Email</span><input name="email" type="email" value="owner@sampoorna.example.invalid" autocomplete="username" required /></label>
-        <label><span>Password</span><input name="password" type="password" value="karobar-demo" autocomplete="current-password" required /></label>
+        <label><span data-i18n="company"></span><select name="companyId"><option value="00000000-0000-4000-8000-000000000001">Sampoorna Traders</option><option value="00000000-0000-4000-8000-000000000011">Konkan Fresh Foods</option></select></label>
+        <label><span data-i18n="email"></span><input name="email" type="email" value="owner@sampoorna.example.invalid" autocomplete="username" required /></label>
+        <label><span data-i18n="password"></span><input name="password" type="password" value="karobar-demo" autocomplete="current-password" required /></label>
         <p class="login-error" id="login-error" role="alert"></p>
-        <button class="primary-button" type="submit">Sign in</button>
+        <button class="primary-button" type="submit" data-i18n="signIn"></button>
       </form>
-      <p class="demo-credential">Synthetic local credentials are filled in for this development workspace.</p>
+      <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
-    <dialog id="review-dialog" aria-labelledby="review-title"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title">Checking…</h2><p id="review-body">The application services are validating this entry.</p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="primary-button" id="review-confirm" value="confirm">Record once</button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
   </body>
 </html>
