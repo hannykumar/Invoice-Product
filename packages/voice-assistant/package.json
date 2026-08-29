@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/voice-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #10 [E10] — turns a spoken or typed instruction into a draft that a person confirms. Never posts, never guesses a material fact.",
+  "exports": { ".": "./src/index.ts" }
+}
