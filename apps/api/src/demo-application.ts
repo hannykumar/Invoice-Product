@@ -10,6 +10,14 @@ import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { InMemorySalesRepository, noComplianceHooks, permissiveInventory, SalesService } from '@invoice/sales';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import {
+  TradeTermsService,
+  noPriceList,
+  type CreditPositionPort,
+  type PartyTermsPort,
+  type SalesHistoryPort,
+  type StockCostPort,
+} from '@invoice/trade-terms';
+import {
   ReportService,
   duesFrom,
   namesFrom,
@@ -119,6 +127,7 @@ export class DemoApplication {
   private readonly paymentRepository: InMemoryPaymentRepository;
   private readonly documents: DocumentLedgerPort;
   private readonly reportService: ReportService;
+  private readonly terms: TradeTermsService;
 
   private constructor(
     config: CompanySeed,
@@ -129,6 +138,7 @@ export class DemoApplication {
     paymentRepository: InMemoryPaymentRepository,
     documents: DocumentLedgerPort,
     reportService: ReportService,
+    terms: TradeTermsService,
   ) {
     this.config = config;
     this.shop = shop;
@@ -138,6 +148,7 @@ export class DemoApplication {
     this.paymentRepository = paymentRepository;
     this.documents = documents;
     this.reportService = reportService;
+    this.terms = terms;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -184,7 +195,69 @@ export class DemoApplication {
       clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService);
+    // Issue #11: the terms of a sale, over this same live company. Every port is the module that
+    // already knows the answer — issued invoices for what this customer last paid, receivables for
+    // what they owe, inventory for what stock cost — so nothing here keeps a second copy.
+    const history: SalesHistoryPort = {
+      async lastAgreedPrice(companyId, request) {
+        const issued = (await salesRepository.list(companyId, { partyId: request.partyId, state: 'FINAL' }))
+          .filter((invoice) => invoice.documentDate <= request.asOf)
+          .sort((a, b) => b.documentDate.localeCompare(a.documentDate));
+        for (const invoice of issued) {
+          const priced = invoice.pricing?.lines.find((l) => l.itemId === request.itemId);
+          if (priced === undefined) continue;
+          const typed = invoice.lines.find((l) => l.itemId === request.itemId);
+          if (typed === undefined) continue;
+          return { amount: typed.unitPrice, documentNumber: invoice.number ?? invoice.id, on: invoice.documentDate };
+        }
+        return null;
+      },
+      async pendingValue(companyId, partyId, excludingDocumentId) {
+        // Bills started and not issued. Without these two tills spend one limit twice.
+        const drafts = (await salesRepository.list(companyId, { partyId })).filter(
+          (invoice) => invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED' && invoice.id !== excludingDocumentId,
+        );
+        return money(drafts.reduce((total, invoice) => total + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n));
+      },
+    };
+    const positions: CreditPositionPort = {
+      async outstanding(actor, partyId, asOn) {
+        const position = await payments.position(actor, partyId, asOn);
+        const oldest = position.documents
+          .filter((d) => d.outstanding.minor > 0n)
+          .reduce((worst, d) => Math.max(worst, d.daysOverdue), 0);
+        return { total: position.totalOutstanding, oldestDaysOverdue: oldest };
+      },
+    };
+    const partyTerms: PartyTermsPort = {
+      // A synthetic limit for the demo company, so the control is visible. A real business sets
+      // this on the customer in master data (#5).
+      async creditLimit() {
+        return money(5_000_00n);
+      },
+      async nameOf(_companyId, partyId) {
+        return partyId === config.customerId ? config.customerName : config.supplierName;
+      },
+    };
+    const stockCost: StockCostPort = {
+      async averageUnitCost(actor, itemId) {
+        const valued = await shop.inventoryService.value(actor, { itemId });
+        return valued.averageUnitCost;
+      },
+    };
+    const terms = new TradeTermsService({
+      priceList: noPriceList,
+      history,
+      positions,
+      parties: partyTerms,
+      cost: stockCost,
+      engine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.policy', mode: 'development' }),
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      clock: { now: () => new Date() },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms);
     await app.seed();
     return app;
   }
@@ -324,7 +397,57 @@ export class DemoApplication {
     this.companyOf(actor);
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: this.saleInput(input) });
     if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
-    return { state: 'preview', title: 'Sale checked', message: draft.pricing.explanation['en-IN'], amount: jsonAmount(draft.pricing.totals.invoiceValue.minor), token: draft.id, effects: ['A numbered invoice will be issued.', 'The customer balance will increase.'] };
+
+    // Issue #11: what was last agreed, what the discount is, and whether this customer should be
+    // given more credit. The draft is excluded from its own pending value.
+    const quote = await this.terms.quote(actor, {
+      partyId: this.config.customerId,
+      documentDate: isoDate(String(input.date)),
+      documentId: draft.id,
+      lines: draft.lines.map((line) => ({
+        lineId: line.lineId,
+        itemId: line.itemId,
+        itemName: String(input.item || 'Herbal Bath Soap 100g'),
+        unit: line.quantity.unit,
+        quantity: String(Number(line.quantity.scaled) / 1_000_000),
+        unitPrice: line.unitPrice,
+      })),
+    });
+
+    const effects = ['A numbered invoice will be issued.', 'The customer balance will increase.'];
+    for (const reason of quote.reasons) effects.push(reason['en-IN']);
+    for (const line of quote.lines) {
+      if (line.price.source !== 'NONE') effects.push(line.price.sentence['en-IN']);
+    }
+
+    return {
+      state: 'preview',
+      title: quote.outcome === 'BLOCK' ? 'This sale is on hold' : 'Sale checked',
+      message: draft.pricing.explanation['en-IN'],
+      amount: jsonAmount(draft.pricing.totals.invoiceValue.minor),
+      token: draft.id,
+      effects,
+      terms: {
+        outcome: quote.outcome,
+        credit: {
+          outcome: quote.credit.outcome,
+          limit: quote.credit.limit === null ? null : jsonAmount(quote.credit.limit.minor),
+          outstanding: jsonAmount(quote.credit.outstanding.minor),
+          pending: jsonAmount(quote.credit.pending.minor),
+          exposure: jsonAmount(quote.credit.exposure.minor),
+          excess: jsonAmount(quote.credit.excess.minor),
+          sentence: quote.credit.sentence,
+        },
+        lines: quote.lines.map((line) => ({
+          lineId: line.lineId,
+          priceSource: line.price.source,
+          priceSentence: line.price.sentence,
+          suggested: line.price.amount === null ? null : jsonAmount(line.price.amount.minor),
+          discount: line.discount === null ? null : { outcome: line.discount.outcome, sentence: line.discount.sentence },
+          margin: line.margin === null ? null : { sentence: line.margin.sentence },
+        })),
+      },
+    };
   }
 
   async recordSale(actor: ActorContext, input: Record<string, unknown>) {
