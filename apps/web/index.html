@@ -122,30 +122,30 @@
         <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy">Loading recorded activity…</p></div></article></section>
 
         <section class="view" id="view-reports" aria-labelledby="reports-title">
-          <div class="page-heading"><div><p class="eyebrow" data-i18n="navReports"></p><h1 id="reports-title" tabindex="-1">Reports</h1><p>Every figure below is computed live from this company's ledger, sales, stock and receivables. Nothing is typed in.</p></div></div>
-          <div id="reports-content" aria-live="polite"><p class="loading-copy">Loading reports from the live company…</p></div>
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navReports"></p><h1 id="reports-title" tabindex="-1" data-i18n="reportsTitle"></h1><p data-i18n="reportsHelp"></p></div></div>
+          <div id="reports-content" aria-live="polite"><p class="loading-copy" data-i18n="reportsLoading"></p></div>
         </section>
 
         <section class="view" id="view-setup" aria-labelledby="setup-title">
-          <div class="page-heading"><div><p class="eyebrow" data-i18n="navSetup"></p><h1 id="setup-title" tabindex="-1">Set up a business</h1><p>Answer a few questions and we open a real set of books for it. Your GST number and opening figures are checked, not assumed.</p></div></div>
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navSetup"></p><h1 id="setup-title" tabindex="-1" data-i18n="setupTitle"></h1><p data-i18n="setupHelp"></p></div></div>
           <form id="setup-form" class="panel setup-form" novalidate>
             <fieldset>
-              <legend>About the business</legend>
-              <label>What is it called?<input name="legalName" required placeholder="e.g. Meera Bakers"></label>
-              <label>What kind of work?
+              <legend data-i18n="setupAbout"></legend>
+              <label><span data-i18n="setupName"></span><input name="legalName" required placeholder="Meera Bakers" /></label>
+              <label><span data-i18n="setupKind"></span>
                 <select name="businessType" required>
-                  <option value="">Choose one</option>
-                  <option value="RETAIL">Retail shop</option>
-                  <option value="WHOLESALE">Wholesale</option>
-                  <option value="BAKERY">Bakery</option>
-                  <option value="SERVICES">Services</option>
-                  <option value="TRANSPORT">Transport</option>
-                  <option value="MANUFACTURING">Manufacturing</option>
+                  <option value="" data-i18n="setupChoose"></option>
+                  <option value="RETAIL" data-i18n="setupRetail"></option>
+                  <option value="WHOLESALE" data-i18n="setupWholesale"></option>
+                  <option value="BAKERY" data-i18n="setupBakery"></option>
+                  <option value="SERVICES" data-i18n="setupServices"></option>
+                  <option value="TRANSPORT" data-i18n="setupTransport"></option>
+                  <option value="MANUFACTURING" data-i18n="setupManufacturing"></option>
                 </select>
               </label>
-              <label>Which state?
+              <label><span data-i18n="setupState"></span>
                 <select name="stateCode" required>
-                  <option value="">Choose one</option>
+                  <option value="" data-i18n="setupChoose"></option>
                   <option value="07">Delhi (07)</option>
                   <option value="27">Maharashtra (27)</option>
                   <option value="29">Karnataka (29)</option>
@@ -160,52 +160,52 @@
                   <option value="03">Punjab (03)</option>
                 </select>
               </label>
-              <label>Phone (optional)<input name="phone" placeholder="98290 11223"></label>
+              <label><span data-i18n="setupPhone"></span><input name="phone" placeholder="98290 11223" /></label>
             </fieldset>
             <fieldset>
-              <legend>GST and books</legend>
-              <label>Registered for GST?
+              <legend data-i18n="setupGstBooks"></legend>
+              <label><span data-i18n="setupRegistered"></span>
                 <select name="registration" required>
-                  <option value="">Choose one</option>
-                  <option value="REGULAR">Yes, regular</option>
-                  <option value="COMPOSITION">Yes, composition</option>
-                  <option value="UNREGISTERED">Not registered</option>
+                  <option value="" data-i18n="setupChoose"></option>
+                  <option value="REGULAR" data-i18n="setupRegular"></option>
+                  <option value="COMPOSITION" data-i18n="setupComposition"></option>
+                  <option value="UNREGISTERED" data-i18n="setupUnregistered"></option>
                 </select>
               </label>
-              <label>GST number<input name="gstin" placeholder="08AAAAA0000A1Z2"></label>
-              <label>How often do you file GST?
+              <label><span data-i18n="setupGstin"></span><input name="gstin" placeholder="08AAAAA0000A1Z2" /></label>
+              <label><span data-i18n="setupFiling"></span>
                 <select name="filingFrequency">
-                  <option value="">Choose one</option>
-                  <option value="MONTHLY">Every month</option>
-                  <option value="QUARTERLY">Every three months</option>
+                  <option value="" data-i18n="setupChoose"></option>
+                  <option value="MONTHLY" data-i18n="setupMonthly"></option>
+                  <option value="QUARTERLY" data-i18n="setupQuarterly"></option>
                 </select>
               </label>
-              <label>Keep books from<input type="date" name="booksStartDate" value="2026-04-01"></label>
+              <label><span data-i18n="setupBooksFrom"></span><input type="date" name="booksStartDate" value="2026-04-01" /></label>
             </fieldset>
             <fieldset>
-              <legend>One thing you sell</legend>
-              <label>Its name<input name="itemName" required placeholder="Chocolate cake 500g"></label>
-              <label>Goods or a service?
-                <select name="itemKind"><option value="GOODS">Goods</option><option value="SERVICES">Service</option></select>
+              <legend data-i18n="setupOneThing"></legend>
+              <label><span data-i18n="setupItemName"></span><input name="itemName" required placeholder="Chocolate cake 500g" /></label>
+              <label><span data-i18n="setupGoodsOrService"></span>
+                <select name="itemKind"><option value="GOODS" data-i18n="setupGoods"></option><option value="SERVICES" data-i18n="setupService"></option></select>
               </label>
-              <label>How is it counted?<input name="itemUnit" value="PCS" placeholder="PCS, KGS, BOX"></label>
-              <label>HSN or SAC code (optional)<input name="itemHsn" placeholder="1905"></label>
+              <label><span data-i18n="setupCounted"></span><input name="itemUnit" value="PCS" placeholder="PCS, KGS, BOX" /></label>
+              <label><span data-i18n="setupHsn"></span><input name="itemHsn" placeholder="1905" /></label>
             </fieldset>
             <fieldset>
-              <legend>Optional — the GST you charge</legend>
-              <p class="setup-hint">If you tell us a rate, we record it as yours and say so on the bill. We never pick one for you.</p>
-              <label>For which goods or service code?<input name="rateCode" placeholder="1905"></label>
-              <label>What rate, in per cent?<input name="ratePercent" inputmode="decimal" placeholder="5"></label>
-              <label>Where does the rate come from?<input name="rateBasis" placeholder="The rate my accountant has always used"></label>
+              <legend data-i18n="setupRateLegend"></legend>
+              <p class="setup-hint" data-i18n="setupRateHint"></p>
+              <label><span data-i18n="setupRateCode"></span><input name="rateCode" placeholder="1905" /></label>
+              <label><span data-i18n="setupRatePercent"></span><input name="ratePercent" inputmode="decimal" placeholder="5" /></label>
+              <label><span data-i18n="setupRateBasis"></span><input name="rateBasis" /></label>
             </fieldset>
             <fieldset>
-              <legend>Optional — money on day one</legend>
-              <p class="setup-hint">The cash you started with. We record it against your own money in the business, so the books balance.</p>
-              <label>Cash in hand on day one<input name="openingCash" inputmode="decimal" placeholder="8000"></label>
+              <legend data-i18n="setupMoneyLegend"></legend>
+              <p class="setup-hint" data-i18n="setupMoneyHint"></p>
+              <label><span data-i18n="setupOpeningCash"></span><input name="openingCash" inputmode="decimal" placeholder="8000" /></label>
             </fieldset>
             <div class="setup-actions">
-              <button type="submit" class="primary-button" id="setup-check">Check setup</button>
-              <button type="button" class="primary-button" id="setup-create" hidden>Create the business</button>
+              <button type="submit" class="primary-button" id="setup-check" data-i18n="setupCheck"></button>
+              <button type="button" class="primary-button" id="setup-create" hidden data-i18n="setupCreate"></button>
             </div>
           </form>
           <div id="setup-result" aria-live="polite"></div>
@@ -218,6 +218,7 @@
         <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
+        <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
       </nav>
     </div>
 

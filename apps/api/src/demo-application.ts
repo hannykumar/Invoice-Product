@@ -225,6 +225,9 @@ export class DemoApplication {
    * The report pack over the company's first year, as figures a screen can render. Every number is
    * folded from the same records the dashboard and the forms mutate; drill rows are carried so a
    * total on screen can be opened into the entries behind it. The company comes from the session.
+   *
+   * Every user-facing string is returned in both languages, exactly as the report modules produce
+   * them. Picking one here would decide for the reader before the browser knows who is reading.
    */
   async reports(actor: ActorContext) {
     this.companyOf(actor);
@@ -236,7 +239,7 @@ export class DemoApplication {
     return {
       period: { from: filter.from, to: filter.to },
       trialBalance: {
-        title: pack.trialBalance.header.title['en-IN'],
+        title: pack.trialBalance.header.title,
         balanced: pack.trialBalance.body.balanced,
         totalDebits: jsonAmount(pack.trialBalance.body.totalDebits.amount.minor),
         totalCredits: jsonAmount(pack.trialBalance.body.totalCredits.amount.minor),
@@ -244,55 +247,55 @@ export class DemoApplication {
         rows: pack.trialBalance.body.rows.map((r) => ({ code: r.code, name: r.name, closing: jsonAmount(r.closing.amount.minor), side: r.side })),
       },
       profitAndLoss: {
-        title: pack.profitAndLoss.header.title['en-IN'],
-        sentence: pack.profitAndLoss.body.sentence['en-IN'],
+        title: pack.profitAndLoss.header.title,
+        sentence: pack.profitAndLoss.body.sentence,
         income: { total: jsonAmount(pack.profitAndLoss.body.income.total.amount.minor), rows: pack.profitAndLoss.body.income.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })), drill: drill(pack.profitAndLoss.body.income.total) },
         expenses: { total: jsonAmount(pack.profitAndLoss.body.expenses.total.amount.minor), rows: pack.profitAndLoss.body.expenses.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })) },
         result: jsonAmount(pack.profitAndLoss.body.result.amount.minor),
       },
       balanceSheet: {
-        title: pack.balanceSheet.header.title['en-IN'],
-        sentence: pack.balanceSheet.body.sentence['en-IN'],
+        title: pack.balanceSheet.header.title,
+        sentence: pack.balanceSheet.body.sentence,
         balanced: pack.balanceSheet.body.balanced,
         totalAssets: jsonAmount(pack.balanceSheet.body.totalAssets.amount.minor),
         totalClaims: jsonAmount(pack.balanceSheet.body.totalClaims.amount.minor),
       },
       sales: {
-        title: pack.sales.header.title['en-IN'],
-        sentence: pack.sales.body.sentence['en-IN'],
+        title: pack.sales.header.title,
+        sentence: pack.sales.body.sentence,
         total: jsonAmount(pack.sales.body.total.amount.minor),
         rows: pack.sales.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), total: jsonAmount(r.total.minor) })),
       },
       purchases: {
-        title: pack.purchases.header.title['en-IN'],
-        sentence: pack.purchases.body.sentence['en-IN'],
+        title: pack.purchases.header.title,
+        sentence: pack.purchases.body.sentence,
         available: pack.purchases.body.available,
         total: jsonAmount(pack.purchases.body.total.amount.minor),
         rows: pack.purchases.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), total: jsonAmount(r.total.minor) })),
       },
       stock: {
-        title: pack.stock.header.title['en-IN'],
-        sentence: pack.stock.body.sentence['en-IN'],
+        title: pack.stock.header.title,
+        sentence: pack.stock.body.sentence,
         value: jsonAmount(pack.stock.body.value.amount.minor),
         rows: pack.stock.body.rows.map((r) => ({ item: r.itemName, warehouse: r.warehouseName, unit: r.unitCode, closing: r.closing, available: r.available, value: jsonAmount(r.value.minor) })),
       },
       dues: {
-        receivables: { title: pack.receivables.header.title['en-IN'], sentence: pack.receivables.body.sentence['en-IN'], total: jsonAmount(pack.receivables.body.total.amount.minor), rows: pack.receivables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), onAccount: jsonAmount(r.onAccount.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
-        payables: { sentence: pack.payables.body.sentence['en-IN'], total: jsonAmount(pack.payables.body.total.amount.minor), rows: pack.payables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
+        receivables: { title: pack.receivables.header.title, sentence: pack.receivables.body.sentence, total: jsonAmount(pack.receivables.body.total.amount.minor), rows: pack.receivables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), onAccount: jsonAmount(r.onAccount.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
+        payables: { sentence: pack.payables.body.sentence, total: jsonAmount(pack.payables.body.total.amount.minor), rows: pack.payables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
       },
       gst: {
-        title: pack.gst.header.title['en-IN'],
-        sentence: pack.gst.body.sentence['en-IN'],
+        title: pack.gst.header.title,
+        sentence: pack.gst.body.sentence,
         collected: jsonAmount(pack.gst.body.totalCollected.amount.minor),
         alreadyPaid: jsonAmount(pack.gst.body.totalAlreadyPaid.amount.minor),
         difference: jsonAmount(pack.gst.body.difference.minor),
-        caution: pack.gst.body.caution['en-IN'],
+        caution: pack.gst.body.caution,
       },
       exceptions: {
-        title: pack.exceptions.header.title['en-IN'],
+        title: pack.exceptions.header.title,
         clean: pack.exceptions.body.clean,
-        sentence: pack.exceptions.body.sentence['en-IN'],
-        items: pack.exceptions.body.exceptions.map((e) => ({ code: e.code, severity: e.severity, what: e.what['en-IN'], why: e.why['en-IN'], amount: e.amount === null ? null : jsonAmount(e.amount.minor) })),
+        sentence: pack.exceptions.body.sentence,
+        items: pack.exceptions.body.exceptions.map((e) => ({ code: e.code, severity: e.severity, what: e.what, why: e.why, amount: e.amount === null ? null : jsonAmount(e.amount.minor) })),
       },
     };
   }
