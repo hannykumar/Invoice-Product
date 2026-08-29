@@ -23,6 +23,7 @@
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
+          <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -120,11 +121,50 @@
           </form>
         </section>
 
+        <section class="view" id="view-supplier" aria-labelledby="supplier-check-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="supplier-check-title" tabindex="-1" data-i18n="supplierTitle"></h1>
+              <p data-i18n="supplierHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="supplier-form">
+              <div class="field-grid">
+                <label><span data-i18n="supplier"></span><input name="party" value="Deccan Hardware Traders" required /></label>
+                <label><span data-i18n="theirGstin"></span><input name="gstin" value="29AAFCD1234K1ZN" required /><small data-i18n="theirGstinHelp"></small></label>
+                <label class="full-field"><span data-i18n="trySomeone"></span><select id="supplier-choices"><option value="" data-i18n="chooseLater"></option></select></label>
+                <label><span data-i18n="supplierBill"></span><input name="reference" value="DHW/2026/114" /></label>
+                <label><span data-i18n="billDate"></span><input name="date" type="date" value="2026-07-04" /></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkSupplier"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="supplierSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="supplier-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="supplier-result-title">—</h2><p id="supplier-result-message"></p></div>
+              <span class="pill" id="supplier-level">—</span>
+            </div>
+            <h3 data-i18n="whatWeFound"></h3>
+            <div id="supplier-warnings" class="activity-list"></div>
+            <h3 data-i18n="whereFrom"></h3>
+            <div id="supplier-sources" class="activity-list"></div>
+            <form id="supplier-ack-form" hidden>
+              <div class="field-grid"><label class="full-field"><span data-i18n="ackReason"></span><input name="reason" placeholder="Spoke to the owner; they are re-registering" required /></label></div>
+              <button type="submit" class="secondary-button wide" data-i18n="ackButton"></button>
+            </form>
+          </article>
+        </section>
+
         <section class="view" id="view-deliveries" aria-labelledby="deliveries-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
-              <h1 id="deliveries-title" data-i18n="deliveriesTitle"></h1>
+              <h1 id="deliveries-title" tabindex="-1" data-i18n="deliveriesTitle"></h1>
               <p data-i18n="deliveriesHelp"></p>
             </div>
             <span class="save-state" id="stock-now" role="status">—</span>
@@ -307,6 +347,7 @@
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
+        <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
       </nav>
     </div>
 

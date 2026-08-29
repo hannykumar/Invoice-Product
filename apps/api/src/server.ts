@@ -5,6 +5,7 @@ import { DomainError } from '@invoice/kernel';
 import { PlatformError } from '../../../packages/platform/src/index.ts';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
+import { DemoApplication } from './demo-application.ts';
 
 const json = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
 
@@ -41,6 +42,10 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // not the session's company. Gated by authentication above, like the rest of the app.
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
+    // Issue #19 — what we know about a supplier, and the evidence behind each warning.
+    if (method === 'GET' && pathname === '/api/suppliers/choices') return json(200, { choices: DemoApplication.supplierChoices() });
+    if (method === 'POST' && pathname === '/api/suppliers/check') return json(200, await app.checkSupplier(actor, body));
+    if (method === 'POST' && pathname === '/api/suppliers/check/acknowledge') return json(200, await app.acknowledgeSupplierRisk(actor, body));
     // Issue #18 — the order, the delivery and the comparison between them and the bill.
     if (method === 'POST' && pathname === '/api/purchase-orders') return json(200, await app.recordOrder(actor, body));
     if (method === 'POST' && pathname === '/api/goods-receipts') return json(200, await app.recordReceipt(actor, body));

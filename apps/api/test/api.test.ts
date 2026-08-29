@@ -323,3 +323,71 @@ test('ordering and receiving need permission, not just a session', async () => {
   }, readOnly);
   assert.equal(refused.status, 403);
 });
+
+/**
+ * Issue #19 — supplier warnings over the HTTP surface, through a real signed-in session.
+ */
+test('the HTTP surface explains a cancelled GST number with its evidence', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+
+  const checked = await request('POST', '/api/suppliers/check', {
+    party: 'Deccan Hardware Traders', gstin: '29AAFCD1234K1ZN',
+    reference: 'DHW/2026/114', date: '2026-07-04',
+  }, session);
+  assert.equal(checked.status, 200);
+  assert.equal(checked.body.level, 'SERIOUS');
+  assert.equal(checked.body.cleared, false);
+  assert.equal(checked.body.confidence, 'COMPLETE');
+
+  const cancelled = checked.body.warnings.find((warning: Record<string, any>) => warning.code === 'GSTIN_CANCELLED_BEFORE_INVOICE');
+  assert.ok(cancelled, 'the cancellation must be explained');
+  assert.match(cancelled.message, /cancelled on 12 March 2026/);
+  assert.match(cancelled.message, /before the date on this bill/);
+
+  // Every warning names its evidence, with a source and the dates behind it.
+  for (const warning of checked.body.warnings) {
+    assert.ok(warning.evidence.length > 0, `${warning.code} must name its evidence`);
+    for (const evidence of warning.evidence) {
+      assert.ok(['GST_PORTAL', 'IMS_GSTR2B', 'OUR_RECORDS', 'SUPPLIER_DOCUMENT'].includes(evidence.source));
+    }
+  }
+  const portal = cancelled.evidence.find((evidence: Record<string, any>) => evidence.source === 'GST_PORTAL');
+  assert.equal(portal.effectiveFrom, '2026-03-12');
+  assert.equal(portal.stale, false);
+
+  // And which sources answered is stated, so a clean result cannot be confused with an unchecked one.
+  const sources = Object.fromEntries(checked.body.sources.map((source: Record<string, any>) => [source.source, source]));
+  assert.equal(sources.GST_PORTAL.answered, true);
+  assert.equal(sources.IMS_GSTR2B.answered, false, 'GSTR-2B is not connected yet (#31)');
+  assert.match(sources.IMS_GSTR2B.note, /not connected yet/);
+
+  const accepted = await request('POST', '/api/suppliers/check/acknowledge', {
+    party: 'Deccan Hardware Traders', gstin: '29AAFCD1234K1ZN',
+    reference: 'DHW/2026/114', date: '2026-07-04',
+    reason: 'Spoke to the owner; they are re-registering',
+  }, session);
+  assert.equal(accepted.body.cleared, true);
+  assert.match(accepted.body.message, /re-registering/);
+});
+
+test('a model score cannot make a supplier look serious over HTTP either', async () => {
+  const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const scored = await request('POST', '/api/suppliers/check', {
+    party: 'Shree Ram Steels Private Limited', gstin: '27AAECS5678D1ZK', modelHint: 'unusual purchase pattern',
+  }, session);
+  assert.equal(scored.body.level, 'INFORMATION');
+  const hint = scored.body.warnings.find((warning: Record<string, any>) => warning.code === 'MODEL_HINT');
+  assert.ok(hint);
+  assert.equal(hint.level, 'INFORMATION');
+  assert.match(hint.message, /a guess from a pattern/);
+});
+
+test('supplier checks are scoped to the signed-in company', async () => {
+  const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const checked = await request('POST', '/api/suppliers/check', {
+    party: 'Western Coast Supplies', gstin: '30AAFCW7788Q1ZP',
+  }, konkan);
+  assert.equal(checked.status, 200);
+  assert.equal(checked.body.supplier, 'Western Coast Supplies');
+  assert.equal(checked.body.raw.companyId, COMPANY_B);
+});

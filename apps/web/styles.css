@@ -178,3 +178,6 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .activity-icon.red { color: var(--red); background: var(--red-bg); }
 .failed-copy { color: var(--red); }
 
+
+/* Issue #19 — the evidence under each supplier warning. */
+.evidence-line { display: block; color: var(--muted); font-size: .78rem; margin-top: .2rem; padding-left: .6rem; border-left: 2px solid var(--line); }

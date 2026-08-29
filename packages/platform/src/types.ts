@@ -16,6 +16,8 @@ export type Permission =
   | "purchase.order.cancel"
   | "purchase.receipt.write"
   | "purchase.match.approve"
+  | "supplier.risk.view"
+  | "supplier.risk.acknowledge"
   | "sales.draft.write"
   | "sales.finalise"
   | "sales.approve"
