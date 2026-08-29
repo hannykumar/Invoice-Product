@@ -92,8 +92,23 @@ export const DECISION_LOG: readonly DecisionLogEntry[] = [
     decidedBy: GPT1,
     decidedOn: isoDate('2026-08-29'),
     affectedRules: [],
-    sourceIds: [],
+    sourceIds: ['gst-council-56th-press-release'],
     whatWouldResolveIt:
-      'Record the rate notifications per chapter or heading with their effective dates, and load the rate table from the register rather than from code.',
+      'Retrieve the rate notifications that took effect on 22 September 2025, record one register entry per heading with its effective date, and load the rate table from the register rather than from code.',
+  },
+  {
+    id: 'dl-rate-table-predates-2025-restructure',
+    question: 'Are the rate values shipped in packages/gst-calc merely unsourced, or are they actually out of date?',
+    decision:
+      'They are out of date as well as unsourced, and they are labelled as fixtures for exercising arithmetic rather than as rates. Production refuses them, so no bill can be raised from them.',
+    rationale:
+      'The GST Council restructured the rate schedule with effect from 22 September 2025: four slabs of 5, 12, 18 and 28 per cent became a merit rate of 5 per cent, a standard rate of 18 per cent and a demerit rate of 40 per cent. The fixture table encodes pre-restructure values, including a 28 per cent line with compensation cess for aerated waters, which the restructure moved. Two further traps are worth recording. First, CBIC\'s own rate page still states its figures are current as of 1 April 2023 and does not mention the change, and its Central Tax (Rate) notification index was last updated in January 2023 — so the easiest official pages to reach are themselves stale. Second, pan masala, gutkha, cigarettes, zarda, unmanufactured tobacco and bidi continue on the older rates until a date to be notified, so those goods have no single current rate that can simply be looked up.',
+    kind: 'DEFERRED',
+    decidedBy: GPT1,
+    decidedOn: isoDate('2026-08-29'),
+    affectedRules: [],
+    sourceIds: ['gst-council-56th-press-release'],
+    whatWouldResolveIt:
+      'Retrieve the rate notifications themselves rather than the announcement, and treat the tobacco goods as a separate case whose effective date is an event we must monitor rather than a date we can record now.',
   },
 ];

@@ -14,13 +14,29 @@ import type { IsoDate } from '@invoice/kernel';
  * `COMMENTARY` exists so that a helpful secondary source can be *recorded* while being
  * structurally incapable of approving a rule.
  */
-export type Authority = 'STATUTE' | 'RULE' | 'NOTIFICATION' | 'ORDER' | 'CIRCULAR' | 'OFFICIAL_FAQ' | 'COMMENTARY';
+export type Authority =
+  | 'STATUTE'
+  | 'RULE'
+  | 'NOTIFICATION'
+  | 'ORDER'
+  | 'CIRCULAR'
+  | 'OFFICIAL_FAQ'
+  | 'PRESS_RELEASE'
+  | 'COMMENTARY';
 
 /** Authority classes that may support an APPROVED compliance rule. */
 export const LEGAL_AUTHORITIES: readonly Authority[] = ['STATUTE', 'RULE', 'NOTIFICATION', 'ORDER'];
 
-/** Authority classes that may support a rule only alongside a legal source. */
-export const SUPPORTING_AUTHORITIES: readonly Authority[] = ['CIRCULAR', 'OFFICIAL_FAQ'];
+/**
+ * Authority classes that may support a rule only alongside a legal source.
+ *
+ * `PRESS_RELEASE` is here for a specific and important reason: the GST Council announces rate
+ * changes in a press release days before the notification that actually enacts them. The
+ * announcement is reliable and useful, and it is still not the instrument that changes the law.
+ * Charging a customer on the strength of a press release is charging them on the strength of an
+ * intention.
+ */
+export const SUPPORTING_AUTHORITIES: readonly Authority[] = ['CIRCULAR', 'OFFICIAL_FAQ', 'PRESS_RELEASE'];
 
 /**
  * Whether we actually read the document, and how.

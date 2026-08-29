@@ -17,7 +17,7 @@ site, on a recorded date, with the words it relies on quoted.
 | Class | Examples | May approve a rule? |
 | --- | --- | --- |
 | `STATUTE`, `RULE`, `NOTIFICATION`, `ORDER` | The IGST Act, the CGST Rules, a rate notification | **Yes** |
-| `CIRCULAR`, `OFFICIAL_FAQ` | A CBIC circular, an official FAQ | Only alongside a legal source |
+| `CIRCULAR`, `OFFICIAL_FAQ`, `PRESS_RELEASE` | A CBIC circular, an official FAQ, a GST Council announcement | Only alongside a legal source |
 | `COMMENTARY` | A consultant's summary, a vendor's blog, a news article | **Never** |
 
 Three further gates apply to every source, each with a test:
@@ -45,13 +45,33 @@ Refusing is not a gap. It is the product working.
 
 | Refused | Why | What would settle it |
 | --- | --- | --- |
-| **Every GST rate** | The shipped rate table was written to exercise arithmetic. No rate has a source. | Record the rate notifications per heading with their effective dates, and load the table from the register. |
+| **Every GST rate** | The shipped table was written to exercise arithmetic, and it also **predates the restructuring of 22 September 2025**. See below. | Retrieve the rate notifications themselves and load the table from the register. |
 | **E-way bill applicability** | Its thresholds are placeholders. | Record the e-way bill rules and each State's intra-State threshold notification. |
 | **Ladakh** | The UTGST extent clause we could read first-hand is the text as enacted in 2017, which predates Ladakh. The amended text could not be retrieved from the publisher. | Retrieve the Act as amended and add Ladakh with that source. |
 | **Place of supply except goods-in-movement and the general services rule** | Bill-to-ship-to, assembly at site, immovable property, transport, events and the rest each need facts the product does not capture. | Capture those facts, then one rule per clause with its own source. |
 | **Composition invoicing** | No source recorded yet. | Record the provision governing a composition dealer's bill. |
 
 Each of these is a decision-log entry with its reasoning, not an omission.
+
+## Why rates are harder than they look
+
+The GST Council restructured the whole rate schedule with effect from **22 September 2025**: four
+slabs of 5, 12, 18 and 28 per cent became a merit rate of **5%**, a standard rate of **18%** and a
+demerit rate of **40%**. Anything encoding the old slabs is not merely unsourced, it is wrong.
+
+Three traps make this worse than a one-off transcription job, and each is recorded in the decision
+log rather than in someone's memory:
+
+1. **The easiest official pages are stale.** CBIC's own "GST Goods and Services Rates" page still
+   says its figures are current as of **1 April 2023** and does not mention the change at all. Its
+   Central Tax (Rate) notification index was last updated in **January 2023**.
+2. **The announcement is not the law.** The Council's press release is reliable and detailed, and
+   it is a *recommendation*. The instrument that changes the rate is the notification. That is why
+   `PRESS_RELEASE` is an authority class that can never approve a rule on its own.
+3. **Some goods have no single current rate.** Pan masala, gutkha, cigarettes, zarda,
+   unmanufactured tobacco and bidi stay on the older rates "till loan and interest payment
+   obligations under the compensation cess account are completely discharged" — a date to be
+   notified. Their effective date is an event to monitor, not a date to record.
 
 ## A subtlety worth reading
 

@@ -58,6 +58,35 @@ test('a blog, a newsletter or a vendor page can never approve a rule', () => {
   assert.ok(!LEGAL_AUTHORITIES.includes('CIRCULAR'), 'a circular is the administration reading the law, not the law');
 });
 
+test('an official announcement is not the instrument that enacts it', () => {
+  // The GST Council announces a rate change days before the notification that makes it law.
+  // The announcement is reliable and useful, and charging a customer on the strength of it would
+  // be charging them on the strength of an intention.
+  const register = new ComplianceRegister(
+    [withSource({ id: 'announcement', authority: 'PRESS_RELEASE' })],
+    [{ ruleId: 'gst.rate', ruleVersion: '1', sourceIds: ['announcement'], tests: ['t'] }],
+    [],
+  );
+  const verdict = register.mayApprove('gst.rate', '1', TODAY);
+  assert.equal(verdict.approved, false);
+  assert.ok(verdict.reasons.some((r) => /rests only on commentary or guidance/.test(r)));
+  assert.ok(!LEGAL_AUTHORITIES.includes('PRESS_RELEASE'));
+
+  // It is still worth recording, and the shipped register does record one.
+  const shipped = defaultRegister().source('gst-council-56th-press-release');
+  assert.equal(shipped.authority, 'PRESS_RELEASE');
+  assert.match(shipped.quotedText, /2 rate structure with a Standard Rate of 18% and a Merit Rate of 5%/);
+  assert.match(shipped.quotedText, /22 September 2025/);
+});
+
+test('the register records that the shipped rate table predates the 2025 restructuring', () => {
+  const entry = defaultRegister().decisions().find((d) => d.id === 'dl-rate-table-predates-2025-restructure');
+  assert.ok(entry !== undefined, 'a known-stale rate table must be written down, not remembered');
+  assert.match(entry.rationale, /22 September 2025/);
+  assert.match(entry.rationale, /current as of 1 April 2023/);
+  assert.deepEqual(entry.sourceIds, ['gst-council-56th-press-release']);
+});
+
 test('a statute hosted somewhere other than the authority’s own site is refused', () => {
   assert.equal(isOfficiallyPublished('https://some-consultant.example.com/igst-act'), false);
   assert.equal(isOfficiallyPublished('https://cbic-gst.gov.in/anything'), true);

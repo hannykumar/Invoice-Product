@@ -134,6 +134,26 @@ export const SOURCES: readonly ComplianceSource[] = [
       'This is the text as enacted in 2017. It has since been amended: Dadra and Nagar Haveli and Daman and Diu were merged, and Ladakh was added. The amended text could not be retrieved first-hand (the publisher\'s updated-Act host refused the connection), so Ladakh is deliberately NOT treated as a UTGST territory by any rule — a supply inside Ladakh is refused instead. See decision log entry `dl-ladakh-utgst`.',
   }),
   source({
+    id: 'gst-council-56th-press-release',
+    title: 'Recommendations of the 56th Meeting of the GST Council',
+    authority: 'PRESS_RELEASE',
+    publisher: 'Ministry of Finance, published by the GST Council',
+    url: 'https://gstcouncil.gov.in/sites/default/files/2025-09/press_release_press_information_bureau.pdf',
+    provision: 'Recommendation III, date of implementation; Annexures I to IV',
+    quotedText:
+      'Rationalisation of the current 4-tiered tax rate structure into a citizen-friendly Simple Tax - a 2 rate structure with a Standard Rate of 18% and a Merit Rate of 5%; a special de-merit rate of 40% for a select few goods and services. The changes in GST rates of goods and services need to be implemented with effect from 22 September 2025.',
+    effectiveFrom: isoDate('2025-09-03'),
+    effectiveTo: null,
+    retrievedOn: isoDate('2026-08-29'),
+    verification: 'FIRST_HAND',
+    state: 'ACTIVE',
+    supersededBy: null,
+    reviewedBy: GPT1,
+    reviewedOn: isoDate('2026-08-29'),
+    notes:
+      'Recorded because it establishes that the whole rate schedule changed on 22 September 2025, which the rate table shipped with issue #25 predates. It is a recommendation, not the instrument that enacts it, so it can never approve a rate rule on its own — the rate notifications must be retrieved. Note also that pan masala, gutkha, cigarettes, zarda, unmanufactured tobacco and bidi stay on the older rates until a date to be notified, so even "the current rate" is conditional for those goods.',
+  }),
+  source({
     id: 'utgst-act-2017-s7',
     title: 'The Union Territory Goods and Services Tax Act, 2017 — levy and collection',
     authority: 'STATUTE',
