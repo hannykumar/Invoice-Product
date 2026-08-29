@@ -26,6 +26,7 @@ from deterministic, versioned, testable rules.
 | [`packages/ledger`](packages/ledger) | #4 | The double-entry ledger: the only write path into the books |
 | [`packages/rules-engine`](packages/rules-engine) | #7 | Deterministic, effective-dated, versioned rules that return explainable decisions |
 | [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
+| [`packages/onboarding`](packages/onboarding) | #36 | Guided setup: profile, defaults, declared rates, opening balances, resumable checklist |
 | [`packages/invoice-templates`](packages/invoice-templates) | #13 | Invoice templates and the rendering engine: A4, thermal, mobile, print |
 | [`packages/gst-calc`](packages/gst-calc) | #25 | Deterministic GST computation, place of supply and tax classification |
 | [`packages/compliance-register`](packages/compliance-register) | #54 | The official sources behind every compliance rule, and the gate that enforces them |
@@ -66,6 +67,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run demo:masters` — prints a walkthrough of master data with synthetic Indian-business samples.
 - `npm run demo:inbox` — prints a walkthrough of the purchase inbox: routing, duplicates, quarantine and drafts.
 - `npm run demo:invoice` — issues a real bill through the ledger and prints it on A4, thermal and mobile into `tmp/invoices/`.
+- `npm run demo:onboarding` — sets up a bakery, interrupted halfway and resumed, into `tmp/onboarding/`.
 - `npm run demo:validate` — prints a walkthrough of purchase validation: what posts, what needs a person and what is stopped.
 
 ## Type checking the deterministic modules

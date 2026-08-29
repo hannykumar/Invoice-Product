@@ -256,6 +256,48 @@ export class LedgerService {
     });
   }
 
+  /**
+   * Opens the account that belongs to one customer or supplier.
+   *
+   * Party balances fold from journal lines, so a party needs an account of its own before anything
+   * can be posted against it. Idempotent: asking twice returns the account that already exists,
+   * because a shopkeeper adding the same customer twice is ordinary, not an error.
+   */
+  async openPartyAccount(
+    actor: ActorContext,
+    input: { partyId: string; name: string; kind: 'CUSTOMER' | 'SUPPLIER' },
+  ): Promise<Account> {
+    this.#permissions.require(actor, SETUP_PERMISSION, 'add a customer or supplier to the books');
+    return this.#store.transaction(actor.companyId, async (uow) => {
+      const existing = await uow.accounts.findByPartyId(actor.companyId, input.partyId);
+      if (existing !== null) return existing;
+
+      const groupRole = input.kind === 'CUSTOMER' ? 'TRADE_RECEIVABLES' : 'TRADE_PAYABLES';
+      const group = await uow.accounts.findBySystemRole(actor.companyId, groupRole);
+      if (group === null) {
+        throw invalid(
+          'LEDGER_PARTY_GROUP_MISSING',
+          'The books have no place to put customers and suppliers yet. Set up the chart of accounts first.',
+        );
+      }
+      const sequence = await uow.sequences.next(actor.companyId, `party-account:${input.kind}`);
+      const account: Account = {
+        id: this.#newId() as AccountId,
+        companyId: actor.companyId,
+        code: `${group.code}-${String(sequence).padStart(4, '0')}`,
+        name: input.name,
+        type: input.kind === 'CUSTOMER' ? 'ASSET' : 'LIABILITY',
+        parentId: group.id,
+        isGroup: false,
+        active: true,
+        partyId: input.partyId as Account['partyId'],
+        systemRole: null,
+      };
+      await uow.accounts.insertMany([account]);
+      return account;
+    });
+  }
+
   /** Posts a balanced, final entry. This is the only write path into the books. */
   async postVoucher(actor: ActorContext, command: PostVoucherCommand): Promise<PostResult> {
     const outcome = await this.#store.transaction(actor.companyId, (uow) => this.#post(uow, actor, command));

@@ -30,7 +30,8 @@
     "demo:masters": "node --experimental-strip-types packages/masters/src/demo.ts",
     "demo:inbox": "node --experimental-strip-types packages/purchasing/src/demo.ts",
     "demo:invoice": "node --experimental-strip-types packages/invoice-templates/src/demo.ts",
-    "demo:validate": "node --experimental-strip-types packages/purchasing/src/validation-demo.ts"
+    "demo:validate": "node --experimental-strip-types packages/purchasing/src/validation-demo.ts",
+    "demo:onboarding": "node --experimental-strip-types packages/onboarding/src/demo.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",
