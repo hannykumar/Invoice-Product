@@ -85,7 +85,8 @@ export async function createCompanyShop(seed: CompanySeed) {
     bills,
     audit,
     clock,
-    accountCodes: { servicesCost: '5900', reverseChargePayable: '2260' },
+    // No nominated codes: issue #73 put PURCHASES_SERVICES and REVERSE_CHARGE_PAYABLE in the
+    // standard chart, and the posting service finds them by role.
     idFactory: () => `${seed.companyId}:bill:${sequence += 1}`,
   });
   const setupActor: ActorContext = {
@@ -98,11 +99,6 @@ export async function createCompanyShop(seed: CompanySeed) {
   const liabilities = chart.find((account) => account.code === '2000');
   const bankParent = chart.find((account) => account.code === '1120');
   const additions: Account[] = [
-    {
-      id: asId<'Account'>(`${seed.companyId}:acc:2260`), companyId: seed.companyId, code: '2260',
-      name: 'GST payable under reverse charge', type: 'LIABILITY', parentId: liabilities?.id ?? null,
-      isGroup: false, active: true, partyId: null, systemRole: null,
-    },
     {
       id: asId<'Account'>(`${seed.companyId}:acc:1121`), companyId: seed.companyId, code: '1121',
       name: 'Current bank account', type: 'ASSET', parentId: bankParent?.id ?? null,

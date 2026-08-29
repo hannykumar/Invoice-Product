@@ -32,11 +32,24 @@ export type SystemAccountRole =
   | 'SALES_RETURNS'
   | 'BAD_DEBTS'
   | 'PURCHASES_GOODS'
+  /**
+   * Services and expenses bought: freight, commission, job work, professional fees. Separate from
+   * goods because putting freight into "purchases of goods" overstates the cost of stock and
+   * misstates the profit and loss (issue #73).
+   */
+  | 'PURCHASES_SERVICES'
   | 'PURCHASE_RETURNS'
   | 'OUTPUT_CGST'
   | 'OUTPUT_SGST'
   | 'OUTPUT_IGST'
   | 'OUTPUT_CESS'
+  /**
+   * GST the business owes the government itself, because the supplier charged none — reverse
+   * charge, which for an MSME is most often a goods-transport bill. It is not GST collected from a
+   * customer, so it does not belong under that heading (issue #73). The return (#30) and the input
+   * credit claim (#31) both find it by this role.
+   */
+  | 'REVERSE_CHARGE_PAYABLE'
   | 'INPUT_CGST'
   | 'INPUT_SGST'
   | 'INPUT_IGST'

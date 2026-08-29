@@ -124,7 +124,7 @@ test("a service line is a cost and receives no stock", async () => {
     invoiceTotalPaise: 38_810_00n,
   }), "post-1");
   const { lines } = await entryOf(shop, bill.voucherId);
-  assert.equal(lines["5900"]?.debit, "1000.00", "services are a cost, not stock");
+  assert.equal(lines["5120"]?.debit, "1000.00", "services are a cost, not stock");
   assert.equal(lines["5100"]?.debit, "32000.00");
   assert.equal(bill.receipts.length, 1, "freight does not enter the godown");
 });
@@ -147,7 +147,7 @@ test("reverse charge records GST the business owes the government itself", async
   }), "post-1");
   const { lines } = await entryOf(shop, bill.voucherId);
   assert.equal(lines["2100-0001"]?.credit, "32000.00", "the supplier is owed the value only");
-  assert.equal(lines["2260"]?.credit, "5760.00", "the tax is owed to the government");
+  assert.equal(lines["2300"]?.credit, "5760.00", "the tax is owed to the government");
   assert.equal(lines["1430"]?.debit, "5760.00", "and claimed back at the same time");
   assert.equal(bill.tax.reverseCharge, true);
 });

@@ -75,24 +75,16 @@ export const makeShop = async (options: { permissions?: readonly string[] } = {}
   });
   const posting = new PurchasePostingService({
     store, ledger, inventory: purchaseInventoryPort(inventoryService, masters), bills, audit, clock,
-    // Until GPT 1's chart has roles for these; see the contract's open proposal.
-    accountCodes: { servicesCost: "5900", reverseChargePayable: "2260" },
+    // No nominated codes any more: issue #73 put PURCHASES_SERVICES and REVERSE_CHARGE_PAYABLE in
+    // the standard chart, and the role lookup finds them.
     idFactory: () => `bill${counter}-${String((n += 1)).padStart(4, "0")}`,
   });
 
   const setup = actorWith(ALL_PERMISSIONS);
   const chart = buildDefaultChart(COMPANY, defaultChartIdFactory(COMPANY));
-  // The standard chart has no home for GST the business owes under reverse charge, so this
-  // business has nominated one. See the open proposal in docs/contracts/purchase-posting.v1.md.
-  const liabilities = chart.find((a) => a.code === "2000");
-  const reverseCharge: Account = {
-    id: asId<"Account">("acct-2260"), companyId: COMPANY, code: "2260",
-    name: "GST payable under reverse charge", type: "LIABILITY",
-    parentId: liabilities?.id ?? null, isGroup: false, active: true, partyId: null, systemRole: null,
-  };
   await ledger.initialiseCompany(setup, {
     booksStartDate: isoDate("2026-04-01"),
-    accounts: [...chart, reverseCharge],
+    accounts: chart,
   });
   await ledger.openPartyAccount(setup, { partyId: SUPPLIER, name: "Shree Ram Steels Private Limited", kind: "SUPPLIER" });
 

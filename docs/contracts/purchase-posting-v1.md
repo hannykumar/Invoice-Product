@@ -110,18 +110,24 @@ leaving it would show money owed that the ledger disagrees with.
 this contract adds no new permission. Moving stock additionally requires `inventory.move`, and the
 negative-stock override requires `inventory.override_negative`, both enforced inside #12.
 
-## Two open proposals for GPT 1
+## Both proposals to GPT 1 are now settled (issue #73)
 
-Neither blocks this contract; both would remove a workaround. Raised rather than added silently,
-per the working agreement.
+They were raised here rather than added silently, per the working agreement, and GPT 1 has since
+put both roles in the standard chart:
 
-1. **`PURCHASES_SERVICES` system role.** The default chart has `SALES_SERVICES` but no purchase
-   equivalent, so services currently fall back to an account the company nominates by code.
-2. **`REVERSE_CHARGE_PAYABLE` system role.** There is no home in the default chart for GST the
-   business owes the government itself, so a reverse-charge purchase needs a nominated account or
-   it is refused with a message saying so.
+| Code | Name | Type | Role |
+| --- | --- | --- | --- |
+| `5120` | Services and expenses bought | `EXPENSE` | `PURCHASES_SERVICES` |
+| `2300` | GST you owe the government yourself | `LIABILITY` | `REVERSE_CHARGE_PAYABLE` |
 
-Both are supplied through `accountCodes` on the service until the roles exist.
+`2300` deliberately hangs off `2000 What the business owes` rather than `2200 GST you collected`:
+on a reverse-charge bill nobody collected that tax from anyone, and grouping the two together
+would tell a shopkeeper they hold money they never took.
+
+The role lookup already ran first, so this service needed no change. **`accountCodes` is now
+optional and unused** — a business no longer has to nominate an account before it can record a
+freight bill. The field is kept for a company whose chart genuinely differs, and the refusals
+below still apply if a role resolves to nothing.
 
 ## Errors
 
