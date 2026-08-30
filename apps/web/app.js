@@ -59,6 +59,15 @@ const copy = {
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
+    navMigration: "Bring your data",
+    migrationTitle: "Bring your data across",
+    migrationHelp: "Send the file your old software exports — customers, items, stock or last year's balances. We read it, show you exactly what would happen, and write nothing until you say so.",
+    migrationFileHeading: "The file from your old software",
+    migrationFileHelp: "Paste it, or choose a file from this device. Nothing leaves your session, and nothing is written to your books yet.",
+    migrationFileName: "What is the file called?",
+    migrationPaste: "Paste the file here",
+    migrationUpload: "…or choose a file",
+    migrationRead: "Read this file",
     saleChecked: "Sale checked", saleCheckedBody: "The checked sale comes to {amount}.", saleEffectInvoice: "A numbered invoice will be issued.", saleEffectBalance: "The customer balance will increase.", purchaseChecked: "Purchase checked", purchaseCheckedBody: "The checked supplier bill comes to {amount}.", purchaseEffectStock: "Stock will update from this purchase.", purchaseEffectBooks: "GST and the supplier balance will post together.", paymentChecked: "Payment checked", paymentCheckedBody: "A receipt of {amount} is ready to record.", paymentEffectBalance: "The customer balance will reduce when this is recorded.", saleRecorded: "Sale recorded", saleRecordedBody: "Invoice {number} was issued.", purchaseRecorded: "Purchase recorded", purchaseRecordedBody: "Stock, GST and the supplier balance were recorded together.", paymentRecorded: "Payment recorded", paymentRecordedBody: "The customer receipt was recorded once.", amountInvalid: "Enter a valid amount greater than zero.", referenceRequired: "Enter the supplier bill number.", rateRequired: "Enter a price and quantity.", permissionDenied: "You do not have permission to do this work.",
     navEInvoice: "E-invoice",
     einvoiceTitle: "Does this bill need a government e-invoice number?", einvoiceHelp: "Most bills do not. We work it out from your turnover and who the bill is for, tell you which rule decided it, and only then offer to send it.",
@@ -152,6 +161,15 @@ const copy = {
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
+    navMigration: "Apna data laayein",
+    migrationTitle: "Apna data yahan laayein",
+    migrationHelp: "Purane software se nikali gayi file bhejein — customer, saman, stock ya pichhle saal ki baaki. Hum use padhkar dikhaayenge ki kya hoga, aur aapke kehne se pehle kuch nahin likhenge.",
+    migrationFileHeading: "Purane software ki file",
+    migrationFileHelp: "Yahan paste karein, ya device se file chunein. Kuch bhi bahar nahin jaata, aur abhi hisaab mein kuch nahin likha jaata.",
+    migrationFileName: "File ka naam kya hai?",
+    migrationPaste: "File yahan paste karein",
+    migrationUpload: "…ya file chunein",
+    migrationRead: "Yeh file padhein",
     saleChecked: "Bikri jaanch li", saleCheckedBody: "Jaanchi hui bikri {amount} ki hai.", saleEffectInvoice: "Number wali invoice jaari hogi.", saleEffectBalance: "Customer ka baki paisa badhega.", purchaseChecked: "Kharid jaanch li", purchaseCheckedBody: "Jaancha hua supplier bill {amount} ka hai.", purchaseEffectStock: "Is kharid se stock update hoga.", purchaseEffectBooks: "GST aur supplier balance ek saath darj honge.", paymentChecked: "Payment jaanch li", paymentCheckedBody: "{amount} ki receipt darj karne ke liye taiyar hai.", paymentEffectBalance: "Darj hone par customer ka baki paisa kam hoga.", saleRecorded: "Bikri darj hui", saleRecordedBody: "Invoice {number} jaari hui.", purchaseRecorded: "Kharid darj hui", purchaseRecordedBody: "Stock, GST aur supplier balance ek saath darj hue.", paymentRecorded: "Payment darj hua", paymentRecordedBody: "Customer receipt ek baar darj hui.", amountInvalid: "Zero se badi sahi rakam bharen.", referenceRequired: "Supplier bill number bharen.", rateRequired: "Daam aur matra bharen.", permissionDenied: "Aapko yeh kaam karne ki permission nahin hai.",
     navEInvoice: "E-invoice",
     einvoiceTitle: "Kya is bill ko sarkari e-invoice number chahiye?", einvoiceHelp: "Zyadatar bills ko nahin chahiye. Hum aapke turnover aur bill kiske liye hai, isse tay karte hain, batate hain kaunsa niyam laga, aur tabhi bhejne ko kehte hain.",
@@ -200,6 +218,32 @@ const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: loc
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const REPORT_TEXT = {
+  bringingIn: { "en-IN": "Bringing it in…", "hi-IN": "Laaya ja raha hai…" },
+  columnHeader: { "en-IN": "Column in your file", "hi-IN": "Aapki file ka column" },
+  weReadItAs: { "en-IN": "We read it as", "hi-IN": "Hum ise samajhte hain" },
+  notUsed: { "en-IN": "Not used", "hi-IN": "Istemaal nahin" },
+  pleaseConfirm: { "en-IN": "Please confirm", "hi-IN": "Pushti karein" },
+  whatThisFileIs: { "en-IN": "What this file looks like", "hi-IN": "Yeh file kya lagti hai" },
+  checkTheColumns: { "en-IN": "Check the columns, then continue", "hi-IN": "Column dekhein, phir aage badhein" },
+  continueToPreview: { "en-IN": "These are right — show me what happens", "hi-IN": "Yeh sahi hain — dikhaayein kya hoga" },
+  bringItIn: { "en-IN": "Bring it into my books", "hi-IN": "Mere hisaab mein laayein" },
+  undoImport: { "en-IN": "Take this back out", "hi-IN": "Ise wapas nikaalein" },
+  rowsReady: { "en-IN": "Rows ready", "hi-IN": "Taiyaar rows" },
+  rowsToFix: { "en-IN": "Rows to fix first", "hi-IN": "Pehle theek karni hain" },
+  rowsAlreadyHere: { "en-IN": "Already here", "hi-IN": "Pehle se maujood" },
+  rowCol: { "en-IN": "Row", "hi-IN": "Row" },
+  whatIsWrong: { "en-IN": "What we found", "hi-IN": "Humein kya mila" },
+  downloadErrors: { "en-IN": "Download the rows to fix", "hi-IN": "Theek karni wali rows download karein" },
+  fileTotals: { "en-IN": "What the file adds up to", "hi-IN": "File ka jod" },
+  broughtIn: { "en-IN": "Brought in", "hi-IN": "Laaya gaya" },
+  booksNow: { "en-IN": "Your books now", "hi-IN": "Ab aapka hisaab" },
+  stockNow: { "en-IN": "In the godown", "hi-IN": "Godown mein" },
+  customersCreated: { "en-IN": "Customers and suppliers", "hi-IN": "Customer aur supplier" },
+  itemsCreated: { "en-IN": "Items", "hi-IN": "Saman" },
+  whyUndo: { "en-IN": "Why are you taking it back out?", "hi-IN": "Ise wapas kyun nikaal rahe hain?" },
+  takenBackOut: { "en-IN": "Taken back out", "hi-IN": "Wapas nikaal diya" },
+  sameFileAgain: { "en-IN": "This is a file you already brought in", "hi-IN": "Yeh file pehle hi laayi ja chuki hai" },
+  differenceReason: { "en-IN": "The two sides do not agree. If you want it recorded anyway, say why:", "hi-IN": "Dono taraf barabar nahin hain. Phir bhi darj karna hai to kaaran likhein:" },
   account: { "en-IN": "Account", "hi-IN": "Account" },
   amount: { "en-IN": "Amount", "hi-IN": "Rakam" },
   balanceCol: { "en-IN": "Balance", "hi-IN": "Baaki" },
@@ -305,6 +349,7 @@ function openView(view) {
   document.querySelector("#menu-button").setAttribute("aria-expanded", "false");
   document.querySelector(`#view-${target} h1`)?.focus?.();
   if (target === "reports") loadReports();
+  if (target === "migration") startMigration();
 }
 
 function draftData(form) {
@@ -813,6 +858,353 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     updateCalculations();
   });
 });
+
+// ---------------------------------------------------------------- issue #37: bringing data across
+//
+// Every step here is a call into the real MigrationService: it reads the file, proposes which
+// column is which, waits for the person to approve that, previews what would happen, and only then
+// writes. What comes back after the commit is the new company's own trial balance and stock.
+
+const migration = { workspaceId: null, batch: null, columns: [], fields: [], fingerprint: null };
+
+async function startMigration() {
+  if (migration.workspaceId !== null) return;
+  try {
+    const started = await api("/api/migration/start", { method: "POST", body: JSON.stringify({}) });
+    migration.workspaceId = started.workspaceId;
+    const box = document.querySelector("#migration-samples");
+    box.replaceChildren();
+    started.samples.forEach((sample) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost-button";
+      button.textContent = sample.name;
+      button.addEventListener("click", () => {
+        document.querySelector("#migration-content").value = sample.content;
+        document.querySelector("#migration-file-name").value = sample.fileName;
+      });
+      box.append(button);
+    });
+  } catch (error) {
+    renderMigrationProblem(error.message);
+  }
+}
+
+function migrationCard(parent, title, sentence) {
+  const box = document.querySelector(parent);
+  box.replaceChildren();
+  const card = reportCard(title, sentence);
+  box.append(card);
+  return card;
+}
+
+function renderMigrationProblem(message) {
+  const card = migrationCard("#migration-preview", t(REPORT_TEXT.needsALook), message);
+  document.querySelector("#migration-result").replaceChildren();
+  return card;
+}
+
+async function readMigrationFile() {
+  const content = document.querySelector("#migration-content").value;
+  if (content.trim() === "") return;
+  const button = document.querySelector("#migration-read");
+  button.disabled = true;
+  try {
+    const analysis = await api("/api/migration/analyse", {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: migration.workspaceId,
+        fileName: document.querySelector("#migration-file-name").value || "export.csv",
+        content,
+      }),
+    });
+    migration.workspaceId = analysis.workspaceId;
+    migration.batch = analysis;
+    migration.columns = analysis.columns;
+    migration.fields = analysis.fields;
+    migration.fingerprint = analysis.fingerprint;
+    document.querySelector("#migration-preview").replaceChildren();
+    document.querySelector("#migration-result").replaceChildren();
+    renderMigrationMapping(analysis);
+  } catch (error) {
+    document.querySelector("#migration-mapping").replaceChildren();
+    renderMigrationProblem(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderMigrationMapping(analysis) {
+  const card = migrationCard(
+    "#migration-mapping",
+    t(REPORT_TEXT.whatThisFileIs),
+    `${analysis.entity.replace("_", " ")} · ${analysis.rowsInFile} ${t(REPORT_TEXT.rowsReady).toLowerCase()} · ${analysis.sourceSystem}`,
+  );
+
+  if (analysis.state === "REJECTED_DUPLICATE") {
+    const flag = document.createElement("div");
+    flag.className = "report-flag";
+    const strong = document.createElement("strong");
+    strong.textContent = t(REPORT_TEXT.sameFileAgain);
+    flag.append(strong);
+    card.append(flag);
+    return;
+  }
+
+  const table = document.createElement("div");
+  table.className = "report-scroll";
+  const grid = document.createElement("table");
+  grid.className = "report-table";
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  [t(REPORT_TEXT.columnHeader), t(REPORT_TEXT.weReadItAs)].forEach((label) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.append(th);
+  });
+  head.append(headRow);
+  const body = document.createElement("tbody");
+
+  analysis.columns.forEach((column) => {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    name.textContent = column.header;
+    const choice = document.createElement("td");
+    const select = document.createElement("select");
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = t(REPORT_TEXT.notUsed);
+    select.append(none);
+    migration.fields.forEach((field) => {
+      const option = document.createElement("option");
+      option.value = field.id;
+      option.textContent = field.required ? `${field.label} *` : field.label;
+      if (field.id === column.field) option.selected = true;
+      select.append(option);
+    });
+    select.addEventListener("change", () => remapMigrationColumns());
+    select.dataset.column = String(column.index);
+    choice.append(select);
+    if (column.pleaseConfirm) {
+      const pill = document.createElement("span");
+      pill.className = "pill warn";
+      pill.textContent = t(REPORT_TEXT.pleaseConfirm);
+      choice.append(pill);
+    }
+    row.append(name, choice);
+    body.append(row);
+  });
+
+  grid.append(head, body);
+  table.append(grid);
+  card.append(table);
+
+  const actions = document.createElement("div");
+  actions.className = "setup-actions";
+  const approve = document.createElement("button");
+  approve.type = "button";
+  approve.className = "primary-button";
+  approve.textContent = t(REPORT_TEXT.continueToPreview);
+  approve.addEventListener("click", () => approveMigrationMapping());
+  actions.append(approve);
+  card.append(actions);
+}
+
+function currentMigrationColumns() {
+  return [...document.querySelectorAll("#migration-mapping select[data-column]")].map((select) => ({
+    index: Number(select.dataset.column),
+    field: select.value === "" ? null : select.value,
+  }));
+}
+
+async function remapMigrationColumns() {
+  try {
+    const remapped = await api("/api/migration/mapping", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: migration.workspaceId, batchId: migration.batch.batchId, columns: currentMigrationColumns() }),
+    });
+    migration.fingerprint = remapped.fingerprint;
+  } catch (error) {
+    renderMigrationProblem(error.message);
+  }
+}
+
+async function approveMigrationMapping() {
+  try {
+    const preview = await api("/api/migration/approve", {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: migration.workspaceId,
+        batchId: migration.batch.batchId,
+        columns: currentMigrationColumns(),
+        fingerprint: migration.fingerprint,
+      }),
+    });
+    renderMigrationPreview(preview);
+  } catch (error) {
+    renderMigrationProblem(error.message);
+  }
+}
+
+function renderMigrationPreview(preview) {
+  const card = migrationCard("#migration-preview", t(REPORT_TEXT.checkTheColumns), t(preview.summary));
+  card.append(reportTable(
+    [{ label: "" }, { label: "", numeric: true }],
+    [
+      [t(REPORT_TEXT.rowsReady), String(preview.accepted)],
+      [t(REPORT_TEXT.rowsToFix), String(preview.rejected)],
+      [t(REPORT_TEXT.rowsAlreadyHere), String(preview.skipped)],
+    ],
+  ));
+
+  if (preview.openingTotals) {
+    card.append(reportTable(
+      [{ label: t(REPORT_TEXT.fileTotals) }, { label: t(REPORT_TEXT.ownedSpent), numeric: true }, { label: t(REPORT_TEXT.owedEarned), numeric: true }],
+      [["", money(preview.openingTotals.debit), money(preview.openingTotals.credit)]],
+    ));
+  }
+  if (preview.stockTotal !== null && preview.stockTotal !== undefined) {
+    card.append(reportTotalRow(t(REPORT_TEXT.goodsValue), preview.stockTotal));
+  }
+
+  if (preview.problems.length > 0) {
+    card.append(reportTable(
+      [{ label: t(REPORT_TEXT.rowCol), numeric: true }, { label: t(REPORT_TEXT.whatIsWrong) }],
+      preview.problems.map((problem) => [String(problem.row), t(problem.message)]),
+    ));
+  }
+
+  if (preview.errorFile) {
+    const download = document.createElement("a");
+    download.className = "ghost-button";
+    download.href = `data:text/csv;charset=utf-8,${encodeURIComponent(preview.errorFile)}`;
+    download.download = "rows-to-fix.csv";
+    download.textContent = t(REPORT_TEXT.downloadErrors);
+    card.append(download);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "setup-actions";
+  let reasonField = null;
+  if (preview.openingTotals && !preview.openingTotals.balanced) {
+    const label = document.createElement("label");
+    const span = document.createElement("span");
+    span.textContent = t(REPORT_TEXT.differenceReason);
+    reasonField = document.createElement("input");
+    label.append(span, reasonField);
+    card.append(label);
+  }
+  const commit = document.createElement("button");
+  commit.type = "button";
+  commit.className = "primary-button";
+  commit.textContent = t(REPORT_TEXT.bringItIn);
+  commit.disabled = preview.accepted === 0;
+  commit.addEventListener("click", () => commitMigration(commit, reasonField === null ? "" : reasonField.value));
+  actions.append(commit);
+  card.append(actions);
+}
+
+async function commitMigration(button, acceptDifferenceReason) {
+  button.disabled = true;
+  const previous = button.textContent;
+  button.textContent = t(REPORT_TEXT.bringingIn);
+  try {
+    const result = await api("/api/migration/commit", {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: migration.workspaceId,
+        batchId: migration.batch.batchId,
+        acceptDifferenceReason,
+      }),
+    });
+    renderMigrationResult(result);
+  } catch (error) {
+    renderMigrationProblem(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = previous;
+  }
+}
+
+function renderMigrationResult(result) {
+  const card = migrationCard("#migration-result", t(REPORT_TEXT.broughtIn), t(result.reconciliation.sentence));
+
+  const facts = [
+    [t(REPORT_TEXT.customersCreated), String(result.books.customers)],
+    [t(REPORT_TEXT.itemsCreated), String(result.books.items)],
+  ];
+  if (result.reconciliation.stockTotals) {
+    facts.push([t(REPORT_TEXT.goodsValue), money(result.reconciliation.stockTotals.recordedValue)]);
+  }
+  card.append(reportTable([{ label: "" }, { label: "", numeric: true }], facts));
+
+  const badge = document.createElement("span");
+  badge.className = `pill ${result.books.trialBalance.balanced ? "done" : "warn"}`;
+  badge.textContent = result.books.trialBalance.balanced ? t(REPORT_TEXT.booksBalance) : t(REPORT_TEXT.booksDoNotBalance);
+  card.append(badge);
+
+  if (result.books.trialBalance.rows.length > 0) {
+    const heading = document.createElement("h3");
+    heading.className = "setup-subheading";
+    heading.textContent = t(REPORT_TEXT.booksNow);
+    card.append(heading);
+    card.append(reportTable(
+      [{ label: t(REPORT_TEXT.account) }, { label: t(REPORT_TEXT.ownedSpent), numeric: true }, { label: t(REPORT_TEXT.owedEarned), numeric: true }],
+      result.books.trialBalance.rows.map((row) => [row.name, row.debit ? money(row.debit) : "", row.credit ? money(row.credit) : ""]),
+    ));
+  }
+
+  if (result.books.stock.length > 0) {
+    const heading = document.createElement("h3");
+    heading.className = "setup-subheading";
+    heading.textContent = t(REPORT_TEXT.stockNow);
+    card.append(heading);
+    card.append(reportTable(
+      [{ label: t(REPORT_TEXT.itemCol) }, { label: t(REPORT_TEXT.leftCol), numeric: true }],
+      result.books.stock.map((line) => [line.name, `${line.quantity} ${line.unit}`]),
+    ));
+  }
+
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = t(REPORT_TEXT.whyUndo);
+  const reason = document.createElement("input");
+  label.append(span, reason);
+  const actions = document.createElement("div");
+  actions.className = "setup-actions";
+  const undo = document.createElement("button");
+  undo.type = "button";
+  undo.className = "ghost-button";
+  undo.textContent = t(REPORT_TEXT.undoImport);
+  undo.addEventListener("click", () => rollbackMigration(reason.value));
+  actions.append(undo);
+  card.append(label, actions);
+}
+
+async function rollbackMigration(reason) {
+  try {
+    const result = await api("/api/migration/rollback", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId: migration.workspaceId, batchId: migration.batch.batchId, reason }),
+    });
+    const card = migrationCard("#migration-result", t(REPORT_TEXT.takenBackOut), reason);
+    card.append(reportTable(
+      [{ label: t(REPORT_TEXT.account) }, { label: t(REPORT_TEXT.ownedSpent), numeric: true }, { label: t(REPORT_TEXT.owedEarned), numeric: true }],
+      result.books.trialBalance.rows.map((row) => [row.name, row.debit ? money(row.debit) : "", row.credit ? money(row.credit) : ""]),
+    ));
+  } catch (error) {
+    renderMigrationProblem(error.message);
+  }
+}
+
+document.querySelector("#migration-read")?.addEventListener("click", () => readMigrationFile());
+document.querySelector("#migration-upload")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  document.querySelector("#migration-content").value = await file.text();
+  document.querySelector("#migration-file-name").value = file.name;
+});
+
 document.querySelector("#setup-form")?.addEventListener("submit", (event) => { event.preventDefault(); checkSetup(); });
 document.querySelector("#setup-form")?.addEventListener("input", () => { document.querySelector("#setup-create").hidden = true; });
 document.querySelector("#setup-create")?.addEventListener("click", createSetup);

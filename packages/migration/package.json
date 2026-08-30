@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/migration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #37 [E37] — bringing a business's existing customers, suppliers, items, stock and balances in from an Excel or CSV export, with mapping, preview, duplicates, reconciliation and rollback.",
+  "exports": { ".": "./src/index.ts" }
+}

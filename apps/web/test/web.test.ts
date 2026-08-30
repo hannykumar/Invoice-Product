@@ -69,7 +69,8 @@ test("sale, purchase and payment are semantic, labelled, recoverable draft flows
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 10);
+  // One focusable heading per view. Eleven since issue #37 added "Bring your data".
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 11);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

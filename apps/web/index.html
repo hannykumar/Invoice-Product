@@ -28,6 +28,7 @@
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
+          <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
         </nav>
         <div class="sidebar-note">
           <span class="status-dot" aria-hidden="true"></span>
@@ -380,6 +381,24 @@
           </form>
           <div id="setup-result" aria-live="polite"></div>
         </section>
+
+        <section class="view" id="view-migration" aria-labelledby="migration-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navMigration"></p><h1 id="migration-title" tabindex="-1" data-i18n="migrationTitle"></h1><p data-i18n="migrationHelp"></p></div></div>
+          <form class="panel setup-form migration-form" id="migration-form" novalidate>
+            <fieldset>
+              <legend data-i18n="migrationFileHeading"></legend>
+              <p class="setup-hint" data-i18n="migrationFileHelp"></p>
+              <div class="migration-samples" id="migration-samples"></div>
+              <label><span data-i18n="migrationFileName"></span><input id="migration-file-name" value="export.csv" /></label>
+              <label><span data-i18n="migrationPaste"></span><textarea id="migration-content" rows="8" spellcheck="false"></textarea></label>
+              <label><span data-i18n="migrationUpload"></span><input type="file" id="migration-upload" accept=".csv,.txt,.tsv" /></label>
+            </fieldset>
+            <div class="setup-actions"><button type="button" class="primary-button" id="migration-read" data-i18n="migrationRead"></button></div>
+          </form>
+          <div id="migration-mapping" aria-live="polite"></div>
+          <div id="migration-preview" aria-live="polite"></div>
+          <div id="migration-result" aria-live="polite"></div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -392,6 +411,7 @@
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
+        <button data-view="migration"><span aria-hidden="true">⇪</span><small data-i18n="navMigration"></small></button>
       </nav>
     </div>
 

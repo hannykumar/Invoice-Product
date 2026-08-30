@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { serveApi } from "../api/src/server.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const port = Number(process.env.WEB_PORT ?? 4173);
+// `PORT` is honoured too, so a tool that assigns a free port can start this without a clash.
+const port = Number(process.env.WEB_PORT ?? process.env.PORT ?? 4173);
 const types: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
