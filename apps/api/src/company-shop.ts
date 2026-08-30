@@ -115,6 +115,8 @@ const SETUP_PERMISSIONS = [
   'ledger.post.credit_note', 'ledger.post.debit_note', 'returns.create',
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
+  'notification.send', 'collections.manage', 'collections.send',
+  'bank.balance.read', 'bank.feed.manage', 'bank.feed.sync',
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',

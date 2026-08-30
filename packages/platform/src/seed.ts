@@ -12,6 +12,8 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "eway.view", "eway.generate", "eway.update", "eway.cancel",
   "sales.draft.write", "sales.finalise", "sales.approve", "sales.cancel",
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",
+  "notification.send", "collections.manage", "collections.send",
+  "bank.balance.read", "bank.feed.manage", "bank.feed.sync",
   "sales.approve_discount",
   "reports.view.financial", "reports.view.sales", "reports.view.purchase", "reports.view.stock",
   "reports.view.dues", "reports.view.gst", "reports.view.exceptions", "reports.export",

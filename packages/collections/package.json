@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/collections",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #23 [E23] — payment reminder schedules, promises, disputes and collection communication history.",
+  "exports": { ".": "./src/index.ts" }
+}

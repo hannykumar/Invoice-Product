@@ -76,7 +76,17 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 12);
+  assert.match(html, /id="view-collections"[^>]+aria-labelledby=/);
+  assert.match(html, /id="collection-plan-form"/);
+  assert.match(script, /\/api\/collections\/plan/);
+  assert.match(script, /\/api\/collections\/send/);
+  assert.match(script, /\/api\/collections\/promises/);
+  assert.match(script, /\/api\/collections\/disputes/);
+  assert.match(html, /id="view-bank-feeds"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/bank-feeds\/consent/);
+  assert.match(script, /\/api\/bank-feeds\/sync/);
+  assert.match(script, /\/api\/bank-feeds\/disconnect/);
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 14);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
