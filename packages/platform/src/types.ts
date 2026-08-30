@@ -55,7 +55,9 @@ export type Permission =
   | "reports.view.dues"
   | "reports.view.gst"
   | "reports.view.exceptions"
-  | "reports.export";
+  | "reports.export"
+  // Issue #34 [E34], GPT 1: asking questions about this company's own books.
+  | "assistant.ask";
 
 export interface RequestContext {
   companyId: Id;

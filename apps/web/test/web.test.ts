@@ -76,8 +76,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
-  // One focusable heading per view. Returns and "Bring your data" make twelve.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 12);
+  // One focusable heading per view. Returns, "Bring your data" and "Ask" make thirteen.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 13);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

@@ -178,6 +178,12 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 #migration-mapping, #migration-preview, #migration-result { margin-top: 1.1rem; display: grid; gap: 1rem; }
 #migration-mapping select { max-width: 16rem; }
 
+/* Issue #34 — the answer: sentences first, then where every figure came from. */
+.ask-sentence { margin: .35rem 0; font-size: 1rem; line-height: 1.5; }
+.ask-quote { margin: .6rem 0; padding: .6rem .8rem; border-left: 3px solid var(--line); color: var(--muted); font-size: .86rem; }
+.ask-steps { margin: .6rem 0 0; padding-left: 1.1rem; display: grid; gap: .3rem; font-size: .9rem; }
+#ask-answer { margin-top: 1.1rem; display: grid; gap: 1rem; }
+
 /* Issue #18 — the order/delivery/bill comparison table and its severity colours. */
 .match-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
 .match-table th, .match-table td { text-align: left; padding: .5rem .65rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
