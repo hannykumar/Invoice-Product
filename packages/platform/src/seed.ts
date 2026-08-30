@@ -4,6 +4,7 @@ import type { Permission } from "./types.ts";
 export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "dashboard.read", "ledger.setup", "ledger.post.purchase", "ledger.post.sale", "ledger.post.receipt",
   "ledger.post.payment", "ledger.post.journal", "ledger.reverse", "inventory.move", "inventory.adjust",
+  "ledger.post.credit_note", "ledger.post.debit_note", "returns.create",
   "inventory.override_negative",
   "purchase.order.write", "purchase.order.cancel", "purchase.receipt.write", "purchase.match.approve",
   "supplier.risk.view", "supplier.risk.acknowledge",

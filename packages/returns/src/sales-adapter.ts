@@ -1,7 +1,13 @@
 import type { SalesRepository } from '@invoice/sales';
 import type { SalesReturnSourcePort } from './ports.ts';
 
-export const salesReturnSource = (sales: SalesRepository): SalesReturnSourcePort => ({
+export const salesReturnSource = (
+  sales: SalesRepository,
+  isGovernmentRegistered: (
+    companyId: Parameters<SalesRepository['findById']>[0],
+    documentId: Parameters<SalesRepository['findById']>[1],
+  ) => Promise<boolean> = async () => false,
+): SalesReturnSourcePort => ({
   async findSalesDocument(companyId, id) {
     const invoice = await sales.findById(companyId, id);
     if (invoice === null || invoice.number === null || invoice.pricing === null) return null;
@@ -12,7 +18,7 @@ export const salesReturnSource = (sales: SalesRepository): SalesReturnSourcePort
       date: invoice.documentDate,
       partyId: invoice.partyId,
       state: invoice.state === 'CANCELLED' ? 'CANCELLED' : 'FINAL',
-      governmentRegistered: false,
+      governmentRegistered: await isGovernmentRegistered(companyId, id),
       lines: invoice.lines.map((input) => {
         const priced = invoice.pricing?.lines.find((line) => line.lineId === input.lineId);
         if (priced === undefined) throw new Error(`Final invoice ${invoice.id} has no pricing snapshot for line ${input.lineId}.`);

@@ -66,6 +66,9 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
+    if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
+    if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
+    if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));
     return json(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
   } catch (error) {
     return json(statusOf(error), {

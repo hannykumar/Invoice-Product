@@ -34,11 +34,29 @@ export interface SalesReturnSourcePort {
   findSalesDocument(companyId: CompanyId, id: string): Promise<OriginalSalesDocument | null>;
 }
 
+export interface OriginalPurchaseDocument {
+  readonly id: string;
+  readonly companyId: CompanyId;
+  readonly number: string;
+  readonly date: IsoDate;
+  readonly partyId: PartyId;
+  readonly partyName: string;
+  readonly state: 'FINAL' | 'CANCELLED';
+  readonly reverseCharge: boolean;
+  readonly governmentRegistered: boolean;
+  readonly lines: readonly (OriginalReturnLine & { readonly ineligibleTax: Money })[];
+}
+
+export interface PurchaseReturnSourcePort {
+  findPurchaseDocument(companyId: CompanyId, id: string): Promise<OriginalPurchaseDocument | null>;
+}
+
 export interface ReturnNoteRepository {
   insert(note: ReturnNote): Promise<void>;
   findById(companyId: CompanyId, id: string): Promise<ReturnNote | null>;
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ReturnNote | null>;
   listForOriginal(companyId: CompanyId, originalDocumentId: string): Promise<ReturnNote[]>;
+  list(companyId: CompanyId): Promise<ReturnNote[]>;
 }
 
 export interface ReturnInventoryLine {
@@ -60,8 +78,10 @@ export interface ReturnInventoryLine {
 /** Runs inside the return service's existing ledger transaction. */
 export interface ReturnInventoryPort {
   applySalesReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]>;
+  applyPurchaseReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]>;
 }
 
 export const noReturnInventory: ReturnInventoryPort = {
   async applySalesReturnIn() { return []; },
+  async applyPurchaseReturnIn() { return []; },
 };

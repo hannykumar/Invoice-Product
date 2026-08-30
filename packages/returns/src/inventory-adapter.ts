@@ -27,4 +27,20 @@ export const returnInventoryAdapter = (inventory: InventoryService): ReturnInven
     if (line.disposition === 'REPLACEMENT') await move('replacement', 'SALE_OUT', line.replacementSerialNumbers);
     return ids;
   },
+
+  async applyPurchaseReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]> {
+    const movement = await inventory.recordMovementIn(actor, {
+      idempotencyKey: `purchase-return:${line.noteId}:${line.originalLineId}:out`,
+      itemId: line.itemId,
+      warehouseId: line.warehouseId,
+      batchId: line.batchId,
+      serialNumbers: line.serialNumbers,
+      kind: 'PURCHASE_RETURN_OUT',
+      quantity: line.quantity,
+      documentDate: line.documentDate,
+      source: { kind: 'debit_note', id: line.noteId, number: line.noteNumber },
+      reason: line.disposition === 'REPLACEMENT' ? `${line.reason} Replacement is still awaited.` : line.reason,
+    });
+    return [movement.id];
+  },
 });

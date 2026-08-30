@@ -23,7 +23,7 @@ const OTHER = asId<'Company'>('returns-other');
 const CUSTOMER = asId<'Party'>('returns-customer');
 const actor: ActorContext = {
   companyId: COMPANY, branchId: asId<'Branch'>('main'), userId: asId<'User'>('priya'),
-  permissions: ['ledger.setup', 'ledger.post.sale', 'ledger.post.credit_note', 'returns.create', 'inventory.move'],
+  permissions: ['ledger.setup', 'ledger.post.sale', 'ledger.post.credit_note', 'ledger.post.locked_period', 'periods.lock', 'periods.hard_lock', 'returns.create', 'inventory.move'],
 };
 
 class Masters implements StockMasterData {
@@ -170,6 +170,37 @@ test('scrapped and replacement dispositions leave no sellable stock but keep bot
     assert.deepEqual(movements.map((movement) => movement.kind), ['SALES_RETURN_IN', disposition === 'SCRAPPED' ? 'ADJUSTMENT_OUT' : 'SALE_OUT']);
     assert.ok(movements.every((movement) => movement.source.id === result.note.id));
   }
+});
+
+test('a full damaged return clears the customer balance and goes only to damaged stock', async () => {
+  const f = await setup();
+  const { note } = await f.service.postSales(actor, command({
+    idempotencyKey: 'full-damaged-return',
+    lines: [{ originalLineId: 'line-apples', quantity: quantityFromString('70', 'BOX'), disposition: 'DAMAGED', warehouseId: 'damaged' }],
+  }));
+  assert.equal(toDecimalString(note.totals.total), '8260.00');
+  assert.equal(toDecimalString((await partyBalance(f.store.read(), COMPANY, CUSTOMER)).balance), '0.00');
+  assert.equal((await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'shop' })).physical.scaled, 0n);
+  assert.equal((await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'damaged' })).physical.scaled, quantityFromString('70', 'BOX').scaled);
+  const voucher = await f.store.read().vouchers.findById(COMPANY, note.voucherId);
+  assert.ok(voucher);
+  const accountRoles = await Promise.all(voucher.lines.map(async (line) => (await f.store.read().accounts.findById(COMPANY, line.accountId))?.systemRole));
+  assert.ok(!accountRoles.includes('CASH_IN_HAND'), 'a return note must not silently move money; an approved refund is a separate payment');
+});
+
+test('a return against a hard-locked original month posts as a later adjustment, never back into the filed month', async () => {
+  const f = await setup();
+  await f.ledger.setPeriodState(actor, { monthKey: '2026-08', state: 'SOFT_LOCKED', reason: 'August reviewed' });
+  await f.ledger.setPeriodState(actor, { monthKey: '2026-08', state: 'HARD_LOCKED', reason: 'August GST filed' });
+  await assert.rejects(
+    f.service.postSales(actor, command({ idempotencyKey: 'backdated-return', periodOverrideReason: 'Customer told us later' })),
+    (error: any) => error.code === 'LEDGER_PERIOD_HARD_LOCKED',
+  );
+  assert.equal((await f.notes.listForOriginal(COMPANY, 'invoice-70')).length, 0);
+  const { note } = await f.service.postSales(actor, command({ idempotencyKey: 'september-adjustment', documentDate: isoDate('2026-09-01') }));
+  assert.equal(note.documentDate, isoDate('2026-09-01'));
+  assert.equal(note.originalDocument.date, isoDate('2026-08-01'));
+  assert.equal(note.complianceStatus, 'PENDING_ADJUSTMENT');
 });
 
 test('an inventory refusal rolls back the credit note, customer credit and return record', async () => {

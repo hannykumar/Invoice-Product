@@ -22,6 +22,7 @@
           <button class="nav-item" data-view="sale"><span aria-hidden="true">＋</span><span data-i18n="navSale"></span></button>
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
+          <button class="nav-item" data-view="returns"><span aria-hidden="true">↩</span><span data-i18n="navReturns"></span></button>
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
@@ -119,6 +120,31 @@
           <form class="transaction-layout draft-form" data-draft="payment">
             <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" data-i18n-placeholder="paymentCustomerPlaceholder" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+          </form>
+        </section>
+
+        <section class="view" id="view-returns" aria-labelledby="returns-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="returns-title" tabindex="-1" data-i18n="returnsTitle"></h1><p data-i18n="returnsHelp"></p></div></div>
+          <form class="transaction-layout" id="return-form">
+            <article class="panel form-panel">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="originalBill"></span><select name="documentId" id="return-document" required></select></label>
+                <label class="full-field"><span data-i18n="returnItem"></span><select name="lineId" id="return-line" required></select><small id="return-remaining" data-i18n="returnRemaining"></small></label>
+                <input name="kind" id="return-kind" type="hidden" />
+                <input name="unit" id="return-unit" type="hidden" />
+                <label><span data-i18n="returnQuantity"></span><input name="quantity" type="number" min="0.000001" step="0.000001" required /></label>
+                <label><span data-i18n="disposition"></span><select name="disposition"><option value="ACCEPTED" data-i18n="dispAccepted"></option><option value="DAMAGED" data-i18n="dispDamaged"></option><option value="SCRAPPED" data-i18n="dispScrapped"></option><option value="REPLACEMENT" data-i18n="dispReplacement"></option></select></label>
+                <label><span data-i18n="returnDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="returnReference"></span><input name="reference" required /></label>
+                <label class="full-field"><span data-i18n="returnReason"></span><textarea name="reason" rows="3" required></textarea><small data-i18n="returnReasonHelp"></small></label>
+              </div>
+            </article>
+            <aside class="panel summary-card">
+              <h2 data-i18n="beforeSaving"></h2>
+              <ol class="check-list"><li data-i18n="returnCheckQuantity"></li><li data-i18n="returnCheckBooks"></li><li data-i18n="returnCheckCompliance"></li></ol>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="returnSafety"></span></p>
+              <button type="submit" class="primary-button wide" data-i18n="checkReturn"></button>
+            </aside>
           </form>
         </section>
 
@@ -388,6 +414,7 @@
         <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
         <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
+        <button data-view="returns"><span aria-hidden="true">↩</span><small data-i18n="navReturns"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>

@@ -11,6 +11,8 @@ export interface ReturnTaxAmounts {
   readonly utgst: Money;
   readonly igst: Money;
   readonly cess: Money;
+  readonly ineligibleTax: Money;
+  readonly reverseChargeTax: Money;
   readonly total: Money;
 }
 

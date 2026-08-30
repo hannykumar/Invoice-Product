@@ -30,4 +30,8 @@ export class InMemoryReturnNoteRepository implements ReturnNoteRepository, Trans
   async listForOriginal(companyId: CompanyId, originalDocumentId: string): Promise<ReturnNote[]> {
     return this.#notes.filter((note) => note.companyId === companyId && note.originalDocument.id === originalDocumentId);
   }
+
+  async list(companyId: CompanyId): Promise<ReturnNote[]> {
+    return this.#notes.filter((note) => note.companyId === companyId);
+  }
 }

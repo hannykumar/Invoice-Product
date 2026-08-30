@@ -35,7 +35,7 @@ test("critical runtime states have distinct English and Hindi wording", async ()
   assert.match(locales["hi-IN"]!.saleCheckedBody!, /\{amount\}/);
 });
 
-test("sale, purchase and payment are semantic, labelled, recoverable draft flows", async () => {
+test("transaction screens are semantic, labelled and safe to review", async () => {
   const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
   for (const flow of ["sale", "purchase", "payment"]) {
     assert.match(html, new RegExp(`<form[^>]+data-draft="${flow}"`));
@@ -51,6 +51,13 @@ test("sale, purchase and payment are semantic, labelled, recoverable draft flows
   assert.match(script, /Nothing was saved/);
   assert.match(script, /Record once/);
   assert.match(html, /id="login-form"/);
+  assert.match(html, /id="view-returns"[^>]+aria-labelledby=/);
+  assert.match(html, /id="return-form"/);
+  assert.match(html, /id="return-document"/);
+  assert.match(html, /id="return-line"/);
+  assert.match(script, /\/api\/returns\/preview/);
+  assert.match(script, /\/api\/returns\/record/);
+  assert.match(script, /localizeReturnResult/);
   assert.match(script, /authorization: `Bearer \$\{state\.sessionId\}`/);
   assert.match(script, /\/api\/auth\/login/);
   assert.match(script, /karobar\.session/);
@@ -69,7 +76,7 @@ test("sale, purchase and payment are semantic, labelled, recoverable draft flows
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 10);
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 11);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -81,7 +88,7 @@ test("responsive CSS includes phone navigation, reduced motion and visible focus
   assert.doesNotMatch(css, /outline:\s*none/);
   assert.doesNotMatch(css, /\.save-state \{ display: none/);
   assert.match(css, /\.topbar-actions \.user-avatar \{ display: none/);
-  assert.match(css, /\.bottom-nav \{[^}]*grid-auto-flow: column; grid-auto-columns: 1fr/);
+  assert.match(css, /\.bottom-nav \{[^}]*grid-auto-flow: column; grid-auto-columns: minmax\(68px, 1fr\);[^}]*overflow-x: auto/);
   assert.match(css, /\.bottom-nav button small \{[^}]*text-overflow: ellipsis/);
 });
 
