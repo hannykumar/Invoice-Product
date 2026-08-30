@@ -14,7 +14,14 @@ import {
   SyntheticEwayBillPortal, SyntheticEwayVault, ewayBillAdapter,
 } from "./adapters.ts";
 import { EwayBillService } from "./service.ts";
+import {
+  InMemorySuitabilityStore, InMemoryVehicleSuitabilityPolicies, SyntheticPlateReader,
+  SyntheticVehicleRecordService, mastersVehicleAdapter,
+} from "./suitability-adapters.ts";
+import { VehicleSuitabilityService } from "./suitability-service.ts";
 import type { ConsignmentLine, Movement, MovementParty, VehicleAssignment } from "./types.ts";
+import type { ShipmentFacts, TransportDetails } from "./suitability-types.ts";
+import type { Vehicle } from "../../masters/src/types.ts";
 
 export const COMPANY: CompanyId = asId<"Company">("sampoorna");
 export const OWNER = asId<"User">("ravi");
@@ -197,5 +204,65 @@ export const makeEwayDesk = (options: { readonly permissions?: readonly string[]
   return {
     portal, gateway, records, trips, policies, audit, clock, service,
     actor: actorWith(options.permissions ?? ALL_EWAY_PERMISSIONS),
+  };
+};
+
+// ------------------------------------------------ issue #28: the load, the lorry, and the check
+
+/** Checking a vehicle, and the separate permission to send it out anyway. */
+export const ALL_VEHICLE_PERMISSIONS = ["transport.vehicle.view", "transport.vehicle.check", "transport.vehicle.override"];
+
+/** A movement's transport details as the dispatch desk enters them. */
+export const transportDetails = (over: Partial<TransportDetails> = {}): TransportDetails => ({
+  mode: "ROAD",
+  vehicleNumber: "KA01AB1234",
+  transporterId: syntheticGstin("29", "AAJCT9876Q"),
+  transporterName: "Deccan Roadlines",
+  transportDocumentNumber: "GR/2026/4471",
+  transportDocumentDate: "2026-08-21",
+  distanceKm: 840,
+  interState: true,
+  movementDate: "2026-08-21",
+  ...over,
+});
+
+/** Five tonnes of steel: the load the issue's own example puts on a scooter. */
+export const fiveTonneShipment = (over: Partial<ShipmentFacts> = {}): ShipmentFacts => ({
+  grossWeightKg: 5_000,
+  volumeCubicMetres: 3.2,
+  ...over,
+});
+
+/**
+ * A working dispatch desk: the vehicle record service, the plate reader and somewhere to keep
+ * what was found.
+ *
+ * The vehicle-record service is the synthetic stand-in for issue #29. Swapping it for #29's own
+ * adapter when that lands changes this line and nothing else.
+ */
+export const makeVehicleDesk = (options: { readonly permissions?: readonly string[]; readonly now?: string; readonly vehicles?: readonly Vehicle[] } = {}) => {
+  const clock = movableClock(options.now ?? "2026-08-21T04:30:00.000Z");
+  const records = new InMemorySuitabilityStore();
+  const policies = new InMemoryVehicleSuitabilityPolicies();
+  const audit = new InMemoryAuditPort();
+  const authority = new SyntheticVehicleRecordService(() => clock.now());
+  const plateReader = new SyntheticPlateReader();
+  const ownVehicles = options.vehicles ?? [];
+  let sequence = 0;
+
+  const service = new VehicleSuitabilityService({
+    records,
+    audit,
+    clock,
+    vehicleRecords: authority,
+    vehicleMaster: mastersVehicleAdapter(() => ownVehicles, () => clock.now()),
+    plateOcr: plateReader,
+    policy: policies,
+    idFactory: () => `vsc-${String((sequence += 1)).padStart(4, "0")}`,
+  });
+
+  return {
+    clock, records, policies, audit, authority, plateReader, service,
+    actor: actorWith(options.permissions ?? ALL_VEHICLE_PERMISSIONS),
   };
 };

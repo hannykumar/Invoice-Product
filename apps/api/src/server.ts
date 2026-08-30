@@ -60,6 +60,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/eway/reject') return json(200, await app.rejectEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/reconcile') return json(200, await app.reconcileEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/offline') return json(200, await app.ewayOfflineJson(actor, body));
+    // Issue #28 — can this lorry carry this load, and who said to send it anyway.
+    if (method === 'GET' && pathname === '/api/vehicles/choices') return json(200, DemoApplication.vehicleChoices());
+    if (method === 'GET' && pathname === '/api/vehicles/held') return json(200, await app.blockedVehicleChecks(actor));
+    if (method === 'POST' && pathname === '/api/vehicles/check') return json(200, await app.checkVehicle(actor, body));
+    if (method === 'POST' && pathname === '/api/vehicles/check/override') return json(200, await app.overrideVehicleCheck(actor, body));
     // Issue #19 — what we know about a supplier, and the evidence behind each warning.
     if (method === 'GET' && pathname === '/api/suppliers/choices') return json(200, { choices: DemoApplication.supplierChoices() });
     if (method === 'POST' && pathname === '/api/suppliers/check') return json(200, await app.checkSupplier(actor, body));

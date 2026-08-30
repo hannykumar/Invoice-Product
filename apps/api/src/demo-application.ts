@@ -66,6 +66,12 @@ import type {
   ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
 } from '../../../packages/transport/src/types.ts';
 import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
+import { outstandingOf } from '../../../packages/transport/src/suitability-service.ts';
+import { DEMO_VEHICLE_RECORDS, platePhoto } from '../../../packages/transport/src/suitability-adapters.ts';
+import { VEHICLE_CLASS_NAMES } from '../../../packages/transport/src/suitability-types.ts';
+import type {
+  ShipmentFacts, TransportDetails, VehicleSuitabilityAssessment,
+} from '../../../packages/transport/src/suitability-types.ts';
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
@@ -1575,6 +1581,167 @@ export class DemoApplication {
         vehicle: row.record.vehicleLegs[row.record.vehicleLegs.length - 1]?.registrationNumber ?? null,
         validUntil: row.record.acknowledgement?.validUntil ?? null,
         timeLeft: row.timeLeft,
+      })),
+    };
+  }
+
+  // ------------------------------------------- issue #28: is this lorry able to carry this load
+
+  /**
+   * The vehicles this screen can be tried against.
+   *
+   * The list is the synthetic authority's own rows plus the shop's own lorry, so what the picker
+   * offers and what the check reads can never drift apart.
+   */
+  static vehicleChoices() {
+    return {
+      vehicles: [
+        ...DEMO_VEHICLE_RECORDS.map((row) => ({
+          number: row.registrationNumber,
+          label: `${row.registrationNumber} · ${row.vehicleClass === undefined ? 'unknown class' : VEHICLE_CLASS_NAMES[row.vehicleClass]}`,
+          knownTo: 'the registering authority',
+        })),
+        { number: 'KA09OW5566', label: 'KA09OW5566 · your own closed van (not on the authority\'s record)', knownTo: 'your vehicle list only' },
+        { number: 'KA88XX0001', label: 'KA88XX0001 · a number nobody holds', knownTo: 'nobody' },
+      ],
+      // What the yard's camera can be made to see, so the comparison can be tried both ways.
+      photos: [
+        { value: '', label: 'No photograph' },
+        { value: 'plate:KA01AB1234@0.96', label: 'A clear photo of KA01AB1234' },
+        { value: 'plate:KA02GV3344@0.94', label: 'A clear photo of a different lorry' },
+        { value: 'plate:KAO1AB1Z34@0.88', label: 'A photo read as KAO1AB1Z34 (look-alike characters)' },
+        { value: 'blurred', label: 'A photo nothing can be read from' },
+      ],
+    };
+  }
+
+  private static vehicleJson(assessment: VehicleSuitabilityAssessment) {
+    const outstanding = outstandingOf(assessment.findings, assessment.overrides);
+    return {
+      state: 'vehicle' as const,
+      id: assessment.id,
+      outcome: assessment.outcome,
+      // An overridden check still says BLOCK — that is what was found — but the heading has to say
+      // where the movement actually stands, or a dispatch clerk reads a stopped lorry.
+      title: assessment.clearedToMove && assessment.overrides.length > 0
+        ? 'Sent out on somebody\'s authority'
+        : assessment.outcome === 'BLOCK'
+        ? 'This load cannot go on this vehicle'
+        : assessment.outcome === 'CANNOT_DECIDE'
+          ? 'This has not been checked all the way through'
+          : assessment.outcome === 'WARN'
+            ? 'It can go, with something worth a look'
+            : 'Nothing found against this movement',
+      message: assessment.summary,
+      clearedToMove: assessment.clearedToMove,
+      vehicle: assessment.transport.vehicleNumber ?? null,
+      findings: assessment.findings.map((finding) => ({
+        code: finding.code,
+        severity: finding.severity,
+        title: finding.title,
+        reason: finding.reason,
+        ruleId: finding.ruleId,
+        sourceRef: finding.sourceRef ?? null,
+        overridable: finding.overridable,
+        evidenceSource: finding.evidenceSource ?? null,
+        facts: finding.appliedFacts.map((fact) => ({ label: fact.label, value: fact.value })),
+        // What the screen offers a button for: still standing, and allowed to be overridden.
+        outstanding: outstanding.some((row) => row.code === finding.code),
+      })),
+      // Every reading, with its source on it, exactly as the check stored it.
+      evidence: assessment.evidence.map((item) => ({
+        source: item.source,
+        retrievedAt: item.retrievedAt,
+        vehicleClass: item.vehicleClass === undefined ? null : VEHICLE_CLASS_NAMES[item.vehicleClass],
+        bodyType: item.bodyType ?? null,
+        ratedPayloadKg: item.ratedPayloadKg ?? null,
+        grossVehicleWeightKg: item.grossVehicleWeightKg ?? null,
+        unladenWeightKg: item.unladenWeightKg ?? null,
+        permitType: item.permitType ?? null,
+        permitValidUpto: item.permitValidUpto ?? null,
+        fitnessValidUpto: item.fitnessValidUpto ?? null,
+        registrationStatus: item.registrationStatus ?? null,
+        reference: item.reference ?? null,
+      })),
+      capacity: assessment.capacity === undefined ? null : {
+        capacityKg: assessment.capacity.capacityKg,
+        basis: assessment.capacity.basis,
+        source: assessment.capacity.source,
+      },
+      plate: assessment.plate === undefined ? null : {
+        verdict: assessment.plate.verdict,
+        readNumber: assessment.plate.readNumber ?? null,
+        declaredNumber: assessment.plate.declaredNumber,
+        confidence: assessment.plate.confidence ?? null,
+        explanation: assessment.plate.explanation,
+      },
+      overrides: assessment.overrides.map((entry) => ({
+        findingCodes: [...entry.findingCodes],
+        reason: entry.reason,
+        by: entry.byUserId,
+        at: entry.at,
+      })),
+      outstanding: outstanding.length,
+    };
+  }
+
+  /** Checks the load against the lorry. Writes the assessment; changes nothing about the goods. */
+  async checkVehicle(actor: ActorContext, input: Record<string, unknown>) {
+    const movementId = String(input.invoice ?? '').trim();
+    if (movementId === '') throw invalid('API_MOVEMENT_REQUIRED', 'Choose which bill is being sent out.');
+    const weight = String(input.weightKg ?? '').trim();
+    const distance = String(input.distanceKm ?? '').trim();
+
+    const transport: TransportDetails = {
+      mode: 'ROAD',
+      vehicleNumber: String(input.vehicle ?? '').trim(),
+      movementDate: this.shop.clock.now().toISOString().slice(0, 10),
+      interState: String(input.interState ?? 'no') === 'yes',
+      ...(String(input.transporterId ?? '').trim() === '' ? {} : { transporterId: String(input.transporterId).trim() }),
+      // Blank stays blank: an unentered distance is a missing fact, never a zero.
+      ...(distance === '' ? {} : { distanceKm: Number(distance) }),
+    };
+    const shipment: ShipmentFacts = {
+      ...(weight === '' ? {} : { grossWeightKg: Number(weight) }),
+      ...(String(input.coldChain ?? '') === 'yes' ? { requiresColdChain: true } : {}),
+      ...(String(input.hazardous ?? '') === 'yes' ? { hazardous: true } : {}),
+    };
+
+    const photo = String(input.platePhoto ?? '').trim();
+    const assessment = await this.shop.vehicleSuitability.assess(actor, {
+      movementId,
+      transport,
+      shipment,
+      ...(photo === '' ? {} : { platePhoto: platePhoto(photo, this.shop.clock.now().toISOString()) }),
+    });
+    return DemoApplication.vehicleJson(assessment);
+  }
+
+  /**
+   * A person answering for named findings.
+   *
+   * The evidence and the findings are untouched by this; the override is stored beside them with
+   * the reason, and the screen goes on showing what was found.
+   */
+  async overrideVehicleCheck(actor: ActorContext, input: Record<string, unknown>) {
+    const codes = String(input.findingCodes ?? '').split(',').map((code) => code.trim()).filter((code) => code !== '');
+    const assessment = await this.shop.vehicleSuitability.override(actor, String(input.checkId ?? ''), {
+      findingCodes: codes,
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.vehicleJson(assessment);
+  }
+
+  /** The dispatch desk's queue: movements a vehicle problem is holding back. */
+  async blockedVehicleChecks(actor: ActorContext) {
+    const rows = await this.shop.vehicleSuitability.blocked(actor);
+    return {
+      held: rows.map((row) => ({
+        movementId: row.movementId,
+        vehicle: row.transport.vehicleNumber ?? null,
+        outcome: row.outcome,
+        summary: row.summary,
+        outstanding: outstandingOf(row.findings, row.overrides).map((finding) => finding.title),
       })),
     };
   }
