@@ -48,11 +48,29 @@ export const INTER_STATE_THRESHOLD: ValueThreshold = Object.freeze({
  */
 export interface StateIntraStateRule extends ValueThreshold {
   readonly stateName: string;
+  readonly kind: JurisdictionKind;
   readonly intraCityExemptAnyValue?: boolean;
   readonly notifiedGoodsOnly?: boolean;
   /** True when this row carries the state's actual notification number. */
   readonly sourceConfirmed: boolean;
 }
+
+/**
+ * What a GST state code actually is.
+ *
+ * India has 28 states and 8 union territories, and the codes do not stop there: two of them belong
+ * to jurisdictions that no longer exist, and one is not a place people live in at all. Calling the
+ * whole list "states" is wrong and this is where that is kept straight:
+ *
+ *   - `STATE` — one of the 28 states.
+ *   - `UNION_TERRITORY` — one of the 8 union territories. Delhi, Chandigarh and the rest.
+ *   - `RETIRED` — a code that is no longer issued: 25 (Daman and Diu, folded into 26 in 2020) and
+ *     28 (undivided Andhra Pradesh, split into 36 and 37 in 2014). Kept because a document raised
+ *     years ago still carries the old code, and it must still resolve to the right rule.
+ *   - `OTHER_TERRITORY` — code 97, which the portal uses for offshore areas and anything outside
+ *     the states and union territories. Not a place anybody picks off a list.
+ */
+export type JurisdictionKind = "STATE" | "UNION_TERRITORY" | "RETIRED" | "OTHER_TERRITORY";
 
 /** Every GST state code, so a code on a screen always has a name behind it. */
 export const STATE_NAMES: Readonly<Record<string, string>> = Object.freeze({
@@ -111,6 +129,7 @@ const state = (
   effectiveFrom: string,
   sourceRef: string,
   extra: {
+    readonly kind?: JurisdictionKind;
     readonly sourceConfirmed?: boolean;
     readonly note?: string;
     readonly intraCityExemptAnyValue?: boolean;
@@ -119,6 +138,7 @@ const state = (
 ): StateIntraStateRule => Object.freeze({
   scope: code,
   stateName: stateName(code),
+  kind: extra.kind ?? "STATE",
   thresholdPaise,
   effectiveFrom,
   sourceRef,
@@ -143,13 +163,13 @@ const NOTIFIED_GOODS_NOTE = "This state asks for an e-way bill only for the good
  * all — a typo, or a party outside India — and it says that is what happened.
  */
 export const INTRA_STATE_RULES: Readonly<Record<string, StateIntraStateRule>> = Object.freeze({
-  "01": state("01", FIFTY_THOUSAND, "2018-11-16", stateOrder("01", "16 November 2018")),
+  "01": state("01", FIFTY_THOUSAND, "2018-11-16", stateOrder("01", "16 November 2018"), { kind: "UNION_TERRITORY" }),
   "02": state("02", FIFTY_THOUSAND, "2018-04-15", stateOrder("02", "15 April 2018")),
   "03": state("03", ONE_LAKH, "2018-06-01", "Punjab Notification GST-I-2018/3, 19 April 2018", { sourceConfirmed: true }),
-  "04": state("04", ONE_LAKH, "2018-06-01", stateOrder("04", "1 June 2018")),
+  "04": state("04", ONE_LAKH, "2018-06-01", stateOrder("04", "1 June 2018"), { kind: "UNION_TERRITORY" }),
   "05": state("05", FIFTY_THOUSAND, "2018-04-20", stateOrder("05", "20 April 2018")),
   "06": state("06", FIFTY_THOUSAND, "2018-04-20", "Haryana Notification 49/ST-2, 19 April 2018", { sourceConfirmed: true }),
-  "07": state("07", ONE_LAKH, "2018-06-16", "Delhi Notification F.3(46)/Fin(Rev-I)/2017-18, 15 June 2018", { sourceConfirmed: true }),
+  "07": state("07", ONE_LAKH, "2018-06-16", "Delhi Notification F.3(46)/Fin(Rev-I)/2017-18, 15 June 2018", { kind: "UNION_TERRITORY", sourceConfirmed: true }),
   "08": state("08", ONE_LAKH, "2019-04-01", "Rajasthan Notification F.17(131)ACCT/GST/2017/3743, 6 August 2018 as amended", { sourceConfirmed: true }),
   "09": state("09", FIFTY_THOUSAND, "2018-04-15", "Uttar Pradesh Notification 38/2018, 11 April 2018", { sourceConfirmed: true }),
   "10": state("10", ONE_LAKH, "2018-04-20", "Bihar Notification S.O. 130, 19 April 2018", { sourceConfirmed: true }),
@@ -172,30 +192,56 @@ export const INTRA_STATE_RULES: Readonly<Record<string, StateIntraStateRule>> = 
     note: "Gujarat asks for no e-way bill at all when the goods stay inside one city, whatever they are worth.",
   }),
   "25": state("25", FIFTY_THOUSAND, "2018-06-01", stateOrder("25", "1 June 2018"), {
+    kind: "RETIRED",
     note: "This code belongs to the old Daman and Diu. Since 26 January 2020 the union territory uses code 26.",
   }),
-  "26": state("26", FIFTY_THOUSAND, "2018-06-01", stateOrder("26", "1 June 2018")),
+  "26": state("26", FIFTY_THOUSAND, "2018-06-01", stateOrder("26", "1 June 2018"), { kind: "UNION_TERRITORY" }),
   "27": state("27", ONE_LAKH, "2018-07-01", "Maharashtra Notification 15E/2018 - State Tax, 29 June 2018", { sourceConfirmed: true }),
   "28": state("28", FIFTY_THOUSAND, "2018-04-15", stateOrder("28", "15 April 2018"), {
+    kind: "RETIRED",
     note: "This code belongs to undivided Andhra Pradesh and is no longer issued. Andhra Pradesh is 37 and Telangana is 36.",
   }),
   "29": state("29", FIFTY_THOUSAND, "2018-04-01", "Karnataka Notification 01/2018 - State Tax, 25 March 2018", { sourceConfirmed: true }),
   "30": state("30", FIFTY_THOUSAND, "2018-06-01", stateOrder("30", "1 June 2018"), { notifiedGoodsOnly: true, note: NOTIFIED_GOODS_NOTE }),
-  "31": state("31", FIFTY_THOUSAND, "2018-06-01", stateOrder("31", "1 June 2018")),
+  "31": state("31", FIFTY_THOUSAND, "2018-06-01", stateOrder("31", "1 June 2018"), { kind: "UNION_TERRITORY" }),
   "32": state("32", FIFTY_THOUSAND, "2018-04-15", "Kerala Notification 3/2018 - State Tax, 12 April 2018", { sourceConfirmed: true }),
   "33": state("33", ONE_LAKH, "2018-06-02", "Tamil Nadu Notification 09/2018 - (Rate)/G.O. (Ms) No. 72, 31 May 2018", { sourceConfirmed: true }),
-  "34": state("34", FIFTY_THOUSAND, "2018-04-25", stateOrder("34", "25 April 2018")),
-  "35": state("35", FIFTY_THOUSAND, "2018-06-01", stateOrder("35", "1 June 2018")),
+  "34": state("34", FIFTY_THOUSAND, "2018-04-25", stateOrder("34", "25 April 2018"), { kind: "UNION_TERRITORY" }),
+  "35": state("35", FIFTY_THOUSAND, "2018-06-01", stateOrder("35", "1 June 2018"), { kind: "UNION_TERRITORY" }),
   "36": state("36", FIFTY_THOUSAND, "2018-04-15", stateOrder("36", "15 April 2018")),
   "37": state("37", FIFTY_THOUSAND, "2018-04-15", stateOrder("37", "15 April 2018")),
-  "38": state("38", FIFTY_THOUSAND, "2019-10-31", stateOrder("38", "31 October 2019")),
-  "97": state("97", FIFTY_THOUSAND, "2018-06-01", stateOrder("97", "1 June 2018")),
+  "38": state("38", FIFTY_THOUSAND, "2019-10-31", stateOrder("38", "31 October 2019"), { kind: "UNION_TERRITORY" }),
+  "97": state("97", FIFTY_THOUSAND, "2018-06-01", stateOrder("97", "1 June 2018"), { kind: "OTHER_TERRITORY" }),
 });
 
-/** Every state, in code order, for a picker on a screen. */
+/**
+ * Every row in the table, in code order.
+ *
+ * This is 39 rows and that is **not** 39 states: it is 28 states, 8 union territories, 2 codes that
+ * are no longer issued, and code 97 for other territory. Use `LIVE_JURISDICTIONS` for anything a
+ * person picks from, and this one for looking up a code that arrived on a document.
+ */
 export const ALL_STATE_RULES: readonly StateIntraStateRule[] = Object.freeze(
   Object.values(INTRA_STATE_RULES).sort((left, right) => (left.scope < right.scope ? -1 : 1)),
 );
+
+/** The 36 places that exist today — 28 states and 8 union territories. What a picker offers. */
+export const LIVE_JURISDICTIONS: readonly StateIntraStateRule[] = Object.freeze(
+  ALL_STATE_RULES.filter((rule) => rule.kind === "STATE" || rule.kind === "UNION_TERRITORY"),
+);
+
+/** Codes that are no longer issued, kept so an old document still resolves to the right rule. */
+export const RETIRED_CODES: readonly StateIntraStateRule[] = Object.freeze(
+  ALL_STATE_RULES.filter((rule) => rule.kind === "RETIRED"),
+);
+
+/** How many of each kind the table holds, for anything that wants to say so out loud. */
+export const jurisdictionCounts = (): Readonly<Record<"states" | "unionTerritories" | "retired" | "otherTerritory", number>> => ({
+  states: ALL_STATE_RULES.filter((rule) => rule.kind === "STATE").length,
+  unionTerritories: ALL_STATE_RULES.filter((rule) => rule.kind === "UNION_TERRITORY").length,
+  retired: RETIRED_CODES.length,
+  otherTerritory: ALL_STATE_RULES.filter((rule) => rule.kind === "OTHER_TERRITORY").length,
+});
 
 /**
  * The intra-state rule for a state on a date.

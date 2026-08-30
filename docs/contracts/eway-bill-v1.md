@@ -57,9 +57,21 @@ The comparison is a strict `>`: **exactly ₹50,000 does not need a bill**, beca
 
 ### The state table
 
-`INTRA_STATE_RULES` in `rules.ts` holds **every state and union territory** — all 39 GST state
-codes from 01 to 38 plus 97 "Other Territory" — each with its own limit, the date its rule came
-into force, and the order it came from. Choosing a state anywhere in the product applies that
+`INTRA_STATE_RULES` in `rules.ts` holds **every state and union territory** — each with its own
+limit, the date its rule came into force, and the order it came from.
+
+The table is **39 rows, and that is not 39 states**. India has 28 states and 8 union territories,
+which is the 36 a person can pick (`LIVE_JURISDICTIONS`). The other three rows are GST codes that
+are not places you would choose from a list, and each carries a `kind` saying which it is:
+
+| Code | Kind | Why it is in the table |
+| --- | --- | --- |
+| 25 Daman and Diu | `RETIRED` | Folded into code 26 in January 2020. A document raised before that still carries 25 and must still resolve |
+| 28 Andhra Pradesh (before division) | `RETIRED` | Split into 36 Telangana and 37 Andhra Pradesh in 2014 |
+| 97 Other Territory | `OTHER_TERRITORY` | The portal's code for offshore areas and anything outside the states and union territories |
+
+Code 96 ("outside India") has a name but deliberately **no** intra-state rule: a movement to or
+from it is an export or an import, never an intra-state one. Choosing a state anywhere in the product applies that
 state's row; nothing falls through to a national approximation. `ALL_STATE_RULES` is the same table
 in code order, and it is what the screen's state picker is built from, so what a person picks and
 what decides the movement cannot drift apart.

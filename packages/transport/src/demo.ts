@@ -8,7 +8,7 @@
  */
 import { formatPaise } from "../../purchasing/src/money.ts";
 import { decideEwayApplicability } from "./applicability.ts";
-import { ALL_STATE_RULES } from "./rules.ts";
+import { ALL_STATE_RULES, LIVE_JURISDICTIONS, RETIRED_CODES, jurisdictionCounts } from "./rules.ts";
 import { describeExpiry, describeTimeLeft, validityDays } from "./validity.ts";
 import { toOfflineJson } from "./payload.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
@@ -62,7 +62,11 @@ console.log("  Maharashtra's limit and not the country's, and neither of them is
 heading("2b. Every state is in the table, so picking a state applies that state's rule");
 const lakh = ALL_STATE_RULES.filter((rule) => rule.thresholdPaise === 1_00_000_00n);
 const special = ALL_STATE_RULES.filter((rule) => rule.intraCityExemptAnyValue === true || rule.notifiedGoodsOnly === true);
-console.log(`States and union territories covered: ${ALL_STATE_RULES.length}`);
+const counts = jurisdictionCounts();
+console.log(`Places you can pick: ${counts.states} states + ${counts.unionTerritories} union territories = ${LIVE_JURISDICTIONS.length}.`);
+console.log(`The table holds ${ALL_STATE_RULES.length} rows, because it also keeps ${counts.retired} GST codes that are no longer`);
+console.log(`issued (${RETIRED_CODES.map((rule) => `${rule.scope} ${rule.stateName}`).join(", ")}) so an old document still resolves,`);
+console.log(`plus code 97 for other territory. ${ALL_STATE_RULES.length} rows is not ${ALL_STATE_RULES.length} states.`);
 console.log(`Limit of ₹1,00,000 inside the state (${lakh.length}): ${lakh.map((rule) => rule.stateName).join(", ")}`);
 console.log(`Limit of ₹50,000 inside the state: every other state.`);
 console.log("Rules that are not only about money:");

@@ -1557,6 +1557,10 @@ async function loadEwayStates() {
   if (!select) return;
   try {
     const { states } = await api("/api/eway/states");
+    // What exists today first; codes that are no longer issued at the end, said plainly, because
+    // an old document can still carry one and somebody may have to pick it.
+    const order = { STATE: 0, UNION_TERRITORY: 0, OTHER_TERRITORY: 1, RETIRED: 2 };
+    states.sort((left, right) => (order[left.kind] ?? 0) - (order[right.kind] ?? 0));
     select.replaceChildren();
     const anywhere = document.createElement("option");
     anywhere.value = "";
@@ -1565,7 +1569,7 @@ async function loadEwayStates() {
     states.forEach((row) => {
       const option = document.createElement("option");
       option.value = row.code;
-      option.textContent = `${row.name} · ${money(row.limit)}`;
+      option.textContent = `${row.name} · ${money(row.limit)}${row.kind === "RETIRED" ? " · code no longer issued" : row.kind === "OTHER_TERRITORY" ? " · not a state" : ""}`;
       option.dataset.limit = String(row.limit);
       option.dataset.from = row.effectiveFrom;
       option.dataset.source = row.sourceRef;
