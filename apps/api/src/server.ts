@@ -32,12 +32,16 @@ export async function handleApi(method: string, pathname: string, body: Record<s
   try {
     const runtime = apiRuntime();
     if (method === 'POST' && pathname === '/api/auth/login') return json(200, runtime.signIn(body));
+    if (method === 'GET' && pathname === '/api/status') return json(200, runtime.publicStatus());
     const context = runtime.authenticate(authorization);
     const actor = runtime.actor(context);
     const app = await runtime.application(context);
     if (method === 'GET' && pathname === '/api/session') return json(200, { company: runtime.companySummary(context.companyId), userId: context.actorId, permissions: [...context.permissions] });
     if (method === 'GET' && pathname === '/api/dashboard') return json(200, await app.dashboard(actor));
     if (method === 'GET' && pathname === '/api/reports') return json(200, await app.reports(actor));
+    if (method === 'GET' && pathname === '/api/operations') return json(200, await runtime.operationsWorkspace(context));
+    if (method === 'POST' && pathname === '/api/operations/jobs/replay') return json(200, runtime.replayOperationalJob(context, body));
+    if (method === 'POST' && pathname === '/api/operations/support-grants') return json(200, runtime.grantSupportAccess(context, body));
     // Setting up a business runs against its own fresh company, so it needs a signed-in session but
     // not the session's company. Gated by authentication above, like the rest of the app.
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));

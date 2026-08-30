@@ -82,7 +82,10 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/bank-feeds\/disconnect/);
   assert.match(html, /id="view-reminders"[^>]+aria-labelledby=/);
   assert.match(script, /\/api\/reminders\/send/);
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 14);
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 15);
+  assert.match(html, /id="view-operations"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/operations/);
+  assert.match(script, /dataReplayJob|replayJob/);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

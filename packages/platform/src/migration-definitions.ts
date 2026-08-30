@@ -12,6 +12,7 @@ import { ewayBillMigrations } from "../../transport/src/migrations.ts";
 import { collectionMigrations } from "../../collections/src/migrations.ts";
 import { bankFeedMigrations } from "../../bank-feeds/src/migrations.ts";
 import { securityMigrations } from "../../../ops/security/src/migrations.ts";
+import { operationsMigrations } from "../../../ops/operations/src/migrations.ts";
 import { notificationMigrations } from "./notification-migrations.ts";
 
 const platformMigrations: readonly Migration[] = [{
@@ -79,5 +80,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...returnMigrations, ...ewayBillMigrations, ...collectionMigrations, ...bankFeedMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...returnMigrations, ...ewayBillMigrations, ...collectionMigrations, ...bankFeedMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );
