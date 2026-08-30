@@ -29,6 +29,7 @@
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
           <button class="nav-item" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button>
           <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
+          <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -279,6 +280,56 @@
           <article class="panel">
             <div class="panel-heading"><div><h2 data-i18n="onTheRoad"></h2><p data-i18n="onTheRoadHelp"></p></div></div>
             <div class="activity-list" id="eway-road"></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-vehicle" aria-labelledby="vehicle-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="vehicle-title" tabindex="-1" data-i18n="vehicleCheckTitle"></h1>
+              <p data-i18n="vehicleCheckHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="vehicle-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="vehicle-invoices" required></select></label>
+                <label><span data-i18n="whichVehicle"></span><select name="vehicle" id="vehicle-numbers" required></select><small data-i18n="whichVehicleHelp"></small></label>
+                <label><span data-i18n="loadWeight"></span><input name="weightKg" type="number" min="0" max="60000" step="1" placeholder="5000" /><small data-i18n="loadWeightHelp"></small></label>
+                <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /></label>
+                <label><span data-i18n="crossesBorder"></span><select name="interState"><option value="yes" data-i18n="answerYes"></option><option value="no" data-i18n="answerNo"></option></select><small data-i18n="crossesBorderHelp"></small></label>
+                <label><span data-i18n="coldChain"></span><select name="coldChain"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
+                <label><span data-i18n="hazardous"></span><select name="hazardous"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
+                <label><span data-i18n="platePhoto"></span><select name="platePhoto" id="vehicle-photos"></select><small data-i18n="platePhotoHelp"></small></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkVehicle"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="vehicleSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="vehicle-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="vehicle-result-title">—</h2><p id="vehicle-result-message"></p></div>
+              <span class="pill" id="vehicle-status">—</span>
+            </div>
+            <div class="activity-list" id="vehicle-findings"></div>
+            <div class="panel-heading"><div><h2 data-i18n="evidenceUsed"></h2><p data-i18n="evidenceUsedHelp"></p></div></div>
+            <div class="activity-list" id="vehicle-evidence"></div>
+            <form id="vehicle-override-form" hidden>
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="overrideWhich"></span><select name="findingCodes" id="vehicle-override-codes" multiple size="3"></select><small data-i18n="overrideWhichHelp"></small></label>
+                <label class="full-field"><span data-i18n="overrideWhy"></span><input name="reason" placeholder="Reweighed at our own weighbridge at 1,180 kg" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="overrideButton"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="overrideSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading"><div><h2 data-i18n="heldBack"></h2><p data-i18n="heldBackHelp"></p></div></div>
+            <div class="activity-list" id="vehicle-held"></div>
           </article>
         </section>
 
@@ -572,6 +623,7 @@
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
         <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
         <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
+        <button data-view="vehicle"><span aria-hidden="true">⚙</span><small data-i18n="navVehicle"></small></button>
       </nav>
     </div>
 
