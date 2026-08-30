@@ -170,6 +170,20 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .setup-subheading { font-size: .95rem; margin: .4rem 0 0; }
 #setup-result { margin-top: 1.1rem; display: grid; gap: 1rem; }
 
+/* Issue #37 — bringing a business's own export in. The sample buttons sit in one wrapping row, and
+   the paste box is a real text area rather than a one-line input. */
+.migration-samples { display: flex; flex-wrap: wrap; gap: .5rem; }
+.migration-form textarea { border: 1px solid var(--line); border-radius: 9px; padding: .55rem .65rem; font-size: .88rem; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); background: white; resize: vertical; width: 100%; box-sizing: border-box; }
+.migration-form input[type="file"] { font-size: .85rem; }
+#migration-mapping, #migration-preview, #migration-result { margin-top: 1.1rem; display: grid; gap: 1rem; }
+#migration-mapping select { max-width: 16rem; }
+
+/* Issue #34 — the answer: sentences first, then where every figure came from. */
+.ask-sentence { margin: .35rem 0; font-size: 1rem; line-height: 1.5; }
+.ask-quote { margin: .6rem 0; padding: .6rem .8rem; border-left: 3px solid var(--line); color: var(--muted); font-size: .86rem; }
+.ask-steps { margin: .6rem 0 0; padding-left: 1.1rem; display: grid; gap: .3rem; font-size: .9rem; }
+#ask-answer { margin-top: 1.1rem; display: grid; gap: 1rem; }
+
 /* Issue #18 — the order/delivery/bill comparison table and its severity colours. */
 .match-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .9rem; }
 .match-table th, .match-table td { text-align: left; padding: .5rem .65rem; border-bottom: 1px solid var(--line); white-space: nowrap; }

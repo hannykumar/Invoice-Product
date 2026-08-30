@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/assistant",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #34 [E34] — answering a business owner's questions from their own authorised data and from sourced rules, with every number traced to a canonical report and every compliance answer traced to the notification it came from.",
+  "exports": { ".": "./src/index.ts" }
+}

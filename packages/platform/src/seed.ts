@@ -15,6 +15,7 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "reports.view.financial", "reports.view.sales", "reports.view.purchase", "reports.view.stock",
   "reports.view.dues", "reports.view.gst", "reports.view.exceptions", "reports.export",
   "collections.reminders.view", "collections.reminders.send", "collections.promise.record", "collections.dispute.manage",
+  "assistant.ask",
 ];
 
 export const SYNTHETIC_PLATFORM_COMPANIES = [

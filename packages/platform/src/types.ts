@@ -60,7 +60,9 @@ export type Permission =
   | "collections.reminders.view"
   | "collections.reminders.send"
   | "collections.promise.record"
-  | "collections.dispute.manage";
+  | "collections.dispute.manage"
+  // Issue #34 [E34], GPT 1: asking questions about this company's own books.
+  | "assistant.ask";
 
 export interface RequestContext {
   companyId: Id;
