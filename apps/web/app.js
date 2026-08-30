@@ -1569,8 +1569,13 @@ async function loadEwayStates() {
     states.forEach((row) => {
       const option = document.createElement("option");
       option.value = row.code;
-      option.textContent = `${row.name} · ${money(row.limit)}${row.kind === "RETIRED" ? " · code no longer issued" : row.kind === "OTHER_TERRITORY" ? " · not a state" : ""}`;
-      option.dataset.limit = String(row.limit);
+      // A territory that asks for no e-way bill has no limit to show, and showing one would lie.
+      const limit = row.exemptAnyValue ? "no e-way bill needed inside it" : money(row.limit);
+      option.textContent = `${row.name} · ${limit}${row.kind === "RETIRED" ? " · code no longer issued" : row.kind === "OTHER_TERRITORY" ? " · not a state" : ""}`;
+      option.dataset.limit = row.exemptAnyValue ? "" : String(row.limit);
+      option.dataset.cityLimit = row.intraCityLimit === null ? "" : String(row.intraCityLimit);
+      option.dataset.cityExempt = String(row.intraCityExempt);
+      option.dataset.sourceKind = row.sourceKind;
       option.dataset.from = row.effectiveFrom;
       option.dataset.source = row.sourceRef;
       option.dataset.confirmed = String(row.sourceConfirmed);
@@ -1589,9 +1594,14 @@ function showEwayStateRule() {
   if (!select || !line) return;
   const option = select.selectedOptions[0];
   if (!option?.value) { line.textContent = ""; return; }
-  const parts = [`Inside ${option.textContent.split(" · ")[0]} the limit is ${money(Number(option.dataset.limit))}, from ${option.dataset.from}.`];
+  const name = option.textContent.split(" · ")[0];
+  const parts = [option.dataset.limit
+    ? `Inside ${name} the limit is ${money(Number(option.dataset.limit))}, from ${option.dataset.from}.`
+    : `${name} asks for no e-way bill at all inside its own borders, from ${option.dataset.from}.`];
+  if (option.dataset.cityLimit) parts.push(`Inside one city the limit is ${money(Number(option.dataset.cityLimit))}.`);
+  if (option.dataset.cityExempt === "true") parts.push("Inside one city no e-way bill is needed at all.");
   if (option.dataset.note) parts.push(option.dataset.note);
-  parts.push(option.dataset.confirmed === "true" ? option.dataset.source : `${option.dataset.source}`);
+  parts.push(option.dataset.source);
   line.textContent = parts.join(" ");
 }
 

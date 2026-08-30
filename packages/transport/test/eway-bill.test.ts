@@ -13,8 +13,8 @@ import assert from "node:assert/strict";
 import { DomainError } from "@invoice/kernel";
 import { consignmentValueOf, decideEwayApplicability } from "../src/applicability.ts";
 import {
-  ALL_STATE_RULES, INTRA_STATE_RULES, LIVE_JURISDICTIONS, RETIRED_CODES, STATE_NAMES,
-  intraStateRuleFor, jurisdictionCounts,
+  ALL_STATE_RULES, CURRENT_STATE_RULES, INTRA_STATE_RULES, LIVE_JURISDICTIONS, RETIRED_CODES,
+  STATE_NAMES, intraStateRuleFor, jurisdictionCounts,
 } from "../src/rules.ts";
 import { buildPartA, buildPartB, toOfflineJson, toRupees } from "../src/payload.ts";
 import {
@@ -91,7 +91,7 @@ test("the table is 28 states and 8 union territories — not 39 states", () => {
   assert.equal(counts.retired, 2);
   assert.deepEqual(RETIRED_CODES.map((rule) => rule.scope), ["25", "28"]);
   assert.equal(counts.otherTerritory, 1);
-  assert.equal(counts.states + counts.unionTerritories + counts.retired + counts.otherTerritory, ALL_STATE_RULES.length);
+  assert.equal(counts.states + counts.unionTerritories + counts.retired + counts.otherTerritory, CURRENT_STATE_RULES.length);
 });
 
 test("a retired code still resolves, because an old document still carries it", () => {
@@ -108,29 +108,109 @@ test("every state and union territory has its own row, named, dated and sourced"
   // 01 to 38, plus 97 "Other Territory".
   assert.equal(codes.length, 39);
   for (const code of codes) {
-    const rule = INTRA_STATE_RULES[code];
-    assert.ok(rule !== undefined, `no rule for state ${code}`);
-    assert.equal(rule.scope, code);
-    assert.equal(rule.stateName, STATE_NAMES[code]);
-    assert.notEqual(rule.sourceRef.trim(), "", `state ${code} has no source`);
-    assert.match(rule.effectiveFrom, /^\d{4}-\d{2}-\d{2}$/);
-    assert.ok(rule.thresholdPaise > 0n);
+    const rows = INTRA_STATE_RULES[code];
+    assert.ok(rows !== undefined && rows.length > 0, `no rule for state ${code}`);
+    for (const row of rows ?? []) {
+      assert.equal(row.scope, code);
+      assert.equal(row.stateName, STATE_NAMES[code]);
+      assert.notEqual(row.sourceRef.trim(), "", `state ${code} has no source`);
+      assert.match(row.effectiveFrom, /^\d{4}-\d{2}-\d{2}$/);
+      assert.ok(row.thresholdPaise > 0n);
+    }
+    // Newest first, so the lookup can take the first row that had come into force.
+    const dates = (rows ?? []).map((row) => row.effectiveFrom);
+    assert.deepEqual(dates, [...dates].sort().reverse(), `state ${code} rows are out of order`);
   }
-  assert.equal(ALL_STATE_RULES.length, codes.length);
+  assert.equal(CURRENT_STATE_RULES.length, codes.length);
 });
 
-test("a row without its notification number says so where anyone can read it", () => {
-  for (const rule of ALL_STATE_RULES) {
-    if (rule.sourceConfirmed) assert.doesNotMatch(rule.sourceRef, /does not hold the notification number/);
-    else assert.match(rule.sourceRef, /confirm it with the state before relying on it/);
+test("every row names a real order, and says when it is not a numbered notification", () => {
+  for (const row of ALL_STATE_RULES) {
+    assert.notEqual(row.sourceRef.trim(), "", `${row.stateName} has no source`);
+    if (row.sourceKind === "PRESS_RELEASE") assert.match(row.sourceRef, /press release/i);
+    if (row.sourceKind === "NOT_HELD") assert.match(row.sourceRef, /order is held/);
+    // A numbered notification must actually carry a number or a file reference.
+    if (row.sourceKind === "NOTIFICATION") assert.match(row.sourceRef, /\d/);
   }
-  assert.equal(INTRA_STATE_RULES["29"]?.sourceConfirmed, true);
-  assert.equal(INTRA_STATE_RULES["36"]?.sourceConfirmed, false);
+  // The two that were rolled out by press release rather than a numbered order say so.
+  assert.equal(INTRA_STATE_RULES["29"]?.[0]?.sourceKind, "PRESS_RELEASE");
+  assert.equal(INTRA_STATE_RULES["09"]?.[0]?.sourceKind, "NOTIFICATION");
+  assert.equal(ALL_STATE_RULES.filter((row) => row.sourceKind === "NOT_HELD").length, 3);
+});
+
+test("a state's limit can change, and a movement is judged under the one in force that day", () => {
+  // West Bengal came down from ₹1 lakh to ₹50,000 on 1 December 2023.
+  assert.equal(intraStateRuleFor("19", "2023-11-30").thresholdPaise, 1_00_000_00n);
+  assert.equal(intraStateRuleFor("19", "2023-12-01").thresholdPaise, 50_000_00n);
+  // Madhya Pradesh went the other way in March 2022.
+  assert.equal(intraStateRuleFor("23", "2022-03-22").thresholdPaise, 50_000_00n);
+  assert.equal(intraStateRuleFor("23", "2022-03-23").thresholdPaise, 1_00_000_00n);
+  // Chandigarh was exempt outright for seven weeks in 2018.
+  assert.equal(intraStateRuleFor("04", "2018-05-01").exemptAnyValue, true);
+  assert.equal(intraStateRuleFor("04", "2018-06-01").thresholdPaise, 50_000_00n);
+});
+
+test("two union territories ask for no e-way bill at all inside their own borders", () => {
+  const exempt = CURRENT_STATE_RULES.filter((row) => row.exemptAnyValue === true).map((row) => row.stateName);
+  assert.deepEqual(exempt, ["Jammu and Kashmir", "Lakshadweep", "Andaman and Nicobar Islands"]);
+
+  const decision = decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Srinagar", stateCode: "01" },
+    billTo: { ...intraStateMovement().billTo, place: "Jammu", stateCode: "01" },
+    documents: [worth(5_00_000_00n)],
+  }));
+  assert.equal(decision.outcome, "NOT_REQUIRED");
+  assert.match(decision.reason, /no e-way bill/);
+  assert.match(decision.sourceRef ?? "", /Notification 64, 30 November 2019/);
+});
+
+test("Rajasthan's higher limit inside one city is applied as a limit, not an exemption", () => {
+  const inRajasthan = (paise: bigint, withinSameCity: boolean) => decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Jaipur", stateCode: "08" },
+    billTo: { ...intraStateMovement().billTo, place: "Jaipur", stateCode: "08" },
+    documents: [worth(paise)],
+    withinSameCity,
+  }));
+  // ₹1,50,000 crosses the state limit but not the city one.
+  assert.equal(inRajasthan(1_50_000_00n, false).outcome, "REQUIRED");
+  assert.equal(inRajasthan(1_50_000_00n, true).outcome, "NOT_REQUIRED");
+  assert.equal(inRajasthan(2_50_000_00n, true).outcome, "REQUIRED");
+  assert.match(inRajasthan(1_50_000_00n, true).reason, /for goods that stay inside one city/);
+});
+
+test("Kerala wants a bill for gold the rest of the country exempts", () => {
+  const gold = (paise: bigint) => decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Thrissur", stateCode: "32" },
+    billTo: { ...intraStateMovement().billTo, place: "Kochi", stateCode: "32" },
+    documents: [worth(paise, { lines: [steelLine({ description: "Gold chains", hsnCode: "7113", taxableValuePaise: paise, igstPaise: 0n })] })],
+  }));
+  // Anywhere else this is exempt at any value. In Kerala it is exempt only below ₹10 lakh.
+  assert.equal(gold(9_00_000_00n).outcome, "NOT_REQUIRED");
+  assert.equal(gold(15_00_000_00n).outcome, "REQUIRED");
+  assert.match(gold(15_00_000_00n).reason, /Trade Circular 1\/2025/);
+});
+
+test("a state whose higher limit excludes some goods says so on a 'no'", () => {
+  // ₹80,000 of anything in Madhya Pradesh is under its ₹1 lakh — but not if it is tobacco.
+  const decision = decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Indore", stateCode: "23" },
+    billTo: { ...intraStateMovement().billTo, place: "Bhopal", stateCode: "23" },
+    documents: [worth(80_000_00n)],
+  }));
+  assert.equal(decision.outcome, "NOT_REQUIRED");
+  assert.match(decision.reason, /tobacco/);
+  // Below the national ₹50,000 nothing needs saying, so the caveat stays off.
+  const small = decideEwayApplicability(intraStateMovement({
+    consignor: { ...intraStateMovement().consignor, place: "Indore", stateCode: "23" },
+    billTo: { ...intraStateMovement().billTo, place: "Bhopal", stateCode: "23" },
+    documents: [worth(10_000_00n)],
+  }));
+  assert.doesNotMatch(small.reason, /tobacco/);
 });
 
 test("picking any state applies that state's own limit, on both sides of it", () => {
   // Table-driven over every state: a rupee under the limit needs nothing, a rupee over needs a bill.
-  for (const rule of ALL_STATE_RULES) {
+  for (const rule of CURRENT_STATE_RULES) {
     const inside = (paise: bigint) => decideEwayApplicability(intraStateMovement({
       consignor: { ...intraStateMovement().consignor, stateCode: rule.scope },
       billTo: { ...intraStateMovement().billTo, stateCode: rule.scope },
@@ -138,33 +218,41 @@ test("picking any state applies that state's own limit, on both sides of it", ()
       // Gujarat's rule turns on this fact before money is looked at, so it is stated for everyone.
       withinSameCity: false,
     }));
+    if (rule.exemptAnyValue === true) {
+      // A territory that asks for nothing asks for nothing, however large the load.
+      assert.equal(inside(rule.thresholdPaise * 100n).outcome, "NOT_REQUIRED", `${rule.stateName} exempts everything`);
+      continue;
+    }
     assert.equal(inside(rule.thresholdPaise).outcome, "NOT_REQUIRED", `${rule.stateName} at exactly its limit`);
     assert.equal(inside(rule.thresholdPaise + 1n).outcome, "REQUIRED", `${rule.stateName} a paisa over its limit`);
     assert.match(inside(rule.thresholdPaise + 1n).reason, new RegExp(`Inside ${rule.stateName.replace(/[()]/g, "\\$&")} the limit is`));
   }
 });
 
-test("the nine states that set ₹1 lakh are exactly the ones that set it", () => {
-  const lakh = ALL_STATE_RULES.filter((rule) => rule.thresholdPaise === 1_00_000_00n).map((rule) => rule.scope);
-  assert.deepEqual(lakh, ["03", "04", "07", "08", "10", "19", "20", "27", "33"]);
+test("the states that set ₹1 lakh today are exactly these seven", () => {
+  const lakh = CURRENT_STATE_RULES
+    .filter((row) => row.exemptAnyValue !== true && row.thresholdPaise === 1_00_000_00n)
+    .map((row) => row.stateName);
+  assert.deepEqual(lakh, ["Punjab", "Delhi", "Rajasthan", "Bihar", "Jharkhand", "Madhya Pradesh", "Maharashtra", "Tamil Nadu"]);
 });
 
 test("a state that asks only for its own notified goods says so on a 'yes'", () => {
+  // Chhattisgarh asks for an intra-state bill only for the fifteen goods it lists.
   const decision = decideEwayApplicability(intraStateMovement({
-    consignor: { ...intraStateMovement().consignor, place: "Indore", stateCode: "23" },
-    billTo: { ...intraStateMovement().billTo, place: "Bhopal", stateCode: "23" },
+    consignor: { ...intraStateMovement().consignor, place: "Raipur", stateCode: "22" },
+    billTo: { ...intraStateMovement().billTo, place: "Bilaspur", stateCode: "22" },
     documents: [worth(80_000_00n)],
   }));
   assert.equal(decision.outcome, "REQUIRED");
-  assert.match(decision.reason, /only for the goods on its own notified list/);
+  assert.match(decision.reason, /only for the fifteen goods its order lists/);
   // And a "no" is not cluttered with a caveat that changes nothing.
   const small = decideEwayApplicability(intraStateMovement({
-    consignor: { ...intraStateMovement().consignor, place: "Indore", stateCode: "23" },
-    billTo: { ...intraStateMovement().billTo, place: "Bhopal", stateCode: "23" },
+    consignor: { ...intraStateMovement().consignor, place: "Raipur", stateCode: "22" },
+    billTo: { ...intraStateMovement().billTo, place: "Bilaspur", stateCode: "22" },
     documents: [worth(10_000_00n)],
   }));
   assert.equal(small.outcome, "NOT_REQUIRED");
-  assert.doesNotMatch(small.reason, /notified list/);
+  assert.doesNotMatch(small.reason, /its order lists/);
 });
 
 test("states are named, not numbered, in everything a person reads", () => {
