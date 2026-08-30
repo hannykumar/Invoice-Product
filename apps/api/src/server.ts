@@ -77,12 +77,17 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
-    if (method === 'GET' && pathname === '/api/collections') return json(200, await app.collectionWorkspace(actor));
-    if (method === 'POST' && pathname === '/api/collections/plan') return json(200, await app.collectionPlan(actor, body));
-    if (method === 'POST' && pathname === '/api/collections/send') return json(200, await app.deliverCollectionReminders(actor, body));
-    if (method === 'POST' && pathname === '/api/collections/preferences') return json(200, await app.setCollectionPreference(actor, body));
-    if (method === 'POST' && pathname === '/api/collections/promises') return json(200, await app.recordCollectionPromise(actor, body));
-    if (method === 'POST' && pathname === '/api/collections/disputes') return json(200, await app.openCollectionDispute(actor, body));
+    // Issue #23 — who is being chased for money, who is deliberately not, and what was sent.
+    if (method === 'GET' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/send') return json(200, await app.sendReminder(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/send-all') return json(200, await app.sendAllReminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/retry') return json(200, await app.retryReminder(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/promise') return json(200, await app.recordPromiseToPay(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/dispute') return json(200, await app.raiseBillDispute(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/dispute/resolve') return json(200, await app.resolveBillDispute(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/stop') return json(200, await app.stopReminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/resume') return json(200, await app.resumeReminders(actor, body));
     if (method === 'GET' && pathname === '/api/bank-feeds') return json(200, await app.bankFeedWorkspace(actor));
     if (method === 'POST' && pathname === '/api/bank-feeds/consent') return json(200, await app.startBankFeedConsent(actor, body));
     if (method === 'POST' && pathname === '/api/bank-feeds/consent/complete') return json(200, await app.completeBankFeedConsent(actor, body));

@@ -116,6 +116,7 @@ const SETUP_PERMISSIONS = [
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
   'notification.send', 'collections.manage', 'collections.send',
+  'collections.reminders.view', 'collections.reminders.send', 'collections.promise.record', 'collections.dispute.manage',
   'bank.balance.read', 'bank.feed.manage', 'bank.feed.sync',
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
   'supplier.risk.view', 'supplier.risk.acknowledge',

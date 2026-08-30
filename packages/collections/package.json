@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Issue #23 [E23] — payment reminder schedules, promises, disputes and collection communication history.",
+  "description": "Issue #23 [E23] — payment reminders and collection tracking: the ladder, opt-outs, quiet periods, promises to pay, disputes and escalation.",
   "exports": { ".": "./src/index.ts" }
 }

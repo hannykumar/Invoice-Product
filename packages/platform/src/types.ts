@@ -63,7 +63,12 @@ export type Permission =
   | "reports.view.dues"
   | "reports.view.gst"
   | "reports.view.exceptions"
-  | "reports.export";
+  | "reports.export"
+  // Chasing overdue money (issue #23 [E23]). Built by GPT 1 on GPT 2's notification service.
+  | "collections.reminders.view"
+  | "collections.reminders.send"
+  | "collections.promise.record"
+  | "collections.dispute.manage";
 
 export interface RequestContext {
   companyId: Id;

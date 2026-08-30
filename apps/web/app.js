@@ -86,6 +86,18 @@ const copy = {
     cancelEway: "Cancel with the portal",
     onTheRoad: "On the road right now", onTheRoadHelp: "Every consignment with a running e-way bill, and how long each one has left.",
     navSupplier: "Supplier check",
+    navReminders: "Reminders",
+    remindersTitle: "Who to remind about money", remindersHelp: "Every line below is worked out from your books this moment. A bill that was paid, disputed or promised is left alone, and it says so — because \"why did nobody remind them?\" is the question that comes next.",
+    remindersToday: "What would go out today", remindersSendAll: "Send everything agreed",
+    remindersSafety: "Nothing is sent until you ask. Before each message goes, the bill is checked again — if the money arrived a minute ago, the message does not go.",
+    remindersSend: "Send this one", remindersRetry: "Try again",
+    remindersTellUs: "Tell us what the customer said", remindersBill: "Which bill", remindersWhatHappened: "What happened",
+    remindersPromise: "They promised to pay", remindersDispute: "They say something is wrong with the bill",
+    remindersPromisedOn: "Promised by", remindersAmount: "Amount they promised", remindersNote: "In their words",
+    remindersRecord: "Record this", remindersStopTitle: "Stop reminding this customer",
+    remindersStopReason: "Why", remindersStop: "Stop reminders", remindersResume: "Start reminders again",
+    remindersHistory: "What was sent", remindersOutbox: "What the customer received",
+    remindersNothing: "Nothing yet.",
     supplierTitle: "Check a supplier before you pay", supplierHelp: "We show you what the GST department says and what your own books say, with the date and source of every single thing. We never tell you what kind of business someone is — only what the records show.",
     theirGstin: "Their GST number", theirGstinHelp: "We check this with the GST department.",
     trySomeone: "Or try one of these", checkSupplier: "Check this supplier",
@@ -197,6 +209,18 @@ const copy = {
     cancelEway: "Portal ke saath radd karen",
     onTheRoad: "Abhi sadak par", onTheRoadHelp: "Har khep jiska e-way bill chal raha hai, aur har ek ke paas kitna samay bacha hai.",
     navSupplier: "Supplier jaanch",
+    navReminders: "Yaad-dilava",
+    remindersTitle: "Paise ke liye kise yaad dilana hai", remindersHelp: "Neeche har line abhi is waqt aapki bahi se nikali gayi hai. Jo bill chuk gaya, jispar sawaal hai, ya jiska vaada hua hai — usse chhod diya jata hai, aur wajah likhi hoti hai; kyunki agla sawaal yahi hota hai ki \"unhe yaad kyun nahin dilaya?\"",
+    remindersToday: "Aaj kya jayega", remindersSendAll: "Jo tay hua sab bhej dein",
+    remindersSafety: "Aapke kahe bina kuch nahin jata. Har message se pehle bill dobara jaancha jata hai — agar paisa abhi aa gaya hai to message nahin jayega.",
+    remindersSend: "Yeh bhej dein", remindersRetry: "Dobara koshish karein",
+    remindersTellUs: "Grahak ne kya kaha, hume batayein", remindersBill: "Kaunsa bill", remindersWhatHappened: "Kya hua",
+    remindersPromise: "Unhone dene ka vaada kiya", remindersDispute: "Unka kehna hai bill mein kuch galat hai",
+    remindersPromisedOn: "Kab tak dene ko kaha", remindersAmount: "Kitne ka vaada", remindersNote: "Unke shabdon mein",
+    remindersRecord: "Yeh likh lein", remindersStopTitle: "Is grahak ko yaad dilana band karein",
+    remindersStopReason: "Kyun", remindersStop: "Yaad dilana band karein", remindersResume: "Dobara shuru karein",
+    remindersHistory: "Kya bheja gaya", remindersOutbox: "Grahak ko kya mila",
+    remindersNothing: "Abhi kuch nahin.",
     supplierTitle: "Paisa dene se pehle supplier jaanchen", supplierHelp: "Hum dikhate hain ki GST vibhag kya kehta hai aur aapki apni bahi kya kehti hai — har baat ki tareekh aur source ke saath. Hum kabhi nahin batate ki koi kaisa hai; sirf yeh ki record mein kya likha hai.",
     theirGstin: "Unka GST number", theirGstinHelp: "Hum ise GST vibhag se jaanchte hain.",
     trySomeone: "Ya inme se koi dekhen", checkSupplier: "Yeh supplier jaanchen",
@@ -325,6 +349,9 @@ function translate() {
   document.querySelectorAll(".draft-form").forEach((form) => setDraftStatus(form, state.draftStatuses[form.dataset.draft] ?? "savedDevice"));
   updateCalculations();
   if (state.dashboard) renderDashboard(state.dashboard);
+  // The reminder rows are sentences from the server in both languages, so switching language must
+  // redraw them; a half-translated page is worse than an untranslated one.
+  if (state.reminders) renderReminders(state.reminders);
 }
 
 function openView(view) {
@@ -342,7 +369,7 @@ function openView(view) {
   document.querySelector(`#view-${target} h1`)?.focus?.();
   if (target === "reports") loadReports();
   if (target === "returns") loadReturnDocuments();
-  if (target === "collections") loadCollections();
+  if (target === "reminders") loadReminders();
   if (target === "bank-feeds") loadBankFeeds();
 }
 
@@ -986,75 +1013,6 @@ document.querySelector("#bank-feed-connections")?.addEventListener("click", asyn
   } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
 });
 
-function collectionRow(item, communication = false) {
-  const row = document.createElement("div");
-  row.className = "activity-row";
-  const icon = document.createElement("span");
-  icon.className = `activity-icon ${item.status === "DELIVERED" || item.outcome === "DELIVERED" ? "green" : item.status === "FAILED" || item.outcome === "FAILED" ? "red" : "amber"}`;
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = communication ? "✓" : "↗";
-  const body = document.createElement("div");
-  const strong = document.createElement("strong");
-  strong.textContent = communication ? `${item.outcome} · ${item.channel}` : `${item.partyName} · ${money(item.balance)} · ${item.status}`;
-  const small = document.createElement("small");
-  small.textContent = communication ? `${item.subject}${item.detail ? ` · ${item.detail}` : ""}` : `${item.subject}${item.statusReason ? ` · ${item.statusReason}` : ""}`;
-  body.append(strong, small);
-  row.append(icon, body);
-  return row;
-}
-
-async function loadCollections() {
-  const reminders = document.querySelector("#collection-reminders");
-  const communications = document.querySelector("#collection-communications");
-  if (!reminders || !communications || !state.sessionId) return;
-  try {
-    const workspace = await api("/api/collections");
-    reminders.replaceChildren();
-    communications.replaceChildren();
-    if (workspace.reminders.length === 0) reminders.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noScheduled }));
-    else workspace.reminders.forEach((item) => reminders.append(collectionRow(item)));
-    if (workspace.communications.length === 0) communications.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noCommunications }));
-    else workspace.communications.forEach((item) => communications.append(collectionRow(item, true)));
-  } catch (error) { reminders.textContent = localizedError(error); }
-}
-
-document.querySelector("#collection-plan-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const result = await api("/api/collections/plan", { method: "POST", body: JSON.stringify(formValues(event.currentTarget)) });
-    showDialog({ title: copy[state.locale].scheduledMessages, message: result.reminder.message, effects: [`${money(result.reminder.balance)} · ${result.reminder.channel}`] }, "recorded");
-    await loadCollections();
-  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
-});
-
-document.querySelector("#collections-send")?.addEventListener("click", async () => {
-  const asOf = document.querySelector('#collection-plan-form [name="asOf"]').value;
-  try {
-    const result = await api("/api/collections/send", { method: "POST", body: JSON.stringify({ asOf }) });
-    showDialog({ title: copy[state.locale].communicationHistory, message: `${result.processed.length} reminder(s) processed.`, effects: result.processed.map((item) => `${item.partyName} · ${item.status}${item.statusReason ? ` · ${item.statusReason}` : ""}`) }, "recorded");
-    await loadCollections();
-  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
-});
-
-document.querySelector("#collection-preference-form")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const optedOut = event.currentTarget.elements.namedItem("optedOut").checked;
-  try {
-    await api("/api/collections/preferences", { method: "POST", body: JSON.stringify({ optedOut, locale: state.locale }) });
-    showDialog({ title: copy[state.locale].savePreference, message: optedOut ? copy[state.locale].optOutCustomer : copy[state.locale].collectionSafety }, "recorded");
-  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
-});
-
-for (const [selector, path, title] of [["#collection-promise-form", "/api/collections/promises", "promiseTitle"], ["#collection-dispute-form", "/api/collections/disputes", "disputeTitle"]]) {
-  document.querySelector(selector)?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await api(path, { method: "POST", body: JSON.stringify(formValues(event.currentTarget)) });
-      showDialog({ title: copy[state.locale][title], message: copy[state.locale].collectionSafety }, "recorded");
-      await loadCollections();
-    } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
-  });
-}
 document.querySelector("#review-cancel").addEventListener("click", () => { state.pendingReturnInput = null; document.querySelector("#review-dialog").close("cancel"); });
 document.querySelector("#review-confirm").addEventListener("click", async (event) => {
   if (state.pendingReturnInput) {
@@ -1460,6 +1418,165 @@ async function loadSupplierChoices() {
 }
 
 
+// ------------------------------------------------------ issue #23: reminders and collections
+//
+// The screen leads with the decision for every open bill, not with a "send reminders" button. A
+// bill left alone is shown as prominently as one being chased, with the sentence that explains it,
+// because the owner's next question is always about the customer who was *not* reminded.
+
+function reminderRow(candidate) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = `activity-icon ${candidate.decision === "SEND" ? "green" : candidate.decision === "ESCALATE" ? "amber" : "blue"}`;
+  icon.textContent = candidate.decision === "SEND" ? "→" : candidate.decision === "ESCALATE" ? "!" : "·";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `${candidate.partyName} · ${candidate.bill} · ${money(candidate.outstanding)}`;
+  const detail = document.createElement("p");
+  detail.textContent = t(candidate.explanation);
+  body.append(title, detail);
+  row.append(icon, body);
+  if (candidate.decision !== "SKIP") {
+    const send = document.createElement("button");
+    send.type = "button";
+    send.className = "secondary-button";
+    send.textContent = copy[state.locale].remindersSend;
+    send.addEventListener("click", () => sendOneReminder(candidate.documentId));
+    row.append(send);
+  }
+  return row;
+}
+
+function sentRow(reminder) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = `activity-icon ${reminder.state === "SENT" ? "green" : reminder.state === "FAILED" ? "amber" : "blue"}`;
+  icon.textContent = reminder.state === "SENT" ? "✓" : reminder.state === "FAILED" ? "!" : "·";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `${reminder.bill} · ${reminder.level} · ${reminder.channel} · ${reminder.state}`;
+  const detail = document.createElement("p");
+  detail.textContent = reminder.failureReason ?? t(reminder.message);
+  body.append(title, detail);
+  row.append(icon, body);
+  if (reminder.state === "FAILED") {
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "secondary-button";
+    retry.textContent = copy[state.locale].remindersRetry;
+    retry.addEventListener("click", async () => {
+      try {
+        await api("/api/reminders/retry", { method: "POST", body: JSON.stringify({ reminderId: reminder.id }) });
+      } catch (error) { showDialog({ title: "Nothing was sent", message: error.message }, "failed"); }
+      loadReminders();
+    });
+    row.append(retry);
+  }
+  return row;
+}
+
+function simpleRow(title, detail) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = "activity-icon blue";
+  icon.textContent = "·";
+  const body = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const paragraph = document.createElement("p");
+  paragraph.textContent = detail;
+  body.append(strong, paragraph);
+  row.append(icon, body);
+  return row;
+}
+
+function renderReminders(data) {
+  state.reminders = data;
+  document.querySelector("#reminders-summary").textContent = t(data.summary);
+  document.querySelector("#reminders-plan").replaceChildren(...data.candidates.map(reminderRow));
+
+  const choices = document.querySelector("#reminders-bill-choices");
+  if (choices) {
+    const open = data.candidates.filter((candidate) => candidate.reason !== "SETTLED");
+    choices.replaceChildren(...open.map((candidate) => {
+      const option = document.createElement("option");
+      option.value = candidate.documentId;
+      option.textContent = `${candidate.bill} · ${money(candidate.outstanding)}`;
+      return option;
+    }));
+  }
+
+  document.querySelector("#reminders-promises").replaceChildren(
+    ...data.promises.map((promise) => simpleRow(`${promise.outcome} · ${money(promise.amount)}`, t(promise.explanation))),
+  );
+  const history = document.querySelector("#reminders-history");
+  history.replaceChildren(...(data.history.length === 0
+    ? [simpleRow(copy[state.locale].remindersNothing, "")]
+    : data.history.map(sentRow)));
+  const outbox = document.querySelector("#reminders-outbox");
+  outbox.replaceChildren(...(data.outbox.length === 0
+    ? [simpleRow(copy[state.locale].remindersNothing, "")]
+    : data.outbox.map((message) => simpleRow(`${message.channel} → ${message.to}`, message.body))));
+}
+
+async function loadReminders() {
+  try {
+    renderReminders(await api("/api/reminders"));
+  } catch (error) {
+    const summary = document.querySelector("#reminders-summary");
+    if (summary) summary.textContent = error.message;
+  }
+}
+
+async function sendOneReminder(documentId) {
+  try {
+    const result = await api("/api/reminders/send", { method: "POST", body: JSON.stringify({ documentId }) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) {
+    showDialog({ title: "Nothing was sent", message: error.message }, "failed");
+  }
+  loadReminders();
+}
+
+document.querySelector("#reminders-send-all")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/reminders/send-all", { method: "POST", body: JSON.stringify({}) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) { showDialog({ title: "Nothing was sent", message: error.message }, "failed"); }
+  loadReminders();
+});
+
+submitStep("#reminders-note-form", async (form) => {
+  const values = formValues(form);
+  try {
+    const result = values.kind === "dispute"
+      ? await api("/api/reminders/dispute", { method: "POST", body: JSON.stringify({ documentId: values.documentId, reason: values.note || "The customer says something on this bill is wrong." }) })
+      : await api("/api/reminders/promise", { method: "POST", body: JSON.stringify({ documentId: values.documentId, amount: values.amount, promisedOn: values.promisedOn, note: values.note }) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) { showDialog({ title: "Nothing was recorded", message: error.message }, "failed"); }
+  loadReminders();
+});
+
+submitStep("#reminders-stop-form", async (form) => {
+  try {
+    const result = await api("/api/reminders/stop", { method: "POST", body: JSON.stringify(formValues(form)) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) { showDialog({ title: "Nothing was changed", message: error.message }, "failed"); }
+  loadReminders();
+});
+
+document.querySelector("#reminders-resume")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/reminders/resume", { method: "POST", body: JSON.stringify({}) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) { showDialog({ title: "Nothing was changed", message: error.message }, "failed"); }
+  loadReminders();
+});
+
+
 // ------------------------------------------------ issue #26: e-invoice applicability and the IRN
 //
 // The screen leads with the decision, not with a send button: most bills need no IRN, and the
@@ -1794,4 +1911,4 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadCollections(); loadBankFeeds(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadReminders(); loadBankFeeds(); } else showLogin();
