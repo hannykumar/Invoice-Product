@@ -476,3 +476,127 @@ test("a business may soften the overload rule, and the change is in policy rathe
   assert.equal(checked.outcome, "WARN");
   assert.equal(checked.clearedToMove, true);
 });
+
+// --------------------------------------------- the plate somebody reads when there is no camera
+
+test("a plate typed in by a person is compared exactly as a photograph is", () => {
+  const matched = comparePlateReading({ text: "ka 01 ab 1234", readBy: "PERSON" }, "KA01AB1234", 0.6);
+  const wrong = comparePlateReading({ text: "KA02GV3344", readBy: "PERSON" }, "KA01AB1234", 0.6);
+
+  assert.equal(matched.verdict, "MATCH");
+  assert.equal(matched.readBy, "PERSON");
+  assert.equal(wrong.verdict, "MISMATCH");
+  assert.ok(wrong.explanation.includes("read as KA02GV3344"), wrong.explanation);
+});
+
+test("a person's reading has no confidence score and is not held to the photograph's floor", () => {
+  const typed = comparePlateReading({ text: "KA01AB1234", readBy: "PERSON" }, "KA01AB1234", 0.9);
+  assert.equal(typed.verdict, "MATCH", "a person reading a plate is not a machine that is 0% sure");
+  assert.equal(typed.confidence, undefined);
+});
+
+test("nothing read at all says so, and does not read as a mismatch", () => {
+  const nothing = comparePlateReading(null, "KA01AB1234", 0.6);
+  assert.equal(nothing.verdict, "CANNOT_READ");
+  assert.ok(nothing.explanation.includes("no photograph and nothing typed in"));
+});
+
+test("with no photograph, what a person typed still stops the wrong lorry", async () => {
+  const desk = makeVehicleDesk();
+  const checked = await desk.service.assess(desk.actor, {
+    movementId: "mov-020",
+    transport: transportDetails(),
+    shipment: { grossWeightKg: 900 },
+    plateReadByHand: "KA02GV3344",
+  });
+
+  assert.equal(checked.plate?.verdict, "MISMATCH");
+  assert.equal(checked.plate?.readBy, "PERSON");
+  assert.equal(checked.outcome, "BLOCK");
+  const finding = checked.findings.find((row) => row.code === "VEHICLE.PLATE.MISMATCH");
+  assert.equal(finding?.evidenceSource, "ENTERED_BY_HAND");
+  assert.ok(finding?.appliedFacts.some((row) => row.value === "Read off the lorry by a person"));
+});
+
+test("an unreadable photograph falls back to what the person could see", async () => {
+  const desk = makeVehicleDesk();
+  desk.plateReader.willReturn({ kind: "UNREADABLE", reason: "The picture is too dark." });
+
+  const checked = await desk.service.assess(desk.actor, {
+    movementId: "mov-021",
+    transport: transportDetails(),
+    shipment: { grossWeightKg: 900 },
+    platePhoto: platePhoto("plate:unreadable", "2026-08-21T04:25:00.000Z"),
+    plateReadByHand: "KA01AB1234",
+  });
+
+  assert.equal(checked.plate?.verdict, "MATCH");
+  assert.equal(checked.plate?.readBy, "PERSON");
+  assert.ok(!codes(checked).includes("VEHICLE.PLATE.UNREADABLE"));
+});
+
+test("a photograph that could be read is preferred over the typed reading", async () => {
+  const desk = makeVehicleDesk();
+  const checked = await desk.service.assess(desk.actor, {
+    movementId: "mov-022",
+    transport: transportDetails(),
+    shipment: { grossWeightKg: 900 },
+    platePhoto: platePhoto("plate:KA02GV3344@0.94", "2026-08-21T04:25:00.000Z"),
+    plateReadByHand: "KA01AB1234",
+  });
+
+  assert.equal(checked.plate?.readBy, "PHOTO", "an image is evidence that can be shown to somebody later");
+  assert.equal(checked.plate?.verdict, "MISMATCH");
+});
+
+// ------------------------------------------ vehicle facts typed in when no record holds them
+
+test("a typed capacity is used when nobody holds one, and is labelled as typed in", async () => {
+  const desk = makeVehicleDesk();
+  const checked = await desk.service.assess(desk.actor, {
+    movementId: "mov-023",
+    transport: transportDetails({ vehicleNumber: "KA88XX0001" }),
+    shipment: { grossWeightKg: 2_000 },
+    declared: { vehicleClass: "LIGHT_GOODS_VEHICLE", ratedPayloadKg: 1_200 },
+  });
+
+  const finding = checked.findings.find((row) => row.code === "VEHICLE.CAPACITY.EXCEEDED");
+  assert.equal(finding?.evidenceSource, "ENTERED_BY_HAND");
+  assert.ok(finding?.reason.includes("1,200 kg"));
+  // A typed number is never dressed up as the registering authority's word.
+  assert.ok(finding?.reason.includes("the capacity typed in for this vehicle"), finding?.reason);
+  assert.equal(checked.capacity?.basis, "the payload typed in for this movement");
+  assert.equal(checked.evidence.some((item) => item.source === "ENTERED_BY_HAND"), true);
+  // The authority still holds nothing, and that stays on the record as its own warning.
+  assert.ok(codes(checked).includes("VEHICLE.RECORD.NOT_FOUND"));
+});
+
+test("a typed capacity never overrules the registering authority's own", async () => {
+  const desk = makeVehicleDesk();
+  const checked = await desk.service.assess(desk.actor, {
+    movementId: "mov-024",
+    transport: transportDetails({ vehicleNumber: "KA02GV3344" }),
+    shipment: { grossWeightKg: 2_000 },
+    declared: { ratedPayloadKg: 9_000 },
+  });
+
+  assert.equal(checked.capacity?.capacityKg, 1_250);
+  assert.equal(checked.capacity?.source, "GOVERNMENT_RECORD");
+  assert.ok(codes(checked).includes("VEHICLE.CAPACITY.EXCEEDED"));
+});
+
+test("typing what you can see is a fresh check, not a repeat of the last one", async () => {
+  const desk = makeVehicleDesk();
+  const request = {
+    movementId: "mov-025",
+    transport: transportDetails({ vehicleNumber: "KA88XX0001" }),
+    shipment: { grossWeightKg: 900 },
+  };
+
+  const blind = await desk.service.assess(desk.actor, request);
+  const told = await desk.service.assess(desk.actor, { ...request, declared: { vehicleClass: "LIGHT_GOODS_VEHICLE", ratedPayloadKg: 1_200 } });
+
+  assert.notEqual(told.id, blind.id, "new facts must produce a new check rather than the old answer");
+  assert.equal(blind.outcome, "CANNOT_DECIDE");
+  assert.equal(told.outcome, "WARN", told.findings.map((finding) => finding.code).join(", "));
+});

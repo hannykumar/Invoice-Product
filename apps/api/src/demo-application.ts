@@ -70,7 +70,7 @@ import { outstandingOf } from '../../../packages/transport/src/suitability-servi
 import { DEMO_VEHICLE_RECORDS, platePhoto } from '../../../packages/transport/src/suitability-adapters.ts';
 import { VEHICLE_CLASS_NAMES } from '../../../packages/transport/src/suitability-types.ts';
 import type {
-  ShipmentFacts, TransportDetails, VehicleSuitabilityAssessment,
+  ShipmentFacts, TransportDetails, VehicleClass, VehicleSuitabilityAssessment,
 } from '../../../packages/transport/src/suitability-types.ts';
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
@@ -1604,6 +1604,8 @@ export class DemoApplication {
         { number: 'KA09OW5566', label: 'KA09OW5566 · your own closed van (not on the authority\'s record)', knownTo: 'your vehicle list only' },
         { number: 'KA88XX0001', label: 'KA88XX0001 · a number nobody holds', knownTo: 'nobody' },
       ],
+      // The classes a person can type when neither record holds the vehicle.
+      classes: Object.entries(VEHICLE_CLASS_NAMES).map(([value, label]) => ({ value, label })),
       // What the yard's camera can be made to see, so the comparison can be tried both ways.
       photos: [
         { value: '', label: 'No photograph' },
@@ -1670,6 +1672,7 @@ export class DemoApplication {
       },
       plate: assessment.plate === undefined ? null : {
         verdict: assessment.plate.verdict,
+        readBy: assessment.plate.readBy,
         readNumber: assessment.plate.readNumber ?? null,
         declaredNumber: assessment.plate.declaredNumber,
         confidence: assessment.plate.confidence ?? null,
@@ -1708,11 +1711,25 @@ export class DemoApplication {
     };
 
     const photo = String(input.platePhoto ?? '').trim();
+    // A yard with no camera still gets its plate checked: whatever somebody read off the lorry
+    // runs through the same comparison, recorded as a person's reading rather than a machine's.
+    const typedPlate = String(input.plateTyped ?? '').trim();
+    // And a vehicle neither record holds can have its class and capacity typed in for this one
+    // movement. Typed facts fill gaps; they never overrule the registering authority.
+    const declaredClass = String(input.declaredClass ?? '').trim();
+    const declaredCapacity = String(input.declaredCapacityKg ?? '').trim();
+    const declared = declaredClass === '' && declaredCapacity === '' ? undefined : {
+      ...(declaredClass === '' ? {} : { vehicleClass: declaredClass as VehicleClass }),
+      ...(declaredCapacity === '' ? {} : { ratedPayloadKg: Number(declaredCapacity) }),
+    };
+
     const assessment = await this.shop.vehicleSuitability.assess(actor, {
       movementId,
       transport,
       shipment,
       ...(photo === '' ? {} : { platePhoto: platePhoto(photo, this.shop.clock.now().toISOString()) }),
+      ...(typedPlate === '' ? {} : { plateReadByHand: typedPlate }),
+      ...(declared === undefined ? {} : { declared }),
     });
     return DemoApplication.vehicleJson(assessment);
   }
