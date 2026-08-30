@@ -80,6 +80,12 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
+    // Issue #47 — asking the assistant to do something: what it would do, and then doing it.
+    if (method === 'GET' && pathname === '/api/agent/capabilities') return json(200, app.agentCapabilities(actor));
+    if (method === 'GET' && pathname === '/api/agent/history') return json(200, await app.agentHistory(actor));
+    if (method === 'POST' && pathname === '/api/agent/plan') return json(200, await app.agentPlan(actor, body));
+    if (method === 'POST' && pathname === '/api/agent/approve') return json(200, await app.agentApprove(actor, body));
+    if (method === 'POST' && pathname === '/api/agent/execute') return json(200, await app.agentExecute(actor, body));
     // Issue #23 — who is being chased for money, who is deliberately not, and what was sent.
     if (method === 'GET' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
     if (method === 'POST' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));

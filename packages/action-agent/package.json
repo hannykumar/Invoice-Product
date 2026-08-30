@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/action-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #47 [E47] — a safe AI action agent: permission-scoped typed tools, plan/preview/approve/execute/report, and a high-risk policy the registry enforces.",
+  "exports": { ".": "./src/index.ts" }
+}

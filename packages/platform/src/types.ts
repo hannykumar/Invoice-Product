@@ -62,7 +62,11 @@ export type Permission =
   | "collections.promise.record"
   | "collections.dispute.manage"
   // Issue #34 [E34], GPT 1: asking questions about this company's own books.
-  | "assistant.ask";
+  | "assistant.ask"
+  // Issue #47 [E47], GPT 1: letting the assistant do authorised work through typed tools.
+  | "agent.plan"
+  | "agent.approve"
+  | "agent.execute";
 
 export interface RequestContext {
   companyId: Id;

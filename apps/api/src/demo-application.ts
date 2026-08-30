@@ -60,6 +60,21 @@ import {
   type ReminderCandidate,
   type Reminder,
 } from '@invoice/collections';
+import {
+  ActionAgentService,
+  InMemoryAgentPlanStore,
+  ToolRegistry,
+  cancelInvoiceTool,
+  findUnpaidTool,
+  sendReminderTool,
+  stopRemindingTool,
+  totalOwedTool,
+  AGENT_DISCLAIMER,
+  type AgentPlan,
+  type AgentReport,
+  type PartyDirectoryPort,
+} from '@invoice/action-agent';
+import { AuditLog, PlatformCommandService } from '../../../packages/platform/src/index.ts';
 import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
 import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
@@ -182,6 +197,8 @@ export class DemoApplication {
   private readonly returnNotes: InMemoryReturnNoteRepository;
   private readonly collections: CollectionsService;
   private readonly outbox: DemoReminderOutbox;
+  private readonly agent: ActionAgentService;
+  private readonly agentAudit: AuditLog;
 
   private constructor(
     config: CompanySeed,
@@ -198,6 +215,8 @@ export class DemoApplication {
     returnNotes: InMemoryReturnNoteRepository,
     collections: CollectionsService,
     outbox: DemoReminderOutbox,
+    agent: ActionAgentService,
+    agentAudit: AuditLog,
   ) {
     this.config = config;
     this.shop = shop;
@@ -213,6 +232,8 @@ export class DemoApplication {
     this.returnNotes = returnNotes;
     this.collections = collections;
     this.outbox = outbox;
+    this.agent = agent;
+    this.agentAudit = agentAudit;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -454,7 +475,52 @@ export class DemoApplication {
       blocked,
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox);
+    // Issue #47 [E47]: the assistant doing authorised work. Every tool below is the real module
+    // already composed above — #23 decides what a reminder should be and re-checks the bill at the
+    // moment of sending, #34 grounds the total in one of #35's reports and carries its snapshot id,
+    // and cancelling a bill is registered as prepare-only, so the assistant can never finish it.
+    const agentAudit = new AuditLog();
+    const agentCommands = new PlatformCommandService(agentAudit, [
+      { action: 'agent.run', minimumRisk: 'medium', requiredPermission: 'approval.decide' },
+    ]);
+    const agentRegistry = new ToolRegistry()
+      .register(findUnpaidTool(collections))
+      .register(totalOwedTool(assistant))
+      .register(sendReminderTool(collections))
+      .register(stopRemindingTool(collections))
+      .register(cancelInvoiceTool());
+    const agentParties: PartyDirectoryPort = {
+      async resolve(_actor, text) {
+        const needle = text.trim().toLowerCase();
+        const known = [{ partyId: String(config.customerId), name: config.customerName }];
+        return known.filter((party) => party.name.toLowerCase().includes(needle) || needle.includes(party.name.toLowerCase()));
+      },
+      async nameOf(_actor, partyId) {
+        return partyId === String(config.customerId) ? config.customerName : partyId;
+      },
+    };
+    const agent = new ActionAgentService({
+      registry: agentRegistry,
+      commands: agentCommands,
+      contextFor: (from: ActorContext) => ({
+        companyId: from.companyId,
+        branchId: from.branchId ?? config.branchId,
+        actorId: from.userId,
+        // The platform's own approval permission travels only when the person actually holds it,
+        // so their policy decides, not this composition.
+        permissions: new Set<Permission>([
+          'notification.send',
+          ...(from.permissions.includes('approval.decide') ? (['approval.decide'] as const) : []),
+        ]),
+        sessionId: `agent:${from.userId}`,
+      }),
+      parties: agentParties,
+      store: new InMemoryAgentPlanStore(),
+      permissions: permissionPortFromActor,
+      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, agent, agentAudit);
     await app.seed();
     return app;
   }
@@ -640,6 +706,105 @@ export class DemoApplication {
     const bill = await this.shop.posting.bill(actor, id);
     if (bill === null) throw notFound('PURCHASE_UNKNOWN', 'That supplier bill was not found.');
     return bill;
+  }
+
+  // ------------------------------------------------ issue #47: letting the assistant do the work
+
+  private agentPlanJson(plan: AgentPlan) {
+    return {
+      id: plan.id,
+      request: plan.request,
+      intent: plan.intent,
+      evidence: plan.evidence,
+      state: plan.state,
+      summary: plan.summary,
+      needsApproval: plan.needsApproval,
+      fingerprint: plan.fingerprint,
+      instructionFlag: plan.instructionFlag,
+      steps: plan.steps.map((step) => ({
+        stepId: step.stepId,
+        tool: step.tool,
+        kind: step.kind,
+        risk: step.risk,
+        executability: step.executability,
+        describe: step.describe,
+        party: step.party,
+        amount: step.amount === null ? null : jsonAmount(step.amount.minor),
+      })),
+      refusals: plan.refusals.map((refusal) => ({ code: refusal.code, reason: refusal.reason, tool: refusal.tool })),
+    };
+  }
+
+  private agentReportJson(report: AgentReport) {
+    return {
+      planId: report.planId,
+      state: report.state,
+      summary: report.summary,
+      handedBack: report.handedBack,
+      steps: report.steps.map((step) => ({
+        stepId: step.stepId,
+        tool: step.tool,
+        state: step.state,
+        describe: step.describe,
+        statement: step.evidence?.statement ?? null,
+        details: step.evidence?.details ?? {},
+        failure: step.failure,
+        retryable: step.retryable,
+      })),
+    };
+  }
+
+  /** What this person is allowed to have the assistant do. Never more than they hold themselves. */
+  agentCapabilities(actor: ActorContext) {
+    this.companyOf(actor);
+    return { tools: this.agent.capabilities(actor), disclaimer: AGENT_DISCLAIMER };
+  }
+
+  async agentPlan(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const plan = await this.agent.plan(actor, {
+      text: String(input.request ?? ''),
+      today: isoDate(String(input.today ?? '2026-08-29')),
+    });
+    // Planning looks at nothing; the preview is where the request meets the books, so both run
+    // together for the screen. Neither of them writes anything.
+    return this.agentPlanJson(await this.agent.preview(actor, plan.id));
+  }
+
+  async agentApprove(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const plan = await this.agent.approve(actor, String(input.planId ?? ''), String(input.fingerprint ?? ''));
+    return { state: 'recorded', title: 'Approved', message: 'The assistant will do exactly what you saw.', plan: this.agentPlanJson(plan) };
+  }
+
+  async agentExecute(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const report = await this.agent.execute(actor, String(input.planId ?? ''), {
+      fingerprint: String(input.fingerprint ?? ''),
+      idempotencyKey: String(input.idempotencyKey ?? input.planId ?? ''),
+    });
+    return {
+      state: 'recorded',
+      title: report.state === 'DONE' ? 'Done' : report.state === 'PARTLY_DONE' ? 'Partly done' : 'Nothing was done',
+      message: report.summary['en-IN'],
+      report: this.agentReportJson(report),
+    };
+  }
+
+  async agentHistory(actor: ActorContext) {
+    this.companyOf(actor);
+    const plans = await this.agent.plans(actor);
+    return {
+      plans: await Promise.all(plans.map(async (plan) => ({
+        ...this.agentPlanJson(plan),
+        report: await this.agent.report(actor, plan.id).then((report) => (report === null ? null : this.agentReportJson(report))),
+      }))),
+      // The trail is GPT 2's audit log, not a second copy kept for the screen.
+      audit: this.agentAudit
+        .forCompany({ companyId: actor.companyId, branchId: String(actor.branchId ?? ''), actorId: actor.userId, permissions: new Set(), sessionId: 'read' })
+        .slice(-20)
+        .map((event) => ({ action: event.action, at: event.occurredAt, detail: event.after ?? {} })),
+    };
   }
 
   // ------------------------------------------------------- issue #23: chasing what is still owed
