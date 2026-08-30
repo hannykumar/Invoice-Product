@@ -26,6 +26,7 @@
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
+          <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -187,6 +188,77 @@
               </div>
               <button type="submit" class="secondary-button wide" data-i18n="cancelEInvoice"></button>
             </form>
+          </article>
+        </section>
+
+
+        <section class="view" id="view-eway" aria-labelledby="eway-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="eway-title" tabindex="-1" data-i18n="ewayTitle"></h1>
+              <p data-i18n="ewayHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="eway-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="eway-invoices" required></select></label>
+                <label><span data-i18n="whyMoving"></span><select name="reason"><option value="SUPPLY" data-i18n="moveSupply"></option><option value="JOB_WORK" data-i18n="moveJobWork"></option><option value="BRANCH_TRANSFER" data-i18n="moveBranch"></option><option value="SALES_RETURN" data-i18n="moveReturn"></option></select></label>
+                <label><span data-i18n="deliveryState"></span><select name="shipToState" id="eway-states"></select><small data-i18n="deliveryStateHelp"></small><small id="eway-state-rule"></small></label>
+                <label><span data-i18n="deliveryPlace"></span><input name="shipToPlace" placeholder="Hyderabad" /></label>
+                <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /><small data-i18n="distanceHelp"></small></label>
+                <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA01AB1234" /><small data-i18n="vehicleHelp"></small></label>
+                <label><span data-i18n="oversized"></span><select name="oversized"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
+                <label><span data-i18n="sameCity"></span><select name="withinSameCity"><option value="" data-i18n="answerNotSaid"></option><option value="yes" data-i18n="answerYes"></option><option value="no" data-i18n="answerNo"></option></select><small data-i18n="sameCityHelp"></small></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkMovement"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="ewaySafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="eway-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="eway-result-title">—</h2><p id="eway-result-message"></p></div>
+              <span class="pill" id="eway-status">—</span>
+            </div>
+            <div class="activity-list" id="eway-detail"></div>
+            <div class="dialog-actions" id="eway-actions">
+              <button type="button" class="primary-button" id="eway-raise" hidden data-i18n="raiseEway"></button>
+              <button type="button" class="secondary-button" id="eway-offline" hidden data-i18n="downloadOffline"></button>
+              <button type="button" class="secondary-button" id="eway-reconcile" hidden data-i18n="askPortal"></button>
+            </div>
+            <form id="eway-vehicle-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA25CD5678" required /></label>
+                <label><span data-i18n="vehicleChangeReason"></span><select name="changeReason"><option value="FIRST_TIME" data-i18n="changeFirst"></option><option value="BREAKDOWN" data-i18n="changeBreakdown"></option><option value="TRANSSHIPMENT" data-i18n="changeTransshipment"></option><option value="OTHERS" data-i18n="reasonOther"></option></select></label>
+                <label><span data-i18n="changeNote"></span><input name="changeNote" placeholder="Gearbox failure on NH48" /></label>
+                <label><span data-i18n="fromPlace"></span><input name="fromPlace" placeholder="Hubballi" /></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="addVehicle"></button>
+            </form>
+            <form id="eway-extend-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="currentPlace"></span><input name="currentPlace" placeholder="Solapur" required /></label>
+                <label><span data-i18n="currentState"></span><input name="currentState" maxlength="2" placeholder="27" required /></label>
+                <label><span data-i18n="remainingKm"></span><input name="remainingKm" type="number" min="0" max="4000" step="1" placeholder="120" required /></label>
+                <label><span data-i18n="extendWhy"></span><input name="reason" placeholder="Held up at a check post" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="extendValidity"></button>
+            </form>
+            <form id="eway-cancel-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="cancelReasonKind"></span><select name="reasonCode"><option value="DATA_ENTRY_MISTAKE" data-i18n="reasonMistake"></option><option value="DUPLICATE" data-i18n="reasonDuplicate"></option><option value="ORDER_CANCELLED" data-i18n="reasonOrderOff"></option><option value="OTHERS" data-i18n="reasonOther"></option></select></label>
+                <label><span data-i18n="cancelReasonWhy"></span><input name="reason" placeholder="The customer called off the order" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="cancelEway"></button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading"><div><h2 data-i18n="onTheRoad"></h2><p data-i18n="onTheRoadHelp"></p></div></div>
+            <div class="activity-list" id="eway-road"></div>
           </article>
         </section>
 
@@ -420,6 +492,7 @@
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
+        <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
       </nav>
     </div>
 
