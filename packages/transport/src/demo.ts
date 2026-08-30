@@ -8,7 +8,7 @@
  */
 import { formatPaise } from "../../purchasing/src/money.ts";
 import { decideEwayApplicability } from "./applicability.ts";
-import { ALL_STATE_RULES, LIVE_JURISDICTIONS, RETIRED_CODES, jurisdictionCounts } from "./rules.ts";
+import { ALL_STATE_RULES, CURRENT_STATE_RULES, LIVE_JURISDICTIONS, RETIRED_CODES, jurisdictionCounts } from "./rules.ts";
 import { describeExpiry, describeTimeLeft, validityDays } from "./validity.ts";
 import { toOfflineJson } from "./payload.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
@@ -60,19 +60,27 @@ console.log("\n  Same goods, same value, same day — two different answers, bec
 console.log("  Maharashtra's limit and not the country's, and neither of them is 'per day'.");
 
 heading("2b. Every state is in the table, so picking a state applies that state's rule");
-const lakh = ALL_STATE_RULES.filter((rule) => rule.thresholdPaise === 1_00_000_00n);
-const special = ALL_STATE_RULES.filter((rule) => rule.intraCityExemptAnyValue === true || rule.notifiedGoodsOnly === true);
+const lakh = CURRENT_STATE_RULES.filter((rule) => rule.exemptAnyValue !== true && rule.thresholdPaise === 1_00_000_00n);
+const special = CURRENT_STATE_RULES.filter((rule) => rule.exemptAnyValue === true
+  || rule.intraCityExemptAnyValue === true || rule.intraCityThresholdPaise !== undefined
+  || rule.notifiedGoodsOnly === true || rule.excludedGoodsNote !== undefined
+  || rule.overridesExemptGoods !== undefined);
 const counts = jurisdictionCounts();
 console.log(`Places you can pick: ${counts.states} states + ${counts.unionTerritories} union territories = ${LIVE_JURISDICTIONS.length}.`);
-console.log(`The table holds ${ALL_STATE_RULES.length} rows, because it also keeps ${counts.retired} GST codes that are no longer`);
-console.log(`issued (${RETIRED_CODES.map((rule) => `${rule.scope} ${rule.stateName}`).join(", ")}) so an old document still resolves,`);
-console.log(`plus code 97 for other territory. ${ALL_STATE_RULES.length} rows is not ${ALL_STATE_RULES.length} states.`);
+console.log(`The table covers ${CURRENT_STATE_RULES.length} GST codes: those 36, plus ${counts.retired} that are no longer issued`);
+console.log(`(${RETIRED_CODES.map((rule) => `${rule.scope} ${rule.stateName}`).join(", ")}) so an old document still resolves, plus 97 for other territory.`);
 console.log(`Limit of ₹1,00,000 inside the state (${lakh.length}): ${lakh.map((rule) => rule.stateName).join(", ")}`);
 console.log(`Limit of ₹50,000 inside the state: every other state.`);
-console.log("Rules that are not only about money:");
-for (const rule of special) console.log(`  · ${rule.stateName}: ${rule.note}`);
-console.log(`Rows carrying the state's own notification number: ${ALL_STATE_RULES.filter((rule) => rule.sourceConfirmed).length} of ${ALL_STATE_RULES.length};`);
-console.log("  the rest say so in their own source line, so nobody mistakes a shipped default for a checked citation.");
+console.log("\nRules that are not only about money:");
+for (const rule of special) {
+  console.log(`  · ${rule.stateName}: ${rule.note ?? rule.excludedGoodsNote ?? rule.overridesExemptGoods}`);
+}
+const byKind = (kind: string) => ALL_STATE_RULES.filter((rule) => rule.sourceKind === kind).length;
+console.log(`\nWhere the rules come from: ${byKind("NOTIFICATION")} rows cite a numbered state order,`);
+console.log(`${byKind("PRESS_RELEASE")} were rolled out by press release and say so, and ${byKind("NOT_HELD")} hold no order at all`);
+console.log("and fall back to the national ₹50,000, saying that is what happened.");
+console.log(`The table holds ${ALL_STATE_RULES.length} rows for ${CURRENT_STATE_RULES.length} codes, because a state's limit changes:`);
+console.log("West Bengal came down to ₹50,000 in December 2023, Madhya Pradesh went up to ₹1 lakh in March 2022.");
 
 heading("3. The ₹50,000 boundary itself");
 const at = (paise: bigint) => decideEwayApplicability(interStateMovement({

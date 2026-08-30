@@ -46,7 +46,7 @@ import type {
   ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
 } from '../../../packages/transport/src/types.ts';
 import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
-import { ALL_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
+import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
@@ -1267,14 +1267,18 @@ export class DemoApplication {
       // 28 states and 8 union territories to pick from; the rest of the rows are codes that are no
       // longer issued, kept so an old document still resolves, and marked as such on the screen.
       counts: jurisdictionCounts(),
-      states: ALL_STATE_RULES.map((rule) => ({
+      states: CURRENT_STATE_RULES.map((rule) => ({
         code: rule.scope,
         name: rule.stateName,
         kind: rule.kind,
-        limit: jsonAmount(rule.thresholdPaise),
+        // An exemption has no limit to show, and showing ₹50,000 against it would be a lie.
+        limit: rule.exemptAnyValue === true ? null : jsonAmount(rule.thresholdPaise),
+        exemptAnyValue: rule.exemptAnyValue === true,
+        intraCityLimit: rule.intraCityThresholdPaise === undefined ? null : jsonAmount(rule.intraCityThresholdPaise),
+        intraCityExempt: rule.intraCityExemptAnyValue === true,
         effectiveFrom: rule.effectiveFrom,
         sourceRef: rule.sourceRef,
-        sourceConfirmed: rule.sourceConfirmed,
+        sourceKind: rule.sourceKind,
         note: rule.note ?? null,
       })),
     };

@@ -1,32 +1,34 @@
 // Issue #27 [E27] — the money limits, and whose limit each one is.
 //
 // This file exists so that "does this need an e-way bill?" is answered from a table with dates and
-// sources on it, rather than from a number somebody remembers. The distinction that matters:
+// notification numbers on it, rather than from a number somebody remembers. The distinction that
+// matters:
 //
 //   - **Between two states** the limit is ₹50,000, and it is national. Rule 138(1) of the CGST
 //     Rules, in force everywhere since 1 April 2018.
-//   - **Inside one state** the limit is that state's own. Several states set ₹1 lakh, which is
-//     where the "₹1 lakh" belief comes from — but it belongs to Punjab, Chandigarh, Delhi,
-//     Rajasthan, Bihar, West Bengal, Jharkhand, Maharashtra and Tamil Nadu, not to the country,
-//     and never to a *day*.
+//   - **Inside one state** the limit is that state's own, set by that state's own order — and the
+//     orders differ in kind, not only in amount. Some states set ₹1 lakh. Some ask for a bill only
+//     for a listed set of goods. Two union territories ask for none at all. One exempts movement
+//     inside a city whatever it is worth. Another sets a higher limit inside a city.
 //
-// Every state and union territory is in the table below, so choosing a state on any screen applies
-// that state's own rule rather than a national approximation. Three things vary between them and
-// all three are held as data:
+// So "₹1 lakh a day" is wrong twice over: ₹1 lakh belongs to the states that set it, and nothing
+// anywhere is measured per day.
 //
-//   1. the money limit,
-//   2. the date the state's own rule came into force,
-//   3. whether the state's rule is about money at all — Gujarat exempts movement inside one city at
-//      any value, and several states ask for a bill only for the goods on their own notified list.
+// **Every row is effective-dated and a state can have several**, because these orders keep moving:
+// West Bengal came down from ₹1 lakh to ₹50,000 on 1 December 2023, Madhya Pradesh went up from
+// ₹50,000 to ₹1 lakh in March 2022, and five union territories were exempted on 1 April 2018 and
+// three of them un-exempted seven weeks later. A movement is judged under the rule in force on its
+// own date, which is the only way an old document can still be explained.
 //
-// Assumption recorded on purpose: these figures and dates are transcribed from the state orders
-// named against each entry. They are the values this product ships with, not values it discovered.
-// Where we hold the state's figure and date but not its notification number, `sourceConfirmed` is
-// false and every screen says so, so nobody mistakes a shipped default for a checked citation.
+// Sources: each row names the state order behind it. They were transcribed in August 2026 from the
+// published compilations at cleartax.in and taxguru.in, with the union territory notifications,
+// Gujarat's B.19, Chandigarh's 3/2018 and 7/2018, Jammu and Kashmir's 64 and Kerala's gold circular
+// checked against the notification texts themselves. `sourceKind` says what kind of thing each
+// citation is, because a press release is not a notification and should not be shown as one.
 
 import type { ValueThreshold } from "./types.ts";
 
-export const EWAY_RULE_SET_VERSION = "in.gst.ewaybill.2026.2";
+export const EWAY_RULE_SET_VERSION = "in.gst.ewaybill.2026.3";
 
 /** ₹50,000. The national limit for goods crossing a state border. */
 export const INTER_STATE_THRESHOLD: ValueThreshold = Object.freeze({
@@ -38,224 +40,355 @@ export const INTER_STATE_THRESHOLD: ValueThreshold = Object.freeze({
 });
 
 /**
- * What a state asks for movement that starts and ends inside it.
- *
- * `intraCityExemptAnyValue` and `notifiedGoodsOnly` are not flourishes. Gujarat exempts movement
- * within one city whatever it is worth, so there the question "is this within one city?" decides
- * the answer before the money does. Madhya Pradesh, Chhattisgarh, Goa and Jharkhand ask for a bill
- * only for goods on their own notified lists, so a decision in those states says plainly that the
- * list has to be checked before anyone relies on a "yes".
- */
-export interface StateIntraStateRule extends ValueThreshold {
-  readonly stateName: string;
-  readonly kind: JurisdictionKind;
-  readonly intraCityExemptAnyValue?: boolean;
-  readonly notifiedGoodsOnly?: boolean;
-  /** True when this row carries the state's actual notification number. */
-  readonly sourceConfirmed: boolean;
-}
-
-/**
  * What a GST state code actually is.
  *
- * India has 28 states and 8 union territories, and the codes do not stop there: two of them belong
- * to jurisdictions that no longer exist, and one is not a place people live in at all. Calling the
- * whole list "states" is wrong and this is where that is kept straight:
- *
- *   - `STATE` — one of the 28 states.
- *   - `UNION_TERRITORY` — one of the 8 union territories. Delhi, Chandigarh and the rest.
- *   - `RETIRED` — a code that is no longer issued: 25 (Daman and Diu, folded into 26 in 2020) and
- *     28 (undivided Andhra Pradesh, split into 36 and 37 in 2014). Kept because a document raised
- *     years ago still carries the old code, and it must still resolve to the right rule.
- *   - `OTHER_TERRITORY` — code 97, which the portal uses for offshore areas and anything outside
- *     the states and union territories. Not a place anybody picks off a list.
+ * India has 28 states and 8 union territories, and the codes do not stop there: two belong to
+ * jurisdictions that no longer exist, and one is not a place people live in at all.
  */
 export type JurisdictionKind = "STATE" | "UNION_TERRITORY" | "RETIRED" | "OTHER_TERRITORY";
 
+/**
+ * What kind of thing the citation is.
+ *
+ * Several states rolled the e-way bill out by press release and never issued a numbered
+ * notification for it, and a few we simply do not hold. Saying which is which on the screen stops
+ * a press release from being read as a gazette reference.
+ */
+export type SourceKind = "NOTIFICATION" | "PRESS_RELEASE" | "NOT_HELD";
+
+/** One state's rule as it stood from one date until the next row replaced it. */
+export interface StateIntraStateRule extends ValueThreshold {
+  readonly stateName: string;
+  readonly kind: JurisdictionKind;
+  readonly sourceKind: SourceKind;
+  /** No e-way bill at all inside this jurisdiction, whatever the consignment is worth. */
+  readonly exemptAnyValue?: boolean;
+  /** No e-way bill when the goods stay inside one city, whatever they are worth. Gujarat. */
+  readonly intraCityExemptAnyValue?: boolean;
+  /** A different, higher limit when the goods stay inside one city. Rajasthan. */
+  readonly intraCityThresholdPaise?: bigint;
+  /** The state asks for a bill only for goods on its own notified list. */
+  readonly notifiedGoodsOnly?: boolean;
+  /** The state's limit applies to everything except a listed set of goods. */
+  readonly excludedGoodsNote?: string;
+  /** Set where the state requires a bill for goods the national annexure exempts. Kerala's gold. */
+  readonly overridesExemptGoods?: string;
+  /** The value from which that state wants a bill for those goods. Kerala's ₹10 lakh on gold. */
+  readonly preciousGoodsThresholdPaise?: bigint;
+}
+
 /** Every GST state code, so a code on a screen always has a name behind it. */
 export const STATE_NAMES: Readonly<Record<string, string>> = Object.freeze({
-  "01": "Jammu and Kashmir",
-  "02": "Himachal Pradesh",
-  "03": "Punjab",
-  "04": "Chandigarh",
-  "05": "Uttarakhand",
-  "06": "Haryana",
-  "07": "Delhi",
-  "08": "Rajasthan",
-  "09": "Uttar Pradesh",
-  "10": "Bihar",
-  "11": "Sikkim",
-  "12": "Arunachal Pradesh",
-  "13": "Nagaland",
-  "14": "Manipur",
-  "15": "Mizoram",
-  "16": "Tripura",
-  "17": "Meghalaya",
-  "18": "Assam",
-  "19": "West Bengal",
-  "20": "Jharkhand",
-  "21": "Odisha",
-  "22": "Chhattisgarh",
-  "23": "Madhya Pradesh",
-  "24": "Gujarat",
-  "25": "Daman and Diu",
-  "26": "Dadra and Nagar Haveli and Daman and Diu",
-  "27": "Maharashtra",
-  "28": "Andhra Pradesh (before division)",
-  "29": "Karnataka",
-  "30": "Goa",
-  "31": "Lakshadweep",
-  "32": "Kerala",
-  "33": "Tamil Nadu",
-  "34": "Puducherry",
-  "35": "Andaman and Nicobar Islands",
-  "36": "Telangana",
-  "37": "Andhra Pradesh",
-  "38": "Ladakh",
-  "97": "Other Territory",
+  "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+  "25": "Daman and Diu", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
+  "28": "Andhra Pradesh (before division)", "29": "Karnataka", "30": "Goa", "31": "Lakshadweep",
+  "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman and Nicobar Islands",
+  "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh", "97": "Other Territory",
   // Not a state. The portal uses it for a party outside India, and no intra-state rule can apply.
   "96": "Outside India",
 });
 
+const UNION_TERRITORIES = new Set(["01", "04", "07", "26", "31", "34", "35", "38"]);
+const RETIRED = new Set(["25", "28"]);
+
 /** The name for a code, or the code itself when it is one we do not know. */
 export const stateName = (code: string): string => STATE_NAMES[code] ?? `state ${code}`;
 
+const kindOf = (code: string): JurisdictionKind =>
+  code === "97" ? "OTHER_TERRITORY" : RETIRED.has(code) ? "RETIRED" : UNION_TERRITORIES.has(code) ? "UNION_TERRITORY" : "STATE";
+
 const FIFTY_THOUSAND = 50_000_00n;
 const ONE_LAKH = 1_00_000_00n;
+const TWO_LAKH = 2_00_000_00n;
 
-const state = (
-  code: string,
-  thresholdPaise: bigint,
-  effectiveFrom: string,
-  sourceRef: string,
-  extra: {
-    readonly kind?: JurisdictionKind;
-    readonly sourceConfirmed?: boolean;
-    readonly note?: string;
-    readonly intraCityExemptAnyValue?: boolean;
-    readonly notifiedGoodsOnly?: boolean;
-  } = {},
-): StateIntraStateRule => Object.freeze({
+type RuleInput = Omit<StateIntraStateRule, "scope" | "stateName" | "kind" | "ruleId" | "thresholdPaise"> & {
+  readonly thresholdPaise?: bigint;
+};
+
+const rule = (code: string, input: RuleInput): StateIntraStateRule => Object.freeze({
   scope: code,
   stateName: stateName(code),
-  kind: extra.kind ?? "STATE",
-  thresholdPaise,
-  effectiveFrom,
-  sourceRef,
-  ruleId: `EWB.THRESHOLD.INTRA_STATE.${code}`,
-  sourceConfirmed: extra.sourceConfirmed ?? false,
-  ...(extra.note === undefined ? {} : { note: extra.note }),
-  ...(extra.intraCityExemptAnyValue === undefined ? {} : { intraCityExemptAnyValue: extra.intraCityExemptAnyValue }),
-  ...(extra.notifiedGoodsOnly === undefined ? {} : { notifiedGoodsOnly: extra.notifiedGoodsOnly }),
+  kind: kindOf(code),
+  ruleId: `EWB.THRESHOLD.INTRA_STATE.${code}.${input.effectiveFrom}`,
+  // An exemption has no threshold to compare against; ₹50,000 is carried only so the shape holds.
+  thresholdPaise: input.thresholdPaise ?? FIFTY_THOUSAND,
+  ...input,
 });
-
-/** For the rows where we hold the date but not the notification number. */
-const stateOrder = (code: string, on: string): string =>
-  `${stateName(code)} notification under the proviso to Rule 138(1), in force from ${on}. This table does not hold the notification number for this state — confirm it with the state before relying on it.`;
 
 const NOTIFIED_GOODS_NOTE = "This state asks for an e-way bill only for the goods on its own notified list. Check that list before deciding these particular goods need one.";
 
 /**
- * Intra-state limits for every state and union territory, by GST state code.
+ * Every state and union territory, newest rule first.
  *
- * Nothing falls through to a national approximation any more: choosing a state applies that
- * state's own row. The national fallback below survives only for a code that is not a state at
- * all — a typo, or a party outside India — and it says that is what happened.
+ * Read `intraStateRuleFor(code, date)` rather than this map: it picks the row that was in force on
+ * the day the goods moved.
  */
-export const INTRA_STATE_RULES: Readonly<Record<string, StateIntraStateRule>> = Object.freeze({
-  "01": state("01", FIFTY_THOUSAND, "2018-11-16", stateOrder("01", "16 November 2018"), { kind: "UNION_TERRITORY" }),
-  "02": state("02", FIFTY_THOUSAND, "2018-04-15", stateOrder("02", "15 April 2018")),
-  "03": state("03", ONE_LAKH, "2018-06-01", "Punjab Notification GST-I-2018/3, 19 April 2018", { sourceConfirmed: true }),
-  "04": state("04", ONE_LAKH, "2018-06-01", stateOrder("04", "1 June 2018"), { kind: "UNION_TERRITORY" }),
-  "05": state("05", FIFTY_THOUSAND, "2018-04-20", stateOrder("05", "20 April 2018")),
-  "06": state("06", FIFTY_THOUSAND, "2018-04-20", "Haryana Notification 49/ST-2, 19 April 2018", { sourceConfirmed: true }),
-  "07": state("07", ONE_LAKH, "2018-06-16", "Delhi Notification F.3(46)/Fin(Rev-I)/2017-18, 15 June 2018", { kind: "UNION_TERRITORY", sourceConfirmed: true }),
-  "08": state("08", ONE_LAKH, "2019-04-01", "Rajasthan Notification F.17(131)ACCT/GST/2017/3743, 6 August 2018 as amended", { sourceConfirmed: true }),
-  "09": state("09", FIFTY_THOUSAND, "2018-04-15", "Uttar Pradesh Notification 38/2018, 11 April 2018", { sourceConfirmed: true }),
-  "10": state("10", ONE_LAKH, "2018-04-20", "Bihar Notification S.O. 130, 19 April 2018", { sourceConfirmed: true }),
-  "11": state("11", FIFTY_THOUSAND, "2018-04-25", stateOrder("11", "25 April 2018")),
-  "12": state("12", FIFTY_THOUSAND, "2018-04-25", stateOrder("12", "25 April 2018")),
-  "13": state("13", FIFTY_THOUSAND, "2018-05-01", stateOrder("13", "1 May 2018")),
-  "14": state("14", FIFTY_THOUSAND, "2018-05-25", stateOrder("14", "25 May 2018")),
-  "15": state("15", FIFTY_THOUSAND, "2018-06-01", stateOrder("15", "1 June 2018")),
-  "16": state("16", FIFTY_THOUSAND, "2018-04-20", stateOrder("16", "20 April 2018")),
-  "17": state("17", FIFTY_THOUSAND, "2018-04-25", stateOrder("17", "25 April 2018")),
-  "18": state("18", FIFTY_THOUSAND, "2018-05-16", stateOrder("18", "16 May 2018")),
-  "19": state("19", ONE_LAKH, "2018-06-06", "West Bengal Notification 13/2018 - C.T./GST, 6 June 2018", { sourceConfirmed: true }),
-  "20": state("20", ONE_LAKH, "2018-04-20", stateOrder("20", "20 April 2018"), { notifiedGoodsOnly: true, note: NOTIFIED_GOODS_NOTE }),
-  "21": state("21", FIFTY_THOUSAND, "2018-06-01", "Odisha Notification 15918-FIN-CT1-TAX-0022/2017, 31 May 2018", { sourceConfirmed: true }),
-  "22": state("22", FIFTY_THOUSAND, "2018-06-01", stateOrder("22", "1 June 2018"), { notifiedGoodsOnly: true, note: NOTIFIED_GOODS_NOTE }),
-  "23": state("23", FIFTY_THOUSAND, "2018-04-25", stateOrder("23", "25 April 2018"), { notifiedGoodsOnly: true, note: NOTIFIED_GOODS_NOTE }),
-  "24": state("24", FIFTY_THOUSAND, "2018-04-15", "Gujarat Notification GSL/GST/RULE-138(14)/B.12, 11 April 2018", {
-    sourceConfirmed: true,
-    intraCityExemptAnyValue: true,
-    note: "Gujarat asks for no e-way bill at all when the goods stay inside one city, whatever they are worth.",
-  }),
-  "25": state("25", FIFTY_THOUSAND, "2018-06-01", stateOrder("25", "1 June 2018"), {
-    kind: "RETIRED",
-    note: "This code belongs to the old Daman and Diu. Since 26 January 2020 the union territory uses code 26.",
-  }),
-  "26": state("26", FIFTY_THOUSAND, "2018-06-01", stateOrder("26", "1 June 2018"), { kind: "UNION_TERRITORY" }),
-  "27": state("27", ONE_LAKH, "2018-07-01", "Maharashtra Notification 15E/2018 - State Tax, 29 June 2018", { sourceConfirmed: true }),
-  "28": state("28", FIFTY_THOUSAND, "2018-04-15", stateOrder("28", "15 April 2018"), {
-    kind: "RETIRED",
+export const INTRA_STATE_RULES: Readonly<Record<string, readonly StateIntraStateRule[]>> = Object.freeze({
+  // No e-way bill at all inside the union territory, at any value.
+  "01": [rule("01", {
+    effectiveFrom: "2019-12-01", exemptAnyValue: true, sourceKind: "NOTIFICATION",
+    sourceRef: "Jammu and Kashmir Notification 64, 30 November 2019",
+    note: "Jammu and Kashmir asks for no e-way bill at all when the goods start and finish inside the union territory. Goods crossing its border still need one.",
+  })],
+  "02": [rule("02", {
+    effectiveFrom: "2018-06-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Himachal Pradesh Notification 12-4/78-EXN-TAX-17408, 31 May 2018",
+  })],
+  "03": [rule("03", {
+    effectiveFrom: "2018-09-13", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+    sourceRef: "Punjab Notification PA/ETC/2018/175, 13 September 2018",
+  })],
+  "04": [
+    rule("04", {
+      effectiveFrom: "2018-05-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "Notification 7/2018 - Union Territory Tax, 18 May 2018",
+      note: "Chandigarh's blanket exemption of 1 April 2018 was withdrawn seven weeks later and the ordinary ₹50,000 limit put back.",
+    }),
+    rule("04", {
+      effectiveFrom: "2018-04-01", exemptAnyValue: true, sourceKind: "NOTIFICATION",
+      sourceRef: "Notification 3/2018 - Union Territory Tax, 31 March 2018",
+    }),
+  ],
+  "05": [rule("05", {
+    effectiveFrom: "2018-04-17", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Uttarakhand Notification 239/CSTUK/GST-Vidhi/2018-19, 17 April 2018",
+  })],
+  "06": [rule("06", {
+    effectiveFrom: "2018-04-20", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Haryana Notification 49/ST-2, 19 April 2018",
+  })],
+  "07": [rule("07", {
+    effectiveFrom: "2018-06-16", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+    sourceRef: "Delhi Notification 03, 15 June 2018",
+  })],
+  "08": [rule("08", {
+    effectiveFrom: "2022-02-24", thresholdPaise: ONE_LAKH, intraCityThresholdPaise: TWO_LAKH,
+    sourceKind: "NOTIFICATION", sourceRef: "Rajasthan Notification 02/2022, 24 February 2022",
+    note: "Rajasthan sets ₹1,00,000 inside the state and a higher ₹2,00,000 when the goods stay inside one city.",
+    excludedGoodsNote: "Rajasthan's higher limits do not cover the goods its order lists separately; check that list for these goods.",
+  })],
+  "09": [rule("09", {
+    effectiveFrom: "2018-04-15", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Uttar Pradesh Notification 38, 11 April 2018",
+  })],
+  "10": [rule("10", {
+    effectiveFrom: "2019-01-14", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+    sourceRef: "Bihar Notification S.O. 14, 14 January 2019",
+    excludedGoodsNote: "Bihar's ₹1,00,000 limit does not cover the goods its order lists separately; check that list for these goods.",
+  })],
+  "11": [rule("11", {
+    effectiveFrom: "2018-04-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "PRESS_RELEASE",
+    sourceRef: "Sikkim rolled the e-way bill out by press release dated 23 April 2018; no numbered state notification is held for it.",
+  })],
+  "12": [rule("12", {
+    effectiveFrom: "2018-04-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Arunachal Pradesh Notification 14/2018, 23 March 2018",
+  })],
+  "13": [rule("13", {
+    effectiveFrom: "2018-05-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Nagaland Notification 6/2018, 19 April 2018",
+  })],
+  "14": [rule("14", {
+    effectiveFrom: "2018-05-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "PRESS_RELEASE",
+    sourceRef: "Manipur rolled the e-way bill out by CBIC press release dated 24 May 2018; no numbered state notification is held for it.",
+  })],
+  "15": [rule("15", {
+    effectiveFrom: "2018-07-02", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Mizoram Notification J.21011/2(iii)/2018-TAX/Pt, 2 July 2018",
+  })],
+  "16": [rule("16", {
+    effectiveFrom: "2018-04-20", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Tripura Notification F.1-11(91)-TAX/GST/2018, 17 April 2018",
+  })],
+  "17": [rule("17", {
+    effectiveFrom: "2018-04-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Meghalaya Notification ERTS(T) 84/2017/20, 20 April 2018",
+  })],
+  "18": [rule("18", {
+    effectiveFrom: "2019-12-16", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Assam Notification 30/2019-GST, 16 December 2019",
+  })],
+  "19": [
+    rule("19", {
+      effectiveFrom: "2023-12-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "West Bengal Notification 2/2023, 10 November 2023",
+      note: "West Bengal brought its intra-state limit down from ₹1,00,000 to ₹50,000 on 1 December 2023. A movement before that date is judged under the old ₹1,00,000.",
+    }),
+    rule("19", {
+      effectiveFrom: "2018-06-06", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+      sourceRef: "West Bengal Notification 13/2018 - C.T./GST, 6 June 2018",
+    }),
+  ],
+  "20": [rule("20", {
+    effectiveFrom: "2018-09-26", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+    sourceRef: "Jharkhand Notification S.O. 66, 26 September 2018",
+    excludedGoodsNote: "Jharkhand's ₹1,00,000 limit does not cover the goods its order lists separately; those need a bill at the ordinary ₹50,000. Check that list for these goods.",
+  })],
+  "21": [rule("21", {
+    effectiveFrom: "2018-06-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "PRESS_RELEASE",
+    sourceRef: "Odisha rolled the e-way bill out by press release dated 31 May 2018; no numbered state notification is held for it.",
+  })],
+  "22": [rule("22", {
+    effectiveFrom: "2018-06-19", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Chhattisgarh Notification F-10-31/2018/CT/V(46), 19 June 2018",
+    notifiedGoodsOnly: true,
+    note: "Chhattisgarh asks for an intra-state e-way bill only for the fifteen goods its order lists. Check that list before deciding these particular goods need one.",
+  })],
+  "23": [
+    rule("23", {
+      effectiveFrom: "2022-03-23", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+      sourceRef: "Madhya Pradesh Notification FA3-08/2018/1/V(18), 23 March 2022",
+      excludedGoodsNote: "Madhya Pradesh's ₹1,00,000 limit does not cover tobacco and its products, pan masala, or medicines and pharmaceuticals; those need a bill at the ordinary ₹50,000.",
+      note: "Madhya Pradesh raised its limit from ₹50,000 to ₹1,00,000 in March 2022. Before that it asked for a bill only for eleven listed goods.",
+    }),
+    rule("23", {
+      effectiveFrom: "2018-04-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "Madhya Pradesh Notification F-A-3-08-2018-1-V(43), 24 April 2018",
+      notifiedGoodsOnly: true, note: NOTIFIED_GOODS_NOTE,
+    }),
+  ],
+  "24": [
+    rule("24", {
+      effectiveFrom: "2018-10-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "Gujarat Notification GSL/GST/RULE-138(14)/B.19, 19 September 2018",
+      intraCityExemptAnyValue: true,
+      note: "Gujarat asks for no e-way bill at all when the goods stay inside one city, whatever they are worth. Hank, yarn, fabric and garments moving anywhere in the state for job work are exempt too.",
+    }),
+    rule("24", {
+      effectiveFrom: "2018-04-15", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "Gujarat Notification GSL/GST/RULE-138(14)/B.12, 11 April 2018",
+    }),
+  ],
+  "25": [
+    rule("25", {
+      effectiveFrom: "2018-05-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "Notification 9/2018 - Union Territory Tax, 18 May 2018",
+      note: "This code belongs to the old Daman and Diu. Since 26 January 2020 the union territory uses code 26.",
+    }),
+    rule("25", {
+      effectiveFrom: "2018-04-01", exemptAnyValue: true, sourceKind: "NOTIFICATION",
+      sourceRef: "Notification 5/2018 - Union Territory Tax, 31 March 2018",
+    }),
+  ],
+  "26": [
+    rule("26", {
+      effectiveFrom: "2018-05-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+      sourceRef: "Notification 8/2018 - Union Territory Tax, 18 May 2018",
+      note: "The blanket exemption of 1 April 2018 was withdrawn seven weeks later and the ordinary ₹50,000 limit put back.",
+    }),
+    rule("26", {
+      effectiveFrom: "2018-04-01", exemptAnyValue: true, sourceKind: "NOTIFICATION",
+      sourceRef: "Notification 4/2018 - Union Territory Tax, 31 March 2018",
+    }),
+  ],
+  "27": [rule("27", {
+    effectiveFrom: "2018-07-01", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+    sourceRef: "Maharashtra Notification 15E/2018 - State Tax, 29 June 2018",
+    note: "Maharashtra also exempts hank, yarn, fabric and garments moved up to 50 km inside the state.",
+  })],
+  "28": [rule("28", {
+    effectiveFrom: "2018-04-15", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOT_HELD",
+    sourceRef: "No order is held for this code; the national ₹50,000 has been used.",
     note: "This code belongs to undivided Andhra Pradesh and is no longer issued. Andhra Pradesh is 37 and Telangana is 36.",
-  }),
-  "29": state("29", FIFTY_THOUSAND, "2018-04-01", "Karnataka Notification 01/2018 - State Tax, 25 March 2018", { sourceConfirmed: true }),
-  "30": state("30", FIFTY_THOUSAND, "2018-06-01", stateOrder("30", "1 June 2018"), { notifiedGoodsOnly: true, note: NOTIFIED_GOODS_NOTE }),
-  "31": state("31", FIFTY_THOUSAND, "2018-06-01", stateOrder("31", "1 June 2018"), { kind: "UNION_TERRITORY" }),
-  "32": state("32", FIFTY_THOUSAND, "2018-04-15", "Kerala Notification 3/2018 - State Tax, 12 April 2018", { sourceConfirmed: true }),
-  "33": state("33", ONE_LAKH, "2018-06-02", "Tamil Nadu Notification 09/2018 - (Rate)/G.O. (Ms) No. 72, 31 May 2018", { sourceConfirmed: true }),
-  "34": state("34", FIFTY_THOUSAND, "2018-04-25", stateOrder("34", "25 April 2018"), { kind: "UNION_TERRITORY" }),
-  "35": state("35", FIFTY_THOUSAND, "2018-06-01", stateOrder("35", "1 June 2018"), { kind: "UNION_TERRITORY" }),
-  "36": state("36", FIFTY_THOUSAND, "2018-04-15", stateOrder("36", "15 April 2018")),
-  "37": state("37", FIFTY_THOUSAND, "2018-04-15", stateOrder("37", "15 April 2018")),
-  "38": state("38", FIFTY_THOUSAND, "2019-10-31", stateOrder("38", "31 October 2019"), { kind: "UNION_TERRITORY" }),
-  "97": state("97", FIFTY_THOUSAND, "2018-06-01", stateOrder("97", "1 June 2018"), { kind: "OTHER_TERRITORY" }),
+  })],
+  "29": [rule("29", {
+    effectiveFrom: "2018-04-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "PRESS_RELEASE",
+    sourceRef: "Karnataka was the first state to start intra-state e-way bills, by press release dated 29 March 2018; it is also cited as Notification 01/2018 - State Tax of 25 March 2018.",
+  })],
+  "30": [rule("30", {
+    effectiveFrom: "2018-05-28", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Goa Notification CCT/26-2/2018-19/36, 28 May 2018",
+    notifiedGoodsOnly: true,
+    note: "Goa asks for an intra-state e-way bill only for the twenty-two goods its order lists. Check that list before deciding these particular goods need one.",
+  })],
+  "31": [rule("31", {
+    effectiveFrom: "2018-04-01", exemptAnyValue: true, sourceKind: "NOTIFICATION",
+    sourceRef: "Notification 6/2018 - Union Territory Tax, 31 March 2018",
+    note: "Lakshadweep asks for no e-way bill at all when the goods start and finish inside the union territory.",
+  })],
+  "32": [rule("32", {
+    effectiveFrom: "2018-04-15", thresholdPaise: FIFTY_THOUSAND, sourceKind: "PRESS_RELEASE",
+    sourceRef: "Kerala rolled the e-way bill out by press release dated 10 April 2018; no numbered state notification is held for it.",
+    overridesExemptGoods: "In Kerala, gold and precious stones need an e-way bill from ₹10,00,000 upwards, even though those goods are exempt elsewhere in the country (Kerala GST Trade Circular 1/2025, in force from 20 January 2025).",
+    preciousGoodsThresholdPaise: 10_00_000_00n,
+  })],
+  "33": [rule("33", {
+    effectiveFrom: "2018-06-02", thresholdPaise: ONE_LAKH, sourceKind: "NOTIFICATION",
+    sourceRef: "Tamil Nadu Notification 09, 31 May 2018",
+  })],
+  "34": [rule("34", {
+    effectiveFrom: "2018-04-25", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Puducherry Notification F.No. 3240/CTD/GST/2018/3, 24 April 2018",
+  })],
+  "35": [rule("35", {
+    effectiveFrom: "2018-04-01", exemptAnyValue: true, sourceKind: "NOTIFICATION",
+    sourceRef: "Notification 2/2018 - Union Territory Tax, 31 March 2018",
+    note: "The Andaman and Nicobar Islands ask for no e-way bill at all when the goods start and finish inside the union territory.",
+  })],
+  "36": [rule("36", {
+    effectiveFrom: "2018-04-15", thresholdPaise: FIFTY_THOUSAND, sourceKind: "PRESS_RELEASE",
+    sourceRef: "Telangana rolled the e-way bill out by press release dated 10 April 2018; no numbered state notification is held for it.",
+  })],
+  "37": [rule("37", {
+    effectiveFrom: "2018-04-15", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOTIFICATION",
+    sourceRef: "Andhra Pradesh CCT's Ref. in CCW/GST/74/2015, 11 April 2018",
+  })],
+  "38": [rule("38", {
+    effectiveFrom: "2019-10-31", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOT_HELD",
+    sourceRef: "No separate Ladakh order is held; the national ₹50,000 has been used since the union territory was formed.",
+    note: "Ladakh was separated from Jammu and Kashmir on 31 October 2019. Jammu and Kashmir's own exemption does not extend to it.",
+  })],
+  "97": [rule("97", {
+    effectiveFrom: "2018-04-01", thresholdPaise: FIFTY_THOUSAND, sourceKind: "NOT_HELD",
+    sourceRef: "No separate order is held for other territory; the national ₹50,000 has been used.",
+  })],
 });
 
-/**
- * Every row in the table, in code order.
- *
- * This is 39 rows and that is **not** 39 states: it is 28 states, 8 union territories, 2 codes that
- * are no longer issued, and code 97 for other territory. Use `LIVE_JURISDICTIONS` for anything a
- * person picks from, and this one for looking up a code that arrived on a document.
- */
+/** Every row in the table, newest first within each code, in code order. */
 export const ALL_STATE_RULES: readonly StateIntraStateRule[] = Object.freeze(
-  Object.values(INTRA_STATE_RULES).sort((left, right) => (left.scope < right.scope ? -1 : 1)),
+  Object.keys(INTRA_STATE_RULES).sort().flatMap((code) => INTRA_STATE_RULES[code] ?? []),
+);
+
+/** The rule in force today for each code, in code order. What a screen shows. */
+export const CURRENT_STATE_RULES: readonly StateIntraStateRule[] = Object.freeze(
+  Object.keys(INTRA_STATE_RULES).sort().map((code) => INTRA_STATE_RULES[code]?.[0] as StateIntraStateRule),
 );
 
 /** The 36 places that exist today — 28 states and 8 union territories. What a picker offers. */
 export const LIVE_JURISDICTIONS: readonly StateIntraStateRule[] = Object.freeze(
-  ALL_STATE_RULES.filter((rule) => rule.kind === "STATE" || rule.kind === "UNION_TERRITORY"),
+  CURRENT_STATE_RULES.filter((row) => row.kind === "STATE" || row.kind === "UNION_TERRITORY"),
 );
 
-/** Codes that are no longer issued, kept so an old document still resolves to the right rule. */
+/** Codes that are no longer issued, kept so an old document still resolves. */
 export const RETIRED_CODES: readonly StateIntraStateRule[] = Object.freeze(
-  ALL_STATE_RULES.filter((rule) => rule.kind === "RETIRED"),
+  CURRENT_STATE_RULES.filter((row) => row.kind === "RETIRED"),
 );
 
 /** How many of each kind the table holds, for anything that wants to say so out loud. */
 export const jurisdictionCounts = (): Readonly<Record<"states" | "unionTerritories" | "retired" | "otherTerritory", number>> => ({
-  states: ALL_STATE_RULES.filter((rule) => rule.kind === "STATE").length,
-  unionTerritories: ALL_STATE_RULES.filter((rule) => rule.kind === "UNION_TERRITORY").length,
+  states: CURRENT_STATE_RULES.filter((row) => row.kind === "STATE").length,
+  unionTerritories: CURRENT_STATE_RULES.filter((row) => row.kind === "UNION_TERRITORY").length,
   retired: RETIRED_CODES.length,
-  otherTerritory: ALL_STATE_RULES.filter((rule) => rule.kind === "OTHER_TERRITORY").length,
+  otherTerritory: CURRENT_STATE_RULES.filter((row) => row.kind === "OTHER_TERRITORY").length,
 });
 
 /**
  * The intra-state rule for a state on a date.
  *
- * A state order that has not come into force yet on the movement's date does not apply to it, so a
- * back-dated movement is judged by the rules that were actually in force when the lorry left — and
- * before a state had its own rule, the national ₹50,000 is what stood.
+ * Rows are newest first, so this is the first one that had come into force by then. Before a state
+ * had any rule of its own, the national ₹50,000 is what stood, and the answer says so rather than
+ * pretending the state set it.
  */
 export const intraStateRuleFor = (
   stateCode: string,
   on: string,
-): ValueThreshold & { readonly stateName?: string; readonly intraCityExemptAnyValue?: boolean; readonly notifiedGoodsOnly?: boolean; readonly sourceConfirmed?: boolean } => {
-  const rule = INTRA_STATE_RULES[stateCode];
-  if (rule === undefined) {
+): ValueThreshold & Partial<Omit<StateIntraStateRule, keyof ValueThreshold>> => {
+  const rows = INTRA_STATE_RULES[stateCode];
+  if (rows === undefined) {
     return {
       ...INTER_STATE_THRESHOLD,
       scope: stateCode,
@@ -263,15 +396,17 @@ export const intraStateRuleFor = (
       note: `"${stateCode}" is not a GST state code we know, so the national ₹50,000 limit has been used. Check the state code on the movement.`,
     };
   }
-  if (rule.effectiveFrom > on) {
+  const inForce = rows.find((row) => row.effectiveFrom <= on);
+  if (inForce === undefined) {
+    const earliest = rows[rows.length - 1] as StateIntraStateRule;
     return {
       ...INTER_STATE_THRESHOLD,
       scope: stateCode,
       ruleId: "EWB.THRESHOLD.INTRA_STATE.BEFORE_STATE_RULE",
-      note: `${rule.stateName} had no e-way bill rule of its own until ${rule.effectiveFrom}, so the national ₹50,000 limit applied on this date.`,
+      note: `${earliest.stateName} had no e-way bill rule of its own until ${earliest.effectiveFrom}, so the national ₹50,000 limit applied on this date.`,
     };
   }
-  return rule;
+  return inForce;
 };
 
 /**

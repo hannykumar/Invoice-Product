@@ -57,12 +57,14 @@ The comparison is a strict `>`: **exactly ₹50,000 does not need a bill**, beca
 
 ### The state table
 
-`INTRA_STATE_RULES` in `rules.ts` holds **every state and union territory** — each with its own
-limit, the date its rule came into force, and the order it came from.
+`INTRA_STATE_RULES` in `rules.ts` holds **every state and union territory**, and holds each one as a
+list of effective-dated rows rather than a single figure, because these orders keep moving.
+`intraStateRuleFor(code, date)` picks the row that was in force on the day the goods moved, which is
+the only way a document raised years ago can still be explained.
 
-The table is **39 rows, and that is not 39 states**. India has 28 states and 8 union territories,
-which is the 36 a person can pick (`LIVE_JURISDICTIONS`). The other three rows are GST codes that
-are not places you would choose from a list, and each carries a `kind` saying which it is:
+India has 28 states and 8 union territories — the 36 a person can pick (`LIVE_JURISDICTIONS`). The
+table covers 39 codes, because three are not places you would choose from a list, and each carries a
+`kind` saying which it is:
 
 | Code | Kind | Why it is in the table |
 | --- | --- | --- |
@@ -70,29 +72,57 @@ are not places you would choose from a list, and each carries a `kind` saying wh
 | 28 Andhra Pradesh (before division) | `RETIRED` | Split into 36 Telangana and 37 Andhra Pradesh in 2014 |
 | 97 Other Territory | `OTHER_TERRITORY` | The portal's code for offshore areas and anything outside the states and union territories |
 
-Code 96 ("outside India") has a name but deliberately **no** intra-state rule: a movement to or
-from it is an export or an import, never an intra-state one. Choosing a state anywhere in the product applies that
-state's row; nothing falls through to a national approximation. `ALL_STATE_RULES` is the same table
-in code order, and it is what the screen's state picker is built from, so what a person picks and
-what decides the movement cannot drift apart.
+Code 96 ("outside India") has a name but deliberately **no** intra-state rule: a movement to or from
+it is an export or an import, never an intra-state one.
 
-**₹1,00,000 inside the state** (9): Punjab, Chandigarh, Delhi, Rajasthan, Bihar, West Bengal,
-Jharkhand, Maharashtra, Tamil Nadu. **₹50,000 inside the state**: everywhere else.
+**₹1,00,000 inside the state, today, in eight of them**: Punjab, Delhi, Rajasthan, Bihar, Jharkhand,
+Madhya Pradesh, Maharashtra, Tamil Nadu. **₹50,000 inside the state**: everywhere else that asks for
+one at all.
 
-Three states' rules are not only about money, and the table says so rather than flattening them:
+#### The rules that are not about money
 
-| State | What is different |
+Flattening these into a number would give wrong answers, so each is held as what it is:
+
+| Where | Rule | Held as |
+| --- | --- | --- |
+| Jammu and Kashmir, Lakshadweep, Andaman and Nicobar Islands | No e-way bill at all inside the territory, at any value | `exemptAnyValue` |
+| Chandigarh, Dadra and Nagar Haveli and Daman and Diu | The same, but only between 1 April and 25 May 2018, when the union territory notifications were withdrawn | `exemptAnyValue` on the older row |
+| Gujarat | No e-way bill inside one city, at any value | `intraCityExemptAnyValue` |
+| Rajasthan | A higher ₹2,00,000 limit inside one city | `intraCityThresholdPaise` |
+| Chhattisgarh, Goa | A bill only for the goods on the state's own notified list (15 and 22 goods) | `notifiedGoodsOnly` |
+| Bihar, Jharkhand, Madhya Pradesh, Rajasthan | The higher limit does not cover certain goods, which stay at ₹50,000 | `excludedGoodsNote` |
+| Kerala | Gold and precious stones need a bill from ₹10,00,000 — goods the national annexure exempts everywhere else | `overridesExemptGoods` with `preciousGoodsThresholdPaise` |
+
+Where a state's rule turns on a fact we have not been told — Gujarat and Rajasthan both turn on
+"does this stay inside one city?" — the answer is `CANNOT_DECIDE` naming `withinSameCity`, never a
+guess in either direction.
+
+#### Rules that changed
+
+Held as separate rows, so a movement is judged under its own day's rule:
+
+| Where | Change |
 | --- | --- |
-| Gujarat | `intraCityExemptAnyValue` — no e-way bill at all inside one city, at any value. A movement there with `withinSameCity` unknown gets `CANNOT_DECIDE` naming that fact |
-| Madhya Pradesh, Chhattisgarh, Goa, Jharkhand | `notifiedGoodsOnly` — the state asks only for goods on its own notified list, so a "yes" carries the caveat that the list has to be checked |
+| West Bengal | ₹1,00,000 → **₹50,000 from 1 December 2023** (Notification 2/2023) |
+| Madhya Pradesh | ₹50,000 for 11 listed goods → **₹1,00,000 from 23 March 2022** (Notification FA3-08/2018/1/V(18)) |
+| Chandigarh, Daman and Diu, Dadra and Nagar Haveli | Exempt outright from 1 April 2018 → **₹50,000 from 25 May 2018** (Notifications 7, 8 and 9/2018 - Union Territory Tax) |
+| Gujarat | ₹50,000 → the intra-city exemption added **from 1 October 2018** (Notification B.19) |
 
-Two codes carry a note because they are historical: 25 (old Daman and Diu, replaced by 26 in 2020)
-and 28 (undivided Andhra Pradesh, now 36 and 37).
+#### Where the citations come from
 
-**`sourceConfirmed`** marks the rows that carry the state's actual notification number — 13 of 39
-today. The other 26 hold the state's figure and date, and their `sourceRef` says in words that the
-notification number is not held and should be confirmed with the state. That sentence reaches the
-screen, so nobody mistakes a shipped default for a checked citation.
+Every row names its order, and `sourceKind` says what kind of thing that citation is, because a
+press release is not a gazette notification and must not be shown as one:
+
+| `sourceKind` | Rows | Meaning |
+| --- | --- | --- |
+| `NOTIFICATION` | 36 | A numbered state or union territory order |
+| `PRESS_RELEASE` | 6 | Karnataka, Kerala, Odisha, Sikkim, Manipur and Telangana rolled the e-way bill out by press release; the row says so |
+| `NOT_HELD` | 3 | Ladakh, retired code 28 and code 97, where no order is held and the national ₹50,000 is used — and the row says that is what happened |
+
+The citations were transcribed in August 2026 from the published compilations at cleartax.in and
+taxguru.in. The ones that change an outcome rather than a footnote — the union territory
+notifications, Gujarat's B.19, Chandigarh's 3/2018 and 7/2018, Jammu and Kashmir's 64, and Kerala's
+gold circular — were checked against the notification texts themselves.
 
 The national ₹50,000 still stands in for two cases, and each says which it is: a code that is not a
 GST state code at all (`EWB.THRESHOLD.INTRA_STATE.UNKNOWN_STATE`), and a movement dated before that
@@ -193,11 +223,12 @@ eight-hour extension window. No production credential is needed to run or test a
 
 ## Assumptions recorded
 
-1. **The state figures and dates are transcribed, not discovered.** They are the values this
-   product ships with. Before a business in a given state relies on one, the row should be checked
-   against that state's current order; every row carries a `sourceRef` and a `sourceConfirmed` flag
-   so the check is a lookup rather than an investigation, and a change is a change to the table
-   rather than to any code.
+1. **The state figures and dates are transcribed, not discovered.** They were taken in August 2026
+   from published compilations, with the rows that change an outcome checked against the
+   notification texts. Before a business in a given state relies on one, the row should be checked
+   against that state's current order; every row carries a `sourceRef` and a `sourceKind` so the
+   check is a lookup rather than an investigation, and a change is a change to the table rather
+   than to any code.
 2. **Distance is supplied, not computed.** The portal can work it out from pin codes when it is
    left at zero; this product does not compute road distance, and a blank one is left blank rather
    than guessed. Validity days are only shown once a distance is known.
@@ -207,14 +238,14 @@ eight-hour extension window. No production credential is needed to run or test a
 
 ## Known limitations
 
-1. **26 of the 39 rows do not carry their notification number.** The figure and the date are there;
-   the citation is not, and each such row says so in its own source line. Confirm with the state
-   before a business there relies on it.
-2. **The notified-goods lists themselves are not held.** Madhya Pradesh, Chhattisgarh, Goa and
-   Jharkhand ask for a bill only for goods on their own lists. The decision applies the money limit
-   and attaches the caveat in plain words, which errs towards raising a permit that was not needed
-   — harmless, since an unneeded e-way bill simply expires — rather than towards moving goods
-   without one.
+1. **The notified-goods lists themselves are not held.** Chhattisgarh and Goa ask for a bill only
+   for goods on their own lists, and Bihar, Jharkhand, Madhya Pradesh and Rajasthan exclude certain
+   goods from their higher limits. The decision applies the money limit and attaches the caveat in
+   plain words, which errs towards raising a permit that was not needed — harmless, since an
+   unneeded e-way bill simply expires — rather than towards moving goods without one.
+2. **Six rows cite a press release rather than a numbered order**, because that is how those states
+   rolled the e-way bill out. Three hold no order at all and fall back to the national ₹50,000. All
+   nine say so on the screen rather than looking like citations they are not.
 3. **No automatic e-way bill from an IRN.** #26 stores the number when the IRP returns one
    alongside an e-invoice; joining the two records is not done yet.
 4. **Distance-based expiry does not know about journey type changes.** Switching from road to ship
