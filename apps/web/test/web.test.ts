@@ -76,7 +76,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 11);
+  // One focusable heading per workspace view; the Reminders screen (#23) is the twelfth.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 12);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

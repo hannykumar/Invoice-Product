@@ -66,6 +66,17 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
+    // Issue #23 — who is being chased for money, who is deliberately not, and what was sent.
+    if (method === 'GET' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/send') return json(200, await app.sendReminder(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/send-all') return json(200, await app.sendAllReminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/retry') return json(200, await app.retryReminder(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/promise') return json(200, await app.recordPromiseToPay(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/dispute') return json(200, await app.raiseBillDispute(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/dispute/resolve') return json(200, await app.resolveBillDispute(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/stop') return json(200, await app.stopReminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/resume') return json(200, await app.resumeReminders(actor, body));
     if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
     if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
     if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));

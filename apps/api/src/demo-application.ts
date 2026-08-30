@@ -37,6 +37,26 @@ import type { PurchaseVerdict } from '../../../packages/purchasing/src/validatio
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
+import {
+  ChannelNotificationTransport,
+  InAppNotificationAdapter,
+  NotificationService,
+  NotificationTemplateRegistry,
+  type Notification,
+  type NotificationTransport,
+  type Permission,
+  type RequestContext,
+} from '../../../packages/platform/src/index.ts';
+import {
+  CollectionsService,
+  InMemoryReminderRepository,
+  notificationReminderTransport,
+  receivablesPositions,
+  registerReminderTemplates,
+  type PartyContactPort,
+  type ReminderCandidate,
+  type Reminder,
+} from '@invoice/collections';
 import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
 import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
@@ -127,6 +147,23 @@ const previewEffects = (preview: PurchasePostingPreview, location: string): stri
   return effects;
 };
 
+/**
+ * Issue #23 — where a reminder ends up in this demo.
+ *
+ * The one thing here that is not the real module: WhatsApp, SMS and email have no provider on a
+ * developer's machine, so the message is rendered through GPT 2's real template registry and kept
+ * where the screen can show it. Nothing about the decision to send it is faked.
+ */
+class DemoReminderOutbox implements NotificationTransport {
+  readonly messages: { channel: string; to: string; subject: string; body: string; at: string }[] = [];
+  private readonly templates: NotificationTemplateRegistry;
+  constructor(templates: NotificationTemplateRegistry) { this.templates = templates; }
+  async send(notification: Notification): Promise<void> {
+    const rendered = this.templates.render(notification);
+    this.messages.unshift({ channel: notification.channel, to: notification.recipientId, subject: rendered.subject, body: rendered.body, at: new Date(notification.scheduledAt).toISOString() });
+  }
+}
+
 export class DemoApplication {
   private readonly config: CompanySeed;
   private readonly shop: Awaited<ReturnType<typeof createCompanyShop>>;
@@ -139,6 +176,8 @@ export class DemoApplication {
   private readonly terms: TradeTermsService;
   private readonly returns: ReturnService;
   private readonly returnNotes: InMemoryReturnNoteRepository;
+  private readonly collections: CollectionsService;
+  private readonly outbox: DemoReminderOutbox;
 
   private constructor(
     config: CompanySeed,
@@ -152,6 +191,8 @@ export class DemoApplication {
     terms: TradeTermsService,
     returns: ReturnService,
     returnNotes: InMemoryReturnNoteRepository,
+    collections: CollectionsService,
+    outbox: DemoReminderOutbox,
   ) {
     this.config = config;
     this.shop = shop;
@@ -164,6 +205,8 @@ export class DemoApplication {
     this.terms = terms;
     this.returns = returns;
     this.returnNotes = returnNotes;
+    this.collections = collections;
+    this.outbox = outbox;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -288,13 +331,59 @@ export class DemoApplication {
       audit: shop.audit, clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes);
+    // Issue #23 [E23]: chasing overdue money. Receivables above it is the real service that has
+    // just been composed; the notification service below it is GPT 2's real one from #39. This
+    // module supplies only the decision about who is chased and how hard.
+    const templates = new NotificationTemplateRegistry();
+    registerReminderTemplates(templates);
+    const outbox = new DemoReminderOutbox(templates);
+    const notifications = new NotificationService(
+      new ChannelNotificationTransport({ in_app: new InAppNotificationAdapter(), email: outbox, whatsapp: outbox, sms: outbox }),
+      () => Date.now(),
+      { maxPerWindow: 100, windowMs: 60_000 },
+    );
+    const reminderContext = (from: ActorContext): RequestContext => ({
+      companyId: from.companyId,
+      branchId: from.branchId ?? config.branchId,
+      actorId: from.userId,
+      // Sending is already gated by the collections permission the caller had to hold; this is the
+      // infrastructure permission the notification service asks for, and nothing more.
+      permissions: new Set<Permission>(['notification.send']),
+      sessionId: `collections:${from.userId}`,
+    });
+    const reminderContacts: PartyContactPort = {
+      async contact(_companyId, partyId) {
+        return partyId === config.customerId
+          ? { recipientId: `${config.customerName.toLowerCase().replace(/[^a-z]+/g, '-')}@example.invalid`, channels: ['whatsapp', 'email', 'in_app'] }
+          : null;
+      },
+      async owner() { return { recipientId: config.setupUserId, channels: ['in_app', 'email'] }; },
+    };
+    const collections = new CollectionsService({
+      businessName: config.name,
+      receivables: receivablesPositions(payments, documents),
+      contacts: reminderContacts,
+      transport: notificationReminderTransport(notifications, reminderContext),
+      repository: new InMemoryReminderRepository(),
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      // This demo company's whole world is 29 August 2026 — its bills, its payments, its due
+      // dates. The reminder clock is pinned to the same afternoon so the screen shows the same day
+      // the books are on. Quiet hours are a real rule evaluated against this clock; the package
+      // tests drive a night and a morning through it.
+      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes, collections, outbox);
     await app.seed();
     return app;
   }
 
   private async seed(): Promise<void> {
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
+    // Two older bills, so the Reminders screen has something to decide about on the demo's date.
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
   }
 
   async dashboard(actor: ActorContext) {
@@ -424,6 +513,148 @@ export class DemoApplication {
     const bill = await this.shop.posting.bill(actor, id);
     if (bill === null) throw notFound('PURCHASE_UNKNOWN', 'That supplier bill was not found.');
     return bill;
+  }
+
+  // ------------------------------------------------------- issue #23: chasing what is still owed
+
+  private reminderDate(input: Record<string, unknown>): IsoDate {
+    return isoDate(String(input.today ?? '2026-08-29'));
+  }
+
+  private candidateJson(candidate: ReminderCandidate) {
+    return {
+      documentId: candidate.documentId,
+      partyId: candidate.partyId,
+      partyName: candidate.partyName,
+      decision: candidate.decision,
+      reason: candidate.reason,
+      level: candidate.level,
+      channel: candidate.channel,
+      step: candidate.step?.code ?? null,
+      explanation: candidate.explanation,
+      bill: candidate.snapshot.documentNumber,
+      outstanding: jsonAmount(candidate.snapshot.outstanding.minor),
+      daysOverdue: candidate.snapshot.daysOverdue,
+    };
+  }
+
+  private reminderJson(reminder: Reminder) {
+    return {
+      id: reminder.id,
+      bill: reminder.snapshot.documentNumber,
+      documentId: reminder.documentId,
+      state: reminder.state,
+      level: reminder.level,
+      channel: reminder.channel,
+      audience: reminder.audience,
+      message: reminder.message,
+      outstanding: jsonAmount(reminder.snapshot.outstanding.minor),
+      daysOverdue: reminder.snapshot.daysOverdue,
+      asOf: reminder.snapshot.asOf,
+      failureReason: reminder.failureReason,
+      sentAt: reminder.sentAt,
+    };
+  }
+
+  /** Everything the Reminders screen shows: the plan, what was sent, promises and disputes. */
+  async reminders(actor: ActorContext, input: Record<string, unknown> = {}) {
+    this.companyOf(actor);
+    const today = this.reminderDate(input);
+    const plan = await this.collections.plan(actor, today);
+    return {
+      asOf: today,
+      summary: plan.summary,
+      counts: { toSend: plan.toSend, toEscalate: plan.toEscalate, skipped: plan.skipped },
+      candidates: plan.candidates.map((candidate) => this.candidateJson(candidate)),
+      history: (await this.collections.history(actor)).map((reminder) => this.reminderJson(reminder)),
+      promises: (await this.collections.promises(actor, today)).map((view) => ({
+        id: view.promise.id,
+        documentId: view.promise.documentId,
+        amount: jsonAmount(view.promise.amount.minor),
+        promisedOn: view.promise.promisedOn,
+        outcome: view.outcome,
+        explanation: view.explanation,
+      })),
+      disputes: (await this.collections.disputes(actor)).map((dispute) => ({
+        id: dispute.id, documentId: dispute.documentId, reason: dispute.reason, state: dispute.state,
+      })),
+      outbox: this.outbox.messages.slice(0, 10),
+    };
+  }
+
+  async sendReminder(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const reminder = await this.collections.send(actor, {
+      documentId: String(input.documentId ?? ''),
+      today: this.reminderDate(input),
+    });
+    return {
+      state: reminder.state === 'SENT' ? 'recorded' : 'recorded',
+      title: reminder.state === 'SENT' ? 'Reminder sent' : `Reminder ${reminder.state.toLowerCase()}`,
+      message: reminder.state === 'FAILED'
+        ? (reminder.failureReason ?? 'The message could not be delivered.')
+        : reminder.message['en-IN'],
+      reminder: this.reminderJson(reminder),
+    };
+  }
+
+  async sendAllReminders(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const sent = await this.collections.sendPlanned(actor, this.reminderDate(input));
+    return {
+      state: 'recorded',
+      title: sent.length === 0 ? 'Nothing needed sending' : `${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`,
+      message: sent.length === 0
+        ? 'Every open bill was deliberately left alone today. The reasons are on this screen.'
+        : `${sent.filter((r) => r.state === 'SENT').length} sent, ${sent.filter((r) => r.state !== 'SENT').length} not delivered.`,
+      reminders: sent.map((reminder) => this.reminderJson(reminder)),
+    };
+  }
+
+  async retryReminder(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), this.reminderDate(input));
+    return { state: 'recorded', title: `Reminder ${reminder.state.toLowerCase()}`, message: reminder.failureReason ?? reminder.message['en-IN'], reminder: this.reminderJson(reminder) };
+  }
+
+  async recordPromiseToPay(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const promise = await this.collections.recordPromise(actor, {
+      partyId: this.config.customerId,
+      documentId: String(input.documentId ?? ''),
+      amount: money(paise(input.amount)),
+      promisedOn: isoDate(String(input.promisedOn ?? '')),
+      note: input.note === undefined ? null : String(input.note),
+    });
+    return { state: 'recorded', title: 'Promise recorded', message: `Reminders for this bill are paused until ${promise.promisedOn}.` };
+  }
+
+  async raiseBillDispute(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    await this.collections.raiseDispute(actor, {
+      partyId: this.config.customerId,
+      documentId: input.documentId === undefined || input.documentId === '' ? null : String(input.documentId),
+      reason: String(input.reason ?? ''),
+    });
+    return { state: 'recorded', title: 'Dispute recorded', message: 'This bill will not be chased until the dispute is closed.' };
+  }
+
+  async resolveBillDispute(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    await this.collections.resolveDispute(actor, String(input.disputeId ?? ''), String(input.resolution ?? 'Settled with the customer.'));
+    return { state: 'recorded', title: 'Dispute closed', message: 'The bill goes back into the reminder ladder at the rung its age has reached.' };
+  }
+
+  async stopReminders(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    await this.collections.optOut(actor, this.config.customerId, String(input.reason ?? ''));
+    return { state: 'recorded', title: 'Reminders stopped', message: `${this.config.customerName} will not receive automatic reminders.` };
+  }
+
+  async resumeReminders(actor: ActorContext, _input: Record<string, unknown> = {}) {
+    this.companyOf(actor);
+    await this.collections.resumeReminders(actor, this.config.customerId);
+    return { state: 'recorded', title: 'Reminders started again', message: `${this.config.customerName} will receive automatic reminders again.` };
   }
 
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {

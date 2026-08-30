@@ -26,6 +26,7 @@
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
+          <button class="nav-item" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -230,6 +231,63 @@
           </article>
         </section>
 
+
+        <!-- Issue #23 [E23]: chasing overdue money. Every row is decided from the receivables
+             position at the moment the page loaded, and a skip is shown as prominently as a send. -->
+        <section class="view" id="view-reminders" aria-labelledby="reminders-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="reminders-title" tabindex="-1" data-i18n="remindersTitle"></h1>
+              <p data-i18n="remindersHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div><h2 data-i18n="remindersToday"></h2><p id="reminders-summary">—</p></div>
+              <button type="button" class="primary-button" id="reminders-send-all" data-i18n="remindersSendAll"></button>
+            </div>
+            <div id="reminders-plan" class="activity-list" aria-live="polite"></div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="remindersSafety"></span></p>
+          </article>
+
+          <article class="panel form-panel">
+            <h2 data-i18n="remindersTellUs"></h2>
+            <form id="reminders-note-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="remindersBill"></span><select name="documentId" id="reminders-bill-choices"></select></label>
+                <label><span data-i18n="remindersWhatHappened"></span><select name="kind" id="reminders-kind">
+                  <option value="promise" data-i18n="remindersPromise"></option>
+                  <option value="dispute" data-i18n="remindersDispute"></option>
+                </select></label>
+                <label><span data-i18n="remindersPromisedOn"></span><input name="promisedOn" type="date" value="2026-09-05" /></label>
+                <label><span data-i18n="remindersAmount"></span><input name="amount" type="text" inputmode="decimal" value="250" /></label>
+                <label class="full-field"><span data-i18n="remindersNote"></span><input name="note" placeholder="Owner said the cheque goes out on Tuesday" /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="remindersRecord"></button>
+            </form>
+            <div id="reminders-promises" class="activity-list"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <h2 data-i18n="remindersStopTitle"></h2>
+            <form id="reminders-stop-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="remindersStopReason"></span><input name="reason" placeholder="They asked us to call instead of messaging" required /></label>
+              </div>
+              <button type="submit" class="secondary-button" data-i18n="remindersStop"></button>
+              <button type="button" class="secondary-button" id="reminders-resume" data-i18n="remindersResume"></button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <h2 data-i18n="remindersHistory"></h2>
+            <div id="reminders-history" class="activity-list"></div>
+            <h3 data-i18n="remindersOutbox"></h3>
+            <div id="reminders-outbox" class="activity-list"></div>
+          </article>
+        </section>
         <section class="view" id="view-deliveries" aria-labelledby="deliveries-title">
           <div class="page-heading">
             <div>
@@ -420,6 +478,7 @@
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
+        <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
       </nav>
     </div>
 
