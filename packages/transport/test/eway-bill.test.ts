@@ -12,7 +12,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DomainError } from "@invoice/kernel";
 import { consignmentValueOf, decideEwayApplicability } from "../src/applicability.ts";
-import { ALL_STATE_RULES, INTRA_STATE_RULES, STATE_NAMES, intraStateRuleFor } from "../src/rules.ts";
+import {
+  ALL_STATE_RULES, INTRA_STATE_RULES, LIVE_JURISDICTIONS, RETIRED_CODES, STATE_NAMES,
+  intraStateRuleFor, jurisdictionCounts,
+} from "../src/rules.ts";
 import { buildPartA, buildPartB, toOfflineJson, toRupees } from "../src/payload.ts";
 import {
   canExtendNow, describeTimeLeft, readPortalTimestamp, validUntilFrom, validityDays,
@@ -76,6 +79,27 @@ test("a code that is not a state says so rather than pretending to be a state ru
   assert.equal(rule.thresholdPaise, 50_000_00n);
   assert.equal(rule.ruleId, "EWB.THRESHOLD.INTRA_STATE.UNKNOWN_STATE");
   assert.match(rule.note ?? "", /is not a GST state code we know/);
+});
+
+test("the table is 28 states and 8 union territories — not 39 states", () => {
+  // India has 28 states and 8 union territories. The GST code list is longer than that, and the
+  // difference is exactly two retired codes and one that is not a place people live in.
+  const counts = jurisdictionCounts();
+  assert.equal(counts.states, 28);
+  assert.equal(counts.unionTerritories, 8);
+  assert.equal(LIVE_JURISDICTIONS.length, 36, "36 places exist today and 36 are pickable");
+  assert.equal(counts.retired, 2);
+  assert.deepEqual(RETIRED_CODES.map((rule) => rule.scope), ["25", "28"]);
+  assert.equal(counts.otherTerritory, 1);
+  assert.equal(counts.states + counts.unionTerritories + counts.retired + counts.otherTerritory, ALL_STATE_RULES.length);
+});
+
+test("a retired code still resolves, because an old document still carries it", () => {
+  // A 2019 document from undivided Andhra Pradesh has code 28 on it and must still get an answer.
+  const rule = intraStateRuleFor("28", "2019-06-01");
+  assert.equal(rule.thresholdPaise, 50_000_00n);
+  assert.match(rule.note ?? "", /Andhra Pradesh is 37 and Telangana is 36/);
+  assert.match(intraStateRuleFor("25", "2019-06-01").note ?? "", /uses code 26/);
 });
 
 test("every state and union territory has its own row, named, dated and sourced", () => {
