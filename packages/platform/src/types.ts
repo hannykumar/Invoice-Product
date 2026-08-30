@@ -24,6 +24,15 @@ export type Permission =
   | "einvoice.view"
   | "einvoice.generate"
   | "einvoice.cancel"
+  | "eway.view"
+  | "eway.generate"
+  | "eway.update"
+  | "eway.cancel"
+  // Issue #28. Checking a lorry against its load is an everyday act; sending a blocked movement
+  // out anyway is deliberately a separate permission from checking it.
+  | "transport.vehicle.view"
+  | "transport.vehicle.check"
+  | "transport.vehicle.override"
   | "sales.draft.write"
   | "sales.finalise"
   | "sales.approve"
@@ -34,12 +43,16 @@ export type Permission =
   | "payments.write_off"
   | "bank.balance.read"
   | "bank.statement.import"
+  | "bank.feed.manage"
+  | "bank.feed.sync"
   | "gst.file"
   | "stock.negative.override"
   | "approval.decide"
   | "access.review"
   | "notification.send"
   | "notification.sensitive.send"
+  | "collections.manage"
+  | "collections.send"
   | "privacy.manage"
   | "privacy.export"
   | "privacy.delete"
@@ -55,7 +68,12 @@ export type Permission =
   | "reports.view.dues"
   | "reports.view.gst"
   | "reports.view.exceptions"
-  | "reports.export";
+  | "reports.export"
+  // Chasing overdue money (issue #23 [E23]). Built by GPT 1 on GPT 2's notification service.
+  | "collections.reminders.view"
+  | "collections.reminders.send"
+  | "collections.promise.record"
+  | "collections.dispute.manage";
 
 export interface RequestContext {
   companyId: Id;

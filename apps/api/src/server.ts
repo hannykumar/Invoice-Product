@@ -59,6 +59,22 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/einvoices/reconcile') return json(200, await app.reconcileEInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/einvoices/cancel') return json(200, await app.cancelEInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/einvoices/offline') return json(200, await app.eInvoiceOfflineJson(actor, body));
+    // Issue #27 — do these goods need an e-way bill, and its life with the portal.
+    if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
+    if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
+    if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/generate') return json(200, await app.generateEwayBill(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/vehicle') return json(200, await app.updateEwayVehicle(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/extend') return json(200, await app.extendEwayValidity(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/cancel') return json(200, await app.cancelEwayBill(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/reject') return json(200, await app.rejectEwayBill(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/reconcile') return json(200, await app.reconcileEwayBill(actor, body));
+    if (method === 'POST' && pathname === '/api/eway/offline') return json(200, await app.ewayOfflineJson(actor, body));
+    // Issue #28 — can this lorry carry this load, and who said to send it anyway.
+    if (method === 'GET' && pathname === '/api/vehicles/choices') return json(200, DemoApplication.vehicleChoices());
+    if (method === 'GET' && pathname === '/api/vehicles/held') return json(200, await app.blockedVehicleChecks(actor));
+    if (method === 'POST' && pathname === '/api/vehicles/check') return json(200, await app.checkVehicle(actor, body));
+    if (method === 'POST' && pathname === '/api/vehicles/check/override') return json(200, await app.overrideVehicleCheck(actor, body));
     // Issue #19 — what we know about a supplier, and the evidence behind each warning.
     if (method === 'GET' && pathname === '/api/suppliers/choices') return json(200, { choices: DemoApplication.supplierChoices() });
     if (method === 'POST' && pathname === '/api/suppliers/check') return json(200, await app.checkSupplier(actor, body));
@@ -76,6 +92,22 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
+    // Issue #23 — who is being chased for money, who is deliberately not, and what was sent.
+    if (method === 'GET' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/send') return json(200, await app.sendReminder(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/send-all') return json(200, await app.sendAllReminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/retry') return json(200, await app.retryReminder(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/promise') return json(200, await app.recordPromiseToPay(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/dispute') return json(200, await app.raiseBillDispute(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/dispute/resolve') return json(200, await app.resolveBillDispute(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/stop') return json(200, await app.stopReminders(actor, body));
+    if (method === 'POST' && pathname === '/api/reminders/resume') return json(200, await app.resumeReminders(actor, body));
+    if (method === 'GET' && pathname === '/api/bank-feeds') return json(200, await app.bankFeedWorkspace(actor));
+    if (method === 'POST' && pathname === '/api/bank-feeds/consent') return json(200, await app.startBankFeedConsent(actor, body));
+    if (method === 'POST' && pathname === '/api/bank-feeds/consent/complete') return json(200, await app.completeBankFeedConsent(actor, body));
+    if (method === 'POST' && pathname === '/api/bank-feeds/sync') return json(200, await app.syncBankFeed(actor, body));
+    if (method === 'POST' && pathname === '/api/bank-feeds/disconnect') return json(200, await app.disconnectBankFeed(actor, body));
     if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
     if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
     if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));

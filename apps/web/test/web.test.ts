@@ -76,8 +76,18 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
-  // One focusable heading per view. Returns and "Bring your data" make twelve.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 12);
+  assert.match(html, /id="view-bank-feeds"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/bank-feeds\/consent/);
+  assert.match(script, /\/api\/bank-feeds\/sync/);
+  assert.match(script, /\/api\/bank-feeds\/disconnect/);
+  assert.match(html, /id="view-reminders"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/reminders\/send/);
+  assert.match(html, /id="view-vehicle"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/vehicles\/check/);
+  assert.match(script, /\/api\/vehicles\/check\/override/);
+  assert.match(html, /id="view-migration"[^>]+aria-labelledby=/);
+  // One focusable heading per screen. Issue #37's "Bring your data" makes sixteen.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 16);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

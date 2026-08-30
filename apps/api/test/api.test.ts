@@ -77,6 +77,28 @@ test('a real membership controls permissions at the domain boundary', async () =
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
 });
 
+test('live bank feed API requires consent, syncs once and preserves history on disconnect', async () => {
+  const owner = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa', redirectUri: 'https://app.example/bank/callback' }, owner);
+  assert.equal(started.status, 200);
+  assert.equal(started.body.connection.status, 'PENDING_CONSENT');
+  const connectionId = started.body.connection.id;
+  const completed = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved' }, owner);
+  assert.equal(completed.body.connection.status, 'CONNECTED');
+  const synced = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
+  assert.equal(synced.body.imported, 2);
+  const retried = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
+  assert.equal(retried.body.imported, 2);
+  const disconnected = await request('POST', '/api/bank-feeds/disconnect', { connectionId, idempotencyKey: 'api-disconnect-once' }, owner);
+  assert.equal(disconnected.body.connection.status, 'DISCONNECTED');
+  const workspace = await request('GET', '/api/bank-feeds', {}, owner);
+  assert.equal(workspace.body.connections[0].transactions.length, 2);
+  assert.equal(JSON.stringify(workspace.body).includes('sandbox-approved'), false);
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('GET', '/api/bank-feeds', {}, viewer)).status, 403);
+});
+
 test('domain failures map to useful HTTP status codes', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const invalid = await request('POST', '/api/purchases/record', { reference: 'INVALID-80', date: '2026-08-29', amount: '0' }, owner);
@@ -536,4 +558,94 @@ test('e-invoices belong to the signed-in company alone', async () => {
   const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   const stolen = await request('POST', '/api/einvoices/preview', { invoice: 'not-ours', turnover: '80000000' }, konkan);
   assert.equal(stolen.status, 404);
+});
+
+// ---------------------------------------------------------------------------- issue #23 [E23]
+// Reminders over HTTP, against the same live company: the plan is computed from the receivables
+// position the ledger produces, and a payment recorded through the payments API stops the chase.
+
+test('the HTTP surface plans reminders from real positions and explains every bill it leaves alone', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const plan = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(plan.status, 200);
+  assert.equal(plan.body.asOf, '2026-08-29');
+
+  // Only one message a day to one customer: the oldest bill is chased and the rest say why not.
+  assert.equal(plan.body.counts.toSend, 1);
+  const sending = plan.body.candidates.find((c: { decision: string }) => c.decision === 'SEND');
+  assert.ok(sending, 'the oldest overdue bill is proposed');
+  assert.ok(sending.daysOverdue >= 60, 'and it is the oldest one');
+  assert.ok(sending.outstanding > 0, 'with the amount still outstanding, not the invoice value');
+
+  const waiting = plan.body.candidates.find((c: { reason: string }) => c.reason === 'TOO_SOON');
+  assert.ok(waiting, 'the second overdue bill waits its turn rather than sending a second message');
+  const notYet = plan.body.candidates.find((c: { reason: string }) => c.reason === 'NOT_YET_DUE');
+  assert.ok(notYet, 'and a bill that is not due yet is left alone');
+
+  // A shopkeeper reads this screen in their own language, so no explanation may be missing one.
+  for (const candidate of plan.body.candidates as { explanation: Record<string, string> }[]) {
+    assert.equal(typeof candidate.explanation['en-IN'], 'string');
+    assert.equal(typeof candidate.explanation['hi-IN'], 'string');
+  }
+});
+
+test('a reminder sent over HTTP goes out once, and asking again does not send a second', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const plan = await request('GET', '/api/reminders', {}, owner);
+  const target = plan.body.candidates.find((c: { decision: string }) => c.decision === 'SEND');
+
+  const sent = await request('POST', '/api/reminders/send', { documentId: target.documentId }, owner);
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.reminder.state, 'SENT');
+  assert.match(sent.body.reminder.message['en-IN'], /Sampoorna Traders/);
+
+  const after = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(after.body.history.length, 1);
+  assert.equal(after.body.outbox.length, 1, 'exactly one message left the building');
+
+  const again = await request('POST', '/api/reminders/send', { documentId: target.documentId }, owner);
+  assert.equal(again.body.reminder.id, sent.body.reminder.id, 'the same reminder, not a new one');
+  const afterAgain = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(afterAgain.body.outbox.length, 1, 'and still one message');
+});
+
+test('a bill that is paid or disputed is not chased, over HTTP either', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const before = await request('GET', '/api/reminders', {}, owner);
+  const open = before.body.candidates.find((c: { reason: string }) => c.reason === 'TOO_SOON');
+  assert.ok(open, 'the second overdue bill is still open');
+
+  // The customer queries it. Nothing goes out until that is settled.
+  const dispute = await request('POST', '/api/reminders/dispute', { documentId: open.documentId, reason: 'They say one carton never arrived.' }, owner);
+  assert.equal(dispute.status, 200);
+  const held = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(held.body.candidates.find((c: { documentId: string }) => c.documentId === open.documentId).reason, 'DISPUTED');
+  const refused = await request('POST', '/api/reminders/send', { documentId: open.documentId }, owner);
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.code, 'REMINDER_NOT_APPLICABLE');
+
+  // Settled, and then actually paid through the real payments API.
+  const disputeId = held.body.disputes[0].id;
+  assert.equal((await request('POST', '/api/reminders/dispute/resolve', { disputeId, resolution: 'The carton was found.' }, owner)).status, 200);
+  const paid = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: String(open.outstanding), date: '2026-08-29', reference: 'REMINDER-23-PAID', invoice: open.documentId }, owner);
+  assert.equal(paid.body.state, 'recorded');
+
+  const settled = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(settled.body.candidates.find((c: { documentId: string }) => c.documentId === open.documentId).reason, 'SETTLED');
+  const afterPayment = await request('POST', '/api/reminders/send', { documentId: open.documentId }, owner);
+  assert.equal(afterPayment.status, 409, 'a paid bill is never chased');
+});
+
+test('reminders need a session, the right permission, and belong to one company only', async () => {
+  assert.equal((await request('GET', '/api/reminders')).status, 401);
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('GET', '/api/reminders', {}, viewer)).status, 403);
+  assert.equal((await request('POST', '/api/reminders/send', { documentId: 'anything' }, viewer)).status, 403);
+
+  const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const theirs = await request('GET', '/api/reminders', {}, konkan);
+  assert.equal(theirs.status, 200);
+  assert.deepEqual(theirs.body.history, [], 'nothing sent from the other company appears here');
+  assert.equal(theirs.body.outbox.length, 0);
 });
