@@ -41,6 +41,14 @@ export interface SuitabilityInput {
   readonly record?: VehicleRecordLookup;
   /** What the business itself has recorded about this vehicle, when it has anything. */
   readonly master?: VehicleEvidence | null;
+  /**
+   * Facts typed in for this one movement.
+   *
+   * Ranked below both records, so typing a capacity fills a gap without ever overruling the
+   * registering authority. A business that runs a lorry the authority has never heard of can
+   * still have its load checked.
+   */
+  readonly declared?: VehicleEvidence | null;
   /** The number-plate photograph's verdict, when a photograph was given. */
   readonly plate?: PlateComparison;
   readonly policy?: VehicleSuitabilityPolicy;
@@ -73,7 +81,11 @@ export const payloadCapacityOf = (evidence: readonly VehicleEvidence[]): Payload
   const ranked = [...evidence].sort((left, right) => rankOf(left.source) - rankOf(right.source));
   for (const item of ranked) {
     if (item.ratedPayloadKg !== undefined && item.ratedPayloadKg > 0) {
-      return { capacityKg: item.ratedPayloadKg, basis: "the payload stated on the record", source: item.source };
+      return {
+        capacityKg: item.ratedPayloadKg,
+        basis: item.source === "ENTERED_BY_HAND" ? "the payload typed in for this movement" : "the payload stated on the record",
+        source: item.source,
+      };
     }
     if (item.grossVehicleWeightKg !== undefined && item.unladenWeightKg !== undefined) {
       const difference = item.grossVehicleWeightKg - item.unladenWeightKg;
@@ -120,6 +132,7 @@ export const checkVehicleSuitability = (input: SuitabilityInput): SuitabilityRes
 
   if (input.record?.kind === "FOUND") evidence.push(input.record.evidence);
   if (input.master !== undefined && input.master !== null) evidence.push(input.master);
+  if (input.declared !== undefined && input.declared !== null) evidence.push(input.declared);
 
   checkTransportDetails(transport, findings);
   const capacity = payloadCapacityOf(evidence);
@@ -419,7 +432,9 @@ const checkCapacity = (
       code: "VEHICLE.CAPACITY.EXCEEDED",
       severity: policy.overloadSeverity,
       title: "This is more than the vehicle may carry",
-      reason: `The load is ${weight(load)} and this vehicle's recorded capacity is ${weight(capacity.capacityKg)} — ${weight(load - capacity.capacityKg)} over. Overloading is what a check post weighs for, and the fine falls on the consignor as much as the driver.`,
+      // A capacity somebody typed is not "recorded", and calling it that would dress a typed
+      // number up as the registering authority's word.
+      reason: `The load is ${weight(load)} and ${capacity.source === "ENTERED_BY_HAND" ? "the capacity typed in for this vehicle" : "this vehicle's recorded capacity"} is ${weight(capacity.capacityKg)} — ${weight(load - capacity.capacityKg)} over. Overloading is what a check post weighs for, and the fine falls on the consignor as much as the driver.`,
       ruleId: "VS.CAPACITY.RECORDED",
       ruleSetVersion: SUITABILITY_RULE_SET_VERSION,
       sourceRef: "Motor Vehicles Act 1988, section 113 — no vehicle may exceed its registered laden weight",
@@ -615,20 +630,24 @@ const checkPlate = (
   if (plate === undefined) return;
   if (plate.verdict === "MATCH") return;
 
+  const readWords = plate.readBy === "PERSON" ? "Read off the lorry by a person" : "Read from the yard's photograph";
+
   if (plate.verdict === "MISMATCH") {
     findings.push({
       code: "VEHICLE.PLATE.MISMATCH",
       severity: policy.plateMismatchSeverity,
-      title: "The photograph shows a different vehicle",
+      title: plate.readBy === "PERSON" ? "The plate on the lorry is a different number" : "The photograph shows a different vehicle",
       reason: plate.explanation,
       ruleId: "VS.PLATE.COMPARISON",
       ruleSetVersion: SUITABILITY_RULE_SET_VERSION,
       appliedFacts: [
-        fact("Number plate in the photograph", plate.readNumber ?? "not read"),
+        fact("Number plate read", plate.readNumber ?? "not read"),
         fact("Vehicle number on the movement", plate.declaredNumber),
+        fact("Who read it", readWords),
         ...(plate.confidence === undefined ? [] : [fact("How sure the reader was", `${Math.round(plate.confidence * 100)}%`)]),
       ],
-      evidenceSource: "GOVERNMENT_RECORD",
+      // A person reading a plate is evidence entered by hand; a photograph is read by a machine.
+      ...(plate.readBy === "PERSON" ? { evidenceSource: "ENTERED_BY_HAND" as const } : {}),
       overridable: true,
     });
     return;
@@ -637,13 +656,14 @@ const checkPlate = (
   findings.push({
     code: plate.verdict === "LOOKALIKE_DIFFERENCE" ? "VEHICLE.PLATE.LOOKALIKE" : "VEHICLE.PLATE.UNREADABLE",
     severity: plate.verdict === "LOOKALIKE_DIFFERENCE" ? "WARN" : "CANNOT_DECIDE",
-    title: plate.verdict === "LOOKALIKE_DIFFERENCE" ? "The plate is nearly, not exactly, the number entered" : "The number plate photograph could not be read",
+    title: plate.verdict === "LOOKALIKE_DIFFERENCE" ? "The plate is nearly, not exactly, the number entered" : "The number plate could not be read",
     reason: plate.explanation,
     ruleId: "VS.PLATE.COMPARISON",
     ruleSetVersion: SUITABILITY_RULE_SET_VERSION,
     appliedFacts: [
-      fact("Number plate in the photograph", plate.readNumber ?? "not read"),
+      fact("Number plate read", plate.readNumber ?? "not read"),
       fact("Vehicle number on the movement", plate.declaredNumber),
+      fact("Who read it", readWords),
       ...(plate.confidence === undefined ? [] : [fact("How sure the reader was", `${Math.round(plate.confidence * 100)}%`)]),
     ],
     overridable: true,

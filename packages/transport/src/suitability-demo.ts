@@ -80,7 +80,23 @@ show(await desk.service.assess(desk.actor, {
   platePhoto: platePhoto("plate:KA02GV3344@0.94", "2026-08-21T04:25:00.000Z"),
 }));
 
-heading("7. The vehicle record service is down");
+heading("7. No camera in the yard: somebody reads the plate instead");
+show(await desk.service.assess(desk.actor, {
+  movementId: "demo-plate-typed",
+  transport: transportDetails({ vehicleNumber: "KA01AB1234" }),
+  shipment: steel,
+  plateReadByHand: "KA02GV3344",
+}));
+
+heading("8. A vehicle nobody holds, with its facts typed in");
+show(await desk.service.assess(desk.actor, {
+  movementId: "demo-typed-facts",
+  transport: transportDetails({ vehicleNumber: "KA88XX0001", interState: false }),
+  shipment: { grossWeightKg: 2_000 },
+  declared: { vehicleClass: "LIGHT_GOODS_VEHICLE", ratedPayloadKg: 1_200 },
+}));
+
+heading("9. The vehicle record service is down");
 desk.authority.goDown();
 show(await desk.service.assess(desk.actor, {
   movementId: "demo-outage",

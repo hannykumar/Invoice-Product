@@ -77,6 +77,10 @@ const copy = {
     crossesBorder: "Does it cross a state border?", crossesBorderHelp: "A state permit does not travel outside the state that issued it.",
     coldChain: "Must the goods stay cold?", hazardous: "Are they hazardous goods?",
     platePhoto: "Photo of the number plate", platePhotoHelp: "The yard's camera. A photo that cannot be read is a question, not a mismatch.",
+    plateTyped: "Or type what the plate says", plateTypedHelp: "If there is no photograph, read the plate off the lorry and type it here. It is checked the same way, and recorded as a person's reading.",
+    typedClass: "If nothing is on record: what kind of vehicle is it?", typedClassHelp: "Only used when neither the registering authority nor your vehicle list holds this vehicle. It never overrules them.",
+    typedCapacity: "If nothing is on record: how much may it carry? (kg)", typedCapacityHelp: "What the registration certificate says it may carry, typed in for this movement.",
+    classNotSaid: "Not said",
     checkVehicle: "Check this vehicle",
     vehicleSafety: "This only checks. Nothing is sent anywhere and no e-way bill is raised.",
     evidenceUsed: "What we read, and from where", evidenceUsedHelp: "The registering authority's record and your own vehicle list, kept apart. An override never changes anything here.",
@@ -215,6 +219,10 @@ const copy = {
     crossesBorder: "Kya maal doosre rajya jaa raha hai?", crossesBorderHelp: "Rajya ka permit us rajya ke bahar nahin chalta.",
     coldChain: "Kya maal thanda rehna chahiye?", hazardous: "Kya yeh khatarnak maal hai?",
     platePhoto: "Number plate ki photo", platePhotoHelp: "Godown ka camera. Jo photo padhi na ja sake wo sawaal hai, galti nahin.",
+    plateTyped: "Ya plate par jo likha hai wo type karein", plateTypedHelp: "Agar photo nahin hai to gaadi ki plate padh kar yahan likh den. Jaanch waisi hi hoti hai, aur yeh insaan ki padhi hui baat ke roop mein darj hoti hai.",
+    typedClass: "Agar record mein kuch nahin: gaadi kis tarah ki hai?", typedClassHelp: "Yeh tabhi kaam aata hai jab na RTO ke paas na aapki list mein yeh gaadi hai. Yeh unse upar kabhi nahin jata.",
+    typedCapacity: "Agar record mein kuch nahin: kitna le ja sakti hai? (kg)", typedCapacityHelp: "RC par jo kshamta likhi hai, is movement ke liye type kar den.",
+    classNotSaid: "Bataya nahin",
     checkVehicle: "Yeh gaadi jaanchen",
     vehicleSafety: "Yeh sirf jaanchta hai. Kahin kuch nahin bheja jata aur koi e-way bill nahin banta.",
     evidenceUsed: "Humne kya padha, aur kahan se", evidenceUsedHelp: "RTO ka record aur aapki apni gaadiyon ki list, alag-alag. Override inme se kuch nahin badalta.",
@@ -1981,7 +1989,12 @@ function renderVehicleCheck(result) {
     finding.facts.forEach((fact) => findings.append(detailRow(fact.label, fact.value)));
   });
   if (result.plate) {
-    findings.append(detailRow("Number plate photograph", result.plate.explanation, result.plate.readNumber ? `Read as ${result.plate.readNumber}` : undefined));
+    // Whether a camera or a person read the plate changes what the line means, so it says which.
+    findings.append(detailRow(
+      result.plate.readBy === "PERSON" ? "Number plate, read off the lorry" : "Number plate photograph",
+      result.plate.explanation,
+      result.plate.readNumber ? `Read as ${result.plate.readNumber}` : undefined,
+    ));
   }
 
   const evidence = document.querySelector("#vehicle-evidence");
@@ -2050,7 +2063,7 @@ async function loadVehicleChoices() {
   const photos = document.querySelector("#vehicle-photos");
   if (!numbers || !photos) return;
   try {
-    const { vehicles, photos: pictures } = await api("/api/vehicles/choices");
+    const { vehicles, photos: pictures, classes } = await api("/api/vehicles/choices");
     numbers.replaceChildren();
     vehicles.forEach((vehicle) => {
       const option = document.createElement("option");
@@ -2065,6 +2078,21 @@ async function loadVehicleChoices() {
       option.textContent = picture.label;
       photos.append(option);
     });
+    // Typed facts start blank: not saying is a real answer, and the rules ask rather than guess.
+    const classSelect = document.querySelector("#vehicle-classes");
+    if (classSelect) {
+      classSelect.replaceChildren();
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = copy[state.locale].classNotSaid;
+      classSelect.append(blank);
+      (classes ?? []).forEach((kind) => {
+        const option = document.createElement("option");
+        option.value = kind.value;
+        option.textContent = kind.label;
+        classSelect.append(option);
+      });
+    }
   } catch { /* the pickers are a convenience; the rest of the page still works */ }
 }
 
