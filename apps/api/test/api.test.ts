@@ -43,6 +43,32 @@ test('the HTTP edge derives company and permissions from an authenticated sessio
   assert.equal(afterB.body.stock.quantity, 0, 'stock remains isolated through HTTP');
 });
 
+test('migration workspaces belong to the exact signed-in session that opened them', async () => {
+  assert.equal((await request('POST', '/api/migration/start')).status, 401);
+  const ownerA = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const ownerB = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const started = await request('POST', '/api/migration/start', {}, ownerA);
+  assert.equal(started.status, 200);
+  const sample = started.body.samples[0];
+  const input = { workspaceId: started.body.workspaceId, fileName: sample.fileName, content: sample.content };
+
+  const stolen = await request('POST', '/api/migration/analyse', input, ownerB);
+  assert.equal(stolen.status, 404);
+  assert.equal(stolen.body.code, 'TENANT_ISOLATION');
+  const secondSession = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const crossedSession = await request('POST', '/api/migration/analyse', input, secondSession);
+  assert.equal(crossedSession.status, 404);
+  assert.equal(crossedSession.body.code, 'TENANT_ISOLATION');
+
+  const missing = await request('POST', '/api/migration/analyse', { fileName: sample.fileName, content: sample.content }, ownerA);
+  assert.equal(missing.status, 404, 'only the start route may create a workspace');
+
+  const own = await request('POST', '/api/migration/analyse', input, ownerA);
+  assert.equal(own.status, 200);
+  assert.equal(own.body.workspaceId, started.body.workspaceId);
+  assert.equal(own.body.state, 'ANALYSED');
+});
+
 test('a real membership controls permissions at the domain boundary', async () => {
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
   assert.equal((await request('GET', '/api/dashboard', {}, viewer)).status, 200);
@@ -90,6 +116,52 @@ test('authenticated sales and customer payments still reach their service module
   assert.match(recorded.body.invoice.number, /^INV\/WEB\//);
   const payment = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: '50', date: '2026-08-29', reference: 'AUTH-PAY-80', invoice: recorded.body.invoice.id }, owner);
   assert.equal(payment.body.state, 'recorded');
+});
+
+test('authenticated customer and supplier returns preview and post through real domain services', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-08-29', terms: '7', reference: 'RETURN-SALE-45' };
+  const recordedSale = await request('POST', '/api/sales/record', sale, owner);
+  assert.equal(recordedSale.status, 200);
+  const saleReturn = {
+    kind: 'SALES_RETURN', documentId: recordedSale.body.invoice.id, lineId: 'line-1', unit: 'PCS', quantity: '2',
+    disposition: 'SCRAPPED', reason: 'Customer returned two unusable pieces.', date: '2026-08-30', reference: 'CN-API-45',
+  };
+  const salePreview = await request('POST', '/api/returns/preview', saleReturn, owner);
+  assert.equal(salePreview.body.state, 'preview');
+  assert.equal(salePreview.body.amount, 200);
+  const postedSaleReturn = await request('POST', '/api/returns/record', saleReturn, owner);
+  assert.equal(postedSaleReturn.body.note.kind, 'SALES_RETURN');
+  assert.match(postedSaleReturn.body.note.number, /^CN\//);
+  assert.equal((await request('POST', '/api/returns/record', saleReturn, owner)).body.deduplicated, true);
+
+  const purchaseInput = { party: 'Shree Ram Steels Private Limited', reference: 'RETURN-PURCHASE-45', date: '2026-08-29', item: 'TMT12', quantity: '10', rate: '100', gst: '1800', supplierState: 'other' };
+  const purchase = await request('POST', '/api/purchases/record', purchaseInput, owner);
+  assert.equal(purchase.status, 200);
+  const choices = await request('GET', '/api/returns/documents', {}, owner);
+  const bill = choices.body.documents.find((document: any) => document.kind === 'PURCHASE_RETURN' && document.number === 'RETURN-PURCHASE-45');
+  assert.ok(bill);
+  const purchaseReturn = {
+    kind: 'PURCHASE_RETURN', documentId: bill.id, lineId: '1', unit: 'KGS', quantity: '2',
+    disposition: 'DAMAGED', reason: 'Bent bars accepted back by the supplier.', date: '2026-08-30', reference: 'DN-API-45',
+  };
+  const purchasePreview = await request('POST', '/api/returns/preview', purchaseReturn, owner);
+  assert.equal(purchasePreview.body.amount, 236);
+  const postedPurchaseReturn = await request('POST', '/api/returns/record', purchaseReturn, owner);
+  assert.equal(postedPurchaseReturn.body.note.kind, 'PURCHASE_RETURN');
+  assert.match(postedPurchaseReturn.body.note.number, /^DN\//);
+
+  const excessive = await request('POST', '/api/returns/preview', { ...purchaseReturn, reference: 'DN-TOO-MUCH-45', quantity: '9' }, owner);
+  assert.equal(excessive.status, 409);
+  assert.equal(excessive.body.code, 'RETURN_QUANTITY_EXCEEDS_ELIGIBLE');
+});
+
+test('return APIs require both a session and the dedicated permission', async () => {
+  assert.equal((await request('GET', '/api/returns/documents')).status, 401);
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const denied = await request('GET', '/api/returns/documents', {}, viewer);
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.code, 'PERMISSION_DENIED');
 });
 
 test('reports require a session and are computed from that company alone', async () => {

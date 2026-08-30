@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/returns",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #45 — auditable sales and purchase returns, credit/debit notes and stock dispositions.",
+  "exports": { ".": "./src/index.ts" }
+}

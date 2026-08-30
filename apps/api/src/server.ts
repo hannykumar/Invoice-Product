@@ -45,13 +45,13 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
     // Issue #37 — bringing a business in from Tally, BUSY or Vyapar. Like setting up a business,
     // this runs against its own fresh company, so nothing it reads in touches the demo books.
-    if (method === 'POST' && pathname === '/api/migration/start') return json(200, await startMigration());
-    if (method === 'POST' && pathname === '/api/migration/analyse') return json(200, await analyseFile(body));
-    if (method === 'POST' && pathname === '/api/migration/mapping') return json(200, await remapColumns(body));
-    if (method === 'POST' && pathname === '/api/migration/approve') return json(200, await approveAndPreview(body));
-    if (method === 'POST' && pathname === '/api/migration/preview') return json(200, await previewImport(body));
-    if (method === 'POST' && pathname === '/api/migration/commit') return json(200, await commitImport(body));
-    if (method === 'POST' && pathname === '/api/migration/rollback') return json(200, await rollbackImport(body));
+    if (method === 'POST' && pathname === '/api/migration/start') return json(200, await startMigration(context));
+    if (method === 'POST' && pathname === '/api/migration/analyse') return json(200, await analyseFile(context, body));
+    if (method === 'POST' && pathname === '/api/migration/mapping') return json(200, await remapColumns(context, body));
+    if (method === 'POST' && pathname === '/api/migration/approve') return json(200, await approveAndPreview(context, body));
+    if (method === 'POST' && pathname === '/api/migration/preview') return json(200, await previewImport(context, body));
+    if (method === 'POST' && pathname === '/api/migration/commit') return json(200, await commitImport(context, body));
+    if (method === 'POST' && pathname === '/api/migration/rollback') return json(200, await rollbackImport(context, body));
     // Issue #26 — does this bill need an IRN, and its life with the government.
     if (method === 'GET' && pathname === '/api/einvoices/invoices') return json(200, await app.issuedInvoices(actor));
     if (method === 'POST' && pathname === '/api/einvoices/preview') return json(200, await app.previewEInvoice(actor, body));
@@ -76,6 +76,9 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
+    if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
+    if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
+    if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));
     return json(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
   } catch (error) {
     return json(statusOf(error), {

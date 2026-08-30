@@ -49,7 +49,7 @@ export interface CompanySeed {
 
 const ITEMS: readonly StockItem[] = [
   { itemId: 'TMT12', name: 'TMT Steel Bar 12mm', baseUnit: 'KGS', tracksBatches: false, tracksSerials: false },
-  { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', baseUnit: 'PCS', tracksBatches: true, tracksSerials: false },
+  { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', baseUnit: 'PCS', tracksBatches: false, tracksSerials: false },
   { itemId: 'FRT', name: 'Inward freight', baseUnit: 'NOS', tracksBatches: false, tracksSerials: false },
 ];
 
@@ -107,6 +107,7 @@ export const DEMO_REGISTRATIONS = [
 const SETUP_PERMISSIONS = [
   'ledger.setup', 'ledger.post.purchase', 'ledger.post.sale', 'ledger.post.receipt', 'ledger.post.payment',
   'ledger.post.journal', 'ledger.reverse', 'inventory.move', 'inventory.adjust', 'inventory.override_negative',
+  'ledger.post.credit_note', 'ledger.post.debit_note', 'returns.create',
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',

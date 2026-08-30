@@ -14,6 +14,7 @@ import type { VoucherId } from "@invoice/kernel";
 import type { Clock } from "@invoice/kernel";
 import { formatPaise } from "./money.ts";
 import { buildPurchasePosting, computePurchaseTotals } from "./posting.ts";
+import { splitLineTax } from "./posting.ts";
 import type { PurchaseAccountCodes } from "./posting.ts";
 import type { PurchaseBillRepository, PurchaseInventoryPort } from "./posting-ports.ts";
 import type {
@@ -141,6 +142,27 @@ export class PurchasePostingService {
     const receivedByReceiptIds = [...new Set(
       approved.lines.map((line) => line.receivedAgainstReceiptId).filter((id): id is string => id !== undefined),
     )];
+    const lineSnapshots = approved.lines.map((line, index) => {
+      const split = splitLineTax(line.taxableValuePaise, line, totals.tax.intraState);
+      const ineligible = line.itcEligibility === "INELIGIBLE" ? split.total : 0n;
+      const eligible = ineligible === 0n;
+      const ordinarySupplierValue = line.taxableValuePaise + (approved.taxLiability === "SUPPLIER" ? split.total : 0n);
+      return {
+        lineNumber: line.lineNumber, itemId: line.itemId, description: line.description,
+        supplyKind: line.supplyKind, quantity: line.quantity,
+        ...(line.warehouseId === undefined ? {} : { warehouseId: line.warehouseId }),
+        ...(line.batchId === undefined ? {} : { batchId: line.batchId }),
+        ...(line.serialNumbers === undefined ? {} : { serialNumbers: line.serialNumbers }),
+        taxableValuePaise: line.taxableValuePaise,
+        cgstPaise: eligible ? split.cgst : 0n, sgstPaise: eligible ? split.sgst : 0n,
+        igstPaise: eligible ? split.igst : 0n, cessPaise: eligible ? split.cess : 0n,
+        ineligibleItcPaise: ineligible,
+        // Allocate the bill-level rounding to the last line. That makes a full set of line
+        // returns recover the exact printed supplier total while every partial line remains
+        // traceable to its original value.
+        supplierValuePaise: ordinarySupplierValue + (index === approved.lines.length - 1 ? totals.roundOffPaise : 0n),
+      };
+    });
 
     const outcome = await this.#store.transaction(actor.companyId, async (uow) => {
       const lines = await buildPurchasePosting(uow.accounts, actor.companyId, approved, totals, this.#codes);
@@ -199,6 +221,7 @@ export class PurchasePostingService {
         tax: totals.tax,
         state: "POSTED",
         voucherId: posted.voucher.id,
+        lines: lineSnapshots,
         receipts,
         ...(receivedByReceiptIds.length === 0 ? {} : { receivedByReceiptIds }),
         postedBy: actor.userId,

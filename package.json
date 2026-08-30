@@ -18,7 +18,7 @@
     "web": "node --experimental-strip-types apps/web/server.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
+    "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tests/e2e/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
     "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
     "security:drill": "node --test --experimental-strip-types ops/security/test/security.test.ts",
     "gates": "node --experimental-strip-types packages/release-gates/src/cli.ts",

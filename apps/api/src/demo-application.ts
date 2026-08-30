@@ -43,6 +43,9 @@ import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
+import {
+  InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
+} from '../../../packages/returns/src/index.ts';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -134,6 +137,8 @@ export class DemoApplication {
   private readonly documents: DocumentLedgerPort;
   private readonly reportService: ReportService;
   private readonly terms: TradeTermsService;
+  private readonly returns: ReturnService;
+  private readonly returnNotes: InMemoryReturnNoteRepository;
 
   private constructor(
     config: CompanySeed,
@@ -145,6 +150,8 @@ export class DemoApplication {
     documents: DocumentLedgerPort,
     reportService: ReportService,
     terms: TradeTermsService,
+    returns: ReturnService,
+    returnNotes: InMemoryReturnNoteRepository,
   ) {
     this.config = config;
     this.shop = shop;
@@ -155,13 +162,16 @@ export class DemoApplication {
     this.documents = documents;
     this.reportService = reportService;
     this.terms = terms;
+    this.returns = returns;
+    this.returnNotes = returnNotes;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
     const shop = await createCompanyShop(config);
     const salesRepository = new InMemorySalesRepository();
     const paymentRepository = new InMemoryPaymentRepository();
-    shop.store.join(salesRepository).join(paymentRepository);
+    const returnNotes = new InMemoryReturnNoteRepository();
+    shop.store.join(salesRepository).join(paymentRepository).join(returnNotes);
     const masters = new InMemoryMasterData();
     masters.putCompany({ companyId: config.companyId, gstin: config.gstin, stateCode: config.gstin.slice(0, 2), registration: 'REGULAR' });
     masters.putParty(config.companyId, { partyId: config.customerId, gstin: config.customerGstin, stateCode: config.customerGstin.slice(0, 2), registration: 'REGULAR' });
@@ -172,9 +182,15 @@ export class DemoApplication {
     const purchases = purchaseDocumentLedger(shop.bills, async () => config.supplierName);
     const documents: DocumentLedgerPort = {
       async openDocuments(companyId, partyId) {
-        const purchaseDocuments = await purchases.openDocuments(companyId, partyId);
+        const notes = await returnNotes.list(companyId);
+        const returnedValue = (documentId: string, kind: 'SALES_RETURN' | 'PURCHASE_RETURN') =>
+          notes.filter((note) => note.kind === kind && note.originalDocument.id === documentId)
+            .reduce((total, note) => total + note.totals.total.minor, 0n);
+        const purchaseDocuments = (await purchases.openDocuments(companyId, partyId)).map((document) => ({
+          ...document, value: money(document.value.minor - returnedValue(document.documentId, 'PURCHASE_RETURN')),
+        }));
         const invoices = await salesRepository.list(companyId, { partyId, state: 'FINAL' });
-        const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: invoice.pricing?.totals.invoiceValue ?? money(0n), side: 'RECEIVABLE' }));
+        const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: money((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - returnedValue(invoice.id, 'SALES_RETURN')), side: 'RECEIVABLE' }));
         return [...purchaseDocuments, ...saleDocuments];
       },
       async parties(companyId) { return [...new Set([...(await purchases.parties(companyId)), config.customerId])] as readonly PartyId[]; },
@@ -263,7 +279,16 @@ export class DemoApplication {
       clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms);
+    const returns = new ReturnService({
+      store: shop.store, ledger: shop.ledger, repository: returnNotes,
+      sales: salesReturnSource(salesRepository, async (companyId, documentId) =>
+        (await shop.eInvoices.findByDocumentId(companyId, documentId))?.status === 'REGISTERED'),
+      purchases: purchaseReturnSource(shop.bills),
+      inventory: returnInventoryAdapter(shop.inventoryService), permissions: permissionPortFromActor,
+      audit: shop.audit, clock: { now: () => new Date() },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes);
     await app.seed();
     return app;
   }
@@ -278,6 +303,7 @@ export class DemoApplication {
     const sales = await this.salesRepository.list(companyId, { state: 'FINAL' });
     const purchases = await this.shop.bills.list(companyId);
     const payments = await this.paymentRepository.list(companyId);
+    const returnNotes = await this.returnNotes.list(companyId);
     const supplier = await this.payments.position(actor, this.config.supplierId, isoDate('2026-08-29'));
     const customer = await this.payments.position(actor, this.config.customerId, isoDate('2026-08-29'));
     const stock = await this.shop.inventoryService.balance(actor, { itemId: 'TMT12', warehouseId: 'wh-main' });
@@ -296,6 +322,7 @@ export class DemoApplication {
         ...sales.map((invoice) => ({ id: invoice.id, kind: 'sale', title: `${invoice.number} · ${this.config.customerName}`, amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n), status: 'Recorded' })),
         ...purchases.map((bill) => ({ id: bill.id, kind: 'purchase', title: `${bill.invoiceNumber} · ${bill.supplierName}`, amount: jsonAmount(bill.totalPaise), status: bill.state === 'POSTED' ? 'Recorded' : bill.state })),
         ...payments.map((payment) => ({ id: payment.id, kind: 'payment', title: `${payment.mode.replace('_', ' ')} · ${this.config.customerName}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
+        ...returnNotes.map((note) => ({ id: note.id, kind: 'return', title: `${note.number} · ${note.originalDocument.number}`, amount: jsonAmount(note.totals.total.minor), status: 'Recorded' })),
       ].reverse(),
     };
   }
@@ -481,12 +508,73 @@ export class DemoApplication {
     return { state: 'recorded', title: 'Payment recorded', message: `₹${jsonAmount(payment.amount.minor).toFixed(2)} was recorded once.`, paymentId: payment.id, customerOutstanding: jsonAmount(position.totalOutstanding.minor) };
   }
 
+  async returnDocuments(actor: ActorContext) {
+    const companyId = this.companyOf(actor);
+    permissionPortFromActor.require(actor, 'returns.create', 'view bills eligible for return');
+    const returned = async (id: string, kind: 'SALES_RETURN' | 'PURCHASE_RETURN', lineId: string) =>
+      (await this.returnNotes.listForOriginal(companyId, id)).filter((note) => note.kind === kind)
+        .flatMap((note) => note.lines).filter((line) => line.originalLineId === lineId)
+        .reduce((total, line) => total + line.quantity.scaled, 0n);
+    const sales = await this.salesRepository.list(companyId, { state: 'FINAL' });
+    const purchases = (await this.shop.bills.list(companyId)).filter((bill) => bill.state === 'POSTED');
+    return {
+      documents: [
+        ...(await Promise.all(sales.map(async (invoice) => ({
+          kind: 'SALES_RETURN', id: invoice.id, number: invoice.number, party: this.config.customerName,
+          date: invoice.documentDate,
+          lines: await Promise.all(invoice.lines.map(async (line) => ({
+            id: line.lineId, item: line.note ?? line.itemId,
+            quantity: Number(line.quantity.scaled) / 1_000_000, unit: line.quantity.unit,
+            returned: Number(await returned(invoice.id, 'SALES_RETURN', line.lineId)) / 1_000_000,
+          }))),
+        })))),
+        ...(await Promise.all(purchases.map(async (bill) => ({
+          kind: 'PURCHASE_RETURN', id: bill.id, number: bill.invoiceNumber, party: bill.supplierName,
+          date: bill.invoiceDate,
+          lines: await Promise.all(bill.lines.map(async (line) => ({
+            id: String(line.lineNumber), item: line.description,
+            quantity: Number(line.quantity.scaled) / 1_000_000, unit: line.quantity.unit,
+            returned: Number(await returned(bill.id, 'PURCHASE_RETURN', String(line.lineNumber))) / 1_000_000,
+          }))),
+        })))),
+      ],
+    };
+  }
+
+  async previewReturn(actor: ActorContext, input: Record<string, unknown>) {
+    const command = this.returnInput(input);
+    const preview = command.kind === 'SALES_RETURN'
+      ? await this.returns.previewSales(actor, command.command)
+      : await this.returns.previewPurchase(actor, command.command);
+    return {
+      state: 'preview', title: command.kind === 'SALES_RETURN' ? 'Customer return checked' : 'Supplier return checked',
+      message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.command.idempotencyKey,
+      effects: [
+        command.kind === 'SALES_RETURN' ? 'A credit note will reduce what the customer owes.' : 'A debit note will reduce what you owe the supplier.',
+        command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'The registered document needs a compliance adjustment.' : 'No government-document adjustment is needed.',
+      ],
+    };
+  }
+
+  async recordReturn(actor: ActorContext, input: Record<string, unknown>) {
+    const command = this.returnInput(input);
+    const result = command.kind === 'SALES_RETURN'
+      ? await this.returns.postSales(actor, command.command)
+      : await this.returns.postPurchase(actor, command.command);
+    return {
+      state: 'recorded', deduplicated: result.deduplicated,
+      title: result.deduplicated ? 'Return already recorded once' : 'Return recorded',
+      message: result.note.summary, note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor) },
+    };
+  }
+
   // ------------------------------------------------- issue #18: order, delivery, three-way match
 
   /** The catalogue the purchase screens share, so an item means the same thing on all of them. */
   private static readonly CATALOGUE: Record<string, { description: string; hsnSac: string; unit: string; kind: 'GOODS' | 'SERVICES'; batchId?: string }> = {
     TMT12: { description: 'TMT Steel Bar 12mm', hsnSac: '72142090', unit: 'KGS', kind: 'GOODS' },
-    SOAP: { description: 'Herbal Bath Soap 100g', hsnSac: '34011190', unit: 'BOX', kind: 'GOODS', batchId: 'batch-web' },
+    SOAP: { description: 'Herbal Bath Soap 100g', hsnSac: '34011190', unit: 'BOX', kind: 'GOODS' },
     FRT: { description: 'Inward freight', hsnSac: '996511', unit: 'NOS', kind: 'SERVICES' },
   };
 
@@ -986,6 +1074,11 @@ export class DemoApplication {
       message: assessment.summary,
       supplier: assessment.supplierName,
       gstin: assessment.gstin ?? null,
+      // Issue #99. Two lights: what the government says, and what our own books say.
+      lights: assessment.lights.map((light) => ({
+        scope: light.scope, colour: light.colour, title: light.title,
+        headline: light.headline, detail: light.detail, warningCount: light.warningCount,
+      })),
       warnings: assessment.warnings.map((warning) => ({
         code: warning.code,
         level: warning.level,
@@ -1103,7 +1196,23 @@ export class DemoApplication {
   private saleInput(input: Record<string, unknown>) {
     const date = isoDate(String(input.date));
     const terms = Number(input.terms ?? 0);
-    return { partyId: this.config.customerId, customerType: 'B2B' as const, supplyKind: 'GOODS' as const, documentDate: date, dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)), deliveryStateCode: this.config.gstin.slice(0, 2), lines: [{ lineId: 'line-1', itemId: 'SOAP', quantity: quantityFromString(String(input.quantity), 'PCS'), unitPrice: money(paise(input.rate)), priceBasis: 'EXCLUSIVE' as const, note: String(input.item || 'Herbal Bath Soap 100g') }], narration: String(input.notes || '') || null };
+    return { partyId: this.config.customerId, customerType: 'B2B' as const, supplyKind: 'GOODS' as const, documentDate: date, dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)), deliveryStateCode: this.config.gstin.slice(0, 2), lines: [{ lineId: 'line-1', itemId: 'SOAP', warehouseId: 'wh-main', quantity: quantityFromString(String(input.quantity), 'PCS'), unitPrice: money(paise(input.rate)), priceBasis: 'EXCLUSIVE' as const, note: String(input.item || 'Herbal Bath Soap 100g') }], narration: String(input.notes || '') || null };
+  }
+
+  private returnInput(input: Record<string, unknown>) {
+    const kind = String(input.kind) === 'PURCHASE_RETURN' ? 'PURCHASE_RETURN' as const : 'SALES_RETURN' as const;
+    const documentId = String(input.documentId ?? '').trim();
+    const lineId = String(input.lineId ?? '').trim();
+    if (documentId === '' || lineId === '') throw invalid('RETURN_DOCUMENT_REQUIRED', 'Choose the original bill and item being returned.');
+    const quantity = quantityFromString(String(input.quantity ?? ''), String(input.unit ?? 'PCS'));
+    const shared = {
+      idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,
+      documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
+      lines: [{ originalLineId: lineId, quantity, disposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT', warehouseId: 'wh-main' }],
+    };
+    return kind === 'SALES_RETURN'
+      ? { kind, command: { ...shared, originalInvoiceId: documentId } }
+      : { kind, command: { ...shared, originalBillId: documentId } };
   }
 
   private companyOf(actor: ActorContext): CompanyId {

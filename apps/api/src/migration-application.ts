@@ -25,7 +25,7 @@ import { InventoryService } from '../../../packages/inventory/src/service.ts';
 import { MasterDataService } from '../../../packages/masters/src/masters.ts';
 import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
 import { AuditLog, PlatformCommandService } from '../../../packages/platform/src/platform.ts';
-import type { RequestContext } from '../../../packages/platform/src/types.ts';
+import { PlatformError, type RequestContext } from '../../../packages/platform/src/types.ts';
 import { InventoryMigrationAdapter, MastersStockData } from '../../../packages/migration/src/adapters/inventory.ts';
 import { MastersMigrationAdapter } from '../../../packages/migration/src/adapters/masters.ts';
 import { InMemoryMigrationStore } from '../../../packages/migration/src/repository.ts';
@@ -42,6 +42,10 @@ const BOOKS_START = isoDate('2026-04-01');
 
 interface Workspace {
   readonly id: string;
+  /** The signed-in session that owns this otherwise isolated, freshly opened company. */
+  readonly ownerCompanyId: string;
+  readonly ownerActorId: string;
+  readonly ownerSessionId: string;
   readonly companyId: CompanyId;
   readonly actor: ActorContext;
   readonly context: RequestContext;
@@ -58,7 +62,7 @@ const workspaces = new Map<string, Workspace>();
 const MAX_WORKSPACES = 8;
 let counter = 0;
 
-const openWorkspace = async (): Promise<Workspace> => {
+const openWorkspace = async (owner: RequestContext): Promise<Workspace> => {
   counter += 1;
   const id = `migration-${counter}-${Date.now()}`;
   const companyId = asId<'Company'>(id);
@@ -114,7 +118,11 @@ const openWorkspace = async (): Promise<Workspace> => {
   });
 
   const workspace: Workspace = {
-    id, companyId, actor, context, service, masters, inventory, store,
+    id,
+    ownerCompanyId: owner.companyId,
+    ownerActorId: owner.actorId,
+    ownerSessionId: owner.sessionId,
+    companyId, actor, context, service, masters, inventory, store,
     warehouseId: warehouse.record.id,
     usedAt: Date.now(),
   };
@@ -127,10 +135,13 @@ const openWorkspace = async (): Promise<Workspace> => {
   return workspace;
 };
 
-const workspaceOf = async (body: Record<string, unknown>): Promise<Workspace> => {
+const workspaceOf = async (owner: RequestContext, body: Record<string, unknown>): Promise<Workspace> => {
   const id = String(body.workspaceId ?? '');
   const existing = workspaces.get(id);
-  if (existing === undefined) return openWorkspace();
+  if (existing === undefined) throw new PlatformError('NOT_FOUND', 'That migration workspace expired or was not found. Start again with a fresh workspace.');
+  if (existing.ownerCompanyId !== owner.companyId || existing.ownerActorId !== owner.actorId || existing.ownerSessionId !== owner.sessionId) {
+    throw new PlatformError('TENANT_ISOLATION', 'That migration workspace belongs to another signed-in session.');
+  }
   existing.usedAt = Date.now();
   return existing;
 };
@@ -208,8 +219,8 @@ const columnsView = (entity: EntityKind, columns: readonly ColumnMapping[]) => {
 };
 
 /** Opens a fresh set of books and hands back the sample files. */
-export const startMigration = async (): Promise<unknown> => {
-  const workspace = await openWorkspace();
+export const startMigration = async (owner: RequestContext): Promise<unknown> => {
+  const workspace = await openWorkspace(owner);
   return {
     workspaceId: workspace.id,
     booksFrom: BOOKS_START,
@@ -218,8 +229,8 @@ export const startMigration = async (): Promise<unknown> => {
   };
 };
 
-export const analyseFile = async (body: Record<string, unknown>): Promise<unknown> => {
-  const workspace = await workspaceOf(body);
+export const analyseFile = async (owner: RequestContext, body: Record<string, unknown>): Promise<unknown> => {
+  const workspace = await workspaceOf(owner, body);
   const entity = ENTITY_KINDS.includes(String(body.entity) as EntityKind) ? (String(body.entity) as EntityKind) : undefined;
   const analysis = await workspace.service.analyse(workspace.actor, {
     fileName: String(body.fileName ?? 'pasted.csv'),
@@ -255,8 +266,8 @@ export const analyseFile = async (body: Record<string, unknown>): Promise<unknow
  * The approval is pinned to the fingerprint of exactly the columns being approved, so a screen that
  * changes a dropdown has to come back through here before it can approve anything.
  */
-export const remapColumns = async (body: Record<string, unknown>): Promise<unknown> => {
-  const workspace = await workspaceOf(body);
+export const remapColumns = async (owner: RequestContext, body: Record<string, unknown>): Promise<unknown> => {
+  const workspace = await workspaceOf(owner, body);
   const batch = await workspace.service.batches(workspace.actor);
   const found = batch.find((candidate) => candidate.id === String(body.batchId ?? ''));
   if (found === undefined) throw new Error('That import is no longer open. Upload the file again.');
@@ -319,8 +330,8 @@ const previewPayload = async (workspace: Workspace, batchId: string) => {
 };
 
 /** Records that the person approved the columns, then shows exactly what would be brought in. */
-export const approveAndPreview = async (body: Record<string, unknown>): Promise<unknown> => {
-  const workspace = await workspaceOf(body);
+export const approveAndPreview = async (owner: RequestContext, body: Record<string, unknown>): Promise<unknown> => {
+  const workspace = await workspaceOf(owner, body);
   const batchId = String(body.batchId ?? '');
   const open = await workspace.service.batches(workspace.actor);
   const found = open.find((candidate) => candidate.id === batchId);
@@ -341,8 +352,8 @@ export const approveAndPreview = async (body: Record<string, unknown>): Promise<
   return previewPayload(workspace, batchId);
 };
 
-export const previewImport = async (body: Record<string, unknown>): Promise<unknown> => {
-  const workspace = await workspaceOf(body);
+export const previewImport = async (owner: RequestContext, body: Record<string, unknown>): Promise<unknown> => {
+  const workspace = await workspaceOf(owner, body);
   return previewPayload(workspace, String(body.batchId ?? ''));
 };
 
@@ -370,8 +381,8 @@ const booksNow = async (workspace: Workspace) => {
   };
 };
 
-export const commitImport = async (body: Record<string, unknown>): Promise<unknown> => {
-  const workspace = await workspaceOf(body);
+export const commitImport = async (owner: RequestContext, body: Record<string, unknown>): Promise<unknown> => {
+  const workspace = await workspaceOf(owner, body);
   const batchId = String(body.batchId ?? '');
   const reason = String(body.acceptDifferenceReason ?? '').trim();
   const result = await workspace.service.commit(workspace.actor, batchId, {
@@ -416,8 +427,8 @@ export const commitImport = async (body: Record<string, unknown>): Promise<unkno
   };
 };
 
-export const rollbackImport = async (body: Record<string, unknown>): Promise<unknown> => {
-  const workspace = await workspaceOf(body);
+export const rollbackImport = async (owner: RequestContext, body: Record<string, unknown>): Promise<unknown> => {
+  const workspace = await workspaceOf(owner, body);
   const batch = await workspace.service.rollback(workspace.actor, String(body.batchId ?? ''), {
     reason: String(body.reason ?? '').trim(),
   });
