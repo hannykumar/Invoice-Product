@@ -85,8 +85,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /id="view-vehicle"[^>]+aria-labelledby=/);
   assert.match(script, /\/api\/vehicles\/check/);
   assert.match(script, /\/api\/vehicles\/check\/override/);
-  // One focusable heading per screen. Issue #28's vehicle check makes fifteen.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 15);
+  assert.match(html, /id="view-migration"[^>]+aria-labelledby=/);
+  // One focusable heading per screen. Issue #37's "Bring your data" makes sixteen.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 16);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

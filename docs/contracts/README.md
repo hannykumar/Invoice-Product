@@ -14,6 +14,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`voice-assistant`](./voice-assistant.v1.md) | 1.0.0 | GPT 1 (#10) | GPT 2 (#38, #47), GPT 1 (#9, #34) | Published |
 | [`inventory`](./inventory.v1.md) | 1.0.0 | GPT 1 (#12) | GPT 1 (#9, #35, #36, #37), GPT 3 (#17, #18, #45) | Published |
 | [`onboarding`](./onboarding.v1.md) | 1.0.0 | GPT 1 (#36) | GPT 2 (#38, #3), GPT 1 (#37) | Published |
+| [`migration`](./migration.v1.md) | 1.0.0 | GPT 1 (#37) | GPT 2 (#38) | Published |
 | [`invoice-templates`](./invoice-templates.v1.md) | 1.0.0 | GPT 1 (#13) | GPT 1 (#9, #36), GPT 2 (#14, #38), GPT 3 (#26, #45) | Published |
 | [`sales`](./sales.v1.md) | 1.0.0 | GPT 1 (#9) | GPT 1 (#10, #11, #12, #13, #20, #35), GPT 2 (#14), GPT 3 (#26, #27, #45) | Published |
 | [`golden-dataset`](./golden-dataset.v1.md) | 1.0.0 | GPT 1 (#43) | Every lane (#44, #48) | Published |

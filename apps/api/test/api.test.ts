@@ -43,6 +43,32 @@ test('the HTTP edge derives company and permissions from an authenticated sessio
   assert.equal(afterB.body.stock.quantity, 0, 'stock remains isolated through HTTP');
 });
 
+test('migration workspaces belong to the exact signed-in session that opened them', async () => {
+  assert.equal((await request('POST', '/api/migration/start')).status, 401);
+  const ownerA = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const ownerB = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const started = await request('POST', '/api/migration/start', {}, ownerA);
+  assert.equal(started.status, 200);
+  const sample = started.body.samples[0];
+  const input = { workspaceId: started.body.workspaceId, fileName: sample.fileName, content: sample.content };
+
+  const stolen = await request('POST', '/api/migration/analyse', input, ownerB);
+  assert.equal(stolen.status, 404);
+  assert.equal(stolen.body.code, 'TENANT_ISOLATION');
+  const secondSession = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const crossedSession = await request('POST', '/api/migration/analyse', input, secondSession);
+  assert.equal(crossedSession.status, 404);
+  assert.equal(crossedSession.body.code, 'TENANT_ISOLATION');
+
+  const missing = await request('POST', '/api/migration/analyse', { fileName: sample.fileName, content: sample.content }, ownerA);
+  assert.equal(missing.status, 404, 'only the start route may create a workspace');
+
+  const own = await request('POST', '/api/migration/analyse', input, ownerA);
+  assert.equal(own.status, 200);
+  assert.equal(own.body.workspaceId, started.body.workspaceId);
+  assert.equal(own.body.state, 'ANALYSED');
+});
+
 test('a real membership controls permissions at the domain boundary', async () => {
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
   assert.equal((await request('GET', '/api/dashboard', {}, viewer)).status, 200);
