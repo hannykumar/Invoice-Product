@@ -1,6 +1,6 @@
 const copy = {
   "en-IN": {
-    skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Payment", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
+    skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Payment", navReturns: "Returns", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft protection is on", draftProtection: "Your unfinished work stays on this device.", companyLocation: "Delhi · Main shop", language: "Language",
     demoTitle: "Connected demo company.", demoBody: "Preview checks are read-only. Recording uses the real sales, purchasing, inventory, ledger and receivables modules.", today: "Today", welcome: "Good to see you, Hanny", welcomeBody: "Live company state from Sampoorna Traders.", newSale: "New sale",
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
@@ -9,6 +9,7 @@ const copy = {
     stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", boxes: "boxes", rate: "Rate per box", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", supplierState: "Where the supplier is", stateOther: "Another state", stateSame: "Same state as your godown", supplierStateHelp: "This decides whether the bill carries IGST, or CGST and SGST.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "If you choose later, the payment remains clearly marked as not matched to a bill.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
+    returnsTitle: "Record a return", returnsHelp: "Choose the original bill and what came back. The original stays unchanged; a linked credit or debit note records the correction.", originalBill: "Original customer or supplier bill", returnItem: "Item being returned", returnQuantity: "Quantity returned", disposition: "What happens to the goods", dispAccepted: "Accepted back into usable stock", dispDamaged: "Move to damaged stock", dispScrapped: "Scrap after receiving", dispReplacement: "Replacement is being arranged", returnDate: "Return date", returnReference: "Return reference", returnReason: "Why is it being returned?", returnReasonHelp: "This explanation stays in the audit trail.", returnRemaining: "Choose a bill to see the quantity still eligible.", returnEligible: "{quantity} {unit} still eligible on the original bill.", returnLineChoice: "{item} · {quantity} {unit} left", customerSale: "Customer sale", supplierPurchase: "Supplier purchase", returnCheckQuantity: "Returned quantity cannot exceed the original eligible quantity", returnCheckBooks: "Stock, GST and the customer or supplier balance change together", returnCheckCompliance: "Registered documents are marked for a compliance adjustment", returnSafety: "Checking changes nothing. Recording creates a linked note; it never edits or hides the original bill.", checkReturn: "Review return", noReturnDocuments: "No issued bills are available for return yet.", returnActivity: "Linked return note posted without changing the original", customerReturnChecked: "Customer return checked", supplierReturnChecked: "Supplier return checked", returnCheckedBody: "The checked return comes to {amount}.", returnCustomerEffect: "A credit note will reduce what the customer owes.", returnSupplierEffect: "A debit note will reduce what you owe the supplier.", returnSalesStockEffect: "Accepted goods will go back into stock.", returnPurchaseStockEffect: "Returned goods will leave stock.", returnComplianceEffect: "The registered document needs a compliance adjustment.", returnNoComplianceEffect: "No government-document adjustment is needed.", returnRecorded: "Return recorded", returnAlreadyRecorded: "Return already recorded once", returnRecordedBody: "Linked note {number} was recorded without changing the original bill.",
     workspace: "Workspace", activityTitle: "All activity", activityHelp: "Every completed action will appear here with its status and time.", demoHistory: "This preview has sample activity", demoHistoryBody: "Connect the application services to show the company's full history. You can still test the draft flows now.", createFirstSale: "Create a sale",
     setupTitle: "Set up a business",
     setupHelp: "Answer a few questions and we open a real set of books for it. Your GST number and opening figures are checked, not assumed.",
@@ -93,7 +94,7 @@ const copy = {
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
-    skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Payment", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
+    skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Payment", navReturns: "Wapsi", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft surakshit hai", draftProtection: "Adhura kaam isi device par rahega.", companyLocation: "Delhi · Mukhya dukaan", language: "Bhasha",
     demoTitle: "Connected demo company.", demoBody: "Preview sirf jaanch karta hai. Record karne par asli sales, purchasing, inventory, ledger aur receivables modules chalte hain.", today: "Aaj", welcome: "Namaste Hanny", welcomeBody: "Sampoorna Traders ki live company state.", newSale: "Nayi bikri",
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
@@ -102,6 +103,7 @@ const copy = {
     stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", boxes: "boxes", rate: "Har box ka daam", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", supplierState: "Supplier kahan hai", stateOther: "Doosre rajya mein", stateSame: "Aapke godown wale rajya mein", supplierStateHelp: "Isse tay hota hai ki bill par IGST lagega ya CGST aur SGST.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Baad mein chunne par payment saaf taur par bina bill ke dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
+    returnsTitle: "Wapsi darj karen", returnsHelp: "Asli bill aur wapas aaya saman chunen. Asli bill nahi badlega; juda hua credit ya debit note sudhar darj karega.", originalBill: "Asli customer ya supplier bill", returnItem: "Wapas ho raha saman", returnQuantity: "Wapas matra", disposition: "Saman ka kya hoga", dispAccepted: "Sahi stock mein wapas rakhen", dispDamaged: "Kharab stock mein rakhen", dispScrapped: "Wapas lekar scrap karen", dispReplacement: "Badla hua saman aayega", returnDate: "Wapsi ki tareekh", returnReference: "Wapsi reference", returnReason: "Wapas kyon ho raha hai?", returnReasonHelp: "Yeh wajah audit record mein rahegi.", returnRemaining: "Bachi hui eligible matra dekhne ke liye bill chunen.", returnEligible: "Asli bill par abhi {quantity} {unit} wapas ho sakta hai.", returnLineChoice: "{item} · {quantity} {unit} bacha", customerSale: "Customer ki bikri", supplierPurchase: "Supplier ki kharid", returnCheckQuantity: "Wapas matra asli eligible matra se zyada nahi ho sakti", returnCheckBooks: "Stock, GST aur customer ya supplier balance ek saath badlenge", returnCheckCompliance: "Registered document ko compliance adjustment ke liye mark kiya jayega", returnSafety: "Jaanchne se kuch nahi badalta. Darj karne par juda hua note banta hai; asli bill kabhi badalta ya chhupta nahi.", checkReturn: "Wapsi dekhen", noReturnDocuments: "Wapsi ke liye abhi koi jaari bill nahi hai.", returnActivity: "Asli bill badle bina juda hua return note darj hua", customerReturnChecked: "Customer wapsi jaanch li", supplierReturnChecked: "Supplier wapsi jaanch li", returnCheckedBody: "Jaanchi hui wapsi {amount} ki hai.", returnCustomerEffect: "Credit note customer se lene wali rakam ghataega.", returnSupplierEffect: "Debit note supplier ko dene wali rakam ghataega.", returnSalesStockEffect: "Sahi saman stock mein wapas jayega.", returnPurchaseStockEffect: "Wapas saman stock se bahar jayega.", returnComplianceEffect: "Registered document ke liye compliance adjustment karna hoga.", returnNoComplianceEffect: "Kisi government-document adjustment ki zaroorat nahi hai.", returnRecorded: "Wapsi darj hui", returnAlreadyRecorded: "Wapsi pehle hi ek baar darj hai", returnRecordedBody: "Asli bill badle bina juda note {number} darj hua.",
     workspace: "Kaam ki jagah", activityTitle: "Saara kaam", activityHelp: "Har poora kaam uske samay aur sthiti ke saath yahan dikhega.", demoHistory: "Is preview mein sample kaam hai", demoHistoryBody: "Company ka poora itihaas dikhane ke liye services jodni hongi. Abhi draft flows check kar sakte hain.", createFirstSale: "Bikri banayen",
     setupTitle: "Business set up karein",
     setupHelp: "Kuch sawaalon ke jawab dein, hum uske liye asli books khol denge. Aapka GST number aur shuruaati aankde jaanche jaate hain, maane nahin jaate.",
@@ -196,7 +198,7 @@ const storage = (() => {
   } catch { return undefined; }
 })();
 
-const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, pendingForm: null, pendingInput: null, sessionId: storage?.getItem("karobar.session") ?? null, draftStatuses: {} };
+const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, returnDocuments: [], pendingForm: null, pendingInput: null, pendingReturnInput: null, sessionId: storage?.getItem("karobar.session") ?? null, draftStatuses: {} };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const REPORT_TEXT = {
@@ -305,6 +307,7 @@ function openView(view) {
   document.querySelector("#menu-button").setAttribute("aria-expanded", "false");
   document.querySelector(`#view-${target} h1`)?.focus?.();
   if (target === "reports") loadReports();
+  if (target === "returns") loadReturnDocuments();
 }
 
 function draftData(form) {
@@ -366,12 +369,12 @@ function activityRow(item) {
   const icon = document.createElement("span");
   icon.className = `activity-icon ${item.kind === "purchase" ? "blue" : item.kind === "payment" ? "amber" : "green"}`;
   icon.setAttribute("aria-hidden", "true");
-  icon.textContent = item.kind === "purchase" ? "↓" : item.kind === "payment" ? "₹" : "✓";
+  icon.textContent = item.kind === "purchase" ? "↓" : item.kind === "payment" ? "₹" : item.kind === "return" ? "↩" : "✓";
   const description = document.createElement("div");
   const title = document.createElement("strong");
   title.textContent = item.title;
   const detail = document.createElement("small");
-  detail.textContent = item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale].paymentActivity : copy[state.locale].saleActivity;
+  detail.textContent = item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale].paymentActivity : item.kind === "return" ? copy[state.locale].returnActivity : copy[state.locale].saleActivity;
   description.append(title, detail);
   const value = document.createElement("div");
   value.className = "activity-value";
@@ -740,6 +743,21 @@ function localizeResult(result, flow, mode) {
   return { ...result, title: copy[state.locale].paymentRecorded, message: copy[state.locale].paymentRecordedBody };
 }
 
+function localizeReturnResult(result, mode, kind) {
+  if (state.locale === "en-IN") return result;
+  if (mode === "preview") return {
+    ...result,
+    title: copy[state.locale][kind === "SALES_RETURN" ? "customerReturnChecked" : "supplierReturnChecked"],
+    message: text("returnCheckedBody", { amount: money(result.amount) }),
+    effects: [
+      copy[state.locale][kind === "SALES_RETURN" ? "returnCustomerEffect" : "returnSupplierEffect"],
+      copy[state.locale][kind === "SALES_RETURN" ? "returnSalesStockEffect" : "returnPurchaseStockEffect"],
+      copy[state.locale][result.effects?.[2]?.startsWith("The registered") ? "returnComplianceEffect" : "returnNoComplianceEffect"],
+    ],
+  };
+  return { ...result, title: copy[state.locale][result.deduplicated ? "returnAlreadyRecorded" : "returnRecorded"], message: text("returnRecordedBody", { number: result.note?.number ?? "—" }) };
+}
+
 function showDialog(result, mode) {
   const dialog = document.querySelector("#review-dialog");
   document.querySelector("#review-title").textContent = result.title;
@@ -795,6 +813,7 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     const input = draftData(form);
     state.pendingForm = form;
     state.pendingInput = input;
+    state.pendingReturnInput = null;
     setFormBusy(form, true);
     showDialog({ title: copy[state.locale].checking, message: copy[state.locale].checkingBody }, "loading");
     try {
@@ -818,7 +837,7 @@ document.querySelector("#setup-form")?.addEventListener("input", () => { documen
 document.querySelector("#setup-create")?.addEventListener("click", createSetup);
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
-document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); });
+document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); loadReturnDocuments(); });
 document.querySelector("#menu-button").addEventListener("click", (event) => { const open = !document.body.classList.contains("menu-open"); document.body.classList.toggle("menu-open", open); event.currentTarget.setAttribute("aria-expanded", String(open)); });
 document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
   const email = document.querySelector('#login-form [name="email"]');
@@ -840,6 +859,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     await loadDashboard();
     loadSupplierChoices();
     loadIssuedInvoices();
+    loadReturnDocuments();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -848,8 +868,23 @@ document.querySelector("#sign-out").addEventListener("click", () => {
   storage?.removeItem("karobar.session");
   showLogin();
 });
-document.querySelector("#review-cancel").addEventListener("click", () => document.querySelector("#review-dialog").close("cancel"));
+document.querySelector("#review-cancel").addEventListener("click", () => { state.pendingReturnInput = null; document.querySelector("#review-dialog").close("cancel"); });
 document.querySelector("#review-confirm").addEventListener("click", async (event) => {
+  if (state.pendingReturnInput) {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = copy[state.locale].recording;
+    try {
+      const result = await api("/api/returns/record", { method: "POST", body: JSON.stringify(state.pendingReturnInput) });
+      state.pendingReturnInput = null;
+      const localized = localizeReturnResult(result, "recorded", result.note.kind);
+      showDialog({ ...localized, effects: [`${result.note.number} · ${money(result.note.amount)}`] }, "recorded");
+      await Promise.all([loadDashboard(), loadReturnDocuments()]);
+    } catch (error) {
+      showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+    }
+    return;
+  }
   if (!state.pendingForm || !state.pendingInput) return;
   const button = event.currentTarget;
   button.disabled = true;
@@ -858,9 +893,100 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     const result = await api(`/api/${state.pendingForm.dataset.draft}s/record`, { method: "POST", body: JSON.stringify(state.pendingInput) });
     storage?.removeItem(`karobar.draft.${state.pendingForm.dataset.draft}`);
     showDialog(localizeResult(result, state.pendingForm.dataset.draft, "recorded"), "recorded");
-    await loadDashboard();
+    await Promise.all([loadDashboard(), loadReturnDocuments()]);
   } catch (error) {
     showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+  }
+});
+
+// ----------------------------------------------------------- issue #45: linked return notes
+//
+// The choices come from issued/posted documents, and preview calls the same service that will
+// post. The browser never calculates eligible quantity, tax or balances on its own.
+
+function updateReturnLines() {
+  const documentSelect = document.querySelector("#return-document");
+  const lineSelect = document.querySelector("#return-line");
+  const selectedDocument = state.returnDocuments.find((candidate) => candidate.id === documentSelect.value);
+  lineSelect.replaceChildren();
+  if (!selectedDocument) {
+    documentSelect.form.elements.kind.value = "";
+    documentSelect.form.elements.unit.value = "";
+    return;
+  }
+  documentSelect.form.elements.kind.value = selectedDocument.kind;
+  selectedDocument.lines.forEach((line) => {
+    const option = document.createElement("option");
+    option.value = line.id;
+    option.dataset.unit = line.unit;
+    option.dataset.remaining = String(line.quantity - line.returned);
+    option.textContent = text("returnLineChoice", { item: line.item, quantity: line.quantity - line.returned, unit: line.unit });
+    lineSelect.append(option);
+  });
+  updateReturnRemaining();
+}
+
+function updateReturnRemaining() {
+  const option = document.querySelector("#return-line").selectedOptions[0];
+  const form = document.querySelector("#return-form");
+  form.elements.unit.value = option?.dataset.unit ?? "";
+  document.querySelector("#return-remaining").textContent = option
+    ? text("returnEligible", { quantity: option.dataset.remaining, unit: option.dataset.unit })
+    : copy[state.locale].returnRemaining;
+}
+
+async function loadReturnDocuments() {
+  const select = document.querySelector("#return-document");
+  if (!select || !state.sessionId) return;
+  try {
+    const result = await api("/api/returns/documents");
+    state.returnDocuments = result.documents;
+    const selected = select.value;
+    select.replaceChildren();
+    if (result.documents.length === 0) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = copy[state.locale].noReturnDocuments;
+      select.append(option);
+    } else {
+      result.documents.forEach((entry) => {
+        const option = document.createElement("option");
+        option.value = entry.id;
+        option.textContent = `${copy[state.locale][entry.kind === "SALES_RETURN" ? "customerSale" : "supplierPurchase"]} · ${entry.number} · ${entry.party}`;
+        select.append(option);
+      });
+      if (result.documents.some((entry) => entry.id === selected)) select.value = selected;
+    }
+    updateReturnLines();
+  } catch (error) {
+    document.querySelector("#return-remaining").textContent = localizedError(error);
+  }
+}
+
+document.querySelector("#return-document")?.addEventListener("change", updateReturnLines);
+document.querySelector("#return-line")?.addEventListener("change", updateReturnRemaining);
+document.querySelector("#return-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = formValues(form);
+  state.pendingForm = null;
+  state.pendingInput = null;
+  state.pendingReturnInput = input;
+  form.setAttribute("aria-busy", "true");
+  const submit = form.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = copy[state.locale].working;
+  showDialog({ title: copy[state.locale].checking, message: copy[state.locale].checkingBody }, "loading");
+  try {
+    const result = await api("/api/returns/preview", { method: "POST", body: JSON.stringify(input) });
+    showDialog(localizeReturnResult(result, "preview", input.kind), "preview");
+  } catch (error) {
+    state.pendingReturnInput = null;
+    showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+  } finally {
+    submit.disabled = false;
+    submit.textContent = copy[state.locale].checkReturn;
+    form.setAttribute("aria-busy", "false");
   }
 });
 
@@ -1286,4 +1412,4 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); } else showLogin();

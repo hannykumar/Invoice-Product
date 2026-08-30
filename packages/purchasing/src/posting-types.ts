@@ -109,6 +109,26 @@ export interface PurchaseBillReceipt {
   readonly stockMovementId: string;
 }
 
+/** Immutable monetary facts needed to return part of a posted line under the original tax treatment. */
+export interface PurchaseBillLineSnapshot {
+  readonly lineNumber: number;
+  readonly itemId: Id;
+  readonly description: string;
+  readonly supplyKind: "GOODS" | "SERVICES";
+  readonly quantity: Quantity;
+  readonly warehouseId?: Id;
+  readonly batchId?: Id;
+  readonly serialNumbers?: readonly string[];
+  readonly taxableValuePaise: Paise;
+  readonly cgstPaise: Paise;
+  readonly sgstPaise: Paise;
+  readonly igstPaise: Paise;
+  readonly cessPaise: Paise;
+  readonly ineligibleItcPaise: Paise;
+  /** The share of the supplier's printed total, including allocated bill rounding. */
+  readonly supplierValuePaise: Paise;
+}
+
 export type PurchaseBillState = "POSTED" | "REVERSED";
 
 /**
@@ -129,6 +149,7 @@ export interface PurchaseBill {
   readonly tax: PurchaseTaxSummary;
   readonly state: PurchaseBillState;
   readonly voucherId: string;
+  readonly lines: readonly PurchaseBillLineSnapshot[];
   readonly receipts: readonly PurchaseBillReceipt[];
   /** Deliveries whose goods this bill pays for, and which already moved the stock themselves. */
   readonly receivedByReceiptIds?: readonly Id[];
