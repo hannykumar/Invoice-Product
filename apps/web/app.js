@@ -66,6 +66,7 @@ const copy = {
     askLegend: "Your question",
     askHint: "Try one of these, or type your own.",
     askQuestion: "What would you like to know?",
+    askQuestionPlaceholder: "How much did I sell this month?",
     askSend: "Ask",
     navMigration: "Bring your data",
     migrationTitle: "Bring your data across",
@@ -176,6 +177,7 @@ const copy = {
     askLegend: "Aapka sawaal",
     askHint: "Inmein se koi chunein, ya apna sawaal likhein.",
     askQuestion: "Aap kya jaanna chahte hain?",
+    askQuestionPlaceholder: "Maine is mahine kitna becha?",
     askSend: "Poochein",
     navMigration: "Apna data laayein",
     migrationTitle: "Apna data yahan laayein",
@@ -360,6 +362,8 @@ function translate() {
   document.querySelectorAll(".draft-form").forEach((form) => setDraftStatus(form, state.draftStatuses[form.dataset.draft] ?? "savedDevice"));
   updateCalculations();
   if (state.dashboard) renderDashboard(state.dashboard);
+  renderAskExamples();
+  if (lastAskAnswer !== null) renderAnswer(lastAskAnswer);
 }
 
 function openView(view) {
@@ -1258,26 +1262,35 @@ document.querySelector("#migration-upload")?.addEventListener("change", async (e
 // rule it quoted with the notification and the date it took effect, then what it assumed and what
 // it was not allowed to see.
 
-let askExamplesLoaded = false;
+let askExamples = null;
+let lastAskAnswer = null;
+
+function renderAskExamples() {
+  if (askExamples === null) return;
+  const box = document.querySelector("#ask-examples");
+  box.replaceChildren();
+  askExamples.slice(0, 6).forEach((example) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost-button";
+    button.textContent = t(example.label);
+    button.addEventListener("click", () => {
+      document.querySelector("#ask-question").value = t(example.label);
+      askQuestion();
+    });
+    box.append(button);
+  });
+}
 
 async function loadAskExamples() {
-  if (askExamplesLoaded) return;
+  if (askExamples !== null) {
+    renderAskExamples();
+    return;
+  }
   try {
-    const { examples } = await api("/api/assistant/examples");
-    const box = document.querySelector("#ask-examples");
-    box.replaceChildren();
-    examples.slice(0, 6).forEach((example) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "ghost-button";
-      button.textContent = t(example.label);
-      button.addEventListener("click", () => {
-        document.querySelector("#ask-question").value = t(example.label);
-        askQuestion();
-      });
-      box.append(button);
-    });
-    askExamplesLoaded = true;
+    const response = await api("/api/assistant/examples");
+    askExamples = response.examples;
+    renderAskExamples();
   } catch (error) {
     renderAnswerProblem(error.message);
   }
@@ -1298,6 +1311,7 @@ async function askQuestion() {
   button.textContent = t(REPORT_TEXT.thinking);
   try {
     const answer = await api("/api/assistant/ask", { method: "POST", body: JSON.stringify({ question }) });
+    lastAskAnswer = answer;
     renderAnswer(answer);
   } catch (error) {
     renderAnswerProblem(error.message);

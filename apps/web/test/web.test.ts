@@ -76,6 +76,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
+  assert.match(html, /id="ask-question"[^>]+data-i18n-placeholder="askQuestionPlaceholder"/);
+  assert.match(script, /renderAskExamples\(\);\s*if \(lastAskAnswer !== null\) renderAnswer\(lastAskAnswer\);/);
   // One focusable heading per view. Returns, "Bring your data" and "Ask" make thirteen.
   assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 13);
 });
