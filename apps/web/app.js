@@ -107,6 +107,7 @@ const copy = {
     matchSafety: "This only compares. Nothing is recorded in your books and no stock moves.",
     colItem: "Item", colOrdered: "Ordered", colArrived: "Arrived", colKept: "Kept", colTurnedAway: "Turned away", colBilled: "Billed", colAgreedPrice: "Agreed price", colBilledPrice: "Billed price",
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
+    navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -217,6 +218,7 @@ const copy = {
     matchSafety: "Yeh sirf milan hai. Bahi mein kuch darj nahi hota aur stock nahi hilta.",
     colItem: "Saman", colOrdered: "Mangaya", colArrived: "Aaya", colKept: "Rakha", colTurnedAway: "Wapas kiya", colBilled: "Bill mein", colAgreedPrice: "Tay daam", colBilledPrice: "Bill ka daam",
     differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
+    navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -340,6 +342,8 @@ function openView(view) {
   document.querySelector(`#view-${target} h1`)?.focus?.();
   if (target === "reports") loadReports();
   if (target === "returns") loadReturnDocuments();
+  if (target === "collections") loadCollections();
+  if (target === "bank-feeds") loadBankFeeds();
 }
 
 function draftData(form) {
@@ -459,6 +463,19 @@ function renderDashboard(data) {
     invoiceSelect.append(option);
   });
   if ([...invoiceSelect.options].some((option) => option.value === selected)) invoiceSelect.value = selected;
+
+  const collectionDocument = document.querySelector("#collection-document");
+  if (collectionDocument) {
+    const prior = collectionDocument.value;
+    collectionDocument.replaceChildren();
+    data.customer.documents.forEach((openDocument) => {
+      const option = document.createElement("option");
+      option.value = openDocument.id;
+      option.textContent = `${openDocument.number} · ${money(openDocument.outstanding)}`;
+      collectionDocument.append(option);
+    });
+    if ([...collectionDocument.options].some((option) => option.value === prior)) collectionDocument.value = prior;
+  }
 }
 
 async function loadDashboard() {
@@ -902,6 +919,142 @@ document.querySelector("#sign-out").addEventListener("click", () => {
   storage?.removeItem("karobar.session");
   showLogin();
 });
+
+// ------------------------------------------------ issue #23: payment reminders and collection tracking
+
+// ------------------------------------------------ issue #24: authorised live bank feeds
+
+let pendingBankConnectionId = null;
+
+function bankActivityRow(iconText, title, detail, tone = "green") {
+  const row = document.createElement("div"); row.className = "activity-row";
+  const icon = document.createElement("span"); icon.className = `activity-icon ${tone}`; icon.setAttribute("aria-hidden", "true"); icon.textContent = iconText;
+  const body = document.createElement("div"); const strong = document.createElement("strong"); strong.textContent = title; const small = document.createElement("small"); small.textContent = detail; body.append(strong, small); row.append(icon, body); return row;
+}
+
+async function loadBankFeeds() {
+  const connections = document.querySelector("#bank-feed-connections");
+  const transactions = document.querySelector("#bank-feed-transactions");
+  if (!connections || !transactions || !state.sessionId) return;
+  try {
+    const workspace = await api("/api/bank-feeds");
+    connections.replaceChildren(); transactions.replaceChildren();
+    if (workspace.connections.length === 0) connections.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankConnections }));
+    for (const connection of workspace.connections) {
+      const account = connection.accounts[0];
+      const detail = account ? `${account.maskedAccountNumber} · ${account.balancePaise === null ? "—" : money(Number(account.balancePaise) / 100)}` : connection.provider;
+      const row = bankActivityRow("⇅", `${account?.displayName ?? connection.provider} · ${connection.status}`, detail, connection.status === "CONNECTED" ? "green" : connection.status === "ERROR" || connection.status === "TOKEN_EXPIRED" ? "red" : "amber");
+      if (connection.status === "CONNECTED") {
+        const actions = document.createElement("div");
+        for (const [label, action] of [[copy[state.locale].syncNow, "sync"], [copy[state.locale].disconnectBank, "disconnect"]]) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button"; button.textContent = label; button.dataset.bankAction = action; button.dataset.connectionId = connection.id; actions.append(button); }
+        row.append(actions);
+      }
+      connections.append(row);
+      connection.transactions.forEach((item) => transactions.append(bankActivityRow(item.creditPaise !== "0" ? "+" : "−", item.description, `${item.bookedOn} · ${money(Number(item.creditPaise !== "0" ? item.creditPaise : item.debitPaise) / 100)}${item.reference ? ` · ${item.reference}` : ""}`)));
+    }
+    if (transactions.childElementCount === 0) transactions.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankTransactions }));
+  } catch (error) { connections.textContent = localizedError(error); }
+}
+
+document.querySelector("#bank-feed-connect")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/bank-feeds/consent", { method: "POST", body: JSON.stringify({ provider: "sandbox-aa", redirectUri: `${location.origin}/bank-feed-return` }) });
+    pendingBankConnectionId = result.connection.id;
+    document.querySelector("#bank-feed-approve").hidden = false;
+    showDialog({ title: copy[state.locale].giveBankPermission, message: copy[state.locale].bankConsentHelp, effects: [result.connection.provider] }, "preview");
+    await loadBankFeeds();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+document.querySelector("#bank-feed-approve")?.addEventListener("click", async (event) => {
+  if (!pendingBankConnectionId) return;
+  try {
+    await api("/api/bank-feeds/consent/complete", { method: "POST", body: JSON.stringify({ connectionId: pendingBankConnectionId, authorizationCode: "sandbox-approved" }) });
+    pendingBankConnectionId = null; event.currentTarget.hidden = true;
+    showDialog({ title: copy[state.locale].bankConnected, message: copy[state.locale].bankFeedSafety }, "recorded");
+    await loadBankFeeds();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+document.querySelector("#bank-feed-connections")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-bank-action]"); if (!button) return;
+  const sync = button.dataset.bankAction === "sync";
+  try {
+    const result = await api(sync ? "/api/bank-feeds/sync" : "/api/bank-feeds/disconnect", { method: "POST", body: JSON.stringify({ connectionId: button.dataset.connectionId, idempotencyKey: `${button.dataset.bankAction}:${button.dataset.connectionId}:${new Date().toISOString().slice(0, 10)}` }) });
+    showDialog({ title: copy[state.locale][sync ? "bankSynced" : "bankDisconnected"], message: sync ? `${result.imported} new transaction(s), ${result.duplicates} duplicate(s).` : result.message }, "recorded");
+    await loadBankFeeds();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+function collectionRow(item, communication = false) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = `activity-icon ${item.status === "DELIVERED" || item.outcome === "DELIVERED" ? "green" : item.status === "FAILED" || item.outcome === "FAILED" ? "red" : "amber"}`;
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = communication ? "✓" : "↗";
+  const body = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = communication ? `${item.outcome} · ${item.channel}` : `${item.partyName} · ${money(item.balance)} · ${item.status}`;
+  const small = document.createElement("small");
+  small.textContent = communication ? `${item.subject}${item.detail ? ` · ${item.detail}` : ""}` : `${item.subject}${item.statusReason ? ` · ${item.statusReason}` : ""}`;
+  body.append(strong, small);
+  row.append(icon, body);
+  return row;
+}
+
+async function loadCollections() {
+  const reminders = document.querySelector("#collection-reminders");
+  const communications = document.querySelector("#collection-communications");
+  if (!reminders || !communications || !state.sessionId) return;
+  try {
+    const workspace = await api("/api/collections");
+    reminders.replaceChildren();
+    communications.replaceChildren();
+    if (workspace.reminders.length === 0) reminders.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noScheduled }));
+    else workspace.reminders.forEach((item) => reminders.append(collectionRow(item)));
+    if (workspace.communications.length === 0) communications.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noCommunications }));
+    else workspace.communications.forEach((item) => communications.append(collectionRow(item, true)));
+  } catch (error) { reminders.textContent = localizedError(error); }
+}
+
+document.querySelector("#collection-plan-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await api("/api/collections/plan", { method: "POST", body: JSON.stringify(formValues(event.currentTarget)) });
+    showDialog({ title: copy[state.locale].scheduledMessages, message: result.reminder.message, effects: [`${money(result.reminder.balance)} · ${result.reminder.channel}`] }, "recorded");
+    await loadCollections();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+document.querySelector("#collections-send")?.addEventListener("click", async () => {
+  const asOf = document.querySelector('#collection-plan-form [name="asOf"]').value;
+  try {
+    const result = await api("/api/collections/send", { method: "POST", body: JSON.stringify({ asOf }) });
+    showDialog({ title: copy[state.locale].communicationHistory, message: `${result.processed.length} reminder(s) processed.`, effects: result.processed.map((item) => `${item.partyName} · ${item.status}${item.statusReason ? ` · ${item.statusReason}` : ""}`) }, "recorded");
+    await loadCollections();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+document.querySelector("#collection-preference-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const optedOut = event.currentTarget.elements.namedItem("optedOut").checked;
+  try {
+    await api("/api/collections/preferences", { method: "POST", body: JSON.stringify({ optedOut, locale: state.locale }) });
+    showDialog({ title: copy[state.locale].savePreference, message: optedOut ? copy[state.locale].optOutCustomer : copy[state.locale].collectionSafety }, "recorded");
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+for (const [selector, path, title] of [["#collection-promise-form", "/api/collections/promises", "promiseTitle"], ["#collection-dispute-form", "/api/collections/disputes", "disputeTitle"]]) {
+  document.querySelector(selector)?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await api(path, { method: "POST", body: JSON.stringify(formValues(event.currentTarget)) });
+      showDialog({ title: copy[state.locale][title], message: copy[state.locale].collectionSafety }, "recorded");
+      await loadCollections();
+    } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+  });
+}
 document.querySelector("#review-cancel").addEventListener("click", () => { state.pendingReturnInput = null; document.querySelector("#review-dialog").close("cancel"); });
 document.querySelector("#review-confirm").addEventListener("click", async (event) => {
   if (state.pendingReturnInput) {
@@ -1641,4 +1794,4 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadCollections(); loadBankFeeds(); } else showLogin();

@@ -22,6 +22,8 @@
           <button class="nav-item" data-view="sale"><span aria-hidden="true">＋</span><span data-i18n="navSale"></span></button>
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
+          <button class="nav-item" data-view="collections"><span aria-hidden="true">↗</span><span data-i18n="navCollections"></span></button>
+          <button class="nav-item" data-view="bank-feeds"><span aria-hidden="true">⇅</span><span data-i18n="navBankFeeds"></span></button>
           <button class="nav-item" data-view="returns"><span aria-hidden="true">↩</span><span data-i18n="navReturns"></span></button>
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
@@ -122,6 +124,66 @@
             <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="receivedFrom"></span><input name="party" data-i18n-placeholder="paymentCustomerPlaceholder" required /></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method"><option>UPI</option><option data-i18n="cash"></option><option data-i18n="bankTransfer"></option><option data-i18n="cheque"></option></select></label><label class="full-field"><span data-i18n="chooseBill"></span><select name="invoice" id="payment-invoice"><option value="" data-i18n="chooseLater"></option></select><small data-i18n="chooseBillHelp"></small></label></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
+        </section>
+
+        <section class="view" id="view-collections" aria-labelledby="collections-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="collections-title" tabindex="-1" data-i18n="collectionsTitle"></h1><p data-i18n="collectionsHelp"></p></div></div>
+          <div class="dashboard-grid">
+            <article class="panel form-panel">
+              <h2 data-i18n="reminderPlan"></h2>
+              <form id="collection-plan-form">
+                <div class="field-grid">
+                  <label><span data-i18n="reminderDate"></span><input name="asOf" type="date" value="2026-10-30" required /></label>
+                  <label><span data-i18n="reminderChannel"></span><select name="channel"><option value="in_app" data-i18n="channelInApp"></option><option value="email" data-i18n="channelEmail"></option><option value="whatsapp" data-i18n="channelWhatsapp"></option></select></label>
+                </div>
+                <button type="submit" class="primary-button wide" data-i18n="scheduleReminder"></button>
+              </form>
+              <button type="button" class="secondary-button wide" id="collections-send" data-i18n="sendDueReminders"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="collectionSafety"></span></p>
+              <form id="collection-preference-form">
+                <label><input name="optedOut" type="checkbox" /> <span data-i18n="optOutCustomer"></span></label>
+                <button type="submit" class="secondary-button wide" data-i18n="savePreference"></button>
+              </form>
+            </article>
+            <aside class="panel">
+              <h2 data-i18n="scheduledMessages"></h2><div class="activity-list" id="collection-reminders" aria-live="polite"></div>
+              <h2 data-i18n="communicationHistory"></h2><div class="activity-list" id="collection-communications" aria-live="polite"></div>
+            </aside>
+          </div>
+          <div class="dashboard-grid">
+            <form class="panel" id="collection-promise-form">
+              <h2 data-i18n="promiseTitle"></h2><div class="field-grid">
+                <label><span data-i18n="promisedAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label>
+                <label><span data-i18n="promisedDate"></span><input name="promisedOn" type="date" value="2026-11-05" required /></label>
+                <input name="asOf" type="hidden" value="2026-10-30" />
+              </div><button type="submit" class="secondary-button wide" data-i18n="savePromise"></button>
+            </form>
+            <form class="panel" id="collection-dispute-form">
+              <h2 data-i18n="disputeTitle"></h2><div class="field-grid">
+                <label><span data-i18n="disputedInvoice"></span><select name="documentId" id="collection-document" required></select></label>
+                <label><span data-i18n="disputeReason"></span><input name="reason" required /></label>
+                <input name="asOf" type="hidden" value="2026-10-30" />
+              </div><button type="submit" class="secondary-button wide" data-i18n="saveDispute"></button>
+            </form>
+          </div>
+        </section>
+
+        <section class="view" id="view-bank-feeds" aria-labelledby="bank-feeds-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="bank-feeds-title" tabindex="-1" data-i18n="bankFeedsTitle"></h1><p data-i18n="bankFeedsHelp"></p></div></div>
+          <div class="dashboard-grid">
+            <article class="panel form-panel">
+              <h2 data-i18n="connectBank"></h2>
+              <p data-i18n="bankConsentHelp"></p>
+              <button type="button" class="primary-button wide" id="bank-feed-connect" data-i18n="giveBankPermission"></button>
+              <button type="button" class="primary-button wide" id="bank-feed-approve" data-i18n="approveSandboxPermission" hidden></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="bankFeedSafety"></span></p>
+            </article>
+            <aside class="panel">
+              <h2 data-i18n="connectedAccounts"></h2>
+              <div class="activity-list" id="bank-feed-connections" aria-live="polite"><p class="loading-copy" data-i18n="noBankConnections"></p></div>
+            </aside>
+          </div>
+          <article class="panel"><h2 data-i18n="importedBankTransactions"></h2><div class="activity-list" id="bank-feed-transactions" aria-live="polite"><p class="loading-copy" data-i18n="noBankTransactions"></p></div></article>
         </section>
 
         <section class="view" id="view-returns" aria-labelledby="returns-title">
@@ -486,6 +548,8 @@
         <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
         <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
+        <button data-view="collections"><span aria-hidden="true">↗</span><small data-i18n="navCollections"></small></button>
+        <button data-view="bank-feeds"><span aria-hidden="true">⇅</span><small data-i18n="navBankFeeds"></small></button>
         <button data-view="returns"><span aria-hidden="true">↩</span><small data-i18n="navReturns"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>

@@ -51,6 +51,15 @@ import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages
 import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
 } from '../../../packages/returns/src/index.ts';
+import {
+  CollectionsService, InMemoryCollectionRepository, PlatformReminderNotificationAdapter,
+  type CollectionChannel,
+} from '../../../packages/collections/src/index.ts';
+import {
+  ChannelNotificationTransport, DeferredChannelAdapter, EmailNotificationAdapter,
+  InAppNotificationAdapter, NotificationService, NotificationTemplateRegistry,
+} from '../../../packages/platform/src/index.ts';
+import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -144,6 +153,8 @@ export class DemoApplication {
   private readonly terms: TradeTermsService;
   private readonly returns: ReturnService;
   private readonly returnNotes: InMemoryReturnNoteRepository;
+  private readonly collections: CollectionsService;
+  private readonly bankFeeds: BankFeedService;
 
   private constructor(
     config: CompanySeed,
@@ -157,6 +168,8 @@ export class DemoApplication {
     terms: TradeTermsService,
     returns: ReturnService,
     returnNotes: InMemoryReturnNoteRepository,
+    collections: CollectionsService,
+    bankFeeds: BankFeedService,
   ) {
     this.config = config;
     this.shop = shop;
@@ -169,6 +182,8 @@ export class DemoApplication {
     this.terms = terms;
     this.returns = returns;
     this.returnNotes = returnNotes;
+    this.collections = collections;
+    this.bankFeeds = bankFeeds;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -293,7 +308,25 @@ export class DemoApplication {
       audit: shop.audit, clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes);
+    const notificationTemplates = new NotificationTemplateRegistry();
+    for (const locale of ['en-IN', 'hi-IN'] as const) notificationTemplates.register('payment_reminder', locale, (payload) => ({ subject: String(payload.subject ?? ''), body: String(payload.message ?? '') }));
+    const notifications = new NotificationService(new ChannelNotificationTransport({
+      in_app: new InAppNotificationAdapter(),
+      email: new EmailNotificationAdapter({ async send() { /* Synthetic local provider: delivery is recorded without external data leaving the app. */ } }, notificationTemplates),
+      whatsapp: new DeferredChannelAdapter('whatsapp'),
+    }));
+    const collections = new CollectionsService({
+      receivables: payments, parties: documents, repository: new InMemoryCollectionRepository(),
+      notifications: new PlatformReminderNotificationAdapter(notifications),
+      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() },
+    });
+
+    const bankProvider = new SyntheticBankFeedProvider();
+    bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
+    bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
+    const bankFeeds = new BankFeedService([bankProvider]);
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes, collections, bankFeeds);
     await app.seed();
     return app;
   }
@@ -512,6 +545,113 @@ export class DemoApplication {
     const position = await this.payments.position(actor, this.config.customerId, isoDate(String(input.date)));
     return { state: 'recorded', title: 'Payment recorded', message: `₹${jsonAmount(payment.amount.minor).toFixed(2)} was recorded once.`, paymentId: payment.id, customerOutstanding: jsonAmount(position.totalOutstanding.minor) };
   }
+
+  // Issue #23 — reminder review and delivery always re-read the live receivables position.
+  async collectionPlan(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const asOf = isoDate(String(input.asOf));
+    const channel = input.channel === undefined || input.channel === '' ? undefined : String(input.channel) as CollectionChannel;
+    const reminder = await this.collections.schedule(actor, {
+      partyId: this.config.customerId, asOf,
+      ...(channel === undefined ? {} : { channel }),
+      idempotencyKey: String(input.idempotencyKey || `web-collection:${this.config.customerId}:${asOf}:${channel ?? 'policy'}`),
+    });
+    return { state: 'scheduled', reminder: this.collectionJson(reminder) };
+  }
+
+  async collectionWorkspace(actor: ActorContext) {
+    this.companyOf(actor);
+    return {
+      reminders: (await this.collections.review(actor)).map((item) => this.collectionJson(item)),
+      communications: (await this.collections.communications(actor)).map((item) => ({
+        id: item.id, reminderId: item.reminderId, partyId: item.partyId, channel: item.channel,
+        outcome: item.outcome, subject: item.subject, message: item.message,
+        balance: jsonAmount(item.snapshot.totalOutstanding.minor), detail: item.detail, occurredAt: item.occurredAt,
+      })),
+    };
+  }
+
+  async deliverCollectionReminders(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const delivered = await this.collections.deliverDue(actor, isoDate(String(input.asOf)));
+    return { processed: delivered.map((item) => this.collectionJson(item)) };
+  }
+
+  async setCollectionPreference(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const preference = await this.collections.setPreference(actor, {
+      partyId: this.config.customerId, optedOut: input.optedOut === true,
+      locale: input.locale === 'hi-IN' ? 'hi-IN' : 'en-IN',
+      disabledChannels: Array.isArray(input.disabledChannels) ? input.disabledChannels.filter((item): item is CollectionChannel => item === 'in_app' || item === 'email' || item === 'whatsapp') : [],
+    });
+    return { optedOut: preference.optedOut, locale: preference.locale, disabledChannels: preference.disabledChannels };
+  }
+
+  async recordCollectionPromise(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const promise = await this.collections.recordPromise(actor, {
+      partyId: this.config.customerId, amount: money(paise(input.amount)), promisedOn: isoDate(String(input.promisedOn)),
+      asOf: isoDate(String(input.asOf)), note: String(input.note ?? '') || null,
+    });
+    return { id: promise.id, status: promise.status, amount: jsonAmount(promise.amount.minor), promisedOn: promise.promisedOn };
+  }
+
+  async openCollectionDispute(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const dispute = await this.collections.openDispute(actor, {
+      partyId: this.config.customerId, documentId: String(input.documentId), asOf: isoDate(String(input.asOf)), reason: String(input.reason ?? ''),
+    });
+    return { id: dispute.id, status: dispute.status, documentNumber: dispute.documentNumber, reason: dispute.reason };
+  }
+
+  private collectionJson(item: Awaited<ReturnType<CollectionsService['schedule']>>) {
+    return {
+      id: item.id, partyId: item.partyId, partyName: item.partyName, channel: item.channel, locale: item.locale,
+      stage: item.stage, scheduledAt: item.scheduledAt, status: item.status, subject: item.subject, message: item.message,
+      balance: jsonAmount(item.snapshot.totalOutstanding.minor), daysOverdue: item.snapshot.oldestDaysOverdue,
+      documents: item.snapshot.documents.map((document) => ({ number: document.number, outstanding: jsonAmount(document.outstanding.minor), daysOverdue: document.daysOverdue })),
+      statusReason: item.statusReason,
+    };
+  }
+
+  // Issue #24 — explicit provider permission and incremental imports. Imported lines remain drafts
+  // for the bank reconciliation engine; these endpoints never post ledger entries or move money.
+  async bankFeedWorkspace(actor: ActorContext) {
+    const context = this.bankContext(actor);
+    return {
+      providers: [{ id: 'sandbox-aa', name: 'Sandbox authorised bank feed' }],
+      connections: this.bankFeeds.connections(context).map((connection) => ({
+        ...this.bankConnectionJson(connection),
+        accounts: this.bankFeeds.accounts(context, connection.id).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
+        transactions: this.bankFeeds.transactions(context, connection.id).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
+      })),
+    };
+  }
+
+  async startBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
+    const connection = await this.bankFeeds.startConsent(this.bankContext(actor), { provider: String(input.provider ?? ''), redirectUri: String(input.redirectUri ?? '') });
+    return { state: 'draft', connection: this.bankConnectionJson(connection) };
+  }
+
+  async completeBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
+    const connection = await this.bankFeeds.completeConsent(this.bankContext(actor), String(input.connectionId ?? ''), String(input.authorizationCode ?? ''));
+    return { state: 'success', connection: this.bankConnectionJson(connection) };
+  }
+
+  async syncBankFeed(actor: ActorContext, input: Record<string, unknown>) {
+    const connectionId = String(input.connectionId ?? '');
+    const result = await this.bankFeeds.sync(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-sync:${connectionId}:${new Date().toISOString().slice(0, 10)}`));
+    return { state: 'success', imported: result.imported, duplicates: result.duplicates, connection: this.bankConnectionJson(result.connection) };
+  }
+
+  async disconnectBankFeed(actor: ActorContext, input: Record<string, unknown>) {
+    const connectionId = String(input.connectionId ?? '');
+    const connection = await this.bankFeeds.disconnect(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-disconnect:${connectionId}`));
+    return { state: 'success', connection: this.bankConnectionJson(connection), message: 'Bank access was disconnected. Previously imported transactions remain available for your records.' };
+  }
+
+  private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
+  private bankConnectionJson(connection: BankFeedConnection) { return { ...connection }; }
 
   async returnDocuments(actor: ActorContext) {
     const companyId = this.companyOf(actor);
