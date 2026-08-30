@@ -51,6 +51,28 @@ test('a real membership controls permissions at the domain boundary', async () =
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
 });
 
+test('live bank feed API requires consent, syncs once and preserves history on disconnect', async () => {
+  const owner = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa', redirectUri: 'https://app.example/bank/callback' }, owner);
+  assert.equal(started.status, 200);
+  assert.equal(started.body.connection.status, 'PENDING_CONSENT');
+  const connectionId = started.body.connection.id;
+  const completed = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved' }, owner);
+  assert.equal(completed.body.connection.status, 'CONNECTED');
+  const synced = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
+  assert.equal(synced.body.imported, 2);
+  const retried = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
+  assert.equal(retried.body.imported, 2);
+  const disconnected = await request('POST', '/api/bank-feeds/disconnect', { connectionId, idempotencyKey: 'api-disconnect-once' }, owner);
+  assert.equal(disconnected.body.connection.status, 'DISCONNECTED');
+  const workspace = await request('GET', '/api/bank-feeds', {}, owner);
+  assert.equal(workspace.body.connections[0].transactions.length, 2);
+  assert.equal(JSON.stringify(workspace.body).includes('sandbox-approved'), false);
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('GET', '/api/bank-feeds', {}, viewer)).status, 403);
+});
+
 test('domain failures map to useful HTTP status codes', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const invalid = await request('POST', '/api/purchases/record', { reference: 'INVALID-80', date: '2026-08-29', amount: '0' }, owner);
