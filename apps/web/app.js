@@ -69,6 +69,21 @@ const copy = {
     sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
     cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
     cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
+    navVehicle: "Vehicle check",
+    vehicleCheckTitle: "Can this lorry carry this load?",
+    vehicleCheckHelp: "Before the goods leave the yard we compare what is being loaded against what the vehicle is registered to carry. Every answer says where the fact came from, and a service we could not reach is never shown as 'nothing wrong'.",
+    whichVehicle: "Which vehicle", whichVehicleHelp: "Pick one to see what the registering authority holds against it.",
+    loadWeight: "Weight being loaded (kg)", loadWeightHelp: "Leave blank if nobody has weighed it — we will ask rather than guess.",
+    crossesBorder: "Does it cross a state border?", crossesBorderHelp: "A state permit does not travel outside the state that issued it.",
+    coldChain: "Must the goods stay cold?", hazardous: "Are they hazardous goods?",
+    platePhoto: "Photo of the number plate", platePhotoHelp: "The yard's camera. A photo that cannot be read is a question, not a mismatch.",
+    checkVehicle: "Check this vehicle",
+    vehicleSafety: "This only checks. Nothing is sent anywhere and no e-way bill is raised.",
+    evidenceUsed: "What we read, and from where", evidenceUsedHelp: "The registering authority's record and your own vehicle list, kept apart. An override never changes anything here.",
+    overrideWhich: "Which findings are you answering for?", overrideWhichHelp: "Only findings that can be overridden are listed. A vehicle that physically cannot carry the load is not one of them.",
+    overrideWhy: "Why is it alright to send it?", overrideButton: "Send it anyway, on my authority",
+    overrideSafety: "This adds your name, the time and your reason beside the findings. It changes no weight, no capacity and no government record.",
+    heldBack: "Held back at the dispatch desk", heldBackHelp: "Movements a vehicle problem is stopping, and what is still to be answered.",
     navEway: "E-way bill",
     ewayTitle: "Do these goods need an e-way bill?", ewayHelp: "An e-way bill is a permit for moving goods, not a tax paper. Most small consignments need none. We work it out from what is on the lorry, where it is going and which state's rule applies, and show you the rule that decided it.",
     whyMoving: "Why are the goods moving?", moveSupply: "A sale", moveJobWork: "Going out for job work", moveBranch: "Moving between your own places", moveReturn: "Coming back from a customer",
@@ -193,6 +208,21 @@ const copy = {
     sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
     cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
     cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
+    navVehicle: "Gaadi ki jaanch",
+    vehicleCheckTitle: "Kya yeh gaadi itna maal le ja sakti hai?",
+    vehicleCheckHelp: "Maal nikalne se pehle hum dekhte hain ki kitna load ho raha hai aur gaadi kitna le jaane ke liye registered hai. Har jawab batata hai wo baat kahan se aayi, aur jo service hum tak pahunch hi nahin payi use kabhi 'sab theek hai' nahin dikhaya jata.",
+    whichVehicle: "Kaunsi gaadi", whichVehicleHelp: "Ek chunein aur dekhein RTO ke record mein uske baare mein kya hai.",
+    loadWeight: "Load ka wazan (kg)", loadWeightHelp: "Agar tola nahin gaya to khali chhod den — hum poochenge, andaza nahin lagayenge.",
+    crossesBorder: "Kya maal doosre rajya jaa raha hai?", crossesBorderHelp: "Rajya ka permit us rajya ke bahar nahin chalta.",
+    coldChain: "Kya maal thanda rehna chahiye?", hazardous: "Kya yeh khatarnak maal hai?",
+    platePhoto: "Number plate ki photo", platePhotoHelp: "Godown ka camera. Jo photo padhi na ja sake wo sawaal hai, galti nahin.",
+    checkVehicle: "Yeh gaadi jaanchen",
+    vehicleSafety: "Yeh sirf jaanchta hai. Kahin kuch nahin bheja jata aur koi e-way bill nahin banta.",
+    evidenceUsed: "Humne kya padha, aur kahan se", evidenceUsedHelp: "RTO ka record aur aapki apni gaadiyon ki list, alag-alag. Override inme se kuch nahin badalta.",
+    overrideWhich: "Aap kis baat ki zimmedari le rahe hain?", overrideWhichHelp: "Sirf wahi cheezein yahan hain jinhen override kiya ja sakta hai. Jo gaadi maal utha hi nahin sakti, wo unme nahin hai.",
+    overrideWhy: "Bhejna kyon theek hai?", overrideButton: "Meri zimmedari par bhejein",
+    overrideSafety: "Isse aapka naam, samay aur wajah findings ke saath jud jati hai. Koi wazan, koi capacity aur koi sarkari record nahin badalta.",
+    heldBack: "Dispatch desk par ruka hua", heldBackHelp: "Wo movements jinhen gaadi ki koi dikkat rok rahi hai, aur kya baaki hai.",
     navEway: "E-way bill",
     ewayTitle: "Kya is maal ko e-way bill chahiye?", ewayHelp: "E-way bill maal le jaane ka parwana hai, tax ka kagaz nahin. Chhoti kheponi ko aksar zaroorat nahin hoti. Hum gaadi par kya hai, kahan ja raha hai aur kis rajya ka niyam lagta hai, isse tay karte hain aur wahi niyam aapko dikhate hain.",
     whyMoving: "Maal kyon ja raha hai?", moveSupply: "Bikri", moveJobWork: "Job work ke liye ja raha hai", moveBranch: "Apni hi jagah par ja raha hai", moveReturn: "Customer se wapas aa raha hai",
@@ -372,6 +402,7 @@ function openView(view) {
   if (target === "reports") loadReports();
   if (target === "returns") loadReturnDocuments();
   if (target === "reminders") loadReminders();
+  if (target === "vehicle") loadVehiclesHeld();
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
 }
@@ -941,6 +972,8 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     loadReturnDocuments();
     loadEwayRoad();
     loadEwayStates();
+    loadVehicleChoices();
+    loadVehiclesHeld();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -1941,8 +1974,161 @@ document.querySelector("#operations-jobs")?.addEventListener("click", async (eve
   catch (error) { announce(error.message); button.disabled = false; }
 });
 
+// ------------------------------------ issue #28: can this lorry actually carry this load
+//
+// The screen is built around one distinction people get wrong: a check that found nothing and a
+// check that could not be made are not the same thing. So a CANNOT_DECIDE is amber and says "not a
+// pass", the evidence is listed with the source on each line, and the override form only ever
+// offers the findings a person is allowed to answer for — the physically impossible ones are shown
+// with no button at all.
+
+let lastVehicleCheck = null;
+
+function renderVehicleCheck(result) {
+  lastVehicleCheck = result;
+  const panel = document.querySelector("#vehicle-panel");
+  panel.hidden = false;
+  document.querySelector("#vehicle-result-title").textContent = result.title;
+  document.querySelector("#vehicle-result-message").textContent = result.message;
+
+  // An overridden check keeps its outcome — the finding stands — so the badge says "overridden"
+  // rather than pretending the check came back clean.
+  const badge = document.querySelector("#vehicle-status");
+  const overridden = result.clearedToMove && result.overrides.length > 0;
+  badge.textContent = overridden ? "overridden" : String(result.outcome).replace(/_/g, " ").toLowerCase();
+  badge.className = `pill ${overridden ? "warn" : result.outcome === "OK" ? "done" : result.outcome === "WARN" ? "warn" : "hold"}`;
+
+  const findings = document.querySelector("#vehicle-findings");
+  findings.replaceChildren();
+  if (result.findings.length === 0) {
+    findings.append(detailRow("Nothing found", result.message));
+  }
+  result.findings.forEach((finding) => {
+    const severity = finding.severity === "BLOCK" ? "Stops the movement" : finding.severity === "WARN" ? "Worth a look" : "Cannot be decided";
+    findings.append(detailRow(
+      `${severity} · ${finding.title}`,
+      finding.reason,
+      // The rule and its source travel with the finding, as they do everywhere else in this app.
+      `${finding.ruleId}${finding.sourceRef ? ` · ${finding.sourceRef}` : ""}${finding.overridable ? "" : " · cannot be overridden"}`,
+    ));
+    finding.facts.forEach((fact) => findings.append(detailRow(fact.label, fact.value)));
+  });
+  if (result.plate) {
+    findings.append(detailRow("Number plate photograph", result.plate.explanation, result.plate.readNumber ? `Read as ${result.plate.readNumber}` : undefined));
+  }
+
+  const evidence = document.querySelector("#vehicle-evidence");
+  evidence.replaceChildren();
+  if (result.evidence.length === 0) {
+    evidence.append(detailRow("Nothing on record", "Neither the registering authority nor your own vehicle list holds anything about this vehicle."));
+  }
+  result.evidence.forEach((item) => {
+    const where = item.source === "GOVERNMENT_RECORD" ? "The registering authority's record" : item.source === "COMPANY_MASTER" ? "Your own vehicle list" : "Typed in for this movement";
+    const parts = [
+      item.vehicleClass ? `class ${item.vehicleClass}` : null,
+      item.bodyType ? `${item.bodyType} body` : null,
+      item.ratedPayloadKg ? `may carry ${item.ratedPayloadKg} kg` : null,
+      item.permitType ? `${item.permitType.toLowerCase()} permit` : null,
+      item.fitnessValidUpto ? `fitness to ${item.fitnessValidUpto}` : null,
+    ].filter(Boolean);
+    evidence.append(detailRow(where, parts.join(" · ") || "nothing held", item.reference ? `Reference ${item.reference} · read at ${item.retrievedAt}` : `Read at ${item.retrievedAt}`));
+  });
+  if (result.capacity) {
+    evidence.append(detailRow("Capacity used for the comparison", `${result.capacity.capacityKg} kg`, result.capacity.basis));
+  }
+  result.overrides.forEach((entry) => {
+    evidence.append(detailRow(`Sent out anyway by ${entry.by}`, entry.reason, `${entry.findingCodes.join(", ")} · ${entry.at}`));
+  });
+
+  // Only what is still standing and is allowed to be answered for.
+  const answerable = result.findings.filter((finding) => finding.outstanding && finding.overridable);
+  const codes = document.querySelector("#vehicle-override-codes");
+  codes.replaceChildren();
+  answerable.forEach((finding) => {
+    const option = document.createElement("option");
+    option.value = finding.code;
+    option.textContent = finding.title;
+    option.selected = true;
+    codes.append(option);
+  });
+  document.querySelector("#vehicle-override-form").hidden = answerable.length === 0;
+}
+
+submitStep("#vehicle-form", async (form) => {
+  try {
+    renderVehicleCheck(await api("/api/vehicles/check", { method: "POST", body: JSON.stringify(formValues(form)) }));
+    await loadVehiclesHeld();
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+submitStep("#vehicle-override-form", async (form) => {
+  if (!lastVehicleCheck) return;
+  const chosen = [...document.querySelector("#vehicle-override-codes").selectedOptions].map((option) => option.value);
+  try {
+    renderVehicleCheck(await api("/api/vehicles/check/override", {
+      method: "POST",
+      body: JSON.stringify({ checkId: lastVehicleCheck.id, findingCodes: chosen.join(","), reason: formValues(form).reason }),
+    }));
+    await loadVehiclesHeld();
+  } catch (error) {
+    showDialog({ title: "Nothing was overridden", message: error.message }, "failed");
+  }
+});
+
+/** The vehicles and the photographs this screen can be tried against. */
+async function loadVehicleChoices() {
+  const numbers = document.querySelector("#vehicle-numbers");
+  const photos = document.querySelector("#vehicle-photos");
+  if (!numbers || !photos) return;
+  try {
+    const { vehicles, photos: pictures } = await api("/api/vehicles/choices");
+    numbers.replaceChildren();
+    vehicles.forEach((vehicle) => {
+      const option = document.createElement("option");
+      option.value = vehicle.number;
+      option.textContent = vehicle.label;
+      numbers.append(option);
+    });
+    photos.replaceChildren();
+    pictures.forEach((picture) => {
+      const option = document.createElement("option");
+      option.value = picture.value;
+      option.textContent = picture.label;
+      photos.append(option);
+    });
+  } catch { /* the pickers are a convenience; the rest of the page still works */ }
+}
+
+async function loadVehiclesHeld() {
+  const list = document.querySelector("#vehicle-held");
+  const select = document.querySelector("#vehicle-invoices");
+  if (!list || !select) return;
+  try {
+    const { invoices } = await api("/api/einvoices/invoices");
+    const chosen = select.value;
+    select.replaceChildren();
+    invoices.forEach((invoice) => {
+      const option = document.createElement("option");
+      option.value = invoice.id;
+      option.textContent = `${invoice.number} · ${money(invoice.amount)}`;
+      select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+
+    const { held } = await api("/api/vehicles/held");
+    list.replaceChildren();
+    if (held.length === 0) {
+      list.append(detailRow("Nothing is held back", "No movement is waiting on a vehicle problem right now."));
+      return;
+    }
+    held.forEach((row) => list.append(detailRow(`${row.vehicle ?? "no vehicle"} · ${row.outcome.toLowerCase().replace(/_/g, " ")}`, row.summary, row.outstanding.join("; "))));
+  } catch { /* the list is a convenience; the rest of the page still works */ }
+}
+
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadReminders(); loadBankFeeds(); if (state.view === "operations") loadOperations(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); if (state.view === "operations") loadOperations(); } else showLogin();

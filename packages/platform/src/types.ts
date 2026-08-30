@@ -28,6 +28,11 @@ export type Permission =
   | "eway.generate"
   | "eway.update"
   | "eway.cancel"
+  // Issue #28. Checking a lorry against its load is an everyday act; sending a blocked movement
+  // out anyway is deliberately a separate permission from checking it.
+  | "transport.vehicle.view"
+  | "transport.vehicle.check"
+  | "transport.vehicle.override"
   | "sales.draft.write"
   | "sales.finalise"
   | "sales.approve"

@@ -10,6 +10,7 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "supplier.risk.view", "supplier.risk.acknowledge",
   "einvoice.view", "einvoice.generate", "einvoice.cancel",
   "eway.view", "eway.generate", "eway.update", "eway.cancel",
+  "transport.vehicle.view", "transport.vehicle.check", "transport.vehicle.override",
   "sales.draft.write", "sales.finalise", "sales.approve", "sales.cancel",
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",
   "notification.send", "collections.manage", "collections.send",

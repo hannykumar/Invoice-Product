@@ -82,10 +82,14 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/bank-feeds\/disconnect/);
   assert.match(html, /id="view-reminders"[^>]+aria-labelledby=/);
   assert.match(script, /\/api\/reminders\/send/);
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 15);
   assert.match(html, /id="view-operations"[^>]+aria-labelledby=/);
   assert.match(script, /\/api\/operations/);
   assert.match(script, /dataReplayJob|replayJob/);
+  assert.match(html, /id="view-vehicle"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/vehicles\/check/);
+  assert.match(script, /\/api\/vehicles\/check\/override/);
+  // One focusable heading per screen. Issues #28 and #41 add vehicle and operations screens.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 16);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
