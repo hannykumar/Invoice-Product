@@ -77,6 +77,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // Issue #28 — can this lorry carry this load, and who said to send it anyway.
     if (method === 'GET' && pathname === '/api/vehicles/choices') return json(200, DemoApplication.vehicleChoices());
     if (method === 'GET' && pathname === '/api/vehicles/held') return json(200, await app.blockedVehicleChecks(actor));
+    if (method === 'POST' && pathname === '/api/vehicles/record') return json(200, await app.lookupVehicleRecord(actor, body));
     if (method === 'POST' && pathname === '/api/vehicles/check') return json(200, await app.checkVehicle(actor, body));
     if (method === 'POST' && pathname === '/api/vehicles/check/override') return json(200, await app.overrideVehicleCheck(actor, body));
     // Issue #19 — what we know about a supplier, and the evidence behind each warning.

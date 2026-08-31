@@ -37,8 +37,16 @@ import {
 } from '../../../packages/transport/src/adapters.ts';
 import { VehicleSuitabilityService } from '../../../packages/transport/src/suitability-service.ts';
 import {
+  InMemoryVehicleRecordCache, InMemoryVehicleRecordConsents, InMemoryVehicleRecordFreshness,
+  SyntheticVahanConnector, apiSetuVehicleAdapter,
+} from '../../../packages/transport/src/vehicle-record-adapters.ts';
+import {
+  TRANSPORT_SUITABILITY_PURPOSE, VehicleRecordService,
+} from '../../../packages/transport/src/vehicle-record-service.ts';
+import { PERMITTED_VEHICLE_FIELDS } from '../../../packages/transport/src/vehicle-record-types.ts';
+import {
   InMemorySuitabilityStore, InMemoryVehicleSuitabilityPolicies, SyntheticPlateReader,
-  SyntheticVehicleRecordService, mastersVehicleAdapter,
+  mastersVehicleAdapter,
 } from '../../../packages/transport/src/suitability-adapters.ts';
 import type { Vehicle } from '../../../packages/masters/src/types.ts';
 
@@ -128,7 +136,7 @@ const SETUP_PERMISSIONS = [
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
   'eway.view', 'eway.generate', 'eway.update', 'eway.cancel',
-  'transport.vehicle.view', 'transport.vehicle.check', 'transport.vehicle.override',
+  'transport.vehicle.view', 'transport.vehicle.check', 'transport.vehicle.override', 'transport.vehicle.connect',
 ];
 
 /**
@@ -283,9 +291,41 @@ export async function createCompanyShop(seed: CompanySeed) {
     policy: ewayPolicies,
     idFactory: () => `${seed.companyId}:ewb:${sequence += 1}`,
   });
-  // Issue #28. The registering authority's record and the number-plate reader, both synthetic here
-  // — #29 owns the real vehicle verification and this implements the port it will fill.
-  const vehicleAuthority = new SyntheticVehicleRecordService(() => clock.now());
+  // Issue #29. The registering authority, reached the way production reaches it: this product's
+  // verification service, over issue #8's connector gateway, with a synthetic VAHAN at the far end.
+  // Only that last hop is fake, so the consent check, the field narrowing, the masking, the caching
+  // and the audit trail are all the real ones on the screen.
+  const vahan = new SyntheticVahanConnector();
+  const vehicleRecordCache = new InMemoryVehicleRecordCache();
+  const vehicleRecordConsents = new InMemoryVehicleRecordConsents();
+  const vehicleRecordFreshness = new InMemoryVehicleRecordFreshness();
+  const vehicleRecords = new VehicleRecordService({
+    provider: apiSetuVehicleAdapter({
+      gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      clock: () => clock.now(),
+    }),
+    cache: vehicleRecordCache,
+    consent: vehicleRecordConsents,
+    freshness: vehicleRecordFreshness,
+    audit,
+    clock,
+  });
+  // The shop connected the service when it was set up, and agreed to the whole allow-list. A
+  // business that had not would see "we could not ask", which is its own state on the screen.
+  vehicleRecordConsents.seed({
+    companyId: seed.companyId,
+    purpose: TRANSPORT_SUITABILITY_PURPOSE,
+    fields: [...PERMITTED_VEHICLE_FIELDS],
+    grantedBy: seed.setupUserId,
+    grantedAt: clock.now().toISOString(),
+    credentialReference: `vault://vehicle/${seed.companyId}`,
+  });
+  const setupActor: ActorContext = {
+    companyId: seed.companyId,
+    branchId: seed.branchId,
+    userId: seed.setupUserId,
+    permissions: SETUP_PERMISSIONS,
+  };
   const plateReader = new SyntheticPlateReader();
   const vehicleChecks = new InMemorySuitabilityStore();
   const vehiclePolicies = new InMemoryVehicleSuitabilityPolicies();
@@ -294,18 +334,14 @@ export async function createCompanyShop(seed: CompanySeed) {
     records: vehicleChecks,
     audit,
     clock,
-    vehicleRecords: vehicleAuthority,
+    // The person running the check is passed with each lookup; this is only the fallback for a
+    // caller that does not name one.
+    vehicleRecords: vehicleRecords.portFor(setupActor),
     vehicleMaster: mastersVehicleAdapter(() => OWN_VEHICLES.map((vehicle) => ({ ...vehicle, companyId: seed.companyId })), () => clock.now()),
     plateOcr: plateReader,
     policy: vehiclePolicies,
     idFactory: () => `${seed.companyId}:vsc:${sequence += 1}`,
   });
-  const setupActor: ActorContext = {
-    companyId: seed.companyId,
-    branchId: seed.branchId,
-    userId: seed.setupUserId,
-    permissions: SETUP_PERMISSIONS,
-  };
   const chart = buildDefaultChart(seed.companyId, defaultChartIdFactory(seed.companyId));
   const liabilities = chart.find((account) => account.code === '2000');
   const bankParent = chart.find((account) => account.code === '1120');
@@ -324,6 +360,7 @@ export async function createCompanyShop(seed: CompanySeed) {
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
     eInvoice, eInvoices, eInvoicePolicies, irpPortal,
     ewayBill, ewayBills, ewayTrips, ewayPolicies, ewayPortal,
-    vehicleSuitability, vehicleChecks, vehiclePolicies, vehicleAuthority, plateReader, setupActor,
+    vehicleSuitability, vehicleChecks, vehiclePolicies, vehicleRecords, vehicleRecordCache,
+    vehicleRecordConsents, vehicleRecordFreshness, vahan, plateReader, setupActor,
   };
 }
