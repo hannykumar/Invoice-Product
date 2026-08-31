@@ -38,6 +38,15 @@ import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
 import {
+  InMemoryServiceInvoiceRepository,
+  InMemorySubscriptionRepository,
+  InMemoryUsageRepository,
+  SubscriptionService,
+  alwaysPays,
+  type Entitlement,
+  type Plan,
+} from '@invoice/subscriptions';
+import {
   ChannelNotificationTransport,
   InAppNotificationAdapter,
   NotificationService,
@@ -191,6 +200,7 @@ export class DemoApplication {
   private readonly terms: TradeTermsService;
   private readonly returns: ReturnService;
   private readonly returnNotes: InMemoryReturnNoteRepository;
+  private readonly subscriptions: SubscriptionService;
   private readonly collections: CollectionsService;
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
@@ -210,6 +220,7 @@ export class DemoApplication {
     collections: CollectionsService,
     outbox: DemoReminderOutbox,
     bankFeeds: BankFeedService,
+    subscriptions: SubscriptionService,
   ) {
     this.config = config;
     this.shop = shop;
@@ -222,6 +233,7 @@ export class DemoApplication {
     this.terms = terms;
     this.returns = returns;
     this.returnNotes = returnNotes;
+    this.subscriptions = subscriptions;
     this.collections = collections;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
@@ -397,7 +409,20 @@ export class DemoApplication {
     bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
     const bankFeeds = new BankFeedService([bankProvider]);
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes, collections, outbox, bankFeeds);
+    // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
+    // is the mock one — no production credential is needed to run any of this — and the limits it
+    // enforces are the real ones from the shipped catalogue.
+    const subscriptions = new SubscriptionService({
+      subscriptions: new InMemorySubscriptionRepository(),
+      usage: new InMemoryUsageRepository(),
+      invoices: new InMemoryServiceInvoiceRepository(),
+      payments: alwaysPays(),
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions);
     await app.seed();
     return app;
   }
@@ -738,9 +763,107 @@ export class DemoApplication {
   }
 
   async recordSale(actor: ActorContext, input: Record<string, unknown>) {
+    // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
+    // In that order, because a bill that failed to post is not a bill, and charging somebody's
+    // allowance for the product's own failure would be the wrong way round.
+    const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${preview.token}`, invoiceId: preview.token });
+    await this.subscriptions.recordUsage(actor, {
+      meter: 'invoices',
+      // The invoice's own id, so a retried request counts the same bill once.
+      idempotencyKey: `invoice:${final.invoice.id}`,
+      note: 'a bill was issued',
+      on: usageDate,
+    });
     return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
+  }
+
+  // ------------------------------------------------------------ issue #42: the plan and its use
+
+  private planJson(plan: Plan) {
+    return {
+      id: plan.id,
+      name: plan.name,
+      description: plan.description,
+      monthlyPrice: jsonAmount(plan.monthlyPrice.minor),
+      trialDays: plan.trialDays,
+      graceDays: plan.graceDays,
+      limits: plan.limits.map((limit) => ({ meter: limit.meter, perMonth: limit.perMonth === null ? null : Number(limit.perMonth) })),
+    };
+  }
+
+  private entitlementJson(entitlement: Entitlement) {
+    return {
+      capability: entitlement.capability,
+      outcome: entitlement.outcome,
+      essential: entitlement.essential,
+      state: entitlement.state,
+      reason: entitlement.reason,
+      used: entitlement.used === null ? null : Number(entitlement.used),
+      limit: entitlement.limit === null ? null : Number(entitlement.limit),
+    };
+  }
+
+  async subscriptionAccount(actor: ActorContext, input: Record<string, unknown> = {}) {
+    this.companyOf(actor);
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const account = await this.subscriptions.account(actor, today);
+    // What the plan would say about a few things a person actually does, so the screen can show
+    // the promise being kept rather than merely printed.
+    const checks = ['sales.issue_invoice', 'assistant.ask', 'gst.compliance_warning', 'supplier.risk_warning', 'data.export'];
+    return {
+      state: account.state,
+      stateWords: account.stateWords,
+      writingStopsOn: account.writingStopsOn,
+      promise: account.promise,
+      plan: this.planJson(account.plan),
+      plans: this.subscriptions.plans().map((plan) => this.planJson(plan)),
+      usage: account.usage.map((total) => ({
+        meter: total.meter,
+        label: total.label,
+        used: Number(total.used),
+        limit: total.limit === null ? null : Number(total.limit),
+        remaining: total.remaining === null ? null : Number(total.remaining),
+      })),
+      invoices: account.invoices.map((invoice) => ({
+        id: invoice.id, period: invoice.period, state: invoice.state,
+        net: jsonAmount(invoice.net.minor), gst: jsonAmount(invoice.gst.minor), total: jsonAmount(invoice.total.minor),
+        issuedOn: invoice.issuedOn, dueOn: invoice.dueOn, paidOn: invoice.paidOn, failureReason: invoice.failureReason,
+      })),
+      checks: await Promise.all(checks.map(async (capability) => this.entitlementJson(await this.subscriptions.check(actor, capability, today)))),
+      history: account.subscription.history,
+    };
+  }
+
+  async changeSubscriptionPlan(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const planId = String(input.planId ?? '');
+    const existing = await this.subscriptions.account(actor, today);
+    const subscription = existing.subscription.id.startsWith('implied:')
+      ? await this.subscriptions.start(actor, { planId, on: today })
+      : await this.subscriptions.changePlan(actor, { planId, on: today, reason: String(input.reason ?? 'Changed from the account screen') });
+    return {
+      state: 'recorded',
+      title: 'Plan changed',
+      message: `This business is now on the ${subscription.planId} plan. Nothing that was already recorded has changed.`,
+    };
+  }
+
+  async issueSubscriptionInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const invoice = await this.subscriptions.issueServiceInvoice(actor, { period: today.slice(0, 7), on: today });
+    const paid = invoice.state === 'PAID' ? invoice : await this.subscriptions.chargeServiceInvoice(actor, invoice.id, today);
+    return {
+      state: 'recorded',
+      title: paid.state === 'PAID' ? 'Paid' : 'Payment did not go through',
+      message: paid.state === 'PAID'
+        ? `Subscription paid for ${paid.period}.`
+        : (paid.failureReason ?? 'The payment could not be taken. Nothing about your books has changed.'),
+    };
   }
 
   async previewPayment(actor: ActorContext, input: Record<string, unknown>) {
