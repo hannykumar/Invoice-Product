@@ -77,6 +77,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run demo:invoice` — issues a real bill through the ledger and prints it on A4, thermal and mobile into `tmp/invoices/`.
 - `npm run demo:onboarding` — sets up a bakery, interrupted halfway and resumed, into `tmp/onboarding/`.
 - `npm run demo:subscriptions` — a free plan filling up, the sentence a shopkeeper reads when it does, an upgrade, a declined card, and a lapse that deletes nothing.
+- `npm run bank:route` — the routes to live bank feeds compared, the cost model, and a conformance run against the sandbox we have (#52).
 - `npm run vendor:readiness` — what company documents and provider accounts still stand between us and a signed contract (#49).
 - `npm run demo:agent` — "find ABC's unpaid invoices and send reminders", previewed, approved, done — and the four requests it refuses.
 - `npm run demo:reminders` — five customers, five reasons: one pays, one disputes, one promises, one goes to the owner, one send fails.
