@@ -28,6 +28,7 @@
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
           <button class="nav-item" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button>
+          <button class="nav-item" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button>
           <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
           <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
@@ -380,6 +381,43 @@
 
         <!-- Issue #23 [E23]: chasing overdue money. Every row is decided from the receivables
              position at the moment the page loaded, and a skip is shown as prominently as a send. -->
+
+        <!-- Issue #42 [E42]: what the plan covers. The screen leads with the promise, because the
+             thing a person most needs to know about pricing is what it cannot take away. -->
+        <section class="view" id="view-plan" aria-labelledby="plan-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="plan-title" tabindex="-1" data-i18n="planTitle"></h1>
+              <p data-i18n="planHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div><h2 id="plan-name">—</h2><p id="plan-state">—</p></div>
+              <span class="pill" id="plan-pill">—</span>
+            </div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span id="plan-promise"></span></p>
+            <h3 data-i18n="planUsage"></h3>
+            <div id="plan-usage" class="activity-list"></div>
+            <h3 data-i18n="planNeverWithheld"></h3>
+            <div id="plan-checks" class="activity-list"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <h2 data-i18n="planChoose"></h2>
+            <div id="plan-options" class="activity-list"></div>
+            <div class="setup-actions">
+              <button type="button" class="primary-button" id="plan-pay" data-i18n="planPay"></button>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2 data-i18n="planInvoices"></h2>
+            <div id="plan-invoices" class="activity-list"></div>
+          </article>
+        </section>
         <section class="view" id="view-reminders" aria-labelledby="reminders-title">
           <div class="page-heading">
             <div>
@@ -644,6 +682,7 @@
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
         <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
+        <button data-view="plan"><span aria-hidden="true">◈</span><small data-i18n="navPlan"></small></button>
         <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
         <button data-view="vehicle"><span aria-hidden="true">⚙</span><small data-i18n="navVehicle"></small></button>
         <button data-view="migration"><span aria-hidden="true">⇪</span><small data-i18n="navMigration"></small></button>

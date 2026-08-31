@@ -88,6 +88,10 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && purchaseMatch?.[1] !== undefined) return json(200, await app.purchase(actor, decodeURIComponent(purchaseMatch[1])));
     if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, app.previewPurchase(actor, body));
     if (method === 'POST' && pathname === '/api/purchases/record') return json(200, await app.recordPurchase(actor, body));
+    // Issue #42 — what this business's plan covers, what it has used, and paying for it.
+    if (method === 'GET' && pathname === '/api/subscription') return json(200, await app.subscriptionAccount(actor, body));
+    if (method === 'POST' && pathname === '/api/subscription/plan') return json(200, await app.changeSubscriptionPlan(actor, body));
+    if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));

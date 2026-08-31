@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/subscriptions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #42 [E42] — plans, entitlements, usage counters, the trial and subscription lifecycle, and our own service invoices.",
+  "exports": { ".": "./src/index.ts" }
+}

@@ -114,6 +114,10 @@ const copy = {
     cancelEway: "Cancel with the portal",
     onTheRoad: "On the road right now", onTheRoadHelp: "Every consignment with a running e-way bill, and how long each one has left.",
     navSupplier: "Supplier check",
+    navPlan: "Your plan",
+    planTitle: "What your plan covers", planHelp: "Plans differ in how much you do. They never differ in how carefully it is done — every warning, every check and your own data are in all of them, including the free one.",
+    planUsage: "What you have used this month", planNeverWithheld: "What no plan can take away",
+    planChoose: "Change your plan", planPay: "Pay for this month", planInvoices: "Our invoices to you",
     navReminders: "Reminders",
     remindersTitle: "Who to remind about money", remindersHelp: "Every line below is worked out from your books this moment. A bill that was paid, disputed or promised is left alone, and it says so — because \"why did nobody remind them?\" is the question that comes next.",
     remindersToday: "What would go out today", remindersSendAll: "Send everything agreed",
@@ -265,6 +269,10 @@ const copy = {
     cancelEway: "Portal ke saath radd karen",
     onTheRoad: "Abhi sadak par", onTheRoadHelp: "Har khep jiska e-way bill chal raha hai, aur har ek ke paas kitna samay bacha hai.",
     navSupplier: "Supplier jaanch",
+    navPlan: "Aapka plan",
+    planTitle: "Aapke plan mein kya hai", planHelp: "Plan sirf itne mein alag hain ki aap kitna kaam karte hain. Kaam kitni savdhani se hota hai usme koi farq nahin — har chetavni, har jaanch aur aapka apna data har plan mein hai, muft wale mein bhi.",
+    planUsage: "Is mahine aapne kitna istemal kiya", planNeverWithheld: "Jo koi plan chheen nahin sakta",
+    planChoose: "Plan badlein", planPay: "Is mahine ka bhugtan karein", planInvoices: "Hamare aapko bheje gaye bill",
     navReminders: "Yaad-dilava",
     remindersTitle: "Paise ke liye kise yaad dilana hai", remindersHelp: "Neeche har line abhi is waqt aapki bahi se nikali gayi hai. Jo bill chuk gaya, jispar sawaal hai, ya jiska vaada hua hai — usse chhod diya jata hai, aur wajah likhi hoti hai; kyunki agla sawaal yahi hota hai ki \"unhe yaad kyun nahin dilaya?\"",
     remindersToday: "Aaj kya jayega", remindersSendAll: "Jo tay hua sab bhej dein",
@@ -434,6 +442,7 @@ function translate() {
   // The reminder rows are sentences from the server in both languages, so switching language must
   // redraw them; a half-translated page is worse than an untranslated one.
   if (state.reminders) renderReminders(state.reminders);
+  if (planState !== null) renderPlan(planState);
 }
 
 function openView(view) {
@@ -453,6 +462,7 @@ function openView(view) {
   if (target === "migration") startMigration();
   if (target === "returns") loadReturnDocuments();
   if (target === "reminders") loadReminders();
+  if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
   if (target === "bank-feeds") loadBankFeeds();
 }
@@ -1849,6 +1859,118 @@ async function loadSupplierChoices() {
     });
   } catch { /* the picker is a convenience; the form works without it */ }
 }
+
+
+// ------------------------------------------------------------- issue #42: what the plan covers
+//
+// The screen opens with the promise and only then shows the numbers, because the fear a pricing
+// page creates is "what will they switch off?" — and the answer here is "nothing that matters".
+
+let planState = null;
+
+function planUsageRow(total) {
+  const limit = total.limit === null ? "no limit" : `${total.used} of ${total.limit}`;
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  // Amber only when the end is actually near. A limit of one is not "nearly used up" at zero used.
+  const tight = total.limit !== null && total.limit >= 10 && total.remaining <= total.limit * 0.1;
+  icon.className = `activity-icon ${total.limit === null ? "blue" : tight ? "amber" : "green"}`;
+  icon.textContent = total.limit === null ? "∞" : tight ? "!" : "✓";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `${t(total.label)} — ${limit}`;
+  const detail = document.createElement("p");
+  detail.textContent = total.limit === null
+    ? "Your plan does not limit this."
+    : `${total.remaining} left.`;
+  body.append(title, detail);
+  row.append(icon, body);
+  return row;
+}
+
+function planCheckRow(check) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = `activity-icon ${check.outcome === "ALLOWED" ? "green" : "amber"}`;
+  icon.textContent = check.outcome === "ALLOWED" ? "✓" : "!";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = check.capability.replaceAll(".", " ").replaceAll("_", " ");
+  const detail = document.createElement("p");
+  detail.textContent = t(check.reason);
+  body.append(title, detail);
+  row.append(icon, body);
+  return row;
+}
+
+function renderPlan(data) {
+  planState = data;
+  document.querySelector("#plan-name").textContent = t(data.plan.name);
+  document.querySelector("#plan-state").textContent = t(data.stateWords);
+  document.querySelector("#plan-pill").textContent = data.state.replaceAll("_", " ").toLowerCase();
+  document.querySelector("#plan-promise").textContent = t(data.promise);
+  document.querySelector("#plan-usage").replaceChildren(...data.usage.map(planUsageRow));
+  // Essential first: the point of the list is what cannot be taken away.
+  document.querySelector("#plan-checks").replaceChildren(
+    ...[...data.checks].sort((a, b) => Number(b.essential) - Number(a.essential)).map(planCheckRow),
+  );
+
+  document.querySelector("#plan-options").replaceChildren(...data.plans.map((plan) => {
+    const row = document.createElement("div");
+    row.className = "activity-row";
+    const icon = document.createElement("span");
+    icon.className = `activity-icon ${plan.id === data.plan.id ? "green" : "blue"}`;
+    icon.textContent = plan.id === data.plan.id ? "✓" : "·";
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = `${t(plan.name)} — ${money(plan.monthlyPrice)} a month`;
+    const detail = document.createElement("p");
+    detail.textContent = t(plan.description);
+    body.append(title, detail);
+    row.append(icon, body);
+    if (plan.id !== data.plan.id) {
+      const choose = document.createElement("button");
+      choose.type = "button";
+      choose.className = "secondary-button";
+      choose.textContent = t(plan.name);
+      choose.addEventListener("click", async () => {
+        try {
+          const result = await api("/api/subscription/plan", { method: "POST", body: JSON.stringify({ planId: plan.id, reason: "Chosen on the plan screen" }) });
+          showDialog({ title: result.title, message: result.message }, "recorded");
+        } catch (error) { showDialog({ title: "Nothing was changed", message: error.message }, "failed"); }
+        loadPlan();
+      });
+      row.append(choose);
+    }
+    return row;
+  }));
+
+  document.querySelector("#plan-invoices").replaceChildren(...(data.invoices.length === 0
+    ? [simpleRow("Nothing yet.", "We have not invoiced you for this month.")]
+    : data.invoices.map((invoice) => simpleRow(
+        `${invoice.period} · ${money(invoice.total)} · ${invoice.state}`,
+        invoice.failureReason ?? `Net ${money(invoice.net)} + GST ${money(invoice.gst)}`,
+      ))));
+}
+
+async function loadPlan() {
+  try {
+    renderPlan(await api("/api/subscription"));
+  } catch (error) {
+    const state = document.querySelector("#plan-state");
+    if (state) state.textContent = error.message;
+  }
+}
+
+document.querySelector("#plan-pay")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/subscription/pay", { method: "POST", body: JSON.stringify({}) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) { showDialog({ title: "Nothing was paid", message: error.message }, "failed"); }
+  loadPlan();
+});
 
 
 // ------------------------------------------------------ issue #23: reminders and collections

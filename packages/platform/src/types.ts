@@ -73,7 +73,10 @@ export type Permission =
   | "collections.reminders.view"
   | "collections.reminders.send"
   | "collections.promise.record"
-  | "collections.dispute.manage";
+  | "collections.dispute.manage"
+  // What a plan covers and what has been used (issue #42 [E42], GPT 1).
+  | "subscription.view"
+  | "subscription.manage";
 
 export interface RequestContext {
   companyId: Id;

@@ -1,6 +1,8 @@
 import type { Id } from "./types.ts";
 
-export type ConnectorKind = "gst" | "irp" | "eway_bill" | "banking" | "vehicle" | "ocr" | "email" | "whatsapp";
+// "payments" is our own subscription provider (issue #42 [E42], GPT 1) — the money customers pay
+// us, which is a different thing from "banking", the customer's own bank feed.
+export type ConnectorKind = "gst" | "irp" | "eway_bill" | "banking" | "vehicle" | "ocr" | "email" | "whatsapp" | "payments";
 export class ConnectorError extends Error {
   public readonly code: "OUTAGE" | "TIMEOUT" | "UNAUTHORIZED" | "INVALID_REQUEST";
   public readonly retryable: boolean;
