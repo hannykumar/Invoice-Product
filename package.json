@@ -41,7 +41,8 @@
     "demo:einvoice": "node --experimental-strip-types packages/gst/src/einvoice-demo.ts",
     "demo:migration": "node --experimental-strip-types packages/migration/src/demo.ts",
     "demo:eway": "node --experimental-strip-types packages/transport/src/demo.ts",
-    "demo:vehicle": "node --experimental-strip-types packages/transport/src/suitability-demo.ts"
+    "demo:vehicle": "node --experimental-strip-types packages/transport/src/suitability-demo.ts",
+    "demo:vehicle-record": "node --experimental-strip-types packages/transport/src/vehicle-record-demo.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",

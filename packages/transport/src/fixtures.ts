@@ -16,9 +16,20 @@ import {
 import { EwayBillService } from "./service.ts";
 import {
   InMemorySuitabilityStore, InMemoryVehicleSuitabilityPolicies, SyntheticPlateReader,
-  SyntheticVehicleRecordService, mastersVehicleAdapter,
+  mastersVehicleAdapter,
 } from "./suitability-adapters.ts";
 import { VehicleSuitabilityService } from "./suitability-service.ts";
+import {
+  InMemoryVehicleRecordCache, InMemoryVehicleRecordConsents, InMemoryVehicleRecordFreshness,
+  SYNTHETIC_VAHAN_ROWS, SyntheticVahanConnector, apiSetuVehicleAdapter,
+} from "./vehicle-record-adapters.ts";
+import {
+  TRANSPORT_SUITABILITY_PURPOSE, VEHICLE_RECORD_CONNECT_PERMISSION, VehicleRecordService,
+} from "./vehicle-record-service.ts";
+import { PERMITTED_VEHICLE_FIELDS } from "./vehicle-record-types.ts";
+import type { VahanRow } from "./vehicle-record-adapters.ts";
+import type { VahanPayloadFields } from "./vehicle-record.ts";
+import type { PermittedVehicleField } from "./vehicle-record-types.ts";
 import type { ConsignmentLine, Movement, MovementParty, VehicleAssignment } from "./types.ts";
 import type { ShipmentFacts, TransportDetails } from "./suitability-types.ts";
 import type { Vehicle } from "../../masters/src/types.ts";
@@ -234,27 +245,33 @@ export const fiveTonneShipment = (over: Partial<ShipmentFacts> = {}): ShipmentFa
 });
 
 /**
- * A working dispatch desk: the vehicle record service, the plate reader and somewhere to keep
- * what was found.
+ * A working dispatch desk: the registering authority behind issue #29's verification, the plate
+ * reader, and somewhere to keep what was found.
  *
- * The vehicle-record service is the synthetic stand-in for issue #29. Swapping it for #29's own
- * adapter when that lands changes this line and nothing else.
+ * The authority is reached the way production reaches it — issue #29's service, over issue #8's
+ * connector gateway, with a synthetic VAHAN at the far end. Only the last hop is fake, so a test
+ * that passes here has exercised the consent check, the field narrowing, the caching and the
+ * masking rather than stepping over them.
  */
 export const makeVehicleDesk = (options: { readonly permissions?: readonly string[]; readonly now?: string; readonly vehicles?: readonly Vehicle[] } = {}) => {
   const clock = movableClock(options.now ?? "2026-08-21T04:30:00.000Z");
   const records = new InMemorySuitabilityStore();
   const policies = new InMemoryVehicleSuitabilityPolicies();
   const audit = new InMemoryAuditPort();
-  const authority = new SyntheticVehicleRecordService(() => clock.now());
   const plateReader = new SyntheticPlateReader();
   const ownVehicles = options.vehicles ?? [];
+  const actor = actorWith(options.permissions ?? ALL_VEHICLE_PERMISSIONS);
   let sequence = 0;
+
+  const desk = makeVehicleRecordDesk({ clock, audit, actor });
 
   const service = new VehicleSuitabilityService({
     records,
     audit,
     clock,
-    vehicleRecords: authority,
+    // Issue #29's own service, seen through the port issue #28 was written against. The lookups a
+    // suitability check makes are attributed to the clerk who ran the check.
+    vehicleRecords: desk.service.portFor(actor),
     vehicleMaster: mastersVehicleAdapter(() => ownVehicles, () => clock.now()),
     plateOcr: plateReader,
     policy: policies,
@@ -262,7 +279,76 @@ export const makeVehicleDesk = (options: { readonly permissions?: readonly strin
   });
 
   return {
-    clock, records, policies, audit, authority, plateReader, service,
-    actor: actorWith(options.permissions ?? ALL_VEHICLE_PERMISSIONS),
+    clock, records, policies, audit, plateReader, service, actor,
+    // What the tests reach for when they need the authority to misbehave.
+    authority: desk.authority,
+    vehicleRecords: desk.service,
+    vehicleRecordCache: desk.cache,
+  };
+};
+
+/** Somebody allowed to switch the government service on: a separate permission from checking. */
+export const ALL_VEHICLE_RECORD_PERMISSIONS = [...ALL_VEHICLE_PERMISSIONS, VEHICLE_RECORD_CONNECT_PERMISSION];
+
+/**
+ * Issue #29's verification on its own, with consent already granted.
+ *
+ * `authority` is the synthetic VAHAN: `goDown()` and `comeBack()` are how a test makes the outage
+ * happen on purpose rather than waiting for one.
+ */
+export const makeVehicleRecordDesk = (options: {
+  readonly clock?: Clock & { travelTo(moment: string): void };
+  readonly audit?: InMemoryAuditPort;
+  readonly actor?: ReturnType<typeof actorWith>;
+  readonly now?: string;
+  readonly rows?: readonly VahanRow[];
+  readonly keys?: VahanPayloadFields;
+  readonly provider?: string;
+  readonly grantConsent?: boolean;
+  readonly fields?: readonly PermittedVehicleField[];
+} = {}) => {
+  const clock = options.clock ?? movableClock(options.now ?? "2026-08-21T04:30:00.000Z");
+  const audit = options.audit ?? new InMemoryAuditPort();
+  const connector = new SyntheticVahanConnector(options.rows ?? SYNTHETIC_VAHAN_ROWS);
+  const gateway = new ConnectorGateway([connector], new SyntheticEwayVault(), new StaticWebhookVerifier());
+  const cache = new InMemoryVehicleRecordCache();
+  const consent = new InMemoryVehicleRecordConsents();
+  const freshness = new InMemoryVehicleRecordFreshness();
+
+  const service = new VehicleRecordService({
+    provider: apiSetuVehicleAdapter({
+      gateway,
+      clock: () => clock.now(),
+      ...(options.provider === undefined ? {} : { provider: options.provider }),
+      ...(options.keys === undefined ? {} : { keys: options.keys }),
+    }),
+    cache, consent, audit, clock, freshness,
+  });
+
+  const actor = options.actor ?? actorWith(ALL_VEHICLE_RECORD_PERMISSIONS);
+  // A business that is already connected when the scenario starts. Granting consent for real goes
+  // through the service and is exercised in issue #29's own tests; seeding it here keeps every
+  // other test from beginning with a piece of setup that is not what it is about.
+  if (options.grantConsent ?? true) {
+    consent.seed({
+      companyId: actor.companyId,
+      purpose: TRANSPORT_SUITABILITY_PURPOSE,
+      fields: [...(options.fields ?? PERMITTED_VEHICLE_FIELDS)],
+      grantedBy: OWNER,
+      grantedAt: clock.now().toISOString(),
+      credentialReference: "vault://vehicle/sampoorna",
+    });
+  }
+
+  return {
+    clock, audit, cache, consent, freshness, gateway, service, actor,
+    authority: {
+      /** The provider stops answering. A different thing from it saying "no such vehicle". */
+      goDown: () => { connector.mode = "outage"; },
+      timeOut: () => { connector.mode = "timeout"; },
+      refuseCredentials: () => { connector.mode = "unauthorized"; },
+      comeBack: () => { connector.mode = "healthy"; },
+      get calls() { return connector.calls; },
+    },
   };
 };
