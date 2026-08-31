@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/operations",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #41 — tenant-safe monitoring, support access, incidents and operational controls.",
+  "exports": { ".": "./src/index.ts" }
+}

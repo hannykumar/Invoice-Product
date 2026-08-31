@@ -33,6 +33,7 @@
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
+          <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
         </nav>
         <div class="sidebar-note">
           <span class="status-dot" aria-hidden="true"></span>
@@ -607,6 +608,18 @@
           </form>
           <div id="setup-result" aria-live="polite"></div>
         </section>
+        <section class="view" id="view-operations" aria-labelledby="operations-title">
+          <div class="page-heading">
+            <div><p class="eyebrow" data-i18n="operationsEyebrow"></p><h1 id="operations-title" tabindex="-1" data-i18n="operationsTitle"></h1><p data-i18n="operationsHelp"></p></div>
+          </div>
+          <div class="safety-note"><strong data-i18n="operationsSafetyTitle"></strong><span data-i18n="operationsSafety"></span></div>
+          <div class="dashboard-grid">
+            <article class="panel"><h2 data-i18n="operationsHealth"></h2><div id="operations-health" role="status"></div></article>
+            <article class="panel"><h2 data-i18n="operationsFailures"></h2><div id="operations-failures"></div></article>
+            <article class="panel"><h2 data-i18n="operationsQueue"></h2><div id="operations-jobs"></div></article>
+            <article class="panel"><h2 data-i18n="operationsIncidents"></h2><div id="operations-incidents"></div></article>
+          </div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -618,6 +631,7 @@
         <button data-view="returns"><span aria-hidden="true">↩</span><small data-i18n="navReturns"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
+        <button data-view="operations"><span aria-hidden="true">●</span><small data-i18n="navOperations"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
