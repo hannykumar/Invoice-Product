@@ -30,6 +30,25 @@ import { EInvoiceService } from '../../../packages/gst/src/einvoice-service.ts';
 import {
   InMemoryEInvoicePolicies, InMemoryEInvoiceStore, SyntheticIrp, irpAdapter,
 } from '../../../packages/gst/src/einvoice-adapters.ts';
+import { EwayBillService } from '../../../packages/transport/src/service.ts';
+import {
+  InMemoryConsolidatedTripStore, InMemoryEwayBillPolicies, InMemoryEwayBillStore,
+  SyntheticEwayBillPortal, ewayBillAdapter,
+} from '../../../packages/transport/src/adapters.ts';
+import { VehicleSuitabilityService } from '../../../packages/transport/src/suitability-service.ts';
+import {
+  InMemoryVehicleRecordCache, InMemoryVehicleRecordConsents, InMemoryVehicleRecordFreshness,
+  SyntheticVahanConnector, apiSetuVehicleAdapter,
+} from '../../../packages/transport/src/vehicle-record-adapters.ts';
+import {
+  TRANSPORT_SUITABILITY_PURPOSE, VehicleRecordService,
+} from '../../../packages/transport/src/vehicle-record-service.ts';
+import { PERMITTED_VEHICLE_FIELDS } from '../../../packages/transport/src/vehicle-record-types.ts';
+import {
+  InMemorySuitabilityStore, InMemoryVehicleSuitabilityPolicies, SyntheticPlateReader,
+  mastersVehicleAdapter,
+} from '../../../packages/transport/src/suitability-adapters.ts';
+import type { Vehicle } from '../../../packages/masters/src/types.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -110,9 +129,24 @@ const SETUP_PERMISSIONS = [
   'ledger.post.credit_note', 'ledger.post.debit_note', 'returns.create',
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
+  'notification.send', 'collections.manage', 'collections.send',
+  'collections.reminders.view', 'collections.reminders.send', 'collections.promise.record', 'collections.dispute.manage',
+  'bank.balance.read', 'bank.feed.manage', 'bank.feed.sync',
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
+  'eway.view', 'eway.generate', 'eway.update', 'eway.cancel',
+  'transport.vehicle.view', 'transport.vehicle.check', 'transport.vehicle.override', 'transport.vehicle.connect',
+];
+
+/**
+ * Issue #28. The shop's own lorry, as its vehicle master holds it.
+ *
+ * Deliberately a vehicle the registering authority's synthetic service has never heard of, so the
+ * screen shows what happens when the only capacity anybody holds is the business's own note.
+ */
+const OWN_VEHICLES: readonly Omit<Vehicle, 'companyId'>[] = [
+  { id: 'veh-own-1', registrationNumber: 'KA09OW5566', vehicleType: 'regular', bodyType: 'closed', ratedCapacityKg: 1500, active: true },
 ];
 
 export async function createCompanyShop(seed: CompanySeed) {
@@ -238,12 +272,76 @@ export async function createCompanyShop(seed: CompanySeed) {
     policy: eInvoicePolicies,
     idFactory: () => `${seed.companyId}:einv:${sequence += 1}`,
   });
+  // Issue #27. The e-way bill portal behind the same gateway; development runs against a synthetic
+  // one that enforces the real windows, so expiry and the 24-hour cancellation are genuinely tried.
+  const ewayPortal = new SyntheticEwayBillPortal(() => clock.now());
+  const ewayBills = new InMemoryEwayBillStore();
+  const ewayTrips = new InMemoryConsolidatedTripStore();
+  const ewayPolicies = new InMemoryEwayBillPolicies();
+  store.join(ewayBills).join(ewayTrips);
+  const ewayBill = new EwayBillService({
+    portal: ewayBillAdapter({
+      gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      clock: () => clock.now(),
+    }),
+    records: ewayBills,
+    trips: ewayTrips,
+    audit,
+    clock,
+    policy: ewayPolicies,
+    idFactory: () => `${seed.companyId}:ewb:${sequence += 1}`,
+  });
+  // Issue #29. The registering authority, reached the way production reaches it: this product's
+  // verification service, over issue #8's connector gateway, with a synthetic VAHAN at the far end.
+  // Only that last hop is fake, so the consent check, the field narrowing, the masking, the caching
+  // and the audit trail are all the real ones on the screen.
+  const vahan = new SyntheticVahanConnector();
+  const vehicleRecordCache = new InMemoryVehicleRecordCache();
+  const vehicleRecordConsents = new InMemoryVehicleRecordConsents();
+  const vehicleRecordFreshness = new InMemoryVehicleRecordFreshness();
+  const vehicleRecords = new VehicleRecordService({
+    provider: apiSetuVehicleAdapter({
+      gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      clock: () => clock.now(),
+    }),
+    cache: vehicleRecordCache,
+    consent: vehicleRecordConsents,
+    freshness: vehicleRecordFreshness,
+    audit,
+    clock,
+  });
+  // The shop connected the service when it was set up, and agreed to the whole allow-list. A
+  // business that had not would see "we could not ask", which is its own state on the screen.
+  vehicleRecordConsents.seed({
+    companyId: seed.companyId,
+    purpose: TRANSPORT_SUITABILITY_PURPOSE,
+    fields: [...PERMITTED_VEHICLE_FIELDS],
+    grantedBy: seed.setupUserId,
+    grantedAt: clock.now().toISOString(),
+    credentialReference: `vault://vehicle/${seed.companyId}`,
+  });
   const setupActor: ActorContext = {
     companyId: seed.companyId,
     branchId: seed.branchId,
     userId: seed.setupUserId,
     permissions: SETUP_PERMISSIONS,
   };
+  const plateReader = new SyntheticPlateReader();
+  const vehicleChecks = new InMemorySuitabilityStore();
+  const vehiclePolicies = new InMemoryVehicleSuitabilityPolicies();
+  store.join(vehicleChecks);
+  const vehicleSuitability = new VehicleSuitabilityService({
+    records: vehicleChecks,
+    audit,
+    clock,
+    // The person running the check is passed with each lookup; this is only the fallback for a
+    // caller that does not name one.
+    vehicleRecords: vehicleRecords.portFor(setupActor),
+    vehicleMaster: mastersVehicleAdapter(() => OWN_VEHICLES.map((vehicle) => ({ ...vehicle, companyId: seed.companyId })), () => clock.now()),
+    plateOcr: plateReader,
+    policy: vehiclePolicies,
+    idFactory: () => `${seed.companyId}:vsc:${sequence += 1}`,
+  });
   const chart = buildDefaultChart(seed.companyId, defaultChartIdFactory(seed.companyId));
   const liabilities = chart.find((account) => account.code === '2000');
   const bankParent = chart.find((account) => account.code === '1120');
@@ -258,8 +356,11 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
   return {
-    store, inventory, inventoryService, bills, orders, receipts, approvals, audit, ledger, posting,
+    store, inventory, inventoryService, bills, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
-    eInvoice, eInvoices, eInvoicePolicies, irpPortal, setupActor,
+    eInvoice, eInvoices, eInvoicePolicies, irpPortal,
+    ewayBill, ewayBills, ewayTrips, ewayPolicies, ewayPortal,
+    vehicleSuitability, vehicleChecks, vehiclePolicies, vehicleRecords, vehicleRecordCache,
+    vehicleRecordConsents, vehicleRecordFreshness, vahan, plateReader, setupActor,
   };
 }

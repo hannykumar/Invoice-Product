@@ -24,6 +24,15 @@ export type Permission =
   | "einvoice.view"
   | "einvoice.generate"
   | "einvoice.cancel"
+  | "eway.view"
+  | "eway.generate"
+  | "eway.update"
+  | "eway.cancel"
+  // Issue #28. Checking a lorry against its load is an everyday act; sending a blocked movement
+  // out anyway is deliberately a separate permission from checking it.
+  | "transport.vehicle.view"
+  | "transport.vehicle.check"
+  | "transport.vehicle.override"
   | "sales.draft.write"
   | "sales.finalise"
   | "sales.approve"
@@ -34,17 +43,27 @@ export type Permission =
   | "payments.write_off"
   | "bank.balance.read"
   | "bank.statement.import"
+  | "bank.feed.manage"
+  | "bank.feed.sync"
   | "gst.file"
   | "stock.negative.override"
   | "approval.decide"
   | "access.review"
   | "notification.send"
   | "notification.sensitive.send"
+  | "collections.manage"
+  | "collections.send"
   | "privacy.manage"
   | "privacy.export"
   | "privacy.delete"
   | "backup.manage"
   | "backup.restore"
+  | "operations.read"
+  | "operations.manage"
+  | "support.access.grant"
+  | "queue.replay"
+  | "incident.manage"
+  | "feature-flags.manage"
   // Approving a discount larger than the business allows (issue #11, GPT 1).
   | "sales.approve_discount"
   // Reports (issue #35, GPT 1). Added to the union so an owner's session can be granted them.
@@ -56,6 +75,14 @@ export type Permission =
   | "reports.view.gst"
   | "reports.view.exceptions"
   | "reports.export"
+  // Chasing overdue money (issue #23 [E23]). Built by GPT 1 on GPT 2's notification service.
+  | "collections.reminders.view"
+  | "collections.reminders.send"
+  | "collections.promise.record"
+  | "collections.dispute.manage"
+  // What a plan covers and what has been used (issue #42 [E42], GPT 1).
+  | "subscription.view"
+  | "subscription.manage"
   // Issue #34 [E34], GPT 1: asking questions about this company's own books.
   | "assistant.ask";
 

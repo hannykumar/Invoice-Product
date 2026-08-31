@@ -77,6 +77,52 @@ test('a real membership controls permissions at the domain boundary', async () =
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
 });
 
+test('operations API exposes tenant-safe failures and replays only safe jobs', async () => {
+  const ownerA = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const ownerB = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const workspaceA = await request('GET', '/api/operations', {}, ownerA);
+  const workspaceB = await request('GET', '/api/operations', {}, ownerB);
+  assert.equal(workspaceA.status, 200);
+  assert.equal(workspaceA.body.health.state, 'healthy');
+  assert.equal(workspaceA.body.failures[0].companyId, COMPANY_A);
+  assert.equal(workspaceB.body.failures[0].companyId, COMPANY_B);
+  assert.notEqual(workspaceA.body.failures[0].correlationId, workspaceB.body.failures[0].correlationId);
+  const job = workspaceA.body.jobs.find((candidate: any) => candidate.state === 'failure');
+  assert.ok(job.idempotent);
+  const replayed = await request('POST', '/api/operations/jobs/replay', { jobId: job.id }, ownerA);
+  assert.equal(replayed.body.state, 'draft');
+  assert.equal((await request('POST', '/api/operations/jobs/replay', { jobId: job.id }, ownerB)).status, 404);
+  const grant = await request('POST', '/api/operations/support-grants', { supportActorId: '00000000-0000-4000-8000-000000000099', reason: 'Customer asked support to inspect IRP error codes', scopes: ['external-failures'], durationMinutes: 30 }, ownerA);
+  assert.equal(grant.status, 200);
+  assert.deepEqual(grant.body.scopes, ['external-failures']);
+  assert.equal((await request('GET', '/api/operations', {}, await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo'))).status, 403);
+  const publicStatus = await request('GET', '/api/status');
+  assert.equal(publicStatus.status, 200);
+  assert.equal(publicStatus.body.incidents[0].state, 'resolved');
+});
+
+test('live bank feed API requires consent, syncs once and preserves history on disconnect', async () => {
+  const owner = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa', redirectUri: 'https://app.example/bank/callback' }, owner);
+  assert.equal(started.status, 200);
+  assert.equal(started.body.connection.status, 'PENDING_CONSENT');
+  const connectionId = started.body.connection.id;
+  const completed = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved' }, owner);
+  assert.equal(completed.body.connection.status, 'CONNECTED');
+  const synced = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
+  assert.equal(synced.body.imported, 2);
+  const retried = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
+  assert.equal(retried.body.imported, 2);
+  const disconnected = await request('POST', '/api/bank-feeds/disconnect', { connectionId, idempotencyKey: 'api-disconnect-once' }, owner);
+  assert.equal(disconnected.body.connection.status, 'DISCONNECTED');
+  const workspace = await request('GET', '/api/bank-feeds', {}, owner);
+  assert.equal(workspace.body.connections[0].transactions.length, 2);
+  assert.equal(JSON.stringify(workspace.body).includes('sandbox-approved'), false);
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('GET', '/api/bank-feeds', {}, viewer)).status, 403);
+});
+
 test('domain failures map to useful HTTP status codes', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const invalid = await request('POST', '/api/purchases/record', { reference: 'INVALID-80', date: '2026-08-29', amount: '0' }, owner);
@@ -569,4 +615,196 @@ test('e-invoices belong to the signed-in company alone', async () => {
   const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   const stolen = await request('POST', '/api/einvoices/preview', { invoice: 'not-ours', turnover: '80000000' }, konkan);
   assert.equal(stolen.status, 404);
+});
+
+// ---------------------------------------------------------------------------- issue #23 [E23]
+// Reminders over HTTP, against the same live company: the plan is computed from the receivables
+// position the ledger produces, and a payment recorded through the payments API stops the chase.
+
+test('the HTTP surface plans reminders from real positions and explains every bill it leaves alone', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const plan = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(plan.status, 200);
+  assert.equal(plan.body.asOf, '2026-08-29');
+
+  // Only one message a day to one customer: the oldest bill is chased and the rest say why not.
+  assert.equal(plan.body.counts.toSend, 1);
+  const sending = plan.body.candidates.find((c: { decision: string }) => c.decision === 'SEND');
+  assert.ok(sending, 'the oldest overdue bill is proposed');
+  assert.ok(sending.daysOverdue >= 60, 'and it is the oldest one');
+  assert.ok(sending.outstanding > 0, 'with the amount still outstanding, not the invoice value');
+
+  const waiting = plan.body.candidates.find((c: { reason: string }) => c.reason === 'TOO_SOON');
+  assert.ok(waiting, 'the second overdue bill waits its turn rather than sending a second message');
+  const notYet = plan.body.candidates.find((c: { reason: string }) => c.reason === 'NOT_YET_DUE');
+  assert.ok(notYet, 'and a bill that is not due yet is left alone');
+
+  // A shopkeeper reads this screen in their own language, so no explanation may be missing one.
+  for (const candidate of plan.body.candidates as { explanation: Record<string, string> }[]) {
+    assert.equal(typeof candidate.explanation['en-IN'], 'string');
+    assert.equal(typeof candidate.explanation['hi-IN'], 'string');
+  }
+});
+
+test('a reminder sent over HTTP goes out once, and asking again does not send a second', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const plan = await request('GET', '/api/reminders', {}, owner);
+  const target = plan.body.candidates.find((c: { decision: string }) => c.decision === 'SEND');
+
+  const sent = await request('POST', '/api/reminders/send', { documentId: target.documentId }, owner);
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.reminder.state, 'SENT');
+  assert.match(sent.body.reminder.message['en-IN'], /Sampoorna Traders/);
+
+  const after = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(after.body.history.length, 1);
+  assert.equal(after.body.outbox.length, 1, 'exactly one message left the building');
+
+  const again = await request('POST', '/api/reminders/send', { documentId: target.documentId }, owner);
+  assert.equal(again.body.reminder.id, sent.body.reminder.id, 'the same reminder, not a new one');
+  const afterAgain = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(afterAgain.body.outbox.length, 1, 'and still one message');
+});
+
+test('a bill that is paid or disputed is not chased, over HTTP either', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const before = await request('GET', '/api/reminders', {}, owner);
+  const open = before.body.candidates.find((c: { reason: string }) => c.reason === 'TOO_SOON');
+  assert.ok(open, 'the second overdue bill is still open');
+
+  // The customer queries it. Nothing goes out until that is settled.
+  const dispute = await request('POST', '/api/reminders/dispute', { documentId: open.documentId, reason: 'They say one carton never arrived.' }, owner);
+  assert.equal(dispute.status, 200);
+  const held = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(held.body.candidates.find((c: { documentId: string }) => c.documentId === open.documentId).reason, 'DISPUTED');
+  const refused = await request('POST', '/api/reminders/send', { documentId: open.documentId }, owner);
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.code, 'REMINDER_NOT_APPLICABLE');
+
+  // Settled, and then actually paid through the real payments API.
+  const disputeId = held.body.disputes[0].id;
+  assert.equal((await request('POST', '/api/reminders/dispute/resolve', { disputeId, resolution: 'The carton was found.' }, owner)).status, 200);
+  const paid = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: String(open.outstanding), date: '2026-08-29', reference: 'REMINDER-23-PAID', invoice: open.documentId }, owner);
+  assert.equal(paid.body.state, 'recorded');
+
+  const settled = await request('GET', '/api/reminders', {}, owner);
+  assert.equal(settled.body.candidates.find((c: { documentId: string }) => c.documentId === open.documentId).reason, 'SETTLED');
+  const afterPayment = await request('POST', '/api/reminders/send', { documentId: open.documentId }, owner);
+  assert.equal(afterPayment.status, 409, 'a paid bill is never chased');
+});
+
+test('reminders need a session, the right permission, and belong to one company only', async () => {
+  assert.equal((await request('GET', '/api/reminders')).status, 401);
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('GET', '/api/reminders', {}, viewer)).status, 403);
+  assert.equal((await request('POST', '/api/reminders/send', { documentId: 'anything' }, viewer)).status, 403);
+
+  const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const theirs = await request('GET', '/api/reminders', {}, konkan);
+  assert.equal(theirs.status, 200);
+  assert.deepEqual(theirs.body.history, [], 'nothing sent from the other company appears here');
+  assert.equal(theirs.body.outbox.length, 0);
+});
+
+// ---------------------------------------------------------------------------- issue #42 [E42]
+// The plan over HTTP, against the same live company: the limit actually stops a bill, the bills
+// that were already issued are untouched, and no plan can switch a compliance warning off.
+
+test('the plan is enforced on a real write path, and counted only when the work succeeded', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+
+  const before = await request('GET', '/api/subscription', {}, owner);
+  assert.equal(before.status, 200);
+  assert.equal(before.body.plan.id, 'free', 'a business with no plan on file is treated as free, not as stopped');
+  const invoicesUsed = before.body.usage.find((total: { meter: string }) => total.meter === 'invoices');
+  assert.ok(invoicesUsed.used >= 1, 'the bills this company has already issued were counted');
+
+  // Every essential capability is allowed on the smallest plan. This is the acceptance criterion.
+  for (const capability of ['gst.compliance_warning', 'supplier.risk_warning', 'data.export']) {
+    const check = before.body.checks.find((entry: { capability: string }) => entry.capability === capability);
+    assert.equal(check.outcome, 'ALLOWED', `${capability} is never withheld`);
+    assert.equal(check.essential, true);
+  }
+
+  // Fill the free plan's monthly allowance, then try one more.
+  const remaining = invoicesUsed.remaining as number;
+  for (let i = 0; i < remaining; i += 1) {
+    const filled = await request('POST', '/api/sales/record', {
+      party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
+      date: '2026-08-29', terms: '30', reference: `PLAN-42-${i}`,
+    }, owner);
+    assert.equal(filled.status, 200, 'bills inside the plan are issued normally');
+  }
+
+  const overLimit = await request('POST', '/api/sales/record', {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
+    date: '2026-08-29', terms: '30', reference: 'PLAN-42-OVER',
+  }, owner);
+  assert.equal(overLimit.status, 403);
+  assert.equal(overLimit.body.code, 'ENTITLEMENT_LIMIT_REACHED');
+  assert.match(overLimit.body.message, /safe and unchanged/);
+
+  const backdated = await request('POST', '/api/sales/record', {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
+    date: '2026-07-01', terms: '30', reference: 'PLAN-42-BACKDATED',
+  }, owner);
+  assert.equal(backdated.status, 403, 'a document date cannot bypass the current subscription limit');
+  assert.equal(backdated.body.code, 'ENTITLEMENT_LIMIT_REACHED');
+
+  // Nothing was half-done: the refused bill does not exist and the books still balance.
+  const reports = await request('GET', '/api/reports', {}, owner);
+  assert.equal(reports.body.trialBalance.balanced, true);
+  assert.ok(!reports.body.sales.rows.some((row: { number: string }) => row.number === undefined));
+
+  // The warnings still work while the plan is exhausted.
+  const exhausted = await request('GET', '/api/subscription', {}, owner);
+  assert.equal(exhausted.body.checks.find((entry: { capability: string }) => entry.capability === 'sales.issue_invoice').outcome, 'BLOCKED_LIMIT');
+  assert.equal(exhausted.body.checks.find((entry: { capability: string }) => entry.capability === 'gst.compliance_warning').outcome, 'ALLOWED');
+
+  // Upgrading lifts it at once, and the bills already issued are still there.
+  const upgraded = await request('POST', '/api/subscription/plan', { planId: 'growth', reason: 'Busy season' }, owner);
+  assert.equal(upgraded.status, 200);
+  const after = await request('GET', '/api/subscription', {}, owner);
+  assert.equal(after.body.plan.id, 'growth');
+  assert.equal(
+    after.body.usage.find((total: { meter: string }) => total.meter === 'invoices').used,
+    exhausted.body.usage.find((total: { meter: string }) => total.meter === 'invoices').used,
+    'a plan change never rewrites what was already done',
+  );
+  const allowedAgain = await request('POST', '/api/sales/record', {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
+    date: '2026-08-29', terms: '30', reference: 'PLAN-42-AFTER',
+  }, owner);
+  assert.equal(allowedAgain.status, 200);
+});
+
+test('the subscription screen needs a session and its own permission, and is company-scoped', async () => {
+  assert.equal((await request('GET', '/api/subscription')).status, 401);
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('GET', '/api/subscription', {}, viewer)).status, 403);
+
+  const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const theirs = await request('GET', '/api/subscription', {}, konkan);
+  assert.equal(theirs.status, 200);
+  assert.equal(theirs.body.plan.id, 'free', 'another company is on its own plan, not this one’s');
+  const konkanInvoices = theirs.body.usage.find((total: { meter: string }) => total.meter === 'invoices');
+  assert.ok(konkanInvoices.used < 50, 'and on its own count');
+});
+
+test('paying for the service is idempotent and never touches the books', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const before = await request('GET', '/api/reports', {}, owner);
+
+  const paid = await request('POST', '/api/subscription/pay', {}, owner);
+  assert.equal(paid.status, 200);
+  const again = await request('POST', '/api/subscription/pay', {}, owner);
+  assert.equal(again.body.message, paid.body.message, 'asking twice pays once');
+
+  const account = await request('GET', '/api/subscription', {}, owner);
+  assert.equal(account.body.invoices.length, 1, 'one invoice for the month, however often it is asked for');
+  assert.equal(account.body.invoices[0].state, 'PAID');
+
+  const after = await request('GET', '/api/reports', {}, owner);
+  assert.deepEqual(after.body.trialBalance, before.body.trialBalance, 'our own billing is not their books');
 });

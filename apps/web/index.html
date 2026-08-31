@@ -22,13 +22,19 @@
           <button class="nav-item" data-view="sale"><span aria-hidden="true">＋</span><span data-i18n="navSale"></span></button>
           <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
           <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
+          <button class="nav-item" data-view="bank-feeds"><span aria-hidden="true">⇅</span><span data-i18n="navBankFeeds"></span></button>
           <button class="nav-item" data-view="returns"><span aria-hidden="true">↩</span><span data-i18n="navReturns"></span></button>
           <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
           <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
+          <button class="nav-item" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button>
+          <button class="nav-item" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button>
+          <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
+          <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
+          <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
           <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
           <button class="nav-item" data-view="ask"><span aria-hidden="true">?</span><span data-i18n="navAsk"></span></button>
         </nav>
@@ -125,6 +131,24 @@
           </form>
         </section>
 
+        <section class="view" id="view-bank-feeds" aria-labelledby="bank-feeds-title">
+          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="bank-feeds-title" tabindex="-1" data-i18n="bankFeedsTitle"></h1><p data-i18n="bankFeedsHelp"></p></div></div>
+          <div class="dashboard-grid">
+            <article class="panel form-panel">
+              <h2 data-i18n="connectBank"></h2>
+              <p data-i18n="bankConsentHelp"></p>
+              <button type="button" class="primary-button wide" id="bank-feed-connect" data-i18n="giveBankPermission"></button>
+              <button type="button" class="primary-button wide" id="bank-feed-approve" data-i18n="approveSandboxPermission" hidden></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="bankFeedSafety"></span></p>
+            </article>
+            <aside class="panel">
+              <h2 data-i18n="connectedAccounts"></h2>
+              <div class="activity-list" id="bank-feed-connections" aria-live="polite"><p class="loading-copy" data-i18n="noBankConnections"></p></div>
+            </aside>
+          </div>
+          <article class="panel"><h2 data-i18n="importedBankTransactions"></h2><div class="activity-list" id="bank-feed-transactions" aria-live="polite"><p class="loading-copy" data-i18n="noBankTransactions"></p></div></article>
+        </section>
+
         <section class="view" id="view-returns" aria-labelledby="returns-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="returns-title" tabindex="-1" data-i18n="returnsTitle"></h1><p data-i18n="returnsHelp"></p></div></div>
           <form class="transaction-layout" id="return-form">
@@ -192,6 +216,146 @@
           </article>
         </section>
 
+
+        <section class="view" id="view-eway" aria-labelledby="eway-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="eway-title" tabindex="-1" data-i18n="ewayTitle"></h1>
+              <p data-i18n="ewayHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="eway-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="eway-invoices" required></select></label>
+                <label><span data-i18n="whyMoving"></span><select name="reason"><option value="SUPPLY" data-i18n="moveSupply"></option><option value="JOB_WORK" data-i18n="moveJobWork"></option><option value="BRANCH_TRANSFER" data-i18n="moveBranch"></option><option value="SALES_RETURN" data-i18n="moveReturn"></option></select></label>
+                <label><span data-i18n="deliveryState"></span><select name="shipToState" id="eway-states"></select><small data-i18n="deliveryStateHelp"></small><small id="eway-state-rule"></small></label>
+                <label><span data-i18n="deliveryPlace"></span><input name="shipToPlace" placeholder="Hyderabad" /></label>
+                <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /><small data-i18n="distanceHelp"></small></label>
+                <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA01AB1234" /><small data-i18n="vehicleHelp"></small></label>
+                <label><span data-i18n="oversized"></span><select name="oversized"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
+                <label><span data-i18n="sameCity"></span><select name="withinSameCity"><option value="" data-i18n="answerNotSaid"></option><option value="yes" data-i18n="answerYes"></option><option value="no" data-i18n="answerNo"></option></select><small data-i18n="sameCityHelp"></small></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkMovement"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="ewaySafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="eway-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="eway-result-title">—</h2><p id="eway-result-message"></p></div>
+              <span class="pill" id="eway-status">—</span>
+            </div>
+            <div class="activity-list" id="eway-detail"></div>
+            <div class="dialog-actions" id="eway-actions">
+              <button type="button" class="primary-button" id="eway-raise" hidden data-i18n="raiseEway"></button>
+              <button type="button" class="secondary-button" id="eway-offline" hidden data-i18n="downloadOffline"></button>
+              <button type="button" class="secondary-button" id="eway-reconcile" hidden data-i18n="askPortal"></button>
+            </div>
+            <form id="eway-vehicle-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA25CD5678" required /></label>
+                <label><span data-i18n="vehicleChangeReason"></span><select name="changeReason"><option value="FIRST_TIME" data-i18n="changeFirst"></option><option value="BREAKDOWN" data-i18n="changeBreakdown"></option><option value="TRANSSHIPMENT" data-i18n="changeTransshipment"></option><option value="OTHERS" data-i18n="reasonOther"></option></select></label>
+                <label><span data-i18n="changeNote"></span><input name="changeNote" placeholder="Gearbox failure on NH48" /></label>
+                <label><span data-i18n="fromPlace"></span><input name="fromPlace" placeholder="Hubballi" /></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="addVehicle"></button>
+            </form>
+            <form id="eway-extend-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="currentPlace"></span><input name="currentPlace" placeholder="Solapur" required /></label>
+                <label><span data-i18n="currentState"></span><input name="currentState" maxlength="2" placeholder="27" required /></label>
+                <label><span data-i18n="remainingKm"></span><input name="remainingKm" type="number" min="0" max="4000" step="1" placeholder="120" required /></label>
+                <label><span data-i18n="extendWhy"></span><input name="reason" placeholder="Held up at a check post" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="extendValidity"></button>
+            </form>
+            <form id="eway-cancel-form" hidden>
+              <div class="field-grid">
+                <label><span data-i18n="cancelReasonKind"></span><select name="reasonCode"><option value="DATA_ENTRY_MISTAKE" data-i18n="reasonMistake"></option><option value="DUPLICATE" data-i18n="reasonDuplicate"></option><option value="ORDER_CANCELLED" data-i18n="reasonOrderOff"></option><option value="OTHERS" data-i18n="reasonOther"></option></select></label>
+                <label><span data-i18n="cancelReasonWhy"></span><input name="reason" placeholder="The customer called off the order" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="cancelEway"></button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading"><div><h2 data-i18n="onTheRoad"></h2><p data-i18n="onTheRoadHelp"></p></div></div>
+            <div class="activity-list" id="eway-road"></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-vehicle" aria-labelledby="vehicle-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="vehicle-title" tabindex="-1" data-i18n="vehicleCheckTitle"></h1>
+              <p data-i18n="vehicleCheckHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <div class="panel-heading"><div><h2 data-i18n="recordLookupTitle"></h2><p data-i18n="recordLookupHelp"></p></div></div>
+            <form id="vehicle-record-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="recordPlate"></span><input name="vehicle" id="vehicle-record-number" placeholder="KA01AB1234" required /><small data-i18n="recordPlateHelp"></small></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="recordLookupButton"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="recordSafety"></span></p>
+            </form>
+            <div class="panel-heading" id="vehicle-record-heading" hidden>
+              <div><h2 id="vehicle-record-title">—</h2><p id="vehicle-record-message"></p></div>
+              <span class="pill" id="vehicle-record-status">—</span>
+            </div>
+            <div class="activity-list" id="vehicle-record-facts"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <form id="vehicle-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="vehicle-invoices" required></select></label>
+                <label><span data-i18n="whichVehicle"></span><select name="vehicle" id="vehicle-numbers" required></select><small data-i18n="whichVehicleHelp"></small></label>
+                <label><span data-i18n="loadWeight"></span><input name="weightKg" type="number" min="0" max="60000" step="1" placeholder="5000" /><small data-i18n="loadWeightHelp"></small></label>
+                <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /></label>
+                <label><span data-i18n="crossesBorder"></span><select name="interState"><option value="yes" data-i18n="answerYes"></option><option value="no" data-i18n="answerNo"></option></select><small data-i18n="crossesBorderHelp"></small></label>
+                <label><span data-i18n="coldChain"></span><select name="coldChain"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
+                <label><span data-i18n="hazardous"></span><select name="hazardous"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
+                <label><span data-i18n="platePhoto"></span><select name="platePhoto" id="vehicle-photos"></select><small data-i18n="platePhotoHelp"></small></label>
+                <label><span data-i18n="plateTyped"></span><input name="plateTyped" placeholder="KA01AB1234" /><small data-i18n="plateTypedHelp"></small></label>
+                <label><span data-i18n="typedClass"></span><select name="declaredClass" id="vehicle-classes"></select><small data-i18n="typedClassHelp"></small></label>
+                <label><span data-i18n="typedCapacity"></span><input name="declaredCapacityKg" type="number" min="0" max="60000" step="1" placeholder="1200" /><small data-i18n="typedCapacityHelp"></small></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkVehicle"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="vehicleSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="vehicle-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="vehicle-result-title">—</h2><p id="vehicle-result-message"></p></div>
+              <span class="pill" id="vehicle-status">—</span>
+            </div>
+            <div class="activity-list" id="vehicle-findings"></div>
+            <div class="panel-heading"><div><h2 data-i18n="evidenceUsed"></h2><p data-i18n="evidenceUsedHelp"></p></div></div>
+            <div class="activity-list" id="vehicle-evidence"></div>
+            <form id="vehicle-override-form" hidden>
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="overrideWhich"></span><select name="findingCodes" id="vehicle-override-codes" multiple size="3"></select><small data-i18n="overrideWhichHelp"></small></label>
+                <label class="full-field"><span data-i18n="overrideWhy"></span><input name="reason" placeholder="Reweighed at our own weighbridge at 1,180 kg" required /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="overrideButton"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="overrideSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading"><div><h2 data-i18n="heldBack"></h2><p data-i18n="heldBackHelp"></p></div></div>
+            <div class="activity-list" id="vehicle-held"></div>
+          </article>
+        </section>
+
         <section class="view" id="view-supplier" aria-labelledby="supplier-check-title">
           <div class="page-heading">
             <div>
@@ -232,6 +396,100 @@
           </article>
         </section>
 
+
+        <!-- Issue #23 [E23]: chasing overdue money. Every row is decided from the receivables
+             position at the moment the page loaded, and a skip is shown as prominently as a send. -->
+
+        <!-- Issue #42 [E42]: what the plan covers. The screen leads with the promise, because the
+             thing a person most needs to know about pricing is what it cannot take away. -->
+        <section class="view" id="view-plan" aria-labelledby="plan-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="plan-title" tabindex="-1" data-i18n="planTitle"></h1>
+              <p data-i18n="planHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div><h2 id="plan-name">—</h2><p id="plan-state">—</p></div>
+              <span class="pill" id="plan-pill">—</span>
+            </div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span id="plan-promise"></span></p>
+            <h3 data-i18n="planUsage"></h3>
+            <div id="plan-usage" class="activity-list"></div>
+            <h3 data-i18n="planNeverWithheld"></h3>
+            <div id="plan-checks" class="activity-list"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <h2 data-i18n="planChoose"></h2>
+            <div id="plan-options" class="activity-list"></div>
+            <div class="setup-actions">
+              <button type="button" class="primary-button" id="plan-pay" data-i18n="planPay"></button>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h2 data-i18n="planInvoices"></h2>
+            <div id="plan-invoices" class="activity-list"></div>
+          </article>
+        </section>
+        <section class="view" id="view-reminders" aria-labelledby="reminders-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="reminders-title" tabindex="-1" data-i18n="remindersTitle"></h1>
+              <p data-i18n="remindersHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div><h2 data-i18n="remindersToday"></h2><p id="reminders-summary">—</p></div>
+              <button type="button" class="primary-button" id="reminders-send-all" data-i18n="remindersSendAll"></button>
+            </div>
+            <div id="reminders-plan" class="activity-list" aria-live="polite"></div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="remindersSafety"></span></p>
+          </article>
+
+          <article class="panel form-panel">
+            <h2 data-i18n="remindersTellUs"></h2>
+            <form id="reminders-note-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="remindersBill"></span><select name="documentId" id="reminders-bill-choices"></select></label>
+                <label><span data-i18n="remindersWhatHappened"></span><select name="kind" id="reminders-kind">
+                  <option value="promise" data-i18n="remindersPromise"></option>
+                  <option value="dispute" data-i18n="remindersDispute"></option>
+                </select></label>
+                <label><span data-i18n="remindersPromisedOn"></span><input name="promisedOn" type="date" value="2026-09-05" /></label>
+                <label><span data-i18n="remindersAmount"></span><input name="amount" type="text" inputmode="decimal" value="250" /></label>
+                <label class="full-field"><span data-i18n="remindersNote"></span><input name="note" placeholder="Owner said the cheque goes out on Tuesday" /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="remindersRecord"></button>
+            </form>
+            <div id="reminders-promises" class="activity-list"></div>
+          </article>
+
+          <article class="panel form-panel">
+            <h2 data-i18n="remindersStopTitle"></h2>
+            <form id="reminders-stop-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="remindersStopReason"></span><input name="reason" placeholder="They asked us to call instead of messaging" required /></label>
+              </div>
+              <button type="submit" class="secondary-button" data-i18n="remindersStop"></button>
+              <button type="button" class="secondary-button" id="reminders-resume" data-i18n="remindersResume"></button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <h2 data-i18n="remindersHistory"></h2>
+            <div id="reminders-history" class="activity-list"></div>
+            <h3 data-i18n="remindersOutbox"></h3>
+            <div id="reminders-outbox" class="activity-list"></div>
+          </article>
+        </section>
         <section class="view" id="view-deliveries" aria-labelledby="deliveries-title">
           <div class="page-heading">
             <div>
@@ -409,6 +667,18 @@
           </form>
           <div id="setup-result" aria-live="polite"></div>
         </section>
+        <section class="view" id="view-operations" aria-labelledby="operations-title">
+          <div class="page-heading">
+            <div><p class="eyebrow" data-i18n="operationsEyebrow"></p><h1 id="operations-title" tabindex="-1" data-i18n="operationsTitle"></h1><p data-i18n="operationsHelp"></p></div>
+          </div>
+          <div class="safety-note"><strong data-i18n="operationsSafetyTitle"></strong><span data-i18n="operationsSafety"></span></div>
+          <div class="dashboard-grid">
+            <article class="panel"><h2 data-i18n="operationsHealth"></h2><div id="operations-health" role="status"></div></article>
+            <article class="panel"><h2 data-i18n="operationsFailures"></h2><div id="operations-failures"></div></article>
+            <article class="panel"><h2 data-i18n="operationsQueue"></h2><div id="operations-jobs"></div></article>
+            <article class="panel"><h2 data-i18n="operationsIncidents"></h2><div id="operations-incidents"></div></article>
+          </div>
+        </section>
 
         <section class="view" id="view-migration" aria-labelledby="migration-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="navMigration"></p><h1 id="migration-title" tabindex="-1" data-i18n="migrationTitle"></h1><p data-i18n="migrationHelp"></p></div></div>
@@ -448,12 +718,18 @@
         <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
         <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
         <button data-view="payment"><span aria-hidden="true">₹</span><small data-i18n="navPayment"></small></button>
+        <button data-view="bank-feeds"><span aria-hidden="true">⇅</span><small data-i18n="navBankFeeds"></small></button>
         <button data-view="returns"><span aria-hidden="true">↩</span><small data-i18n="navReturns"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
+        <button data-view="operations"><span aria-hidden="true">●</span><small data-i18n="navOperations"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
+        <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
+        <button data-view="plan"><span aria-hidden="true">◈</span><small data-i18n="navPlan"></small></button>
+        <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
+        <button data-view="vehicle"><span aria-hidden="true">⚙</span><small data-i18n="navVehicle"></small></button>
         <button data-view="migration"><span aria-hidden="true">⇪</span><small data-i18n="navMigration"></small></button>
         <button data-view="ask"><span aria-hidden="true">?</span><small data-i18n="navAsk"></small></button>
       </nav>

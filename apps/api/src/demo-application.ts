@@ -40,15 +40,59 @@ import type { PurchaseVerdict } from '../../../packages/purchasing/src/validatio
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
+import {
+  InMemoryServiceInvoiceRepository,
+  InMemorySubscriptionRepository,
+  InMemoryUsageRepository,
+  SubscriptionService,
+  alwaysPays,
+  type Entitlement,
+  type Plan,
+} from '@invoice/subscriptions';
+import {
+  ChannelNotificationTransport,
+  InAppNotificationAdapter,
+  NotificationService,
+  NotificationTemplateRegistry,
+  type Notification,
+  type NotificationTransport,
+  type Permission,
+  type RequestContext,
+} from '../../../packages/platform/src/index.ts';
+import {
+  CollectionsService,
+  InMemoryReminderRepository,
+  notificationReminderTransport,
+  receivablesPositions,
+  registerReminderTemplates,
+  type PartyContactPort,
+  type ReminderCandidate,
+  type Reminder,
+} from '@invoice/collections';
 import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
 import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
+import type {
+  ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
+} from '../../../packages/transport/src/types.ts';
+import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
+import { outstandingOf } from '../../../packages/transport/src/suitability-service.ts';
+import { platePhoto } from '../../../packages/transport/src/suitability-adapters.ts';
+import { SYNTHETIC_VAHAN_ROWS } from '../../../packages/transport/src/vehicle-record-adapters.ts';
+import { PERMITTED_VEHICLE_FIELD_NAMES } from '../../../packages/transport/src/vehicle-record-types.ts';
+import { readVehicleClass, readWeightKg } from '../../../packages/transport/src/vehicle-record.ts';
+import { VEHICLE_CLASS_NAMES } from '../../../packages/transport/src/suitability-types.ts';
+import type {
+  ShipmentFacts, TransportDetails, VehicleClass, VehicleEvidence, VehicleSuitabilityAssessment,
+} from '../../../packages/transport/src/suitability-types.ts';
+import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
 } from '../../../packages/returns/src/index.ts';
+import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -130,6 +174,23 @@ const previewEffects = (preview: PurchasePostingPreview, location: string): stri
   return effects;
 };
 
+/**
+ * Issue #23 — where a reminder ends up in this demo.
+ *
+ * The one thing here that is not the real module: WhatsApp, SMS and email have no provider on a
+ * developer's machine, so the message is rendered through GPT 2's real template registry and kept
+ * where the screen can show it. Nothing about the decision to send it is faked.
+ */
+class DemoReminderOutbox implements NotificationTransport {
+  readonly messages: { channel: string; to: string; subject: string; body: string; at: string }[] = [];
+  private readonly templates: NotificationTemplateRegistry;
+  constructor(templates: NotificationTemplateRegistry) { this.templates = templates; }
+  async send(notification: Notification): Promise<void> {
+    const rendered = this.templates.render(notification);
+    this.messages.unshift({ channel: notification.channel, to: notification.recipientId, subject: rendered.subject, body: rendered.body, at: new Date(notification.scheduledAt).toISOString() });
+  }
+}
+
 export class DemoApplication {
   private readonly config: CompanySeed;
   private readonly shop: Awaited<ReturnType<typeof createCompanyShop>>;
@@ -143,6 +204,10 @@ export class DemoApplication {
   private readonly terms: TradeTermsService;
   private readonly returns: ReturnService;
   private readonly returnNotes: InMemoryReturnNoteRepository;
+  private readonly subscriptions: SubscriptionService;
+  private readonly collections: CollectionsService;
+  private readonly outbox: DemoReminderOutbox;
+  private readonly bankFeeds: BankFeedService;
 
   private constructor(
     config: CompanySeed,
@@ -157,6 +222,10 @@ export class DemoApplication {
     terms: TradeTermsService,
     returns: ReturnService,
     returnNotes: InMemoryReturnNoteRepository,
+    collections: CollectionsService,
+    outbox: DemoReminderOutbox,
+    bankFeeds: BankFeedService,
+    subscriptions: SubscriptionService,
   ) {
     this.config = config;
     this.shop = shop;
@@ -170,6 +239,10 @@ export class DemoApplication {
     this.terms = terms;
     this.returns = returns;
     this.returnNotes = returnNotes;
+    this.subscriptions = subscriptions;
+    this.collections = collections;
+    this.outbox = outbox;
+    this.bankFeeds = bankFeeds;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -367,14 +440,76 @@ export class DemoApplication {
       register: new ComplianceRegister(),
       blocked,
     });
+    // Issue #23 [E23]: chasing overdue money. Receivables above it is the real service that has
+    // just been composed; the notification service below it is GPT 2's real one from #39. This
+    // module supplies only the decision about who is chased and how hard.
+    const templates = new NotificationTemplateRegistry();
+    registerReminderTemplates(templates);
+    const outbox = new DemoReminderOutbox(templates);
+    const notifications = new NotificationService(
+      new ChannelNotificationTransport({ in_app: new InAppNotificationAdapter(), email: outbox, whatsapp: outbox, sms: outbox }),
+      () => Date.now(),
+      { maxPerWindow: 100, windowMs: 60_000 },
+    );
+    const reminderContext = (from: ActorContext): RequestContext => ({
+      companyId: from.companyId,
+      branchId: from.branchId ?? config.branchId,
+      actorId: from.userId,
+      // Sending is already gated by the collections permission the caller had to hold; this is the
+      // infrastructure permission the notification service asks for, and nothing more.
+      permissions: new Set<Permission>(['notification.send']),
+      sessionId: `collections:${from.userId}`,
+    });
+    const reminderContacts: PartyContactPort = {
+      async contact(_companyId, partyId) {
+        return partyId === config.customerId
+          ? { recipientId: `${config.customerName.toLowerCase().replace(/[^a-z]+/g, '-')}@example.invalid`, channels: ['whatsapp', 'email', 'in_app'] }
+          : null;
+      },
+      async owner() { return { recipientId: config.setupUserId, channels: ['in_app', 'email'] }; },
+    };
+    const collections = new CollectionsService({
+      businessName: config.name,
+      receivables: receivablesPositions(payments, documents),
+      contacts: reminderContacts,
+      transport: notificationReminderTransport(notifications, reminderContext),
+      repository: new InMemoryReminderRepository(),
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      // This demo company's whole world is 29 August 2026 — its bills, its payments, its due
+      // dates. The reminder clock is pinned to the same afternoon so the screen shows the same day
+      // the books are on. Quiet hours are a real rule evaluated against this clock; the package
+      // tests drive a night and a morning through it.
+      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+    });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes);
+    const bankProvider = new SyntheticBankFeedProvider();
+    bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
+    bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
+    const bankFeeds = new BankFeedService([bankProvider]);
+
+    // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
+    // is the mock one — no production credential is needed to run any of this — and the limits it
+    // enforces are the real ones from the shipped catalogue.
+    const subscriptions = new SubscriptionService({
+      subscriptions: new InMemorySubscriptionRepository(),
+      usage: new InMemoryUsageRepository(),
+      invoices: new InMemoryServiceInvoiceRepository(),
+      payments: alwaysPays(),
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+    });
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions);
     await app.seed();
     return app;
   }
 
   private async seed(): Promise<void> {
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
+    // Two older bills, so the Reminders screen has something to decide about on the demo's date.
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
   }
 
   async dashboard(actor: ActorContext) {
@@ -553,6 +688,148 @@ export class DemoApplication {
     return bill;
   }
 
+  // ------------------------------------------------------- issue #23: chasing what is still owed
+
+  private reminderDate(input: Record<string, unknown>): IsoDate {
+    return isoDate(String(input.today ?? '2026-08-29'));
+  }
+
+  private candidateJson(candidate: ReminderCandidate) {
+    return {
+      documentId: candidate.documentId,
+      partyId: candidate.partyId,
+      partyName: candidate.partyName,
+      decision: candidate.decision,
+      reason: candidate.reason,
+      level: candidate.level,
+      channel: candidate.channel,
+      step: candidate.step?.code ?? null,
+      explanation: candidate.explanation,
+      bill: candidate.snapshot.documentNumber,
+      outstanding: jsonAmount(candidate.snapshot.outstanding.minor),
+      daysOverdue: candidate.snapshot.daysOverdue,
+    };
+  }
+
+  private reminderJson(reminder: Reminder) {
+    return {
+      id: reminder.id,
+      bill: reminder.snapshot.documentNumber,
+      documentId: reminder.documentId,
+      state: reminder.state,
+      level: reminder.level,
+      channel: reminder.channel,
+      audience: reminder.audience,
+      message: reminder.message,
+      outstanding: jsonAmount(reminder.snapshot.outstanding.minor),
+      daysOverdue: reminder.snapshot.daysOverdue,
+      asOf: reminder.snapshot.asOf,
+      failureReason: reminder.failureReason,
+      sentAt: reminder.sentAt,
+    };
+  }
+
+  /** Everything the Reminders screen shows: the plan, what was sent, promises and disputes. */
+  async reminders(actor: ActorContext, input: Record<string, unknown> = {}) {
+    this.companyOf(actor);
+    const today = this.reminderDate(input);
+    const plan = await this.collections.plan(actor, today);
+    return {
+      asOf: today,
+      summary: plan.summary,
+      counts: { toSend: plan.toSend, toEscalate: plan.toEscalate, skipped: plan.skipped },
+      candidates: plan.candidates.map((candidate) => this.candidateJson(candidate)),
+      history: (await this.collections.history(actor)).map((reminder) => this.reminderJson(reminder)),
+      promises: (await this.collections.promises(actor, today)).map((view) => ({
+        id: view.promise.id,
+        documentId: view.promise.documentId,
+        amount: jsonAmount(view.promise.amount.minor),
+        promisedOn: view.promise.promisedOn,
+        outcome: view.outcome,
+        explanation: view.explanation,
+      })),
+      disputes: (await this.collections.disputes(actor)).map((dispute) => ({
+        id: dispute.id, documentId: dispute.documentId, reason: dispute.reason, state: dispute.state,
+      })),
+      outbox: this.outbox.messages.slice(0, 10),
+    };
+  }
+
+  async sendReminder(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const reminder = await this.collections.send(actor, {
+      documentId: String(input.documentId ?? ''),
+      today: this.reminderDate(input),
+    });
+    return {
+      state: reminder.state === 'SENT' ? 'recorded' : 'recorded',
+      title: reminder.state === 'SENT' ? 'Reminder sent' : `Reminder ${reminder.state.toLowerCase()}`,
+      message: reminder.state === 'FAILED'
+        ? (reminder.failureReason ?? 'The message could not be delivered.')
+        : reminder.message['en-IN'],
+      reminder: this.reminderJson(reminder),
+    };
+  }
+
+  async sendAllReminders(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const sent = await this.collections.sendPlanned(actor, this.reminderDate(input));
+    return {
+      state: 'recorded',
+      title: sent.length === 0 ? 'Nothing needed sending' : `${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`,
+      message: sent.length === 0
+        ? 'Every open bill was deliberately left alone today. The reasons are on this screen.'
+        : `${sent.filter((r) => r.state === 'SENT').length} sent, ${sent.filter((r) => r.state !== 'SENT').length} not delivered.`,
+      reminders: sent.map((reminder) => this.reminderJson(reminder)),
+    };
+  }
+
+  async retryReminder(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), this.reminderDate(input));
+    return { state: 'recorded', title: `Reminder ${reminder.state.toLowerCase()}`, message: reminder.failureReason ?? reminder.message['en-IN'], reminder: this.reminderJson(reminder) };
+  }
+
+  async recordPromiseToPay(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const promise = await this.collections.recordPromise(actor, {
+      partyId: this.config.customerId,
+      documentId: String(input.documentId ?? ''),
+      amount: money(paise(input.amount)),
+      promisedOn: isoDate(String(input.promisedOn ?? '')),
+      note: input.note === undefined ? null : String(input.note),
+    });
+    return { state: 'recorded', title: 'Promise recorded', message: `Reminders for this bill are paused until ${promise.promisedOn}.` };
+  }
+
+  async raiseBillDispute(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    await this.collections.raiseDispute(actor, {
+      partyId: this.config.customerId,
+      documentId: input.documentId === undefined || input.documentId === '' ? null : String(input.documentId),
+      reason: String(input.reason ?? ''),
+    });
+    return { state: 'recorded', title: 'Dispute recorded', message: 'This bill will not be chased until the dispute is closed.' };
+  }
+
+  async resolveBillDispute(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    await this.collections.resolveDispute(actor, String(input.disputeId ?? ''), String(input.resolution ?? 'Settled with the customer.'));
+    return { state: 'recorded', title: 'Dispute closed', message: 'The bill goes back into the reminder ladder at the rung its age has reached.' };
+  }
+
+  async stopReminders(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    await this.collections.optOut(actor, this.config.customerId, String(input.reason ?? ''));
+    return { state: 'recorded', title: 'Reminders stopped', message: `${this.config.customerName} will not receive automatic reminders.` };
+  }
+
+  async resumeReminders(actor: ActorContext, _input: Record<string, unknown> = {}) {
+    this.companyOf(actor);
+    await this.collections.resumeReminders(actor, this.config.customerId);
+    return { state: 'recorded', title: 'Reminders started again', message: `${this.config.customerName} will receive automatic reminders again.` };
+  }
+
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: this.saleInput(input) });
@@ -611,9 +888,107 @@ export class DemoApplication {
   }
 
   async recordSale(actor: ActorContext, input: Record<string, unknown>) {
+    // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
+    // In that order, because a bill that failed to post is not a bill, and charging somebody's
+    // allowance for the product's own failure would be the wrong way round.
+    const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${preview.token}`, invoiceId: preview.token });
+    await this.subscriptions.recordUsage(actor, {
+      meter: 'invoices',
+      // The invoice's own id, so a retried request counts the same bill once.
+      idempotencyKey: `invoice:${final.invoice.id}`,
+      note: 'a bill was issued',
+      on: usageDate,
+    });
     return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
+  }
+
+  // ------------------------------------------------------------ issue #42: the plan and its use
+
+  private planJson(plan: Plan) {
+    return {
+      id: plan.id,
+      name: plan.name,
+      description: plan.description,
+      monthlyPrice: jsonAmount(plan.monthlyPrice.minor),
+      trialDays: plan.trialDays,
+      graceDays: plan.graceDays,
+      limits: plan.limits.map((limit) => ({ meter: limit.meter, perMonth: limit.perMonth === null ? null : Number(limit.perMonth) })),
+    };
+  }
+
+  private entitlementJson(entitlement: Entitlement) {
+    return {
+      capability: entitlement.capability,
+      outcome: entitlement.outcome,
+      essential: entitlement.essential,
+      state: entitlement.state,
+      reason: entitlement.reason,
+      used: entitlement.used === null ? null : Number(entitlement.used),
+      limit: entitlement.limit === null ? null : Number(entitlement.limit),
+    };
+  }
+
+  async subscriptionAccount(actor: ActorContext, input: Record<string, unknown> = {}) {
+    this.companyOf(actor);
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const account = await this.subscriptions.account(actor, today);
+    // What the plan would say about a few things a person actually does, so the screen can show
+    // the promise being kept rather than merely printed.
+    const checks = ['sales.issue_invoice', 'assistant.ask', 'gst.compliance_warning', 'supplier.risk_warning', 'data.export'];
+    return {
+      state: account.state,
+      stateWords: account.stateWords,
+      writingStopsOn: account.writingStopsOn,
+      promise: account.promise,
+      plan: this.planJson(account.plan),
+      plans: this.subscriptions.plans().map((plan) => this.planJson(plan)),
+      usage: account.usage.map((total) => ({
+        meter: total.meter,
+        label: total.label,
+        used: Number(total.used),
+        limit: total.limit === null ? null : Number(total.limit),
+        remaining: total.remaining === null ? null : Number(total.remaining),
+      })),
+      invoices: account.invoices.map((invoice) => ({
+        id: invoice.id, period: invoice.period, state: invoice.state,
+        net: jsonAmount(invoice.net.minor), gst: jsonAmount(invoice.gst.minor), total: jsonAmount(invoice.total.minor),
+        issuedOn: invoice.issuedOn, dueOn: invoice.dueOn, paidOn: invoice.paidOn, failureReason: invoice.failureReason,
+      })),
+      checks: await Promise.all(checks.map(async (capability) => this.entitlementJson(await this.subscriptions.check(actor, capability, today)))),
+      history: account.subscription.history,
+    };
+  }
+
+  async changeSubscriptionPlan(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const planId = String(input.planId ?? '');
+    const existing = await this.subscriptions.account(actor, today);
+    const subscription = existing.subscription.id.startsWith('implied:')
+      ? await this.subscriptions.start(actor, { planId, on: today })
+      : await this.subscriptions.changePlan(actor, { planId, on: today, reason: String(input.reason ?? 'Changed from the account screen') });
+    return {
+      state: 'recorded',
+      title: 'Plan changed',
+      message: `This business is now on the ${subscription.planId} plan. Nothing that was already recorded has changed.`,
+    };
+  }
+
+  async issueSubscriptionInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const invoice = await this.subscriptions.issueServiceInvoice(actor, { period: today.slice(0, 7), on: today });
+    const paid = invoice.state === 'PAID' ? invoice : await this.subscriptions.chargeServiceInvoice(actor, invoice.id, today);
+    return {
+      state: 'recorded',
+      title: paid.state === 'PAID' ? 'Paid' : 'Payment did not go through',
+      message: paid.state === 'PAID'
+        ? `Subscription paid for ${paid.period}.`
+        : (paid.failureReason ?? 'The payment could not be taken. Nothing about your books has changed.'),
+    };
   }
 
   async previewPayment(actor: ActorContext, input: Record<string, unknown>) {
@@ -634,6 +1009,45 @@ export class DemoApplication {
     const position = await this.payments.position(actor, this.config.customerId, isoDate(String(input.date)));
     return { state: 'recorded', title: 'Payment recorded', message: `₹${jsonAmount(payment.amount.minor).toFixed(2)} was recorded once.`, paymentId: payment.id, customerOutstanding: jsonAmount(position.totalOutstanding.minor) };
   }
+
+  // Issue #24 — explicit provider permission and incremental imports. Imported lines remain drafts
+  // for the bank reconciliation engine; these endpoints never post ledger entries or move money.
+  async bankFeedWorkspace(actor: ActorContext) {
+    const context = this.bankContext(actor);
+    return {
+      providers: [{ id: 'sandbox-aa', name: 'Sandbox authorised bank feed' }],
+      connections: this.bankFeeds.connections(context).map((connection) => ({
+        ...this.bankConnectionJson(connection),
+        accounts: this.bankFeeds.accounts(context, connection.id).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
+        transactions: this.bankFeeds.transactions(context, connection.id).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
+      })),
+    };
+  }
+
+  async startBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
+    const connection = await this.bankFeeds.startConsent(this.bankContext(actor), { provider: String(input.provider ?? ''), redirectUri: String(input.redirectUri ?? '') });
+    return { state: 'draft', connection: this.bankConnectionJson(connection) };
+  }
+
+  async completeBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
+    const connection = await this.bankFeeds.completeConsent(this.bankContext(actor), String(input.connectionId ?? ''), String(input.authorizationCode ?? ''));
+    return { state: 'success', connection: this.bankConnectionJson(connection) };
+  }
+
+  async syncBankFeed(actor: ActorContext, input: Record<string, unknown>) {
+    const connectionId = String(input.connectionId ?? '');
+    const result = await this.bankFeeds.sync(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-sync:${connectionId}:${new Date().toISOString().slice(0, 10)}`));
+    return { state: 'success', imported: result.imported, duplicates: result.duplicates, connection: this.bankConnectionJson(result.connection) };
+  }
+
+  async disconnectBankFeed(actor: ActorContext, input: Record<string, unknown>) {
+    const connectionId = String(input.connectionId ?? '');
+    const connection = await this.bankFeeds.disconnect(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-disconnect:${connectionId}`));
+    return { state: 'success', connection: this.bankConnectionJson(connection), message: 'Bank access was disconnected. Previously imported transactions remain available for your records.' };
+  }
+
+  private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
+  private bankConnectionJson(connection: BankFeedConnection) { return { ...connection }; }
 
   async returnDocuments(actor: ActorContext) {
     const companyId = this.companyOf(actor);
@@ -1139,6 +1553,551 @@ export class DemoApplication {
       document, applicability: this.applicabilityFor(document, input),
     });
     return { state: 'offline' as const, fileName: `einvoice-${document.documentNumber.replace(/\//g, '-')}.json`, json };
+  }
+
+  // ------------------------------------------------ issue #27: e-way bills for goods on the road
+
+  /**
+   * Turns a sales invoice and what the dispatch clerk typed into one movement of goods.
+   *
+   * The bill and the lorry are deliberately separate things. The invoice says who is being charged;
+   * the form says where the goods are actually going, how far, and on which vehicle. Both go in,
+   * and the rules decide from the movement rather than from the bill.
+   */
+  private async movementFor(actor: ActorContext, invoiceId: string, input: Record<string, unknown>): Promise<Movement> {
+    const companyId = this.companyOf(actor);
+    const invoice = await this.salesRepository.findById(companyId, invoiceId);
+    if (invoice === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    if (invoice.state !== 'FINAL' || invoice.number === null) {
+      throw invalid('API_INVOICE_NOT_FINAL', 'This bill has not been issued yet, so there is nothing to move against it.');
+    }
+    const pricing = invoice.pricing;
+    if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
+
+    const consignor: MovementParty = {
+      legalName: this.config.name,
+      gstin: this.config.gstin,
+      address1: this.config.location,
+      place: this.config.location.split('·')[0]?.trim() ?? this.config.location,
+      pincode: '560058',
+      stateCode: this.config.gstin.slice(0, 2),
+    };
+    const billTo: MovementParty = {
+      legalName: this.config.customerName,
+      gstin: this.config.customerGstin,
+      address1: 'Customer address on file',
+      place: 'Bengaluru',
+      pincode: '560001',
+      stateCode: this.config.customerGstin.slice(0, 2),
+    };
+
+    // Where the goods really go. Left off entirely when the form did not say, so the rules read the
+    // buyer's own address rather than a made-up delivery address.
+    const shipToState = String(input.shipToState ?? '').trim();
+    const shipToPlace = String(input.shipToPlace ?? '').trim();
+    const shipTo: MovementParty | undefined = shipToState === '' ? undefined : {
+      legalName: `${this.config.customerName} — delivery address`,
+      gstin: this.config.customerGstin,
+      address1: 'Delivery address given on the movement',
+      place: shipToPlace === '' ? 'Delivery address' : shipToPlace,
+      pincode: '500037',
+      stateCode: shipToState,
+    };
+
+    const lines: ConsignmentLine[] = pricing.lines.map((line) => ({
+      description: line.itemName,
+      hsnCode: line.hsnOrSac ?? '',
+      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
+      unit: line.quantity.unit,
+      taxableValuePaise: line.taxableValue.minor,
+      cgstPaise: line.cgst.minor,
+      sgstPaise: line.sgst.minor,
+      igstPaise: line.igst.minor,
+      cessPaise: line.cess.minor,
+    }));
+
+    const distance = String(input.distanceKm ?? '').trim();
+    const vehicleNumber = String(input.vehicle ?? '').trim();
+    const withinSameCity = String(input.withinSameCity ?? '').trim();
+    const vehicle: VehicleAssignment | undefined = vehicleNumber === '' ? undefined : {
+      registrationNumber: vehicleNumber,
+      vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
+      fromPlace: consignor.place,
+      fromStateCode: consignor.stateCode,
+    };
+
+    return {
+      movementId: invoice.id,
+      reason: (String(input.reason ?? 'SUPPLY') as MovementReason),
+      consignor,
+      billTo,
+      ...(shipTo === undefined ? {} : { shipTo }),
+      documents: [{
+        documentId: invoice.id,
+        documentType: 'TAX_INVOICE',
+        documentNumber: invoice.number,
+        documentDate: invoice.documentDate,
+        lines,
+      }],
+      transportMode: 'ROAD',
+      vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
+      conveyance: 'OWN_VEHICLE',
+      // Blank means "we have not been told", which stays a question rather than becoming a zero.
+      ...(distance === '' ? {} : { approximateDistanceKm: Number(distance) }),
+      ...(withinSameCity === '' ? {} : { withinSameCity: withinSameCity === 'yes' }),
+      ...(vehicle === undefined ? {} : { vehicle }),
+    };
+  }
+
+  private static ewayJson(record: EwayBillRecord, now: Date) {
+    return {
+      state: 'eway' as const,
+      status: record.status,
+      title: record.status === 'ACTIVE'
+        ? 'The goods may move'
+        : record.status === 'PART_A_ONLY'
+          ? 'Raised, but no vehicle yet'
+          : record.status === 'EXPIRED'
+            ? 'This e-way bill has run out'
+            : record.status === 'CANCELLED'
+              ? 'Cancelled with the portal'
+              : record.status === 'REJECTED'
+                ? 'Marked as not your consignment'
+                : record.status === 'PENDING'
+                  ? 'Waiting for the portal'
+                  : 'No e-way bill',
+      message: record.message,
+      documentNumber: record.documentNumber,
+      applicability: {
+        outcome: record.applicability.outcome,
+        reason: record.applicability.reason,
+        ruleId: record.applicability.ruleId,
+        sourceRef: record.applicability.sourceRef ?? null,
+        effectiveFrom: record.applicability.effectiveFrom ?? null,
+        facts: record.applicability.appliedFacts.map((fact) => ({ label: fact.label, value: fact.value })),
+      },
+      ewayBillNumber: record.acknowledgement?.ewayBillNumber ?? null,
+      generatedAt: record.acknowledgement?.generatedAt ?? null,
+      validUntil: record.acknowledgement?.validUntil ?? null,
+      // The same moment written the way a driver reads it: Indian wall-clock, not a UTC stamp.
+      validUntilLabel: record.acknowledgement?.validUntil === undefined ? null : describeExpiry(record.acknowledgement.validUntil),
+      cancellableUntilLabel: record.cancellableUntil === undefined ? null : describeExpiry(record.cancellableUntil),
+      timeLeft: record.acknowledgement?.validUntil === undefined || record.status !== 'ACTIVE'
+        ? null
+        : describeTimeLeft(record.acknowledgement.validUntil, now),
+      consignmentValue: jsonAmount(record.consignmentValuePaise),
+      vehicles: record.vehicleLegs.map((leg) => ({
+        number: leg.registrationNumber, from: leg.fromPlace, reason: leg.reason, at: leg.recordedAt,
+      })),
+      cancellableUntil: record.cancellableUntil ?? null,
+      consolidatedTripNumber: record.consolidatedTripNumber ?? null,
+      failure: record.failure ?? null,
+      raw: record,
+    };
+  }
+
+  /** Whether these goods need an e-way bill at all, and what would be sent. Writes nothing. */
+  async previewEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const preview = await this.shop.ewayBill.preview(actor, movement);
+    return {
+      state: 'preview' as const,
+      title: preview.applicability.outcome === 'REQUIRED'
+        ? (preview.ready ? (preview.vehicleReady ? 'Ready to raise' : 'Ready, but no vehicle yet') : 'Something is missing')
+        : preview.applicability.outcome === 'CANNOT_DECIDE' ? 'We need one more fact' : 'No e-way bill needed',
+      message: preview.summary,
+      outcome: preview.applicability.outcome,
+      reason: preview.applicability.reason,
+      ruleId: preview.applicability.ruleId,
+      sourceRef: preview.applicability.sourceRef ?? null,
+      effectiveFrom: preview.applicability.effectiveFrom ?? null,
+      facts: preview.applicability.appliedFacts.map((fact) => ({ label: fact.label, value: fact.value })),
+      threshold: preview.applicability.thresholdApplied === undefined ? null : {
+        scope: preview.applicability.thresholdApplied.scope,
+        amount: jsonAmount(preview.applicability.thresholdApplied.thresholdPaise),
+        note: preview.applicability.thresholdApplied.note ?? null,
+      },
+      ready: preview.ready,
+      vehicleReady: preview.vehicleReady,
+      validityDays: preview.validityDays ?? null,
+      consignmentValue: jsonAmount(preview.consignmentValuePaise),
+      problems: preview.problems.map((problem) => ({ field: problem.field, message: problem.message })),
+      documentNumber: movement.documents[0]?.documentNumber ?? '',
+    };
+  }
+
+  /** Raises the e-way bill with the portal, once. */
+  async generateEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const record = await this.shop.ewayBill.generate(actor, movement);
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /** Part B: the lorry going on, or a different lorry after a breakdown. */
+  async updateEwayVehicle(actor: ActorContext, input: Record<string, unknown>) {
+    const number = String(input.vehicle ?? '').trim();
+    if (number === '') throw invalid('API_VEHICLE_REQUIRED', 'Enter the vehicle number that is carrying the goods.');
+    const vehicle: VehicleAssignment = {
+      registrationNumber: number,
+      vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
+      fromPlace: String(input.fromPlace ?? this.config.location.split('·')[0]?.trim() ?? 'Bengaluru'),
+      fromStateCode: String(input.fromState ?? this.config.gstin.slice(0, 2)),
+      ...(String(input.changeReason ?? '') === '' ? {} : { reason: String(input.changeReason) as NonNullable<VehicleAssignment['reason']> }),
+      ...(String(input.changeNote ?? '') === '' ? {} : { reasonNote: String(input.changeNote) }),
+    };
+    const record = await this.shop.ewayBill.updateVehicle(actor, String(input.invoice ?? ''), vehicle);
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  async extendEwayValidity(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.extendValidity(actor, String(input.invoice ?? ''), {
+      currentPlace: String(input.currentPlace ?? ''),
+      currentStateCode: String(input.currentState ?? ''),
+      remainingDistanceKm: Number(String(input.remainingKm ?? '0')),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  async cancelEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.cancel(actor, String(input.invoice ?? ''), {
+      reasonCode: (String(input.reasonCode ?? 'OTHERS') as 'OTHERS'),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  async rejectEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.reject(actor, String(input.invoice ?? ''), {
+      reasonCode: (String(input.reasonCode ?? 'NOT_MY_CONSIGNMENT') as 'NOT_MY_CONSIGNMENT'),
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /** Asks the portal what it actually holds, for when a call timed out. */
+  async reconcileEwayBill(actor: ActorContext, input: Record<string, unknown>) {
+    const record = await this.shop.ewayBill.reconcile(actor, String(input.invoice ?? ''));
+    return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /** Part A as a file, for the day the portal is down and the lorry still has to leave. */
+  async ewayOfflineJson(actor: ActorContext, input: Record<string, unknown>) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const json = await this.shop.ewayBill.offlineJson(actor, movement);
+    return {
+      state: 'offline' as const,
+      fileName: `ewaybill-${(movement.documents[0]?.documentNumber ?? 'movement').replace(/\//g, '-')}.json`,
+      json,
+    };
+  }
+
+  /**
+   * Every state and its own e-way bill limit, for the picker on the screen.
+   *
+   * The list is the rule table itself, so choosing a state on screen and the rule that decides the
+   * movement can never drift apart.
+   */
+  static ewayStates() {
+    return {
+      // 28 states and 8 union territories to pick from; the rest of the rows are codes that are no
+      // longer issued, kept so an old document still resolves, and marked as such on the screen.
+      counts: jurisdictionCounts(),
+      states: CURRENT_STATE_RULES.map((rule) => ({
+        code: rule.scope,
+        name: rule.stateName,
+        kind: rule.kind,
+        // An exemption has no limit to show, and showing ₹50,000 against it would be a lie.
+        limit: rule.exemptAnyValue === true ? null : jsonAmount(rule.thresholdPaise),
+        exemptAnyValue: rule.exemptAnyValue === true,
+        intraCityLimit: rule.intraCityThresholdPaise === undefined ? null : jsonAmount(rule.intraCityThresholdPaise),
+        intraCityExempt: rule.intraCityExemptAnyValue === true,
+        effectiveFrom: rule.effectiveFrom,
+        sourceRef: rule.sourceRef,
+        sourceKind: rule.sourceKind,
+        note: rule.note ?? null,
+      })),
+    };
+  }
+
+  /** What is on the road right now, for the dispatch desk. */
+  async ewayBillsOnTheRoad(actor: ActorContext) {
+    const rows = await this.shop.ewayBill.onTheRoad(actor);
+    return {
+      consignments: rows.map((row) => ({
+        movementId: row.record.movementId,
+        documentNumber: row.record.documentNumber,
+        ewayBillNumber: row.record.acknowledgement?.ewayBillNumber ?? null,
+        status: row.record.status,
+        vehicle: row.record.vehicleLegs[row.record.vehicleLegs.length - 1]?.registrationNumber ?? null,
+        validUntil: row.record.acknowledgement?.validUntil ?? null,
+        timeLeft: row.timeLeft,
+      })),
+    };
+  }
+
+  // ------------------------------------------- issue #29: what the registering authority holds
+
+  /**
+   * One number plate, typed in, answered by the registering authority.
+   *
+   * This is the whole of issue #29 on a screen: a masked, dated classification, who answered, and
+   * — when we could not ask — which of the reasons it was, never dressed up as "nothing wrong".
+   */
+  async lookupVehicleRecord(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const result = await this.shop.vehicleRecords.verify(actor, String(input.vehicle ?? ''));
+    const consent = await this.shop.vehicleRecords.consentStatus(actor);
+    const connected = consent !== null && consent.revokedAt === undefined;
+    const base = {
+      state: 'vehicle-record' as const,
+      vehicle: String(input.vehicle ?? '').toUpperCase().replace(/[\s-]/g, ''),
+      kind: result.kind,
+      message: result.summary,
+      // What the business agreed the government service may be asked for, on the screen that uses
+      // it, so nobody has to take our word for what is being read.
+      consent: connected
+        ? { fields: (consent?.fields ?? []).map((field) => PERMITTED_VEHICLE_FIELD_NAMES[field]), purpose: consent?.purpose ?? null, expiresOn: consent?.expiresOn ?? null }
+        : null,
+    };
+    if (result.kind === 'FOUND') {
+      return {
+        ...base,
+        title: `${base.vehicle} is on the registering authority's record`,
+        provider: result.provenance.provider,
+        providerReference: result.provenance.providerReference,
+        retrievedAt: result.provenance.retrievedAt,
+        freshness: result.freshness,
+        fromCache: result.fromCache,
+        facts: DemoApplication.vehicleRecordFacts(result.evidence),
+      };
+    }
+    if (result.kind === 'NOT_FOUND') {
+      return {
+        ...base,
+        title: `The authority holds no vehicle with the number ${base.vehicle}`,
+        provider: result.provenance.provider,
+        providerReference: result.provenance.providerReference,
+        retrievedAt: result.provenance.retrievedAt,
+        freshness: null,
+        fromCache: result.fromCache,
+        facts: [],
+      };
+    }
+    return {
+      ...base,
+      title: 'This vehicle has not been checked',
+      code: result.code,
+      retryable: result.retryable,
+      provider: null,
+      providerReference: null,
+      retrievedAt: result.checkedAt,
+      freshness: result.lastKnown?.freshness ?? null,
+      fromCache: false,
+      facts: result.lastKnown === undefined ? [] : DemoApplication.vehicleRecordFacts(result.lastKnown.evidence),
+      lastKnownAt: result.lastKnown?.provenance.retrievedAt ?? null,
+    };
+  }
+
+  /** The permitted fields, in plain words, in the order a person would read them. */
+  private static vehicleRecordFacts(evidence: VehicleEvidence) {
+    const rows: { label: string; value: string }[] = [
+      { label: 'What kind of vehicle', value: evidence.vehicleClass === undefined ? 'The record does not say' : VEHICLE_CLASS_NAMES[evidence.vehicleClass] },
+      { label: 'Body', value: evidence.bodyType ?? 'The record does not say' },
+      { label: 'May carry', value: evidence.ratedPayloadKg === undefined ? 'Not stated on the record' : `${evidence.ratedPayloadKg} kg` },
+      { label: 'Weight loaded / empty', value: `${evidence.grossVehicleWeightKg ?? '—'} kg / ${evidence.unladenWeightKg ?? '—'} kg` },
+      { label: 'Permit', value: evidence.permitType ?? 'The record does not say' },
+      { label: 'Permit valid until', value: evidence.permitValidUpto ?? 'Not stated' },
+      { label: 'Fitness certificate until', value: evidence.fitnessValidUpto ?? 'Not stated' },
+      { label: 'Insurance until', value: evidence.insuranceValidUpto ?? 'Not stated' },
+      { label: 'Registration status', value: evidence.registrationStatus ?? 'Not stated' },
+      { label: 'Registered to (masked)', value: evidence.registeredOwnerName ?? 'Not read' },
+    ];
+    return rows;
+  }
+
+  // ------------------------------------------- issue #28: is this lorry able to carry this load
+
+  /**
+   * The vehicles this screen can be tried against.
+   *
+   * The list is the synthetic authority's own rows plus the shop's own lorry, so what the picker
+   * offers and what the check reads can never drift apart.
+   */
+  static vehicleChoices() {
+    return {
+      vehicles: [
+        ...SYNTHETIC_VAHAN_ROWS.map((row) => {
+          const number = String(row.rc_regn_no);
+          // The label is worked out the same way the check works it out, so the picker can never
+          // promise a class the lookup does not read.
+          const read = readVehicleClass(row.rc_vh_class_desc, readWeightKg(row.rc_gvw));
+          return {
+            number,
+            label: `${number} · ${read === null ? 'a class we do not recognise' : VEHICLE_CLASS_NAMES[read.vehicleClass]}`,
+            knownTo: 'the registering authority',
+          };
+        }),
+        { number: 'KA09OW5566', label: 'KA09OW5566 · your own closed van (not on the authority\'s record)', knownTo: 'your vehicle list only' },
+        { number: 'KA88XX0001', label: 'KA88XX0001 · a number nobody holds', knownTo: 'nobody' },
+      ],
+      // The classes a person can type when neither record holds the vehicle.
+      classes: Object.entries(VEHICLE_CLASS_NAMES).map(([value, label]) => ({ value, label })),
+      // What the yard's camera can be made to see, so the comparison can be tried both ways.
+      photos: [
+        { value: '', label: 'No photograph' },
+        { value: 'plate:KA01AB1234@0.96', label: 'A clear photo of KA01AB1234' },
+        { value: 'plate:KA02GV3344@0.94', label: 'A clear photo of a different lorry' },
+        { value: 'plate:KAO1AB1Z34@0.88', label: 'A photo read as KAO1AB1Z34 (look-alike characters)' },
+        { value: 'blurred', label: 'A photo nothing can be read from' },
+      ],
+    };
+  }
+
+  private static vehicleJson(assessment: VehicleSuitabilityAssessment) {
+    const outstanding = outstandingOf(assessment.findings, assessment.overrides);
+    return {
+      state: 'vehicle' as const,
+      id: assessment.id,
+      outcome: assessment.outcome,
+      // An overridden check still says BLOCK — that is what was found — but the heading has to say
+      // where the movement actually stands, or a dispatch clerk reads a stopped lorry.
+      title: assessment.clearedToMove && assessment.overrides.length > 0
+        ? 'Sent out on somebody\'s authority'
+        : assessment.outcome === 'BLOCK'
+        ? 'This load cannot go on this vehicle'
+        : assessment.outcome === 'CANNOT_DECIDE'
+          ? 'This has not been checked all the way through'
+          : assessment.outcome === 'WARN'
+            ? 'It can go, with something worth a look'
+            : 'Nothing found against this movement',
+      message: assessment.summary,
+      clearedToMove: assessment.clearedToMove,
+      vehicle: assessment.transport.vehicleNumber ?? null,
+      findings: assessment.findings.map((finding) => ({
+        code: finding.code,
+        severity: finding.severity,
+        title: finding.title,
+        reason: finding.reason,
+        ruleId: finding.ruleId,
+        sourceRef: finding.sourceRef ?? null,
+        overridable: finding.overridable,
+        evidenceSource: finding.evidenceSource ?? null,
+        facts: finding.appliedFacts.map((fact) => ({ label: fact.label, value: fact.value })),
+        // What the screen offers a button for: still standing, and allowed to be overridden.
+        outstanding: outstanding.some((row) => row.code === finding.code),
+      })),
+      // Every reading, with its source on it, exactly as the check stored it.
+      evidence: assessment.evidence.map((item) => ({
+        source: item.source,
+        retrievedAt: item.retrievedAt,
+        vehicleClass: item.vehicleClass === undefined ? null : VEHICLE_CLASS_NAMES[item.vehicleClass],
+        bodyType: item.bodyType ?? null,
+        ratedPayloadKg: item.ratedPayloadKg ?? null,
+        grossVehicleWeightKg: item.grossVehicleWeightKg ?? null,
+        unladenWeightKg: item.unladenWeightKg ?? null,
+        permitType: item.permitType ?? null,
+        permitValidUpto: item.permitValidUpto ?? null,
+        fitnessValidUpto: item.fitnessValidUpto ?? null,
+        registrationStatus: item.registrationStatus ?? null,
+        reference: item.reference ?? null,
+      })),
+      capacity: assessment.capacity === undefined ? null : {
+        capacityKg: assessment.capacity.capacityKg,
+        basis: assessment.capacity.basis,
+        source: assessment.capacity.source,
+      },
+      plate: assessment.plate === undefined ? null : {
+        verdict: assessment.plate.verdict,
+        readBy: assessment.plate.readBy,
+        readNumber: assessment.plate.readNumber ?? null,
+        declaredNumber: assessment.plate.declaredNumber,
+        confidence: assessment.plate.confidence ?? null,
+        explanation: assessment.plate.explanation,
+      },
+      overrides: assessment.overrides.map((entry) => ({
+        findingCodes: [...entry.findingCodes],
+        reason: entry.reason,
+        by: entry.byUserId,
+        at: entry.at,
+      })),
+      outstanding: outstanding.length,
+    };
+  }
+
+  /** Checks the load against the lorry. Writes the assessment; changes nothing about the goods. */
+  async checkVehicle(actor: ActorContext, input: Record<string, unknown>) {
+    const movementId = String(input.invoice ?? '').trim();
+    if (movementId === '') throw invalid('API_MOVEMENT_REQUIRED', 'Choose which bill is being sent out.');
+    const weight = String(input.weightKg ?? '').trim();
+    const distance = String(input.distanceKm ?? '').trim();
+
+    const transport: TransportDetails = {
+      mode: 'ROAD',
+      vehicleNumber: String(input.vehicle ?? '').trim(),
+      movementDate: this.shop.clock.now().toISOString().slice(0, 10),
+      interState: String(input.interState ?? 'no') === 'yes',
+      ...(String(input.transporterId ?? '').trim() === '' ? {} : { transporterId: String(input.transporterId).trim() }),
+      // Blank stays blank: an unentered distance is a missing fact, never a zero.
+      ...(distance === '' ? {} : { distanceKm: Number(distance) }),
+    };
+    const shipment: ShipmentFacts = {
+      ...(weight === '' ? {} : { grossWeightKg: Number(weight) }),
+      ...(String(input.coldChain ?? '') === 'yes' ? { requiresColdChain: true } : {}),
+      ...(String(input.hazardous ?? '') === 'yes' ? { hazardous: true } : {}),
+    };
+
+    const photo = String(input.platePhoto ?? '').trim();
+    // A yard with no camera still gets its plate checked: whatever somebody read off the lorry
+    // runs through the same comparison, recorded as a person's reading rather than a machine's.
+    const typedPlate = String(input.plateTyped ?? '').trim();
+    // And a vehicle neither record holds can have its class and capacity typed in for this one
+    // movement. Typed facts fill gaps; they never overrule the registering authority.
+    const declaredClass = String(input.declaredClass ?? '').trim();
+    const declaredCapacity = String(input.declaredCapacityKg ?? '').trim();
+    const declared = declaredClass === '' && declaredCapacity === '' ? undefined : {
+      ...(declaredClass === '' ? {} : { vehicleClass: declaredClass as VehicleClass }),
+      ...(declaredCapacity === '' ? {} : { ratedPayloadKg: Number(declaredCapacity) }),
+    };
+
+    const assessment = await this.shop.vehicleSuitability.assess(actor, {
+      movementId,
+      transport,
+      shipment,
+      ...(photo === '' ? {} : { platePhoto: platePhoto(photo, this.shop.clock.now().toISOString()) }),
+      ...(typedPlate === '' ? {} : { plateReadByHand: typedPlate }),
+      ...(declared === undefined ? {} : { declared }),
+    });
+    return DemoApplication.vehicleJson(assessment);
+  }
+
+  /**
+   * A person answering for named findings.
+   *
+   * The evidence and the findings are untouched by this; the override is stored beside them with
+   * the reason, and the screen goes on showing what was found.
+   */
+  async overrideVehicleCheck(actor: ActorContext, input: Record<string, unknown>) {
+    const codes = String(input.findingCodes ?? '').split(',').map((code) => code.trim()).filter((code) => code !== '');
+    const assessment = await this.shop.vehicleSuitability.override(actor, String(input.checkId ?? ''), {
+      findingCodes: codes,
+      reason: String(input.reason ?? ''),
+    });
+    return DemoApplication.vehicleJson(assessment);
+  }
+
+  /** The dispatch desk's queue: movements a vehicle problem is holding back. */
+  async blockedVehicleChecks(actor: ActorContext) {
+    const rows = await this.shop.vehicleSuitability.blocked(actor);
+    return {
+      held: rows.map((row) => ({
+        movementId: row.movementId,
+        vehicle: row.transport.vehicleNumber ?? null,
+        outcome: row.outcome,
+        summary: row.summary,
+        outstanding: outstandingOf(row.findings, row.overrides).map((finding) => finding.title),
+      })),
+    };
   }
 
   // -------------------------------------------------------- issue #19: supplier risk warnings

@@ -6,6 +6,7 @@ import { AccessControl, AuthenticationService, PlatformError, type Permission, t
 import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
 import { DemoApplication } from './demo-application.ts';
 import type { CompanySeed } from './company-shop.ts';
+import { createOperations } from '../../../ops/operations/src/index.ts';
 
 export class AuthenticationError extends Error {
   readonly status = 401;
@@ -46,6 +47,8 @@ export class ApiRuntime {
   readonly #access = new AccessControl();
   readonly #authentication = new AuthenticationService(this.#access);
   readonly #applications = new Map<string, Promise<DemoApplication>>();
+  readonly #operations = createOperations();
+  readonly #operationsSeeded = new Set<string>();
   readonly #credentials: readonly Credential[];
 
   constructor() {
@@ -75,6 +78,10 @@ export class ApiRuntime {
         permissions: new Set(credential.permissions),
       });
     }
+    const demo = owners[0]!;
+    const incidentActor: RequestContext = { companyId: demo.companyId, branchId: demo.branchId, actorId: demo.userId, sessionId: 'operations-seed', permissions: new Set(demo.permissions) };
+    const incident = this.#operations.status.openIncident(incidentActor, 'E-invoice registration delay', 'Invoice Registration Portal', 'Some registrations were delayed. Customer invoices remained unchanged.');
+    this.#operations.status.updateIncident(incidentActor, incident.id, 'resolved', 'The portal recovered. Safe queued registrations can now be replayed by an authorised operator.');
   }
 
   signIn(input: Record<string, unknown>) {
@@ -130,6 +137,31 @@ export class ApiRuntime {
     if (company === undefined) throw new AuthenticationError('That company is not available.');
     return { id: company.companyId, name: company.legalName, branch: company.branchName };
   }
+
+  async operationsWorkspace(context: RequestContext) {
+    if (!this.#operationsSeeded.has(context.companyId)) {
+      this.#operations.telemetry.registerHealthCheck('api', () => true);
+      this.#operations.telemetry.registerHealthCheck('queue', () => true);
+      this.#operations.telemetry.externalFailure(context, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
+      const job = this.#operations.queue.enqueue(context, { kind: 'irp-register', idempotencyKey: `demo-invoice-${context.companyId}`, idempotent: true, maxAttempts: 1, correlationId: `irp-demo-${context.companyId}` });
+      this.#operations.queue.begin(context, job.id);
+      this.#operations.queue.fail(context, job.id, 'IRP_TEMPORARILY_UNAVAILABLE');
+      this.#operationsSeeded.add(context.companyId);
+    }
+    return { health: await this.#operations.telemetry.health(), failures: this.#operations.telemetry.failures(context), jobs: this.#operations.queue.list(context), incidents: this.#operations.status.publicStatus() };
+  }
+
+  replayOperationalJob(context: RequestContext, input: Record<string, unknown>) {
+    return this.#operations.queue.replay(context, String(input.jobId ?? ''));
+  }
+
+  grantSupportAccess(context: RequestContext, input: Record<string, unknown>) {
+    const scopes = Array.isArray(input.scopes) ? input.scopes.filter((scope): scope is 'external-failures' | 'queue-state' | 'health' => scope === 'external-failures' || scope === 'queue-state' || scope === 'health') : [];
+    const grant = this.#operations.support.grant(context, { supportActorId: String(input.supportActorId ?? ''), reason: String(input.reason ?? ''), scopes, durationMs: Number(input.durationMinutes ?? 30) * 60 * 1000 });
+    return { ...grant, scopes: [...grant.scopes] };
+  }
+
+  publicStatus() { return { incidents: this.#operations.status.publicStatus() }; }
 }
 
 let runtimeInstance: ApiRuntime | undefined;
