@@ -763,7 +763,8 @@ export class DemoApplication {
     // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
     // In that order, because a bill that failed to post is not a bill, and charging somebody's
     // allowance for the product's own failure would be the wrong way round.
-    await this.subscriptions.require(actor, 'sales.issue_invoice', isoDate(String(input.date ?? '2026-08-29')));
+    const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${preview.token}`, invoiceId: preview.token });
     await this.subscriptions.recordUsage(actor, {
@@ -771,7 +772,7 @@ export class DemoApplication {
       // The invoice's own id, so a retried request counts the same bill once.
       idempotencyKey: `invoice:${final.invoice.id}`,
       note: 'a bill was issued',
-      on: isoDate(String(input.date ?? '2026-08-29')),
+      on: usageDate,
     });
     return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
   }
@@ -804,7 +805,7 @@ export class DemoApplication {
 
   async subscriptionAccount(actor: ActorContext, input: Record<string, unknown> = {}) {
     this.companyOf(actor);
-    const today = isoDate(String(input.today ?? '2026-08-29'));
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
     const account = await this.subscriptions.account(actor, today);
     // What the plan would say about a few things a person actually does, so the screen can show
     // the promise being kept rather than merely printed.
@@ -835,7 +836,7 @@ export class DemoApplication {
 
   async changeSubscriptionPlan(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const today = isoDate(String(input.today ?? '2026-08-29'));
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
     const planId = String(input.planId ?? '');
     const existing = await this.subscriptions.account(actor, today);
     const subscription = existing.subscription.id.startsWith('implied:')
@@ -850,7 +851,7 @@ export class DemoApplication {
 
   async issueSubscriptionInvoice(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const today = isoDate(String(input.today ?? '2026-08-29'));
+    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
     const invoice = await this.subscriptions.issueServiceInvoice(actor, { period: today.slice(0, 7), on: today });
     const paid = invoice.state === 'PAID' ? invoice : await this.subscriptions.chargeServiceInvoice(actor, invoice.id, today);
     return {

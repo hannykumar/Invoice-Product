@@ -47,7 +47,9 @@ export const writingStopsOn = (subscription: Subscription, plan: Plan): IsoDate 
   if (subscription.cancelledOn !== null) return subscription.cancelledOn;
   if (plan.monthlyPrice.minor === 0n) return null;
   const ranOutOn = subscription.paidThrough ?? subscription.trialEndsOn;
-  return addDays(ranOutOn, plan.graceDays);
+  // `stateOn` allows writing through the last grace day, so the first stopped day is the day
+  // after it. Returning the last working day here would make the warning contradict the gate.
+  return addDays(ranOutOn, plan.graceDays + 1);
 };
 
 export const STATE_WORDS: Readonly<Record<SubscriptionState, { 'en-IN': string; 'hi-IN': string }>> = {

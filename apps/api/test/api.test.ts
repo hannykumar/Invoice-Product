@@ -77,6 +77,30 @@ test('a real membership controls permissions at the domain boundary', async () =
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
 });
 
+test('operations API exposes tenant-safe failures and replays only safe jobs', async () => {
+  const ownerA = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const ownerB = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  const workspaceA = await request('GET', '/api/operations', {}, ownerA);
+  const workspaceB = await request('GET', '/api/operations', {}, ownerB);
+  assert.equal(workspaceA.status, 200);
+  assert.equal(workspaceA.body.health.state, 'healthy');
+  assert.equal(workspaceA.body.failures[0].companyId, COMPANY_A);
+  assert.equal(workspaceB.body.failures[0].companyId, COMPANY_B);
+  assert.notEqual(workspaceA.body.failures[0].correlationId, workspaceB.body.failures[0].correlationId);
+  const job = workspaceA.body.jobs.find((candidate: any) => candidate.state === 'failure');
+  assert.ok(job.idempotent);
+  const replayed = await request('POST', '/api/operations/jobs/replay', { jobId: job.id }, ownerA);
+  assert.equal(replayed.body.state, 'draft');
+  assert.equal((await request('POST', '/api/operations/jobs/replay', { jobId: job.id }, ownerB)).status, 404);
+  const grant = await request('POST', '/api/operations/support-grants', { supportActorId: '00000000-0000-4000-8000-000000000099', reason: 'Customer asked support to inspect IRP error codes', scopes: ['external-failures'], durationMinutes: 30 }, ownerA);
+  assert.equal(grant.status, 200);
+  assert.deepEqual(grant.body.scopes, ['external-failures']);
+  assert.equal((await request('GET', '/api/operations', {}, await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo'))).status, 403);
+  const publicStatus = await request('GET', '/api/status');
+  assert.equal(publicStatus.status, 200);
+  assert.equal(publicStatus.body.incidents[0].state, 'resolved');
+});
+
 test('live bank feed API requires consent, syncs once and preserves history on disconnect', async () => {
   const owner = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa', redirectUri: 'https://app.example/bank/callback' }, owner);
@@ -687,6 +711,13 @@ test('the plan is enforced on a real write path, and counted only when the work 
   assert.equal(overLimit.status, 403);
   assert.equal(overLimit.body.code, 'ENTITLEMENT_LIMIT_REACHED');
   assert.match(overLimit.body.message, /safe and unchanged/);
+
+  const backdated = await request('POST', '/api/sales/record', {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
+    date: '2026-07-01', terms: '30', reference: 'PLAN-42-BACKDATED',
+  }, owner);
+  assert.equal(backdated.status, 403, 'a document date cannot bypass the current subscription limit');
+  assert.equal(backdated.body.code, 'ENTITLEMENT_LIMIT_REACHED');
 
   // Nothing was half-done: the refused bill does not exist and the books still balance.
   const reports = await request('GET', '/api/reports', {}, owner);

@@ -14,6 +14,7 @@ import {
   WithheldSafeguardError,
   definePlan,
   stateOn,
+  subscriptionMigrations,
 } from '../src/index.ts';
 import { EVERY_PERMISSION, TODAY, makeSubscriptionDesk } from './harness.ts';
 
@@ -214,7 +215,8 @@ describe('the trial, the grace and the day it stops', () => {
     assert.equal(grace.state, 'GRACE');
 
     const account = await desk.service.account(desk.actor, on('2026-06-20'));
-    assert.equal(account.writingStopsOn, '2026-06-30');
+    assert.equal(account.writingStopsOn, '2026-07-01');
+    assert.equal((await desk.service.account(desk.actor, on(account.writingStopsOn))).state, 'READ_ONLY');
     assert.match(account.stateWords['en-IN'], /told before anything stops/);
   });
 
@@ -282,6 +284,16 @@ describe('our own invoice, and the money', () => {
     assert.equal(again.id, invoice.id, 'asking twice does not raise a second invoice');
   });
 
+  it('issues one invoice when simultaneous requests arrive for the same month', async () => {
+    const desk = await makeSubscriptionDesk();
+    await desk.service.start(desk.actor, { planId: 'starter', on: TODAY });
+    const [first, second] = await Promise.all([
+      desk.service.issueServiceInvoice(desk.actor, { period: '2026-06', on: TODAY }),
+      desk.service.issueServiceInvoice(desk.actor, { period: '2026-06', on: TODAY }),
+    ]);
+    assert.equal(first.id, second.id);
+  });
+
   it('a declined payment changes the invoice and nothing else', async () => {
     const desk = await makeSubscriptionDesk();
     await desk.service.start(desk.actor, { planId: 'starter', on: on('2026-06-01') });
@@ -308,8 +320,10 @@ describe('our own invoice, and the money', () => {
       eventId: 'evt_1', invoiceId: invoice.id, outcome: 'PAID' as const,
       providerReference: 'pay_1', occurredOn: on('2026-06-16'),
     };
-    const first = await desk.service.receivePaymentEvent(desk.actor, event);
-    const second = await desk.service.receivePaymentEvent(desk.actor, event);
+    const [first, second] = await Promise.all([
+      desk.service.receivePaymentEvent(desk.actor, event),
+      desk.service.receivePaymentEvent(desk.actor, event),
+    ]);
     assert.equal(first.state, 'PAID');
     assert.deepEqual(second, first);
 
@@ -335,6 +349,16 @@ describe('our own invoice, and the money', () => {
     assert.equal(invoice.total.minor, 0n);
     assert.equal(invoice.state, 'PAID');
     assert.equal(desk.payments.seen.length, 0);
+  });
+});
+
+describe('the subscription schema protects company boundaries', () => {
+  it('forces tenant policies and company-scopes invoice payment references', () => {
+    const sql = subscriptionMigrations[0]?.up ?? '';
+    assert.equal((sql.match(/FORCE ROW LEVEL SECURITY/g) ?? []).length, 4);
+    assert.equal((sql.match(/CREATE POLICY/g) ?? []).length, 4);
+    assert.match(sql, /current_setting\('app\.company_id', true\)/);
+    assert.match(sql, /FOREIGN KEY \(company_id, invoice_id\) REFERENCES subscription_service_invoices\(company_id, id\)/);
   });
 });
 

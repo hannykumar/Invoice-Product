@@ -152,6 +152,7 @@ const copy = {
     colItem: "Item", colOrdered: "Ordered", colArrived: "Arrived", colKept: "Kept", colTurnedAway: "Turned away", colBilled: "Billed", colAgreedPrice: "Agreed price", colBilledPrice: "Billed price",
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
     navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected",
+    navOperations: "Operations", operationsEyebrow: "Service health", operationsTitle: "Is the service working?", operationsHelp: "See service checks, failed external calls, safe retries and customer incident updates without opening invoices or bank records.", operationsSafetyTitle: "Customer data stays private. ", operationsSafety: "This page shows error codes and correlation IDs only. A retry is offered only for work declared safe and duplicate-proof.", operationsHealth: "Health checks", operationsFailures: "External failures", operationsQueue: "Safe retry queue", operationsIncidents: "Customer status timeline", operationsHealthy: "All checks are working", operationsDegraded: "One or more checks need attention", operationsNoFailures: "No external failures for this company.", operationsNoJobs: "No jobs are waiting.", operationsReplay: "Retry safely", operationsNoIncidents: "No current or recent incidents.",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -307,6 +308,7 @@ const copy = {
     colItem: "Saman", colOrdered: "Mangaya", colArrived: "Aaya", colKept: "Rakha", colTurnedAway: "Wapas kiya", colBilled: "Bill mein", colAgreedPrice: "Tay daam", colBilledPrice: "Bill ka daam",
     differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
     navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya",
+    navOperations: "Seva ki sthiti", operationsEyebrow: "Seva ki sehat", operationsTitle: "Kya seva sahi chal rahi hai?", operationsHelp: "Invoice ya bank record khole bina service check, bahari nakaami, surakshit retry aur grahak ko dikhne wali ghatna dekhein.", operationsSafetyTitle: "Grahak ka data niji rehta hai. ", operationsSafety: "Yahan sirf error code aur correlation ID dikhte hain. Retry tabhi milta hai jab kaam surakshit aur duplicate-proof ghoshit ho.", operationsHealth: "Sehat ki jaanch", operationsFailures: "Bahari nakaami", operationsQueue: "Surakshit retry queue", operationsIncidents: "Grahak sthiti ka itihaas", operationsHealthy: "Sabhi jaanch sahi chal rahi hain", operationsDegraded: "Ek ya adhik jaanch par dhyan chahiye", operationsNoFailures: "Is company ke liye koi bahari nakaami nahin.", operationsNoJobs: "Koi kaam intezar mein nahin.", operationsReplay: "Surakshit dobara chalayen", operationsNoIncidents: "Koi maujooda ya haal ki ghatna nahin.",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -465,6 +467,7 @@ function openView(view) {
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
   if (target === "bank-feeds") loadBankFeeds();
+  if (target === "operations") loadOperations();
 }
 
 function draftData(form) {
@@ -2462,6 +2465,36 @@ async function loadEwayRoad() {
   } catch { /* the picker and the list are conveniences; the rest of the page still works */ }
 }
 
+async function loadOperations() {
+  const health = document.querySelector("#operations-health");
+  const failures = document.querySelector("#operations-failures");
+  const jobs = document.querySelector("#operations-jobs");
+  const incidents = document.querySelector("#operations-incidents");
+  if (!health || !failures || !jobs || !incidents) return;
+  try {
+    const data = await api("/api/operations");
+    health.replaceChildren(simpleRow(data.health.state === "healthy" ? copy[state.locale].operationsHealthy : copy[state.locale].operationsDegraded, Object.entries(data.health.checks).map(([name, value]) => `${name}: ${value}`).join(" · ")));
+    failures.replaceChildren(...(data.failures.length ? data.failures.map((failure) => simpleRow(`${failure.connector} · ${failure.errorCode}`, `${failure.operation} · ${failure.correlationId}`)) : [simpleRow(copy[state.locale].operationsNoFailures, "")]));
+    jobs.replaceChildren(...(data.jobs.length ? data.jobs.map((job) => {
+      const row = simpleRow(`${job.kind} · ${job.state}`, `${job.correlationId} · ${job.attempts}/${job.maxAttempts}`);
+      if (job.state === "failure" && job.idempotent) {
+        const button = document.createElement("button");
+        button.type = "button"; button.className = "secondary-button"; button.dataset.replayJob = job.id; button.textContent = copy[state.locale].operationsReplay;
+        row.append(button);
+      }
+      return row;
+    }) : [simpleRow(copy[state.locale].operationsNoJobs, "")]));
+    incidents.replaceChildren(...(data.incidents.length ? data.incidents.map((incident) => simpleRow(`${incident.title} · ${incident.state}`, incident.timeline.map((update) => update.message).join(" → "))) : [simpleRow(copy[state.locale].operationsNoIncidents, "")]));
+  } catch (error) { health.textContent = error.message; }
+}
+
+document.querySelector("#operations-jobs")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-replay-job]");
+  if (!button) return;
+  button.disabled = true;
+  try { await api("/api/operations/jobs/replay", { method: "POST", body: JSON.stringify({ jobId: button.dataset.replayJob }) }); await loadOperations(); }
+  catch (error) { announce(error.message); button.disabled = false; }
+});
 
 // ------------------------------------ issue #28: can this lorry actually carry this load
 //
@@ -2640,4 +2673,4 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); if (state.view === "operations") loadOperations(); } else showLogin();

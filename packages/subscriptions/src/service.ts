@@ -89,7 +89,8 @@ export class SubscriptionService {
   readonly #plans: readonly Plan[];
   readonly #capabilities: readonly Capability[];
   readonly #newId: () => string;
-  readonly #handledEvents = new Set<string>();
+  readonly #paymentEvents = new Map<string, Promise<ServiceInvoice>>();
+  readonly #invoiceIssues = new Map<string, Promise<ServiceInvoice>>();
 
   constructor(deps: SubscriptionServiceDeps) {
     this.#subscriptions = deps.subscriptions;
@@ -304,32 +305,40 @@ export class SubscriptionService {
    */
   async issueServiceInvoice(actor: ActorContext, input: { period: string; on: IsoDate }): Promise<ServiceInvoice> {
     this.#permissions.require(actor, SUBSCRIPTION_PERMISSIONS.manage, 'issue the subscription invoice');
-    const existing = await this.#invoices.findForPeriod(actor.companyId, input.period);
-    if (existing !== null) return existing;
-    const subscription = await this.#require(actor);
-    const plan = this.#planOrThrow(subscription.planId);
-    const net = plan.monthlyPrice;
-    const gst = mulDiv(net, SERVICE_GST_BASIS_POINTS, 10_000n);
-    const invoice: ServiceInvoice = {
-      id: this.#newId(),
-      companyId: actor.companyId,
-      planId: plan.id,
-      period: input.period,
-      net,
-      gst,
-      total: money(net.minor + gst.minor),
-      state: net.minor === 0n ? 'PAID' : 'ISSUED',
-      issuedOn: input.on,
-      dueOn: addDays(input.on, 7),
-      paidOn: net.minor === 0n ? input.on : null,
-      providerReference: null,
-      failureReason: null,
-    };
-    await this.#invoices.save(invoice);
-    await this.#record(actor, 'subscription.invoice_issued', invoice.id, `Invoice for ${input.period} on the ${plan.name['en-IN']} plan.`, {
-      period: input.period, total: invoice.total.minor.toString(),
-    });
-    return invoice;
+    const key = `${actor.companyId}:${input.period}`;
+    const pending = this.#invoiceIssues.get(key);
+    if (pending !== undefined) return pending;
+    const issue = (async () => {
+      const existing = await this.#invoices.findForPeriod(actor.companyId, input.period);
+      if (existing !== null) return existing;
+      const subscription = await this.#require(actor);
+      const plan = this.#planOrThrow(subscription.planId);
+      const net = plan.monthlyPrice;
+      const gst = mulDiv(net, SERVICE_GST_BASIS_POINTS, 10_000n);
+      const invoice: ServiceInvoice = {
+        id: this.#newId(),
+        companyId: actor.companyId,
+        planId: plan.id,
+        period: input.period,
+        net,
+        gst,
+        total: money(net.minor + gst.minor),
+        state: net.minor === 0n ? 'PAID' : 'ISSUED',
+        issuedOn: input.on,
+        dueOn: addDays(input.on, 7),
+        paidOn: net.minor === 0n ? input.on : null,
+        providerReference: null,
+        failureReason: null,
+      };
+      await this.#invoices.save(invoice);
+      await this.#record(actor, 'subscription.invoice_issued', invoice.id, `Invoice for ${input.period} on the ${plan.name['en-IN']} plan.`, {
+        period: input.period, total: invoice.total.minor.toString(),
+      });
+      return invoice;
+    })();
+    this.#invoiceIssues.set(key, issue);
+    try { return await issue; }
+    finally { this.#invoiceIssues.delete(key); }
   }
 
   /** Asks the provider for the money. A refusal is recorded and changes no business record. */
@@ -357,12 +366,17 @@ export class SubscriptionService {
    */
   async receivePaymentEvent(actor: ActorContext, webhook: PaymentWebhook): Promise<ServiceInvoice> {
     const key = `${actor.companyId}:${webhook.eventId}`;
-    const invoice = await this.#invoiceOrThrow(actor, webhook.invoiceId);
-    if (this.#handledEvents.has(key)) return invoice;
-    this.#handledEvents.add(key);
-    return webhook.outcome === 'PAID'
-      ? this.#settle(actor, invoice, webhook.occurredOn, webhook.providerReference)
-      : this.#fail(actor, invoice, webhook.failureReason ?? 'The provider declined the payment.');
+    const handled = this.#paymentEvents.get(key);
+    if (handled !== undefined) return handled;
+    const processing = (async () => {
+      const invoice = await this.#invoiceOrThrow(actor, webhook.invoiceId);
+      return webhook.outcome === 'PAID'
+        ? this.#settle(actor, invoice, webhook.occurredOn, webhook.providerReference)
+        : this.#fail(actor, invoice, webhook.failureReason ?? 'The provider declined the payment.');
+    })();
+    this.#paymentEvents.set(key, processing);
+    try { return await processing; }
+    catch (error) { this.#paymentEvents.delete(key); throw error; }
   }
 
   async #settle(actor: ActorContext, invoice: ServiceInvoice, on: IsoDate, providerReference: string): Promise<ServiceInvoice> {
@@ -467,4 +481,3 @@ export class SubscriptionService {
 /** How much of a limit is left, for a screen that wants to warn before it bites. */
 export const remainingOf = (total: UsageTotal): Money | null =>
   total.limit === null ? null : subtract(money(total.limit), money(total.used));
-

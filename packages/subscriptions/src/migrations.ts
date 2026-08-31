@@ -51,16 +51,18 @@ export const subscriptionMigrations: readonly Migration[] = [{
       due_on date NOT NULL,
       paid_on date,
       provider_reference text,
-      failure_reason text
+      failure_reason text,
+      UNIQUE(company_id, id)
     );
     CREATE UNIQUE INDEX subscription_invoice_period_idx ON subscription_service_invoices(company_id, period);
     CREATE TABLE subscription_payment_events (
       company_id uuid NOT NULL REFERENCES companies(id),
       event_id text NOT NULL,
-      invoice_id uuid NOT NULL REFERENCES subscription_service_invoices(id),
+      invoice_id uuid NOT NULL,
       outcome text NOT NULL CHECK (outcome IN ('PAID','FAILED')),
       received_at timestamptz NOT NULL,
-      PRIMARY KEY (company_id, event_id)
+      PRIMARY KEY (company_id, event_id),
+      FOREIGN KEY (company_id, invoice_id) REFERENCES subscription_service_invoices(company_id, id)
     );
     ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
     ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
@@ -70,6 +72,10 @@ export const subscriptionMigrations: readonly Migration[] = [{
     ALTER TABLE subscription_service_invoices FORCE ROW LEVEL SECURITY;
     ALTER TABLE subscription_payment_events ENABLE ROW LEVEL SECURITY;
     ALTER TABLE subscription_payment_events FORCE ROW LEVEL SECURITY;
+    CREATE POLICY subscriptions_tenant ON subscriptions USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    CREATE POLICY subscription_usage_tenant ON subscription_usage_events USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    CREATE POLICY subscription_invoices_tenant ON subscription_service_invoices USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    CREATE POLICY subscription_payments_tenant ON subscription_payment_events USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
   `,
   down: `
     DROP TABLE IF EXISTS subscription_payment_events;
