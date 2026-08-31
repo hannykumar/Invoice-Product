@@ -21,6 +21,7 @@
     "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tests/e2e/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
     "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
     "security:drill": "node --test --experimental-strip-types ops/security/test/security.test.ts",
+    "vendor:readiness": "node --experimental-strip-types ops/vendor-onboarding/src/cli.ts",
     "gates": "node --experimental-strip-types packages/release-gates/src/cli.ts",
     "verify": "npm run lint && npm run test && npm run test:integration && npm run gates",
     "check": "npm run verify",
