@@ -1,0 +1,265 @@
+# E-way bill applicability and the full lifecycle — v1
+
+Issue #27 [E27]. Owner: GPT 3. Package: `packages/transport`.
+
+Decide whether a movement of goods needs an e-way bill at all, prepare Part A and Part B, and
+manage the permit through its whole life: vehicle changes, validity, extension, cancellation,
+rejection and consolidated trip sheets.
+
+## The assumption that shapes everything
+
+> **₹1 lakh a day is not a rule.**
+
+It is a rule of thumb somebody's uncle uses, and it is wrong in both directions:
+
+- The general limit is **₹50,000 for one consignment**, not ₹1 lakh, and never *per day*.
+- **Inside one state, each state sets its own limit.** Several of them are ₹1 lakh — Maharashtra,
+  Delhi, West Bengal, Tamil Nadu, Bihar, Punjab, Rajasthan — which is where the belief comes from.
+  That is those states' limit, from those states' dates, not a national one.
+- Some movements need a bill **at any value at all** (goods sent inter-state for job work), and
+  some need **none however large** (a consignment of jewellery, goods on a hand cart).
+
+So applicability is a **decision** — with the facts it applied, a rule id, an effective date and
+the notification behind it. Where a fact is missing the answer is `CANNOT_DECIDE` and the movement
+goes to a person, never to a guess that lets a lorry leave.
+
+## Applicability
+
+`decideEwayApplicability(movement)` is pure: same facts, same answer, forever.
+
+| Outcome | Meaning |
+| --- | --- |
+| `REQUIRED` | The vehicle may not leave without an e-way bill |
+| `NOT_REQUIRED` | No e-way bill is needed for this movement |
+| `CANNOT_DECIDE` | We were not told something we need, and will not guess |
+
+Decided in this order, which is the order the rules really override each other in:
+
+1. Non-motorised conveyance — Rule 138(14)(a).
+2. The customs-clearance leg between a port/airport and an inland depot — Rule 138(14)(g).
+3. Goods moving under customs bond — Rule 138(14)(h).
+4. No document on the movement → `CANNOT_DECIDE`.
+5. Everything on the vehicle is annexure-exempt goods — Annexure to Rule 138(14).
+6. Inter-state job work → required **at any value** — first proviso to Rule 138(1).
+7. Handicrafts moved by a person exempt from registration → required at any value.
+8. Origin or destination state unknown → `CANNOT_DECIDE`.
+9. Inter-state → the national ₹50,000 limit.
+10. Intra-state → that state's limit from `rules.ts`, on the movement's own date.
+
+### Consignment value
+
+Explanation 2 to Rule 138(1): the value **including** CGST, SGST, IGST and cess, **excluding** the
+value of any exempt supply on the same invoice. Both halves matter — tax can push ₹48,000 over the
+line, and forgetting to drop exempt lines can push a bill over one it was never near.
+
+The comparison is a strict `>`: **exactly ₹50,000 does not need a bill**, because the rule says
+"exceeds". That one word is the whole boundary, and it lives in one function so every state gets it.
+
+### The state table
+
+`INTRA_STATE_RULES` in `rules.ts` holds **every state and union territory**, and holds each one as a
+list of effective-dated rows rather than a single figure, because these orders keep moving.
+`intraStateRuleFor(code, date)` picks the row that was in force on the day the goods moved, which is
+the only way a document raised years ago can still be explained.
+
+India has 28 states and 8 union territories — the 36 a person can pick (`LIVE_JURISDICTIONS`). The
+table covers 39 codes, because three are not places you would choose from a list, and each carries a
+`kind` saying which it is:
+
+| Code | Kind | Why it is in the table |
+| --- | --- | --- |
+| 25 Daman and Diu | `RETIRED` | Folded into code 26 in January 2020. A document raised before that still carries 25 and must still resolve |
+| 28 Andhra Pradesh (before division) | `RETIRED` | Split into 36 Telangana and 37 Andhra Pradesh in 2014 |
+| 97 Other Territory | `OTHER_TERRITORY` | The portal's code for offshore areas and anything outside the states and union territories |
+
+Code 96 ("outside India") has a name but deliberately **no** intra-state rule: a movement to or from
+it is an export or an import, never an intra-state one.
+
+**₹1,00,000 inside the state, today, in eight of them**: Punjab, Delhi, Rajasthan, Bihar, Jharkhand,
+Madhya Pradesh, Maharashtra, Tamil Nadu. **₹50,000 inside the state**: everywhere else that asks for
+one at all.
+
+#### The rules that are not about money
+
+Flattening these into a number would give wrong answers, so each is held as what it is:
+
+| Where | Rule | Held as |
+| --- | --- | --- |
+| Jammu and Kashmir, Lakshadweep, Andaman and Nicobar Islands | No e-way bill at all inside the territory, at any value | `exemptAnyValue` |
+| Chandigarh, Dadra and Nagar Haveli and Daman and Diu | The same, but only between 1 April and 25 May 2018, when the union territory notifications were withdrawn | `exemptAnyValue` on the older row |
+| Gujarat | No e-way bill inside one city, at any value | `intraCityExemptAnyValue` |
+| Rajasthan | A higher ₹2,00,000 limit inside one city | `intraCityThresholdPaise` |
+| Chhattisgarh, Goa | A bill only for the goods on the state's own notified list (15 and 22 goods) | `notifiedGoodsOnly` |
+| Bihar, Jharkhand, Madhya Pradesh, Rajasthan | The higher limit does not cover certain goods, which stay at ₹50,000 | `excludedGoodsNote` |
+| Kerala | Gold and precious stones need a bill from ₹10,00,000 — goods the national annexure exempts everywhere else | `overridesExemptGoods` with `preciousGoodsThresholdPaise` |
+
+Where a state's rule turns on a fact we have not been told — Gujarat and Rajasthan both turn on
+"does this stay inside one city?" — the answer is `CANNOT_DECIDE` naming `withinSameCity`, never a
+guess in either direction.
+
+#### Rules that changed
+
+Held as separate rows, so a movement is judged under its own day's rule:
+
+| Where | Change |
+| --- | --- |
+| West Bengal | ₹1,00,000 → **₹50,000 from 1 December 2023** (Notification 2/2023) |
+| Madhya Pradesh | ₹50,000 for 11 listed goods → **₹1,00,000 from 23 March 2022** (Notification FA3-08/2018/1/V(18)) |
+| Chandigarh, Daman and Diu, Dadra and Nagar Haveli | Exempt outright from 1 April 2018 → **₹50,000 from 25 May 2018** (Notifications 7, 8 and 9/2018 - Union Territory Tax) |
+| Gujarat | ₹50,000 → the intra-city exemption added **from 1 October 2018** (Notification B.19) |
+
+#### Where the citations come from
+
+Every row names its order, and `sourceKind` says what kind of thing that citation is, because a
+press release is not a gazette notification and must not be shown as one:
+
+| `sourceKind` | Rows | Meaning |
+| --- | --- | --- |
+| `NOTIFICATION` | 36 | A numbered state or union territory order |
+| `PRESS_RELEASE` | 6 | Karnataka, Kerala, Odisha, Sikkim, Manipur and Telangana rolled the e-way bill out by press release; the row says so |
+| `NOT_HELD` | 3 | Ladakh, retired code 28 and code 97, where no order is held and the national ₹50,000 is used — and the row says that is what happened |
+
+The citations were transcribed in August 2026 from the published compilations at cleartax.in and
+taxguru.in. The ones that change an outcome rather than a footnote — the union territory
+notifications, Gujarat's B.19, Chandigarh's 3/2018 and 7/2018, Jammu and Kashmir's 64, and Kerala's
+gold circular — were checked against the notification texts themselves.
+
+The national ₹50,000 still stands in for two cases, and each says which it is: a code that is not a
+GST state code at all (`EWB.THRESHOLD.INTRA_STATE.UNKNOWN_STATE`), and a movement dated before that
+state had a rule of its own (`EWB.THRESHOLD.INTRA_STATE.BEFORE_STATE_RULE`).
+
+States are **named, not numbered**, in every sentence a person reads: "from Karnataka to
+Maharashtra", not "from state 29 to state 27".
+
+## Part A and Part B
+
+They are separate on the portal and separate here, because different people fill them in at
+different times, and because **goods may not move on a Part A alone**. A consignor can raise Part A
+in the morning; the transporter adds the lorry at four in the afternoon.
+
+| Status | Meaning |
+| --- | --- |
+| `PENDING` | Sent to the portal, no reply yet. We do not know |
+| `PART_A_ONLY` | The portal holds the consignment but no vehicle. **The goods may not move** |
+| `ACTIVE` | Part B filled, validity running. This is what the lorry travels on |
+| `EXPIRED` | Validity has run out. Derived at read time, never trusted from the last write |
+| `CANCELLED` / `REJECTED` / `FAILED` | Withdrawn, disowned by the other party, or not accepted |
+
+Bill-to and ship-to are kept apart throughout. A Bengaluru seller billing Mumbai and delivering to
+Hyderabad is one movement to Telangana and one bill to Maharashtra: the movement decides which
+rules apply, the bill decides the tax. `transactionType: 2` and the `actToStateCode` field carry it.
+
+## Validity
+
+- One day for every **200 km** or part of it; one day for every **20 km** for over-dimensional
+  cargo. So 840 km is 5 days on a lorry and 42 days on an ODC trailer.
+- A day ends at **midnight Indian time**, and the portal's own counting adds a day: a bill made on
+  the 21st with one day of validity runs to the midnight ending the 22nd. Everything in
+  `validity.ts` works in IST explicitly; doing it in UTC "because the server is UTC" silently moves
+  every expiry by five and a half hours, which at midnight is a whole day.
+- **The clock starts at Part B**, not at Part A, and **a vehicle change does not restart it**. A
+  breakdown at Hubballi does not buy the consignment another two days.
+- Extension is accepted only in the **eight hours either side of expiry**. `canExtendNow()` says
+  which side of that window you are on in words a driver can act on.
+
+## Lifecycle
+
+| Call | What it does |
+| --- | --- |
+| `preview` | The decision, the facts, what is missing, how long it would last. Writes nothing |
+| `generate` | Raises the bill, once. Part B optional |
+| `updateVehicle` | Part B: first vehicle, or a change with a reason |
+| `assignTransporter` | Hands it to a transporter, who fills in Part B themselves |
+| `extendValidity` | Extends inside the portal's window, with where the vehicle is now |
+| `cancel` | Withdraws it, inside 24 hours, with a reason |
+| `reject` | The other party saying the consignment is not theirs, inside 72 hours |
+| `consolidate` | One trip sheet over several consignments on one lorry |
+| `reconcile` | Asks the portal what it actually holds, for when a call timed out |
+| `offlineJson` | Part A as a file for manual upload |
+| `onTheRoad` / `expiringWithin` | What is moving now, and what runs out soon |
+
+**Idempotency.** The key comes from the movement, never from the attempt, and the portal's own
+duplicate reply (error 604) is treated as success with the number it already holds. Pressing the
+button twice cannot put two permits on one lorry; a unique index on `(company_id, movement_id)` is
+the database's half of the same promise.
+
+**Cancellation is not rejection.** Cancelling withdraws your own permit within 24 hours; rejecting
+is the *other* party disowning a movement raised against them within 72 hours. They are separate
+states, separate permissions and separate audit actions. A consignment an officer has already
+verified on the road **cannot be cancelled at all** — the portal refuses, and that refusal is
+passed on rather than retried.
+
+**A consolidated trip sheet replaces nothing.** Each consignment keeps its own number and its own
+expiry; the sheet is what the driver shows at a check post. The service says exactly that in the
+message it returns.
+
+## Permissions
+
+| Permission | Guards |
+| --- | --- |
+| `eway.view` | Seeing status, previewing, reconciling, offline export |
+| `eway.generate` | Raising a permit with the portal |
+| `eway.update` | Vehicle, transporter, extension, trip sheets |
+| `eway.cancel` | Withdrawing a permit, or rejecting one raised against you |
+
+Raising a permit is deliberately separate from issuing a bill: #9's `sales.finalise` does not carry
+it. The transporter's day-to-day act — putting a lorry on — is separate from both.
+
+## Storage
+
+Migration `20260829T230150061Z_transport_f5901402df63_eway_bill_lifecycle`: `eway_bills`,
+`eway_consolidated_trips`, `eway_bill_policies`, `eway_state_thresholds`. The sales invoice (#9)
+and the delivery challan (#18) are not created here; only the movement id and document number are
+stored. Constraints enforce what the module promises: nothing claims a portal state without a
+number, and nothing is `ACTIVE` without a validity.
+
+## Provider
+
+The portal sits behind `connector-v1` (#8), connector kind `eway_bill`. Development runs against
+`SyntheticEwayBillPortal`, which enforces the behaviours that matter: duplicate 604 with the
+existing number, validity starting at Part B and expiring at midnight IST, cancellation refused
+after 24 hours with 108, cancellation refused outright once verified in transit with 110, and the
+eight-hour extension window. No production credential is needed to run or test anything.
+
+## Assumptions recorded
+
+1. **The state figures and dates are transcribed, not discovered.** They were taken in August 2026
+   from published compilations, with the rows that change an outcome checked against the
+   notification texts. Before a business in a given state relies on one, the row should be checked
+   against that state's current order; every row carries a `sourceRef` and a `sourceKind` so the
+   check is a lookup rather than an investigation, and a change is a change to the table rather
+   than to any code.
+2. **Distance is supplied, not computed.** The portal can work it out from pin codes when it is
+   left at zero; this product does not compute road distance, and a blank one is left blank rather
+   than guessed. Validity days are only shown once a distance is known.
+3. **Exempt goods are matched by HSN prefix** against the part of the Rule 138(14) annexure a small
+   business actually moves. The list is not exhaustive, so a line can also be marked exempt
+   directly. A GST rate of zero does **not** imply e-way-bill exemption and is never read as one.
+
+## Known limitations
+
+1. **The notified-goods lists themselves are not held.** Chhattisgarh and Goa ask for a bill only
+   for goods on their own lists, and Bihar, Jharkhand, Madhya Pradesh and Rajasthan exclude certain
+   goods from their higher limits. The decision applies the money limit and attaches the caveat in
+   plain words, which errs towards raising a permit that was not needed — harmless, since an
+   unneeded e-way bill simply expires — rather than towards moving goods without one.
+2. **Six rows cite a press release rather than a numbered order**, because that is how those states
+   rolled the e-way bill out. Three hold no order at all and fall back to the national ₹50,000. All
+   nine say so on the screen rather than looking like citations they are not.
+3. **No automatic e-way bill from an IRN.** #26 stores the number when the IRP returns one
+   alongside an e-invoice; joining the two records is not done yet.
+4. **Distance-based expiry does not know about journey type changes.** Switching from road to ship
+   mid-journey is recorded as a vehicle leg, but the ODC/regular per-day figure is taken from the
+   vehicle on the bill.
+5. **Consignor and consignee addresses on the web surface are placeholders**, because #5's full
+   address records are not wired into the demo company. The Part A builder validates them properly;
+   the demo simply supplies thin ones.
+6. **We do not prove physical delivery** — explicitly a non-goal. An e-way bill is a permit, and
+   this module never treats one as evidence that goods arrived.
+
+## Try it
+
+```sh
+npm run demo:eway   # applicability, state rules, Part A, Part B, breakdown, expiry, cancel
+npm run web         # sign in, then the "E-way bill" screen
+```

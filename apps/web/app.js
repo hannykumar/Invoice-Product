@@ -91,7 +91,54 @@ const copy = {
     sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
     cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
     cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
+    navVehicle: "Vehicle check",
+    vehicleCheckTitle: "Can this lorry carry this load?",
+    vehicleCheckHelp: "Before the goods leave the yard we compare what is being loaded against what the vehicle is registered to carry. Every answer says where the fact came from, and a service we could not reach is never shown as 'nothing wrong'.",
+    recordLookupTitle: "What does the registering authority hold?",
+    recordLookupHelp: "Type a number plate and we ask the government's vehicle record for it. You get what kind of vehicle it is, how much it may carry and until when its papers are valid — with the date we asked. The owner's name is shortened to initials before it is stored, and nothing else about the owner is asked for at all.",
+    recordPlate: "Number plate", recordPlateHelp: "Type it as it is written on the lorry. Spaces and dashes do not matter.",
+    recordLookupButton: "Ask the registering authority",
+    recordSafety: "This only reads. Nothing is sent to the tax portal and no e-way bill is raised.",
+    recordAsked: "When we asked", recordProvider: "Who answered", recordReference: "Their reference for this answer",
+    recordReused: "Read again from what we already had, so the provider was not asked twice.",
+    recordAgreed: "What this business agreed may be read",
+    whichVehicle: "Which vehicle", whichVehicleHelp: "Pick one to see what the registering authority holds against it.",
+    loadWeight: "Weight being loaded (kg)", loadWeightHelp: "Leave blank if nobody has weighed it — we will ask rather than guess.",
+    crossesBorder: "Does it cross a state border?", crossesBorderHelp: "A state permit does not travel outside the state that issued it.",
+    coldChain: "Must the goods stay cold?", hazardous: "Are they hazardous goods?",
+    platePhoto: "Photo of the number plate", platePhotoHelp: "The yard's camera. A photo that cannot be read is a question, not a mismatch.",
+    plateTyped: "Or type what the plate says", plateTypedHelp: "If there is no photograph, read the plate off the lorry and type it here. It is checked the same way, and recorded as a person's reading.",
+    typedClass: "If nothing is on record: what kind of vehicle is it?", typedClassHelp: "Only used when neither the registering authority nor your vehicle list holds this vehicle. It never overrules them.",
+    typedCapacity: "If nothing is on record: how much may it carry? (kg)", typedCapacityHelp: "What the registration certificate says it may carry, typed in for this movement.",
+    classNotSaid: "Not said",
+    checkVehicle: "Check this vehicle",
+    vehicleSafety: "This only checks. Nothing is sent anywhere and no e-way bill is raised.",
+    evidenceUsed: "What we read, and from where", evidenceUsedHelp: "The registering authority's record and your own vehicle list, kept apart. An override never changes anything here.",
+    overrideWhich: "Which findings are you answering for?", overrideWhichHelp: "Only findings that can be overridden are listed. A vehicle that physically cannot carry the load is not one of them.",
+    overrideWhy: "Why is it alright to send it?", overrideButton: "Send it anyway, on my authority",
+    overrideSafety: "This adds your name, the time and your reason beside the findings. It changes no weight, no capacity and no government record.",
+    heldBack: "Held back at the dispatch desk", heldBackHelp: "Movements a vehicle problem is stopping, and what is still to be answered.",
+    navEway: "E-way bill",
+    ewayTitle: "Do these goods need an e-way bill?", ewayHelp: "An e-way bill is a permit for moving goods, not a tax paper. Most small consignments need none. We work it out from what is on the lorry, where it is going and which state's rule applies, and show you the rule that decided it.",
+    whyMoving: "Why are the goods moving?", moveSupply: "A sale", moveJobWork: "Going out for job work", moveBranch: "Moving between your own places", moveReturn: "Coming back from a customer",
+    deliveryState: "Which state are the goods going to?", deliveryStateHelp: "Every state's own limit is built in. Leave it on the buyer's own state unless the goods are being delivered somewhere else.", buyerOwnState: "Wherever the buyer is",
+    deliveryPlace: "Delivery town or city",
+    distanceKm: "Road distance (km)", distanceHelp: "This decides how many days the bill lasts: one day for every 200 km, or part of it.",
+    vehicleNumber: "Vehicle number", vehicleHelp: "Leave blank to raise Part A now and add the lorry later. Goods may not move until it is added.",
+    oversized: "Is it an oversized load?", answerYes: "Yes", answerNo: "No", answerNotSaid: "Not said",
+    sameCity: "Does it stay inside one city?", sameCityHelp: "Some states, such as Gujarat, ask for no e-way bill at all inside one city. Leave it as 'not said' if you are unsure — we will ask rather than guess.",
+    checkMovement: "Check this movement", ewaySafety: "Checking sends nothing. Nothing reaches the portal until you press the raise button.",
+    raiseEway: "Raise the e-way bill", askPortal: "Ask the portal what it has",
+    vehicleChangeReason: "Why this vehicle?", changeFirst: "It is the first one", changeBreakdown: "The last one broke down", changeTransshipment: "Goods moved to another lorry", changeNote: "Say what happened", fromPlace: "Picking up from",
+    addVehicle: "Put this vehicle on the bill",
+    currentPlace: "Where is the vehicle now?", currentState: "Which state code?", remainingKm: "Kilometres still to go", extendWhy: "Why is it taking longer?", extendValidity: "Extend the e-way bill",
+    cancelEway: "Cancel with the portal",
+    onTheRoad: "On the road right now", onTheRoadHelp: "Every consignment with a running e-way bill, and how long each one has left.",
     navSupplier: "Supplier check",
+    navPlan: "Your plan",
+    planTitle: "What your plan covers", planHelp: "Plans differ in how much you do. They never differ in how carefully it is done — every warning, every check and your own data are in all of them, including the free one.",
+    planUsage: "What you have used this month", planNeverWithheld: "What no plan can take away",
+    planChoose: "Change your plan", planPay: "Pay for this month", planInvoices: "Our invoices to you",
     navReminders: "Reminders",
     remindersTitle: "Who to remind about money", remindersHelp: "Every line below is worked out from your books this moment. A bill that was paid, disputed or promised is left alone, and it says so — because \"why did nobody remind them?\" is the question that comes next.",
     remindersToday: "What would go out today", remindersSendAll: "Send everything agreed",
@@ -125,6 +172,8 @@ const copy = {
     matchSafety: "This only compares. Nothing is recorded in your books and no stock moves.",
     colItem: "Item", colOrdered: "Ordered", colArrived: "Arrived", colKept: "Kept", colTurnedAway: "Turned away", colBilled: "Billed", colAgreedPrice: "Agreed price", colBilledPrice: "Billed price",
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
+    navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected",
+    navOperations: "Operations", operationsEyebrow: "Service health", operationsTitle: "Is the service working?", operationsHelp: "See service checks, failed external calls, safe retries and customer incident updates without opening invoices or bank records.", operationsSafetyTitle: "Customer data stays private. ", operationsSafety: "This page shows error codes and correlation IDs only. A retry is offered only for work declared safe and duplicate-proof.", operationsHealth: "Health checks", operationsFailures: "External failures", operationsQueue: "Safe retry queue", operationsIncidents: "Customer status timeline", operationsHealthy: "All checks are working", operationsDegraded: "One or more checks need attention", operationsNoFailures: "No external failures for this company.", operationsNoJobs: "No jobs are waiting.", operationsReplay: "Retry safely", operationsNoIncidents: "No current or recent incidents.",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -219,7 +268,54 @@ const copy = {
     sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
     cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
     cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
+    navVehicle: "Gaadi ki jaanch",
+    vehicleCheckTitle: "Kya yeh gaadi itna maal le ja sakti hai?",
+    vehicleCheckHelp: "Maal nikalne se pehle hum dekhte hain ki kitna load ho raha hai aur gaadi kitna le jaane ke liye registered hai. Har jawab batata hai wo baat kahan se aayi, aur jo service hum tak pahunch hi nahin payi use kabhi 'sab theek hai' nahin dikhaya jata.",
+    recordLookupTitle: "RTO ke record mein is gaadi ke baare mein kya hai?",
+    recordLookupHelp: "Gaadi ka number likhein, hum sarkari record se poochenge. Aapko milega: gaadi kis tarah ki hai, kitna maal le ja sakti hai, aur kaagaz kab tak valid hain — us tareekh ke saath jab humne poocha. Malik ka naam sirf shuruaati akshar mein rakha jata hai, aur uske baare mein aur kuch maanga hi nahin jata.",
+    recordPlate: "Gaadi ka number", recordPlateHelp: "Jaise gaadi par likha hai waise likhein. Space ya dash se farak nahin padta.",
+    recordLookupButton: "RTO se poochein",
+    recordSafety: "Yeh sirf padhta hai. Tax portal par kuch nahin jata aur koi e-way bill nahin banta.",
+    recordAsked: "Kab poocha", recordProvider: "Kisne jawab diya", recordReference: "Unka reference number",
+    recordReused: "Jo pehle se tha wahi dobara dikhaya gaya, provider se dobara nahin poocha gaya.",
+    recordAgreed: "Is vyapaar ne kya padhne ki ijazat di hai",
+    whichVehicle: "Kaunsi gaadi", whichVehicleHelp: "Ek chunein aur dekhein RTO ke record mein uske baare mein kya hai.",
+    loadWeight: "Load ka wazan (kg)", loadWeightHelp: "Agar tola nahin gaya to khali chhod den — hum poochenge, andaza nahin lagayenge.",
+    crossesBorder: "Kya maal doosre rajya jaa raha hai?", crossesBorderHelp: "Rajya ka permit us rajya ke bahar nahin chalta.",
+    coldChain: "Kya maal thanda rehna chahiye?", hazardous: "Kya yeh khatarnak maal hai?",
+    platePhoto: "Number plate ki photo", platePhotoHelp: "Godown ka camera. Jo photo padhi na ja sake wo sawaal hai, galti nahin.",
+    plateTyped: "Ya plate par jo likha hai wo type karein", plateTypedHelp: "Agar photo nahin hai to gaadi ki plate padh kar yahan likh den. Jaanch waisi hi hoti hai, aur yeh insaan ki padhi hui baat ke roop mein darj hoti hai.",
+    typedClass: "Agar record mein kuch nahin: gaadi kis tarah ki hai?", typedClassHelp: "Yeh tabhi kaam aata hai jab na RTO ke paas na aapki list mein yeh gaadi hai. Yeh unse upar kabhi nahin jata.",
+    typedCapacity: "Agar record mein kuch nahin: kitna le ja sakti hai? (kg)", typedCapacityHelp: "RC par jo kshamta likhi hai, is movement ke liye type kar den.",
+    classNotSaid: "Bataya nahin",
+    checkVehicle: "Yeh gaadi jaanchen",
+    vehicleSafety: "Yeh sirf jaanchta hai. Kahin kuch nahin bheja jata aur koi e-way bill nahin banta.",
+    evidenceUsed: "Humne kya padha, aur kahan se", evidenceUsedHelp: "RTO ka record aur aapki apni gaadiyon ki list, alag-alag. Override inme se kuch nahin badalta.",
+    overrideWhich: "Aap kis baat ki zimmedari le rahe hain?", overrideWhichHelp: "Sirf wahi cheezein yahan hain jinhen override kiya ja sakta hai. Jo gaadi maal utha hi nahin sakti, wo unme nahin hai.",
+    overrideWhy: "Bhejna kyon theek hai?", overrideButton: "Meri zimmedari par bhejein",
+    overrideSafety: "Isse aapka naam, samay aur wajah findings ke saath jud jati hai. Koi wazan, koi capacity aur koi sarkari record nahin badalta.",
+    heldBack: "Dispatch desk par ruka hua", heldBackHelp: "Wo movements jinhen gaadi ki koi dikkat rok rahi hai, aur kya baaki hai.",
+    navEway: "E-way bill",
+    ewayTitle: "Kya is maal ko e-way bill chahiye?", ewayHelp: "E-way bill maal le jaane ka parwana hai, tax ka kagaz nahin. Chhoti kheponi ko aksar zaroorat nahin hoti. Hum gaadi par kya hai, kahan ja raha hai aur kis rajya ka niyam lagta hai, isse tay karte hain aur wahi niyam aapko dikhate hain.",
+    whyMoving: "Maal kyon ja raha hai?", moveSupply: "Bikri", moveJobWork: "Job work ke liye ja raha hai", moveBranch: "Apni hi jagah par ja raha hai", moveReturn: "Customer se wapas aa raha hai",
+    deliveryState: "Maal kis rajya mein ja raha hai?", deliveryStateHelp: "Har rajya ki apni limit isme bani hui hai. Agar maal kharidar ke apne pate par hi ja raha hai to ise waise hi rehne den.", buyerOwnState: "Jahan kharidar hai",
+    deliveryPlace: "Delivery ka shehar",
+    distanceKm: "Sadak ki doori (km)", distanceHelp: "Isse tay hota hai bill kitne din chalega: har 200 km ya uske hisse par ek din.",
+    vehicleNumber: "Gaadi ka number", vehicleHelp: "Khali chhod den to abhi Part A ban jayega aur gaadi baad mein jodi ja sakti hai. Gaadi jude bina maal nahin hil sakta.",
+    oversized: "Kya load bahut bada hai?", answerYes: "Haan", answerNo: "Nahin", answerNotSaid: "Bataya nahin",
+    sameCity: "Kya maal ek hi shehar mein reh raha hai?", sameCityHelp: "Kuch rajya, jaise Gujarat, ek hi shehar ke andar koi e-way bill nahin maangte. Pakka nahin to 'bataya nahin' rehne den — hum poochenge, andaza nahin lagayenge.",
+    checkMovement: "Yeh movement jaanchen", ewaySafety: "Jaanchne se kuch nahin jata. Banane ka button dabane tak portal tak kuch nahin pahunchta.",
+    raiseEway: "E-way bill banayein", askPortal: "Portal se poochen unke paas kya hai",
+    vehicleChangeReason: "Yeh gaadi kyon?", changeFirst: "Yeh pehli hai", changeBreakdown: "Pichhli kharab ho gayi", changeTransshipment: "Maal doosri gaadi par gaya", changeNote: "Kya hua, batayein", fromPlace: "Kahan se utha raha hai",
+    addVehicle: "Yeh gaadi bill par lagayein",
+    currentPlace: "Gaadi abhi kahan hai?", currentState: "Kaunsa rajya code?", remainingKm: "Kitne kilometre baaki hain", extendWhy: "Der kyon ho rahi hai?", extendValidity: "E-way bill ki avdhi badhayein",
+    cancelEway: "Portal ke saath radd karen",
+    onTheRoad: "Abhi sadak par", onTheRoadHelp: "Har khep jiska e-way bill chal raha hai, aur har ek ke paas kitna samay bacha hai.",
     navSupplier: "Supplier jaanch",
+    navPlan: "Aapka plan",
+    planTitle: "Aapke plan mein kya hai", planHelp: "Plan sirf itne mein alag hain ki aap kitna kaam karte hain. Kaam kitni savdhani se hota hai usme koi farq nahin — har chetavni, har jaanch aur aapka apna data har plan mein hai, muft wale mein bhi.",
+    planUsage: "Is mahine aapne kitna istemal kiya", planNeverWithheld: "Jo koi plan chheen nahin sakta",
+    planChoose: "Plan badlein", planPay: "Is mahine ka bhugtan karein", planInvoices: "Hamare aapko bheje gaye bill",
     navReminders: "Yaad-dilava",
     remindersTitle: "Paise ke liye kise yaad dilana hai", remindersHelp: "Neeche har line abhi is waqt aapki bahi se nikali gayi hai. Jo bill chuk gaya, jispar sawaal hai, ya jiska vaada hua hai — usse chhod diya jata hai, aur wajah likhi hoti hai; kyunki agla sawaal yahi hota hai ki \"unhe yaad kyun nahin dilaya?\"",
     remindersToday: "Aaj kya jayega", remindersSendAll: "Jo tay hua sab bhej dein",
@@ -253,6 +349,8 @@ const copy = {
     matchSafety: "Yeh sirf milan hai. Bahi mein kuch darj nahi hota aur stock nahi hilta.",
     colItem: "Saman", colOrdered: "Mangaya", colArrived: "Aaya", colKept: "Rakha", colTurnedAway: "Wapas kiya", colBilled: "Bill mein", colAgreedPrice: "Tay daam", colBilledPrice: "Bill ka daam",
     differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
+    navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya",
+    navOperations: "Seva ki sthiti", operationsEyebrow: "Seva ki sehat", operationsTitle: "Kya seva sahi chal rahi hai?", operationsHelp: "Invoice ya bank record khole bina service check, bahari nakaami, surakshit retry aur grahak ko dikhne wali ghatna dekhein.", operationsSafetyTitle: "Grahak ka data niji rehta hai. ", operationsSafety: "Yahan sirf error code aur correlation ID dikhte hain. Retry tabhi milta hai jab kaam surakshit aur duplicate-proof ghoshit ho.", operationsHealth: "Sehat ki jaanch", operationsFailures: "Bahari nakaami", operationsQueue: "Surakshit retry queue", operationsIncidents: "Grahak sthiti ka itihaas", operationsHealthy: "Sabhi jaanch sahi chal rahi hain", operationsDegraded: "Ek ya adhik jaanch par dhyan chahiye", operationsNoFailures: "Is company ke liye koi bahari nakaami nahin.", operationsNoJobs: "Koi kaam intezar mein nahin.", operationsReplay: "Surakshit dobara chalayen", operationsNoIncidents: "Koi maujooda ya haal ki ghatna nahin.",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -399,6 +497,7 @@ function translate() {
   // The reminder rows are sentences from the server in both languages, so switching language must
   // redraw them; a half-translated page is worse than an untranslated one.
   if (state.reminders) renderReminders(state.reminders);
+  if (planState !== null) renderPlan(planState);
   renderAskExamples();
   if (lastAskAnswer !== null) renderAnswer(lastAskAnswer);
 }
@@ -420,6 +519,11 @@ function openView(view) {
   if (target === "migration") startMigration();
   if (target === "returns") loadReturnDocuments();
   if (target === "reminders") loadReminders();
+  if (target === "plan") loadPlan();
+  if (target === "vehicle") loadVehiclesHeld();
+  if (target === "bank-feeds") loadBankFeeds();
+  if (target === "operations") loadOperations();
+  if (target === "ask") loadAskExamples();
   if (target === "ask") { loadAskExamples(); loadAgentCapabilities(); }
 }
 
@@ -540,6 +644,19 @@ function renderDashboard(data) {
     invoiceSelect.append(option);
   });
   if ([...invoiceSelect.options].some((option) => option.value === selected)) invoiceSelect.value = selected;
+
+  const collectionDocument = document.querySelector("#collection-document");
+  if (collectionDocument) {
+    const prior = collectionDocument.value;
+    collectionDocument.replaceChildren();
+    data.customer.documents.forEach((openDocument) => {
+      const option = document.createElement("option");
+      option.value = openDocument.id;
+      option.textContent = `${openDocument.number} · ${money(openDocument.outstanding)}`;
+      collectionDocument.append(option);
+    });
+    if ([...collectionDocument.options].some((option) => option.value === prior)) collectionDocument.value = prior;
+  }
 }
 
 async function loadDashboard() {
@@ -1485,6 +1602,10 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     loadSupplierChoices();
     loadIssuedInvoices();
     loadReturnDocuments();
+    loadEwayRoad();
+    loadEwayStates();
+    loadVehicleChoices();
+    loadVehiclesHeld();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -1493,6 +1614,73 @@ document.querySelector("#sign-out").addEventListener("click", () => {
   storage?.removeItem("karobar.session");
   showLogin();
 });
+
+// ------------------------------------------------ issue #23: payment reminders and collection tracking
+
+// ------------------------------------------------ issue #24: authorised live bank feeds
+
+let pendingBankConnectionId = null;
+
+function bankActivityRow(iconText, title, detail, tone = "green") {
+  const row = document.createElement("div"); row.className = "activity-row";
+  const icon = document.createElement("span"); icon.className = `activity-icon ${tone}`; icon.setAttribute("aria-hidden", "true"); icon.textContent = iconText;
+  const body = document.createElement("div"); const strong = document.createElement("strong"); strong.textContent = title; const small = document.createElement("small"); small.textContent = detail; body.append(strong, small); row.append(icon, body); return row;
+}
+
+async function loadBankFeeds() {
+  const connections = document.querySelector("#bank-feed-connections");
+  const transactions = document.querySelector("#bank-feed-transactions");
+  if (!connections || !transactions || !state.sessionId) return;
+  try {
+    const workspace = await api("/api/bank-feeds");
+    connections.replaceChildren(); transactions.replaceChildren();
+    if (workspace.connections.length === 0) connections.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankConnections }));
+    for (const connection of workspace.connections) {
+      const account = connection.accounts[0];
+      const detail = account ? `${account.maskedAccountNumber} · ${account.balancePaise === null ? "—" : money(Number(account.balancePaise) / 100)}` : connection.provider;
+      const row = bankActivityRow("⇅", `${account?.displayName ?? connection.provider} · ${connection.status}`, detail, connection.status === "CONNECTED" ? "green" : connection.status === "ERROR" || connection.status === "TOKEN_EXPIRED" ? "red" : "amber");
+      if (connection.status === "CONNECTED") {
+        const actions = document.createElement("div");
+        for (const [label, action] of [[copy[state.locale].syncNow, "sync"], [copy[state.locale].disconnectBank, "disconnect"]]) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button"; button.textContent = label; button.dataset.bankAction = action; button.dataset.connectionId = connection.id; actions.append(button); }
+        row.append(actions);
+      }
+      connections.append(row);
+      connection.transactions.forEach((item) => transactions.append(bankActivityRow(item.creditPaise !== "0" ? "+" : "−", item.description, `${item.bookedOn} · ${money(Number(item.creditPaise !== "0" ? item.creditPaise : item.debitPaise) / 100)}${item.reference ? ` · ${item.reference}` : ""}`)));
+    }
+    if (transactions.childElementCount === 0) transactions.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankTransactions }));
+  } catch (error) { connections.textContent = localizedError(error); }
+}
+
+document.querySelector("#bank-feed-connect")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/bank-feeds/consent", { method: "POST", body: JSON.stringify({ provider: "sandbox-aa", redirectUri: `${location.origin}/bank-feed-return` }) });
+    pendingBankConnectionId = result.connection.id;
+    document.querySelector("#bank-feed-approve").hidden = false;
+    showDialog({ title: copy[state.locale].giveBankPermission, message: copy[state.locale].bankConsentHelp, effects: [result.connection.provider] }, "preview");
+    await loadBankFeeds();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+document.querySelector("#bank-feed-approve")?.addEventListener("click", async (event) => {
+  if (!pendingBankConnectionId) return;
+  try {
+    await api("/api/bank-feeds/consent/complete", { method: "POST", body: JSON.stringify({ connectionId: pendingBankConnectionId, authorizationCode: "sandbox-approved" }) });
+    pendingBankConnectionId = null; event.currentTarget.hidden = true;
+    showDialog({ title: copy[state.locale].bankConnected, message: copy[state.locale].bankFeedSafety }, "recorded");
+    await loadBankFeeds();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
+document.querySelector("#bank-feed-connections")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-bank-action]"); if (!button) return;
+  const sync = button.dataset.bankAction === "sync";
+  try {
+    const result = await api(sync ? "/api/bank-feeds/sync" : "/api/bank-feeds/disconnect", { method: "POST", body: JSON.stringify({ connectionId: button.dataset.connectionId, idempotencyKey: `${button.dataset.bankAction}:${button.dataset.connectionId}:${new Date().toISOString().slice(0, 10)}` }) });
+    showDialog({ title: copy[state.locale][sync ? "bankSynced" : "bankDisconnected"], message: sync ? `${result.imported} new transaction(s), ${result.duplicates} duplicate(s).` : result.message }, "recorded");
+    await loadBankFeeds();
+  } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+});
+
 document.querySelector("#review-cancel").addEventListener("click", () => { state.pendingReturnInput = null; document.querySelector("#review-dialog").close("cancel"); });
 document.querySelector("#review-confirm").addEventListener("click", async (event) => {
   if (state.pendingReturnInput) {
@@ -1898,6 +2086,29 @@ async function loadSupplierChoices() {
 }
 
 
+// ------------------------------------------------------------- issue #42: what the plan covers
+//
+// The screen opens with the promise and only then shows the numbers, because the fear a pricing
+// page creates is "what will they switch off?" — and the answer here is "nothing that matters".
+
+let planState = null;
+
+function planUsageRow(total) {
+  const limit = total.limit === null ? "no limit" : `${total.used} of ${total.limit}`;
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  // Amber only when the end is actually near. A limit of one is not "nearly used up" at zero used.
+  const tight = total.limit !== null && total.limit >= 10 && total.remaining <= total.limit * 0.1;
+  icon.className = `activity-icon ${total.limit === null ? "blue" : tight ? "amber" : "green"}`;
+  icon.textContent = total.limit === null ? "∞" : tight ? "!" : "✓";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `${t(total.label)} — ${limit}`;
+  const detail = document.createElement("p");
+  detail.textContent = total.limit === null
+    ? "Your plan does not limit this."
+    : `${total.remaining} left.`;
 // ---------------------------------------------------------- issue #47: asking it to do the work
 //
 // The screen never offers a "do it" button before it has shown the whole list. Every step names
@@ -1930,6 +2141,17 @@ function agentStepRow(step) {
   return row;
 }
 
+function planCheckRow(check) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = `activity-icon ${check.outcome === "ALLOWED" ? "green" : "amber"}`;
+  icon.textContent = check.outcome === "ALLOWED" ? "✓" : "!";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = check.capability.replaceAll(".", " ").replaceAll("_", " ");
+  const detail = document.createElement("p");
+  detail.textContent = t(check.reason);
 function agentRefusalRow(refusal) {
   const row = document.createElement("div");
   row.className = "activity-row";
@@ -1946,6 +2168,71 @@ function agentRefusalRow(refusal) {
   return row;
 }
 
+function renderPlan(data) {
+  planState = data;
+  document.querySelector("#plan-name").textContent = t(data.plan.name);
+  document.querySelector("#plan-state").textContent = t(data.stateWords);
+  document.querySelector("#plan-pill").textContent = data.state.replaceAll("_", " ").toLowerCase();
+  document.querySelector("#plan-promise").textContent = t(data.promise);
+  document.querySelector("#plan-usage").replaceChildren(...data.usage.map(planUsageRow));
+  // Essential first: the point of the list is what cannot be taken away.
+  document.querySelector("#plan-checks").replaceChildren(
+    ...[...data.checks].sort((a, b) => Number(b.essential) - Number(a.essential)).map(planCheckRow),
+  );
+
+  document.querySelector("#plan-options").replaceChildren(...data.plans.map((plan) => {
+    const row = document.createElement("div");
+    row.className = "activity-row";
+    const icon = document.createElement("span");
+    icon.className = `activity-icon ${plan.id === data.plan.id ? "green" : "blue"}`;
+    icon.textContent = plan.id === data.plan.id ? "✓" : "·";
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = `${t(plan.name)} — ${money(plan.monthlyPrice)} a month`;
+    const detail = document.createElement("p");
+    detail.textContent = t(plan.description);
+    body.append(title, detail);
+    row.append(icon, body);
+    if (plan.id !== data.plan.id) {
+      const choose = document.createElement("button");
+      choose.type = "button";
+      choose.className = "secondary-button";
+      choose.textContent = t(plan.name);
+      choose.addEventListener("click", async () => {
+        try {
+          const result = await api("/api/subscription/plan", { method: "POST", body: JSON.stringify({ planId: plan.id, reason: "Chosen on the plan screen" }) });
+          showDialog({ title: result.title, message: result.message }, "recorded");
+        } catch (error) { showDialog({ title: "Nothing was changed", message: error.message }, "failed"); }
+        loadPlan();
+      });
+      row.append(choose);
+    }
+    return row;
+  }));
+
+  document.querySelector("#plan-invoices").replaceChildren(...(data.invoices.length === 0
+    ? [simpleRow("Nothing yet.", "We have not invoiced you for this month.")]
+    : data.invoices.map((invoice) => simpleRow(
+        `${invoice.period} · ${money(invoice.total)} · ${invoice.state}`,
+        invoice.failureReason ?? `Net ${money(invoice.net)} + GST ${money(invoice.gst)}`,
+      ))));
+}
+
+async function loadPlan() {
+  try {
+    renderPlan(await api("/api/subscription"));
+  } catch (error) {
+    const state = document.querySelector("#plan-state");
+    if (state) state.textContent = error.message;
+  }
+}
+
+document.querySelector("#plan-pay")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/subscription/pay", { method: "POST", body: JSON.stringify({}) });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) { showDialog({ title: "Nothing was paid", message: error.message }, "failed"); }
+  loadPlan();
 function renderAgentPlan(plan) {
   agentState.plan = plan;
   document.querySelector("#agent-panel").hidden = false;
@@ -2278,7 +2565,7 @@ function renderEInvoice(result, mode) {
       detail.append(detailRow("Government acknowledgement", `${result.ackNumber} on ${result.ackDate}`));
       detail.append(detailRow("Signed QR code", `${String(result.signedQrCode).slice(0, 32)}…`, "Kept exactly as the government sent it. This goes on the customer's copy."));
     }
-    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntil));
+    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntilLabel ?? result.cancellableUntil, "The portal allows 24 hours, and not a minute more."));
     if (result.failure) detail.append(detailRow("What went wrong", result.failure.message, result.failure.retryable ? "Worth trying again." : "Trying again unchanged will not help."));
   }
 
@@ -2360,8 +2647,448 @@ async function loadIssuedInvoices() {
   } catch { /* the picker is a convenience; the rest of the page still works */ }
 }
 
+
+// ------------------------------------------------ issue #27: e-way bills for goods on the road
+//
+// The screen leads with the decision and the facts behind it, because most consignments a small
+// business moves need no e-way bill at all. Raising one is offered only after the answer is yes,
+// and a bill with no vehicle on it is never shown as permission to move: Part A and Part B are two
+// different states here exactly as they are on the portal.
+
+function renderEway(result, mode) {
+  const panel = document.querySelector("#eway-panel");
+  panel.hidden = false;
+  document.querySelector("#eway-result-title").textContent = result.title;
+  document.querySelector("#eway-result-message").textContent = result.message;
+
+  const badge = document.querySelector("#eway-status");
+  const status = mode === "preview" ? result.outcome : result.status;
+  badge.textContent = String(status).replace(/_/g, " ").toLowerCase();
+  badge.className = `pill ${status === "ACTIVE" ? "done" : status === "FAILED" || status === "EXPIRED" || status === "CANNOT_DECIDE" ? "hold" : status === "REQUIRED" || status === "PART_A_ONLY" ? "warn" : "done"}`;
+
+  const detail = document.querySelector("#eway-detail");
+  detail.replaceChildren();
+
+  const applicability = mode === "preview" ? result : result.applicability;
+  detail.append(detailRow("The rule that decided it", applicability.ruleId, applicability.sourceRef || undefined));
+  detail.append(detailRow("Why", applicability.reason));
+  // The facts the rules actually used, listed as they were applied rather than summarised after.
+  (applicability.facts ?? []).forEach((fact) => detail.append(detailRow(fact.label, fact.value)));
+
+  if (mode === "preview") {
+    if (result.threshold) detail.append(detailRow("Limit compared against", money(result.threshold.amount), result.threshold.note || undefined));
+    if (result.validityDays) detail.append(detailRow("Days it would be valid for", String(result.validityDays), "One day for every 200 km, or part of it. The clock starts when a vehicle goes on."));
+    result.problems.forEach((problem) => detail.append(detailRow("Missing", problem.message, problem.field)));
+  } else {
+    if (result.ewayBillNumber) detail.append(detailRow("E-way bill number", result.ewayBillNumber, "Keep this number with the driver."));
+    if (result.validUntil) detail.append(detailRow("Valid until", result.validUntilLabel ?? result.validUntil, result.timeLeft || undefined));
+    if (result.vehicles.length) detail.append(detailRow("Vehicles", result.vehicles.map((vehicle) => vehicle.number).join(" → ")));
+    if (result.consolidatedTripNumber) detail.append(detailRow("On trip sheet", result.consolidatedTripNumber));
+    if (result.cancellableUntil) detail.append(detailRow("Can be cancelled until", result.cancellableUntilLabel ?? result.cancellableUntil, "The portal allows 24 hours, and not a minute more."));
+    if (result.failure) detail.append(detailRow("What went wrong", result.failure.message, result.failure.retryable ? "Worth trying again." : "Trying again unchanged will not help."));
+  }
+
+  // Only offer what makes sense for where this consignment actually is.
+  const required = mode === "preview" ? result.outcome === "REQUIRED" : result.applicability.outcome === "REQUIRED";
+  const raised = mode !== "preview" && ["PART_A_ONLY", "ACTIVE", "EXPIRED"].includes(result.status);
+  document.querySelector("#eway-raise").hidden = !(required && (mode === "preview" ? result.ready : result.status === "FAILED"));
+  document.querySelector("#eway-offline").hidden = !required;
+  document.querySelector("#eway-reconcile").hidden = !(mode !== "preview" && (result.status === "FAILED" || result.status === "PENDING"));
+  // A vehicle can go on while the bill is live, and only then.
+  document.querySelector("#eway-vehicle-form").hidden = !(raised && result.status !== "EXPIRED");
+  document.querySelector("#eway-extend-form").hidden = !(mode !== "preview" && (result.status === "ACTIVE" || result.status === "EXPIRED"));
+  document.querySelector("#eway-cancel-form").hidden = !(raised && result.status !== "EXPIRED");
+}
+
+const ewayInput = () => formValues(document.querySelector("#eway-form"));
+
+submitStep("#eway-form", async () => {
+  try {
+    renderEway(await api("/api/eway/preview", { method: "POST", body: JSON.stringify(ewayInput()) }), "preview");
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+const ewayAction = (selector, path) => {
+  const button = document.querySelector(selector);
+  if (!button) return;
+  button.addEventListener("click", async () => {
+    try {
+      renderEway(await api(path, { method: "POST", body: JSON.stringify(ewayInput()) }), "record");
+      await loadEwayRoad();
+    } catch (error) {
+      showDialog({ title: "Nothing was raised", message: error.message }, "failed");
+    }
+  });
+};
+
+ewayAction("#eway-raise", "/api/eway/generate");
+ewayAction("#eway-reconcile", "/api/eway/reconcile");
+
+const ewayForm = (selector, path, failureTitle) => submitStep(selector, async (form) => {
+  try {
+    renderEway(await api(path, {
+      method: "POST", body: JSON.stringify({ ...ewayInput(), ...formValues(form) }),
+    }), "record");
+    await loadEwayRoad();
+  } catch (error) {
+    showDialog({ title: failureTitle, message: error.message }, "failed");
+  }
+});
+
+ewayForm("#eway-vehicle-form", "/api/eway/vehicle", "The vehicle was not added");
+ewayForm("#eway-extend-form", "/api/eway/extend", "Nothing was extended");
+ewayForm("#eway-cancel-form", "/api/eway/cancel", "Nothing was cancelled");
+
+// The offline file matters most when the portal is down and the lorry still has to leave.
+document.querySelector("#eway-offline")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/eway/offline", { method: "POST", body: JSON.stringify(ewayInput()) });
+    showDialog({
+      title: "File ready",
+      message: `${result.fileName} — this is what would be sent. It is not an e-way bill, and goods must not move on it.`,
+      effects: String(result.json).split("\n").slice(0, 12),
+    }, "recorded");
+  } catch (error) {
+    showDialog({ title: "Nothing to export", message: error.message }, "failed");
+  }
+});
+
+// Every state, with its own limit, straight from the rule table the decision uses — so what the
+// picker shows and what decides the movement can never drift apart.
+async function loadEwayStates() {
+  const select = document.querySelector("#eway-states");
+  if (!select) return;
+  try {
+    const { states } = await api("/api/eway/states");
+    // What exists today first; codes that are no longer issued at the end, said plainly, because
+    // an old document can still carry one and somebody may have to pick it.
+    const order = { STATE: 0, UNION_TERRITORY: 0, OTHER_TERRITORY: 1, RETIRED: 2 };
+    states.sort((left, right) => (order[left.kind] ?? 0) - (order[right.kind] ?? 0));
+    select.replaceChildren();
+    const anywhere = document.createElement("option");
+    anywhere.value = "";
+    anywhere.textContent = copy[state.locale].buyerOwnState;
+    select.append(anywhere);
+    states.forEach((row) => {
+      const option = document.createElement("option");
+      option.value = row.code;
+      // A territory that asks for no e-way bill has no limit to show, and showing one would lie.
+      const limit = row.exemptAnyValue ? "no e-way bill needed inside it" : money(row.limit);
+      option.textContent = `${row.name} · ${limit}${row.kind === "RETIRED" ? " · code no longer issued" : row.kind === "OTHER_TERRITORY" ? " · not a state" : ""}`;
+      option.dataset.limit = row.exemptAnyValue ? "" : String(row.limit);
+      option.dataset.cityLimit = row.intraCityLimit === null ? "" : String(row.intraCityLimit);
+      option.dataset.cityExempt = String(row.intraCityExempt);
+      option.dataset.sourceKind = row.sourceKind;
+      option.dataset.from = row.effectiveFrom;
+      option.dataset.source = row.sourceRef;
+      option.dataset.confirmed = String(row.sourceConfirmed);
+      option.dataset.note = row.note ?? "";
+      select.append(option);
+    });
+    select.addEventListener("change", showEwayStateRule);
+    showEwayStateRule();
+  } catch { /* the picker is a convenience; the check still works without it */ }
+}
+
+// The chosen state's own rule, shown before anything is checked, so the limit is never a surprise.
+function showEwayStateRule() {
+  const select = document.querySelector("#eway-states");
+  const line = document.querySelector("#eway-state-rule");
+  if (!select || !line) return;
+  const option = select.selectedOptions[0];
+  if (!option?.value) { line.textContent = ""; return; }
+  const name = option.textContent.split(" · ")[0];
+  const parts = [option.dataset.limit
+    ? `Inside ${name} the limit is ${money(Number(option.dataset.limit))}, from ${option.dataset.from}.`
+    : `${name} asks for no e-way bill at all inside its own borders, from ${option.dataset.from}.`];
+  if (option.dataset.cityLimit) parts.push(`Inside one city the limit is ${money(Number(option.dataset.cityLimit))}.`);
+  if (option.dataset.cityExempt === "true") parts.push("Inside one city no e-way bill is needed at all.");
+  if (option.dataset.note) parts.push(option.dataset.note);
+  parts.push(option.dataset.source);
+  line.textContent = parts.join(" ");
+}
+
+async function loadEwayRoad() {
+  const list = document.querySelector("#eway-road");
+  const select = document.querySelector("#eway-invoices");
+  if (!list || !select) return;
+  try {
+    const { invoices } = await api("/api/einvoices/invoices");
+    const chosen = select.value;
+    select.replaceChildren();
+    invoices.forEach((invoice) => {
+      const option = document.createElement("option");
+      option.value = invoice.id;
+      option.textContent = `${invoice.number} · ${money(invoice.amount)}`;
+      select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+
+    const { consignments } = await api("/api/eway/on-the-road");
+    list.replaceChildren();
+    if (consignments.length === 0) {
+      list.append(detailRow("Nothing is on the road", "No consignment has a running e-way bill right now."));
+      return;
+    }
+    consignments.forEach((row) => {
+      list.append(detailRow(
+        `${row.documentNumber} · ${row.ewayBillNumber ?? "no number yet"}`,
+        row.vehicle ?? "no vehicle yet — the goods may not move",
+        row.timeLeft,
+      ));
+    });
+  } catch { /* the picker and the list are conveniences; the rest of the page still works */ }
+}
+
+async function loadOperations() {
+  const health = document.querySelector("#operations-health");
+  const failures = document.querySelector("#operations-failures");
+  const jobs = document.querySelector("#operations-jobs");
+  const incidents = document.querySelector("#operations-incidents");
+  if (!health || !failures || !jobs || !incidents) return;
+  try {
+    const data = await api("/api/operations");
+    health.replaceChildren(simpleRow(data.health.state === "healthy" ? copy[state.locale].operationsHealthy : copy[state.locale].operationsDegraded, Object.entries(data.health.checks).map(([name, value]) => `${name}: ${value}`).join(" · ")));
+    failures.replaceChildren(...(data.failures.length ? data.failures.map((failure) => simpleRow(`${failure.connector} · ${failure.errorCode}`, `${failure.operation} · ${failure.correlationId}`)) : [simpleRow(copy[state.locale].operationsNoFailures, "")]));
+    jobs.replaceChildren(...(data.jobs.length ? data.jobs.map((job) => {
+      const row = simpleRow(`${job.kind} · ${job.state}`, `${job.correlationId} · ${job.attempts}/${job.maxAttempts}`);
+      if (job.state === "failure" && job.idempotent) {
+        const button = document.createElement("button");
+        button.type = "button"; button.className = "secondary-button"; button.dataset.replayJob = job.id; button.textContent = copy[state.locale].operationsReplay;
+        row.append(button);
+      }
+      return row;
+    }) : [simpleRow(copy[state.locale].operationsNoJobs, "")]));
+    incidents.replaceChildren(...(data.incidents.length ? data.incidents.map((incident) => simpleRow(`${incident.title} · ${incident.state}`, incident.timeline.map((update) => update.message).join(" → "))) : [simpleRow(copy[state.locale].operationsNoIncidents, "")]));
+  } catch (error) { health.textContent = error.message; }
+}
+
+document.querySelector("#operations-jobs")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-replay-job]");
+  if (!button) return;
+  button.disabled = true;
+  try { await api("/api/operations/jobs/replay", { method: "POST", body: JSON.stringify({ jobId: button.dataset.replayJob }) }); await loadOperations(); }
+  catch (error) { announce(error.message); button.disabled = false; }
+});
+
+// ------------------------------------ issue #28: can this lorry actually carry this load
+//
+// The screen is built around one distinction people get wrong: a check that found nothing and a
+// check that could not be made are not the same thing. So a CANNOT_DECIDE is amber and says "not a
+// pass", the evidence is listed with the source on each line, and the override form only ever
+// offers the findings a person is allowed to answer for — the physically impossible ones are shown
+// with no button at all.
+
+// ------------------------------------------------------------ issue #29: the government record
+//
+// One number plate, typed in by a person at the gate, and what the registering authority says about
+// it. The three answers stay three: facts, "no such vehicle", and "we could not ask" — the last one
+// says which reason it was and never reads as "nothing wrong".
+
+function renderVehicleRecord(result) {
+  const words = copy[state.locale];
+  document.querySelector("#vehicle-record-heading").hidden = false;
+  document.querySelector("#vehicle-record-title").textContent = result.title;
+  document.querySelector("#vehicle-record-message").textContent = result.message;
+
+  const badge = document.querySelector("#vehicle-record-status");
+  badge.textContent = result.kind === "FOUND"
+    ? (result.freshness === "STALE" ? "on record, but old" : "on record")
+    : result.kind === "NOT_FOUND" ? "not on record" : "not checked";
+  badge.className = `pill ${result.kind === "FOUND" ? (result.freshness === "STALE" ? "warn" : "done") : result.kind === "NOT_FOUND" ? "warn" : "hold"}`;
+
+  const list = document.querySelector("#vehicle-record-facts");
+  list.replaceChildren();
+  result.facts.forEach((fact) => list.append(detailRow(fact.label, fact.value)));
+  // Where the answer came from and when, always, because a reading nobody can trace is not proof.
+  if (result.provider) list.append(detailRow(words.recordProvider, result.provider));
+  if (result.providerReference) list.append(detailRow(words.recordReference, result.providerReference));
+  if (result.retrievedAt) {
+    list.append(detailRow(words.recordAsked, new Date(result.retrievedAt).toLocaleString(), result.fromCache ? words.recordReused : undefined));
+  }
+  if (result.consent) list.append(detailRow(words.recordAgreed, result.consent.fields.join(", ")));
+}
+
+submitStep("#vehicle-record-form", async (form) => {
+  try {
+    renderVehicleRecord(await api("/api/vehicles/record", { method: "POST", body: JSON.stringify(formValues(form)) }));
+  } catch (error) {
+    document.querySelector("#vehicle-record-heading").hidden = false;
+    document.querySelector("#vehicle-record-title").textContent = "That could not be looked up";
+    document.querySelector("#vehicle-record-message").textContent = error.message;
+    document.querySelector("#vehicle-record-facts").replaceChildren();
+  }
+});
+
+let lastVehicleCheck = null;
+
+function renderVehicleCheck(result) {
+  lastVehicleCheck = result;
+  const panel = document.querySelector("#vehicle-panel");
+  panel.hidden = false;
+  document.querySelector("#vehicle-result-title").textContent = result.title;
+  document.querySelector("#vehicle-result-message").textContent = result.message;
+
+  // An overridden check keeps its outcome — the finding stands — so the badge says "overridden"
+  // rather than pretending the check came back clean.
+  const badge = document.querySelector("#vehicle-status");
+  const overridden = result.clearedToMove && result.overrides.length > 0;
+  badge.textContent = overridden ? "overridden" : String(result.outcome).replace(/_/g, " ").toLowerCase();
+  badge.className = `pill ${overridden ? "warn" : result.outcome === "OK" ? "done" : result.outcome === "WARN" ? "warn" : "hold"}`;
+
+  const findings = document.querySelector("#vehicle-findings");
+  findings.replaceChildren();
+  if (result.findings.length === 0) {
+    findings.append(detailRow("Nothing found", result.message));
+  }
+  result.findings.forEach((finding) => {
+    const severity = finding.severity === "BLOCK" ? "Stops the movement" : finding.severity === "WARN" ? "Worth a look" : "Cannot be decided";
+    findings.append(detailRow(
+      `${severity} · ${finding.title}`,
+      finding.reason,
+      // The rule and its source travel with the finding, as they do everywhere else in this app.
+      `${finding.ruleId}${finding.sourceRef ? ` · ${finding.sourceRef}` : ""}${finding.overridable ? "" : " · cannot be overridden"}`,
+    ));
+    finding.facts.forEach((fact) => findings.append(detailRow(fact.label, fact.value)));
+  });
+  if (result.plate) {
+    // Whether a camera or a person read the plate changes what the line means, so it says which.
+    findings.append(detailRow(
+      result.plate.readBy === "PERSON" ? "Number plate, read off the lorry" : "Number plate photograph",
+      result.plate.explanation,
+      result.plate.readNumber ? `Read as ${result.plate.readNumber}` : undefined,
+    ));
+  }
+
+  const evidence = document.querySelector("#vehicle-evidence");
+  evidence.replaceChildren();
+  if (result.evidence.length === 0) {
+    evidence.append(detailRow("Nothing on record", "Neither the registering authority nor your own vehicle list holds anything about this vehicle."));
+  }
+  result.evidence.forEach((item) => {
+    const where = item.source === "GOVERNMENT_RECORD" ? "The registering authority's record" : item.source === "COMPANY_MASTER" ? "Your own vehicle list" : "Typed in for this movement";
+    const parts = [
+      item.vehicleClass ? `class ${item.vehicleClass}` : null,
+      item.bodyType ? `${item.bodyType} body` : null,
+      item.ratedPayloadKg ? `may carry ${item.ratedPayloadKg} kg` : null,
+      item.permitType ? `${item.permitType.toLowerCase()} permit` : null,
+      item.fitnessValidUpto ? `fitness to ${item.fitnessValidUpto}` : null,
+    ].filter(Boolean);
+    evidence.append(detailRow(where, parts.join(" · ") || "nothing held", item.reference ? `Reference ${item.reference} · read at ${item.retrievedAt}` : `Read at ${item.retrievedAt}`));
+  });
+  if (result.capacity) {
+    evidence.append(detailRow("Capacity used for the comparison", `${result.capacity.capacityKg} kg`, result.capacity.basis));
+  }
+  result.overrides.forEach((entry) => {
+    evidence.append(detailRow(`Sent out anyway by ${entry.by}`, entry.reason, `${entry.findingCodes.join(", ")} · ${entry.at}`));
+  });
+
+  // Only what is still standing and is allowed to be answered for.
+  const answerable = result.findings.filter((finding) => finding.outstanding && finding.overridable);
+  const codes = document.querySelector("#vehicle-override-codes");
+  codes.replaceChildren();
+  answerable.forEach((finding) => {
+    const option = document.createElement("option");
+    option.value = finding.code;
+    option.textContent = finding.title;
+    option.selected = true;
+    codes.append(option);
+  });
+  document.querySelector("#vehicle-override-form").hidden = answerable.length === 0;
+}
+
+submitStep("#vehicle-form", async (form) => {
+  try {
+    renderVehicleCheck(await api("/api/vehicles/check", { method: "POST", body: JSON.stringify(formValues(form)) }));
+    await loadVehiclesHeld();
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+submitStep("#vehicle-override-form", async (form) => {
+  if (!lastVehicleCheck) return;
+  const chosen = [...document.querySelector("#vehicle-override-codes").selectedOptions].map((option) => option.value);
+  try {
+    renderVehicleCheck(await api("/api/vehicles/check/override", {
+      method: "POST",
+      body: JSON.stringify({ checkId: lastVehicleCheck.id, findingCodes: chosen.join(","), reason: formValues(form).reason }),
+    }));
+    await loadVehiclesHeld();
+  } catch (error) {
+    showDialog({ title: "Nothing was overridden", message: error.message }, "failed");
+  }
+});
+
+/** The vehicles and the photographs this screen can be tried against. */
+async function loadVehicleChoices() {
+  const numbers = document.querySelector("#vehicle-numbers");
+  const photos = document.querySelector("#vehicle-photos");
+  if (!numbers || !photos) return;
+  try {
+    const { vehicles, photos: pictures, classes } = await api("/api/vehicles/choices");
+    numbers.replaceChildren();
+    vehicles.forEach((vehicle) => {
+      const option = document.createElement("option");
+      option.value = vehicle.number;
+      option.textContent = vehicle.label;
+      numbers.append(option);
+    });
+    photos.replaceChildren();
+    pictures.forEach((picture) => {
+      const option = document.createElement("option");
+      option.value = picture.value;
+      option.textContent = picture.label;
+      photos.append(option);
+    });
+    // Typed facts start blank: not saying is a real answer, and the rules ask rather than guess.
+    const classSelect = document.querySelector("#vehicle-classes");
+    if (classSelect) {
+      classSelect.replaceChildren();
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = copy[state.locale].classNotSaid;
+      classSelect.append(blank);
+      (classes ?? []).forEach((kind) => {
+        const option = document.createElement("option");
+        option.value = kind.value;
+        option.textContent = kind.label;
+        classSelect.append(option);
+      });
+    }
+  } catch { /* the pickers are a convenience; the rest of the page still works */ }
+}
+
+async function loadVehiclesHeld() {
+  const list = document.querySelector("#vehicle-held");
+  const select = document.querySelector("#vehicle-invoices");
+  if (!list || !select) return;
+  try {
+    const { invoices } = await api("/api/einvoices/invoices");
+    const chosen = select.value;
+    select.replaceChildren();
+    invoices.forEach((invoice) => {
+      const option = document.createElement("option");
+      option.value = invoice.id;
+      option.textContent = `${invoice.number} · ${money(invoice.amount)}`;
+      select.append(option);
+    });
+    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+
+    const { held } = await api("/api/vehicles/held");
+    list.replaceChildren();
+    if (held.length === 0) {
+      list.append(detailRow("Nothing is held back", "No movement is waiting on a vehicle problem right now."));
+      return;
+    }
+    held.forEach((row) => list.append(detailRow(`${row.vehicle ?? "no vehicle"} · ${row.outcome.toLowerCase().replace(/_/g, " ")}`, row.summary, row.outstanding.join("; "))));
+  } catch { /* the list is a convenience; the rest of the page still works */ }
+}
+
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); if (state.view === "operations") loadOperations(); } else showLogin();
