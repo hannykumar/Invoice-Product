@@ -524,7 +524,7 @@ test('the HTTP surface explains a cancelled GST number with its evidence', async
 test('a model score cannot make a supplier look serious over HTTP either', async () => {
   const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const scored = await request('POST', '/api/suppliers/check', {
-    party: 'Shree Ram Steels Private Limited', gstin: '27AAECS5678D1ZK', modelHint: 'unusual purchase pattern',
+    party: 'Shree Ram Steels Private Limited', gstin: '27AAECS5678D1Z4', modelHint: 'unusual purchase pattern',
   }, session);
   assert.equal(scored.body.level, 'INFORMATION');
   const hint = scored.body.warnings.find((warning: Record<string, any>) => warning.code === 'MODEL_HINT');
@@ -536,7 +536,7 @@ test('a model score cannot make a supplier look serious over HTTP either', async
 test('supplier checks are scoped to the signed-in company', async () => {
   const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   const checked = await request('POST', '/api/suppliers/check', {
-    party: 'Western Coast Supplies', gstin: '30AAFCW7788Q1ZP',
+    party: 'Western Coast Supplies', gstin: '30AAFCW7788Q1ZE',
   }, konkan);
   assert.equal(checked.status, 200);
   assert.equal(checked.body.supplier, 'Western Coast Supplies');
@@ -923,4 +923,65 @@ test('the assistant refuses over HTTP what it must not finish, and needs its own
   const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   const theirs = await request('GET', '/api/agent/history', {}, konkan);
   assert.deepEqual(theirs.body.plans, [], 'one company never sees another’s requests');
+});
+
+test('the GST return workspace is prepared from this company\'s own books', async () => {
+  assert.equal((await request('POST', '/api/gst-returns')).status, 401);
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+
+  // A bill in a month of its own, so this test does not depend on what other tests recorded.
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-05-14', terms: '15', reference: 'GSTR-30-SALE' };
+  const recorded = await request('POST', '/api/sales/record', sale, owner);
+  assert.equal(recorded.status, 200);
+
+  const prepared = await request('POST', '/api/gst-returns/prepare', { period: '2026-05' }, owner);
+  assert.equal(prepared.status, 200);
+  assert.equal(prepared.body.period, '2026-05');
+  assert.equal(prepared.body.periodLabel, 'May 2026');
+
+  // Every figure names the bills behind it — the issue's first acceptance criterion, on the wire.
+  const rows = prepared.body.sections.flatMap((section: any) => section.rows);
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((row: any) => row.sources.length > 0));
+  assert.ok(rows.some((row: any) => row.sources.some((source: any) => source.number === recorded.body.invoice.number)));
+
+  // The return and the books are compared, and the 3B is built from the same bills.
+  assert.equal(prepared.body.reconciliation.agrees, true);
+  assert.equal(prepared.body.gstr3b.heads.length, 4);
+});
+
+test('a GST return cannot be exported before it is approved, and approving fixes the figures', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-04-18', terms: '15', reference: 'GSTR-30-APPROVE' };
+  assert.equal((await request('POST', '/api/sales/record', sale, owner)).status, 200);
+  await request('POST', '/api/gst-returns/prepare', { period: '2026-04' }, owner);
+
+  const tooSoon = await request('POST', '/api/gst-returns/export', { period: '2026-04', returnType: 'GSTR1' }, owner);
+  assert.equal(tooSoon.status, 409);
+  assert.equal(tooSoon.body.code, 'GST_RETURN_NOT_APPROVED');
+
+  const approved = await request('POST', '/api/gst-returns/approve', { period: '2026-04', note: 'Checked against the sales register.' }, owner);
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.status, 'APPROVED');
+  assert.ok(approved.body.approvedAt !== null);
+
+  // The manual export path, which must work with no licensed intermediary anywhere in the picture.
+  const file = await request('POST', '/api/gst-returns/export', { period: '2026-04', returnType: 'GSTR1' }, owner);
+  assert.equal(file.status, 200);
+  assert.match(file.body.fileName, /^gstr1_[0-9A-Z]{15}_042026\.json$/);
+  assert.equal(file.body.payload.fp, '042026');
+  assert.match(file.body.message, /Nothing has been sent from here/);
+
+  // And the books cannot move under it quietly: a new April bill is reported, not absorbed.
+  const before = approved.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0);
+  assert.equal((await request('POST', '/api/sales/record', { ...sale, reference: 'GSTR-30-LATE', quantity: '1' }, owner)).status, 200);
+  const after = await request('POST', '/api/gst-returns', { period: '2026-04' }, owner);
+  assert.ok(after.body.drift !== null);
+  assert.equal(after.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0), before);
+});
+
+test('GST return APIs require both a session and the dedicated permission', async () => {
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const denied = await request('POST', '/api/gst-returns/prepare', { period: '2026-05' }, viewer);
+  assert.equal(denied.status, 403);
 });

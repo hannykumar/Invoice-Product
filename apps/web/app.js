@@ -91,6 +91,26 @@ const copy = {
     sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
     cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
     cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
+    navGstReturns: "GST returns",
+    gstReturnsTitle: "Your GST returns for the month",
+    gstReturnsHelp: "Every bill you issued in the month, sorted into the parts the government asks for, with the bills behind each figure still there to open. Nothing is guessed: a bill we cannot place is put on a list with the question that would place it.",
+    gstWhichMonth: "Which month", gstWhichMonthHelp: "Returns are filed month by month. Pick the month you are filing for.",
+    gstPrepare: "Prepare this month",
+    gstSafety: "This only reads your books and works out what the return would say. Nothing is sent to the government here.",
+    gstDriftTitle: "Your books have changed since this was approved",
+    gstExceptionsTitle: "Bills that cannot go on the return yet",
+    gstExceptionsHelp: "Each one is waiting on an answer from a person. They are in your books; they are simply not on the return until somebody decides.",
+    gstSectionsTitle: "What the return says",
+    gstSectionsHelp: "The government wants your sales split up like this. Every line shows the bills it was made from.",
+    gstBooksTitle: "Does it agree with your books?",
+    gst3bTitle: "The short return: what you owe and what you have already paid",
+    gstApproveTitle: "Approving and filing",
+    gstApproveHelp: "Approving fixes these figures against your name and the moment. After that, if your books move, the app tells you rather than quietly changing the return.",
+    gstApproveNote: "A note for the record",
+    gstApprove: "Approve this return",
+    gstExport: "Download the file to upload yourself",
+    gstOwe: "you owe", gstCredit: "already paid", gstLeftOver: "left over",
+    gstOnReturn: "on the return", gstInBooks: "in your books",
     navVehicle: "Vehicle check",
     vehicleCheckTitle: "Can this lorry carry this load?",
     vehicleCheckHelp: "Before the goods leave the yard we compare what is being loaded against what the vehicle is registered to carry. Every answer says where the fact came from, and a service we could not reach is never shown as 'nothing wrong'.",
@@ -268,6 +288,26 @@ const copy = {
     sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
     cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
     cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
+    navGstReturns: "GST return",
+    gstReturnsTitle: "Is mahine ka aapka GST return",
+    gstReturnsHelp: "Mahine ke saare bill, sarkar jaise maangti hai waise baante hue, aur har figure ke peeche ke bill khol kar dekhe ja sakte hain. Kuch andaza nahin lagaya jata: jo bill rakha na ja sake wo sawaal ke saath ek list par chala jata hai.",
+    gstWhichMonth: "Kaunsa mahina", gstWhichMonthHelp: "Return har mahine ka alag hota hai. Jis mahine ka bhar rahe hain wo chunein.",
+    gstPrepare: "Is mahine ka tayyar karein",
+    gstSafety: "Yeh sirf aapki books padhta hai aur batata hai return kya kahega. Yahan se sarkar ko kuch nahin jata.",
+    gstDriftTitle: "Approve hone ke baad aapki books badli hain",
+    gstExceptionsTitle: "Jo bill abhi return par nahin ja sakte",
+    gstExceptionsHelp: "Har ek kisi insaan ke jawab ka intezaar kar raha hai. Wo aapki books mein hain; bas jab tak koi tay na kare, return par nahin aate.",
+    gstSectionsTitle: "Return kya keh raha hai",
+    gstSectionsHelp: "Sarkar aapki bikri aise baanti hui maangti hai. Har line ke neeche uske bill dikhte hain.",
+    gstBooksTitle: "Kya yeh aapki books se milta hai?",
+    gst3bTitle: "Chhota return: kitna dena hai aur kitna pehle de chuke hain",
+    gstApproveTitle: "Approve karna aur file karna",
+    gstApproveHelp: "Approve karte hi yeh figure aapke naam aur us waqt ke saath pakke ho jaate hain. Uske baad books badlein to app aapko batata hai, chupke se return nahin badalta.",
+    gstApproveNote: "Record ke liye ek note",
+    gstApprove: "Yeh return approve karein",
+    gstExport: "Khud upload karne ke liye file lein",
+    gstOwe: "dena hai", gstCredit: "pehle diya", gstLeftOver: "bacha",
+    gstOnReturn: "return par", gstInBooks: "books mein",
     navVehicle: "Gaadi ki jaanch",
     vehicleCheckTitle: "Kya yeh gaadi itna maal le ja sakti hai?",
     vehicleCheckHelp: "Maal nikalne se pehle hum dekhte hain ki kitna load ho raha hai aur gaadi kitna le jaane ke liye registered hai. Har jawab batata hai wo baat kahan se aayi, aur jo service hum tak pahunch hi nahin payi use kabhi 'sab theek hai' nahin dikhaya jata.",
@@ -521,6 +561,7 @@ function openView(view) {
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
+  if (target === "gst-returns") openGstReturns();
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
   if (target === "ask") loadAskExamples();
@@ -3092,3 +3133,157 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 translate();
 openView(state.view);
 if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); if (state.view === "operations") loadOperations(); } else showLogin();
+
+// ------------------------------------ issue #30: the month's GST returns
+//
+// The screen is built around the two things a shopkeeper actually needs from a return and rarely
+// gets. First, every figure opens up: each row lists the bills it was made from, so "why is this
+// ₹1,25,000" is one click and not a phone call to an accountant. Second, nothing is filled in on
+// their behalf — a bill the app cannot place sits on its own list with the question that would
+// place it, and the return is short by exactly that bill until somebody answers.
+
+let gstWorkspace = null;
+
+function gstPeriodValue() {
+  const field = document.querySelector("#gst-period");
+  if (field.value) return field.value;
+  // The month a business is actually filing is the one that has just ended.
+  const now = new Date();
+  const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  field.value = previous.toISOString().slice(0, 7);
+  return field.value;
+}
+
+function openGstReturns() {
+  gstPeriodValue();
+  // Always re-read, never reuse what was on screen last time. Somebody who raises a bill and comes
+  // back here would otherwise be shown the figures from before it, and — worse — would not be told
+  // that their books have moved since the return was approved.
+  loadGstReturns();
+}
+
+async function loadGstReturns() {
+  try {
+    renderGstWorkspace(await api("/api/gst-returns", { method: "POST", body: JSON.stringify({ period: gstPeriodValue() }) }));
+  } catch (error) {
+    showGstProblem(error.message);
+  }
+}
+
+function showGstProblem(message) {
+  document.querySelector("#gst-heading").hidden = false;
+  document.querySelector("#gst-title").textContent = t({ "en-IN": "That month could not be prepared", "hi-IN": "Wo mahina tayyar nahin ho paya" });
+  document.querySelector("#gst-summary").textContent = message;
+  document.querySelector("#gst-blockers").replaceChildren();
+}
+
+function renderGstWorkspace(workspace) {
+  gstWorkspace = workspace;
+  const words = copy[state.locale];
+
+  document.querySelector("#gst-heading").hidden = false;
+  document.querySelector("#gst-title").textContent = workspace.periodLabel;
+  document.querySelector("#gst-summary").textContent = workspace.summary;
+  const badge = document.querySelector("#gst-status");
+  badge.textContent = workspace.statusLabel;
+  // Amber for "somebody has to decide", green for approved and onwards, blue while it is a draft.
+  badge.className = `pill ${workspace.status === "NEEDS_ATTENTION" ? "warn" : workspace.status === "DRAFT" ? "hold" : "done"}`;
+
+  // What stands between this month and an approval, said before anything else on the page.
+  const blockers = document.querySelector("#gst-blockers");
+  blockers.replaceChildren();
+  workspace.whyNotApprovable.forEach((reason) => blockers.append(simpleRow(reason, "")));
+  workspace.findings
+    .filter((finding) => finding.severity !== "INFORMATION")
+    .forEach((finding) => blockers.append(simpleRow(finding.message, finding.whatToDo)));
+
+  const drift = document.querySelector("#gst-drift-panel");
+  drift.hidden = workspace.drift === null;
+  if (workspace.drift !== null) document.querySelector("#gst-drift-message").textContent = workspace.drift.message;
+
+  const exceptionsPanel = document.querySelector("#gst-exceptions-panel");
+  exceptionsPanel.hidden = workspace.exceptions.length === 0;
+  const exceptions = document.querySelector("#gst-exceptions");
+  exceptions.replaceChildren();
+  workspace.exceptions.forEach((exception) => {
+    exception.questions.forEach((question) => {
+      exceptions.append(simpleRow(`${exception.number} · ${exception.party} · ${money(exception.amount)}`, `${question.message} ${question.whatToDo}`));
+    });
+  });
+
+  const sectionsPanel = document.querySelector("#gst-sections-panel");
+  sectionsPanel.hidden = workspace.sections.length === 0;
+  const sections = document.querySelector("#gst-sections");
+  sections.replaceChildren();
+  workspace.sections.forEach((section) => {
+    sections.append(simpleRow(section.name, section.sentence));
+    section.rows.forEach((row) => {
+      // The bills behind the row, on the row. This is the drill-down the whole design turns on.
+      const bills = row.sources.map((source) => `${source.number} (${money(source.amount)})`).join(", ");
+      const rate = row.rate === null ? "" : ` · ${row.rate}%`;
+      sections.append(detailRow(`${row.label}${rate}`, `${money(row.taxableValue)} + ${money(row.tax)} GST`, bills));
+    });
+  });
+
+  const booksPanel = document.querySelector("#gst-books-panel");
+  booksPanel.hidden = false;
+  document.querySelector("#gst-books-sentence").textContent = workspace.reconciliation.sentence;
+  const books = document.querySelector("#gst-books");
+  books.replaceChildren();
+  workspace.reconciliation.heads.forEach((head) => {
+    books.append(detailRow(head.head, `${words.gstOnReturn} ${money(head.onTheReturn)} · ${words.gstInBooks} ${money(head.inTheBooks)}`, head.agrees ? undefined : workspace.reconciliation.sentence));
+  });
+
+  document.querySelector("#gst-3b-panel").hidden = false;
+  document.querySelector("#gst-3b-summary").textContent = workspace.gstr3b.summary;
+  document.querySelector("#gst-3b-caution").textContent = workspace.gstr3b.caution;
+  const summary3b = document.querySelector("#gst-3b");
+  summary3b.replaceChildren();
+  workspace.gstr3b.outward.forEach((box) => summary3b.append(detailRow(`${box.boxId} ${box.label}`, `${money(box.taxableValue)} + ${money(box.tax)} GST`)));
+  workspace.gstr3b.heads.forEach((head) => {
+    // Positive means more is owed than there is credit for; negative means credit is left over.
+    const line = head.difference > 0
+      ? `${words.gstOwe} ${money(head.difference)}`
+      : head.difference < 0 ? `${money(-head.difference)} ${words.gstLeftOver}` : "—";
+    summary3b.append(detailRow(head.head, line, `${words.gstOwe} ${money(head.liability)} · ${words.gstCredit} ${money(head.credit)}`));
+  });
+
+  document.querySelector("#gst-actions-panel").hidden = false;
+  // Looking at what a month would say is free and stores nothing, so the screen opens on a
+  // computed view with nothing prepared. There is nothing to approve until somebody has pressed
+  // "Prepare this month" and a snapshot has been taken, and offering the button before then only
+  // produces a refusal a person cannot act on.
+  const approve = document.querySelector("#gst-approve");
+  approve.disabled = !workspace.prepared || !workspace.mayApprove || workspace.approvedAt !== null;
+  approve.title = workspace.prepared ? "" : t({ "en-IN": "Prepare this month first.", "hi-IN": "Pehle is mahine ka tayyar karein." });
+  document.querySelector("#gst-export").disabled = workspace.approvedAt === null;
+}
+
+submitStep("#gst-return-form", async (form) => {
+  try {
+    renderGstWorkspace(await api("/api/gst-returns/prepare", { method: "POST", body: JSON.stringify(formValues(form)) }));
+    document.querySelector("#gst-action-result").textContent = "";
+  } catch (error) { showGstProblem(error.message); }
+});
+
+document.querySelector("#gst-approve")?.addEventListener("click", async () => {
+  try {
+    renderGstWorkspace(await api("/api/gst-returns/approve", {
+      method: "POST",
+      body: JSON.stringify({ period: gstPeriodValue(), note: document.querySelector("#gst-note").value }),
+    }));
+    document.querySelector("#gst-action-result").textContent = t({ "en-IN": "Approved. These figures are now fixed against your name.", "hi-IN": "Approve ho gaya. Ab yeh figure aapke naam se pakke hain." });
+  } catch (error) { document.querySelector("#gst-action-result").textContent = error.message; }
+});
+
+document.querySelector("#gst-export")?.addEventListener("click", async () => {
+  try {
+    const file = await api("/api/gst-returns/export", { method: "POST", body: JSON.stringify({ period: gstPeriodValue(), returnType: "GSTR1" }) });
+    document.querySelector("#gst-action-result").textContent = `${file.fileName} — ${file.message}`;
+    // Shown rather than downloaded: somebody about to hand a file to the government should be able
+    // to look at it first.
+    const preview = document.querySelector("#gst-file");
+    preview.hidden = false;
+    preview.textContent = JSON.stringify(file.payload, null, 2);
+  } catch (error) { document.querySelector("#gst-action-result").textContent = error.message; }
+});

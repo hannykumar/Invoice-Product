@@ -28,6 +28,14 @@ export type Permission =
   | "eway.generate"
   | "eway.update"
   | "eway.cancel"
+  // Issue #30. Preparing a GST return, approving it and sending it are four separate acts, because
+  // looking at what a month says is harmless and filing it on a business's behalf is not.
+  | "gst_returns.view"
+  | "gst_returns.prepare"
+  | "gst_returns.approve"
+  | "gst_returns.export"
+  | "gst_returns.submit"
+  | "gst_returns.reopen"
   // Issue #28. Checking a lorry against its load is an everyday act; sending a blocked movement
   // out anyway is deliberately a separate permission from checking it.
   | "transport.vehicle.view"

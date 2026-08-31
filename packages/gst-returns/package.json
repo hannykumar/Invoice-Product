@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/gst-returns",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #30 [E30] — the GSTR-1 and GSTR-3B preparation workspace.",
+  "exports": { ".": "./src/index.ts" }
+}

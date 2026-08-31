@@ -108,6 +108,11 @@ import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
 } from '../../../packages/returns/src/index.ts';
 import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
+import {
+  GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInwardTaxPort,
+  returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
+  type OutwardDocument, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
+} from '@invoice/gst-returns';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -225,6 +230,7 @@ export class DemoApplication {
   private readonly bankFeeds: BankFeedService;
   private readonly agent: ActionAgentService;
   private readonly agentAudit: AuditLog;
+  private readonly gstReturns: GstReturnService;
 
   private constructor(
     config: CompanySeed,
@@ -245,6 +251,7 @@ export class DemoApplication {
     subscriptions: SubscriptionService,
     agent: ActionAgentService,
     agentAudit: AuditLog,
+    gstReturns: GstReturnService,
   ) {
     this.config = config;
     this.shop = shop;
@@ -264,6 +271,7 @@ export class DemoApplication {
     this.collections = collections;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
+    this.gstReturns = gstReturns;
   }
 
   static async create(config: CompanySeed): Promise<DemoApplication> {
@@ -275,6 +283,12 @@ export class DemoApplication {
     const masters = new InMemoryMasterData();
     masters.putCompany({ companyId: config.companyId, gstin: config.gstin, stateCode: config.gstin.slice(0, 2), registration: 'REGULAR' });
     masters.putParty(config.companyId, { partyId: config.customerId, gstin: config.customerGstin, stateCode: config.customerGstin.slice(0, 2), registration: 'REGULAR' });
+    // The demo's soap is classified nil-rated against an apple's HSN, copied from the reports
+    // fixture. That makes every GST figure in the local app zero, including this issue's returns
+    // workspace. Changing it here turns the local books taxable and immediately fails an assertion
+    // in #35's reports tests that equates income with the bill total — which is only true when
+    // there is no GST, since tax collected is a liability and not income. Both are recorded as an
+    // issue on that lane rather than changed from here.
     masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '0808', treatment: 'NIL_RATED', reverseCharge: false, baseUnit: 'PCS' });
     const calculator = new GstCalculator({ masterData: masters, rates: FIXTURE_RATE_TABLE, gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'development' }), mode: 'development' });
     const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: 'WEB', padding: 5 } } });
@@ -566,7 +580,67 @@ export class DemoApplication {
       clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions, agent, agentAudit);
+    // Issue #30 — the GST return workspace, over this same live company.
+    //
+    // Every port here is the module that already holds the answer. The bills come from the sales
+    // repository the till writes to, the credit notes from the returns module, the tax already
+    // paid and the reconciliation figure from two *different* reads of the ledger — so the check
+    // that the return agrees with the books is a real comparison of two sources and not a number
+    // compared with itself. There is no `government` port, which is the point: this shop has no
+    // licensed intermediary, and everything except the last button still works.
+    const outwardSupplies: OutwardSupplyPort = {
+      async documentsFor(companyId, period): Promise<readonly OutwardDocument[]> {
+        const supplier = { gstin: config.gstin, stateCode: config.gstin.slice(0, 2) };
+        const customer = {
+          name: config.customerName,
+          gstin: config.customerGstin,
+          stateCode: config.customerGstin.slice(0, 2),
+          unregisteredConfirmed: false,
+        };
+        const invoices = (await salesRepository.list(companyId, { state: 'FINAL' }))
+          .filter((invoice) => taxPeriodOf(invoice.documentDate) === period);
+        const documents = invoices.map((invoice) => salesInvoiceToDocument(
+          {
+            id: invoice.id, companyId: invoice.companyId, state: invoice.state, number: invoice.number,
+            documentDate: invoice.documentDate, partyId: invoice.partyId, customerType: invoice.customerType,
+            placeOfSupplyStateCode: invoice.pricing?.placeOfSupplyStateCode ?? invoice.placeOfSupplyStateCode,
+            voucherId: invoice.voucherId,
+            pricing: invoice.pricing === null ? null : {
+              lines: invoice.pricing.lines.map((line) => ({
+                lineId: line.lineId, itemId: line.itemId, itemName: line.itemName, hsnOrSac: line.hsnOrSac,
+                quantity: showQuantity(line.quantity), ratePercentTimes100: line.ratePercentTimes100,
+                taxableValue: line.taxableValue, cgst: line.cgst, sgst: line.sgst, utgst: line.utgst,
+                igst: line.igst, cess: line.cess, reverseCharge: line.reverseCharge, rateBasis: line.rateBasis,
+                treatment: line.treatment,
+              })),
+              totals: { invoiceTotal: invoice.pricing.totals.invoiceValue },
+            },
+          },
+          customer,
+          supplier,
+        ));
+        const notes = (await returnNotes.list(companyId))
+          .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
+          .map((note) => returnNoteToDocument({
+            ...note,
+            lines: note.lines.map((noteLine) => ({ ...noteLine, quantity: showQuantity(noteLine.quantity) })),
+          }, customer, supplier, {
+            placeOfSupplyStateCode: config.gstin.slice(0, 2),
+            hsnByItem: { SOAP: '3401', TMT12: '7214' },
+          }));
+        return [...documents, ...notes];
+      },
+    };
+    const gstReturns = new GstReturnService({
+      outward: outwardSupplies,
+      inward: ledgerInwardTaxPort(shop.store.read()),
+      books: ledgerBookTaxPort(shop.store.read()),
+      repository: new InMemoryReturnPreparations(),
+      audit: shop.audit,
+      clock: { now: () => new Date() },
+    });
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns);
     await app.seed();
     return app;
   }
@@ -1213,6 +1287,160 @@ export class DemoApplication {
 
   private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
   private bankConnectionJson(connection: BankFeedConnection) { return { ...connection }; }
+
+  // ------------------------------------------------------------------ issue #30: GST returns
+  //
+  // One screen for a month. The two returns, the questions that stop it, whether it agrees with the
+  // books, and the file to upload. The workspace object the service returns is already shaped for a
+  // person, so this is a rename into JSON rather than a second set of decisions.
+
+  private gstPeriodOf(input: Record<string, unknown>): TaxPeriod {
+    const raw = String(input.period ?? '').trim();
+    if (raw === '') {
+      // Default to the month before today, which is the one a business is actually filing.
+      const now = new Date();
+      const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      return taxPeriod(previous.toISOString().slice(0, 7));
+    }
+    return taxPeriod(raw);
+  }
+
+  private gstInput(input: Record<string, unknown>) {
+    return {
+      period: this.gstPeriodOf(input),
+      gstin: this.config.gstin,
+      supplierStateCode: this.config.gstin.slice(0, 2),
+    };
+  }
+
+  private gstWorkspaceJson(workspace: ReturnWorkspace) {
+    return {
+      state: 'gst-return' as const,
+      period: workspace.period,
+      periodLabel: workspace.periodLabel,
+      gstin: workspace.gstin,
+      status: workspace.state,
+      statusLabel: workspace.stateLabel['en-IN'],
+      summary: workspace.sentence['en-IN'],
+      // Whether a snapshot has actually been taken and stored. Looking at what a month *would* say
+      // is free and needs nothing stored, so this is not the same as `mayApprove`: a month nobody
+      // has prepared has nothing to approve, and the screen must not offer to.
+      prepared: workspace.preparation !== null,
+      mayApprove: workspace.mayApprove,
+      whyNotApprovable: workspace.whyNotApprovable.map((reason) => reason['en-IN']),
+      counts: workspace.counts,
+      approvedAt: workspace.preparation?.approval?.approvedAt ?? null,
+      exportedAt: workspace.preparation?.exportedAt ?? null,
+      // Every table, with its rows and — on every row — the bills behind it.
+      sections: workspace.gstr1.sections.map((section) => ({
+        id: section.id,
+        name: section.name['en-IN'],
+        sentence: section.sentence['en-IN'],
+        taxableValue: jsonAmount(section.totals.taxableValue.minor),
+        tax: jsonAmount(totalTaxOf(section.totals).minor),
+        rows: section.rows.map((row) => ({
+          label: row.documentNumber ?? row.placeOfSupplyStateCode ?? '—',
+          counterparty: row.counterpartyName,
+          date: row.documentDate,
+          rate: row.ratePercentTimes100 === null ? null : Number(row.ratePercentTimes100) / 100,
+          taxableValue: jsonAmount(row.amounts.taxableValue.minor),
+          tax: jsonAmount(totalTaxOf(row.amounts).minor),
+          sources: row.sources.map((source) => ({
+            number: source.number, date: source.date, voucherId: source.voucherId,
+            amount: jsonAmount(source.amount.minor),
+          })),
+        })),
+      })),
+      reasons: workspace.reasons.map((reason) => ({ sourceId: reason.sourceId, section: reason.section, reason: reason.reason['en-IN'] })),
+      gstr3b: {
+        summary: workspace.gstr3b.sentence['en-IN'],
+        caution: workspace.gstr3b.caution['en-IN'],
+        outward: workspace.gstr3b.outward.map((box) => ({
+          boxId: box.boxId, label: box.label['en-IN'],
+          taxableValue: jsonAmount(box.amounts.taxableValue.minor),
+          tax: jsonAmount(totalTaxOf(box.amounts).minor),
+        })),
+        heads: workspace.gstr3b.heads.map((head) => ({
+          head: head.head,
+          liability: jsonAmount(head.liability.minor),
+          credit: jsonAmount(head.credit.minor),
+          difference: jsonAmount(head.difference.minor),
+        })),
+      },
+      reconciliation: {
+        agrees: workspace.reconciliation.agrees,
+        sentence: workspace.reconciliation.sentence['en-IN'],
+        heads: workspace.reconciliation.heads.map((head) => ({
+          head: head.head,
+          onTheReturn: jsonAmount(head.onTheReturn.minor),
+          inTheBooks: jsonAmount(head.inTheBooks.minor),
+          agrees: head.agrees,
+        })),
+      },
+      // The bills that are in the books but cannot go on the return until somebody answers.
+      exceptions: workspace.exceptions.map((exception) => ({
+        number: exception.document.number,
+        party: exception.document.partyName,
+        amount: jsonAmount(exception.document.invoiceValue.minor),
+        questions: exception.findings.map((finding) => ({ message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'] })),
+      })),
+      findings: workspace.findings.map((finding) => ({
+        code: finding.code, severity: finding.severity,
+        message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'],
+        document: finding.source?.number ?? null,
+      })),
+      drift: workspace.drift === null ? null : {
+        message: workspace.drift.message['en-IN'],
+        added: workspace.drift.documentsAdded.map((document) => document.number),
+        removed: workspace.drift.documentsRemoved.map((document) => document.number),
+        changed: workspace.drift.documentsChanged.map((document) => document.number),
+      },
+    };
+  }
+
+  async gstReturnWorkspace(actor: ActorContext, input: Record<string, unknown>) {
+    return this.gstWorkspaceJson(await this.gstReturns.workspace(actor, this.gstInput(input)));
+  }
+
+  async prepareGstReturn(actor: ActorContext, input: Record<string, unknown>) {
+    const request = this.gstInput(input);
+    return this.gstWorkspaceJson(await this.gstReturns.prepare(actor, {
+      ...request,
+      idempotencyKey: `web-gstr:${request.period}:${String(input.reference ?? request.period)}`,
+    }));
+  }
+
+  async approveGstReturn(actor: ActorContext, input: Record<string, unknown>) {
+    const note = String(input.note ?? '').trim();
+    return this.gstWorkspaceJson(await this.gstReturns.approve(actor, {
+      ...this.gstInput(input),
+      ...(note === '' ? {} : { note }),
+    }));
+  }
+
+  async reopenGstReturn(actor: ActorContext, input: Record<string, unknown>) {
+    await this.gstReturns.reopen(actor, this.gstPeriodOf(input), String(input.reason ?? ''));
+    return this.gstWorkspaceJson(await this.gstReturns.workspace(actor, this.gstInput(input)));
+  }
+
+  /**
+   * The file a shop with no licensed intermediary uploads by hand.
+   *
+   * It comes back as JSON in the response rather than as a download, so the screen can show what is
+   * in it before anybody saves it. A person about to hand a file to the government should be able
+   * to look at it first.
+   */
+  async exportGstReturn(actor: ActorContext, input: Record<string, unknown>) {
+    const returnType = String(input.returnType ?? 'GSTR1') === 'GSTR3B' ? 'GSTR3B' as const : 'GSTR1' as const;
+    const file = await this.gstReturns.exportFile(actor, { ...this.gstInput(input), returnType });
+    return {
+      state: 'gst-export' as const,
+      title: `${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} file ready`,
+      message: file.sentence['en-IN'],
+      fileName: file.fileName,
+      payload: file.payload,
+    };
+  }
 
   async returnDocuments(actor: ActorContext) {
     const companyId = this.companyOf(actor);

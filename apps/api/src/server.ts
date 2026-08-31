@@ -127,6 +127,12 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/bank-feeds/consent/complete') return json(200, await app.completeBankFeedConsent(actor, body));
     if (method === 'POST' && pathname === '/api/bank-feeds/sync') return json(200, await app.syncBankFeed(actor, body));
     if (method === 'POST' && pathname === '/api/bank-feeds/disconnect') return json(200, await app.disconnectBankFeed(actor, body));
+    // Issue #30 — the month's GST returns: what they say, what stops them, and the file to upload.
+    if (method === 'POST' && pathname === '/api/gst-returns') return json(200, await app.gstReturnWorkspace(actor, body));
+    if (method === 'POST' && pathname === '/api/gst-returns/prepare') return json(200, await app.prepareGstReturn(actor, body));
+    if (method === 'POST' && pathname === '/api/gst-returns/approve') return json(200, await app.approveGstReturn(actor, body));
+    if (method === 'POST' && pathname === '/api/gst-returns/reopen') return json(200, await app.reopenGstReturn(actor, body));
+    if (method === 'POST' && pathname === '/api/gst-returns/export') return json(200, await app.exportGstReturn(actor, body));
     if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
     if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
     if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));

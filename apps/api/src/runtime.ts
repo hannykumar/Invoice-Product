@@ -19,18 +19,26 @@ const passwordMatches = (supplied: string, expected: Buffer): boolean => {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 };
 
+/**
+ * The two synthetic companies the local app signs into.
+ *
+ * Every GST number here is checksum-correct — the last character is the check digit of the
+ * fourteen before it — and belongs to nobody. It has to be: the GST return workspace (#30) refuses
+ * to file a return carrying a number the government would reject, so a demo company with a
+ * mistyped registration cannot get past its own validations.
+ */
 const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | 'branchId' | 'setupUserId'>>> = {
   '00000000-0000-4000-8000-000000000001': {
-    name: 'Sampoorna Traders', location: 'Bengaluru · Peenya godown', gstin: '29AAAAA0000A1ZR',
-    customerId: asId<'Party'>('sampoorna:party:customer'), customerName: 'ABC Traders', customerGstin: '29BBBBB1111B1Z4',
+    name: 'Sampoorna Traders', location: 'Bengaluru · Peenya godown', gstin: '29AAAAA0000A1ZY',
+    customerId: asId<'Party'>('sampoorna:party:customer'), customerName: 'ABC Traders', customerGstin: '29BBBBB1111B1ZJ',
     supplierId: asId<'Party'>('sampoorna:party:supplier'), supplierName: 'Shree Ram Steels Private Limited',
-    supplierGstin: '27AAECS5678D1ZK',
+    supplierGstin: '27AAECS5678D1Z4',
   },
   '00000000-0000-4000-8000-000000000011': {
-    name: 'Konkan Fresh Foods', location: 'Panaji · Market godown', gstin: '30AAAAA0000A1ZQ',
-    customerId: asId<'Party'>('konkan:party:customer'), customerName: 'Mapusa Family Stores', customerGstin: '30BBBBB1111B1Z3',
+    name: 'Konkan Fresh Foods', location: 'Panaji · Market godown', gstin: '30AAAAA0000A1ZF',
+    customerId: asId<'Party'>('konkan:party:customer'), customerName: 'Mapusa Family Stores', customerGstin: '30BBBBB1111B1Z0',
     supplierId: asId<'Party'>('konkan:party:supplier'), supplierName: 'Western Coast Supplies',
-    supplierGstin: '30AAFCW7788Q1ZP',
+    supplierGstin: '30AAFCW7788Q1ZE',
   },
 };
 

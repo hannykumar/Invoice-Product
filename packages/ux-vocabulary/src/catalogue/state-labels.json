@@ -155,6 +155,34 @@
     "fiscal_period.HARD_LOCKED": {
       "en-IN": "Closed for good",
       "hi-IN": "Hamesha ke liye band"
+    },
+    "gst_return.DRAFT": {
+      "en-IN": "Being prepared",
+      "hi-IN": "Tayyar ho raha hai"
+    },
+    "gst_return.NEEDS_ATTENTION": {
+      "en-IN": "Something must be decided first",
+      "hi-IN": "Pehle kuch tay karna hai"
+    },
+    "gst_return.APPROVED": {
+      "en-IN": "Checked and approved, not sent yet",
+      "hi-IN": "Jaanch kar approve kiya, abhi bheja nahi"
+    },
+    "gst_return.EXPORTED": {
+      "en-IN": "File downloaded, ready to upload",
+      "hi-IN": "File download ho gayi, upload karni hai"
+    },
+    "gst_return.SUBMITTING": {
+      "en-IN": "Being sent to the government",
+      "hi-IN": "Sarkar ko bheja ja raha hai"
+    },
+    "gst_return.FILED": {
+      "en-IN": "Filed with the government",
+      "hi-IN": "Sarkar ke paas file ho gaya"
+    },
+    "gst_return.SUBMISSION_FAILED": {
+      "en-IN": "It did not go through, nothing was filed",
+      "hi-IN": "Nahi gaya, kuch file nahi hua"
     }
   }
 }
