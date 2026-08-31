@@ -55,7 +55,15 @@ export interface AssessVehicleRequest {
   readonly shipment: ShipmentFacts;
   /** A photograph of the number plate, when the yard took one. */
   readonly platePhoto?: PlatePhoto;
-  /** Facts typed in for this one movement, when neither record holds them. */
+  /**
+   * What a person read off the plate, when there is no photograph or none that can be used.
+   *
+   * Most yards have no camera. Requiring a photograph would mean the plate is never checked at
+   * all on exactly the days it matters, so a typed reading runs through the same comparison and
+   * produces the same findings — recorded as a person's reading rather than a machine's.
+   */
+  readonly plateReadByHand?: string;
+  /** Facts typed in for this one movement, on top of whatever the two records hold. */
   readonly declared?: Omit<VehicleEvidence, "registrationNumber" | "source" | "retrievedAt">;
 }
 
@@ -126,14 +134,16 @@ export class VehicleSuitabilityService {
     const record = number === "" ? undefined : await this.#lookUpVehicle(actor.companyId, number, at);
     const master = number === "" ? null : await this.#fromMaster(actor.companyId, number);
     const declared = this.#declaredEvidence(request, number, at);
-    const plate = await this.#readPlate(actor.companyId, request.platePhoto, number, policy);
+    const plate = await this.#readPlate(actor.companyId, request, number, policy);
 
     const result = checkVehicleSuitability({
       transport: request.transport,
       shipment: request.shipment,
       ...(record === undefined ? {} : { record }),
-      // Anything typed in for this movement stands in for the company's own note when there is none.
-      master: master ?? declared ?? null,
+      master,
+      // Typed facts are kept as their own kind of evidence and ranked last, so they fill gaps in
+      // the records without ever overruling what the registering authority holds.
+      ...(declared === null ? {} : { declared }),
       ...(plate === undefined ? {} : { plate }),
       policy,
     });
@@ -255,13 +265,26 @@ export class VehicleSuitabilityService {
     return { registrationNumber, source: "ENTERED_BY_HAND", retrievedAt: at, ...request.declared };
   }
 
+  /**
+   * The plate, from whichever reading is available.
+   *
+   * A usable photograph wins, because an image is evidence a person can be shown later. Where
+   * there is no photograph, none that could be read, or no reader to ask, a typed reading is used
+   * instead rather than the check being skipped.
+   */
   async #readPlate(
     companyId: CompanyId,
-    photo: PlatePhoto | undefined,
+    request: AssessVehicleRequest,
     declaredNumber: string,
     policy: VehicleSuitabilityPolicy,
   ): Promise<PlateComparison | undefined> {
-    if (photo === undefined || this.#plateOcr === undefined) return undefined;
+    const typed = (request.plateReadByHand ?? "").trim();
+    const byHand = typed === ""
+      ? undefined
+      : comparePlateReading({ text: typed, readBy: "PERSON" }, declaredNumber, policy.minimumPlateConfidence);
+
+    const photo = request.platePhoto;
+    if (photo === undefined || this.#plateOcr === undefined) return byHand;
     let outcome;
     try {
       outcome = await this.#plateOcr.read(companyId, photo);
@@ -269,17 +292,22 @@ export class VehicleSuitabilityService {
       outcome = { kind: "UNAVAILABLE" as const, code: "OCR_FAILED", message: error instanceof Error ? error.message : "The plate reader failed.", retryable: true };
     }
     if (outcome.kind === "READ") {
-      return comparePlateReading({ text: outcome.text, confidence: outcome.confidence, photoId: photo.photoId }, declaredNumber, policy.minimumPlateConfidence);
+      const fromPhoto = comparePlateReading({ text: outcome.text, confidence: outcome.confidence, photoId: photo.photoId }, declaredNumber, policy.minimumPlateConfidence);
+      // A photograph that could not be trusted falls back to the person's reading rather than
+      // leaving the plate unchecked when somebody did in fact read it.
+      return fromPhoto.verdict === "CANNOT_READ" && byHand !== undefined ? byHand : fromPhoto;
     }
+    if (byHand !== undefined) return byHand;
     // Unreadable and unreachable are both "we do not know", and both say which one it was rather
     // than pretending the plate was checked.
     return {
       verdict: "CANNOT_READ",
+      readBy: "PHOTO",
       declaredNumber: normaliseVehicleNumber(declaredNumber),
       photoId: photo.photoId,
       explanation: outcome.kind === "UNREADABLE"
-        ? `The number plate photograph could not be read: ${outcome.reason} Nothing has been concluded from it either way.`
-        : `The number plate reader could not be reached: ${outcome.message} The photograph has not been compared with the vehicle number.`,
+        ? `The number plate photograph could not be read: ${outcome.reason} Nothing has been concluded from it either way. If somebody can see the lorry, they can type what the plate says instead.`
+        : `The number plate reader could not be reached: ${outcome.message} The photograph has not been compared with the vehicle number. If somebody can see the lorry, they can type what the plate says instead.`,
     };
   }
 
@@ -366,5 +394,9 @@ const keyFor = (request: AssessVehicleRequest): string => {
     String(shipment.hazardous ?? ""),
     String(shipment.bulkLiquid ?? ""),
     request.platePhoto?.photoId ?? "",
+    // A typed plate reading or typed vehicle facts change the answer, so they change the key: a
+    // second check after somebody types what they can see is a new check, not a repeat.
+    request.plateReadByHand ?? "",
+    JSON.stringify(request.declared ?? {}),
   ].join("|");
 };

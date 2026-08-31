@@ -16,7 +16,7 @@
 // decides what the reading means.
 
 import { normaliseVehicleNumber } from "./validity.ts";
-import type { PlateComparison, PlateComparisonVerdict } from "./suitability-types.ts";
+import type { PlateComparison, PlateComparisonVerdict, PlateReadBy } from "./suitability-types.ts";
 
 /**
  * Characters a plate reader confuses, in both directions.
@@ -57,9 +57,17 @@ const compareCharacters = (read: string, declared: string): { readonly differing
 
 export interface PlateReading {
   readonly text: string;
-  /** 0 to 1, as the reader reported it. */
-  readonly confidence: number;
+  /**
+   * 0 to 1, as the reader reported it.
+   *
+   * A person reading a plate has no confidence score, and inventing 1.0 for them would put a
+   * human eye and a vision model on the same footing. So this is absent for a typed reading, and
+   * the confidence floor below does not apply to one.
+   */
+  readonly confidence?: number;
   readonly photoId?: string;
+  /** Defaults to a photograph, because that is what the reader port produces. */
+  readonly readBy?: PlateReadBy;
 }
 
 /**
@@ -77,22 +85,34 @@ export const comparePlateReading = (
   if (reading === null) {
     return {
       verdict: "CANNOT_READ",
+      readBy: "PHOTO",
       declaredNumber: declared,
-      explanation: "No number plate photograph was read, so the vehicle number on this movement has not been checked against a picture of the lorry.",
+      explanation: "Nobody has read the number plate — no photograph and nothing typed in — so the vehicle number on this movement has not been checked against the lorry itself.",
     };
   }
 
+  const readBy: PlateReadBy = reading.readBy ?? "PHOTO";
+  const source = readBy === "PERSON" ? "the plate somebody read off the lorry" : "the photograph";
   const read = normaliseVehicleNumber(reading.text ?? "");
   const shared = {
     declaredNumber: declared,
-    confidence: reading.confidence,
+    readBy,
+    ...(reading.confidence === undefined ? {} : { confidence: reading.confidence }),
     ...(reading.photoId === undefined ? {} : { photoId: reading.photoId }),
   };
 
   if (read === "") {
-    return { ...shared, verdict: "CANNOT_READ", explanation: "Nothing could be read from the number plate photograph. This is not a mismatch — the plate simply could not be made out, so somebody has to look at the lorry." };
+    return {
+      ...shared,
+      verdict: "CANNOT_READ",
+      explanation: readBy === "PERSON"
+        ? "Nothing was typed in for what the plate says, so the vehicle number has not been checked against the lorry."
+        : "Nothing could be read from the number plate photograph. This is not a mismatch — the plate simply could not be made out, so somebody has to look at the lorry.",
+    };
   }
-  if (reading.confidence < minimumConfidence) {
+  // The confidence floor is about a machine's reading. A person's reading has no score, and
+  // holding it to one would throw away the very reading we asked for when there was no photo.
+  if (readBy === "PHOTO" && reading.confidence !== undefined && reading.confidence < minimumConfidence) {
     return {
       ...shared,
       verdict: "CANNOT_READ",
@@ -102,7 +122,14 @@ export const comparePlateReading = (
   }
 
   if (read === declared) {
-    return { ...shared, verdict: "MATCH", readNumber: read, explanation: `The number plate in the photograph reads ${read}, which is the vehicle number on this movement.` };
+    return {
+      ...shared,
+      verdict: "MATCH",
+      readNumber: read,
+      explanation: readBy === "PERSON"
+        ? `The plate on the lorry was read as ${read}, which is the vehicle number on this movement.`
+        : `The number plate in the photograph reads ${read}, which is the vehicle number on this movement.`,
+    };
   }
 
   const { differing, lookalikeOnly } = compareCharacters(read, declared);
@@ -112,7 +139,7 @@ export const comparePlateReading = (
     verdict,
     readNumber: read,
     explanation: verdict === "LOOKALIKE_DIFFERENCE"
-      ? `The photograph reads ${read} and the movement says ${declared}. They differ only where the characters look alike, which readers and people both get wrong, so somebody should glance at the lorry rather than treat this as the wrong vehicle.`
-      : `The photograph reads ${read} and the movement says ${declared}. These are ${differing === 1 ? "not the same plate" : "different plates"}, so either the wrong vehicle number was entered or the goods are being loaded onto a different lorry.`,
+      ? `${source === "the photograph" ? "The photograph reads" : "The plate was read as"} ${read} and the movement says ${declared}. They differ only where the characters look alike, which readers and people both get wrong, so somebody should glance at the lorry rather than treat this as the wrong vehicle.`
+      : `${source === "the photograph" ? "The photograph reads" : "The plate was read as"} ${read} and the movement says ${declared}. These are ${differing === 1 ? "not the same plate" : "different plates"}, so either the wrong vehicle number was entered or the goods are being loaded onto a different lorry.`,
   };
 };

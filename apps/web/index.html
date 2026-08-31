@@ -34,6 +34,7 @@
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
           <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
+          <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
         </nav>
         <div class="sidebar-note">
           <span class="status-dot" aria-hidden="true"></span>
@@ -304,6 +305,9 @@
                 <label><span data-i18n="coldChain"></span><select name="coldChain"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
                 <label><span data-i18n="hazardous"></span><select name="hazardous"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
                 <label><span data-i18n="platePhoto"></span><select name="platePhoto" id="vehicle-photos"></select><small data-i18n="platePhotoHelp"></small></label>
+                <label><span data-i18n="plateTyped"></span><input name="plateTyped" placeholder="KA01AB1234" /><small data-i18n="plateTypedHelp"></small></label>
+                <label><span data-i18n="typedClass"></span><select name="declaredClass" id="vehicle-classes"></select><small data-i18n="typedClassHelp"></small></label>
+                <label><span data-i18n="typedCapacity"></span><input name="declaredCapacityKg" type="number" min="0" max="60000" step="1" placeholder="1200" /><small data-i18n="typedCapacityHelp"></small></label>
               </div>
               <button type="submit" class="primary-button wide" data-i18n="checkVehicle"></button>
               <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="vehicleSafety"></span></p>
@@ -620,6 +624,24 @@
             <article class="panel"><h2 data-i18n="operationsIncidents"></h2><div id="operations-incidents"></div></article>
           </div>
         </section>
+
+        <section class="view" id="view-migration" aria-labelledby="migration-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navMigration"></p><h1 id="migration-title" tabindex="-1" data-i18n="migrationTitle"></h1><p data-i18n="migrationHelp"></p></div></div>
+          <form class="panel setup-form migration-form" id="migration-form" novalidate>
+            <fieldset>
+              <legend data-i18n="migrationFileHeading"></legend>
+              <p class="setup-hint" data-i18n="migrationFileHelp"></p>
+              <div class="migration-samples" id="migration-samples"></div>
+              <label><span data-i18n="migrationFileName"></span><input id="migration-file-name" value="export.csv" /></label>
+              <label><span data-i18n="migrationPaste"></span><textarea id="migration-content" rows="8" spellcheck="false"></textarea></label>
+              <label><span data-i18n="migrationUpload"></span><input type="file" id="migration-upload" accept=".csv,.txt,.tsv" /></label>
+            </fieldset>
+            <div class="setup-actions"><button type="button" class="primary-button" id="migration-read" data-i18n="migrationRead"></button></div>
+          </form>
+          <div id="migration-mapping" aria-live="polite"></div>
+          <div id="migration-preview" aria-live="polite"></div>
+          <div id="migration-result" aria-live="polite"></div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -638,6 +660,7 @@
         <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
         <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
         <button data-view="vehicle"><span aria-hidden="true">⚙</span><small data-i18n="navVehicle"></small></button>
+        <button data-view="migration"><span aria-hidden="true">⇪</span><small data-i18n="navMigration"></small></button>
       </nav>
     </div>
 

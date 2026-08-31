@@ -167,8 +167,17 @@ export type PlateComparisonVerdict =
   /** The photo could not be read, or the reader could not be reached. Not a mismatch. */
   | "CANNOT_READ";
 
+/** Who read the plate: the yard's camera, or a person standing in front of the lorry. */
+export type PlateReadBy = "PHOTO" | "PERSON";
+
 export interface PlateComparison {
   readonly verdict: PlateComparisonVerdict;
+  /**
+   * A photograph is not always there. A yard with no camera, a phone out of charge, a picture too
+   * dark to use — in all of those a person reads the plate and types it, and that reading is
+   * checked by exactly the same rules. What changes is this field and the words on the screen.
+   */
+  readonly readBy: PlateReadBy;
   /** What the reader made of the plate, normalised. Absent when nothing could be read. */
   readonly readNumber?: string;
   readonly declaredNumber: string;

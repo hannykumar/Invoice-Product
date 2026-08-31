@@ -75,6 +75,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run demo:reminders` — five customers, five reasons: one pays, one disputes, one promises, one goes to the owner, one send fails.
 - `npm run demo:validate` — prints a walkthrough of purchase validation: what posts, what needs a person and what is stopped.
 - `npm run demo:posting` — prints a walkthrough of purchase posting: the books, the godown and the supplier's account moving together.
+- `npm run demo:migration` — moves a business in from Tally, BUSY and Vyapar exports: four files, the same file twice, and an import taken back out.
 
 ## Type checking the deterministic modules
 

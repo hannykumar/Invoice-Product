@@ -5,6 +5,7 @@ import { DomainError } from '@invoice/kernel';
 import { PlatformError } from '../../../packages/platform/src/index.ts';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
+import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
 
 const json = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
@@ -46,6 +47,15 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // not the session's company. Gated by authentication above, like the rest of the app.
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
+    // Issue #37 — bringing a business in from Tally, BUSY or Vyapar. Like setting up a business,
+    // this runs against its own fresh company, so nothing it reads in touches the demo books.
+    if (method === 'POST' && pathname === '/api/migration/start') return json(200, await startMigration(context));
+    if (method === 'POST' && pathname === '/api/migration/analyse') return json(200, await analyseFile(context, body));
+    if (method === 'POST' && pathname === '/api/migration/mapping') return json(200, await remapColumns(context, body));
+    if (method === 'POST' && pathname === '/api/migration/approve') return json(200, await approveAndPreview(context, body));
+    if (method === 'POST' && pathname === '/api/migration/preview') return json(200, await previewImport(context, body));
+    if (method === 'POST' && pathname === '/api/migration/commit') return json(200, await commitImport(context, body));
+    if (method === 'POST' && pathname === '/api/migration/rollback') return json(200, await rollbackImport(context, body));
     // Issue #26 — does this bill need an IRN, and its life with the government.
     if (method === 'GET' && pathname === '/api/einvoices/invoices') return json(200, await app.issuedInvoices(actor));
     if (method === 'POST' && pathname === '/api/einvoices/preview') return json(200, await app.previewEInvoice(actor, body));
