@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/vendor-onboarding",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #49 [X01] — the company and vendor-onboarding register: what documents exist, who holds each access, and which integrations are blocked without them.",
+  "exports": { ".": "./src/index.ts" }
+}
