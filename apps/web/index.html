@@ -710,6 +710,38 @@
             <div class="setup-actions"><button type="submit" class="primary-button" id="ask-send" data-i18n="askSend"></button></div>
           </form>
           <div id="ask-answer" aria-live="polite"></div>
+
+          <!-- Issue #47 [E47]: asking the assistant to *do* something. The screen leads with what
+               it would do, in full, and the button that carries it out only appears afterwards. -->
+          <form class="panel setup-form" id="agent-form" novalidate>
+            <fieldset>
+              <legend data-i18n="agentLegend"></legend>
+              <p class="setup-hint" data-i18n="agentHint"></p>
+              <div class="migration-samples" id="agent-examples"></div>
+              <label><span data-i18n="agentRequest"></span><input id="agent-request" autocomplete="off" data-i18n-placeholder="agentRequestPlaceholder" /></label>
+            </fieldset>
+            <div class="setup-actions"><button type="submit" class="primary-button" id="agent-plan-button" data-i18n="agentShowMe"></button></div>
+          </form>
+
+          <article class="panel" id="agent-panel" hidden aria-live="polite">
+            <div class="panel-heading">
+              <div><h2 data-i18n="agentWouldDo"></h2><p id="agent-summary">—</p></div>
+              <span class="pill" id="agent-intent">—</span>
+            </div>
+            <p class="safety-note" id="agent-flag" hidden><span aria-hidden="true">!</span><span id="agent-flag-text"></span></p>
+            <div id="agent-steps" class="activity-list"></div>
+            <div id="agent-refusals" class="activity-list"></div>
+            <div class="setup-actions" id="agent-actions" hidden>
+              <button type="button" class="primary-button" id="agent-do-it" data-i18n="agentDoIt"></button>
+            </div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="agentSafety"></span></p>
+            <div id="agent-report" class="activity-list"></div>
+          </article>
+
+          <article class="panel" id="agent-capabilities-panel">
+            <h2 data-i18n="agentCanDo"></h2>
+            <div id="agent-capabilities" class="activity-list"></div>
+          </article>
         </section>
       </main>
 

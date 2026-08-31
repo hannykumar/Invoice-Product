@@ -28,6 +28,7 @@ from deterministic, versioned, testable rules.
 | [`packages/sales`](packages/sales) | #9 | The sales invoice lifecycle: draft, approval, numbering, posting, cancellation |
 | [`packages/receivables`](packages/receivables) | #20 | Payments, allocation, cheque lifecycle, ageing and party statements |
 | [`packages/subscriptions`](packages/subscriptions) | #42 | Plans, entitlements, usage counters, the subscription lifecycle and our own service invoices |
+| [`packages/action-agent`](packages/action-agent) | #47 | The safe AI action agent: typed permission-scoped tools, plan/preview/approve/execute/report |
 | [`packages/collections`](packages/collections) | #23 | Payment reminders and collection tracking: the ladder, opt-outs, promises, disputes, escalation |
 | [`packages/voice-assistant`](packages/voice-assistant) | #10 | Spoken or typed instructions to a confirmed draft, never a guess |
 | [`packages/assistant`](packages/assistant) | #34 | Questions about your own books, answered with the report and the notification behind every figure |
@@ -77,6 +78,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run demo:onboarding` — sets up a bakery, interrupted halfway and resumed, into `tmp/onboarding/`.
 - `npm run demo:subscriptions` — a free plan filling up, the sentence a shopkeeper reads when it does, an upgrade, a declined card, and a lapse that deletes nothing.
 - `npm run vendor:readiness` — what company documents and provider accounts still stand between us and a signed contract (#49).
+- `npm run demo:agent` — "find ABC's unpaid invoices and send reminders", previewed, approved, done — and the four requests it refuses.
 - `npm run demo:reminders` — five customers, five reasons: one pays, one disputes, one promises, one goes to the owner, one send fails.
 - `npm run demo:validate` — prints a walkthrough of purchase validation: what posts, what needs a person and what is stopped.
 - `npm run demo:posting` — prints a walkthrough of purchase posting: the books, the godown and the supplier's account moving together.

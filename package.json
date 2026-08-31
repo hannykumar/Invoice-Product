@@ -37,6 +37,7 @@
     "demo:reports": "node --experimental-strip-types packages/reports/src/demo.ts",
     "demo:reminders": "node --experimental-strip-types packages/collections/src/demo.ts",
     "demo:subscriptions": "node --experimental-strip-types packages/subscriptions/src/demo.ts",
+    "demo:agent": "node --experimental-strip-types packages/action-agent/src/demo.ts",
     "demo:posting": "node --experimental-strip-types packages/purchasing/src/posting-demo.ts",
     "demo:matching": "node --experimental-strip-types packages/purchasing/src/matching-demo.ts",
     "demo:risk": "node --experimental-strip-types packages/purchasing/src/supplier-risk-demo.ts",

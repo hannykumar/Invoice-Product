@@ -61,6 +61,11 @@ const copy = {
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
     navAsk: "Ask",
+    agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
+    agentRequest: "What should I do?", agentRequestPlaceholder: "Find ABC Traders' unpaid invoices and send reminders",
+    agentShowMe: "Show me what you would do", agentWouldDo: "What I would do", agentDoIt: "Yes, do it",
+    agentSafety: "I only do things you can already do yourself. Before each one runs, I check your books again — if a bill was paid in the meantime, that message does not go.",
+    agentCanDo: "What I am allowed to do for you",
     askTitle: "Ask about your business",
     askHelp: "Ask in English or Hinglish. Every figure in the answer comes from one of your own reports, and every rule answer names the notification it came from.",
     askLegend: "Your question",
@@ -233,6 +238,11 @@ const copy = {
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
     navAsk: "Poochein",
+    agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
+    agentRequest: "Main kya karun?", agentRequestPlaceholder: "ABC Traders ke baaki bill dekh kar reminder bhej do",
+    agentShowMe: "Dikhaiye aap kya karenge", agentWouldDo: "Main kya karunga", agentDoIt: "Haan, kar dein",
+    agentSafety: "Main sirf wahi karta hoon jo aap khud kar sakte hain. Har kaam se pehle bahi dobara dekhta hoon — agar beech mein bill chuk gaya to woh message nahin jayega.",
+    agentCanDo: "Main aapke liye kya kar sakta hoon",
     askTitle: "Apne business ke baare mein poochein",
     askHelp: "English ya Hinglish mein poochein. Jawab ka har aankda aapki apni report se aata hai, aur har niyam ke jawab mein us notification ka naam hota hai jahan se wo aaya.",
     askLegend: "Aapka sawaal",
@@ -514,6 +524,7 @@ function openView(view) {
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
   if (target === "ask") loadAskExamples();
+  if (target === "ask") { loadAskExamples(); loadAgentCapabilities(); }
 }
 
 function draftData(form) {
@@ -2098,6 +2109,33 @@ function planUsageRow(total) {
   detail.textContent = total.limit === null
     ? "Your plan does not limit this."
     : `${total.remaining} left.`;
+// ---------------------------------------------------------- issue #47: asking it to do the work
+//
+// The screen never offers a "do it" button before it has shown the whole list. Every step names
+// the customer and the amount, so a wrong party or a wrong figure is visible in the sentence a
+// person reads rather than buried in what happens afterwards.
+
+const agentState = { plan: null };
+
+const AGENT_EXAMPLES = [
+  "Find ABC Traders' unpaid invoices and send reminders",
+  "Who owes me money?",
+  "Stop reminding ABC Traders",
+  "Transfer ₹50,000 to Shree Ram Steels",
+];
+
+function agentStepRow(step) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  const writes = step.kind === "WRITE";
+  icon.className = `activity-icon ${step.executability === "PREPARE_ONLY" ? "amber" : writes ? "green" : "blue"}`;
+  icon.textContent = writes ? "✎" : "👁";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = step.amount === null ? step.tool : `${step.tool} · ${money(step.amount)}`;
+  const detail = document.createElement("p");
+  detail.textContent = t(step.describe);
   body.append(title, detail);
   row.append(icon, body);
   return row;
@@ -2114,6 +2152,17 @@ function planCheckRow(check) {
   title.textContent = check.capability.replaceAll(".", " ").replaceAll("_", " ");
   const detail = document.createElement("p");
   detail.textContent = t(check.reason);
+function agentRefusalRow(refusal) {
+  const row = document.createElement("div");
+  row.className = "activity-row";
+  const icon = document.createElement("span");
+  icon.className = "activity-icon amber";
+  icon.textContent = "✗";
+  const body = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = refusal.code.replaceAll("_", " ").toLowerCase();
+  const detail = document.createElement("p");
+  detail.textContent = t(refusal.reason);
   body.append(title, detail);
   row.append(icon, body);
   return row;
@@ -2184,6 +2233,123 @@ document.querySelector("#plan-pay")?.addEventListener("click", async () => {
     showDialog({ title: result.title, message: result.message }, "recorded");
   } catch (error) { showDialog({ title: "Nothing was paid", message: error.message }, "failed"); }
   loadPlan();
+function renderAgentPlan(plan) {
+  agentState.plan = plan;
+  document.querySelector("#agent-panel").hidden = false;
+  document.querySelector("#agent-summary").textContent = t(plan.summary);
+  document.querySelector("#agent-intent").textContent = plan.intent.replaceAll("_", " ").toLowerCase();
+  const flag = document.querySelector("#agent-flag");
+  flag.hidden = !plan.instructionFlag;
+  if (plan.instructionFlag) {
+    document.querySelector("#agent-flag-text").textContent =
+      `That request tried to give me instructions ("${plan.instructionFlag}"). It is on the record, and it changed nothing.`;
+  }
+  document.querySelector("#agent-steps").replaceChildren(...plan.steps.map(agentStepRow));
+  document.querySelector("#agent-refusals").replaceChildren(...plan.refusals.map(agentRefusalRow));
+  document.querySelector("#agent-report").replaceChildren();
+  // The button exists only when there is something to carry out.
+  document.querySelector("#agent-actions").hidden = plan.steps.length === 0;
+}
+
+function renderAgentReport(report) {
+  document.querySelector("#agent-actions").hidden = true;
+  document.querySelector("#agent-report").replaceChildren(
+    ...report.steps.map((step) => {
+      const row = document.createElement("div");
+      row.className = "activity-row";
+      const icon = document.createElement("span");
+      icon.className = `activity-icon ${step.state === "DONE" ? "green" : step.state === "FAILED" ? "amber" : "blue"}`;
+      icon.textContent = step.state === "DONE" ? "✓" : step.state === "FAILED" ? "!" : "·";
+      const body = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = `${step.state} · ${step.tool}`;
+      const detail = document.createElement("p");
+      detail.textContent = t(step.statement ?? step.failure ?? step.describe);
+      body.append(title, detail);
+      row.append(icon, body);
+      return row;
+    }),
+    ...report.handedBack.map((line) => {
+      const row = document.createElement("div");
+      row.className = "activity-row";
+      const icon = document.createElement("span");
+      icon.className = "activity-icon amber";
+      icon.textContent = "→";
+      const body = document.createElement("div");
+      const detail = document.createElement("p");
+      detail.textContent = t(line);
+      body.append(detail);
+      row.append(icon, body);
+      return row;
+    }),
+  );
+}
+
+async function loadAgentCapabilities() {
+  const list = document.querySelector("#agent-capabilities");
+  if (!list) return;
+  try {
+    const { tools } = await api("/api/agent/capabilities");
+    list.replaceChildren(...tools.map((tool) => {
+      const row = document.createElement("div");
+      row.className = "activity-row";
+      const icon = document.createElement("span");
+      icon.className = `activity-icon ${tool.executability === "PREPARE_ONLY" ? "amber" : tool.kind === "WRITE" ? "green" : "blue"}`;
+      icon.textContent = tool.kind === "WRITE" ? "✎" : "👁";
+      const body = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = t(tool.summary);
+      const detail = document.createElement("p");
+      detail.textContent = tool.executability === "PREPARE_ONLY"
+        ? "I can only prepare this one; you finish it."
+        : tool.kind === "WRITE" ? "I ask you first, every time." : "Reading only — this changes nothing.";
+      body.append(title, detail);
+      row.append(icon, body);
+      return row;
+    }));
+  } catch { /* the list is a convenience; the form works without it */ }
+
+  const examples = document.querySelector("#agent-examples");
+  if (examples && examples.childElementCount === 0) {
+    examples.replaceChildren(...AGENT_EXAMPLES.map((example) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary-button";
+      button.textContent = example;
+      button.addEventListener("click", () => { document.querySelector("#agent-request").value = example; });
+      return button;
+    }));
+  }
+}
+
+submitStep("#agent-form", async () => {
+  const request = document.querySelector("#agent-request").value.trim();
+  if (request === "") return;
+  try {
+    renderAgentPlan(await api("/api/agent/plan", { method: "POST", body: JSON.stringify({ request }) }));
+  } catch (error) {
+    showDialog({ title: "Nothing was planned", message: error.message }, "failed");
+  }
+});
+
+document.querySelector("#agent-do-it")?.addEventListener("click", async () => {
+  const plan = agentState.plan;
+  if (plan === null) return;
+  try {
+    // Approving and carrying out are two calls, because they are two decisions: the first pins
+    // exactly what was on the screen, and the second is refused if the books moved since.
+    if (plan.needsApproval) {
+      await api("/api/agent/approve", { method: "POST", body: JSON.stringify({ planId: plan.id, fingerprint: plan.fingerprint }) });
+    }
+    const result = await api("/api/agent/execute", {
+      method: "POST",
+      body: JSON.stringify({ planId: plan.id, fingerprint: plan.fingerprint, idempotencyKey: plan.id }),
+    });
+    renderAgentReport(result.report);
+    showDialog({ title: result.title, message: result.message }, "recorded");
+  } catch (error) {
+    showDialog({ title: "Nothing was done", message: error.message }, "failed");
+  }
 });
 
 
