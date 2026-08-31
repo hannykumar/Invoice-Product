@@ -91,9 +91,15 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /id="view-migration"[^>]+aria-labelledby=/);
   assert.match(html, /id="ask-question"[^>]+data-i18n-placeholder="askQuestionPlaceholder"/);
   assert.match(script, /renderAskExamples\(\);\s*if \(lastAskAnswer !== null\) renderAnswer\(lastAskAnswer\);/);
-  // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans
-  // and #34's "Ask" make nineteen between them.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 19);
+  // Issue #30 — the GST return screen, and the two acts that leave the building kept apart from
+  // preparing: approving is its own button and exporting is another.
+  assert.match(html, /id="view-gst-returns"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/gst-returns\/prepare/);
+  assert.match(script, /\/api\/gst-returns\/approve/);
+  assert.match(script, /\/api\/gst-returns\/export/);
+  // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
+  // #34's "Ask" and #30's GST returns make twenty between them.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 20);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

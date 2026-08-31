@@ -31,6 +31,7 @@
           <button class="nav-item" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button>
           <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
           <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
+          <button class="nav-item" data-view="gst-returns"><span aria-hidden="true">▦</span><span data-i18n="navGstReturns"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
@@ -284,6 +285,67 @@
           <article class="panel">
             <div class="panel-heading"><div><h2 data-i18n="onTheRoad"></h2><p data-i18n="onTheRoadHelp"></p></div></div>
             <div class="activity-list" id="eway-road"></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-gst-returns" aria-labelledby="gst-returns-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="gst-returns-title" tabindex="-1" data-i18n="gstReturnsTitle"></h1>
+              <p data-i18n="gstReturnsHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="gst-return-form">
+              <div class="field-grid">
+                <label><span data-i18n="gstWhichMonth"></span><input name="period" id="gst-period" type="month" required /><small data-i18n="gstWhichMonthHelp"></small></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="gstPrepare"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="gstSafety"></span></p>
+            </form>
+            <div class="panel-heading" id="gst-heading" hidden>
+              <div><h2 id="gst-title">—</h2><p id="gst-summary"></p></div>
+              <span class="pill" id="gst-status">—</span>
+            </div>
+            <div class="activity-list" id="gst-blockers"></div>
+          </article>
+
+          <article class="panel" id="gst-drift-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="gstDriftTitle"></h2><p id="gst-drift-message"></p></div></div>
+          </article>
+
+          <article class="panel" id="gst-exceptions-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="gstExceptionsTitle"></h2><p data-i18n="gstExceptionsHelp"></p></div></div>
+            <div class="activity-list" id="gst-exceptions"></div>
+          </article>
+
+          <article class="panel" id="gst-sections-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="gstSectionsTitle"></h2><p data-i18n="gstSectionsHelp"></p></div></div>
+            <div class="activity-list" id="gst-sections"></div>
+          </article>
+
+          <article class="panel" id="gst-books-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="gstBooksTitle"></h2><p id="gst-books-sentence"></p></div></div>
+            <div class="activity-list" id="gst-books"></div>
+          </article>
+
+          <article class="panel" id="gst-3b-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="gst3bTitle"></h2><p id="gst-3b-summary"></p></div></div>
+            <div class="activity-list" id="gst-3b"></div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span id="gst-3b-caution"></span></p>
+          </article>
+
+          <article class="panel form-panel" id="gst-actions-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="gstApproveTitle"></h2><p data-i18n="gstApproveHelp"></p></div></div>
+            <div class="field-grid">
+              <label class="full-field"><span data-i18n="gstApproveNote"></span><input id="gst-note" placeholder="Checked against the sales register" /></label>
+            </div>
+            <button type="button" class="primary-button wide" id="gst-approve" data-i18n="gstApprove"></button>
+            <button type="button" class="secondary-button wide" id="gst-export" data-i18n="gstExport"></button>
+            <p id="gst-action-result"></p>
+            <pre id="gst-file" hidden></pre>
           </article>
         </section>
 

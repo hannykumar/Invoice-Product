@@ -172,3 +172,36 @@ Owned by **GPT1** under issue **#4**.
 | `SOFT_LOCKED` | `hardLock` | `HARD_LOCKED` | `permission:periods.hard_lock`, `reason_required` |
 
 > HARD_LOCKED is deliberately irreversible so filed periods cannot move.
+
+## gst_return
+
+Owned by **GPT3** under issue **#30**.
+
+| State | Group | Plain wording | Final? |
+| --- | --- | --- | --- |
+| `DRAFT` | draft | Being prepared | no |
+| `NEEDS_ATTENTION` | needs_attention | Something must be decided first | no |
+| `APPROVED` | accepted | Checked and approved, not yet sent | no |
+| `EXPORTED` | accepted | File downloaded for upload | no |
+| `SUBMITTING` | submitted | Being sent to the government | no |
+| `FILED` | accepted | Filed with the government | yes |
+| `SUBMISSION_FAILED` | failed | It did not go through. Nothing was filed. | no |
+
+| From | Event | To | Must be true first |
+| --- | --- | --- | --- |
+| `DRAFT` | `prepare` | `NEEDS_ATTENTION` | `permission:gst_returns.prepare`, `blocking_findings_present` |
+| `NEEDS_ATTENTION` | `prepare` | `DRAFT` | `permission:gst_returns.prepare`, `no_blocking_findings` |
+| `DRAFT` | `approve` | `APPROVED` | `permission:gst_returns.approve`, `no_blocking_findings`, `books_agree` |
+| `APPROVED` | `reopen` | `DRAFT` | `permission:gst_returns.reopen`, `reason_required` |
+| `APPROVED` | `export` | `EXPORTED` | `permission:gst_returns.export` |
+| `EXPORTED` | `reopen` | `DRAFT` | `permission:gst_returns.reopen`, `reason_required` |
+| `APPROVED` | `submit` | `SUBMITTING` | `permission:gst_returns.submit`, `government_channel_configured` |
+| `EXPORTED` | `submit` | `SUBMITTING` | `permission:gst_returns.submit`, `government_channel_configured` |
+| `SUBMITTING` | `acknowledged` | `FILED` | `government_reference_present` |
+| `SUBMITTING` | `rejected` | `SUBMISSION_FAILED` | — |
+| `SUBMITTING` | `noAnswer` | `SUBMITTING` | — |
+| `SUBMISSION_FAILED` | `reopen` | `DRAFT` | `permission:gst_returns.reopen`, `reason_required` |
+
+> FILED is terminal on purpose: a filed return is corrected by an amendment on a later month's return, never by editing this one.
+> SUBMITTING is where a submission with no answer stays. It is not a failure: after a timeout the return may well be filed, and moving it to SUBMISSION_FAILED would have a business file the same return twice.
+> No transition out of APPROVED changes the figures. Reopening withdraws the approval first, and the withdrawal is recorded with its reason.

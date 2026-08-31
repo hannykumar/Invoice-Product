@@ -145,6 +145,38 @@
         { "from": "SOFT_LOCKED", "to": "HARD_LOCKED", "event": "hardLock", "guards": ["permission:periods.hard_lock", "reason_required"] }
       ],
       "notes": ["HARD_LOCKED is deliberately irreversible so filed periods cannot move."]
+    },
+    "gst_return": {
+      "owner": "GPT3",
+      "issue": 30,
+      "states": {
+        "DRAFT": { "group": "draft", "plain": "Being prepared", "terminal": false },
+        "NEEDS_ATTENTION": { "group": "needs_attention", "plain": "Something must be decided first", "terminal": false },
+        "APPROVED": { "group": "accepted", "plain": "Checked and approved, not yet sent", "terminal": false },
+        "EXPORTED": { "group": "accepted", "plain": "File downloaded for upload", "terminal": false },
+        "SUBMITTING": { "group": "submitted", "plain": "Being sent to the government", "terminal": false },
+        "FILED": { "group": "accepted", "plain": "Filed with the government", "terminal": true },
+        "SUBMISSION_FAILED": { "group": "failed", "plain": "It did not go through. Nothing was filed.", "terminal": false }
+      },
+      "transitions": [
+        { "from": "DRAFT", "to": "NEEDS_ATTENTION", "event": "prepare", "guards": ["permission:gst_returns.prepare", "blocking_findings_present"] },
+        { "from": "NEEDS_ATTENTION", "to": "DRAFT", "event": "prepare", "guards": ["permission:gst_returns.prepare", "no_blocking_findings"] },
+        { "from": "DRAFT", "to": "APPROVED", "event": "approve", "guards": ["permission:gst_returns.approve", "no_blocking_findings", "books_agree"] },
+        { "from": "APPROVED", "to": "DRAFT", "event": "reopen", "guards": ["permission:gst_returns.reopen", "reason_required"] },
+        { "from": "APPROVED", "to": "EXPORTED", "event": "export", "guards": ["permission:gst_returns.export"] },
+        { "from": "EXPORTED", "to": "DRAFT", "event": "reopen", "guards": ["permission:gst_returns.reopen", "reason_required"] },
+        { "from": "APPROVED", "to": "SUBMITTING", "event": "submit", "guards": ["permission:gst_returns.submit", "government_channel_configured"] },
+        { "from": "EXPORTED", "to": "SUBMITTING", "event": "submit", "guards": ["permission:gst_returns.submit", "government_channel_configured"] },
+        { "from": "SUBMITTING", "to": "FILED", "event": "acknowledged", "guards": ["government_reference_present"] },
+        { "from": "SUBMITTING", "to": "SUBMISSION_FAILED", "event": "rejected" },
+        { "from": "SUBMITTING", "to": "SUBMITTING", "event": "noAnswer" },
+        { "from": "SUBMISSION_FAILED", "to": "DRAFT", "event": "reopen", "guards": ["permission:gst_returns.reopen", "reason_required"] }
+      ],
+      "notes": [
+        "FILED is terminal on purpose: a filed return is corrected by an amendment on a later month's return, never by editing this one.",
+        "SUBMITTING is where a submission with no answer stays. It is not a failure: after a timeout the return may well be filed, and moving it to SUBMISSION_FAILED would have a business file the same return twice.",
+        "No transition out of APPROVED changes the figures. Reopening withdraws the approval first, and the withdrawal is recorded with its reason."
+      ]
     }
   }
 }
