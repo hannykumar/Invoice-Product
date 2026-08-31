@@ -36,6 +36,7 @@
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
           <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
           <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
+          <button class="nav-item" data-view="ask"><span aria-hidden="true">?</span><span data-i18n="navAsk"></span></button>
         </nav>
         <div class="sidebar-note">
           <span class="status-dot" aria-hidden="true"></span>
@@ -696,6 +697,20 @@
           <div id="migration-preview" aria-live="polite"></div>
           <div id="migration-result" aria-live="polite"></div>
         </section>
+
+        <section class="view" id="view-ask" aria-labelledby="ask-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="navAsk"></p><h1 id="ask-title" tabindex="-1" data-i18n="askTitle"></h1><p data-i18n="askHelp"></p></div></div>
+          <form class="panel setup-form" id="ask-form" novalidate>
+            <fieldset>
+              <legend data-i18n="askLegend"></legend>
+              <p class="setup-hint" data-i18n="askHint"></p>
+              <div class="migration-samples" id="ask-examples"></div>
+              <label><span data-i18n="askQuestion"></span><input id="ask-question" autocomplete="off" data-i18n-placeholder="askQuestionPlaceholder" /></label>
+            </fieldset>
+            <div class="setup-actions"><button type="submit" class="primary-button" id="ask-send" data-i18n="askSend"></button></div>
+          </form>
+          <div id="ask-answer" aria-live="polite"></div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -716,6 +731,7 @@
         <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
         <button data-view="vehicle"><span aria-hidden="true">⚙</span><small data-i18n="navVehicle"></small></button>
         <button data-view="migration"><span aria-hidden="true">⇪</span><small data-i18n="navMigration"></small></button>
+        <button data-view="ask"><span aria-hidden="true">?</span><small data-i18n="navAsk"></small></button>
       </nav>
     </div>
 

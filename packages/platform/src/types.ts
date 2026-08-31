@@ -82,7 +82,9 @@ export type Permission =
   | "collections.dispute.manage"
   // What a plan covers and what has been used (issue #42 [E42], GPT 1).
   | "subscription.view"
-  | "subscription.manage";
+  | "subscription.manage"
+  // Issue #34 [E34], GPT 1: asking questions about this company's own books.
+  | "assistant.ask";
 
 export interface RequestContext {
   companyId: Id;

@@ -60,6 +60,14 @@ const copy = {
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
+    navAsk: "Ask",
+    askTitle: "Ask about your business",
+    askHelp: "Ask in English or Hinglish. Every figure in the answer comes from one of your own reports, and every rule answer names the notification it came from.",
+    askLegend: "Your question",
+    askHint: "Try one of these, or type your own.",
+    askQuestion: "What would you like to know?",
+    askQuestionPlaceholder: "How much did I sell this month?",
+    askSend: "Ask",
     navMigration: "Bring your data",
     migrationTitle: "Bring your data across",
     migrationHelp: "Send the file your old software exports — customers, items, stock or last year's balances. We read it, show you exactly what would happen, and write nothing until you say so.",
@@ -224,6 +232,14 @@ const copy = {
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
+    navAsk: "Poochein",
+    askTitle: "Apne business ke baare mein poochein",
+    askHelp: "English ya Hinglish mein poochein. Jawab ka har aankda aapki apni report se aata hai, aur har niyam ke jawab mein us notification ka naam hota hai jahan se wo aaya.",
+    askLegend: "Aapka sawaal",
+    askHint: "Inmein se koi chunein, ya apna sawaal likhein.",
+    askQuestion: "Aap kya jaanna chahte hain?",
+    askQuestionPlaceholder: "Maine is mahine kitna becha?",
+    askSend: "Poochein",
     navMigration: "Apna data laayein",
     migrationTitle: "Apna data yahan laayein",
     migrationHelp: "Purane software se nikali gayi file bhejein — customer, saman, stock ya pichhle saal ki baaki. Hum use padhkar dikhaayenge ki kya hoga, aur aapke kehne se pehle kuch nahin likhenge.",
@@ -342,6 +358,17 @@ const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: loc
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const REPORT_TEXT = {
+  answerLabel: { "en-IN": "Answer", "hi-IN": "Jawab" },
+  whereFrom: { "en-IN": "Where these figures come from", "hi-IN": "Yeh aankde kahan se aaye" },
+  recordsBehind: { "en-IN": "records behind it", "hi-IN": "iske peeche ke record" },
+  ruleSays: { "en-IN": "What the rule says", "hi-IN": "Niyam kya kehta hai" },
+  inForceFrom: { "en-IN": "In force from", "hi-IN": "Kab se laagu" },
+  weCannotSay: { "en-IN": "We will not say", "hi-IN": "Hum nahin kahenge" },
+  ruleUnclear: { "en-IN": "Not settled enough to rely on", "hi-IN": "Bharosa karne layak tay nahin" },
+  assumedNote: { "en-IN": "What I took as given", "hi-IN": "Maine kya maan liya" },
+  leftOut: { "en-IN": "Left out of this answer", "hi-IN": "Is jawab se bahar" },
+  askingAbout: { "en-IN": "Period", "hi-IN": "Samay" },
+  thinking: { "en-IN": "Looking it up…", "hi-IN": "Dekh raha hoon…" },
   bringingIn: { "en-IN": "Bringing it in…", "hi-IN": "Laaya ja raha hai…" },
   columnHeader: { "en-IN": "Column in your file", "hi-IN": "Aapki file ka column" },
   weReadItAs: { "en-IN": "We read it as", "hi-IN": "Hum ise samajhte hain" },
@@ -461,6 +488,8 @@ function translate() {
   // redraw them; a half-translated page is worse than an untranslated one.
   if (state.reminders) renderReminders(state.reminders);
   if (planState !== null) renderPlan(planState);
+  renderAskExamples();
+  if (lastAskAnswer !== null) renderAnswer(lastAskAnswer);
 }
 
 function openView(view) {
@@ -484,6 +513,7 @@ function openView(view) {
   if (target === "vehicle") loadVehiclesHeld();
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
+  if (target === "ask") loadAskExamples();
 }
 
 function draftData(form) {
@@ -1367,6 +1397,171 @@ document.querySelector("#migration-upload")?.addEventListener("change", async (e
   document.querySelector("#migration-content").value = await file.text();
   document.querySelector("#migration-file-name").value = file.name;
 });
+
+
+// ------------------------------------------------------------------- issue #34: asking questions
+//
+// The screen sends the question and shows the answer exactly as the assistant built it: the
+// sentences, then every figure with the report it came from and the records behind it, then any
+// rule it quoted with the notification and the date it took effect, then what it assumed and what
+// it was not allowed to see.
+
+let askExamples = null;
+let lastAskAnswer = null;
+
+function renderAskExamples() {
+  if (askExamples === null) return;
+  const box = document.querySelector("#ask-examples");
+  box.replaceChildren();
+  askExamples.slice(0, 6).forEach((example) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost-button";
+    button.textContent = t(example.label);
+    button.addEventListener("click", () => {
+      document.querySelector("#ask-question").value = t(example.label);
+      askQuestion();
+    });
+    box.append(button);
+  });
+}
+
+async function loadAskExamples() {
+  if (askExamples !== null) {
+    renderAskExamples();
+    return;
+  }
+  try {
+    const response = await api("/api/assistant/examples");
+    askExamples = response.examples;
+    renderAskExamples();
+  } catch (error) {
+    renderAnswerProblem(error.message);
+  }
+}
+
+function renderAnswerProblem(message) {
+  const box = document.querySelector("#ask-answer");
+  box.replaceChildren();
+  box.append(reportCard(t(REPORT_TEXT.needsALook), message));
+}
+
+async function askQuestion() {
+  const question = document.querySelector("#ask-question").value.trim();
+  if (question === "") return;
+  const button = document.querySelector("#ask-send");
+  button.disabled = true;
+  const previous = button.textContent;
+  button.textContent = t(REPORT_TEXT.thinking);
+  try {
+    const answer = await api("/api/assistant/ask", { method: "POST", body: JSON.stringify({ question }) });
+    lastAskAnswer = answer;
+    renderAnswer(answer);
+  } catch (error) {
+    renderAnswerProblem(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = previous;
+  }
+}
+
+function renderAnswer(answer) {
+  const box = document.querySelector("#ask-answer");
+  box.replaceChildren();
+  const card = reportCard(t(REPORT_TEXT.answerLabel), answer.question);
+
+  answer.sentences.forEach((sentence) => {
+    const paragraph = document.createElement("p");
+    paragraph.className = "ask-sentence";
+    paragraph.textContent = t(sentence);
+    card.append(paragraph);
+  });
+
+  const badge = document.createElement("span");
+  badge.className = `pill ${answer.state === "ANSWERED" ? "done" : answer.state === "NEEDS_PERMISSION" ? "hold" : "warn"}`;
+  badge.textContent = answer.state.toLowerCase().replace(/_/g, " ");
+  card.append(badge);
+
+  if (answer.amounts.length > 0) {
+    const heading = document.createElement("h3");
+    heading.className = "setup-subheading";
+    heading.textContent = t(REPORT_TEXT.whereFrom);
+    card.append(heading);
+    answer.amounts.forEach((amount) => {
+      card.append(reportTotalRow(`${t(amount.what)} · ${amount.reportId.replace(/_/g, " ")} · ${amount.from} → ${amount.to}`, amount.value));
+      if (amount.drill.length > 0) {
+        card.append(drillDetails(`${amount.records} ${t(REPORT_TEXT.recordsBehind)}`, amount.value, amount.drill));
+      }
+    });
+  }
+
+  answer.compliance.forEach((citation) => {
+    const heading = document.createElement("h3");
+    heading.className = "setup-subheading";
+    heading.textContent =
+      citation.certainty === "THE_RULE_SAYS" ? t(REPORT_TEXT.ruleSays)
+      : citation.certainty === "THE_RULE_IS_UNCLEAR" ? t(REPORT_TEXT.ruleUnclear)
+      : t(REPORT_TEXT.weCannotSay);
+    card.append(heading);
+    if (citation.source) {
+      const rows = [
+        [citation.source.title, citation.source.provision],
+        [t(REPORT_TEXT.inForceFrom), citation.effectiveFrom ?? citation.source.effectiveFrom],
+      ];
+      card.append(reportTable([{ label: "" }, { label: "" }], rows));
+      const quote = document.createElement("blockquote");
+      quote.className = "ask-quote";
+      quote.textContent = citation.source.quotedText;
+      card.append(quote);
+    }
+    citation.missing.forEach((missing) => {
+      const flag = document.createElement("div");
+      flag.className = "report-flag";
+      const strong = document.createElement("strong");
+      strong.textContent = `${missing.label} — ${missing.whyNeeded}`;
+      flag.append(strong);
+      card.append(flag);
+    });
+  });
+
+  const notes = [
+    [t(REPORT_TEXT.assumedNote), answer.assumptions],
+    [t(REPORT_TEXT.leftOut), answer.withheld],
+  ];
+  notes.forEach(([label, list]) => {
+    if (list.length === 0) return;
+    const heading = document.createElement("h3");
+    heading.className = "setup-subheading";
+    heading.textContent = label;
+    card.append(heading);
+    list.forEach((note) => {
+      const paragraph = document.createElement("p");
+      paragraph.className = "setup-hint";
+      paragraph.textContent = t(note);
+      card.append(paragraph);
+    });
+  });
+
+  if (answer.nextSteps.length > 0) {
+    const steps = document.createElement("ul");
+    steps.className = "ask-steps";
+    answer.nextSteps.forEach((step) => {
+      const item = document.createElement("li");
+      item.textContent = t(step.label);
+      steps.append(item);
+    });
+    card.append(steps);
+  }
+
+  const disclaimer = document.createElement("p");
+  disclaimer.className = "setup-hint";
+  disclaimer.textContent = t(answer.disclaimer);
+  card.append(disclaimer);
+
+  box.append(card);
+}
+
+document.querySelector("#ask-form")?.addEventListener("submit", (event) => { event.preventDefault(); askQuestion(); });
 
 document.querySelector("#setup-form")?.addEventListener("submit", (event) => { event.preventDefault(); checkSetup(); });
 document.querySelector("#setup-form")?.addEventListener("input", () => { document.querySelector("#setup-create").hidden = true; });

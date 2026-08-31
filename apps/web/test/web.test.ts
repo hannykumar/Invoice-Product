@@ -89,8 +89,11 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/vehicles\/check/);
   assert.match(script, /\/api\/vehicles\/check\/override/);
   assert.match(html, /id="view-migration"[^>]+aria-labelledby=/);
-  // One focusable heading per screen, including vehicle, operations, migration and plans.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 18);
+  assert.match(html, /id="ask-question"[^>]+data-i18n-placeholder="askQuestionPlaceholder"/);
+  assert.match(script, /renderAskExamples\(\);\s*if \(lastAskAnswer !== null\) renderAnswer\(lastAskAnswer\);/);
+  // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans
+  // and #34's "Ask" make nineteen between them.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 19);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

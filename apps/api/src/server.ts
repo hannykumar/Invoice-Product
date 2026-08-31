@@ -43,6 +43,10 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/operations') return json(200, await runtime.operationsWorkspace(context));
     if (method === 'POST' && pathname === '/api/operations/jobs/replay') return json(200, runtime.replayOperationalJob(context, body));
     if (method === 'POST' && pathname === '/api/operations/support-grants') return json(200, runtime.grantSupportAccess(context, body));
+    // Issue #34 — ask about this company's own books; the answer cites the report every figure came
+    // from, and the notification behind every rule it quotes.
+    if (method === 'GET' && pathname === '/api/assistant/examples') return json(200, { examples: DemoApplication.assistantExamples() });
+    if (method === 'POST' && pathname === '/api/assistant/ask') return json(200, await app.ask(actor, body));
     // Setting up a business runs against its own fresh company, so it needs a signed-in session but
     // not the session's company. Gated by authentication above, like the rest of the app.
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));

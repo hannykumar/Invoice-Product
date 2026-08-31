@@ -30,6 +30,8 @@ from deterministic, versioned, testable rules.
 | [`packages/subscriptions`](packages/subscriptions) | #42 | Plans, entitlements, usage counters, the subscription lifecycle and our own service invoices |
 | [`packages/collections`](packages/collections) | #23 | Payment reminders and collection tracking: the ladder, opt-outs, promises, disputes, escalation |
 | [`packages/voice-assistant`](packages/voice-assistant) | #10 | Spoken or typed instructions to a confirmed draft, never a guess |
+| [`packages/assistant`](packages/assistant) | #34 | Questions about your own books, answered with the report and the notification behind every figure |
+| [`packages/migration`](packages/migration) | #37 | Excel and CSV migration from Tally, BUSY and Vyapar, with mapping approval and rollback |
 | [`packages/inventory`](packages/inventory) | #12 | Stock from an append-only movement ledger, reservations, negative-stock control |
 | [`packages/onboarding`](packages/onboarding) | #36 | Guided setup: profile, defaults, declared rates, opening balances, resumable checklist |
 | [`packages/invoice-templates`](packages/invoice-templates) | #13 | Invoice templates and the rendering engine: A4, thermal, mobile, print |
@@ -79,6 +81,7 @@ The production persistence target is PostgreSQL, with a transactional outbox for
 - `npm run demo:validate` — prints a walkthrough of purchase validation: what posts, what needs a person and what is stopped.
 - `npm run demo:posting` — prints a walkthrough of purchase posting: the books, the godown and the supplier's account moving together.
 - `npm run demo:migration` — moves a business in from Tally, BUSY and Vyapar exports: four files, the same file twice, and an import taken back out.
+- `npm run demo:assistant` — a month of trading, then ten questions asked of the books: what it answers, what it refuses, and what it will not be talked into.
 
 ## Type checking the deterministic modules
 

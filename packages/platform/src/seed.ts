@@ -21,6 +21,7 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "collections.reminders.view", "collections.reminders.send", "collections.promise.record", "collections.dispute.manage",
   "subscription.view", "subscription.manage",
   "operations.read", "operations.manage", "support.access.grant", "queue.replay", "incident.manage", "feature-flags.manage",
+  "assistant.ask",
 ];
 
 export const SYNTHETIC_PLATFORM_COMPANIES = [

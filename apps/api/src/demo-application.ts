@@ -26,6 +26,9 @@ import {
   type PurchaseReadPort,
   type ReportFilter,
 } from '@invoice/reports';
+import { ComplianceRegister } from '@invoice/compliance-register';
+import { AssistantService, describeIntent } from '../../../packages/assistant/src/service.ts';
+import type { BlockedDocument, BlockedDocumentPort, BlockingReason } from '../../../packages/assistant/src/ports.ts';
 import { createDefaultUnitRegistry } from '../../../packages/masters/src/units.ts';
 import type { IsoDate } from '@invoice/kernel';
 import type { InventoryStore, StockItem, StockMasterData, Warehouse } from '@invoice/inventory';
@@ -197,6 +200,7 @@ export class DemoApplication {
   private readonly paymentRepository: InMemoryPaymentRepository;
   private readonly documents: DocumentLedgerPort;
   private readonly reportService: ReportService;
+  private readonly assistant: AssistantService;
   private readonly terms: TradeTermsService;
   private readonly returns: ReturnService;
   private readonly returnNotes: InMemoryReturnNoteRepository;
@@ -214,6 +218,7 @@ export class DemoApplication {
     paymentRepository: InMemoryPaymentRepository,
     documents: DocumentLedgerPort,
     reportService: ReportService,
+    assistant: AssistantService,
     terms: TradeTermsService,
     returns: ReturnService,
     returnNotes: InMemoryReturnNoteRepository,
@@ -230,6 +235,7 @@ export class DemoApplication {
     this.paymentRepository = paymentRepository;
     this.documents = documents;
     this.reportService = reportService;
+    this.assistant = assistant;
     this.terms = terms;
     this.returns = returns;
     this.returnNotes = returnNotes;
@@ -361,6 +367,79 @@ export class DemoApplication {
       audit: shop.audit, clock: { now: () => new Date() },
     });
 
+
+    /**
+     * Issue #34 — why a particular bill is held up, worked out from this live company rather than
+     * described by a fixture: the bill is looked up in the sales repository, its lines are checked
+     * against what the stock ledger actually says, and the place-of-supply question is put to the
+     * rules engine with this bill's own facts.
+     */
+    const blocked: BlockedDocumentPort = {
+      async find(companyId: CompanyId, reference: string): Promise<BlockedDocument | null> {
+        const invoices = await salesRepository.list(companyId);
+        const invoice = invoices.find(
+          (candidate) => (candidate.number ?? '').toUpperCase() === reference.toUpperCase() || candidate.id === reference,
+        );
+        if (invoice === undefined) return null;
+
+        const reasons: BlockingReason[] = [];
+        if (invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED') {
+          for (const line of invoice.lines) {
+            const balance = await shop.inventoryService.balance(shop.setupActor, { itemId: line.itemId, warehouseId: 'wh-main' });
+            if (balance.available.scaled >= line.quantity.scaled) continue;
+            reasons.push({
+              code: 'STOCK_SHORTFALL',
+              what: {
+                'en-IN': `There is not enough ${line.itemId} in ${config.location}: the bill needs ${formatQuantity(line.quantity)} and ${formatQuantity(balance.available)} is free to sell.`,
+                'hi-IN': `${config.location} mein ${line.itemId} kam hai: bill ko ${formatQuantity(line.quantity)} chahiye aur bechne ke liye ${formatQuantity(balance.available)} hai.`,
+              },
+              nextStep: {
+                'en-IN': 'Receive more stock, or reduce the quantity on the bill.',
+                'hi-IN': 'Aur maal mangwayein, ya bill ki maatra kam karein.',
+              },
+              action: 'purchase',
+            });
+          }
+          reasons.push({
+            code: 'RULE_CHECK',
+            what: {
+              'en-IN': 'Which state this sale counts in has to be settled before the bill goes out.',
+              'hi-IN': 'Bill jaane se pehle tay karna hoga ki yeh bikri kis rajya ki hai.',
+            },
+            nextStep: {
+              'en-IN': 'Check the delivery address on the bill.',
+              'hi-IN': 'Bill par delivery ka pata dekh lein.',
+            },
+            action: 'sale',
+            topic: 'gst.place_of_supply',
+            facts: {
+              'supply.type': 'GOODS',
+              'supply.deliveryStateCode': config.customerGstin.slice(0, 2),
+              'supply.supplierStateCode': config.gstin.slice(0, 2),
+            },
+          });
+        }
+        return {
+          documentId: invoice.id,
+          number: invoice.number,
+          kind: 'SALES_INVOICE',
+          date: invoice.documentDate,
+          partyName: config.customerName,
+          reasons,
+        };
+      },
+    };
+
+    const assistant = new AssistantService({
+      reports: reportService,
+      permissions: permissionPortFromActor,
+      audit: shop.audit,
+      clock: { now: () => new Date() },
+      // Production mode: a rule that has not been reviewed cannot answer anybody's question.
+      rules: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'production' }),
+      register: new ComplianceRegister(),
+      blocked,
+    });
     // Issue #23 [E23]: chasing overdue money. Receivables above it is the real service that has
     // just been composed; the notification service below it is GPT 2's real one from #39. This
     // module supplies only the decision about who is chased and how hard.
@@ -421,8 +500,7 @@ export class DemoApplication {
       audit: shop.audit,
       clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
     });
-
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions);
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions);
     await app.seed();
     return app;
   }
@@ -472,6 +550,53 @@ export class DemoApplication {
    * Every user-facing string is returned in both languages, exactly as the report modules produce
    * them. Picking one here would decide for the reader before the browser knows who is reading.
    */
+  /** Issue #34 — a question about this company's own books, answered from this company's reports. */
+  async ask(actor: ActorContext, body: Record<string, unknown>) {
+    this.companyOf(actor);
+    const answer = await this.assistant.ask(actor, { question: String(body.question ?? '') });
+    return {
+      id: answer.id,
+      question: answer.question,
+      intent: answer.intent,
+      state: answer.state,
+      sentences: answer.sentences,
+      amounts: answer.amounts.map((amount) => ({
+        what: amount.what,
+        formatted: amount.formatted,
+        value: jsonAmount(amount.amount.minor),
+        reportId: amount.reportId,
+        from: amount.from,
+        to: amount.to,
+        records: amount.drillDown.length,
+        drill: amount.drillDown.slice(0, 8).map((record) => ({
+          date: record.date,
+          number: record.sourceNumber,
+          description: record.description,
+          amount: jsonAmount(record.amount.minor),
+        })),
+      })),
+      compliance: answer.compliance.map((citation) => ({
+        certainty: citation.certainty,
+        asOfDate: citation.asOfDate,
+        effectiveFrom: citation.effectiveFrom,
+        ruleId: citation.ruleId,
+        source: citation.source,
+        missing: citation.missing,
+      })),
+      period: answer.period,
+      assumptions: answer.assumptions,
+      withheld: answer.withheld,
+      nextSteps: answer.nextSteps,
+      sourcesUsed: answer.sourcesUsed,
+      disclaimer: answer.disclaimer,
+    };
+  }
+
+  /** The questions this assistant can answer, so the screen offers real examples, not invented ones. */
+  static assistantExamples() {
+    return AssistantService.supportedIntents().map((intent) => ({ intent, label: describeIntent(intent) }));
+  }
+
   async reports(actor: ActorContext) {
     this.companyOf(actor);
     const filter: ReportFilter = { from: isoDate('2026-04-01'), to: isoDate('2027-03-31') };
