@@ -81,6 +81,14 @@ const copy = {
     navVehicle: "Vehicle check",
     vehicleCheckTitle: "Can this lorry carry this load?",
     vehicleCheckHelp: "Before the goods leave the yard we compare what is being loaded against what the vehicle is registered to carry. Every answer says where the fact came from, and a service we could not reach is never shown as 'nothing wrong'.",
+    recordLookupTitle: "What does the registering authority hold?",
+    recordLookupHelp: "Type a number plate and we ask the government's vehicle record for it. You get what kind of vehicle it is, how much it may carry and until when its papers are valid — with the date we asked. The owner's name is shortened to initials before it is stored, and nothing else about the owner is asked for at all.",
+    recordPlate: "Number plate", recordPlateHelp: "Type it as it is written on the lorry. Spaces and dashes do not matter.",
+    recordLookupButton: "Ask the registering authority",
+    recordSafety: "This only reads. Nothing is sent to the tax portal and no e-way bill is raised.",
+    recordAsked: "When we asked", recordProvider: "Who answered", recordReference: "Their reference for this answer",
+    recordReused: "Read again from what we already had, so the provider was not asked twice.",
+    recordAgreed: "What this business agreed may be read",
     whichVehicle: "Which vehicle", whichVehicleHelp: "Pick one to see what the registering authority holds against it.",
     loadWeight: "Weight being loaded (kg)", loadWeightHelp: "Leave blank if nobody has weighed it — we will ask rather than guess.",
     crossesBorder: "Does it cross a state border?", crossesBorderHelp: "A state permit does not travel outside the state that issued it.",
@@ -233,6 +241,14 @@ const copy = {
     navVehicle: "Gaadi ki jaanch",
     vehicleCheckTitle: "Kya yeh gaadi itna maal le ja sakti hai?",
     vehicleCheckHelp: "Maal nikalne se pehle hum dekhte hain ki kitna load ho raha hai aur gaadi kitna le jaane ke liye registered hai. Har jawab batata hai wo baat kahan se aayi, aur jo service hum tak pahunch hi nahin payi use kabhi 'sab theek hai' nahin dikhaya jata.",
+    recordLookupTitle: "RTO ke record mein is gaadi ke baare mein kya hai?",
+    recordLookupHelp: "Gaadi ka number likhein, hum sarkari record se poochenge. Aapko milega: gaadi kis tarah ki hai, kitna maal le ja sakti hai, aur kaagaz kab tak valid hain — us tareekh ke saath jab humne poocha. Malik ka naam sirf shuruaati akshar mein rakha jata hai, aur uske baare mein aur kuch maanga hi nahin jata.",
+    recordPlate: "Gaadi ka number", recordPlateHelp: "Jaise gaadi par likha hai waise likhein. Space ya dash se farak nahin padta.",
+    recordLookupButton: "RTO se poochein",
+    recordSafety: "Yeh sirf padhta hai. Tax portal par kuch nahin jata aur koi e-way bill nahin banta.",
+    recordAsked: "Kab poocha", recordProvider: "Kisne jawab diya", recordReference: "Unka reference number",
+    recordReused: "Jo pehle se tha wahi dobara dikhaya gaya, provider se dobara nahin poocha gaya.",
+    recordAgreed: "Is vyapaar ne kya padhne ki ijazat di hai",
     whichVehicle: "Kaunsi gaadi", whichVehicleHelp: "Ek chunein aur dekhein RTO ke record mein uske baare mein kya hai.",
     loadWeight: "Load ka wazan (kg)", loadWeightHelp: "Agar tola nahin gaya to khali chhod den — hum poochenge, andaza nahin lagayenge.",
     crossesBorder: "Kya maal doosre rajya jaa raha hai?", crossesBorderHelp: "Rajya ka permit us rajya ke bahar nahin chalta.",
@@ -2381,6 +2397,47 @@ document.querySelector("#operations-jobs")?.addEventListener("click", async (eve
 // pass", the evidence is listed with the source on each line, and the override form only ever
 // offers the findings a person is allowed to answer for — the physically impossible ones are shown
 // with no button at all.
+
+// ------------------------------------------------------------ issue #29: the government record
+//
+// One number plate, typed in by a person at the gate, and what the registering authority says about
+// it. The three answers stay three: facts, "no such vehicle", and "we could not ask" — the last one
+// says which reason it was and never reads as "nothing wrong".
+
+function renderVehicleRecord(result) {
+  const words = copy[state.locale];
+  document.querySelector("#vehicle-record-heading").hidden = false;
+  document.querySelector("#vehicle-record-title").textContent = result.title;
+  document.querySelector("#vehicle-record-message").textContent = result.message;
+
+  const badge = document.querySelector("#vehicle-record-status");
+  badge.textContent = result.kind === "FOUND"
+    ? (result.freshness === "STALE" ? "on record, but old" : "on record")
+    : result.kind === "NOT_FOUND" ? "not on record" : "not checked";
+  badge.className = `pill ${result.kind === "FOUND" ? (result.freshness === "STALE" ? "warn" : "done") : result.kind === "NOT_FOUND" ? "warn" : "hold"}`;
+
+  const list = document.querySelector("#vehicle-record-facts");
+  list.replaceChildren();
+  result.facts.forEach((fact) => list.append(detailRow(fact.label, fact.value)));
+  // Where the answer came from and when, always, because a reading nobody can trace is not proof.
+  if (result.provider) list.append(detailRow(words.recordProvider, result.provider));
+  if (result.providerReference) list.append(detailRow(words.recordReference, result.providerReference));
+  if (result.retrievedAt) {
+    list.append(detailRow(words.recordAsked, new Date(result.retrievedAt).toLocaleString(), result.fromCache ? words.recordReused : undefined));
+  }
+  if (result.consent) list.append(detailRow(words.recordAgreed, result.consent.fields.join(", ")));
+}
+
+submitStep("#vehicle-record-form", async (form) => {
+  try {
+    renderVehicleRecord(await api("/api/vehicles/record", { method: "POST", body: JSON.stringify(formValues(form)) }));
+  } catch (error) {
+    document.querySelector("#vehicle-record-heading").hidden = false;
+    document.querySelector("#vehicle-record-title").textContent = "That could not be looked up";
+    document.querySelector("#vehicle-record-message").textContent = error.message;
+    document.querySelector("#vehicle-record-facts").replaceChildren();
+  }
+});
 
 let lastVehicleCheck = null;
 

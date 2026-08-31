@@ -6,6 +6,7 @@
 // today", which are three different answers and are never collapsed into two.
 
 import type { CompanyId } from "@invoice/kernel";
+import type { ActorContext } from "@invoice/ledger";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
 import type {
   PlatePhoto, VehicleEvidence, VehicleSuitabilityAssessment, VehicleSuitabilityPolicy,
@@ -38,7 +39,12 @@ export type VehicleRecordLookup =
  * adapter implements this and nothing above it changes.
  */
 export interface VehicleRecordPort {
-  lookup(companyId: CompanyId, registrationNumber: string): Promise<VehicleRecordLookup>;
+  /**
+   * `actor` is who is asking, and it is optional only so that a simple stand-in can ignore it.
+   * The real implementation records the lookup against the person who ran the check, rather than
+   * against nobody.
+   */
+  lookup(companyId: CompanyId, registrationNumber: string, actor?: ActorContext): Promise<VehicleRecordLookup>;
 }
 
 export type PlateReadOutcome =

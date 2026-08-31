@@ -67,10 +67,13 @@ import type {
 } from '../../../packages/transport/src/types.ts';
 import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
 import { outstandingOf } from '../../../packages/transport/src/suitability-service.ts';
-import { DEMO_VEHICLE_RECORDS, platePhoto } from '../../../packages/transport/src/suitability-adapters.ts';
+import { platePhoto } from '../../../packages/transport/src/suitability-adapters.ts';
+import { SYNTHETIC_VAHAN_ROWS } from '../../../packages/transport/src/vehicle-record-adapters.ts';
+import { PERMITTED_VEHICLE_FIELD_NAMES } from '../../../packages/transport/src/vehicle-record-types.ts';
+import { readVehicleClass, readWeightKg } from '../../../packages/transport/src/vehicle-record.ts';
 import { VEHICLE_CLASS_NAMES } from '../../../packages/transport/src/suitability-types.ts';
 import type {
-  ShipmentFacts, TransportDetails, VehicleClass, VehicleSuitabilityAssessment,
+  ShipmentFacts, TransportDetails, VehicleClass, VehicleEvidence, VehicleSuitabilityAssessment,
 } from '../../../packages/transport/src/suitability-types.ts';
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
@@ -1585,6 +1588,86 @@ export class DemoApplication {
     };
   }
 
+  // ------------------------------------------- issue #29: what the registering authority holds
+
+  /**
+   * One number plate, typed in, answered by the registering authority.
+   *
+   * This is the whole of issue #29 on a screen: a masked, dated classification, who answered, and
+   * — when we could not ask — which of the reasons it was, never dressed up as "nothing wrong".
+   */
+  async lookupVehicleRecord(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const result = await this.shop.vehicleRecords.verify(actor, String(input.vehicle ?? ''));
+    const consent = await this.shop.vehicleRecords.consentStatus(actor);
+    const connected = consent !== null && consent.revokedAt === undefined;
+    const base = {
+      state: 'vehicle-record' as const,
+      vehicle: String(input.vehicle ?? '').toUpperCase().replace(/[\s-]/g, ''),
+      kind: result.kind,
+      message: result.summary,
+      // What the business agreed the government service may be asked for, on the screen that uses
+      // it, so nobody has to take our word for what is being read.
+      consent: connected
+        ? { fields: (consent?.fields ?? []).map((field) => PERMITTED_VEHICLE_FIELD_NAMES[field]), purpose: consent?.purpose ?? null, expiresOn: consent?.expiresOn ?? null }
+        : null,
+    };
+    if (result.kind === 'FOUND') {
+      return {
+        ...base,
+        title: `${base.vehicle} is on the registering authority's record`,
+        provider: result.provenance.provider,
+        providerReference: result.provenance.providerReference,
+        retrievedAt: result.provenance.retrievedAt,
+        freshness: result.freshness,
+        fromCache: result.fromCache,
+        facts: DemoApplication.vehicleRecordFacts(result.evidence),
+      };
+    }
+    if (result.kind === 'NOT_FOUND') {
+      return {
+        ...base,
+        title: `The authority holds no vehicle with the number ${base.vehicle}`,
+        provider: result.provenance.provider,
+        providerReference: result.provenance.providerReference,
+        retrievedAt: result.provenance.retrievedAt,
+        freshness: null,
+        fromCache: result.fromCache,
+        facts: [],
+      };
+    }
+    return {
+      ...base,
+      title: 'This vehicle has not been checked',
+      code: result.code,
+      retryable: result.retryable,
+      provider: null,
+      providerReference: null,
+      retrievedAt: result.checkedAt,
+      freshness: result.lastKnown?.freshness ?? null,
+      fromCache: false,
+      facts: result.lastKnown === undefined ? [] : DemoApplication.vehicleRecordFacts(result.lastKnown.evidence),
+      lastKnownAt: result.lastKnown?.provenance.retrievedAt ?? null,
+    };
+  }
+
+  /** The permitted fields, in plain words, in the order a person would read them. */
+  private static vehicleRecordFacts(evidence: VehicleEvidence) {
+    const rows: { label: string; value: string }[] = [
+      { label: 'What kind of vehicle', value: evidence.vehicleClass === undefined ? 'The record does not say' : VEHICLE_CLASS_NAMES[evidence.vehicleClass] },
+      { label: 'Body', value: evidence.bodyType ?? 'The record does not say' },
+      { label: 'May carry', value: evidence.ratedPayloadKg === undefined ? 'Not stated on the record' : `${evidence.ratedPayloadKg} kg` },
+      { label: 'Weight loaded / empty', value: `${evidence.grossVehicleWeightKg ?? '—'} kg / ${evidence.unladenWeightKg ?? '—'} kg` },
+      { label: 'Permit', value: evidence.permitType ?? 'The record does not say' },
+      { label: 'Permit valid until', value: evidence.permitValidUpto ?? 'Not stated' },
+      { label: 'Fitness certificate until', value: evidence.fitnessValidUpto ?? 'Not stated' },
+      { label: 'Insurance until', value: evidence.insuranceValidUpto ?? 'Not stated' },
+      { label: 'Registration status', value: evidence.registrationStatus ?? 'Not stated' },
+      { label: 'Registered to (masked)', value: evidence.registeredOwnerName ?? 'Not read' },
+    ];
+    return rows;
+  }
+
   // ------------------------------------------- issue #28: is this lorry able to carry this load
 
   /**
@@ -1596,11 +1679,17 @@ export class DemoApplication {
   static vehicleChoices() {
     return {
       vehicles: [
-        ...DEMO_VEHICLE_RECORDS.map((row) => ({
-          number: row.registrationNumber,
-          label: `${row.registrationNumber} · ${row.vehicleClass === undefined ? 'unknown class' : VEHICLE_CLASS_NAMES[row.vehicleClass]}`,
-          knownTo: 'the registering authority',
-        })),
+        ...SYNTHETIC_VAHAN_ROWS.map((row) => {
+          const number = String(row.rc_regn_no);
+          // The label is worked out the same way the check works it out, so the picker can never
+          // promise a class the lookup does not read.
+          const read = readVehicleClass(row.rc_vh_class_desc, readWeightKg(row.rc_gvw));
+          return {
+            number,
+            label: `${number} · ${read === null ? 'a class we do not recognise' : VEHICLE_CLASS_NAMES[read.vehicleClass]}`,
+            knownTo: 'the registering authority',
+          };
+        }),
         { number: 'KA09OW5566', label: 'KA09OW5566 · your own closed van (not on the authority\'s record)', knownTo: 'your vehicle list only' },
         { number: 'KA88XX0001', label: 'KA88XX0001 · a number nobody holds', knownTo: 'nobody' },
       ],

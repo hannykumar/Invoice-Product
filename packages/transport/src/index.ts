@@ -15,3 +15,10 @@ export * from "./plate.ts";
 export * from "./suitability-service.ts";
 export * from "./suitability-adapters.ts";
 export * from "./suitability-migrations.ts";
+// Issue #29 — the registering authority's vehicle record, behind an approved provider.
+export * from "./vehicle-record-types.ts";
+export * from "./vehicle-record-ports.ts";
+export * from "./vehicle-record.ts";
+export * from "./vehicle-record-service.ts";
+export * from "./vehicle-record-adapters.ts";
+export * from "./vehicle-record-migrations.ts";

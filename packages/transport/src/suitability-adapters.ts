@@ -1,11 +1,9 @@
-// Issue #28 [E28] — storage, the company's own vehicle list, and stand-ins for the two outside
-// services until issue #29 and a real plate reader arrive.
+// Issue #28 [E28] — storage, the company's own vehicle list, and a stand-in for the plate reader.
 //
-// The synthetic vehicle-record service below is not a happy path. It implements the behaviours that
-// actually decide whether this module is any good: a scooter that is registered and perfectly real
-// but cannot carry a consignment, a goods vehicle with a capacity well under what is being loaded,
-// a vehicle the authority has never heard of, and a service that is simply down — which is a
-// different answer from all three.
+// The registering authority is not here. Issue #29 owns it: `VehicleRecordService` implements the
+// `VehicleRecordPort` below, over issue #8's connector gateway, with a synthetic VAHAN behind it
+// for development. Keeping a second synthetic authority here as well would give this module two
+// ideas of what a vehicle record looks like, and eventually two different answers.
 
 import type { CompanyId } from "@invoice/kernel";
 import type { TransactionParticipant } from "@invoice/ledger";
@@ -91,124 +89,6 @@ export const mastersVehicleAdapter = (vehicles: (companyId: CompanyId) => readon
     };
   },
 });
-
-// ------------------------------------------------------- the stand-in for issue #29's service
-
-/** One vehicle as the synthetic authority holds it, plus the ways a lookup can fail. */
-export interface SyntheticVehicleRow extends Omit<VehicleEvidence, "source" | "retrievedAt"> {}
-
-/**
- * A vehicle-record service for development and tests.
- *
- * Issue #29 owns the real one. This implements the same port so everything above it can be built,
- * demonstrated and tested today, and so the failure cases — no such vehicle, service down — can be
- * exercised deliberately rather than waited for.
- */
-export class SyntheticVehicleRecordService implements VehicleRecordPort {
-  readonly #rows = new Map<string, SyntheticVehicleRow>();
-  readonly #now: () => Date;
-  #outage: { readonly code: string; readonly message: string; readonly retryable: boolean } | null = null;
-
-  constructor(now: () => Date, rows: readonly SyntheticVehicleRow[] = DEMO_VEHICLE_RECORDS) {
-    this.#now = now;
-    rows.forEach((row) => this.#rows.set(normaliseVehicleNumber(row.registrationNumber), row));
-  }
-
-  /** Takes the service down, so the "we could not ask" path can be tested on purpose. */
-  goDown(code = "OUTAGE", message = "The vehicle record service is not responding at the moment.", retryable = true): void {
-    this.#outage = { code, message, retryable };
-  }
-
-  comeBack(): void { this.#outage = null; }
-
-  async lookup(_companyId: CompanyId, registrationNumber: string): Promise<VehicleRecordLookup> {
-    const checkedAt = this.#now().toISOString();
-    if (this.#outage !== null) return { kind: "UNAVAILABLE", ...this.#outage, checkedAt };
-    const row = this.#rows.get(normaliseVehicleNumber(registrationNumber));
-    if (row === undefined) {
-      return { kind: "NOT_FOUND", checkedAt, message: `The registering authority holds no vehicle with the number ${normaliseVehicleNumber(registrationNumber)}.` };
-    }
-    return { kind: "FOUND", evidence: { ...row, source: "GOVERNMENT_RECORD", retrievedAt: checkedAt } };
-  }
-}
-
-/**
- * The vehicles the demo and the tests run against.
- *
- * A scooter, a private car, a small goods vehicle and a proper lorry — the four the issue's own
- * scenarios need, with real-shaped capacities.
- */
-export const DEMO_VEHICLE_RECORDS: readonly SyntheticVehicleRow[] = Object.freeze([
-  {
-    registrationNumber: "KA05MN9012",
-    vehicleClass: "TWO_WHEELER",
-    bodyType: "two_wheeler",
-    grossVehicleWeightKg: 240,
-    unladenWeightKg: 118,
-    permitType: "NONE",
-    fitnessValidUpto: "2029-03-31",
-    insuranceValidUpto: "2027-01-31",
-    registrationStatus: "ACTIVE",
-    registeredOwnerName: "R Manjunath",
-    reference: "SYN/KA05MN9012",
-  },
-  {
-    registrationNumber: "KA03MC4455",
-    vehicleClass: "MOTOR_CAR",
-    bodyType: "closed",
-    grossVehicleWeightKg: 1_950,
-    unladenWeightKg: 1_450,
-    permitType: "PRIVATE",
-    fitnessValidUpto: "2030-06-30",
-    insuranceValidUpto: "2027-05-31",
-    registrationStatus: "ACTIVE",
-    reference: "SYN/KA03MC4455",
-  },
-  {
-    // The one the issue's second sentence is about: a real goods vehicle, comfortably too small.
-    registrationNumber: "KA02GV3344",
-    vehicleClass: "LIGHT_GOODS_VEHICLE",
-    bodyType: "closed",
-    grossVehicleWeightKg: 2_590,
-    unladenWeightKg: 1_340,
-    ratedPayloadKg: 1_250,
-    permitType: "STATE",
-    permitValidUpto: "2027-03-31",
-    fitnessValidUpto: "2027-09-30",
-    insuranceValidUpto: "2027-02-28",
-    registrationStatus: "ACTIVE",
-    reference: "SYN/KA02GV3344",
-  },
-  {
-    registrationNumber: "KA01AB1234",
-    vehicleClass: "HEAVY_GOODS_VEHICLE",
-    bodyType: "open",
-    grossVehicleWeightKg: 25_000,
-    unladenWeightKg: 8_600,
-    ratedPayloadKg: 16_400,
-    permitType: "NATIONAL",
-    permitValidUpto: "2028-03-31",
-    fitnessValidUpto: "2027-11-30",
-    insuranceValidUpto: "2027-07-31",
-    registrationStatus: "ACTIVE",
-    registeredOwnerName: "Sampoorna Traders Private Limited",
-    reference: "SYN/KA01AB1234",
-  },
-  {
-    registrationNumber: "KA07RF8899",
-    vehicleClass: "MEDIUM_GOODS_VEHICLE",
-    bodyType: "refrigerated",
-    grossVehicleWeightKg: 12_000,
-    unladenWeightKg: 5_200,
-    ratedPayloadKg: 6_800,
-    permitType: "NATIONAL",
-    permitValidUpto: "2028-03-31",
-    fitnessValidUpto: "2027-08-31",
-    insuranceValidUpto: "2027-09-30",
-    registrationStatus: "ACTIVE",
-    reference: "SYN/KA07RF8899",
-  },
-]);
 
 // ------------------------------------------------------------------- the number-plate reader
 

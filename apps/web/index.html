@@ -295,6 +295,22 @@
           </div>
 
           <article class="panel form-panel">
+            <div class="panel-heading"><div><h2 data-i18n="recordLookupTitle"></h2><p data-i18n="recordLookupHelp"></p></div></div>
+            <form id="vehicle-record-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="recordPlate"></span><input name="vehicle" id="vehicle-record-number" placeholder="KA01AB1234" required /><small data-i18n="recordPlateHelp"></small></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="recordLookupButton"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="recordSafety"></span></p>
+            </form>
+            <div class="panel-heading" id="vehicle-record-heading" hidden>
+              <div><h2 id="vehicle-record-title">—</h2><p id="vehicle-record-message"></p></div>
+              <span class="pill" id="vehicle-record-status">—</span>
+            </div>
+            <div class="activity-list" id="vehicle-record-facts"></div>
+          </article>
+
+          <article class="panel form-panel">
             <form id="vehicle-form">
               <div class="field-grid">
                 <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="vehicle-invoices" required></select></label>

@@ -131,7 +131,7 @@ export class VehicleSuitabilityService {
     const number = normaliseVehicleNumber(request.transport.vehicleNumber ?? "");
     const at = this.#clock.now().toISOString();
 
-    const record = number === "" ? undefined : await this.#lookUpVehicle(actor.companyId, number, at);
+    const record = number === "" ? undefined : await this.#lookUpVehicle(actor, number, at);
     const master = number === "" ? null : await this.#fromMaster(actor.companyId, number);
     const declared = this.#declaredEvidence(request, number, at);
     const plate = await this.#readPlate(actor.companyId, request, number, policy);
@@ -239,10 +239,12 @@ export class VehicleSuitabilityService {
   // --------------------------------------------------------------------- internals
 
   /** The registering authority, when one is connected. Its failure is an answer, not a throw. */
-  async #lookUpVehicle(companyId: CompanyId, registrationNumber: string, at: string): Promise<VehicleRecordLookup | undefined> {
+  async #lookUpVehicle(actor: ActorContext, registrationNumber: string, at: string): Promise<VehicleRecordLookup | undefined> {
     if (this.#vehicleRecords === undefined) return undefined;
     try {
-      return await this.#vehicleRecords.lookup(companyId, registrationNumber);
+      // The actor travels with the lookup so the government call is recorded against the person
+      // who ran the check, not against the service.
+      return await this.#vehicleRecords.lookup(actor.companyId, registrationNumber, actor);
     } catch (error) {
       return {
         kind: "UNAVAILABLE",
