@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/bank-feed-selection",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #52 [X04] — choosing the route to multi-bank transaction feeds: the comparison, the cost model, and the conformance harness a candidate provider must pass.",
+  "exports": { ".": "./src/index.ts" }
+}
