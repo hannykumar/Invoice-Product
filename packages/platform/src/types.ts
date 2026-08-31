@@ -36,6 +36,13 @@ export type Permission =
   | "gst_returns.export"
   | "gst_returns.submit"
   | "gst_returns.reopen"
+  // Issue #31. Comparing purchases with what the suppliers told the government. Claiming credit
+  // the government's record does not carry is deliberately its own permission: it is the one act
+  // in the comparison that can cost the business money if it turns out to be wrong.
+  | "itc.view"
+  | "itc.import"
+  | "itc.decide"
+  | "itc.claim_at_risk"
   // Issue #28. Checking a lorry against its load is an everyday act; sending a blocked movement
   // out anyway is deliberately a separate permission from checking it.
   | "transport.vehicle.view"

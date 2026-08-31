@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/itc",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #31 [E31] — IMS/GSTR-2B reconciliation and the input-tax-credit controls over it.",
+  "exports": { ".": "./src/index.ts" }
+}

@@ -74,6 +74,7 @@ reverse.
 | `docs/contracts/purchase-matching-v1.md` | GPT 3 | Order/receipt lifecycles, per-item matching, findings and severities, tolerances, approvals |
 | `docs/contracts/supplier-risk-v1.md` | GPT 3 | Evidence shape, warning codes and levels, wording rules, the optional `Gstr2bPort` for #31 |
 | `docs/contracts/einvoice-v1.md` | GPT 3 | Applicability outcomes and rules, IRN formula and verification, statuses, idempotency, `IrpPort` |
+| `docs/contracts/itc-reconciliation-v1.md` | GPT 3 | Book/portal document shapes, match statuses and evidence, accept/reject/pending, ITC outcomes, the GSTR-3B linkage |
 
 Every GPT 3 write goes through GPT 2's `PlatformCommandService`. Tenant isolation, idempotency
 and audit are theirs — do not write a second implementation of any of them.
@@ -90,6 +91,8 @@ and audit are theirs — do not write a second implementation of any of them.
 | #18 matching | **Done, tests green** | `packages/purchasing`. Purchase-order lifecycle, goods receipt with accepted/rejected quantities and quality evidence, PO vs GRN vs invoice matching per item, effective-dated quantity/price/tax tolerances, one-step goods-confirmed flow with no order, held-match approvals pinned to a fingerprint, migration `…_three_way_matching`. **Only the accepted quantity moves stock**, and #17 skips re-receiving a line a receipt already brought in. Demonstrable on the web app's Deliveries screen. |
 | #19 supplier risk | **Done, tests green** | `packages/purchasing`. GSTIN status and effective dates behind #8's connector, filing status, e-invoice eligibility, bank-detail changes read from #5's version history, overdue and dispute signals, evidence-bearing warnings with three levels, acknowledgements pinned to a fingerprint, migration `…_supplier_risk_warnings`. Wording is defamation-safe **by machinery**: `safeMessage()` throws on an accusation, and a test drives every branch. A model score can never change the level. #31's GSTR-2B signal is an optional port; without it every assessment says so. Demonstrable on the web app's Supplier check screen. #99 added two red/amber/green/grey lights — one for the GST department's answer, one for our own books — because "information" told a shopkeeper nothing. |
 | #26 e-invoice | **Done, tests green** | New `packages/gst`. Effective-dated applicability with turnover/document/recipient/exempt rules naming their notifications, government-schema payload and offline JSON, IRN generate/fetch/cancel behind #8's connector, signed QR kept verbatim, 24-hour cancellation window and 30-day reporting deadline, migration `…_einvoice_irn_lifecycle`. The IRN is a hash of four fields we know, so the government's reply is **verified** against a locally computed IRN before anything is marked registered. Idempotent three ways, including treating the portal's duplicate error as success. Demonstrable on the web app's E-invoice screen. |
+| #30 GST returns | **Done, tests green** | `packages/gst-returns`. GSTR-1 and GSTR-3B built from one snapshot of the books, exception queue, book-to-return reconciliation, approval, manual JSON export and optional GSP submission. |
+| #31 IMS/GSTR-2B | **Done, tests green** | New `packages/itc`. GSTR-2B/IMS file import (portal JSON and CSV) with a typed-entry path beside it, optional GSP download through the same reader, exact and fuzzy matching across GSTIN, number, date, taxable value and tax, six evidence rows on every line, accept/reject/pending with reasons and an append-only history, duplicates/amendments/withdrawals/blocked credit handled, migration `…_itc_reconciliation`. **A bill the portal does not carry is never credit**: it is held back and can only be claimed by a named person with the `itc.claim_at_risk` permission and a reason, and then only at the lower of the two figures. Feeds GSTR-3B's credit side through #30's own `InwardTaxPort`, and finally answers #19's `Gstr2bPort`. Demonstrable on the web app's Purchase check screen. |
 | #29 | Next | Authorised vehicle-record verification. |
 | #19, #26–#33, #44, #45, #51, #53 | Later waves | See `docs/gpt3-handbook.md` section 6. |
 
@@ -106,5 +109,6 @@ npm run demo:inbox    # five documents through four channels: routing, duplicate
 npm run demo:matching # ordered 100, received 90, billed 100 — held, explained, then approved
 npm run demo:risk     # four suppliers, four stories, and a GST-department outage
 npm run demo:einvoice # who needs an IRN, sending one, retrying, an outage, and cancelling
+npm run demo:itc      # a month of purchases against the government's record: missing, mismatched, duplicated
 npm run web           # the browser workspace, including the Deliveries screen for #18
 ```

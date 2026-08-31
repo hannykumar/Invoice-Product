@@ -12,6 +12,7 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "eway.view", "eway.generate", "eway.update", "eway.cancel",
   "gst_returns.view", "gst_returns.prepare", "gst_returns.approve", "gst_returns.export",
   "gst_returns.submit", "gst_returns.reopen",
+  "itc.view", "itc.import", "itc.decide", "itc.claim_at_risk",
   "transport.vehicle.view", "transport.vehicle.check", "transport.vehicle.override",
   "sales.draft.write", "sales.finalise", "sales.approve", "sales.cancel",
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",

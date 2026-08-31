@@ -31,6 +31,7 @@
           <button class="nav-item" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button>
           <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
           <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
+          <button class="nav-item" data-view="itc"><span aria-hidden="true">⚖</span><span data-i18n="navItc"></span></button>
           <button class="nav-item" data-view="gst-returns"><span aria-hidden="true">▦</span><span data-i18n="navGstReturns"></span></button>
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
@@ -285,6 +286,71 @@
           <article class="panel">
             <div class="panel-heading"><div><h2 data-i18n="onTheRoad"></h2><p data-i18n="onTheRoadHelp"></p></div></div>
             <div class="activity-list" id="eway-road"></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-itc" aria-labelledby="itc-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="itc-title" tabindex="-1" data-i18n="itcTitle"></h1>
+              <p data-i18n="itcHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="itc-form">
+              <div class="field-grid">
+                <label><span data-i18n="itcWhichMonth"></span><input name="period" id="itc-period" type="month" required /><small data-i18n="itcWhichMonthHelp"></small></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="itcCheck"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="itcSafety"></span></p>
+            </form>
+            <div class="panel-heading" id="itc-heading" hidden>
+              <div><h2 id="itc-month">—</h2><p id="itc-summary"></p></div>
+              <span class="pill" id="itc-status">—</span>
+            </div>
+            <div class="activity-list" id="itc-warnings"></div>
+          </article>
+
+          <article class="panel form-panel" id="itc-import-panel">
+            <div class="panel-heading"><div><h2 data-i18n="itcImportTitle"></h2><p data-i18n="itcImportHelp"></p></div></div>
+            <div class="field-grid">
+              <label class="full-field"><span data-i18n="itcImportFile"></span><input type="file" id="itc-file" accept=".json,.csv,text/plain" /><small data-i18n="itcImportFileHelp"></small></label>
+              <label class="full-field"><span data-i18n="itcImportPaste"></span><textarea id="itc-content" rows="4" placeholder="{ &quot;data&quot;: { &quot;docdata&quot;: ... } }"></textarea></label>
+            </div>
+            <button type="button" class="primary-button wide" id="itc-import" data-i18n="itcImportButton"></button>
+            <p id="itc-import-result"></p>
+          </article>
+
+          <article class="panel form-panel" id="itc-typed-panel">
+            <div class="panel-heading"><div><h2 data-i18n="itcTypedTitle"></h2><p data-i18n="itcTypedHelp"></p></div></div>
+            <form id="itc-typed-form">
+              <div class="field-grid">
+                <label><span data-i18n="itcTypedGstin"></span><input name="gstin" required placeholder="29AAAAA0000A1ZY" /></label>
+                <label><span data-i18n="itcTypedSupplier"></span><input name="supplierName" /></label>
+                <label><span data-i18n="itcTypedNumber"></span><input name="number" required /></label>
+                <label><span data-i18n="itcTypedDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="itcTypedTaxable"></span><input name="taxableValue" inputmode="decimal" required /></label>
+                <label><span data-i18n="itcTypedCgst"></span><input name="cgst" inputmode="decimal" value="0" /></label>
+                <label><span data-i18n="itcTypedSgst"></span><input name="sgst" inputmode="decimal" value="0" /></label>
+                <label><span data-i18n="itcTypedIgst"></span><input name="igst" inputmode="decimal" value="0" /></label>
+                <label><span data-i18n="itcTypedTotal"></span><input name="invoiceValue" inputmode="decimal" /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="itcTypedButton"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="itcTypedSafety"></span></p>
+              <p id="itc-typed-result"></p>
+            </form>
+          </article>
+
+          <article class="panel" id="itc-totals-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="itcTotalsTitle"></h2><p id="itc-totals-caution"></p></div></div>
+            <div class="activity-list" id="itc-totals"></div>
+          </article>
+
+          <article class="panel" id="itc-lines-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="itcLinesTitle"></h2><p data-i18n="itcLinesHelp"></p></div></div>
+            <div class="activity-list" id="itc-lines"></div>
           </article>
         </section>
 
@@ -820,6 +886,7 @@
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
         <button data-view="einvoice"><span aria-hidden="true">✦</span><small data-i18n="navEInvoice"></small></button>
+        <button data-view="itc"><span aria-hidden="true">⚖</span><small data-i18n="navItc"></small></button>
         <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
         <button data-view="plan"><span aria-hidden="true">◈</span><small data-i18n="navPlan"></small></button>
         <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
