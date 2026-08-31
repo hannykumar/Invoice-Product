@@ -91,6 +91,32 @@ const copy = {
     sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
     cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
     cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
+    navItc: "Purchase check",
+    itcTitle: "Your purchases against the government's record",
+    itcHelp: "Every bill you recorded this month, next to what your suppliers actually told the government. Where the two agree, the GST you paid can be claimed back. Where they do not, the money is held back and the line says who has to do what.",
+    itcWhichMonth: "Which month", itcWhichMonthHelp: "Pick the month you are about to file for.",
+    itcCheck: "Check this month",
+    itcSafety: "This only compares. Nothing is claimed, sent or filed from this screen.",
+    itcImportTitle: "Bring in the government's list",
+    itcImportHelp: "Download the GSTR-2B file for this month from the GST portal and choose it here, or paste it in. A spreadsheet from your accountant works too.",
+    itcImportFile: "The file you downloaded", itcImportFileHelp: "Nothing leaves this device except the contents of the file you choose.",
+    itcImportPaste: "Or paste it here",
+    itcImportButton: "Import this month's record",
+    itcTypedTitle: "Or type a bill in from the portal screen",
+    itcTypedHelp: "If the file will not download — the shop's internet, a phone, a portal that will not respond — read the bill off the portal and type it here. It is checked exactly as strictly as the file.",
+    itcTypedGstin: "Supplier's GST number", itcTypedSupplier: "Supplier's name", itcTypedNumber: "Bill number on the portal",
+    itcTypedDate: "Bill date", itcTypedTaxable: "Value before GST", itcTypedCgst: "CGST", itcTypedSgst: "SGST",
+    itcTypedIgst: "IGST", itcTypedTotal: "Total on the bill",
+    itcTypedButton: "Add this row",
+    itcTypedSafety: "The line will say the figure was typed in by a person, not downloaded. Everything else works the same.",
+    itcTotalsTitle: "What this means for your GST return",
+    itcLinesTitle: "Bill by bill",
+    itcLinesHelp: "Every line shows what your books say, what the portal says, and what is holding the credit. Accepting a bill the portal does not carry needs a reason, and your name stays on it.",
+    itcClaimable: "Safe to claim this month", itcHeldBack: "Held back", itcAtRisk: "Claimed on your say-so",
+    itcAccept: "Accept", itcReject: "Reject", itcPending: "Keep pending",
+    itcReasonPlaceholder: "Why? (goes on the record)",
+    itcOurs: "yours", itcTheirs: "portal",
+    itcTypedFlag: "typed in by a person",
     navGstReturns: "GST returns",
     gstReturnsTitle: "Your GST returns for the month",
     gstReturnsHelp: "Every bill you issued in the month, sorted into the parts the government asks for, with the bills behind each figure still there to open. Nothing is guessed: a bill we cannot place is put on a list with the question that would place it.",
@@ -288,6 +314,32 @@ const copy = {
     sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
     cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
     cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
+    navItc: "Kharid milan",
+    itcTitle: "Aapki kharid aur sarkari record",
+    itcHelp: "Is mahine ke aapke saare bill, aur unke saamne wo jo aapke supplier ne sarkar ko bataya. Jahan dono milte hain, wahan aapka diya GST wapas mil sakta hai. Jahan nahin milte, wahan paisa roka jata hai aur line batati hai kise kya karna hai.",
+    itcWhichMonth: "Kaunsa mahina", itcWhichMonthHelp: "Jis mahine ka return bharna hai wo chunein.",
+    itcCheck: "Is mahine ka milan karein",
+    itcSafety: "Yeh sirf milan karta hai. Yahan se kuch claim, file ya bheja nahin jata.",
+    itcImportTitle: "Sarkari list yahan laiye",
+    itcImportHelp: "GST portal se is mahine ki GSTR-2B file download karke yahan chunein, ya paste kijiye. Accountant ki spreadsheet bhi chalti hai.",
+    itcImportFile: "Download ki hui file", itcImportFileHelp: "Aapki chuni hui file ke alawa kuch bhi device se bahar nahin jata.",
+    itcImportPaste: "Ya yahan paste kijiye",
+    itcImportButton: "Is mahine ka record import karein",
+    itcTypedTitle: "Ya portal dekh kar bill haath se likhiye",
+    itcTypedHelp: "File download na ho — internet, phone, ya portal na chale — to portal par dekh kar bill yahan likh dijiye. File jitni hi sakhti se jaanch hoti hai.",
+    itcTypedGstin: "Supplier ka GST number", itcTypedSupplier: "Supplier ka naam", itcTypedNumber: "Portal par bill number",
+    itcTypedDate: "Bill ki tareekh", itcTypedTaxable: "GST se pehle rakam", itcTypedCgst: "CGST", itcTypedSgst: "SGST",
+    itcTypedIgst: "IGST", itcTypedTotal: "Bill ka total",
+    itcTypedButton: "Yeh row joden",
+    itcTypedSafety: "Line par likha rahega ki yeh figure kisi ne haath se likha tha, download nahin kiya. Baaki sab waise hi chalta hai.",
+    itcTotalsTitle: "Aapke GST return par iska kya asar hai",
+    itcLinesTitle: "Ek-ek bill",
+    itcLinesHelp: "Har line dikhati hai ki aapki books kya kehti hain, portal kya kehta hai, aur credit kis wajah se ruka hai. Jo bill portal par nahin hai use accept karne ke liye wajah likhni hoti hai, aur aapka naam us par rehta hai.",
+    itcClaimable: "Is mahine lena theek hai", itcHeldBack: "Roka gaya", itcAtRisk: "Aapke kehne par liya",
+    itcAccept: "Accept", itcReject: "Reject", itcPending: "Pending rakhein",
+    itcReasonPlaceholder: "Kyun? (record par jayega)",
+    itcOurs: "aapka", itcTheirs: "portal",
+    itcTypedFlag: "kisi ne haath se likha",
     navGstReturns: "GST return",
     gstReturnsTitle: "Is mahine ka aapka GST return",
     gstReturnsHelp: "Mahine ke saare bill, sarkar jaise maangti hai waise baante hue, aur har figure ke peeche ke bill khol kar dekhe ja sakte hain. Kuch andaza nahin lagaya jata: jo bill rakha na ja sake wo sawaal ke saath ek list par chala jata hai.",
@@ -561,6 +613,7 @@ function openView(view) {
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
+  if (target === "itc") openItc();
   if (target === "gst-returns") openGstReturns();
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
@@ -2150,6 +2203,11 @@ function planUsageRow(total) {
   detail.textContent = total.limit === null
     ? "Your plan does not limit this."
     : `${total.remaining} left.`;
+  body.append(title, detail);
+  row.append(icon, body);
+  return row;
+}
+
 // ---------------------------------------------------------- issue #47: asking it to do the work
 //
 // The screen never offers a "do it" button before it has shown the whole list. Every step names
@@ -2193,6 +2251,11 @@ function planCheckRow(check) {
   title.textContent = check.capability.replaceAll(".", " ").replaceAll("_", " ");
   const detail = document.createElement("p");
   detail.textContent = t(check.reason);
+  body.append(title, detail);
+  row.append(icon, body);
+  return row;
+}
+
 function agentRefusalRow(refusal) {
   const row = document.createElement("div");
   row.className = "activity-row";
@@ -2274,6 +2337,8 @@ document.querySelector("#plan-pay")?.addEventListener("click", async () => {
     showDialog({ title: result.title, message: result.message }, "recorded");
   } catch (error) { showDialog({ title: "Nothing was paid", message: error.message }, "failed"); }
   loadPlan();
+});
+
 function renderAgentPlan(plan) {
   agentState.plan = plan;
   document.querySelector("#agent-panel").hidden = false;
@@ -3286,4 +3351,177 @@ document.querySelector("#gst-export")?.addEventListener("click", async () => {
     preview.hidden = false;
     preview.textContent = JSON.stringify(file.payload, null, 2);
   } catch (error) { document.querySelector("#gst-action-result").textContent = error.message; }
+});
+
+// ---------------------------------------------------------------------------- issue #31
+//
+// The purchase comparison. Two lists of the same month — ours and the government's — and the
+// difference between them, which is where a shop's money actually goes missing.
+//
+// The screen is built around one refusal: a bill the portal does not carry contributes nothing to
+// what is claimed. It is shown, it is counted, and the button that would claim it anyway asks for
+// a reason and keeps the person's name on the line. The other thing worth noticing is that the
+// evidence is on the row itself — six fields, both sides — so "why does the app think these are
+// the same bill" never needs a phone call.
+
+let itcWorkspace = null;
+
+function itcPeriodValue() {
+  const field = document.querySelector("#itc-period");
+  if (field.value) return field.value;
+  const now = new Date();
+  const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  field.value = previous.toISOString().slice(0, 7);
+  return field.value;
+}
+
+function openItc() {
+  itcPeriodValue();
+  loadItc();
+}
+
+async function loadItc() {
+  try {
+    renderItc(await api("/api/itc", { method: "POST", body: JSON.stringify({ period: itcPeriodValue() }) }));
+  } catch (error) {
+    showItcProblem(error.message);
+  }
+}
+
+function showItcProblem(message) {
+  document.querySelector("#itc-heading").hidden = false;
+  document.querySelector("#itc-month").textContent = t({ "en-IN": "That month could not be compared", "hi-IN": "Us mahine ka milan nahin ho paya" });
+  document.querySelector("#itc-summary").textContent = message;
+}
+
+function itcDecisionControls(line) {
+  const words = copy[state.locale];
+  const wrapper = document.createElement("div");
+  wrapper.className = "row-actions";
+
+  const reason = document.createElement("input");
+  reason.placeholder = words.itcReasonPlaceholder;
+  reason.id = `itc-reason-${line.key}`;
+  wrapper.append(reason);
+
+  [["ACCEPT", words.itcAccept], ["PENDING", words.itcPending], ["REJECT", words.itcReject]].forEach(([decision, label]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = decision === "ACCEPT" ? "primary-button" : "secondary-button";
+    button.textContent = label;
+    // A duplicate can never carry credit, so the buttons that would decide it are not offered.
+    button.disabled = line.status === "DUPLICATE_IN_BOOKS" || line.status === "DUPLICATE_ON_PORTAL";
+    button.addEventListener("click", async () => {
+      try {
+        renderItc(await api("/api/itc/decide", {
+          method: "POST",
+          body: JSON.stringify({ period: itcPeriodValue(), lineKey: line.key, decision, reason: reason.value, reference: Date.now() }),
+        }));
+      } catch (error) {
+        document.querySelector("#itc-summary").textContent = error.message;
+      }
+    });
+    wrapper.append(button);
+  });
+
+  return wrapper;
+}
+
+function renderItc(workspace) {
+  itcWorkspace = workspace;
+  const words = copy[state.locale];
+
+  document.querySelector("#itc-heading").hidden = false;
+  document.querySelector("#itc-month").textContent = workspace.periodLabel;
+  document.querySelector("#itc-summary").textContent = workspace.summary;
+  const badge = document.querySelector("#itc-status");
+  badge.textContent = workspace.portalDataPresent
+    ? `${workspace.outcomeCounts.HELD_BACK} ${t({ "en-IN": "waiting", "hi-IN": "baaki" })}`
+    : t({ "en-IN": "not checked yet", "hi-IN": "abhi mila nahin" });
+  badge.className = `pill ${!workspace.portalDataPresent ? "warn" : workspace.outcomeCounts.HELD_BACK > 0 ? "hold" : "done"}`;
+
+  const warnings = document.querySelector("#itc-warnings");
+  warnings.replaceChildren();
+  workspace.findings.forEach((finding) => warnings.append(simpleRow(finding.message, finding.whatToDo)));
+
+  document.querySelector("#itc-totals-panel").hidden = false;
+  document.querySelector("#itc-totals-caution").textContent = workspace.returnLinkage.caution;
+  const totals = document.querySelector("#itc-totals");
+  totals.replaceChildren();
+  totals.append(detailRow(words.itcClaimable, money(workspace.claimable)));
+  totals.append(detailRow(words.itcHeldBack, money(workspace.heldBack)));
+  if (workspace.atRisk > 0) totals.append(detailRow(words.itcAtRisk, money(workspace.atRisk)));
+
+  const linesPanel = document.querySelector("#itc-lines-panel");
+  linesPanel.hidden = workspace.lines.length === 0;
+  const lines = document.querySelector("#itc-lines");
+  lines.replaceChildren();
+
+  workspace.lines.forEach((line) => {
+    const header = `${line.supplier} · ${line.number}`;
+    lines.append(simpleRow(`${header} — ${line.statusLabel}`, `${line.outcomeLabel}. ${line.sentence}`));
+
+    // The evidence, on the row. Only the fields that disagree are spelled out in full; the ones
+    // that agree are named so it is clear what was actually compared.
+    const agreed = line.evidence.filter((row) => row.verdict === "AGREES").map((row) => row.label);
+    line.evidence.filter((row) => row.verdict === "DIFFERS").forEach((row) => {
+      lines.append(detailRow(row.label, `${words.itcOurs} ${row.ours ?? "—"} · ${words.itcTheirs} ${row.theirs ?? "—"}`));
+    });
+    if (agreed.length > 0) lines.append(detailRow(t({ "en-IN": "Agrees on", "hi-IN": "Yeh milta hai" }), agreed.join(", ")));
+    if (line.portalSource === "TYPED") lines.append(detailRow(words.itcTheirs, words.itcTypedFlag));
+    if (line.decision !== null) {
+      lines.append(detailRow(
+        t({ "en-IN": "Your answer", "hi-IN": "Aapka jawab" }),
+        `${line.decision.kind}${line.decision.reason ? ` — ${line.decision.reason}` : ""}`,
+        line.decision.stale ? t({ "en-IN": "The figures changed after you answered. Look again.", "hi-IN": "Jawab ke baad figure badle hain. Dobara dekhiye." }) : undefined,
+      ));
+    }
+    line.findings.forEach((finding) => lines.append(simpleRow(finding.message, finding.whatToDo)));
+    lines.append(itcDecisionControls(line));
+  });
+}
+
+submitStep("#itc-form", async () => {
+  await loadItc();
+});
+
+document.querySelector("#itc-file")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  // Read on this device and shown before anything is sent, so a person can see what they are about
+  // to import.
+  document.querySelector("#itc-content").value = await file.text();
+  document.querySelector("#itc-import-result").textContent = `${file.name} — ${t({ "en-IN": "read. Press import when you are ready.", "hi-IN": "padh li gayi. Taiyar hon to import dabaiye." })}`;
+});
+
+document.querySelector("#itc-import")?.addEventListener("click", async () => {
+  const content = document.querySelector("#itc-content").value.trim();
+  if (content === "") {
+    document.querySelector("#itc-import-result").textContent = t({ "en-IN": "Choose the file you downloaded, or paste it in first.", "hi-IN": "Pehle download ki hui file chunein ya paste kijiye." });
+    return;
+  }
+  try {
+    const workspace = await api("/api/itc/import", {
+      method: "POST",
+      body: JSON.stringify({ period: itcPeriodValue(), content, fileName: document.querySelector("#itc-file")?.files?.[0]?.name ?? "" }),
+    });
+    document.querySelector("#itc-import-result").textContent = workspace.imported;
+    renderItc(workspace);
+  } catch (error) {
+    document.querySelector("#itc-import-result").textContent = error.message;
+  }
+});
+
+submitStep("#itc-typed-form", async (form) => {
+  try {
+    const workspace = await api("/api/itc/typed", {
+      method: "POST",
+      body: JSON.stringify({ period: itcPeriodValue(), ...formValues(form) }),
+    });
+    document.querySelector("#itc-typed-result").textContent = workspace.imported;
+    form.reset();
+    renderItc(workspace);
+  } catch (error) {
+    document.querySelector("#itc-typed-result").textContent = error.message;
+  }
 });

@@ -35,6 +35,7 @@
     "demo:invoice": "node --experimental-strip-types packages/invoice-templates/src/demo.ts",
     "demo:validate": "node --experimental-strip-types packages/purchasing/src/validation-demo.ts",
     "demo:onboarding": "node --experimental-strip-types packages/onboarding/src/demo.ts",
+    "demo:itc": "node --experimental-strip-types packages/itc/src/demo.ts",
     "demo:reports": "node --experimental-strip-types packages/reports/src/demo.ts",
     "demo:reminders": "node --experimental-strip-types packages/collections/src/demo.ts",
     "demo:subscriptions": "node --experimental-strip-types packages/subscriptions/src/demo.ts",

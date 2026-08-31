@@ -128,6 +128,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/bank-feeds/sync') return json(200, await app.syncBankFeed(actor, body));
     if (method === 'POST' && pathname === '/api/bank-feeds/disconnect') return json(200, await app.disconnectBankFeed(actor, body));
     // Issue #30 — the month's GST returns: what they say, what stops them, and the file to upload.
+    // Issue #31 — your purchases against what your suppliers told the government.
+    if (method === 'POST' && pathname === '/api/itc') return json(200, await app.itcWorkspace(actor, body));
+    if (method === 'POST' && pathname === '/api/itc/import') return json(200, await app.importItcFile(actor, body));
+    if (method === 'POST' && pathname === '/api/itc/typed') return json(200, await app.addTypedItcRecord(actor, body));
+    if (method === 'POST' && pathname === '/api/itc/decide') return json(200, await app.decideItcLine(actor, body));
     if (method === 'POST' && pathname === '/api/gst-returns') return json(200, await app.gstReturnWorkspace(actor, body));
     if (method === 'POST' && pathname === '/api/gst-returns/prepare') return json(200, await app.prepareGstReturn(actor, body));
     if (method === 'POST' && pathname === '/api/gst-returns/approve') return json(200, await app.approveGstReturn(actor, body));

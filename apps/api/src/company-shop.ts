@@ -26,6 +26,12 @@ import {
   SyntheticCredentialVault, SyntheticGstConnector, gstinStatusAdapter,
 } from '../../../packages/purchasing/src/supplier-risk-adapters.ts';
 import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platform/src/connectors.ts';
+import { ItcReconciliationService } from '../../../packages/itc/src/service.ts';
+import {
+  InMemoryImportBatches, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
+  purchaseBillToBookDocument,
+} from '../../../packages/itc/src/adapters.ts';
+import type { BookPurchaseDocument, TaxPeriod } from '../../../packages/itc/src/types.ts';
 import { EInvoiceService } from '../../../packages/gst/src/einvoice-service.ts';
 import {
   InMemoryEInvoicePolicies, InMemoryEInvoiceStore, SyntheticIrp, irpAdapter,
@@ -135,6 +141,7 @@ const SETUP_PERMISSIONS = [
   'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
+  'itc.view', 'itc.import', 'itc.decide', 'itc.claim_at_risk',
   'eway.view', 'eway.generate', 'eway.update', 'eway.cancel',
   'transport.vehicle.view', 'transport.vehicle.check', 'transport.vehicle.override', 'transport.vehicle.connect',
 ];
@@ -242,6 +249,48 @@ export async function createCompanyShop(seed: CompanySeed) {
     });
   }
   for (const demo of DEMO_REGISTRATIONS) portal.put(demo.gstin, demo.payload);
+  /**
+   * Issue #31. The purchase comparison, over the bills this company has actually posted.
+   *
+   * The supplier's registration comes from the seed rather than being guessed from the bill: a
+   * purchase whose supplier we have no GST number for is reported as uncomparable, which is the
+   * honest answer and the one the screen shows.
+   */
+  const itcRecords = new InMemoryPortalRecords();
+  const itcBatches = new InMemoryImportBatches();
+  const itcDecisions = new InMemoryItcDecisions();
+  const gstinOfParty = (partyId: string): string | null =>
+    partyId === seed.supplierId && seed.supplierGstin !== undefined ? seed.supplierGstin : null;
+  const itc = new ItcReconciliationService({
+    books: {
+      async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
+        const posted = await bills.list(companyId);
+        return posted
+          .filter((bill) => bill.invoiceDate.slice(0, 7) === period)
+          .map((bill) => purchaseBillToBookDocument(
+            {
+              id: bill.id, companyId: bill.companyId, supplierPartyId: bill.supplierPartyId,
+              supplierName: bill.supplierName, invoiceNumber: bill.invoiceNumber,
+              invoiceDate: bill.invoiceDate, totalPaise: bill.totalPaise, state: bill.state,
+              voucherId: bill.voucherId,
+              tax: {
+                taxableValuePaise: bill.tax.taxableValuePaise, cgstPaise: bill.tax.cgstPaise,
+                sgstPaise: bill.tax.sgstPaise, igstPaise: bill.tax.igstPaise, cessPaise: bill.tax.cessPaise,
+                ineligibleItcPaise: bill.tax.ineligibleItcPaise, reverseCharge: bill.tax.reverseCharge,
+              },
+            },
+            { gstin: gstinOfParty(bill.supplierPartyId) },
+          ));
+      },
+    },
+    records: itcRecords,
+    batches: itcBatches,
+    decisions: itcDecisions,
+    audit,
+    clock,
+    idFactory: () => `${seed.companyId}:itc:${sequence += 1}`,
+  });
+
   const risk = new SupplierRiskService({
     gstin: gstinStatusAdapter({
       gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
@@ -253,7 +302,9 @@ export async function createCompanyShop(seed: CompanySeed) {
     acknowledgements: riskAcknowledgements,
     audit,
     clock,
-    // No `gstr2b` port: #31 has not shipped, so every assessment says so plainly.
+    // Issue #31's signal, now that it exists. Before this the supplier check said on every
+    // assessment that GSTR-2B had not been looked at, which was true and not much use.
+    gstr2b: gstr2bSignalPort(itc),
   });
   // Issue #26. The Invoice Registration Portal behind #8's gateway; development runs against a
   // synthetic one that computes real IRNs, so the verification in `irn.ts` is genuinely exercised.
@@ -358,6 +409,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   return {
     store, inventory, inventoryService, bills, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
+    itc, itcRecords, itcBatches, itcDecisions,
     eInvoice, eInvoices, eInvoicePolicies, irpPortal,
     ewayBill, ewayBills, ewayTrips, ewayPolicies, ewayPortal,
     vehicleSuitability, vehicleChecks, vehiclePolicies, vehicleRecords, vehicleRecordCache,

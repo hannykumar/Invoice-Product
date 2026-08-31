@@ -216,3 +216,10 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .light-card.grey { background: #f1f3f2; }
 .light-card.grey .light-dot { background: #8b9793; }
 .light-card.grey .light-headline { color: #5c6864; }
+
+/* Issue #31 — the accept / reject / pending controls under each compared bill. The reason field
+   sits with the buttons rather than in a dialog, because the reason is part of the decision and a
+   dialog is where reasons go to be typed as "ok". */
+.row-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .1rem 0 1.1rem 2.1rem; }
+.row-actions input { flex: 1 1 16rem; min-width: 10rem; }
+.row-actions button { padding: .45rem .9rem; font-size: .84rem; }

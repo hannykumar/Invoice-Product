@@ -97,9 +97,15 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/gst-returns\/prepare/);
   assert.match(script, /\/api\/gst-returns\/approve/);
   assert.match(script, /\/api\/gst-returns\/export/);
+  // Issue #31 — the purchase comparison, with both ways of supplying the government's list: the
+  // downloaded file and a row typed in by a person when the file cannot be had.
+  assert.match(html, /id="view-itc"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/itc\/import/);
+  assert.match(script, /\/api\/itc\/typed/);
+  assert.match(script, /\/api\/itc\/decide/);
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
-  // #34's "Ask" and #30's GST returns make twenty between them.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 20);
+  // #34's "Ask", #30's GST returns and #31's purchase check make twenty-one between them.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 21);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

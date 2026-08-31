@@ -108,6 +108,9 @@ import {
   InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
 } from '../../../packages/returns/src/index.ts';
 import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
+import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
+import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
+import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
 import {
   GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInwardTaxPort,
   returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
@@ -633,7 +636,16 @@ export class DemoApplication {
     };
     const gstReturns = new GstReturnService({
       outward: outwardSupplies,
-      inward: ledgerInwardTaxPort(shop.store.read()),
+      // Issue #31. The credit side of the 3B is the reconciliation's conclusion, not a second read
+      // of the ledger: a purchase the government's record does not carry is held back here and is
+      // therefore held back on the return, by construction rather than by a rule that could differ.
+      // The ledger read is still available as `ledgerInwardTaxPort` for the books comparison.
+      inward: itcInwardTaxPort(shop.itc, (companyId) => ({
+        companyId,
+        branchId: config.branchId,
+        userId: config.setupUserId,
+        permissions: [ITC_PERMISSIONS.view],
+      })),
       books: ledgerBookTaxPort(shop.store.read()),
       repository: new InMemoryReturnPreparations(),
       audit: shop.audit,
@@ -1396,6 +1408,155 @@ export class DemoApplication {
         changed: workspace.drift.documentsChanged.map((document) => document.number),
       },
     };
+  }
+
+  // ------------------------------------------------------------------ issue #31: the purchase comparison
+  //
+  // One screen for a month: what our books hold, what the suppliers told the government, and the
+  // difference. The workspace object is already shaped for a person, so this is a rename into JSON
+  // rather than a second set of decisions — including the decision that matters most, which is that
+  // a bill the portal does not carry contributes nothing to the credit until somebody says so.
+
+  private itcLineJson(line: ReconciliationLine) {
+    const document = line.book ?? line.portal;
+    return {
+      key: line.key,
+      supplier: line.book?.supplierName ?? line.portal?.supplierName ?? 'Unknown supplier',
+      gstin: line.book?.supplierGstin ?? line.portal?.supplierGstin ?? null,
+      number: document?.number ?? '—',
+      date: document?.documentDate ?? null,
+      kind: document?.kind ?? 'INVOICE',
+      status: line.status,
+      statusLabel: line.statusLabel['en-IN'],
+      outcome: line.outcome,
+      outcomeLabel: line.outcomeLabel['en-IN'],
+      sentence: line.sentence['en-IN'],
+      matchNote: line.matchNote['en-IN'],
+      claimable: jsonAmount(totalItcTaxOf(line.claimable).minor),
+      heldBack: jsonAmount(totalItcTaxOf(line.heldBack).minor),
+      // The whole of "match decisions show evidence": every field, both sides, and the verdict.
+      evidence: line.evidence.map((row) => ({
+        field: row.field,
+        label: row.label['en-IN'],
+        ours: row.ours,
+        theirs: row.theirs,
+        verdict: row.verdict,
+        difference: row.difference === null ? null : jsonAmount(row.difference.minor),
+      })),
+      findings: line.findings.map((finding) => ({
+        code: finding.code, severity: finding.severity,
+        message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'],
+      })),
+      decision: line.decision === null ? null : {
+        kind: line.decision.kind,
+        reason: line.decision.reason,
+        decidedAt: line.decision.decidedAt,
+        stale: line.decisionStale,
+      },
+      portalSource: line.portal?.source ?? null,
+    };
+  }
+
+  private itcWorkspaceJson(workspace: ItcWorkspace) {
+    return {
+      state: 'itc' as const,
+      period: workspace.period,
+      periodLabel: workspace.periodLabel,
+      summary: workspace.sentence['en-IN'],
+      portalDataPresent: workspace.portalDataPresent,
+      lastImport: workspace.lastImport === null ? null : {
+        source: workspace.lastImport.source,
+        fileName: workspace.lastImport.fileName,
+        importedAt: workspace.lastImport.importedAt,
+        sentence: workspace.lastImport.sentence['en-IN'],
+        rejected: workspace.lastImport.rejected.map((row) => row.reason),
+      },
+      counts: workspace.counts,
+      outcomeCounts: workspace.outcomeCounts,
+      claimable: jsonAmount(totalItcTaxOf(workspace.claimable).minor),
+      heldBack: jsonAmount(totalItcTaxOf(workspace.heldBack).minor),
+      atRisk: jsonAmount(totalItcTaxOf(workspace.atRisk).minor),
+      lines: workspace.lines.map((line) => this.itcLineJson(line)),
+      findings: workspace.findings
+        .filter((finding) => finding.lineKey === null)
+        .map((finding) => ({ code: finding.code, severity: finding.severity, message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'] })),
+      returnLinkage: {
+        allOtherItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.allOtherItc).minor),
+        reverseChargeItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.reverseChargeItc).minor),
+        importItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.importItc).minor),
+        reversedItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.reversedItc).minor),
+        caution: workspace.returnLinkage.caution['en-IN'],
+      },
+    };
+  }
+
+  async itcWorkspace(actor: ActorContext, input: Record<string, unknown>) {
+    return this.itcWorkspaceJson(await this.shop.itc.workspace(actor, this.gstPeriodOf(input)));
+  }
+
+  /**
+   * Imports the GSTR-2B or IMS file the business downloaded from the portal.
+   *
+   * The file arrives as text in the request rather than as an upload, because the local app has no
+   * file store and because a person should be able to see what they are importing. The reader is
+   * the same one the download path uses.
+   */
+  async importItcFile(actor: ActorContext, input: Record<string, unknown>) {
+    const period = this.gstPeriodOf(input);
+    const batch = await this.shop.itc.importFile(actor, {
+      period,
+      content: String(input.content ?? ''),
+      ...(String(input.fileName ?? '').trim() === '' ? {} : { fileName: String(input.fileName).trim() }),
+      expectedGstin: this.config.gstin,
+    });
+    return {
+      ...this.itcWorkspaceJson(await this.shop.itc.workspace(actor, period)),
+      imported: batch.sentence['en-IN'],
+    };
+  }
+
+  /**
+   * One row read off the portal and typed in by hand.
+   *
+   * Kept beside the file import rather than hidden behind it: a shop looking at the portal on a
+   * phone often cannot download anything, and a feature that only works with the file does not
+   * work on the days it is needed.
+   */
+  async addTypedItcRecord(actor: ActorContext, input: Record<string, unknown>) {
+    const period = this.gstPeriodOf(input);
+    const batch = await this.shop.itc.addTypedRecord(actor, {
+      period,
+      record: {
+        supplierGstin: String(input.gstin ?? ''),
+        supplierName: String(input.supplierName ?? ''),
+        kind: String(input.kind ?? 'INVOICE'),
+        number: String(input.number ?? ''),
+        documentDate: String(input.date ?? ''),
+        taxableValue: String(input.taxableValue ?? '0'),
+        cgst: String(input.cgst ?? '0'),
+        sgst: String(input.sgst ?? '0'),
+        igst: String(input.igst ?? '0'),
+        invoiceValue: String(input.invoiceValue ?? '0'),
+        itcAvailableOnPortal: String(input.itcAvailable ?? 'Y'),
+      },
+    });
+    return {
+      ...this.itcWorkspaceJson(await this.shop.itc.workspace(actor, period)),
+      imported: batch.sentence['en-IN'],
+    };
+  }
+
+  async decideItcLine(actor: ActorContext, input: Record<string, unknown>) {
+    const period = this.gstPeriodOf(input);
+    const kind = String(input.decision ?? 'PENDING').toUpperCase();
+    const workspace = await this.shop.itc.decide(actor, {
+      period,
+      lineKey: String(input.lineKey ?? ''),
+      kind: kind === 'ACCEPT' ? 'ACCEPT' : kind === 'REJECT' ? 'REJECT' : 'PENDING',
+      reason: String(input.reason ?? ''),
+      idempotencyKey: `web-itc:${period}:${String(input.lineKey ?? '')}:${kind}:${String(input.reference ?? Date.now())}`,
+    });
+    return this.itcWorkspaceJson(workspace);
   }
 
   async gstReturnWorkspace(actor: ActorContext, input: Record<string, unknown>) {
