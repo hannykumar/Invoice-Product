@@ -115,7 +115,16 @@ export type Permission =
   | "compliance.calendar.complete"
   | "compliance.calendar.snooze"
   | "compliance.calendar.escalate"
-  | "compliance.calendar.declare";
+  | "compliance.calendar.declare"
+  // Issue #33 [E33]. Connecting a GST number to the government, taking that connection back and
+  // replacing its credentials are three different acts. Revoking is deliberately not the same
+  // permission as authorising: it is the emergency control, and it must not need the person who
+  // set the connection up in the first place.
+  | "gsp.connection.view"
+  | "gsp.connection.authorise"
+  | "gsp.connection.revoke"
+  | "gsp.credential.rotate"
+  | "gsp.calls.reconcile";
 
 export interface RequestContext {
   companyId: Id;
