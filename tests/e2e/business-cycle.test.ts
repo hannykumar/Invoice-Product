@@ -5,131 +5,20 @@
  * posts the purchase, payable and stock in one transaction; a sale consumes that same stock and
  * creates a receivable; a receipt reduces it. The refusal and retry assertions protect the seams
  * between those modules, where feature-level tests cannot see a partial write.
+ *
+ * The wiring lives in `harness.ts`, which every scenario in this directory shares.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { asId, isoDate, quantityFromString, rupees, toDecimalString, type PartyId } from '@invoice/kernel';
-import { partyBalance, permissionPortFromActor, trialBalance, type Account, type ActorContext } from '@invoice/ledger';
-import { GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
-import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { InMemorySalesRepository, SalesService, noComplianceHooks } from '@invoice/sales';
-import { salesInventoryAdapter } from '@invoice/inventory';
+import { isoDate, quantityFromString, rupees, toDecimalString, asId } from '@invoice/kernel';
+import { partyBalance, trialBalance } from '@invoice/ledger';
 import { BankReconciliationService, fromBankTransaction, fromPayment } from '@invoice/bank-reconciliation';
 import { DelimitedStatementParser, StatementImportService, type RequestContext } from '../../packages/platform/src/index.ts';
-import {
-  InMemoryPaymentRepository,
-  ReceivablesService,
-  type DocumentLedgerPort,
-  type OpenDocument,
-} from '@invoice/receivables';
-import {
-  ALL_PERMISSIONS,
-  COMPANY,
-  SUPPLIER,
-  makeShop,
-  purchase,
-} from '../../packages/purchasing/src/posting-fixtures.ts';
-
-const CUSTOMER = asId<'Party'>('e2e-customer');
-const CUSTOMER_NAME = 'ABC Traders';
-const E2E_PERMISSIONS = [
-  ...ALL_PERMISSIONS,
-  'ledger.post.sale',
-  'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel',
-  'payments.record', 'payments.allocate', 'ledger.post.receipt',
-];
+import { COMPANY, CUSTOMER, SUPPLIER, makeBusiness, purchase } from './harness.ts';
 
 test('purchase → stock → sale → receipt stays balanced through refusals and retries', async () => {
-  const shop = await makeShop();
-  const actor: ActorContext = { ...shop.actor, permissions: E2E_PERMISSIONS };
-  await shop.ledger.openPartyAccount(actor, { partyId: CUSTOMER, name: CUSTOMER_NAME, kind: 'CUSTOMER' });
-  await shop.store.transaction(COMPANY, async (uow) => {
-    const bankHeading = await uow.accounts.findByCode(COMPANY, '1120');
-    assert.ok(bankHeading, 'the standard chart must have a bank-account heading');
-    const bankAccount: Account = {
-      id: asId<'Account'>(`${COMPANY}:acc:1121`),
-      companyId: COMPANY,
-      code: '1121',
-      name: 'Current bank account',
-      type: 'ASSET',
-      parentId: bankHeading.id,
-      isGroup: false,
-      active: true,
-      partyId: null,
-      systemRole: null,
-    };
-    await uow.accounts.insertMany([bankAccount]);
-  });
-
-  const salesRepository = new InMemorySalesRepository();
-  const paymentRepository = new InMemoryPaymentRepository();
-  shop.store.join(salesRepository).join(paymentRepository);
-
-  const taxMasters = new InMemoryMasterData();
-  taxMasters.putCompany({ companyId: COMPANY, gstin: '29AAAAA0000A1ZQ', stateCode: '29', registration: 'REGULAR' });
-  taxMasters.putParty(COMPANY, { partyId: CUSTOMER, gstin: '29DDDDD3333D1ZS', stateCode: '29', registration: 'REGULAR' });
-  taxMasters.putItem(COMPANY, {
-    itemId: 'TMT12', name: 'TMT Steel Bar 12mm', kind: 'GOODS', hsnOrSac: '72142090',
-    treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'KGS',
-  });
-  const declaredRates = new InMemoryDeclaredRates();
-  declaredRates.declare({
-    companyId: COMPANY,
-    code: '72142090',
-    kind: 'GOODS',
-    ratePercentTimes100: 1800n,
-    effectiveFrom: isoDate('2026-04-01'),
-    effectiveTo: null,
-    declaredBy: actor.userId,
-    declaredOn: isoDate('2026-04-01'),
-    basis: 'Synthetic E2E business declaration; not a legal rate source.',
-  });
-  const calculator = new GstCalculator({
-    masterData: taxMasters,
-    rates: new RateTable([]),
-    declaredRates,
-    gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'production' }),
-    mode: 'production',
-  });
-  const sales = new SalesService({
-    store: shop.store,
-    ledger: shop.ledger,
-    calculator,
-    repository: salesRepository,
-    inventory: salesInventoryAdapter(shop.inventoryService, { defaultWarehouseId: 'wh-main' }),
-    compliance: noComplianceHooks,
-    permissions: permissionPortFromActor,
-    audit: shop.audit,
-    clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
-  });
-
-  const documents: DocumentLedgerPort = {
-    async openDocuments(companyId, partyId): Promise<readonly OpenDocument[]> {
-      const invoices = await salesRepository.list(companyId, { partyId, state: 'FINAL' });
-      return invoices.map((invoice) => ({
-        documentId: invoice.id,
-        kind: 'SALES_INVOICE',
-        number: invoice.number ?? invoice.id,
-        partyId,
-        date: invoice.documentDate,
-        dueDate: invoice.dueDate,
-        value: invoice.pricing?.totals.invoiceValue ?? rupees(0),
-        side: 'RECEIVABLE',
-      }));
-    },
-    async parties(): Promise<readonly PartyId[]> { return [CUSTOMER]; },
-    async nameOf(_companyId, partyId): Promise<string> { return partyId === CUSTOMER ? CUSTOMER_NAME : String(partyId); },
-  };
-  const receivables = new ReceivablesService({
-    store: shop.store,
-    ledger: shop.ledger,
-    repository: paymentRepository,
-    documents,
-    permissions: permissionPortFromActor,
-    audit: shop.audit,
-    clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
-  });
-
+  const shop = await makeBusiness();
+  const { actor, sales, receivables, paymentRepository } = shop;
   // One approved supplier bill creates one bill, one payable and 500 kg in the godown.
   const buy = purchase({ id: 'e2e-buy-500', sourceDocumentId: 'e2e-source-buy-500', invoiceNumber: 'E2E/BUY/500' });
   const firstPost = await shop.posting.post(actor, buy, 'e2e:purchase:first');
