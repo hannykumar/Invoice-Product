@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/gsp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #33 [E33] — the authorised channel to the government: per-GSTIN authorisation, consent and production GST, IRP and e-way operations.",
+  "exports": { ".": "./src/index.ts" }
+}
