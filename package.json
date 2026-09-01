@@ -23,6 +23,7 @@
     "security:drill": "node --test --experimental-strip-types ops/security/test/security.test.ts",
     "vendor:readiness": "node --experimental-strip-types ops/vendor-onboarding/src/cli.ts",
     "bank:route": "node --experimental-strip-types ops/bank-feed-selection/src/cli.ts",
+    "gsp:route": "node --experimental-strip-types ops/gsp-selection/src/cli.ts",
     "gates": "node --experimental-strip-types packages/release-gates/src/cli.ts",
     "verify": "npm run lint && npm run test && npm run test:integration && npm run gates",
     "check": "npm run verify",

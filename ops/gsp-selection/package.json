@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/gsp-selection",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #50 [X02] — choosing a GSP/IRP: the capability checklist, the written-quotation register, the cost model at 10–50 GSTINs, and the sandbox conformance harness.",
+  "exports": { ".": "./src/index.ts" }
+}

@@ -78,14 +78,19 @@ export const SCOPE_NAMES: Readonly<Record<GovernmentScope, Bilingual>> = Object.
  * this table is the single place where "what the code is doing" is translated into "what the
  * business agreed to". An operation missing from this table is refused: an act nobody has mapped to
  * a consent is an act nobody consented to.
+ *
+ * They must be spelled exactly as the adapters send them, which is not a detail: `eway.vehicle` and
+ * `eway.transporter` are what #27 posts, and a table carrying tidier names would refuse a driver
+ * changing lorries at nine at night with "this app tried to do something it has no permission
+ * for". A test in `ops/gsp-selection` reads the adapters and fails if the two ever drift apart.
  */
 export const OPERATION_SCOPES: Readonly<Record<string, GovernmentScope>> = Object.freeze({
   'einvoice.generate': 'EINVOICE_GENERATE',
   'einvoice.cancel': 'EINVOICE_CANCEL',
   'einvoice.fetch': 'EINVOICE_FETCH',
   'eway.generate': 'EWAY_GENERATE',
-  'eway.update_vehicle': 'EWAY_UPDATE',
-  'eway.assign_transporter': 'EWAY_UPDATE',
+  'eway.vehicle': 'EWAY_UPDATE',
+  'eway.transporter': 'EWAY_UPDATE',
   'eway.extend': 'EWAY_UPDATE',
   'eway.consolidate': 'EWAY_UPDATE',
   'eway.cancel': 'EWAY_CANCEL',
