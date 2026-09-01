@@ -521,6 +521,8 @@ const REPORT_TEXT = {
   gstPaid: { "en-IN": "GST you had already paid", "hi-IN": "Aap pehle jo GST de chuke the" },
   godown: { "en-IN": "Godown", "hi-IN": "Godown" },
   goodsValue: { "en-IN": "Goods value", "hi-IN": "Maal ki keemat" },
+  gstCol: { "en-IN": "GST", "hi-IN": "GST" },
+  earnedNote: { "en-IN": "Goods value is what you earned. The GST beside it is collected for the government and owed to them, so it is not part of your income.", "hi-IN": "Maal ki keemat aapki kamai hai. Uske saath ka GST sarkar ke liye vasoola gaya hai aur unhe dena hai, isliye woh aapki aamdani mein nahin ginta." },
   itemCol: { "en-IN": "Item", "hi-IN": "Item" },
   leftCol: { "en-IN": "Left", "hi-IN": "Bacha" },
   moneyNoBill: { "en-IN": "Money with no bill", "hi-IN": "Bina bill ka paisa" },
@@ -786,6 +788,19 @@ function reportCard(title, sentence) {
   return card;
 }
 
+/** A sentence under a register, for a fact the table cannot say on its own. */
+function reportNote(text) {
+  const note = document.createElement("p");
+  note.className = "safety-note";
+  const icon = document.createElement("span");
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "i";
+  const body = document.createElement("span");
+  body.textContent = text;
+  note.append(icon, body);
+  return note;
+}
+
 function reportTable(columns, rows) {
   const wrap = document.createElement("div");
   wrap.className = "report-scroll";
@@ -892,16 +907,20 @@ function renderReports(data) {
   // Sales register.
   const sales = reportCard(t(data.sales.title), t(data.sales.sentence));
   if (data.sales.rows.length > 0) sales.append(reportTable(
-    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
-    data.sales.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.total)]),
+    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.gstCol), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
+    data.sales.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.tax), money(r.total)]),
   ));
+  // Issue #116: the difference between the two figures is GST, and a person should not have to
+  // work that out. It is named, and said in words, because it is the difference between what the
+  // business earned and what it merely collected.
+  if (data.sales.tax > 0) sales.append(reportNote(t(REPORT_TEXT.earnedNote)));
   content.append(sales);
 
   // Purchase register — real here, because purchases post bills.
   const purchases = reportCard(t(data.purchases.title), t(data.purchases.sentence));
   if (data.purchases.rows.length > 0) purchases.append(reportTable(
-    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.supplier) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
-    data.purchases.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.total)]),
+    [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.supplier) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.gstCol), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
+    data.purchases.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.tax), money(r.total)]),
   ));
   content.append(purchases);
 

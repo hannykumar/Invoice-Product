@@ -180,7 +180,8 @@ test('authenticated customer and supplier returns preview and post through real 
   };
   const salePreview = await request('POST', '/api/returns/preview', saleReturn, owner);
   assert.equal(salePreview.body.state, 'preview');
-  assert.equal(salePreview.body.amount, 200);
+  // ₹200 of goods plus the GST that was charged on them: a credit note gives back the tax too.
+  assert.equal(salePreview.body.amount, 224);
   const postedSaleReturn = await request('POST', '/api/returns/record', saleReturn, owner);
   assert.equal(postedSaleReturn.body.note.kind, 'SALES_RETURN');
   assert.match(postedSaleReturn.body.note.number, /^CN\//);
@@ -234,7 +235,23 @@ test('reports require a session and are computed from that company alone', async
   assert.equal(reports.body.trialBalance.totalDebits, reports.body.trialBalance.totalCredits);
 
   // What the owner earned reconciles to the bills that produced it — the acceptance criterion.
-  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.total);
+  //
+  // It reconciles to the register's **taxable value**, not to its bill total (#116). GST collected
+  // on a sale is money owed to the government, not earnings, so a business that billed ₹4,103
+  // including ₹453 of GST earned ₹3,650. The older form of this assertion compared income with the
+  // bill total, which is only ever equal when there is no tax in the books at all — which is what
+  // the demo's nil-rated item used to arrange, so the check never once compared what it claimed to.
+  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.taxable);
+  assert.ok(reports.body.sales.tax > 0, 'and there is real tax in these books to be excluded');
+  assert.equal(
+    reports.body.sales.taxable + reports.body.sales.tax,
+    reports.body.sales.total,
+    'the three totals are one identity: what was earned, plus what was collected for the government, is what was billed',
+  );
+  assert.ok(
+    reports.body.profitAndLoss.income.total < reports.body.sales.total,
+    'income is strictly less than the bill total whenever any GST was charged',
+  );
 
   // The sale just recorded is in the register and in the drill-down behind the income total.
   assert.ok(reports.body.sales.rows.some((row: { number: string }) => row.number === recorded.body.invoice.number));

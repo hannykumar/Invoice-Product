@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { invalid, isoDate, money, notFound, quantityFromString, type CompanyId, type PartyId } from '@invoice/kernel';
+import { invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
@@ -290,13 +290,12 @@ export class DemoApplication {
     const masters = new InMemoryMasterData();
     masters.putCompany({ companyId: config.companyId, gstin: config.gstin, stateCode: config.gstin.slice(0, 2), registration: 'REGULAR' });
     masters.putParty(config.companyId, { partyId: config.customerId, gstin: config.customerGstin, stateCode: config.customerGstin.slice(0, 2), registration: 'REGULAR' });
-    // The demo's soap is classified nil-rated against an apple's HSN, copied from the reports
-    // fixture. That makes every GST figure in the local app zero, including this issue's returns
-    // workspace. Changing it here turns the local books taxable and immediately fails an assertion
-    // in #35's reports tests that equates income with the bill total — which is only true when
-    // there is no GST, since tax collected is a liability and not income. Both are recorded as an
-    // issue on that lane rather than changed from here.
-    masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '0808', treatment: 'NIL_RATED', reverseCharge: false, baseUnit: 'PCS' });
+    // Soap is a taxed good (#116). It was previously nil-rated against `0808`, which is fresh
+    // apples — copied from the reports fixture, where that HSN belongs to a box of apples. Every
+    // GST figure in the local app was therefore zero, and no screen involving tax could be looked
+    // at. `3923` sits on both sides of its 1 July rate change in `FIXTURE_RATE_TABLE`, so the demo
+    // also exercises an effective-date boundary rather than a single flat rate.
+    masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '3923', treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'PCS' });
     const calculator = new GstCalculator({ masterData: masters, rates: FIXTURE_RATE_TABLE, gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'development' }), mode: 'development' });
     const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: 'WEB', padding: 5 } } });
 
@@ -797,18 +796,27 @@ export class DemoApplication {
         totalAssets: jsonAmount(pack.balanceSheet.body.totalAssets.amount.minor),
         totalClaims: jsonAmount(pack.balanceSheet.body.totalClaims.amount.minor),
       },
+      // A register has three totals and they are three different facts (#116). `total` is what the
+      // customer was billed; `taxable` is what the business earned; `tax` is what it collected for
+      // the government and owes them. Only `taxable` reconciles to income — GST is a liability, not
+      // earnings — so all three are published rather than leaving a caller to assume.
       sales: {
         title: pack.sales.header.title,
         sentence: pack.sales.body.sentence,
         total: jsonAmount(pack.sales.body.total.amount.minor),
-        rows: pack.sales.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), total: jsonAmount(r.total.minor) })),
+        taxable: jsonAmount(pack.sales.body.taxableValue.amount.minor),
+        tax: jsonAmount(pack.sales.body.tax.amount.minor),
+        taxableDrill: drill(pack.sales.body.taxableValue),
+        rows: pack.sales.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), tax: jsonAmount(sum([r.cgst, r.sgst, r.igst, r.cess]).minor), total: jsonAmount(r.total.minor) })),
       },
       purchases: {
         title: pack.purchases.header.title,
         sentence: pack.purchases.body.sentence,
         available: pack.purchases.body.available,
         total: jsonAmount(pack.purchases.body.total.amount.minor),
-        rows: pack.purchases.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), total: jsonAmount(r.total.minor) })),
+        taxable: jsonAmount(pack.purchases.body.taxableValue.amount.minor),
+        tax: jsonAmount(pack.purchases.body.tax.amount.minor),
+        rows: pack.purchases.body.rows.map((r) => ({ date: r.date, number: r.number, party: r.partyName, taxable: jsonAmount(r.taxableValue.minor), tax: jsonAmount(sum([r.cgst, r.sgst, r.igst, r.cess]).minor), total: jsonAmount(r.total.minor) })),
       },
       stock: {
         title: pack.stock.header.title,
