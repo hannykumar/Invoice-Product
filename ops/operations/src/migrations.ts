@@ -20,4 +20,32 @@ export const operationsMigrations: readonly Migration[] = [{
     CREATE POLICY support_access_grants_tenant ON support_access_grants USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
   `,
   down: `DROP TABLE IF EXISTS operational_feature_flags; DROP TABLE IF EXISTS status_incident_updates; DROP TABLE IF EXISTS status_incidents; DROP TABLE IF EXISTS support_access_grants; DROP TABLE IF EXISTS operational_jobs; DROP TABLE IF EXISTS operational_failures;`,
+}, {
+  id: "20260901T130036302Z_operations_91c75652d848_recurring_work_scheduler",
+  up: `
+    CREATE TABLE recurring_work_status (
+      company_id uuid NOT NULL REFERENCES companies(id),
+      job_key text NOT NULL,
+      name text NOT NULL,
+      every_ms bigint NOT NULL CHECK (every_ms >= 60000),
+      next_run_at timestamptz NOT NULL,
+      outcome text NOT NULL CHECK (outcome IN ('never','running','success','failure','dead_lettered')),
+      attempts integer NOT NULL DEFAULT 0,
+      max_attempts integer NOT NULL CHECK (max_attempts > 0),
+      last_scheduled_for timestamptz,
+      last_started_at timestamptz,
+      last_completed_at timestamptz,
+      duration_ms bigint CHECK (duration_ms >= 0),
+      last_error_code text,
+      queue_job_id uuid,
+      summary text,
+      PRIMARY KEY (company_id, job_key),
+      FOREIGN KEY (company_id, queue_job_id) REFERENCES operational_jobs(company_id, id)
+    );
+    CREATE INDEX recurring_work_due_idx ON recurring_work_status(next_run_at) WHERE outcome <> 'running';
+    ALTER TABLE recurring_work_status ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE recurring_work_status FORCE ROW LEVEL SECURITY;
+    CREATE POLICY recurring_work_tenant ON recurring_work_status USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+  `,
+  down: `DROP TABLE IF EXISTS recurring_work_status;`,
 }];

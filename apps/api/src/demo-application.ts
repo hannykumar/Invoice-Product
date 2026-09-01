@@ -116,6 +116,7 @@ import {
   returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
   type OutwardDocument, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
+import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -229,6 +230,7 @@ export class DemoApplication {
   private readonly returnNotes: InMemoryReturnNoteRepository;
   private readonly subscriptions: SubscriptionService;
   private readonly collections: CollectionsService;
+  private readonly notifications: NotificationService;
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
   private readonly agent: ActionAgentService;
@@ -249,6 +251,7 @@ export class DemoApplication {
     returns: ReturnService,
     returnNotes: InMemoryReturnNoteRepository,
     collections: CollectionsService,
+    notifications: NotificationService,
     outbox: DemoReminderOutbox,
     bankFeeds: BankFeedService,
     subscriptions: SubscriptionService,
@@ -272,6 +275,7 @@ export class DemoApplication {
     this.agent = agent;
     this.agentAudit = agentAudit;
     this.collections = collections;
+    this.notifications = notifications;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
     this.gstReturns = gstReturns;
@@ -652,9 +656,22 @@ export class DemoApplication {
       clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns);
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns);
     await app.seed();
     return app;
+  }
+
+  /** Periodic services composed by this local host; the scheduler supplies the service actor. */
+  recurringJobs(): readonly RecurringJobDefinition[] {
+    return standardRecurringJobs({
+      notifications: { deliverDue: (context) => this.notifications.deliverDue(context) },
+      ewayBills: {
+        expiringWithin: (serviceActor, hours) => this.shop.ewayBill.expiringWithin(serviceActor as ActorContext, hours),
+      },
+      collections: {
+        sendPlanned: (serviceActor, today) => this.collections.sendPlanned(serviceActor as ActorContext, isoDate(today)),
+      },
+    });
   }
 
   private async seed(): Promise<void> {
