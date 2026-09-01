@@ -614,12 +614,12 @@ export class DemoApplication {
             pricing: invoice.pricing === null ? null : {
               lines: invoice.pricing.lines.map((line) => ({
                 lineId: line.lineId, itemId: line.itemId, itemName: line.itemName, hsnOrSac: line.hsnOrSac,
-                quantity: showQuantity(line.quantity), ratePercentTimes100: line.ratePercentTimes100,
+                quantity: line.quantity, ratePercentTimes100: line.ratePercentTimes100,
                 taxableValue: line.taxableValue, cgst: line.cgst, sgst: line.sgst, utgst: line.utgst,
                 igst: line.igst, cess: line.cess, reverseCharge: line.reverseCharge, rateBasis: line.rateBasis,
                 treatment: line.treatment,
               })),
-              totals: { invoiceTotal: invoice.pricing.totals.invoiceValue },
+              totals: { invoiceValue: invoice.pricing.totals.invoiceValue },
             },
           },
           customer,
@@ -627,10 +627,7 @@ export class DemoApplication {
         ));
         const notes = (await returnNotes.list(companyId))
           .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
-          .map((note) => returnNoteToDocument({
-            ...note,
-            lines: note.lines.map((noteLine) => ({ ...noteLine, quantity: showQuantity(noteLine.quantity) })),
-          }, customer, supplier, {
+          .map((note) => returnNoteToDocument(note, customer, supplier, {
             placeOfSupplyStateCode: config.gstin.slice(0, 2),
             hsnByItem: { SOAP: '3401', TMT12: '7214' },
           }));

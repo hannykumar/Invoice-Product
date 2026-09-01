@@ -13,7 +13,7 @@
  *    including its unpleasant behaviours — duplicate submissions, timeouts, rejections with the
  *    portal's own error codes — so those paths are exercised without a production credential.
  */
-import { conflict, invalid, type CompanyId, type Money } from '@invoice/kernel';
+import { conflict, invalid, toQuantityString, type CompanyId, type Money, type Quantity } from '@invoice/kernel';
 import type { JournalLine, UnitOfWork, Voucher } from '@invoice/ledger';
 import type {
   BookTaxPort, GovernmentReturnPort, GovernmentSubmitOutcome, GovernmentSubmitRequest, InwardTaxPort,
@@ -115,7 +115,15 @@ export interface SalesInvoiceLike {
       readonly itemId: string;
       readonly itemName: string;
       readonly hsnOrSac: string | null;
-      readonly quantity: string;
+      /**
+       * The quantity as the sales module holds it: an exact scaled decimal with its unit.
+       *
+       * It used to be declared here as a `string`, which is what the return form wants, and the
+       * conversion was left to a caller who did not exist. A real bill therefore reached
+       * `parseQuantity` as an object and the HSN summary crashed on it. Taking the real shape and
+       * converting here is the adapter's whole job.
+       */
+      readonly quantity: Quantity;
       readonly ratePercentTimes100: bigint | null;
       readonly taxableValue: Money;
       readonly cgst: Money;
@@ -132,7 +140,15 @@ export interface SalesInvoiceLike {
        */
       readonly treatment?: 'TAXABLE' | 'NIL_RATED' | 'EXEMPT' | 'NON_GST' | 'UNKNOWN';
     }[];
-    readonly totals: { readonly invoiceTotal: Money };
+    /**
+     * The bill total including tax.
+     *
+     * Named exactly as the sales module (#9) names it. It used to be `invoiceTotal` here, which no
+     * real sales invoice has, so every bill converted to `invoiceValue: undefined` and the return
+     * crashed on the first fingerprint. Both modules' own tests passed throughout, because each was
+     * fed a fixture shaped like its own idea of the other — which is what #44 exists to catch.
+     */
+    readonly totals: { readonly invoiceValue: Money };
   } | null;
   /** Set where the seller marked the bill as an export, an SEZ supply or a deemed export. */
   readonly supplyTreatment?: SupplyTreatment;
@@ -213,8 +229,8 @@ export const salesInvoiceToDocument = (
     description: line.itemName,
     hsnOrSac: line.hsnOrSac,
     supplyKind: 'GOODS',
-    unit: null,
-    quantity: line.quantity,
+    unit: line.quantity.unit,
+    quantity: toQuantityString(line.quantity),
     ratePercentTimes100: line.ratePercentTimes100,
     amounts: {
       taxableValue: line.taxableValue,
@@ -246,7 +262,7 @@ export const salesInvoiceToDocument = (
     placeOfSupplyStateCode: invoice.placeOfSupplyStateCode,
     reverseCharge: lines.some((line) => line.reverseCharge),
     lines,
-    invoiceValue: invoice.pricing.totals.invoiceTotal,
+    invoiceValue: invoice.pricing.totals.invoiceValue,
     unregisteredConfirmed: counterparty.gstin !== null || counterparty.unregisteredConfirmed,
   };
 };
@@ -266,7 +282,8 @@ export interface ReturnNoteLike {
     readonly itemId: string;
     readonly description: string;
     readonly supplyKind: 'GOODS' | 'SERVICES';
-    readonly quantity: string;
+    /** As the returns module holds it, for the same reason as on a sales invoice above. */
+    readonly quantity: Quantity;
     readonly amounts: {
       readonly taxableValue: Money; readonly cgst: Money; readonly sgst: Money;
       readonly utgst: Money; readonly igst: Money; readonly cess: Money; readonly total: Money;
@@ -300,8 +317,8 @@ export const returnNoteToDocument = (
     description: line.description,
     hsnOrSac: facts.hsnByItem?.[line.itemId] ?? null,
     supplyKind: line.supplyKind,
-    unit: null,
-    quantity: line.quantity,
+    unit: line.quantity.unit,
+    quantity: toQuantityString(line.quantity),
     ratePercentTimes100: facts.rateByLine?.[line.originalLineId] ?? null,
     amounts: {
       taxableValue: line.amounts.taxableValue,

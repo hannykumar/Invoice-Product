@@ -10,7 +10,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DomainError, asId, fixedClock, isoDate } from '@invoice/kernel';
+import { DomainError, asId, fixedClock, isoDate, quantityFromString } from '@invoice/kernel';
 import { InMemoryAuditPort, type ActorContext } from '@invoice/ledger';
 import { B2clThresholdTable, InMemoryDeclaredThresholds } from '../src/thresholds.ts';
 import { classifyDocument } from '../src/classify.ts';
@@ -654,7 +654,7 @@ test('union-territory tax is folded into the state column, because the form has 
       partyId: 'p', customerType: 'B2C', placeOfSupplyStateCode: '04', voucherId: 'vch-ut',
       pricing: {
         lines: [{
-          lineId: 'l1', itemId: 'SOAP', itemName: 'Soap', hsnOrSac: '3401', quantity: '10',
+          lineId: 'l1', itemId: 'SOAP', itemName: 'Soap', hsnOrSac: '3401', quantity: quantityFromString('10', 'PCS'),
           ratePercentTimes100: 1800n,
           taxableValue: { currency: 'INR', minor: 100_000n },
           cgst: { currency: 'INR', minor: 9_000n },
@@ -664,7 +664,7 @@ test('union-territory tax is folded into the state column, because the form has 
           cess: { currency: 'INR', minor: 0n },
           reverseCharge: false, rateBasis: 'BUSINESS_DECLARED',
         }],
-        totals: { invoiceTotal: { currency: 'INR', minor: 118_000n } },
+        totals: { invoiceValue: { currency: 'INR', minor: 118_000n } },
       },
     },
     { name: 'Chandigarh customer', gstin: null, stateCode: '04', unregisteredConfirmed: true },
@@ -675,7 +675,7 @@ test('union-territory tax is folded into the state column, because the form has 
 
 test('a nil-rated bill is reported as nil-rated, not as an ordinary sale taxed at nothing', () => {
   const nilLine = {
-    lineId: 'l1', itemId: 'SOAP', itemName: 'Soap', hsnOrSac: '3401', quantity: '10',
+    lineId: 'l1', itemId: 'SOAP', itemName: 'Soap', hsnOrSac: '3401', quantity: quantityFromString('10', 'PCS'),
     ratePercentTimes100: null,
     taxableValue: { currency: 'INR' as const, minor: 50_000n },
     cgst: { currency: 'INR' as const, minor: 0n }, sgst: { currency: 'INR' as const, minor: 0n },
@@ -687,7 +687,7 @@ test('a nil-rated bill is reported as nil-rated, not as an ordinary sale taxed a
     {
       id: 'inv-nil', companyId: SUNRISE_COMPANY, state: 'FINAL', number: 'INV-NIL', documentDate: '2026-07-05',
       partyId: 'p', customerType: 'B2B', placeOfSupplyStateCode: '27', voucherId: 'vch-nil',
-      pricing: { lines: [nilLine], totals: { invoiceTotal: { currency: 'INR', minor: 50_000n } } },
+      pricing: { lines: [nilLine], totals: { invoiceValue: { currency: 'INR', minor: 50_000n } } },
     },
     { name: 'Pune Retail Stores', gstin: PUNE_RETAIL_GSTIN, stateCode: '27', unregisteredConfirmed: false },
     { gstin: SUNRISE_GSTIN, stateCode: SUNRISE_STATE },
@@ -705,14 +705,14 @@ test('an item nobody has classified stops the return rather than being reported 
         partyId: 'p', customerType: 'B2B', placeOfSupplyStateCode: '27', voucherId: 'vch-x',
         pricing: {
           lines: [{
-            lineId: 'l1', itemId: 'MYSTERY', itemName: 'Something', hsnOrSac: null, quantity: '1',
+            lineId: 'l1', itemId: 'MYSTERY', itemName: 'Something', hsnOrSac: null, quantity: quantityFromString('1', 'NOS'),
             ratePercentTimes100: null,
             taxableValue: { currency: 'INR', minor: 10_000n }, cgst: { currency: 'INR', minor: 0n },
             sgst: { currency: 'INR', minor: 0n }, utgst: { currency: 'INR', minor: 0n },
             igst: { currency: 'INR', minor: 0n }, cess: { currency: 'INR', minor: 0n },
             reverseCharge: false, rateBasis: null, treatment: 'UNKNOWN',
           }],
-          totals: { invoiceTotal: { currency: 'INR', minor: 10_000n } },
+          totals: { invoiceValue: { currency: 'INR', minor: 10_000n } },
         },
       },
       { name: 'Pune Retail Stores', gstin: PUNE_RETAIL_GSTIN, stateCode: '27', unregisteredConfirmed: false },
