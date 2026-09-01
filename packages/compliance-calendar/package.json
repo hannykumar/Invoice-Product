@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/compliance-calendar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #32 [E32] — the compliance calendar and the preventive alert engine.",
+  "exports": { ".": "./src/index.ts" }
+}

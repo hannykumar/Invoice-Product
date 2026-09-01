@@ -105,7 +105,17 @@ export type Permission =
   // Issue #47 [E47], GPT 1: letting the assistant do authorised work through typed tools.
   | "agent.plan"
   | "agent.approve"
-  | "agent.execute";
+  | "agent.execute"
+  // Issue #32 [E32]. Reading the compliance calendar, marking an obligation done with evidence,
+  // silencing a reminder and putting a deadline in front of the owner are four different acts.
+  // Silencing a warning is separated from reading one on purpose: it is a decision with a
+  // consequence, and the record of who made it is half the reason for having it.
+  | "compliance.calendar.view"
+  | "compliance.calendar.refresh"
+  | "compliance.calendar.complete"
+  | "compliance.calendar.snooze"
+  | "compliance.calendar.escalate"
+  | "compliance.calendar.declare";
 
 export interface RequestContext {
   companyId: Id;

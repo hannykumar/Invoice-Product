@@ -9,6 +9,7 @@ import { supplierRiskMigrations } from "../../purchasing/src/supplier-risk-migra
 import { eInvoiceMigrations } from "../../gst/src/einvoice-migrations.ts";
 import { gstReturnMigrations } from "../../gst-returns/src/migrations.ts";
 import { itcMigrations } from "../../itc/src/migrations.ts";
+import { complianceCalendarMigrations } from "../../compliance-calendar/src/migrations.ts";
 import { returnMigrations } from "../../returns/src/migrations.ts";
 import { ewayBillMigrations } from "../../transport/src/migrations.ts";
 import { collectionMigrations } from "../../collections/src/migrations.ts";
@@ -85,5 +86,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...returnMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...returnMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );
