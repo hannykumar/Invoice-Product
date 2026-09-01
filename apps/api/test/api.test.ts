@@ -985,3 +985,46 @@ test('GST return APIs require both a session and the dedicated permission', asyn
   const denied = await request('POST', '/api/gst-returns/prepare', { period: '2026-05' }, viewer);
   assert.equal(denied.status, 403);
 });
+
+/**
+ * Issue #123 — the provider callback endpoint.
+ *
+ * It is the only route in this API that a stranger may call, so what it refuses matters more than
+ * what it accepts.
+ */
+const postCallback = async (kind: string, rawBody: string, signature: string) => {
+  const response = await handleApi('POST', `/api/webhooks/government/${kind}`, {}, undefined, { rawBody, signature });
+  return { status: response.status, body: JSON.parse(response.body) as Record<string, any> };
+};
+
+test('a provider callback needs no session, but does need a signature over the bytes it sent', async () => {
+  const body = JSON.stringify({
+    eventId: 'evt-api-1',
+    providerRequestId: 'never-sent-from-this-process',
+    occurredAt: '2026-08-17T04:30:00.000Z',
+    payload: { Irn: 'irn-api-1' },
+  });
+
+  // No session at all, which is the point: a GSP has not signed in and never will.
+  const wrongly = await postCallback('irp', body, 'not-the-signature');
+  assert.equal(wrongly.status, 401);
+  assert.equal(wrongly.body.state, 'failed');
+
+  const unsigned = await postCallback('irp', body, '');
+  assert.equal(unsigned.status, 401);
+
+  const accepted = await postCallback('irp', body, 'test-signature');
+  assert.equal(accepted.status, 202);
+  // This process made no such call, so the callback matched nothing — recorded, not acted on.
+  assert.equal(accepted.body.outcome.kind, 'UNMATCHED');
+
+  // The provider resending is ordinary, and must not be treated as a second acknowledgement.
+  const again = await postCallback('irp', body, 'test-signature');
+  assert.equal(again.status, 202);
+  assert.equal(again.body.outcome.kind, 'DUPLICATE');
+});
+
+test('a callback address for something that is not a government connector does not exist', async () => {
+  const response = await postCallback('banking', JSON.stringify({ eventId: 'evt-api-2' }), 'test-signature');
+  assert.equal(response.status, 404);
+});

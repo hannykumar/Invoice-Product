@@ -38,6 +38,8 @@ import type {
   RevokeOutcome,
   RotateOutcome,
   VerifyOtpOutcome,
+  WebhookEventRecord,
+  WebhookEventRepository,
 } from './ports.ts';
 import type { GstinAuthorisation, ProviderCall, ProviderProfile } from './types.ts';
 
@@ -77,6 +79,14 @@ export class InMemoryCallLog implements CallLogRepository {
 
   async findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ProviderCall | null> {
     return [...this.#rows.values()].find((row) => row.companyId === companyId && row.idempotencyKey === key) ?? null;
+  }
+
+  async findByProviderRequestId(providerRequestId: string): Promise<ProviderCall | null> {
+    return [...this.#rows.values()].find((row) => row.providerRequestId === providerRequestId) ?? null;
+  }
+
+  async findByCorrelationId(correlationId: string): Promise<ProviderCall | null> {
+    return [...this.#rows.values()].find((row) => row.correlationId === correlationId) ?? null;
   }
 
   async listUnsettled(companyId: CompanyId, before: string): Promise<readonly ProviderCall[]> {
@@ -121,6 +131,38 @@ export class SlidingWindowLimiter implements RateLimiterPort {
     history.push(at);
     this.#calls.set(key, history);
     return { allowed: true };
+  }
+}
+
+/**
+ * Every callback taken delivery of, and every one thrown out at the door.
+ *
+ * The unique key is (connector, event id) — the same key the table's unique index uses — because a
+ * provider that does not get a 200 will send the same acknowledgement again, and applying one twice
+ * would settle a call twice.
+ */
+export class InMemoryWebhookEvents implements WebhookEventRepository {
+  readonly #rows = new Map<string, WebhookEventRecord>();
+  readonly #rejected: { kind: string; digest: string; reason: string }[] = [];
+
+  async find(kind: string, eventId: string): Promise<WebhookEventRecord | null> {
+    return this.#rows.get(`${kind}:${eventId}`) ?? null;
+  }
+
+  async insert(record: WebhookEventRecord): Promise<void> {
+    this.#rows.set(`${record.kind}:${record.eventId}`, record);
+  }
+
+  async recordRejected(input: { readonly kind: string; readonly digest: string; readonly at: string; readonly reason: string }): Promise<void> {
+    this.#rejected.push({ kind: input.kind, digest: input.digest, reason: input.reason });
+  }
+
+  async listRejected(): Promise<readonly { readonly kind: string; readonly digest: string; readonly reason: string }[]> {
+    return [...this.#rejected];
+  }
+
+  all(): readonly WebhookEventRecord[] {
+    return [...this.#rows.values()];
   }
 }
 

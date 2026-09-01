@@ -148,4 +148,59 @@ export const gspMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS gstin_consents;
     DROP TABLE IF EXISTS gstin_authorisations;
   `,
+}, {
+  // Issue #123 — provider callbacks, and the index that lets one find the call it is about.
+  //
+  // Two things here are the whole point of the table.
+  //
+  //   1. **(connector, event id) is unique.** A provider that does not get a 200 sends the same
+  //      acknowledgement again, and applying one twice would settle a call twice. Deduplication
+  //      belongs in the database rather than in a set held by a process that restarts.
+  //   2. **A callback that failed authentication is recorded by a digest of its bytes.** The fact
+  //      that somebody sent it is worth knowing; what it said is not evidence and is never parsed,
+  //      so there is nowhere here to put it.
+  id: "20260901T083908982Z_gsp_bae8a5e29faf_government_webhook_events",
+  up: `
+    CREATE TABLE government_webhook_events (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      connector text NOT NULL,
+      event_id text NOT NULL,
+      provider_request_id text NOT NULL,
+      -- Null when the callback matched no call of ours, which is recorded rather than acted on.
+      call_id uuid REFERENCES government_calls(id),
+      -- Taken from the matched call, never from the callback body.
+      company_id uuid REFERENCES companies(id),
+      outcome text NOT NULL CHECK (outcome IN ('SETTLED','CONFIRMED','CONFLICT','UNMATCHED','REFUSED','IGNORED')),
+      government_reference text,
+      received_at timestamptz NOT NULL DEFAULT now(),
+      -- A callback whose company is known came from a call we made; one without a company matched
+      -- nothing, and must not be able to claim a company by asserting one.
+      CHECK (company_id IS NULL OR call_id IS NOT NULL),
+      UNIQUE (connector, event_id)
+    );
+
+    -- Deliveries that did not authenticate. No parsed content, by design: only the shape of what
+    -- arrived and when.
+    CREATE TABLE government_webhook_rejections (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      connector text NOT NULL,
+      -- sha256 of the bytes as they arrived.
+      digest text NOT NULL,
+      reason text NOT NULL,
+      received_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    -- What a callback matches on. Without this the lookup is a scan of every call ever made.
+    CREATE INDEX government_calls_provider_request_idx
+      ON government_calls(provider_request_id) WHERE provider_request_id IS NOT NULL;
+    CREATE INDEX government_calls_correlation_idx ON government_calls(correlation_id);
+    CREATE INDEX government_webhook_events_call_idx ON government_webhook_events(call_id, received_at DESC);
+    CREATE INDEX government_webhook_rejections_seen_idx ON government_webhook_rejections(connector, received_at DESC);
+  `,
+  down: `
+    DROP INDEX IF EXISTS government_calls_correlation_idx;
+    DROP INDEX IF EXISTS government_calls_provider_request_idx;
+    DROP TABLE IF EXISTS government_webhook_rejections;
+    DROP TABLE IF EXISTS government_webhook_events;
+  `,
 }]);
