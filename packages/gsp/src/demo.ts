@@ -16,10 +16,11 @@
 import { InMemoryAuditPort } from '@invoice/ledger';
 import { ConnectorGateway, MockConnector, StaticWebhookVerifier } from '../../platform/src/connectors.ts';
 import { SyntheticIrp, SyntheticIrpVault } from '../../gst/src/einvoice-adapters.ts';
-import { InMemoryAuthorisations, InMemoryCallLog, RecordingExceptionSink, SandboxGspProvider, SlidingWindowLimiter } from './adapters.ts';
+import { InMemoryAuthorisations, InMemoryCallLog, InMemoryWebhookEvents, RecordingExceptionSink, SandboxGspProvider, SlidingWindowLimiter } from './adapters.ts';
 import { GovernmentChannel } from './channel.ts';
 import { GovernmentCallReconciler } from './reconcile.ts';
 import { GovernmentAccessService } from './service.ts';
+import { GovernmentWebhookReceiver, WebhookNotAuthenticated } from './webhooks.ts';
 import { EVERYDAY_SCOPES, KARNATAKA_GSTIN, MAHARASHTRA_GSTIN, SUNRISE_COMPANY, SUNRISE_NAME, invoicePayload, ownerOf } from './fixtures.ts';
 
 const heading = (text: string): void => console.log(`\n${text}\n${'─'.repeat(text.length)}`);
@@ -35,6 +36,7 @@ const gateway = new ConnectorGateway([irp, new MockConnector('gst'), new MockCon
 
 const service = new GovernmentAccessService({ authorisations, calls, provider, audit, clock });
 const channel = new GovernmentChannel({ gateway, authorisations, calls, audit, clock, provider, limiter: new SlidingWindowLimiter() });
+const webhooks = new GovernmentWebhookReceiver({ gateway, calls, authorisations, events: new InMemoryWebhookEvents(), audit, clock, exceptions: new RecordingExceptionSink() });
 const owner = ownerOf();
 
 heading('Connecting the Bengaluru registration');
@@ -90,6 +92,34 @@ const report = await new GovernmentCallReconciler({ calls, provider, audit, cloc
 console.log(`Checked ${report.checked}; corrected ${report.corrected}; never arrived ${report.notFound}; still unknown ${report.stillUnknown}.`);
 const settled = (await calls.list(SUNRISE_COMPANY, KARNATAKA_GSTIN)).find((call) => call.documentRef === 'SI-1044');
 console.log(`SI-1044 is now ${settled?.outcome} with the government's own reference ${settled?.governmentReference}.`);
+
+heading('The provider rings back about another one (issue #123)');
+irp.setMode('timeout');
+const lost = await channel.call(owner, {
+  operation: 'einvoice.generate',
+  payload: invoicePayload(KARNATAKA_GSTIN, 'SI-1046'),
+  idempotencyKey: 'demo-si-1046',
+  documentRef: 'SI-1046',
+});
+irp.setMode('healthy');
+const lostCall = (await calls.list(SUNRISE_COMPANY, KARNATAKA_GSTIN)).find((call) => call.documentRef === 'SI-1046');
+console.log(`SI-1046 timed out: ${lost.kind}. Thirty seconds later the provider posts the acknowledgement.`);
+
+const callbackBody = JSON.stringify({
+  eventId: 'evt-si-1046',
+  providerRequestId: lostCall?.correlationId,
+  occurredAt: clock.now().toISOString(),
+  payload: { Irn: 'irn-for-si-1046' },
+});
+const landed = await webhooks.receive('irp', callbackBody, 'test-signature');
+console.log(`Callback: ${landed.kind}. SI-1046 is settled without waiting for the next sweep.`);
+const resent = await webhooks.receive('irp', callbackBody, 'test-signature');
+console.log(`The provider resends the same event: ${resent.kind} — the record changes once, not twice.`);
+try {
+  await webhooks.receive('irp', JSON.stringify({ eventId: 'evt-forged', providerRequestId: lostCall?.correlationId, occurredAt: clock.now().toISOString(), payload: { Irn: 'forged' } }), 'wrong-signature');
+} catch (error) {
+  if (error instanceof WebhookNotAuthenticated) console.log(`A callback that does not authenticate: refused, recorded by digest, and never read.`);
+}
 
 heading('Taking the permission back');
 const revoked = await service.revoke(owner, KARNATAKA_GSTIN, 'The owner is changing accountants.');

@@ -330,7 +330,14 @@ export const gstinInPayload = (payload: Readonly<Record<string, unknown>>): stri
   return null;
 };
 
-const governmentReferenceOf = (payload: Readonly<Record<string, unknown>>): string | null => {
+/**
+ * The government's own number for a document, wherever the provider put it.
+ *
+ * Shared with the webhook receiver on purpose: a callback and a reply carrying the same
+ * acknowledgement must be read the same way, or the two paths will disagree about whether they
+ * agree.
+ */
+export const governmentReferenceOf = (payload: Readonly<Record<string, unknown>>): string | null => {
   for (const key of ['Irn', 'irn', 'EwbNo', 'ewbNo', 'AckNo', 'ackNo', 'reference', 'Reference']) {
     const value = payload[key];
     if (typeof value === 'string' && value !== '') return value;

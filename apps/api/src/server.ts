@@ -7,6 +7,8 @@ import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
+import { isGovernmentConnector, receiveGovernmentWebhook } from './government-webhooks.ts';
+import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 
 const json = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
 
@@ -14,6 +16,8 @@ export interface ApiResult { readonly status: number; readonly headers: Readonly
 
 const statusOf = (error: unknown): number => {
   if (error instanceof AuthenticationError) return 401;
+  // A provider that signed its callback wrongly is told so, and told nothing else.
+  if (error instanceof WebhookNotAuthenticated) return 401;
   if (error instanceof DomainError) {
     if (error.kind === 'FORBIDDEN') return 403;
     if (error.kind === 'NOT_FOUND') return 404;
@@ -29,11 +33,26 @@ const statusOf = (error: unknown): number => {
   return 400;
 };
 
-export async function handleApi(method: string, pathname: string, body: Record<string, unknown> = {}, authorization?: string): Promise<ApiResult> {
+export interface WebhookDelivery {
+  /** The bytes exactly as they arrived: a signature is over what was sent, not over its meaning. */
+  readonly rawBody: string;
+  readonly signature: string;
+}
+
+export async function handleApi(method: string, pathname: string, body: Record<string, unknown> = {}, authorization?: string, delivery?: WebhookDelivery): Promise<ApiResult> {
   try {
     const runtime = apiRuntime();
     if (method === 'POST' && pathname === '/api/auth/login') return json(200, runtime.signIn(body));
     if (method === 'GET' && pathname === '/api/status') return json(200, runtime.publicStatus());
+    // Issue #123 — a provider's callback about a government call. No session: it authenticates by
+    // signing the bytes it sent, so this sits in front of authentication and reads the raw body.
+    const webhook = /^\/api\/webhooks\/government\/([^/]+)$/.exec(pathname);
+    if (method === 'POST' && webhook?.[1] !== undefined) {
+      const kind = decodeURIComponent(webhook[1]);
+      if (!isGovernmentConnector(kind)) return json(404, { state: 'failed', title: 'Not found', message: 'That is not a government callback address.' });
+      const received = await receiveGovernmentWebhook(kind, delivery?.rawBody ?? '', delivery?.signature ?? '');
+      return json(received.status, { state: 'received', outcome: received.outcome });
+    }
     const context = runtime.authenticate(authorization);
     const actor = runtime.actor(context);
     const app = await runtime.application(context);
@@ -152,19 +171,30 @@ export async function handleApi(method: string, pathname: string, body: Record<s
   }
 }
 
-const readBody = async (request: IncomingMessage): Promise<Record<string, unknown>> => {
+/**
+ * The body, kept twice: parsed for every ordinary route, and raw for the one that verifies a
+ * signature over it. Re-serialising a parsed object produces a different string, which would fail
+ * to verify against a signature that was perfectly correct.
+ */
+const readBody = async (request: IncomingMessage): Promise<{ parsed: Record<string, unknown>; raw: string }> => {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(Buffer.from(chunk));
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+  if (chunks.length === 0) return { parsed: {}, raw: '' };
+  const raw = Buffer.concat(chunks).toString('utf8');
+  return { parsed: JSON.parse(raw) as Record<string, unknown>, raw };
 };
 
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost');
   let body: Record<string, unknown> = {};
-  try { body = await readBody(request); }
+  let raw = '';
+  try { const read = await readBody(request); body = read.parsed; raw = read.raw; }
   catch { const result = json(400, { state: 'failed', title: 'Nothing was saved', message: 'The request body is not valid JSON.' }); response.writeHead(result.status, result.headers); response.end(result.body); return; }
-  const result = await handleApi(request.method ?? 'GET', url.pathname, body, request.headers.authorization);
+  const signature = request.headers['x-provider-signature'];
+  const result = await handleApi(request.method ?? 'GET', url.pathname, body, request.headers.authorization, {
+    rawBody: raw,
+    signature: typeof signature === 'string' ? signature : '',
+  });
   response.writeHead(result.status, result.headers);
   response.end(result.body);
 }

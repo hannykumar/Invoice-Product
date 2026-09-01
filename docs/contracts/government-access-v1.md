@@ -95,6 +95,36 @@ are reached through `AuthorisedGateway` and their own existing adapters.
 `gsp.credential.rotate`, `gsp.calls.reconcile`. Revoking is not the same permission as authorising:
 it is the emergency control and must not need the person who set the connection up.
 
+## Provider callbacks (issue #123)
+
+A provider that could not reach us — or that acknowledges asynchronously, which the IRP does — posts
+the answer back. `GovernmentWebhookReceiver.receive(kind, rawBody, signature)` takes delivery.
+
+- **The body is not data until the signature verifies.** Nothing is read, matched or written before
+  #8's `WebhookVerifier` authenticates the bytes. A delivery that fails is recorded by a sha256
+  digest of what arrived and never parsed: that somebody sent it is worth knowing; what it said is
+  not evidence.
+- **The raw bytes must survive to the receiver.** A parsed and re-serialised body is a different
+  string with the same meaning, and verifies against nothing. `handleApi` takes the raw body for
+  this route alone.
+- **The company comes from the matched call.** A callback names a provider request id or the
+  correlation id we generated; we find our own row and take the company, GST number and document
+  from it. A forged callback cannot name a company at all.
+- **Deduplication is durable.** `(connector, event_id)` is unique in the database, not a set in a
+  process that restarts. A resent acknowledgement answers `DUPLICATE` and changes nothing.
+- **Outcomes**: `SETTLED` (an unknown call now has the government's answer), `CONFIRMED` (agrees
+  with what we hold — the ordinary race with polling), `CONFLICT` (disagrees: both sides kept, an
+  exception raised), `UNMATCHED`, `REFUSED` (the matched call's GST number is not connected here),
+  `IGNORED` (no acknowledgement number to apply).
+- A callback about a call made **before** an authorisation was revoked still settles it. Revocation
+  stops new calls; it does not un-register an invoice the government already registered.
+
+**Endpoint**: `POST /api/webhooks/government/{irp|eway_bill|gst}`, signature in
+`x-provider-signature`, no session. `202` for anything verified and recorded, `401` for a delivery
+that did not authenticate, `404` for a connector that takes no government callbacks. Polling
+(`GovernmentCallReconciler`) remains the fallback when no callback ever arrives; the two agree by
+construction because both read the acknowledgement with the same function.
+
 ## Assumptions recorded against unfinished dependencies
 
 - **#50 (provider comparison) and #51 (production contracting) are open.** No provider has been
@@ -109,6 +139,12 @@ it is the emergency control and must not need the person who set the connection 
   contract covers.
 - The exception sink is a port; until the queue (#7/#48) is wired in, `RecordingExceptionSink`
   keeps conflicts where a test and the demo can see them.
+- The webhook endpoint is wired with `StaticWebhookVerifier`, GPT 2's development verifier. It is
+  exactly as strong as the provider contract behind it — which is to say not at all until #51
+  supplies a signing secret and a real verifier. That swap is one line in
+  `apps/api/src/government-webhooks.ts`. Until the channel itself is wired into the running app,
+  the endpoint verifies, deduplicates and records every delivery and reports `UNMATCHED`, which is
+  the right answer for a callback about a call that process never made.
 
 ## Demonstration scenario
 

@@ -39,6 +39,16 @@ export interface CallLogRepository {
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ProviderCall | null>;
   /** The calls whose fate we never learned. What reconciliation reads. */
   listUnsettled(companyId: CompanyId, before: string): Promise<readonly ProviderCall[]>;
+  /**
+   * The call a provider's callback is about.
+   *
+   * Looked up across companies on purpose, and it is the only lookup here that is: a callback
+   * arrives with no session and no company, and the company is then taken *from the row it
+   * matched* rather than from anything the caller said. That is what stops a forged callback
+   * naming somebody else's company — it never gets to name one.
+   */
+  findByProviderRequestId(providerRequestId: string): Promise<ProviderCall | null>;
+  findByCorrelationId(correlationId: string): Promise<ProviderCall | null>;
   list(companyId: CompanyId, gstin?: string): Promise<readonly ProviderCall[]>;
 }
 
@@ -123,6 +133,36 @@ export type ProviderStatusOutcome =
   /** The government has no record: the call never landed, and the document can be sent again. */
   | { readonly kind: 'NOT_FOUND' }
   | { readonly kind: 'UNAVAILABLE'; readonly retryable: boolean; readonly detail: string };
+
+/**
+ * Every provider callback we have taken delivery of, including the ones we threw out.
+ *
+ * Two jobs, and the second is the one people forget. It deduplicates — a provider that does not get
+ * a 200 will send the same event again, and the same acknowledgement must not settle a call twice.
+ * And it records callbacks whose signature did not verify, by a digest of the bytes rather than by
+ * anything inside them: a body that failed authentication is not evidence, but the fact that
+ * somebody sent it is.
+ */
+export interface WebhookEventRepository {
+  /** Null when this event id has not been seen for this connector before. */
+  find(kind: string, eventId: string): Promise<WebhookEventRecord | null>;
+  insert(record: WebhookEventRecord): Promise<void>;
+  /** An unverified delivery, recorded by digest. Nothing inside it is read or stored. */
+  recordRejected(input: { readonly kind: string; readonly digest: string; readonly at: string; readonly reason: string }): Promise<void>;
+  listRejected(): Promise<readonly { readonly kind: string; readonly digest: string; readonly reason: string }[]>;
+}
+
+export interface WebhookEventRecord {
+  readonly kind: string;
+  readonly eventId: string;
+  readonly providerRequestId: string;
+  readonly receivedAt: string;
+  /** The call it was about, when it matched one. */
+  readonly callId: string | null;
+  readonly companyId: CompanyId | null;
+  readonly outcome: string;
+  readonly governmentReference: string | null;
+}
 
 /**
  * Our own call limits, kept below the provider's published ones.
