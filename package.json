@@ -53,7 +53,8 @@
     "demo:assistant": "node --experimental-strip-types packages/assistant/src/demo.ts",
     "demo:gst-returns": "node --experimental-strip-types packages/gst-returns/src/demo.ts",
     "demo:calendar": "node --experimental-strip-types packages/compliance-calendar/src/demo.ts",
-    "demo:gsp": "node --experimental-strip-types packages/gsp/src/demo.ts"
+    "demo:gsp": "node --experimental-strip-types packages/gsp/src/demo.ts",
+    "demo:rates": "node --experimental-strip-types packages/rate-advisor/src/demo.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",
