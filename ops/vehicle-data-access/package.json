@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/vehicle-data-access",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #53 [X05] — applying for authorised vehicle-record access: the field-minimisation register, the necessity review, the tracked application, the permitted-use terms and the manual fallback.",
+  "exports": { ".": "./src/index.ts" }
+}
