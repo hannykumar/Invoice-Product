@@ -206,6 +206,25 @@ const main = async (): Promise<void> => {
     written.push(file);
   }
 
+  // Issue #148 — one page with every reserved slot showing at once, so the finished layout can be
+  // reviewed as a picture before any provider is connected. Nothing here is filled in: this is
+  // exactly what a bill looks like today, with the space blocked out for what is still coming.
+  const wholesaleTemplate = templateById('wholesale-classic');
+  if (wholesaleTemplate !== undefined) {
+    const everySlot = captureSnapshot(
+      { ...wholesaleTemplate, optionalFields: [...wholesaleTemplate.optionalFields, 'qr.upi'] },
+      'en-IN',
+      '2026-08-29',
+    );
+    const file = join(outDir, 'reserved-slots.html');
+    writeFileSync(
+      file,
+      renderInvoice({ ...document, eInvoice: null }, everySlot, { format: 'A4', locale: 'en-IN' }),
+      'utf8',
+    );
+    written.push(file);
+  }
+
   // A hundred-line bill, to show the A4 layout still holds up.
   const longLines = Array.from({ length: 100 }, (_unused, i) => ({
     ...(document.lines[1] as (typeof document.lines)[number]),

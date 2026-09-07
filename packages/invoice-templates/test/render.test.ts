@@ -21,6 +21,7 @@ const line = (overrides: Partial<RenderableLine> = {}): RenderableLine => ({
   lineId: 'l1',
   description: 'Plastic crate',
   hsnOrSac: '3923',
+  kind: 'GOODS',
   quantityText: '40 PCS',
   unitPrice: rupees(210),
   discount: null,
@@ -246,15 +247,27 @@ test('the QR area is big enough to scan, and says so when the code has not arriv
   assert.match(html, /\.qr-slot \{[^}]*width: 26mm/);
   assert.match(html, /\.qr-slot \{[^}]*padding: 2mm/);
 
+  // Issue #148 — a code that has not arrived leaves a box the size of the one it will land in.
   const pending = doc({ eInvoice: { irn: 'irn-1', qrSvg: null } });
   const pendingHtml = renderInvoice(pending, snapshotOf(wholesale), { format: 'A4', locale: 'en-IN' });
-  assert.ok(pendingHtml.includes('QR code not received yet'), 'an empty slot must explain itself');
+  assert.ok(pendingHtml.includes('Government QR, not received yet'), 'an empty slot must explain itself');
   assert.ok(!pendingHtml.includes('<svg'), 'we never draw a placeholder that looks like a real code');
 });
 
 test('a styled bill is never presented as a registered e-invoice', () => {
   const html = renderInvoice(doc(), snapshotOf(wholesale), { format: 'A4', locale: 'en-IN' });
-  assert.ok(!html.includes('IRN'), 'a bill with no government reference must not imply one');
+  // The bill has no government reference, so the words "IRN" and "Ack number" only ever appear on
+  // a reserved box that says out loud that nothing has arrived. Nothing on the page can be read as
+  // a registration this bill does not have.
+  assert.ok(!html.includes('<code>'), 'a bill with no government reference must not print one');
+  for (const claim of ['Government reference (IRN)', 'Ack number', 'Ack date']) {
+    const at = html.indexOf(claim);
+    if (at === -1) continue;
+    assert.ok(
+      html.slice(at, at + claim.length + 24).includes('not received yet'),
+      `"${claim}" must never stand on a bill without saying it has not arrived`,
+    );
+  }
   assert.ok(!html.includes('e-invoice'));
 });
 

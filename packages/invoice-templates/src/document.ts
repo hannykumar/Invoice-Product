@@ -26,6 +26,12 @@ export interface RenderableLine {
   readonly lineId: string;
   readonly description: string;
   readonly hsnOrSac: string | null;
+  /**
+   * Issue #131 — `GOODS` is something the customer bought and must satisfy quantity times rate
+   * equals the amount. `CHARGE` is freight or another charge, printed on a line of its own below
+   * the goods, never folded into one of them.
+   */
+  readonly kind: 'GOODS' | 'CHARGE';
   /** Already formatted with its unit, e.g. "70 BOX". Quantities are never re-derived when printing. */
   readonly quantityText: string;
   readonly unitPrice: Money;
