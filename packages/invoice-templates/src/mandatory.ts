@@ -81,4 +81,5 @@ export const OPTIONAL_FIELDS: readonly string[] = [
   'transport.transporter',
   'transport.eWayBillNumber',
   'qr.eInvoice',
+  'qr.upi',
 ];

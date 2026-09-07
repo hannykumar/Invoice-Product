@@ -54,6 +54,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
       lineId: l.lineId,
       description: l.itemName,
       hsnOrSac: l.hsnOrSac,
+      kind: l.kind,
       quantityText: formatQuantity(l.quantity),
       unitPrice: l.unitPrice,
       discount: l.discountAmount.minor === 0n ? null : l.discountAmount,

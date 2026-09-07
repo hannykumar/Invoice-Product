@@ -4,5 +4,6 @@ export * from './template.ts';
 export * from './document.ts';
 export * from './words.ts';
 export * from './snapshot.ts';
+export * from './reserved.ts';
 export * from './render.ts';
 export * from './from-sales.ts';

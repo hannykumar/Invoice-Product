@@ -19,6 +19,7 @@ import {
   isZero,
   money,
   mulDiv,
+  quantity,
   roundToWholeUnits,
   subtract,
   sum,
@@ -56,6 +57,16 @@ export type PriceBasis = 'EXCLUSIVE' | 'INCLUSIVE';
 export type RateBasis = 'REGISTER' | 'BUSINESS_DECLARED';
 export type TaxSplit = 'CGST_SGST' | 'CGST_UTGST' | 'IGST';
 
+/**
+ * Issue #131 — a computed line is either something that was sold, or a charge added to the bill.
+ *
+ * They are kept apart because a customer checks a goods line by multiplying quantity by rate. If
+ * freight is buried inside that line the multiplication fails and the whole bill looks wrong, which
+ * is the first thing anyone notices. A charge is therefore a line of its own.
+ */
+export type LineKind = 'GOODS' | 'CHARGE';
+export type ChargeKind = 'FREIGHT' | 'OTHER';
+
 export type Discount =
   | { readonly kind: 'PERCENT'; readonly percentTimes100: bigint }
   | { readonly kind: 'AMOUNT'; readonly amount: Money };
@@ -91,11 +102,21 @@ export interface ComputedTaxLine {
   readonly itemId: string;
   readonly itemName: string;
   readonly hsnOrSac: string | null;
+  /** `GOODS` for something that was sold, `CHARGE` for freight or another charge on the bill. */
+  readonly kind: LineKind;
+  /** Which charge this is, on a `CHARGE` line. `null` on everything that was sold. */
+  readonly chargeKind: ChargeKind | null;
   readonly treatment: TaxTreatment;
   readonly quantity: Quantity;
   readonly unitPrice: Money;
   readonly grossAmount: Money;
   readonly discountAmount: Money;
+  /**
+   * How much of the bill's freight and other charges sits inside this line's taxable value.
+   *
+   * Since issue #131 this is always zero on a goods line — a goods line is exactly quantity times
+   * rate, less its own discount — and on a charge line it is the whole of that charge.
+   */
   readonly chargesShare: Money;
   readonly taxableValue: Money;
   readonly ratePercentTimes100: bigint | null;
@@ -194,6 +215,32 @@ const nil = (): Money => zero(INR);
 
 /** Exact quantity times price, rounded once. Quantities are scaled by 10^6. */
 const extend = (unitPrice: Money, quantity: Quantity): Money => mulDiv(unitPrice, quantity.scaled, 1000000n);
+
+/**
+ * Splits GST on an exclusive-priced amount into the taxes that actually apply.
+ *
+ * CGST and SGST (or UTGST) are each half the rate, worked out separately rather than halving one
+ * figure, because the two halves are claimed and reported separately.
+ */
+const applySplit = (
+  base: Money,
+  rate: bigint,
+  split: TaxSplit,
+): { cgst: Money; sgst: Money; utgst: Money; igst: Money } => {
+  if (split === 'IGST') {
+    return { cgst: nil(), sgst: nil(), utgst: nil(), igst: mulDiv(base, rate, 10000n) };
+  }
+  const half = mulDiv(base, rate / 2n, 10000n);
+  return split === 'CGST_UTGST'
+    ? { cgst: half, sgst: nil(), utgst: half, igst: nil() }
+    : { cgst: half, sgst: half, utgst: nil(), igst: nil() };
+};
+
+/** What a charge is called on the bill. English, like every other line description here. */
+const CHARGE_NAMES: Record<ChargeKind, string> = {
+  FREIGHT: 'Freight',
+  OTHER: 'Other charges',
+};
 
 const applyDiscount = (gross: Money, discount: Discount | undefined): Money => {
   if (discount === undefined) return nil();
@@ -325,19 +372,25 @@ export class GstCalculator {
     if (prepared.some((p) => p === null)) return this.#refuse(input, reasons, decisions);
     const ready = prepared as NonNullable<(typeof prepared)[number]>[];
 
-    // 5. Freight and other charges form part of the supply, so they are apportioned across the
-    //    lines by value before tax is worked out — never taxed as a separate untaxed line.
-    const charges = add(input.freight ?? nil(), input.otherCharges ?? nil());
-    const weights = ready.map((r) => (r.net.minor < 0n ? 0n : r.net.minor));
-    const shares = isZero(charges) ? ready.map(() => nil()) : allocateByWeight(charges, weights);
-
-    const computedLines: ComputedTaxLine[] = [];
-    for (const [index, r] of ready.entries()) {
-      const chargesShare = shares[index] as Money;
-      const line = this.#computeLine(input, r, chargesShare, split, mayChargeGst, reasons);
-      if (line !== null) computedLines.push(line);
+    // 5. Goods lines carry nothing but their own arithmetic: quantity times rate, less their own
+    //    discount. Issue #131 — folding freight in here made the printed bill fail the first check
+    //    a customer makes, so charges are worked out separately in step 6.
+    const goodsLines: ComputedTaxLine[] = [];
+    for (const r of ready) {
+      const line = this.#computeLine(input, r, split, mayChargeGst, reasons);
+      if (line !== null) goodsLines.push(line);
     }
     if (reasons.length > 0) return this.#refuse(input, reasons, decisions);
+
+    // 6. Freight and other charges are still part of the same supply and are still taxed — they
+    //    are simply given lines of their own rather than hidden inside the goods.
+    const computedLines = [
+      ...goodsLines,
+      ...this.#chargeLines(goodsLines, [
+        { kind: 'FREIGHT', amount: input.freight ?? nil() },
+        { kind: 'OTHER', amount: input.otherCharges ?? nil() },
+      ], split),
+    ];
 
     const totals = this.#totals(computedLines, input.roundToWholeRupee ?? true);
     const declaredLines = computedLines.filter((l) => l.rateBasis === 'BUSINESS_DECLARED');
@@ -405,17 +458,16 @@ export class GstCalculator {
   #computeLine(
     input: ComputeInput,
     prepared: { line: TaxLineInput; item: import('./master-data-port.ts').ItemTaxClassification; gross: Money; discount: Money; net: Money },
-    chargesShare: Money,
     split: TaxSplit,
     mayChargeGst: boolean,
     reasons: BlockedReason[],
   ): ComputedTaxLine | null {
     const { line, item } = prepared;
-    const base = add(prepared.net, chargesShare);
+    const base = prepared.net;
     const notTaxed = item.treatment !== 'TAXABLE' || !mayChargeGst;
 
     if (notTaxed) {
-      return this.#assemble(line, item, prepared, chargesShare, base, null, nil(), nil(), nil(), nil(), nil(), null, null, split, mayChargeGst, null, null, null);
+      return this.#assemble(line, item, prepared, base, null, nil(), nil(), nil(), nil(), nil(), null, null, split, mayChargeGst, null, null, null);
     }
 
     if (item.hsnOrSac === null) {
@@ -465,7 +517,6 @@ export class GstCalculator {
     }
 
     const rate = entry.ratePercentTimes100;
-    const halfRate = rate / 2n;
 
     let taxableValue: Money;
     let cgst = nil();
@@ -477,6 +528,7 @@ export class GstCalculator {
       // Work the tax back out of the price, then set the taxable value to whatever is left, so the
       // parts always add back to exactly the price the shopkeeper quoted.
       const candidate = mulDiv(base, 10000n, 10000n + rate);
+      const halfRate = rate / 2n;
       if (split === 'IGST') {
         igst = mulDiv(candidate, rate, 10000n);
         taxableValue = subtract(base, igst);
@@ -494,18 +546,7 @@ export class GstCalculator {
       }
     } else {
       taxableValue = base;
-      if (split === 'IGST') {
-        igst = mulDiv(taxableValue, rate, 10000n);
-      } else {
-        const half = mulDiv(taxableValue, halfRate, 10000n);
-        if (split === 'CGST_UTGST') {
-          cgst = half;
-          utgst = half;
-        } else {
-          cgst = half;
-          sgst = half;
-        }
-      }
+      ({ cgst, sgst, utgst, igst } = applySplit(taxableValue, rate, split));
     }
 
     const cess = this.#cess(entry.cess, taxableValue, line.quantity);
@@ -513,7 +554,6 @@ export class GstCalculator {
       line,
       item,
       prepared,
-      chargesShare,
       taxableValue,
       rate,
       cgst,
@@ -585,11 +625,128 @@ export class GstCalculator {
     return rule.percentTimes100 === undefined ? perUnit : byPercent;
   }
 
+  /**
+   * Turns freight and other charges into lines of their own.
+   *
+   * Freight on a sale of goods is not a service the customer bought separately — it is part of the
+   * same supply, so it carries the rate of the goods it travelled with rather than a rate of its
+   * own. When a bill has goods at more than one rate, the charge is divided between those rates by
+   * value, and each part becomes its own line saying which goods it belongs to. That division is
+   * the only apportionment left: no goods line's own amount is ever touched by it.
+   *
+   * A bill with no goods lines at all gets one untaxed charge line, because there is no rate to
+   * borrow. That is visible on the bill rather than silently dropped.
+   */
+  #chargeLines(
+    goodsLines: readonly ComputedTaxLine[],
+    charges: readonly { kind: ChargeKind; amount: Money }[],
+    split: TaxSplit,
+  ): ComputedTaxLine[] {
+    const billed = charges.filter((c) => !isZero(c.amount));
+    if (billed.length === 0) return [];
+
+    const groups = new Map<
+      string,
+      { rate: bigint | null; reverseCharge: boolean; treatment: TaxTreatment; weight: bigint }
+    >();
+    for (const l of goodsLines) {
+      const key = `${l.ratePercentTimes100 ?? 'none'}|${l.reverseCharge}`;
+      const weight = l.taxableValue.minor < 0n ? 0n : l.taxableValue.minor;
+      const existing = groups.get(key);
+      if (existing === undefined) {
+        groups.set(key, { rate: l.ratePercentTimes100, reverseCharge: l.reverseCharge, treatment: l.treatment, weight });
+      } else {
+        existing.weight += weight;
+      }
+    }
+    const buckets =
+      groups.size === 0
+        ? [{ rate: null, reverseCharge: false, treatment: 'NON_GST' as TaxTreatment, weight: 1n }]
+        : [...groups.values()];
+
+    const lines: ComputedTaxLine[] = [];
+    for (const charge of billed) {
+      const shares = allocateByWeight(charge.amount, buckets.map((b) => b.weight));
+      for (const [index, bucket] of buckets.entries()) {
+        const amount = shares[index] as Money;
+        if (isZero(amount)) continue;
+        lines.push(this.#chargeLine(charge.kind, amount, bucket, buckets.length > 1, index, split));
+      }
+    }
+    return lines;
+  }
+
+  #chargeLine(
+    kind: ChargeKind,
+    amount: Money,
+    bucket: { rate: bigint | null; reverseCharge: boolean; treatment: TaxTreatment },
+    splitAcrossRates: boolean,
+    index: number,
+    split: TaxSplit,
+  ): ComputedTaxLine {
+    const { cgst, sgst, utgst, igst } =
+      bucket.rate === null
+        ? { cgst: nil(), sgst: nil(), utgst: nil(), igst: nil() }
+        : applySplit(amount, bucket.rate, split);
+    // No cess on a charge. Cess is defined per item — often per unit of that item — so there is no
+    // honest way to read one off a freight amount, and inventing one would be a wrong bill.
+    const totalTax = sum([cgst, sgst, utgst, igst]);
+    const suffix = !splitAcrossRates
+      ? ''
+      : bucket.rate === null
+        ? ' (on goods with no GST)'
+        : ` (on goods at ${Number(bucket.rate) / 100}%)`;
+    const name = `${CHARGE_NAMES[kind]}${suffix}`;
+    return {
+      lineId: `charge:${kind.toLowerCase()}:${index}`,
+      itemId: `charge:${kind.toLowerCase()}`,
+      itemName: name,
+      // A charge that rides on a supply of goods has no code of its own; it takes the treatment of
+      // the goods. Printing a transport SAC next to a 5% rate borrowed from fruit would be a lie.
+      hsnOrSac: null,
+      kind: 'CHARGE',
+      chargeKind: kind,
+      treatment: bucket.treatment,
+      // One of it, priced at its own amount, so quantity times rate equals the amount here too.
+      quantity: quantity(1, 'NOS'),
+      unitPrice: amount,
+      grossAmount: amount,
+      discountAmount: nil(),
+      chargesShare: amount,
+      taxableValue: amount,
+      ratePercentTimes100: bucket.rate,
+      cgst,
+      sgst,
+      utgst,
+      igst,
+      cess: nil(),
+      totalTax,
+      lineTotal: bucket.reverseCharge ? amount : add(amount, totalTax),
+      reverseCharge: bucket.reverseCharge,
+      rateSourceRef: null,
+      rateReviewState: null,
+      // The rate is borrowed from the goods, so the goods line is where its source is stated. Left
+      // null here so a borrowed rate never re-triggers the business-declared notice on its own.
+      rateBasis: null,
+      rateDeclaredBy: null,
+      rateDeclaredBasis: null,
+      explanation: {
+        'en-IN':
+          bucket.rate === null
+            ? `${name} of ${toDecimalString(amount)} is added to the bill. No GST applies to it, because none applies to the goods it goes with.`
+            : `${name} of ${toDecimalString(amount)} is part of the same supply, so it carries the same ${Number(bucket.rate) / 100}% GST as those goods: ${toDecimalString(totalTax)}.`,
+        'hi-IN':
+          bucket.rate === null
+            ? `${name} ${toDecimalString(amount)} bill mein juda hai. Is par GST nahin lagta, kyunki jis maal ke saath yeh hai us par bhi nahin lagta.`
+            : `${name} ${toDecimalString(amount)} usi supply ka hissa hai, isliye us maal jaisa hi ${Number(bucket.rate) / 100}% GST lagta hai: ${toDecimalString(totalTax)}.`,
+      },
+    };
+  }
+
   #assemble(
     line: TaxLineInput,
     item: import('./master-data-port.ts').ItemTaxClassification,
     prepared: { gross: Money; discount: Money },
-    chargesShare: Money,
     taxableValue: Money,
     rate: bigint | null,
     cgst: Money,
@@ -613,12 +770,14 @@ export class GstCalculator {
       itemId: item.itemId,
       itemName: item.name,
       hsnOrSac: item.hsnOrSac,
+      kind: 'GOODS',
+      chargeKind: null,
       treatment: item.treatment,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
       grossAmount: prepared.gross,
       discountAmount: prepared.discount,
-      chargesShare,
+      chargesShare: nil(),
       taxableValue,
       ratePercentTimes100: rate,
       cgst,

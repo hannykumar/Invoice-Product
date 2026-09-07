@@ -12,7 +12,7 @@
  *     template has no way to remove a legally required field, because it has no field for it.
  *  2. **Everything is escaped.** An item called `<script>` is a thing a shopkeeper can type.
  */
-import { formatDate, formatINR, toDecimalString, type Money } from '@invoice/kernel';
+import { formatDate, formatINR, sum, toDecimalString, type Money } from '@invoice/kernel';
 import type {
   InvoiceDocument,
   Locale,
@@ -21,6 +21,7 @@ import type {
   TemplateSnapshot,
 } from './document.ts';
 import type { PageFormat } from './template.ts';
+import { renderReservedSlot, reservedSlotStyles } from './reserved.ts';
 
 export interface RenderOptions {
   readonly format: PageFormat;
@@ -65,6 +66,8 @@ const T = {
   batch: { 'en-IN': 'Batch', 'hi-IN': 'Batch' },
   note: { 'en-IN': 'Note', 'hi-IN': 'Note' },
   taxable: { 'en-IN': 'Taxable value', 'hi-IN': 'Jis par tax laga' },
+  subTotal: { 'en-IN': 'Sub-total for goods', 'hi-IN': 'Maal ka sub-total' },
+  charges: { 'en-IN': 'Charges added to this bill', 'hi-IN': 'Bill mein jude charge' },
   gstPercent: { 'en-IN': 'GST %', 'hi-IN': 'GST %' },
   gstAmount: { 'en-IN': 'GST', 'hi-IN': 'GST' },
   lineTotal: { 'en-IN': 'Amount', 'hi-IN': 'Rakam' },
@@ -79,7 +82,6 @@ const T = {
   vehicle: { 'en-IN': 'Vehicle', 'hi-IN': 'Gaadi' },
   eWayBill: { 'en-IN': 'E-way bill', 'hi-IN': 'E-way bill' },
   irn: { 'en-IN': 'Government reference (IRN)', 'hi-IN': 'Sarkari reference (IRN)' },
-  qrPending: { 'en-IN': 'QR code not received yet', 'hi-IN': 'QR code abhi nahin mila' },
   bank: { 'en-IN': 'Pay into', 'hi-IN': 'Yahan bhejein' },
   po: { 'en-IN': 'Your order reference', 'hi-IN': 'Aapka order reference' },
 } as const;
@@ -128,30 +130,35 @@ const complianceLineColumns = (locale: Locale, snapshot: TemplateSnapshot): stri
 };
 
 const lineRow = (line: RenderableLine, snapshot: TemplateSnapshot): string => {
+  // A charge has no quantity and no rate a customer would recognise, so both are left blank rather
+  // than filled with a made-up "1". Only a goods line invites the quantity-times-rate check.
+  const charge = line.kind === 'CHARGE';
+  // Cells a charge has no answer for are left blank rather than filled with a dash. A row of five
+  // dashes reads as missing data; a blank cell reads as "does not apply", which is the truth.
   const cells = [
     `<td>${escapeHtml(line.description)}${line.reverseCharge ? ' <span class="tag">RCM</span>' : ''}</td>`,
-    `<td>${escapeHtml(line.hsnOrSac ?? '—')}</td>`,
-    `<td class="num">${escapeHtml(line.quantityText)}</td>`,
-    `<td class="num">${money(line.unitPrice)}</td>`,
+    `<td>${charge ? '' : escapeHtml(line.hsnOrSac ?? '—')}</td>`,
+    `<td class="num">${charge ? '' : escapeHtml(line.quantityText)}</td>`,
+    `<td class="num">${charge ? '' : money(line.unitPrice)}</td>`,
   ];
   if (snapshot.lineColumns.includes('line.discount')) {
-    cells.push(`<td class="num">${line.discount === null ? '—' : money(line.discount)}</td>`);
+    cells.push(`<td class="num">${charge ? '' : line.discount === null ? '—' : money(line.discount)}</td>`);
   }
-  if (snapshot.lineColumns.includes('line.batch')) cells.push(`<td>${escapeHtml(line.batch ?? '—')}</td>`);
-  if (snapshot.lineColumns.includes('line.note')) cells.push(`<td>${escapeHtml(line.note ?? '')}</td>`);
+  if (snapshot.lineColumns.includes('line.batch')) cells.push(`<td>${charge ? '' : escapeHtml(line.batch ?? '—')}</td>`);
+  if (snapshot.lineColumns.includes('line.note')) cells.push(`<td>${charge ? '' : escapeHtml(line.note ?? '')}</td>`);
   cells.push(
     `<td class="num">${money(line.taxableValue)}</td>`,
     `<td class="num">${escapeHtml(percent(line.ratePercentTimes100))}</td>`,
     `<td class="num">${money(line.taxAmount)}</td>`,
   );
-  return `<tr>${cells.join('')}</tr>`;
+  return `<tr${charge ? ' class="charge"' : ''}>${cells.join('')}</tr>`;
 };
 
 /** The narrow shapes get a list, because a nine-column table on 58mm of paper is unreadable. */
 const narrowLine = (line: RenderableLine, locale: Locale): string => `
   <div class="tline">
     <div class="tline-name">${escapeHtml(line.description)}${line.reverseCharge ? ' (RCM)' : ''}</div>
-    <div class="tline-detail"><span>${escapeHtml(line.quantityText)} × ${money(line.unitPrice)}</span><span class="num">${money(line.taxableValue)}</span></div>
+    <div class="tline-detail"><span>${line.kind === 'CHARGE' ? '' : `${escapeHtml(line.quantityText)} × ${money(line.unitPrice)}`}</span><span class="num">${money(line.taxableValue)}</span></div>
     ${line.ratePercentTimes100 === null ? '' : `<div class="tline-tax"><span>${escapeHtml(t('gstAmount', locale))} ${escapeHtml(percent(line.ratePercentTimes100))}</span><span class="num">${money(line.taxAmount)}</span></div>`}
   </div>`;
 
@@ -197,12 +204,19 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .words { margin-top: 2mm; border: 1px dashed ${palette.border}; padding: 2mm; }
     .notice { margin-top: 3mm; border-left: 3px solid ${palette.accent}; background: #fffbe6; padding: 2mm; }
     .tag { font-size: ${typography.baseSizePt - 1}pt; border: 1px solid ${palette.border}; padding: 0 .8mm; }
+    table.items tbody.charges tr:first-child td { border-top: 1px solid ${palette.accent}; }
+    table.items tr.charge td { background: #fafafa; }
+    table.items tr.subtotal td { font-weight: 600; border-top: 1px solid ${palette.accent}; }
     .tline { border-bottom: 1px dotted ${palette.border}; padding: 1.2mm 0; break-inside: avoid; }
     .tline-name { font-weight: 700; }
+    .tcharges { border-top: 1px solid ${palette.border}; margin-top: 1.5mm; padding-top: 1mm; }
     .tline-detail, .tline-tax { display: flex; justify-content: space-between; }
     .qr { margin-top: 3mm; display: flex; gap: 3mm; align-items: center; }
     .qr-slot { width: 26mm; height: 26mm; border: 1px solid ${palette.border}; padding: 2mm; display: flex; align-items: center; justify-content: center; text-align: center; font-size: ${typography.baseSizePt - 2}pt; color: ${palette.muted}; background: #fff; }
     .qr-slot svg { width: 100%; height: 100%; }
+    .qr-pair { display: flex; gap: 3mm; align-items: flex-start; flex-wrap: wrap; }
+    .qr-lines { display: flex; flex-direction: column; gap: 1.5mm; }
+    ${reservedSlotStyles(palette.border, palette.muted, Math.max(6, typography.baseSizePt - 2))}
     footer { margin-top: 4mm; border-top: 1px solid ${palette.border}; padding-top: 2mm; color: ${palette.muted}; }
     @media print {
       body { background: #fff; }
@@ -249,11 +263,31 @@ export const renderInvoice = (
     doc.reverseCharge ? `<div><strong>${escapeHtml(t('reverseCharge', locale))}</strong></div>` : '',
   ].join('');
 
+  // Issue #131 — goods first, then charges on lines of their own. A goods line on the printed bill
+  // is exactly quantity × rate less its shown discount, so the first check anyone makes succeeds.
+  const goodsLines = doc.lines.filter((l) => l.kind !== 'CHARGE');
+  const chargeLines = doc.lines.filter((l) => l.kind === 'CHARGE');
+  const columnCount = narrow ? 0 : complianceLineColumns(locale, snapshot).length;
+  const goodsSubTotal = sum(goodsLines.map((l) => l.taxableValue));
+
+  const chargeBody =
+    chargeLines.length === 0
+      ? ''
+      : `<tbody class="charges">
+          <tr class="subtotal"><td colspan="${columnCount - 3}">${escapeHtml(t('subTotal', locale))}</td><td class="num">${money(goodsSubTotal)}</td><td></td><td></td></tr>
+          ${chargeLines.map((l) => lineRow(l, snapshot)).join('')}
+        </tbody>`;
+
   const itemsBlock = narrow
-    ? `<div class="items-narrow">${doc.lines.map((l) => narrowLine(l, locale)).join('')}</div>`
+    ? `<div class="items-narrow">${goodsLines.map((l) => narrowLine(l, locale)).join('')}${
+        chargeLines.length === 0
+          ? ''
+          : `<div class="tcharges"><div class="tline-name">${escapeHtml(t('charges', locale))}</div>${chargeLines.map((l) => narrowLine(l, locale)).join('')}</div>`
+      }</div>`
     : `<table class="items">
         <thead><tr>${complianceLineColumns(locale, snapshot).map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
-        <tbody>${doc.lines.map((l) => lineRow(l, snapshot)).join('')}</tbody>
+        <tbody>${goodsLines.map((l) => lineRow(l, snapshot)).join('')}</tbody>
+        ${chargeBody}
       </table>`;
 
   const totals = `
@@ -278,13 +312,29 @@ export const renderInvoice = (
           ${doc.transport.eWayBillNumber == null ? '' : `<div><span class="k">${escapeHtml(t('eWayBill', locale))}:</span> ${escapeHtml(doc.transport.eWayBillNumber)}</div>`}
         </section>`;
 
-  const qr =
-    doc.eInvoice === null || !shows('qr.eInvoice')
-      ? ''
-      : `<div class="qr">
-          <div class="qr-slot">${doc.eInvoice.qrSvg ?? escapeHtml(t('qrPending', locale))}</div>
-          <div><span class="k">${escapeHtml(t('irn', locale))}:</span><br><code>${escapeHtml(doc.eInvoice.irn)}</code></div>
-        </div>`;
+  // Issue #148 — the e-invoice block is drawn whenever the design carries it, whether or not the
+  // government reply has arrived. What has not arrived is a reserved box at its final size, so the
+  // page a business approves today is the page that prints once the provider is connected.
+  const reserved = (id: Parameters<typeof renderReservedSlot>[0]): string =>
+    renderReservedSlot(id, format, locale, escapeHtml);
+
+  const qr = !shows('qr.eInvoice')
+    ? ''
+    : `<div class="qr qr-pair">
+        ${doc.eInvoice?.qrSvg == null ? reserved('einvoice.qr') : `<div class="qr-slot">${doc.eInvoice.qrSvg}</div>`}
+        <div class="qr-lines">
+          ${
+            doc.eInvoice === null
+              ? reserved('einvoice.irn')
+              : `<div><span class="k">${escapeHtml(t('irn', locale))}:</span><br><code>${escapeHtml(doc.eInvoice.irn)}</code></div>`
+          }
+          <div class="qr-pair">${reserved('einvoice.ackNumber')}${reserved('einvoice.ackDate')}</div>
+        </div>
+      </div>`;
+
+  // The pay-by-scan square. No shipped design carries it yet; issue #144 turns it on and supplies
+  // the business's UPI id, and finds the space already waiting for it here.
+  const upi = !shows('qr.upi') ? '' : `<div class="qr qr-pair">${reserved('upi.qr')}</div>`;
 
   const bank =
     doc.bankDetails === null || !shows('seller.bankDetails')
@@ -331,6 +381,7 @@ export const renderInvoice = (
   ${words}
   ${notice}
   ${qr}
+  ${upi}
   <footer>${footerBits}</footer>
 </div>
 </body>
