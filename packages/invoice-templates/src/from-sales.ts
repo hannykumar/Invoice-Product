@@ -29,6 +29,10 @@ export interface PrintingContext {
   readonly declaredRateNotice?: string | null;
   readonly batchByLineId?: Readonly<Record<string, string>>;
   readonly noteByLineId?: Readonly<Record<string, string>>;
+  /** Issue #138 — how each line was packed for the journey, e.g. "80 Bags". */
+  readonly packagesByLineId?: Readonly<Record<string, string>>;
+  /** Issue #138 — the business's signature image, supplied the same way as its logo. */
+  readonly signatureDataUri?: string | null;
 }
 
 const nil = (): Money => zero('INR');
@@ -70,6 +74,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
       cess: l.cess,
       reverseCharge: l.reverseCharge,
       batch: context.batchByLineId?.[l.lineId] ?? null,
+      packages: context.packagesByLineId?.[l.lineId] ?? null,
       note: context.noteByLineId?.[l.lineId] ?? null,
     })),
     totals: {
@@ -94,6 +99,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     bankDetails: context.bankDetails ?? null,
     terms: context.terms ?? null,
     declaration: context.declaration ?? null,
+    signatureDataUri: context.signatureDataUri ?? null,
     poReference: context.poReference ?? null,
   };
 };

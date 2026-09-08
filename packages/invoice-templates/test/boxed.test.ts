@@ -90,6 +90,7 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   bankDetails: null,
   terms: null,
   declaration: null,
+  signatureDataUri: null,
   poReference: null,
   ...overrides,
 });
@@ -262,4 +263,101 @@ test('what a shopkeeper types is escaped on this design too', () => {
   assert.ok(!html.includes('<script>alert(1)</script>'));
   assert.ok(!html.includes('<img src=x'));
   assert.ok(html.includes('&lt;script&gt;'));
+});
+
+
+/**
+ * Issue #138 — the ten trade fields real bills carry.
+ *
+ * Each is small on its own. Together they are what makes a page read as a bill rather than a
+ * printout, so each is checked for three things: it prints when the fact is there, it leaves no
+ * empty label when it is not, and it stays off the till roll where there is no room.
+ */
+const withTradeFields = (): InvoiceDocument =>
+  doc({
+    seller: { ...doc().seller, pan: 'AAAAA0000A' },
+    lines: [line({ packages: '80 Bags' })],
+    transport: {
+      transporter: 'Sharma Roadlines',
+      vehicleNumber: 'DL01AB1234',
+      eWayBillNumber: '3912 4455 6677',
+      lrNumber: 'SRL/2026/44120',
+      documentNumber: 'GC-88213',
+      documentDate: isoDate('2026-08-20'),
+      destination: 'Ghazipur Cold Store, Gate 4',
+    },
+  });
+
+test('#138 — the trade fields print on A4 when the bill carries them', () => {
+  const html = renderIndia(withTradeFields());
+  for (const [what, expected] of [
+    ['company PAN', 'AAAAA0000A'],
+    ['number and kind of packages', '80 Bags'],
+    ['the packages column heading', '>Packages<'],
+    ['LR / RR number', 'SRL/2026/44120'],
+    ['transport document number', 'GC-88213'],
+    ['delivery destination', 'Ghazipur Cold Store, Gate 4'],
+    ['a serial number column', '>Sl<'],
+    ["the line's own amount", '>Amount<'],
+    ['the unit beside the rate', '>per<'],
+    ['tax amount in words', 'Tax amount in words'],
+  ] as const) {
+    assert.ok(html.includes(expected), `${what} must be printed`);
+  }
+  assert.ok(html.includes('Authorised Signatory'), 'and the bill is signed for');
+});
+
+test('#138 — a bill without a fact prints cleanly, with no empty label', () => {
+  const bare = renderIndia(doc());
+  assert.ok(!bare.includes('PAN'), 'no PAN line when the business has not given one');
+  assert.ok(!bare.includes('LR / RR number'), 'no transporter paperwork row without a transporter');
+  assert.ok(!bare.includes('Destination'), 'no destination label with nothing to put in it');
+
+  // The packages column is a design choice, so a design that does not show it prints no heading.
+  const withoutColumn = renderInvoice(
+    withTradeFields(),
+    { ...snapshotOf(india), lineColumns: ['line.discount'] },
+    { format: 'A4', locale: 'en-IN' },
+  );
+  assert.ok(!withoutColumn.includes('>Packages<'));
+});
+
+test('#138 — none of them reach the till roll, where there is no room', () => {
+  const html = renderIndia(withTradeFields(), 'THERMAL_58MM');
+  // Checked by label rather than by value: a GSTIN has the PAN inside it (07**AAAAA0000A**1Z4), so
+  // looking for the number alone would find the GSTIN and fail on a page that is perfectly correct.
+  for (const absent of ['PAN', 'Packages', '80 Bags', 'SRL/2026/44120', 'GC-88213', 'Ghazipur Cold Store', 'Authorised Signatory']) {
+    assert.ok(!html.includes(absent), `${absent} has no place on 58mm paper`);
+  }
+  // What a customer at a counter does need still prints.
+  assert.ok(html.includes('ABC Traders') && html.includes('Total to pay'));
+});
+
+test('#138 — the signature is an uploaded image, with a reserved box until one exists', () => {
+  const waiting = renderIndia(doc());
+  assert.ok(waiting.includes('data-reserved="signature"'), 'the space is held at its final size');
+  assert.ok(waiting.includes('Signature not uploaded yet'), 'and says why it is empty');
+  assert.ok(!waiting.includes('<img class="sign-image"'));
+
+  const signed = renderIndia(doc({ signatureDataUri: 'data:image/png;base64,iVBORw0KGgo=' }));
+  assert.ok(signed.includes('<img class="sign-image"'), 'the real signature is printed once uploaded');
+  assert.ok(!signed.includes('data-reserved="signature"'), 'and the reserved box gives way to it');
+  assert.ok(signed.includes('Authorised Signatory'), 'the rule under it stays either way');
+});
+
+test('#138 — we state a fact about the document, but reserve nothing on the business behalf', () => {
+  const html = renderIndia(doc());
+  // This product produced the page, so it can say so.
+  assert.ok(html.includes('This is a computer generated invoice.'));
+  // "Errors and omissions excepted" is a reservation the business makes to its customer. It is off
+  // until a business turns it on, like every other commitment on this bill.
+  assert.ok(!html.includes('E. & O.E.'));
+  assert.ok(!india.optionalFields.includes('footer.eoe'));
+
+  const optedIn = renderInvoice(
+    doc(),
+    { ...snapshotOf(india), optionalFields: [...india.optionalFields, 'footer.eoe'] },
+    { format: 'A4', locale: 'en-IN' },
+  );
+  assert.ok(optedIn.includes('E. &amp; O.E.'), 'and prints as soon as the business asks for it');
 });

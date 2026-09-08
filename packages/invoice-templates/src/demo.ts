@@ -146,6 +146,7 @@ const main = async (): Promise<void> => {
     name: 'Sharma Fruit Traders',
     addressLines: ['12/4, Ajmal Khan Road', 'Karol Bagh, New Delhi 110005'],
     gstin: '07AAAAA0000A1Z4',
+    pan: 'AAAAA0000A',
     stateCode: '07',
     stateName: 'Delhi',
     phone: '011 4000 1234',
@@ -165,7 +166,15 @@ const main = async (): Promise<void> => {
     seller,
     buyer,
     placeOfSupplyStateName: 'Delhi',
-    transport: { transporter: 'Sharma Roadlines', vehicleNumber: 'DL01AB1234', eWayBillNumber: null },
+    transport: {
+      transporter: 'Sharma Roadlines',
+      vehicleNumber: 'DL01AB1234',
+      eWayBillNumber: null,
+      lrNumber: 'SRL/2026/44120',
+      documentNumber: 'GC-88213',
+      documentDate: isoDate('2026-08-20'),
+      destination: 'Azadpur Mandi, New Delhi',
+    },
     bankDetails: ['HDFC Bank, Karol Bagh', 'Account 50200012345678', 'IFSC HDFC0000123'],
     // Sample text, invented for this walkthrough. A real bill carries the terms the business itself
     // wrote and nothing else — this product never puts words in its mouth.
@@ -177,6 +186,7 @@ const main = async (): Promise<void> => {
     // its own locale below, so it picks the matching sentence.
     declaredRateNotice: null,
     batchByLineId: { l1: 'AP-2608', l3: 'JU-1912' },
+    packagesByLineId: { l1: '70 Boxes', l2: '8 Bundles', l3: '10 Cartons' },
   });
 
   const outDir = join(process.cwd(), 'tmp', 'invoices');
