@@ -212,7 +212,11 @@ export const renderBoxed = (
       ? ''
       : `<td><span class="cap">${escapeHtml(t('bank', locale))}</span>${doc.bankDetails.map((l) => `<div>${escapeHtml(l)}</div>`).join('')}</td>`;
 
-  const footerCells = [declaration, bank, signature].filter((c) => c !== '');
+  // The pay-by-scan square sits beside the bank details, which is where a customer looks for a way
+  // to pay. Issue #144 supplies the business's UPI id; issue #148's reserved box holds the space.
+  const upi = !shows('qr.upi') ? '' : `<td class="upi-cell">${reserved('upi.qr')}</td>`;
+
+  const footerCells = [declaration, bank, upi, signature].filter((c) => c !== '');
 
   // The government block belongs at the top of the page, which is where a registered e-invoice
   // carries it and where anyone checking the bill looks first. Putting it here also means the QR

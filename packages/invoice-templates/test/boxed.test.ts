@@ -125,15 +125,34 @@ test('the item table reads like a bill: a serial column, the unit beside the rat
   assert.ok(html.includes('>1</td>'), 'lines are numbered from one');
 });
 
-test('india-standard is what a wholesaler and a manufacturer are offered first', () => {
+test('there is one correct bill: every shipped design is boxed, and none is the weaker option', () => {
   assert.equal(recommendTemplates('WHOLESALE')[0]?.id, 'india-standard');
   assert.equal(recommendTemplates('MANUFACTURING')[0]?.id, 'india-standard');
-  assert.equal(
-    recommendTemplates('WHOLESALE').length,
-    SHIPPED_TEMPLATES.length,
-    'the cleaner design stays available, it is only no longer first',
+
+  // A business is never offered a version of the bill that is missing something. Designs differ in
+  // what optional extras they carry and what fits on their paper — never in whether the bill is
+  // complete. The old airy design was deleted rather than kept as an alternative.
+  assert.ok(
+    SHIPPED_TEMPLATES.every((t) => t.layout === 'BOXED'),
+    'no shipped design is airy any more',
   );
-  assert.ok(recommendTemplates('WHOLESALE').some((t) => t.id === 'wholesale-classic'));
+  assert.ok(!SHIPPED_TEMPLATES.some((t) => t.id === 'wholesale-classic'));
+
+  // And the parts that make a bill correct come from the renderer, not from the design, so every
+  // design on paper wide enough for them carries them.
+  for (const template of SHIPPED_TEMPLATES.filter((t) => t.formats.includes('A4'))) {
+    const html = renderInvoice(doc(), snapshotOf(template), { format: 'A4', locale: 'en-IN' });
+    assert.ok(html.includes('Tax summary by HSN / SAC'), `${template.id} prints the tax summary`);
+    assert.ok(html.includes('Tax amount in words'), `${template.id} prints the tax total in words`);
+    assert.ok(html.includes('In words'), `${template.id} prints the amount in words`);
+    assert.ok(html.includes('>Sl<') && html.includes('>Amount<'), `${template.id} has a proper item table`);
+  }
+});
+
+test('no shipped design puts words on the bill that the business did not write', () => {
+  for (const template of SHIPPED_TEMPLATES) {
+    assert.equal(template.footerNote, null, `${template.id} ships no slogan or returns policy`);
+  }
 });
 
 test('it still cannot drop a required field, and prints the compliance section on every paper', () => {

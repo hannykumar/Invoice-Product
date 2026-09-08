@@ -16,10 +16,13 @@ export type PageFormat = 'A4' | 'THERMAL_80MM' | 'THERMAL_58MM' | 'MOBILE';
 /**
  * Issue #140 — how the page is built, which is a deeper choice than how it is coloured.
  *
- * `AIRY` is the original: white space, rules under the rows, a coloured heading band. `BOXED` is
- * how an Indian tax invoice is actually laid out — the whole page is one ruled grid, every fact in
- * its own cell, closed on all four sides. Businesses judge a billing product on whether its output
- * looks like the bills they already send, and on that test the airy page reads as foreign software.
+ * `BOXED` is how an Indian tax invoice is actually laid out — the whole page is one ruled grid,
+ * every fact in its own cell, closed on all four sides. Every shipped design is boxed.
+ *
+ * `AIRY` is the original: white space, rules under the rows, a coloured heading band. No design
+ * ships it any more. It stays only because a bill records the design it was printed with, so a bill
+ * issued before this changed must still reprint as the page it was rather than silently changing
+ * shape years later.
  *
  * This is a structural choice, so it cannot be expressed through the palette: it changes which
  * boxes exist, not what colour they are.
@@ -111,9 +114,15 @@ const DEVANAGARI_SAFE = "'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', system-
 /**
  * The templates that ship.
  *
- * Each exists because a real business needs it, not because a designer wanted variety. The
- * wholesaler needs HSN, batch and transport; the bakery needs flavour, size and a delivery date;
- * the counter shop needs 58 millimetres of thermal paper and nothing else.
+ * **There is one correct bill.** Every design below is the same boxed page and carries the same
+ * compliance section, item table, HSN summary and totals, because those come from the renderer and
+ * a design has no field with which to remove them. What a design chooses is only which *optional*
+ * extras it shows and which paper it fits on: the wholesaler wants batch and transport, the bakery
+ * wants a note per line, the counter shop wants 58 millimetres of till roll and nothing else.
+ *
+ * A business is never offered a version of the bill that is missing something another version has.
+ * The earlier airy design was deleted rather than kept as an alternative for anyone who preferred
+ * the look, because a business that picked it would have got a worse bill with no way to know.
  */
 export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
   {
@@ -145,31 +154,9 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     publishedOn: '2026-09-08' as IsoDate,
   },
   {
-    id: 'wholesale-classic',
-    version: '1.0.0',
-    layout: 'AIRY',
-    name: { 'en-IN': 'Wholesale, plain', 'hi-IN': 'Thok, saada' },
-    businessTypes: ['WHOLESALE', 'MANUFACTURING'],
-    formats: ['A4', 'MOBILE'],
-    palette: { accent: '#1f4e79', text: '#111111', muted: '#555555', border: '#999999' },
-    typography: { bodyStack: DEVANAGARI_SAFE, headingStack: DEVANAGARI_SAFE, baseSizePt: 9 },
-    optionalFields: [
-      'seller.logo', 'seller.phone', 'seller.bankDetails', 'document.dueDate', 'document.poReference',
-      'line.batch', 'line.discount', 'totals.outstanding', 'footer.terms', 'footer.signature',
-      'transport.vehicleNumber', 'transport.transporter', 'transport.eWayBillNumber', 'qr.eInvoice',
-    ],
-    lineColumns: ['line.batch', 'line.discount'],
-    logo: { show: true, maxHeightPt: 42 },
-    footerNote: {
-      'en-IN': 'Goods once sold are taken back only as agreed.',
-      'hi-IN': 'Becha hua maal sirf tay shart par wapas liya jayega.',
-    },
-    publishedOn: '2026-08-29' as IsoDate,
-  },
-  {
     id: 'bakery-warm',
     version: '1.0.0',
-    layout: 'AIRY',
+    layout: 'BOXED',
     name: { 'en-IN': 'Bakery', 'hi-IN': 'Bakery' },
     businessTypes: ['BAKERY', 'RETAIL'],
     formats: ['A4', 'THERMAL_80MM', 'MOBILE'],
@@ -178,13 +165,13 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     optionalFields: ['seller.logo', 'seller.phone', 'line.note', 'footer.thankYou', 'totals.amountPaid'],
     lineColumns: ['line.note'],
     logo: { show: true, maxHeightPt: 56 },
-    footerNote: { 'en-IN': 'Thank you, and come again.', 'hi-IN': 'Dhanyavaad, phir aaiyega.' },
+    footerNote: null,
     publishedOn: '2026-08-29' as IsoDate,
   },
   {
     id: 'counter-thermal',
     version: '1.0.0',
-    layout: 'AIRY',
+    layout: 'BOXED',
     name: { 'en-IN': 'Counter slip', 'hi-IN': 'Counter parchi' },
     businessTypes: ['RETAIL'],
     formats: ['THERMAL_58MM', 'THERMAL_80MM'],
@@ -193,13 +180,13 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     optionalFields: ['seller.phone', 'totals.amountPaid', 'footer.thankYou'],
     lineColumns: [],
     logo: { show: false, maxHeightPt: 0 },
-    footerNote: { 'en-IN': 'Thank you.', 'hi-IN': 'Dhanyavaad.' },
+    footerNote: null,
     publishedOn: '2026-08-29' as IsoDate,
   },
   {
     id: 'services-simple',
     version: '1.0.0',
-    layout: 'AIRY',
+    layout: 'BOXED',
     name: { 'en-IN': 'Services', 'hi-IN': 'Service' },
     businessTypes: ['SERVICES'],
     formats: ['A4', 'MOBILE'],
@@ -208,13 +195,13 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     optionalFields: ['seller.logo', 'seller.email', 'seller.bankDetails', 'document.dueDate', 'line.note', 'footer.terms', 'footer.signature'],
     lineColumns: ['line.note'],
     logo: { show: true, maxHeightPt: 48 },
-    footerNote: { 'en-IN': 'Payable within the agreed days.', 'hi-IN': 'Tay dinon ke andar dena hai.' },
+    footerNote: null,
     publishedOn: '2026-08-29' as IsoDate,
   },
   {
     id: 'transport-consignment',
     version: '1.0.0',
-    layout: 'AIRY',
+    layout: 'BOXED',
     name: { 'en-IN': 'Transport', 'hi-IN': 'Transport' },
     businessTypes: ['TRANSPORT'],
     formats: ['A4'],
