@@ -69,6 +69,22 @@ record, so a retry after a timeout still ends holding the right IRN — which is
 validator refuses them, correctly. The trial script swaps them in after the payload is built.
 Nothing in the product does this, and the validator stays as it is.
 
+## e-Way bill does not work on this sandbox
+
+Three separate attempts, all on 9 September 2026:
+
+- `/ewaybillapi/v1.03/authenticate` answers `status_cd: "1"` but with the placeholder text
+  *"If authentication succeeds"* and **no token and no `data` object**. It is a stub.
+- No generation route exists. Eight path shapes were tried — `/ewaybillapi/v1.03/ewayapi`,
+  `/ewaybill/type/GENERATE/version/V1_03`, `/ewb/...` and others — and every one answers
+  `WB_ERR_9404`.
+- Asking for the e-way bill on the e-invoice call, which is how an invoice-linked movement is
+  normally raised, registers the IRN happily and returns **no `EwbNo`** at all. `EwbDtls` is
+  accepted and ignored.
+
+So the e-way bill lane is not merely unproven, it is unavailable here. Either it lives on a host
+their documentation names, or the sandbox account has to be enabled for it separately.
+
 ## What is still open
 
 The **GST-returns route** is still not found: `/gst`, `/gstr`, `/gstapi`, `/taxpayerapi`,
