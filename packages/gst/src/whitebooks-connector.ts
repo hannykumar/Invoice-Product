@@ -57,6 +57,8 @@ type Envelope = {
   readonly data?: unknown;
   readonly error?: unknown;
   readonly errorCode?: string;
+  /** Where the sentence a person can read actually lives, when there is one. */
+  readonly info?: string;
 };
 
 /**
@@ -99,9 +101,18 @@ const unwrap = (body: Envelope): Record<string, unknown> => {
     const described = parseErrors(body.status_desc ?? "");
     if (described !== undefined) return { ErrorCode: described.code, ErrorMessage: described.message };
 
+    // Two spellings are in use across their lanes: `error_cd`/`message` on e-invoice, and
+    // `errorCode`/`errorMessage` on e-way bill — where `errorMessage` is the code repeated and the
+    // readable sentence sits in `info` instead ("The distance between the pincodes given is too
+    // high or low"). Take whichever actually says something.
     const errors = Array.isArray(body.error) ? body.error : [];
-    const first = errors[0] as { error_cd?: string; message?: string } | undefined;
-    if (first?.error_cd !== undefined) return { ErrorCode: String(first.error_cd), ErrorMessage: first.message ?? "" };
+    const first = errors[0] as { error_cd?: unknown; errorCode?: unknown; message?: unknown; errorMessage?: unknown } | undefined;
+    const code = first?.error_cd ?? first?.errorCode;
+    if (code !== undefined) {
+      const stated = [first?.message, first?.errorMessage].find((value) => typeof value === "string" && value !== "" && value !== String(code));
+      const readable = (body.info ?? "").replace(/^[,\s]+/, "");
+      return { ErrorCode: String(code), ErrorMessage: (stated as string | undefined) ?? readable };
+    }
 
     // A refusal we cannot itemise still has to reach the caller as a refusal, or a rejected bill
     // would look like a registered one with every field blank.

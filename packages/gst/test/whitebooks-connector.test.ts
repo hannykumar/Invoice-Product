@@ -176,3 +176,21 @@ test("AckNo arrives as a number and must survive as text", async () => {
 
   assert.equal(response.payload.AckNo, "152610027961228");
 });
+
+test("the e-way bill lane spells its errors differently, and hides the readable part in info", async () => {
+  // Live shape from /ewaybillapi/v1.03/ewayapi/genewaybill: errorMessage merely repeats the code,
+  // and the sentence worth showing a person is in `info`.
+  const { fetch } = stub([AUTH_OK, {
+    status_cd: "0", irp: "NIC1",
+    error: [{ errorCode: "702", errorMessage: "702" }],
+    info: ", The distance between the pincodes given is too high or low",
+  }]);
+  const connector = whitebooksIrpConnector({ credentials: CREDENTIALS, email: "dev@example.com", fetch });
+
+  const response = await connector.execute({
+    tenantId: "t", operation: "einvoice.generate", payload: {}, idempotencyKey: "k", correlationId: "c",
+  });
+
+  assert.equal(response.payload.ErrorCode, "702");
+  assert.equal(response.payload.ErrorMessage, "The distance between the pincodes given is too high or low");
+});

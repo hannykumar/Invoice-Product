@@ -69,21 +69,37 @@ record, so a retry after a timeout still ends holding the right IRN — which is
 validator refuses them, correctly. The trial script swaps them in after the payload is built.
 Nothing in the product does this, and the validator stays as it is.
 
-## e-Way bill does not work on this sandbox
+## All three lanes work
 
-Three separate attempts, all on 9 September 2026:
+Their real documentation is inside the Developer Hub, behind the login, at
+`developer.whitebooks.in/apis/docs/{gst-api,e-invoice-api,e-way-bill-api}`. The e-way bill
+reference alone lists 27 endpoint groups. Everything below came from it and was then confirmed
+against the live sandbox on 9 September 2026.
 
-- `/ewaybillapi/v1.03/authenticate` answers `status_cd: "1"` but with the placeholder text
-  *"If authentication succeeds"* and **no token and no `data` object**. It is a stub.
-- No generation route exists. Eight path shapes were tried — `/ewaybillapi/v1.03/ewayapi`,
-  `/ewaybill/type/GENERATE/version/V1_03`, `/ewb/...` and others — and every one answers
-  `WB_ERR_9404`.
-- Asking for the e-way bill on the e-invoice call, which is how an invoice-linked movement is
-  normally raised, registers the IRN happily and returns **no `EwbNo`** at all. `EwbDtls` is
-  accepted and ignored.
+**An earlier note in this file said e-way bill was unavailable. That was wrong.** The route exists;
+the path is lower case. `/ewaybillapi/v1.03/ewayapi/GENEWAYBILL` answers `WB_ERR_9404` and
+`/ewaybillapi/v1.03/ewayapi/genewaybill` works. Eight probes missed it on capitalisation alone,
+which is why guessing at paths was the wrong method and reading their reference was the right one.
 
-So the e-way bill lane is not merely unproven, it is unavailable here. Either it lives on a host
-their documentation names, or the sandbox account has to be enabled for it separately.
+| Lane | Route | Confirmed by |
+| --- | --- | --- |
+| e-Invoice login | `GET /einvoice/authenticate` | A live IRN |
+| e-Invoice generate | `POST /einvoice/type/GENERATE/version/V1_03` | A live IRN |
+| e-Invoice fetch | `GET /einvoice/type/GETIRN/version/V1_03` | A live fetch |
+| e-Way bill generate | `POST /ewaybillapi/v1.03/ewayapi/genewaybill` | e-way bill `501009126912` |
+| GST returns OTP | `GET /authentication/otprequest` | `status_cd 1`, txn returned |
+
+Three things the reference settles that probing could not:
+
+- **The e-way bill lane needs no token.** `/ewaybillapi/v1.03/authenticate` returns the placeholder
+  *"If authentication succeeds"* and no token, because none is wanted: `password` travels as a
+  header on the generate call itself.
+- **The GST returns lane sits at the root**, not under a `/gst` prefix, and it wants `gst_username`
+  and `state_cd` as *headers* — not the `username` header the other two lanes use. It answers an
+  OTP request with a transaction id, confirming the OTP design the help guide described.
+- **The e-way bill lane spells its errors differently.** e-Invoice sends `error_cd`/`message`;
+  e-way bill sends `errorCode`/`errorMessage` where `errorMessage` merely repeats the code, and the
+  sentence worth showing a person is in a separate `info` field. `unwrap` now reads both.
 
 ## Their public documentation does not exist
 
