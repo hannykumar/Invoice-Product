@@ -81,6 +81,7 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   eInvoice: null,
   taxAmountInWordsText: amountInWords(rupees(1512)),
   declaration: null,
+  signatureDataUri: null,
   amountInWordsText: amountInWords(rupees(9912)),
   declaredRateNotice: null,
   logoDataUri: null,

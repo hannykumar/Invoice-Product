@@ -201,7 +201,9 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed table.notice td { background: #fffbe6; }
     .boxed table.foot td.upi-cell { width: 32mm; text-align: center; }
     .boxed .sign-cell { text-align: right; }
-    .boxed .sign-space { height: 16mm; }
+    .boxed .sign-space { min-height: 16mm; display: flex; align-items: center; justify-content: flex-end; }
+    .boxed .sign-image { max-height: 16mm; max-width: 48mm; }
+    .boxed table.notations td { text-align: center; color: ${palette.muted}; }
     .boxed .sign-line { font-weight: 700; }
     .boxed table.head td.party-cell { width: 50%; }
     .boxed table.head.with-qr td.party-cell { width: 34%; }

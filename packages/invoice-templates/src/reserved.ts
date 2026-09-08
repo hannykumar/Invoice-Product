@@ -3,7 +3,8 @@
  *
  * Some things on a bill cannot carry a real value until an outside connection is live. The
  * government e-invoice QR picture, the IRN and the acknowledgement number and date all wait on a
- * provider (#51). The pay-by-scan UPI square waits on a business saving its UPI id (#144).
+ * provider (#51). The pay-by-scan UPI square waits on a business saving its UPI id (#144), and the
+ * signature image waits on the business uploading one (#146).
  *
  * The instruction was to build the layout now with the space blocked out, so the finished page can
  * be seen and approved before those arrive. That is what this file is. It exists so that the rule
@@ -34,7 +35,8 @@ export type ReservedSlotId =
   | 'einvoice.irn'
   | 'einvoice.ackNumber'
   | 'einvoice.ackDate'
-  | 'upi.qr';
+  | 'upi.qr'
+  | 'signature';
 
 export interface ReservedSlotSpec {
   readonly id: ReservedSlotId;
@@ -69,6 +71,8 @@ export const RESERVED_SLOTS: readonly ReservedSlotSpec[] = [
   slot('einvoice.ackNumber', 44, 8, 'Ack number, not received yet', 'Ack number, abhi nahin mila', 'e-invoice provider access, issue #51'),
   slot('einvoice.ackDate', 44, 8, 'Ack date, not received yet', 'Ack ki taarikh, abhi nahin mili', 'e-invoice provider access, issue #51'),
   slot('upi.qr', 26, 26, 'Pay by scan, UPI id not saved yet', 'Scan karke payment, UPI id abhi save nahin', 'the business saving its UPI id, issue #144'),
+  // Sized to the space a scanned signature actually needs above the "Authorised Signatory" rule.
+  slot('signature', 48, 16, 'Signature not uploaded yet', 'Hastakshar abhi upload nahin hue', 'the business uploading its signature, issue #146'),
 ];
 
 export const reservedSlot = (id: ReservedSlotId): ReservedSlotSpec => {

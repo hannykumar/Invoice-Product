@@ -72,6 +72,17 @@ const T = {
   forSeller: { 'en-IN': 'for', 'hi-IN': 'ki taraf se' },
   authorisedSignatory: { 'en-IN': 'Authorised Signatory', 'hi-IN': 'Adhikrit hastakshar' },
   totalWord: { 'en-IN': 'Total', 'hi-IN': 'Kul' },
+  // Issue #138 — the trade fields real bills carry.
+  pan: { 'en-IN': 'PAN', 'hi-IN': 'PAN' },
+  packages: { 'en-IN': 'Packages', 'hi-IN': 'Packet' },
+  lrNumber: { 'en-IN': 'LR / RR number', 'hi-IN': 'LR / RR number' },
+  transportDoc: { 'en-IN': 'Transport document', 'hi-IN': 'Transport document' },
+  destination: { 'en-IN': 'Destination', 'hi-IN': 'Kahan pahunchana hai' },
+  eoe: { 'en-IN': 'E. & O.E.', 'hi-IN': 'E. & O.E.' },
+  computerGenerated: {
+    'en-IN': 'This is a computer generated invoice.',
+    'hi-IN': 'Yeh bill computer se bana hai.',
+  },
 } as const;
 
 export type Wording = keyof typeof T;

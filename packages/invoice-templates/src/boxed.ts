@@ -33,6 +33,7 @@ const partyCell = (party: RenderableParty, heading: string, locale: Locale, show
     ${party.addressLines.map((l) => `<div>${escapeHtml(l)}</div>`).join('')}
     <div>${escapeHtml(party.stateName)} (${escapeHtml(party.stateCode)})</div>
     ${party.gstin === null ? '' : `<div><span class="cap-inline">${escapeHtml(t('gstin', locale))}</span> ${escapeHtml(party.gstin)}</div>`}
+    ${party.pan == null || !shows('seller.pan') ? '' : `<div><span class="cap-inline">${escapeHtml(t('pan', locale))}</span> ${escapeHtml(party.pan)}</div>`}
     ${party.phone != null && shows('seller.phone') ? `<div>${escapeHtml(party.phone)}</div>` : ''}
     ${party.email != null && shows('seller.email') ? `<div>${escapeHtml(party.email)}</div>` : ''}
   </td>`;
@@ -52,14 +53,29 @@ const itemTable = (
 ): string => {
   const showDiscount = snapshot.lineColumns.includes('line.discount');
   const showBatch = snapshot.lineColumns.includes('line.batch');
+  const showPackages = snapshot.lineColumns.includes('line.packages');
 
-  const headings = [
-    t('serial', locale), t('item', locale), t('hsn', locale),
-    ...(showBatch ? [t('batch', locale)] : []),
-    t('qty', locale), t('rate', locale), t('per', locale),
-    ...(showDiscount ? [t('discount', locale)] : []),
-    t('gstPercent', locale), t('lineTotal', locale),
+  /**
+   * Columns, each with the share of the width it needs.
+   *
+   * The description gets the most, because it is the only column whose content is a sentence and
+   * the one a customer reads first. Everything else is a number or a short code. The shares are
+   * normalised below, so adding or dropping a column keeps the rest in proportion.
+   */
+  const headings: { label: string; share: number }[] = [
+    { label: t('serial', locale), share: 4 },
+    { label: t('item', locale), share: 24 },
+    { label: t('hsn', locale), share: 8 },
+    ...(showBatch ? [{ label: t('batch', locale), share: 8 }] : []),
+    ...(showPackages ? [{ label: t('packages', locale), share: 8 }] : []),
+    { label: t('qty', locale), share: 7 },
+    { label: t('rate', locale), share: 9 },
+    { label: t('per', locale), share: 5 },
+    ...(showDiscount ? [{ label: t('discount', locale), share: 9 }] : []),
+    { label: t('gstPercent', locale), share: 6 },
+    { label: t('lineTotal', locale), share: 11 },
   ];
+  const totalShare = headings.reduce((a, h) => a + h.share, 0);
 
   const row = (line: RenderableLine, index: number | null): string => {
     const charge = line.kind === 'CHARGE';
@@ -69,6 +85,7 @@ const itemTable = (
       <td>${escapeHtml(line.description)}${line.reverseCharge ? ' <span class="tag">RCM</span>' : ''}</td>
       <td>${charge ? '' : escapeHtml(line.hsnOrSac ?? '—')}</td>
       ${showBatch ? `<td>${charge ? '' : escapeHtml(line.batch ?? '')}</td>` : ''}
+      ${showPackages ? `<td>${charge ? '' : escapeHtml(line.packages ?? '')}</td>` : ''}
       <td class="num">${charge ? '' : escapeHtml(q.amount)}</td>
       <td class="num">${charge ? '' : money(line.unitPrice)}</td>
       <td>${charge ? '' : escapeHtml(q.unit)}</td>
@@ -82,7 +99,9 @@ const itemTable = (
   const span = headings.length - 1;
 
   return `<table class="grid items">
-    <thead><tr>${headings.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+    <thead><tr>${headings
+      .map((h) => `<th style="width:${((h.share / totalShare) * 100).toFixed(2)}%">${escapeHtml(h.label)}</th>`)
+      .join('')}</tr></thead>
     <tbody>${goods.map((l, i) => row(l, i + 1)).join('')}</tbody>
     ${
       charges.length === 0
@@ -193,11 +212,17 @@ export const renderBoxed = (
   const transport = doc.transport;
   const showTransport = transport !== null && shows('transport.vehicleNumber');
 
+  // Issue #138 — a real signature image where the business has uploaded one, and issue #148's
+  // reserved box at the same size until it does, so the footer does not move on the day it arrives.
   const signature = !shows('footer.signature')
     ? ''
     : `<td class="sign-cell">
         <span class="cap">${escapeHtml(t('forSeller', locale))} ${escapeHtml(doc.seller.name)}</span>
-        <div class="sign-space"></div>
+        <div class="sign-space">${
+          doc.signatureDataUri === null
+            ? reserved('signature')
+            : `<img class="sign-image" src="${escapeHtml(doc.signatureDataUri)}" alt="">`
+        }</div>
         <div class="sign-line">${escapeHtml(t('authorisedSignatory', locale))}</div>
       </td>`;
 
@@ -217,6 +242,19 @@ export const renderBoxed = (
   const upi = !shows('qr.upi') ? '' : `<td class="upi-cell">${reserved('upi.qr')}</td>`;
 
   const footerCells = [declaration, bank, upi, signature].filter((c) => c !== '');
+
+  /**
+   * The two standard notations from issue #138.
+   *
+   * "This is a computer generated invoice" is a fact about the document, which this product
+   * produced, so the shipped design states it. "E. & O.E." — errors and omissions excepted — is a
+   * reservation the *business* makes to its customer, so it is off unless a business turns it on.
+   * We do not make commitments on a business's behalf.
+   */
+  const notations = [
+    shows('footer.computerGenerated') ? t('computerGenerated', locale) : '',
+    shows('footer.eoe') ? t('eoe', locale) : '',
+  ].filter((n) => n !== '');
 
   // The government block belongs at the top of the page, which is where a registered e-invoice
   // carries it and where anyone checking the bill looks first. Putting it here also means the QR
@@ -262,6 +300,28 @@ export const renderBoxed = (
             ${cell(t('eWayBill', locale), showTransport ? escapeHtml(transport.eWayBillNumber ?? '') : '')}
             ${cell(t('placeOfSupply', locale), `${escapeHtml(doc.placeOfSupplyStateName)} (${escapeHtml(doc.placeOfSupplyStateCode)})`)}
           </tr>
+          ${
+            // Issue #138 — the transporter's own paperwork. A whole row is only worth its space when
+            // the design carries at least one of these, so a bill without them prints cleanly.
+            !showTransport || !(shows('transport.lrNumber') || shows('transport.document') || shows('transport.destination'))
+              ? ''
+              : `<tr>
+                  ${cell(t('lrNumber', locale), shows('transport.lrNumber') ? escapeHtml(transport.lrNumber ?? '') : '')}
+                  ${cell(
+                    t('transportDoc', locale),
+                    !shows('transport.document')
+                      ? ''
+                      : escapeHtml(
+                          [transport.documentNumber, transport.documentDate === null || transport.documentDate === undefined ? null : formatDate(transport.documentDate)]
+                            .filter((v): v is string => v != null && v !== '')
+                            .join(', '),
+                        ),
+                  )}
+                </tr>
+                <tr>
+                  ${cell(t('destination', locale), shows('transport.destination') ? escapeHtml(transport.destination ?? '') : '', 2)}
+                </tr>`
+          }
           ${irnRow}
         </table>
       </td>
@@ -284,5 +344,10 @@ export const renderBoxed = (
   </table>
   ${doc.declaredRateNotice === null ? '' : `<table class="grid notice"><tr><td>${escapeHtml(doc.declaredRateNotice)}</td></tr></table>`}
   ${doc.terms !== null && shows('footer.terms') ? `<table class="grid words"><tr><td>${escapeHtml(doc.terms)}</td></tr></table>` : ''}
-  ${footerCells.length === 0 ? '' : `<table class="grid foot"><tr>${footerCells.join('')}</tr></table>`}`;
+  ${footerCells.length === 0 ? '' : `<table class="grid foot"><tr>${footerCells.join('')}</tr></table>`}
+  ${
+    notations.length === 0
+      ? ''
+      : `<table class="grid notations"><tr><td>${notations.map((n) => escapeHtml(n)).join(' &nbsp;&nbsp; ')}</td></tr></table>`
+  }`;
 };

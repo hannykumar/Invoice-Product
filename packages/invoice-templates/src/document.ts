@@ -17,6 +17,11 @@ export interface RenderableParty {
   readonly name: string;
   readonly addressLines: readonly string[];
   readonly gstin: string | null;
+  /**
+   * Issue #138 — the income-tax number of the business, which real bills print beside the GSTIN.
+   * A buyer's accounts department uses it when it deducts tax at source against the payment.
+   */
+  readonly pan?: string | null;
   readonly stateCode: string;
   readonly stateName: string;
   readonly phone?: string | null;
@@ -54,6 +59,13 @@ export interface RenderableLine {
   readonly cess: Money;
   readonly reverseCharge: boolean;
   readonly batch?: string | null;
+  /**
+   * Issue #138 — how the goods were made up for the journey, e.g. "80 Bags".
+   *
+   * It is not the quantity and never stands in for it. A lorry driver, a godown keeper and the
+   * person signing for delivery count packages; the bill is priced on the quantity.
+   */
+  readonly packages?: string | null;
   readonly note?: string | null;
 }
 
@@ -75,6 +87,16 @@ export interface RenderableTransport {
   readonly transporter?: string | null;
   readonly vehicleNumber?: string | null;
   readonly eWayBillNumber?: string | null;
+  /**
+   * Issue #138 — the transporter's own paperwork, which is what a consignment is traced by when a
+   * delivery goes missing. The LR (lorry receipt) or RR (railway receipt) number is the reference
+   * the transporter answers to; the document number and date are what the buyer quotes back.
+   */
+  readonly lrNumber?: string | null;
+  readonly documentNumber?: string | null;
+  readonly documentDate?: IsoDate | null;
+  /** Where the goods are actually going, which is often not the address the bill is made out to. */
+  readonly destination?: string | null;
 }
 
 export interface RenderableEInvoice {
@@ -126,6 +148,13 @@ export interface InvoiceDocument {
    * box does not appear at all until then. Issue #138 wires it to the company record.
    */
   readonly declaration: string | null;
+  /**
+   * Issue #138 — the signature image, frozen onto the bill the way the logo and the design are.
+   *
+   * Until a business uploads one the signature block keeps a reserved box at the size the image
+   * will take, so the footer does not change shape on the day it arrives (issue #148's rule).
+   */
+  readonly signatureDataUri: string | null;
   readonly poReference: string | null;
 }
 
