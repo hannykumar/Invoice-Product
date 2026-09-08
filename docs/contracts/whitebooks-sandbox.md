@@ -85,6 +85,20 @@ Three separate attempts, all on 9 September 2026:
 So the e-way bill lane is not merely unproven, it is unavailable here. Either it lives on a host
 their documentation names, or the sandbox account has to be enabled for it separately.
 
+## Their public documentation does not exist
+
+`https://whitebooks.in/llms.txt` is real and 15 KB long, and it advertises OpenAPI specs
+(`/openapi/eway.json`), Redoc references (`/docs/eway`), developer guides (`/developer/e-way-bill`)
+and about a dozen e-way-bill API pages. **Every one of them redirects to the marketing home page or
+returns the single-page-app shell.** None is a document.
+
+It also names an API in a shape the service does not serve — `POST /v1/ewaybill/create`,
+`POST /v1/einvoice/create`, `GET /v1/gstin/validate`. All three answer `WB_ERR_9404` on both
+`apisandbox.whitebooks.in` and `api.whitebooks.in`.
+
+So the routes recorded above, found by probing, are the only ones known to exist. Treat that file
+as marketing copy aimed at crawlers, not as a specification.
+
 ## What is still open
 
 The **GST-returns route** is still not found: `/gst`, `/gstr`, `/gstapi`, `/taxpayerapi`,
