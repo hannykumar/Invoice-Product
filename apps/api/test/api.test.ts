@@ -87,6 +87,11 @@ test('operations API exposes tenant-safe failures and replays only safe jobs', a
   assert.equal(workspaceA.body.failures[0].companyId, COMPANY_A);
   assert.equal(workspaceB.body.failures[0].companyId, COMPANY_B);
   assert.notEqual(workspaceA.body.failures[0].correlationId, workspaceB.body.failures[0].correlationId);
+  assert.deepEqual(workspaceA.body.recurring.map((candidate: any) => candidate.jobKey).sort(), [
+    'collection-reminders', 'eway-bill-expiry-watch', 'notification-delivery',
+  ]);
+  assert.equal(workspaceA.body.recurring.every((candidate: any) => candidate.companyId === COMPANY_A), true);
+  assert.equal(workspaceB.body.recurring.every((candidate: any) => candidate.companyId === COMPANY_B), true);
   const job = workspaceA.body.jobs.find((candidate: any) => candidate.state === 'failure');
   assert.ok(job.idempotent);
   const replayed = await request('POST', '/api/operations/jobs/replay', { jobId: job.id }, ownerA);

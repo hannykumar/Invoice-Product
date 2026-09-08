@@ -57,6 +57,7 @@ export class ApiRuntime {
   readonly #applications = new Map<string, Promise<DemoApplication>>();
   readonly #operations = createOperations();
   readonly #operationsSeeded = new Set<string>();
+  readonly #recurringRegistered = new Set<string>();
   readonly #credentials: readonly Credential[];
 
   constructor() {
@@ -137,7 +138,21 @@ export class ApiRuntime {
       });
       this.#applications.set(context.companyId, application);
     }
-    return application;
+    const resolved = await application;
+    if (!this.#recurringRegistered.has(context.companyId)) {
+      const serviceContext: RequestContext = {
+        companyId: context.companyId,
+        branchId: context.branchId,
+        actorId: `recurring-service:${context.companyId}`,
+        sessionId: `recurring-service:${context.companyId}`,
+        permissions: new Set<Permission>([
+          'operations.read', 'queue.replay', 'notification.send', 'eway.view', 'collections.reminders.send',
+        ]),
+      };
+      for (const job of resolved.recurringJobs()) this.#operations.recurring.register(serviceContext, job);
+      this.#recurringRegistered.add(context.companyId);
+    }
+    return resolved;
   }
 
   companySummary(companyId: string) {
@@ -156,8 +171,10 @@ export class ApiRuntime {
       this.#operations.queue.fail(context, job.id, 'IRP_TEMPORARILY_UNAVAILABLE');
       this.#operationsSeeded.add(context.companyId);
     }
-    return { health: await this.#operations.telemetry.health(), failures: this.#operations.telemetry.failures(context), jobs: this.#operations.queue.list(context), incidents: this.#operations.status.publicStatus() };
+    return { health: await this.#operations.telemetry.health(), failures: this.#operations.telemetry.failures(context), jobs: this.#operations.queue.list(context), recurring: this.#operations.recurring.status(context), incidents: this.#operations.status.publicStatus() };
   }
+
+  runRecurringWork(companyId?: string) { return this.#operations.recurring.runDue(companyId); }
 
   replayOperationalJob(context: RequestContext, input: Record<string, unknown>) {
     return this.#operations.queue.replay(context, String(input.jobId ?? ''));

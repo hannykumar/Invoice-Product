@@ -17,6 +17,7 @@ export const captureSnapshot = (
   templateId: template.id,
   templateVersion: template.version,
   capturedOn,
+  layout: template.layout,
   palette: { ...template.palette },
   typography: { ...template.typography },
   optionalFields: [...template.optionalFields],

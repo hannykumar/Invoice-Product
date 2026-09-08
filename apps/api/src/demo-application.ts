@@ -116,6 +116,7 @@ import {
   returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
   type OutwardDocument, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
+import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -229,6 +230,7 @@ export class DemoApplication {
   private readonly returnNotes: InMemoryReturnNoteRepository;
   private readonly subscriptions: SubscriptionService;
   private readonly collections: CollectionsService;
+  private readonly notifications: NotificationService;
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
   private readonly agent: ActionAgentService;
@@ -249,6 +251,7 @@ export class DemoApplication {
     returns: ReturnService,
     returnNotes: InMemoryReturnNoteRepository,
     collections: CollectionsService,
+    notifications: NotificationService,
     outbox: DemoReminderOutbox,
     bankFeeds: BankFeedService,
     subscriptions: SubscriptionService,
@@ -272,6 +275,7 @@ export class DemoApplication {
     this.agent = agent;
     this.agentAudit = agentAudit;
     this.collections = collections;
+    this.notifications = notifications;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
     this.gstReturns = gstReturns;
@@ -610,12 +614,12 @@ export class DemoApplication {
             pricing: invoice.pricing === null ? null : {
               lines: invoice.pricing.lines.map((line) => ({
                 lineId: line.lineId, itemId: line.itemId, itemName: line.itemName, hsnOrSac: line.hsnOrSac,
-                quantity: showQuantity(line.quantity), ratePercentTimes100: line.ratePercentTimes100,
+                quantity: line.quantity, ratePercentTimes100: line.ratePercentTimes100,
                 taxableValue: line.taxableValue, cgst: line.cgst, sgst: line.sgst, utgst: line.utgst,
                 igst: line.igst, cess: line.cess, reverseCharge: line.reverseCharge, rateBasis: line.rateBasis,
                 treatment: line.treatment,
               })),
-              totals: { invoiceTotal: invoice.pricing.totals.invoiceValue },
+              totals: { invoiceValue: invoice.pricing.totals.invoiceValue },
             },
           },
           customer,
@@ -623,10 +627,7 @@ export class DemoApplication {
         ));
         const notes = (await returnNotes.list(companyId))
           .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
-          .map((note) => returnNoteToDocument({
-            ...note,
-            lines: note.lines.map((noteLine) => ({ ...noteLine, quantity: showQuantity(noteLine.quantity) })),
-          }, customer, supplier, {
+          .map((note) => returnNoteToDocument(note, customer, supplier, {
             placeOfSupplyStateCode: config.gstin.slice(0, 2),
             hsnByItem: { SOAP: '3401', TMT12: '7214' },
           }));
@@ -651,9 +652,22 @@ export class DemoApplication {
       clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns);
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns);
     await app.seed();
     return app;
+  }
+
+  /** Periodic services composed by this local host; the scheduler supplies the service actor. */
+  recurringJobs(): readonly RecurringJobDefinition[] {
+    return standardRecurringJobs({
+      notifications: { deliverDue: (context) => this.notifications.deliverDue(context) },
+      ewayBills: {
+        expiringWithin: (serviceActor, hours) => this.shop.ewayBill.expiringWithin(serviceActor as ActorContext, hours),
+      },
+      collections: {
+        sendPlanned: (serviceActor, today) => this.collections.sendPlanned(serviceActor as ActorContext, isoDate(today)),
+      },
+    });
   }
 
   private async seed(): Promise<void> {

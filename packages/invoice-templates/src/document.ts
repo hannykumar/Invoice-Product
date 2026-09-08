@@ -7,6 +7,7 @@
  * and is stored alongside the invoice.
  */
 import type { IsoDate, Money } from '@invoice/kernel';
+import type { PageLayout } from './template.ts';
 
 export type DocumentTitle = 'TAX_INVOICE' | 'BILL_OF_SUPPLY' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
 export type TaxSplit = 'CGST_SGST' | 'CGST_UTGST' | 'IGST';
@@ -26,6 +27,12 @@ export interface RenderableLine {
   readonly lineId: string;
   readonly description: string;
   readonly hsnOrSac: string | null;
+  /**
+   * Issue #131 — `GOODS` is something the customer bought and must satisfy quantity times rate
+   * equals the amount. `CHARGE` is freight or another charge, printed on a line of its own below
+   * the goods, never folded into one of them.
+   */
+  readonly kind: 'GOODS' | 'CHARGE';
   /** Already formatted with its unit, e.g. "70 BOX". Quantities are never re-derived when printing. */
   readonly quantityText: string;
   readonly unitPrice: Money;
@@ -33,6 +40,17 @@ export interface RenderableLine {
   readonly taxableValue: Money;
   readonly ratePercentTimes100: bigint | null;
   readonly taxAmount: Money;
+  /**
+   * The tax split for this line, carried rather than derived.
+   *
+   * Issue #135's HSN summary has to show CGST and SGST as separate columns per code, and halving
+   * `taxAmount` would not give them: cess is in there too, and each half is rounded on its own. So
+   * the calculator's own figures come through untouched and the summary adds up exactly.
+   */
+  readonly cgst: Money;
+  readonly sgst: Money;
+  readonly utgst: Money;
+  readonly igst: Money;
   readonly cess: Money;
   readonly reverseCharge: boolean;
   readonly batch?: string | null;
@@ -89,11 +107,25 @@ export interface InvoiceDocument {
    * reprint years later shows the same words even if the helper changes.
    */
   readonly amountInWordsText: string;
+  /**
+   * The tax total written out, for the line under the HSN summary that real bills carry.
+   *
+   * Computed with the total, for the same reason: a reprint years later must read identically.
+   */
+  readonly taxAmountInWordsText: string;
   /** Present when any rate on the bill came from the business rather than a checked notification. */
   readonly declaredRateNotice: string | null;
   readonly logoDataUri: string | null;
   readonly bankDetails: readonly string[] | null;
   readonly terms: string | null;
+  /**
+   * The declaration the business makes about the bill, printed in its own box on the boxed design.
+   *
+   * There is no default and there never will be: a declaration is a statement the business makes,
+   * not one this product makes on its behalf. It prints only when the business has set one, and the
+   * box does not appear at all until then. Issue #138 wires it to the company record.
+   */
+  readonly declaration: string | null;
   readonly poReference: string | null;
 }
 
@@ -108,6 +140,11 @@ export interface TemplateSnapshot {
   readonly templateId: string;
   readonly templateVersion: string;
   readonly capturedOn: string;
+  /**
+   * Optional so that a snapshot captured before issue #140 still reprints exactly as it did. An
+   * absent layout means the original airy one, which is what those bills were printed with.
+   */
+  readonly layout?: PageLayout;
   readonly palette: { accent: string; text: string; muted: string; border: string };
   readonly typography: { bodyStack: string; headingStack: string; baseSizePt: number };
   readonly optionalFields: readonly string[];

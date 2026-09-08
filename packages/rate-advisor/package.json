@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/rate-advisor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #59 [E59] — suggesting a GST rate from the tax-default register, cross-checking a printed one against it, and learning from what a person approves.",
+  "exports": { ".": "./src/index.ts" }
+}

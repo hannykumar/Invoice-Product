@@ -204,4 +204,9 @@ export const apiServer = createServer(serveApi);
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => console.log(`Karobar API: http://127.0.0.1:${port}`));
+  // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
+  const recurringTimer = setInterval(() => {
+    void apiRuntime().runRecurringWork().catch(() => console.error('Recurring work tick failed; its queue state is available to operators.'));
+  }, 60_000);
+  recurringTimer.unref();
 }

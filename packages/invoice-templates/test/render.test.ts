@@ -21,12 +21,17 @@ const line = (overrides: Partial<RenderableLine> = {}): RenderableLine => ({
   lineId: 'l1',
   description: 'Plastic crate',
   hsnOrSac: '3923',
+  kind: 'GOODS',
   quantityText: '40 PCS',
   unitPrice: rupees(210),
   discount: null,
   taxableValue: rupees(8400),
   ratePercentTimes100: 1800n,
   taxAmount: rupees(1512),
+  cgst: rupees(756),
+  sgst: rupees(756),
+  utgst: rupees(0),
+  igst: rupees(0),
   cess: rupees(0),
   reverseCharge: false,
   batch: 'B-1',
@@ -74,6 +79,8 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   },
   transport: null,
   eInvoice: null,
+  taxAmountInWordsText: amountInWords(rupees(1512)),
+  declaration: null,
   amountInWordsText: amountInWords(rupees(9912)),
   declaredRateNotice: null,
   logoDataUri: null,
@@ -83,7 +90,36 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   ...overrides,
 });
 
-const wholesale = templateById('wholesale-classic') as TemplateDefinition;
+/**
+ * A design as one would have been *stored* before issue #140.
+ *
+ * No shipped design is airy any more — there is one correct bill, and a business is never offered a
+ * version of it that is missing something. The airy renderer stays only so that a bill issued under
+ * the old design reprints as the page it was, and this fixture is what keeps that path tested.
+ */
+const wholesale: TemplateDefinition = {
+  id: 'airy-as-stored-before-140',
+  version: '1.0.0',
+  layout: 'AIRY',
+  name: { 'en-IN': 'Wholesale, plain', 'hi-IN': 'Thok, saada' },
+  businessTypes: ['WHOLESALE', 'MANUFACTURING'],
+  formats: ['A4', 'MOBILE'],
+  palette: { accent: '#1f4e79', text: '#111111', muted: '#555555', border: '#999999' },
+  typography: {
+    bodyStack: "'Noto Sans Devanagari', 'Nirmala UI', system-ui, sans-serif",
+    headingStack: "'Noto Sans Devanagari', 'Nirmala UI', system-ui, sans-serif",
+    baseSizePt: 9,
+  },
+  optionalFields: [
+    'seller.logo', 'seller.phone', 'seller.bankDetails', 'document.dueDate', 'document.poReference',
+    'line.batch', 'line.discount', 'totals.outstanding', 'footer.terms', 'footer.signature',
+    'transport.vehicleNumber', 'transport.transporter', 'transport.eWayBillNumber', 'qr.eInvoice',
+  ],
+  lineColumns: ['line.batch', 'line.discount'],
+  logo: { show: true, maxHeightPt: 42 },
+  footerNote: null,
+  publishedOn: isoDate('2026-08-29'),
+};
 const snapshotOf = (t: TemplateDefinition) => captureSnapshot(t, 'en-IN', '2026-08-29');
 
 test('a template cannot remove, add or rename a legally required field', () => {
@@ -246,15 +282,27 @@ test('the QR area is big enough to scan, and says so when the code has not arriv
   assert.match(html, /\.qr-slot \{[^}]*width: 26mm/);
   assert.match(html, /\.qr-slot \{[^}]*padding: 2mm/);
 
+  // Issue #148 — a code that has not arrived leaves a box the size of the one it will land in.
   const pending = doc({ eInvoice: { irn: 'irn-1', qrSvg: null } });
   const pendingHtml = renderInvoice(pending, snapshotOf(wholesale), { format: 'A4', locale: 'en-IN' });
-  assert.ok(pendingHtml.includes('QR code not received yet'), 'an empty slot must explain itself');
+  assert.ok(pendingHtml.includes('Government QR, not received yet'), 'an empty slot must explain itself');
   assert.ok(!pendingHtml.includes('<svg'), 'we never draw a placeholder that looks like a real code');
 });
 
 test('a styled bill is never presented as a registered e-invoice', () => {
   const html = renderInvoice(doc(), snapshotOf(wholesale), { format: 'A4', locale: 'en-IN' });
-  assert.ok(!html.includes('IRN'), 'a bill with no government reference must not imply one');
+  // The bill has no government reference, so the words "IRN" and "Ack number" only ever appear on
+  // a reserved box that says out loud that nothing has arrived. Nothing on the page can be read as
+  // a registration this bill does not have.
+  assert.ok(!html.includes('<code>'), 'a bill with no government reference must not print one');
+  for (const claim of ['Government reference (IRN)', 'Ack number', 'Ack date']) {
+    const at = html.indexOf(claim);
+    if (at === -1) continue;
+    assert.ok(
+      html.slice(at, at + claim.length + 24).includes('not received yet'),
+      `"${claim}" must never stand on a bill without saying it has not arrived`,
+    );
+  }
   assert.ok(!html.includes('e-invoice'));
 });
 

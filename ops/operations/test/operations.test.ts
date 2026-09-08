@@ -100,3 +100,11 @@ test("operations migration persists tenant controls with forced row security", (
   assert.match(sql, /FORCE ROW LEVEL SECURITY/);
   assert.match(sql, /current_setting\('app\.company_id'/);
 });
+
+test("recurring-work migration persists operator state with tenant isolation and queue integrity", () => {
+  const sql = operationsMigrations[1]!.up;
+  assert.match(sql, /CREATE TABLE recurring_work_status/);
+  assert.match(sql, /FOREIGN KEY \(company_id, queue_job_id\) REFERENCES operational_jobs\(company_id, id\)/);
+  assert.match(sql, /FORCE ROW LEVEL SECURITY/);
+  assert.match(sql, /CREATE POLICY recurring_work_tenant/);
+});

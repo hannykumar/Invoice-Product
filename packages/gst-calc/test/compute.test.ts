@@ -176,7 +176,10 @@ test('a discount reduces the taxable value before tax, not after', () => {
   assert.equal(toDecimalString(line?.cgst ?? inr(0)), '85.50');
 });
 
-test('freight is shared across the lines by value and taxed with them, never left untaxed', () => {
+// Issue #131 — freight used to be folded into the goods lines, which made quantity times rate stop
+// matching the amount on the printed bill. It is still taxed, and still taxed at the rate of the
+// goods it travelled with; it simply gets lines of its own.
+test('freight is a line of its own, taxed with the goods, and never changes a goods line', () => {
   const { calculator } = makeCalculator();
   const result = computed(
     calculator.compute(
@@ -189,19 +192,53 @@ test('freight is shared across the lines by value and taxed with them, never lef
       }),
     ),
   );
-  const [crates, juice] = result.lines;
-  assert.equal(toDecimalString(crates?.chargesShare ?? inr(0)), '750.00');
-  assert.equal(toDecimalString(juice?.chargesShare ?? inr(0)), '250.00');
-  assert.equal(toDecimalString(crates?.taxableValue ?? inr(0)), '3750.00');
-  assert.equal(toDecimalString(juice?.taxableValue ?? inr(0)), '1250.00');
+  const goods = result.lines.filter((l) => l.kind === 'GOODS');
+  const charges = result.lines.filter((l) => l.kind === 'CHARGE');
+  const [crates, juice] = goods;
+
+  assert.equal(toDecimalString(crates?.taxableValue ?? inr(0)), '3000.00', '10 × ₹300, and nothing else');
+  assert.equal(toDecimalString(juice?.taxableValue ?? inr(0)), '1000.00', '10 × ₹100, and nothing else');
+  for (const line of goods) {
+    assert.equal(toDecimalString(line.chargesShare), '0.00', 'no charge is hidden inside a goods line');
+  }
+
+  // Different rates on the bill, so the freight is divided between them by value: ₹750 rides with
+  // the crates at 18%, ₹250 with the juice at 12%.
+  assert.equal(charges.length, 2);
+  assert.deepEqual(
+    charges.map((l) => [l.chargeKind, toDecimalString(l.taxableValue), Number(l.ratePercentTimes100)]),
+    [
+      ['FREIGHT', '750.00', 1800],
+      ['FREIGHT', '250.00', 1200],
+    ],
+  );
+  assert.equal(toDecimalString(charges[0]?.cgst ?? inr(0)), '67.50');
+  assert.equal(toDecimalString(charges[1]?.cgst ?? inr(0)), '15.00');
+
   assert.equal(
     toDecimalString(result.totals.taxableValue),
     '5000.00',
-    'the whole of the freight is inside the taxable value',
+    'the whole of the freight is still inside the taxable value',
   );
-  // Different items, different rates: 18% on the crates, 12% on the juice.
-  assert.equal(toDecimalString(crates?.cgst ?? inr(0)), '337.50');
-  assert.equal(toDecimalString(juice?.cgst ?? inr(0)), '75.00');
+  assert.equal(toDecimalString(result.totals.cgst), '412.50', 'and the tax on it is unchanged');
+});
+
+test('a charge line is one unit priced at its own amount, so quantity × rate holds there too', () => {
+  const { calculator } = makeCalculator();
+  const result = computed(calculator.compute(crateSale({ freight: inr(200), otherCharges: inr(50) })));
+  const charges = result.lines.filter((l) => l.kind === 'CHARGE');
+  assert.deepEqual(
+    charges.map((l) => [l.itemName, toDecimalString(l.unitPrice), toDecimalString(l.taxableValue)]),
+    [
+      ['Freight', '200.00', '200.00'],
+      ['Other charges', '50.00', '50.00'],
+    ],
+    'one rate on the bill, so each charge is a single line and needs no explanation of which goods it rides with',
+  );
+  for (const line of charges) {
+    assert.equal(line.quantity.scaled, 1000000n, 'one of it');
+    assert.equal(toDecimalString(line.discountAmount), '0.00');
+  }
 });
 
 test('nil-rated, exempt and non-GST supplies produce no tax at all — and are told apart', () => {

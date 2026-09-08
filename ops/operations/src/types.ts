@@ -40,6 +40,27 @@ export interface QueueJob {
   readonly completedAt?: string;
 }
 
+export type RecurringRunOutcome = "never" | "running" | "success" | "failure" | "dead_lettered";
+
+/** Operator-facing state for one code-registered job in one company. */
+export interface RecurringWorkStatus {
+  readonly companyId: Id;
+  readonly jobKey: string;
+  readonly name: string;
+  readonly everyMs: number;
+  readonly nextRunAt: string;
+  readonly outcome: RecurringRunOutcome;
+  readonly attempts: number;
+  readonly maxAttempts: number;
+  readonly lastScheduledFor?: string | undefined;
+  readonly lastStartedAt?: string | undefined;
+  readonly lastCompletedAt?: string | undefined;
+  readonly durationMs?: number | undefined;
+  readonly lastErrorCode?: string | undefined;
+  readonly queueJobId?: Id | undefined;
+  readonly summary?: string | undefined;
+}
+
 export interface SupportGrant {
   readonly id: Id;
   readonly companyId: Id;

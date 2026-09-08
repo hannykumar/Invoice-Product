@@ -478,6 +478,36 @@ export class MasterDataService {
     return defaults.find((entry) => entry.itemId === itemId) ?? defaults.find((entry) => entry.hsnSac === item.hsnSac) ?? null;
   }
 
+  /**
+   * Every default that could apply, rather than the first one that does.
+   *
+   * `taxDefaultFor` answers "what rate should this line use", and to answer it has to pick one.
+   * Issue #59 asks a different question — "what does the register actually hold about this?" — and
+   * there the difference between one answer and three matters enormously: three entries claiming
+   * different rates for one HSN is a register somebody has to fix, not a rate to quietly apply. So
+   * this returns them all, item-level first, and leaves the choosing to the caller.
+   *
+   * Neither the item nor the code has to exist. A line whose item is not in the master list is the
+   * ordinary case when a supplier's bill has only just been photographed.
+   */
+  taxDefaultCandidates(
+    context: RequestContext,
+    lookup: { readonly itemId?: Id; readonly hsnSac?: string },
+    asOf: IsoDate = today(),
+  ): readonly Version<TaxDefault>[] {
+    const defaults = this.#stores.taxDefaults.list(context.companyId, asOf);
+    const code = lookup.hsnSac?.trim();
+    const matching = [
+      ...(lookup.itemId === undefined ? [] : defaults.filter((entry) => entry.itemId === lookup.itemId)),
+      ...(code === undefined || code === "" ? [] : defaults.filter((entry) => entry.hsnSac === code)),
+    ];
+    // The version, not just the row: the effective date is half of what makes a rate defensible,
+    // and it lives on the version rather than on the record.
+    return matching
+      .map((entry) => this.#stores.taxDefaults.asOf(context.companyId, entry.id, asOf))
+      .filter((version): version is Version<TaxDefault> => version !== null);
+  }
+
   // ------------------------------------------------ logistics and bank accounts
 
   createTransporter(context: RequestContext, input: Omit<Transporter, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<Transporter> {

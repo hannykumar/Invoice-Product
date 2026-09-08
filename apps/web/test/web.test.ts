@@ -14,6 +14,20 @@ async function localeCopy(): Promise<Record<string, Record<string, string>>> {
   return vm.runInNewContext(`(${literal})`) as Record<string, Record<string, string>>;
 }
 
+test("the browser bundle parses before any screen is allowed to ship", async () => {
+  const source = await read("app.js");
+  assert.doesNotThrow(() => new vm.Script(source, { filename: "apps/web/app.js" }));
+});
+
+test("every navigation target has a matching labelled screen", async () => {
+  const html = await read("index.html");
+  const targets = new Set([...html.matchAll(/data-view="([^"]+)"/g)].map((match) => match[1]!));
+  assert.ok(targets.size > 10, "the smoke check must cover the real application navigation");
+  for (const target of targets) {
+    assert.match(html, new RegExp(`<section[^>]+id="view-${target}"[^>]+aria-labelledby="[^"]+"`), `Missing labelled screen for data-view="${target}"`);
+  }
+});
+
 test("every visible and screen-reader translation key exists in English and Hindi", async () => {
   const [html, locales] = await Promise.all([read("index.html"), localeCopy()]);
   const keys = [...html.matchAll(/data-i18n(?:-aria|-placeholder)?="([^"]+)"/g)].map((match) => match[1]!);
@@ -85,6 +99,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /id="view-operations"[^>]+aria-labelledby=/);
   assert.match(script, /\/api\/operations/);
   assert.match(script, /dataReplayJob|replayJob/);
+  assert.match(html, /id="operations-recurring"/);
+  assert.match(script, /data\.recurring/);
   assert.match(html, /id="view-vehicle"[^>]+aria-labelledby=/);
   assert.match(script, /\/api\/vehicles\/check/);
   assert.match(script, /\/api\/vehicles\/check\/override/);

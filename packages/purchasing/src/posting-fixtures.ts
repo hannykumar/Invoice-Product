@@ -40,7 +40,12 @@ const ITEMS: StockItem[] = [
   { itemId: "SOAP", name: "Herbal Bath Soap 100g", baseUnit: "PCS", tracksBatches: true, tracksSerials: false },
   { itemId: "FRT", name: "Inward freight", baseUnit: "NOS", tracksBatches: false, tracksSerials: false },
 ];
-const WAREHOUSES: Warehouse[] = [{ warehouseId: "wh-main", name: "Peenya godown" }];
+const WAREHOUSES: Warehouse[] = [
+  { warehouseId: "wh-main", name: "Peenya godown" },
+  // Where returned goods that cannot be sold again are put. A separate place rather than a flag,
+  // because the whole point is that the saleable balance must not include them (#44).
+  { warehouseId: "wh-quarantine", name: "Quarantine shelf" },
+];
 
 export class Masters implements StockMasterData {
   readonly #registry: UnitRegistry;

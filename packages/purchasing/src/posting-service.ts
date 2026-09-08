@@ -109,6 +109,24 @@ export class PurchasePostingService {
   // ------------------------------------------------------------------- writing
 
   /**
+   * The answer when this purchase has already been recorded.
+   *
+   * A reversed bill is the one case that is not simply "here is the bill you already have": the
+   * business deliberately undid it, and recording it again behind their back would make the
+   * correction invisible. Kept in one place because it is now asked twice — once as a fast path,
+   * and once inside the transaction where the answer is authoritative.
+   */
+  #alreadyRecorded(existing: PurchaseBill, approved: ApprovedPurchase): PurchasePostingResult {
+    if (existing.state === "REVERSED") {
+      throw conflict(
+        "PURCHASE_ALREADY_REVERSED",
+        `Bill ${approved.invoiceNumber} was recorded and then reversed. To record it again, approve it afresh, so the correction stays visible.`,
+      );
+    }
+    return { bill: existing, deduplicated: true };
+  }
+
+  /**
    * Posts an approved purchase.
    *
    * Calling it again for the same purchase returns the bill that already exists rather than
@@ -122,16 +140,11 @@ export class PurchasePostingService {
     }
     this.#assertPostable(approved);
 
+    // A fast answer for the ordinary retry, where the first attempt finished long ago. It is not
+    // the guarantee: two posts racing each other both pass this, so the decisive check is inside
+    // the transaction below, where the store serialises them.
     const existing = await this.#bills.findByPurchaseId(actor.companyId, approved.id);
-    if (existing !== null) {
-      if (existing.state === "REVERSED") {
-        throw conflict(
-          "PURCHASE_ALREADY_REVERSED",
-          `Bill ${approved.invoiceNumber} was recorded and then reversed. To record it again, approve it afresh, so the correction stays visible.`,
-        );
-      }
-      return { bill: existing, deduplicated: true };
-    }
+    if (existing !== null) return this.#alreadyRecorded(existing, approved);
 
     // Everything is worked out before anything is written, so a disagreement in the arithmetic is
     // found while the books are still untouched.
@@ -229,6 +242,18 @@ export class PurchasePostingService {
         idempotencyKey,
         summary: this.#summarise(approved, dueDate, totals.tax, receipts.length),
       };
+      // The decisive duplicate check, inside the unit of work.
+      //
+      // The check at the top of this method is only a fast path: two posts of the same bill in
+      // flight together both find nothing there and both arrive here. The ledger and the godown
+      // already protect themselves — `postVoucherIn` and `receiveIn` are keyed on the purchase, so
+      // the money and the stock move once — but inserting unconditionally would still leave a
+      // second bill row against the same voucher, and a duplicate supplier bill in the register is
+      // exactly what this product is supposed to make impossible.
+      const raced = await this.#bills.findByPurchaseId(actor.companyId, approved.id);
+      if (raced !== null) {
+        return { bill: this.#alreadyRecorded(raced, approved).bill, voucher: posted.voucher, deduplicated: true };
+      }
       await this.#bills.insert(bill);
       return { bill, voucher: posted.voucher, deduplicated: posted.deduplicated };
     });

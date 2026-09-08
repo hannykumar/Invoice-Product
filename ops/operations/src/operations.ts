@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { AuditLog, PlatformError, type Id, type Permission, type RequestContext } from "../../../packages/platform/src/index.ts";
 import { SecureLogger, type SafeLogEvent } from "../../security/src/index.ts";
 import type { DiagnosticScope, ExternalFailure, FeatureFlag, Incident, IncidentUpdate, OperationState, QueueJob, SupportGrant, TraceSpan } from "./types.ts";
+import { RecurringWorkRunner } from "./recurring.ts";
 
 const HOUR = 60 * 60 * 1000;
 const requirePermission = (context: RequestContext, permission: Permission): void => {
@@ -171,5 +172,6 @@ export class StatusService {
 
 export function createOperations(now: () => Date = () => new Date(), sink: (event: SafeLogEvent) => void = () => {}) {
   const audit = new AuditLog();
-  return { audit, telemetry: new OperationsTelemetry(sink, now), support: new SupportAccessService(audit, now), queue: new OperationalQueue(audit, now), status: new StatusService(audit, now) };
+  const queue = new OperationalQueue(audit, now);
+  return { audit, telemetry: new OperationsTelemetry(sink, now), support: new SupportAccessService(audit, now), queue, recurring: new RecurringWorkRunner(queue, now), status: new StatusService(audit, now) };
 }
