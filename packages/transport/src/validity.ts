@@ -29,11 +29,20 @@ const HOUR = 3_600_000;
  * shape today, and tying them together would mean one changing its format breaks the other.
  */
 export const readPortalTimestamp = (raw: string): Date => {
-  const indian = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(raw.trim());
+  // The live NIC portal answers on a twelve-hour clock — "15/09/2026 11:59:00 PM" — while the
+  // documented shape is twenty-four hour. Both are read here, because reading only the documented
+  // one printed "valid until NaN/NaN/NaN" to a driver holding the consignment.
+  const indian = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp])\.?[Mm]\.?)?$/.exec(raw.trim());
   if (indian !== null) {
-    const [, day, month, year, hour, minute, second = "00"] = indian;
+    const [, day, month, year, rawHour, minute, second = "00", meridiem] = indian;
+    let hour = Number(rawHour);
+    if (meridiem !== undefined) {
+      // Midnight is 12 AM and noon is 12 PM: the only two the arithmetic gets wrong if left alone.
+      const afternoon = meridiem.toLowerCase() === "p";
+      hour = afternoon ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
+    }
     // The portal's wall clock is Indian, so it is read as Indian and stored as an instant.
-    return new Date(Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`) - IST_OFFSET_MINUTES * MINUTE);
+    return new Date(Date.parse(`${year}-${month}-${day}T${String(hour).padStart(2, "0")}:${minute}:${second}Z`) - IST_OFFSET_MINUTES * MINUTE);
   }
   return new Date(raw);
 };
@@ -118,11 +127,11 @@ export const canExtendNow = (validUntil: string, now: Date, policy: EwayBillPoli
 };
 
 /** The moment written the way a person reads it, in Indian time. */
-export const describeExpiry = (validUntil: string): string => `${writePortalTimestamp(new Date(validUntil))} (Indian time)`;
+export const describeExpiry = (validUntil: string): string => `${writePortalTimestamp(readPortalTimestamp(validUntil))} (Indian time)`;
 
 /** How long is left, in plain words, for the screen a dispatch clerk is looking at. */
 export const describeTimeLeft = (validUntil: string, now: Date): string => {
-  const left = new Date(validUntil).getTime() - now.getTime();
+  const left = readPortalTimestamp(validUntil).getTime() - now.getTime();
   if (left <= 0) return "This e-way bill has already run out.";
   const hours = Math.floor(left / HOUR);
   if (hours < 1) return `About ${Math.max(1, Math.round(left / MINUTE))} minutes left.`;

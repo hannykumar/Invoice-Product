@@ -101,6 +101,29 @@ Three things the reference settles that probing could not:
   e-way bill sends `errorCode`/`errorMessage` where `errorMessage` merely repeats the code, and the
   sentence worth showing a person is in a separate `info` field. `unwrap` now reads both.
 
+## The e-way bill service runs end to end too
+
+`EwayBillService.preview`, `.generate` and `.cancel` against the live sandbox, through the real
+adapter and the real payload builder:
+
+```
+PREVIEW  ready, ₹94,400, six days' validity once the vehicle is on it
+GENERATE 521009126918, ACTIVE, valid until 15/09/2026 23:59:00 (Indian time)
+CANCEL   CANCELLED
+```
+
+The same `allowSandboxGstins` switch applies here, using the same rule from
+`packages/gst/src/sandbox-gstins.ts` rather than a second copy of it.
+
+**One defect only this run could find.** The portal writes validity on a *twelve-hour* clock —
+`15/09/2026 11:59:00 PM` — while its documentation describes a twenty-four hour one.
+`readPortalTimestamp` read only the documented shape, and two callers, `describeExpiry` and
+`describeTimeLeft`, bypassed it entirely for a bare `new Date()`. The result was a message reading
+**"valid until NaN/NaN/NaN NaN:NaN:NaN"** handed to a driver holding the consignment.
+
+Fixed at the root: one parser, now understanding both clocks including the noon and midnight cases,
+and all three callers routed through it rather than patched one at a time.
+
 ## Their public documentation does not exist
 
 `https://whitebooks.in/llms.txt` is real and 15 KB long, and it advertises OpenAPI specs
@@ -142,6 +165,29 @@ the document instead means **the returned IRN is verified for real**, which is h
 
 Asking WhiteBooks for conforming test data is still worth doing and the request still stands, but
 it is no longer a blocker.
+
+## The e-way bill service runs end to end too
+
+`EwayBillService.preview`, `.generate` and `.cancel` against the live sandbox, through the real
+adapter and the real payload builder:
+
+```
+PREVIEW  ready, ₹94,400, six days' validity once the vehicle is on it
+GENERATE 521009126918, ACTIVE, valid until 15/09/2026 23:59:00 (Indian time)
+CANCEL   CANCELLED
+```
+
+The same `allowSandboxGstins` switch applies here, using the same rule from
+`packages/gst/src/sandbox-gstins.ts` rather than a second copy of it.
+
+**One defect only this run could find.** The portal writes validity on a *twelve-hour* clock —
+`15/09/2026 11:59:00 PM` — while its documentation describes a twenty-four hour one.
+`readPortalTimestamp` read only the documented shape, and two callers, `describeExpiry` and
+`describeTimeLeft`, bypassed it entirely for a bare `new Date()`. The result was a message reading
+**"valid until NaN/NaN/NaN NaN:NaN:NaN"** handed to a driver holding the consignment.
+
+Fixed at the root: one parser, now understanding both clocks including the noon and midnight cases,
+and all three callers routed through it rather than patched one at a time.
 
 ## Their public documentation does not exist
 

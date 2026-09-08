@@ -120,3 +120,24 @@ test("a fetch finds the bill, though the portal renames the number on the way ba
   assert.equal(response.payload.ewayBillNo, "571009126913", "under the name the adapter above reads");
   assert.equal(response.payload.status, "CNL");
 });
+
+// The live portal's clock, which is not the one the documentation describes.
+test("the portal's twelve-hour timestamps are read, not turned into NaN", async () => {
+  const { readPortalTimestamp, describeExpiry, describeTimeLeft } = await import("../src/validity.ts");
+
+  // Live values from the sandbox. Reading only the documented twenty-four hour shape put
+  // "valid until NaN/NaN/NaN" in front of a driver holding the consignment.
+  assert.equal(readPortalTimestamp("15/09/2026 11:59:00 PM").toISOString(), "2026-09-15T18:29:00.000Z");
+  assert.equal(readPortalTimestamp("09/09/2026 04:19:00 AM").toISOString(), "2026-09-08T22:49:00.000Z");
+
+  // Noon and midnight are the two the arithmetic gets wrong if left alone.
+  assert.equal(readPortalTimestamp("09/09/2026 12:30:00 PM").toISOString(), "2026-09-09T07:00:00.000Z");
+  assert.equal(readPortalTimestamp("09/09/2026 12:30:00 AM").toISOString(), "2026-09-08T19:00:00.000Z");
+
+  // The documented shape still reads exactly as it did.
+  assert.equal(readPortalTimestamp("15/09/2026 23:59:00").toISOString(), "2026-09-15T18:29:00.000Z");
+
+  // And the two places a person actually sees it.
+  assert.equal(describeExpiry("15/09/2026 11:59:00 PM"), "15/09/2026 23:59:00 (Indian time)");
+  assert.match(describeTimeLeft("15/09/2026 11:59:00 PM", new Date("2026-09-15T12:29:00.000Z")), /About 6 hours left/);
+});
