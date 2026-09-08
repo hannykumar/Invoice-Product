@@ -5,4 +5,5 @@ export * from "./payload.ts";
 export * from "./einvoice-ports.ts";
 export * from "./einvoice-service.ts";
 export * from "./einvoice-adapters.ts";
+export * from "./whitebooks-connector.ts";
 export * from "./einvoice-migrations.ts";
