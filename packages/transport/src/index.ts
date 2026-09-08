@@ -6,6 +6,7 @@ export * from "./payload.ts";
 export * from "./ports.ts";
 export * from "./service.ts";
 export * from "./adapters.ts";
+export * from "./whitebooks-eway-connector.ts";
 export * from "./migrations.ts";
 // Issue #28 — transport details and vehicle suitability.
 export * from "./suitability-types.ts";

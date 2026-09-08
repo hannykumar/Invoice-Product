@@ -135,11 +135,32 @@ sandbox exception into GSTIN validation — see `docs/vendor/whitebooks-support-
 they answer, the service layer is exercised against `SyntheticIrp` and the live sandbox is
 exercised at the connector level only.
 
+## e-Way bill is wired in and proven live
+
+`whitebooksEwayConnector` (packages/transport) implements `ExternalConnector` for kind
+`eway_bill`; `ewayBillAdapter` above it is unchanged. All eight routes live under
+`/ewaybillapi/v1.03/ewayapi/` in lower case: `genewaybill`, `getewaybill`, `vehewb`,
+`updatetransporter`, `extendvalidity`, `canewb`, `rejewb`, `gencewb`.
+
+A full lifecycle ran against the live sandbox on 9 September 2026 through the real adapter —
+generate, fetch, cancel — and the cancellation was confirmed by fetching the bill back and reading
+`status: CNL`.
+
+One more defect the live run found: **the portal answers a generation with `ewayBillNo` and a fetch
+with `ewbNo`** — the same number under two names. Untranslated, a bill that exists reads as
+`NOT_FOUND`, which is worse than an error, because it invites raising a second e-way bill for goods
+already carrying one. The connector now gives the fetch the name the adapter reads.
+
+The envelope handling is shared with the e-invoice lane in `packages/gst/src/whitebooks-http.ts`,
+since the two lanes are one service wearing two hats and two copies would drift.
+
 ## What is still open
 
-The **GST-returns route** is still not found: `/gst`, `/gstr`, `/gstapi`, `/taxpayerapi`,
-`/returns` and `/gsp` all answer `WB_ERR_9404`. Returns needs no password — it is the portal switch
-plus an OTP — so this is a documentation gap, not a credential one.
+**GST returns is proven but not wired.** `GET /authentication/otprequest` answers with a
+transaction id, so the lane works; `GovernmentReturnPort` in `packages/gst-returns` has no
+WhiteBooks adapter yet. That lane authenticates by OTP rather than password and wants
+`gst_username` and `state_cd` as headers, so it needs its own caller rather than reusing either of
+the other two.
 
 `SyntheticIrp` remains the default for tests and demos; nothing in CI depends on a network.
 
