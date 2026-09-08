@@ -19,7 +19,7 @@ import { decideApplicability } from "./applicability.ts";
 import {
   cancellableUntil, checkAcknowledgement, computeIrn, financialYearOf, readAckDate, reportableUntil,
 } from "./irn.ts";
-import { buildEInvoicePayload, toOfflineJson } from "./payload.ts";
+import { buildEInvoicePayload, toOfflineJson, type PayloadOptions } from "./payload.ts";
 import { DEFAULT_EINVOICE_POLICY } from "./einvoice-types.ts";
 import type {
   ApplicabilityDecision, CancelReasonCode, EInvoiceApplicabilityInput, EInvoicePolicy,
@@ -42,6 +42,12 @@ export interface EInvoiceServiceDeps {
   readonly clock: Clock;
   readonly policy?: EInvoicePolicyPort;
   readonly idFactory?: () => string;
+  /**
+   * Accept the government's own malformed sandbox GSTINs, so the product can be exercised end to
+   * end against the government's sandbox. Off unless set, and it admits nothing that could be a
+   * real GST number — see `sandbox-gstins.ts`.
+   */
+  readonly allowSandboxGstins?: boolean;
 }
 
 export interface RegisterInput {
@@ -67,6 +73,7 @@ export class EInvoiceService {
   readonly #clock: Clock;
   readonly #policy: EInvoicePolicyPort | undefined;
   readonly #newId: () => string;
+  readonly #payloadOptions: PayloadOptions;
 
   constructor(deps: EInvoiceServiceDeps) {
     this.#irp = deps.irp;
@@ -74,6 +81,7 @@ export class EInvoiceService {
     this.#audit = deps.audit;
     this.#clock = deps.clock;
     this.#policy = deps.policy;
+    this.#payloadOptions = deps.allowSandboxGstins === true ? { allowSandboxGstins: true } : {};
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
   }
 
@@ -119,7 +127,7 @@ export class EInvoiceService {
       };
     }
 
-    const built = buildEInvoicePayload(input.document);
+    const built = buildEInvoicePayload(input.document, this.#payloadOptions);
     const due = reportableUntil(input.document.documentDate, policy.reportingWindowDays);
     if (!built.ok) {
       return {
@@ -176,7 +184,7 @@ export class EInvoiceService {
       );
     }
 
-    const built = buildEInvoicePayload(document);
+    const built = buildEInvoicePayload(document, this.#payloadOptions);
     if (!built.ok) {
       throw invalid(
         "EINVOICE_INCOMPLETE",
@@ -371,7 +379,7 @@ export class EInvoiceService {
     if (applicability.outcome === "NOT_APPLICABLE") {
       throw conflict("EINVOICE_NOT_APPLICABLE", `This bill does not need an e-invoice number, so there is nothing to export. ${applicability.reason}`);
     }
-    return toOfflineJson(input.document);
+    return toOfflineJson(input.document, this.#payloadOptions);
   }
 
   // --------------------------------------------------------------------- internals

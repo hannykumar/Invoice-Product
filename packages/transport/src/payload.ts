@@ -9,6 +9,7 @@
 // Money inside this product is always `bigint` paise. The portal wants rupees with two decimals.
 // That conversion happens here, at the boundary, and only here.
 
+import { isSandboxGstin } from "../../gst/src/sandbox-gstins.ts";
 import { normaliseVehicleNumber, VEHICLE_NUMBER } from "./validity.ts";
 import type {
   ConsignmentLine, Movement, MovementParty, MovementReason, TransportMode, VehicleAssignment,
@@ -36,6 +37,12 @@ export type PayloadResult =
 
 const PINCODE = /^\d{6}$/;
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$/;
+
+/** The same narrow allowance the e-invoice lane uses, and deliberately the same rule rather than a
+ * second copy of it: the government's sandbox taxpayers are malformed by its own hand, and nothing
+ * this admits could ever be a real GST number. See `packages/gst/src/sandbox-gstins.ts`. */
+const gstinAcceptable = (gstin: string, options: PartABuildOptions): boolean =>
+  GSTIN.test(gstin) || (options.allowSandboxGstins === true && isSandboxGstin(gstin));
 /** The 15-character id the portal issues to transporters who have no GSTIN. */
 const TRANSPORTER_ID = /^[0-9A-Z]{15}$/;
 
@@ -78,7 +85,7 @@ export const DOCUMENT_TYPE_CODES: Readonly<Record<string, string>> = Object.free
  */
 export const UNREGISTERED = "URP";
 
-const checkParty = (party: MovementParty | undefined, role: string, prefix: string, problems: PayloadProblem[]): void => {
+const checkParty = (party: MovementParty | undefined, role: string, prefix: string, problems: PayloadProblem[], options: PartABuildOptions): void => {
   if (party === undefined) {
     problems.push({ field: prefix, message: `We do not have the ${role}'s details, so this e-way bill cannot be raised.` });
     return;
@@ -86,7 +93,7 @@ const checkParty = (party: MovementParty | undefined, role: string, prefix: stri
   const gstin = (party.gstin ?? "").trim().toUpperCase();
   if (gstin === "") {
     problems.push({ field: `${prefix}Gstin`, message: `The ${role}'s GST number is missing. If they have none, say so explicitly rather than leaving it blank.` });
-  } else if (gstin !== UNREGISTERED && !GSTIN.test(gstin)) {
+  } else if (gstin !== UNREGISTERED && !gstinAcceptable(gstin, options)) {
     problems.push({ field: `${prefix}Gstin`, message: `The ${role}'s GST number is not a valid one.` });
   }
   if ((party.legalName ?? "").trim() === "") problems.push({ field: `${prefix}TrdName`, message: `The ${role}'s name is missing.` });
@@ -116,6 +123,8 @@ export const checkVehicle = (vehicle: VehicleAssignment | undefined, mode: Trans
 export interface PartABuildOptions {
   /** Kilometres by road. The portal takes 0 to mean "work it out from the pin codes". */
   readonly distanceKm?: number;
+  /** Accept the government's malformed sandbox GSTINs. Never set against the live portal. */
+  readonly allowSandboxGstins?: boolean;
 }
 
 /**
@@ -142,8 +151,8 @@ export const buildPartA = (movement: Movement, options: PartABuildOptions = {}):
   }
 
   const route = movementRoute(movement);
-  checkParty(movement.dispatchFrom ?? movement.consignor, "sender", "from", problems);
-  checkParty(movement.shipTo ?? movement.billTo, "receiver", "to", problems);
+  checkParty(movement.dispatchFrom ?? movement.consignor, "sender", "from", problems, options);
+  checkParty(movement.shipTo ?? movement.billTo, "receiver", "to", problems, options);
 
   primary.lines.forEach((line, index) => {
     if ((line.hsnCode ?? "").trim() === "") {

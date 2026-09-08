@@ -18,7 +18,8 @@ import type { ActorContext, AuditPort } from "@invoice/ledger";
 import { consignmentValueOf, decideEwayApplicability, movementRoute } from "./applicability.ts";
 import { buildPartA, buildPartB, toOfflineJson, type PayloadProblem } from "./payload.ts";
 import {
-  canExtendNow, describeExpiry, describeTimeLeft, isExpired, normaliseVehicleNumber, validityDays,
+  canExtendNow, describeExpiry, describeTimeLeft, isExpired, normaliseVehicleNumber,
+  readPortalTimestamp, validityDays,
 } from "./validity.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
 import type {
@@ -47,6 +48,9 @@ export interface EwayBillServiceDeps {
   readonly clock: Clock;
   readonly policy?: EwayBillPolicyPort;
   readonly idFactory?: () => string;
+  /** Accept the government's malformed sandbox GSTINs, so this lane can be tested against its own
+   * sandbox. Off unless set, and it admits nothing that could be a real GST number. */
+  readonly allowSandboxGstins?: boolean;
 }
 
 /** What a preview returns: the decision, what is missing, and nothing written anywhere. */
@@ -70,9 +74,11 @@ export class EwayBillService {
   readonly #clock: Clock;
   readonly #policy: EwayBillPolicyPort | undefined;
   readonly #newId: () => string;
+  readonly #payloadOptions: { readonly allowSandboxGstins?: boolean };
 
   constructor(deps: EwayBillServiceDeps) {
     this.#portal = deps.portal;
+    this.#payloadOptions = deps.allowSandboxGstins === true ? { allowSandboxGstins: true } : {};
     this.#records = deps.records;
     this.#trips = deps.trips;
     this.#audit = deps.audit;
@@ -144,7 +150,7 @@ export class EwayBillService {
       };
     }
 
-    const built = buildPartA(movement);
+    const built = buildPartA(movement, this.#payloadOptions);
     const days = movement.approximateDistanceKm === undefined
       ? undefined
       : validityDays(movement.approximateDistanceKm, movement.vehicle?.vehicleType ?? movement.vehicleType, policy);
@@ -205,7 +211,7 @@ export class EwayBillService {
       );
     }
 
-    const partA = buildPartA(movement);
+    const partA = buildPartA(movement, this.#payloadOptions);
     if (!partA.ok) {
       throw invalid(
         "EWAY_INCOMPLETE",
@@ -732,12 +738,9 @@ export class EwayBillService {
     return movement.documents[0]?.documentDate ?? this.#clock.now().toISOString().slice(0, 10);
   }
 
-  /** The portal writes wall-clock Indian time; this is the one place we read it. */
+  /** The portal writes wall-clock Indian time, in either of two shapes. `validity.ts` reads both. */
   #portalTime(raw: string): Date {
-    const indian = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(raw.trim());
-    if (indian === null) return new Date(raw);
-    const [, day, month, year, hour, minute, second = "00"] = indian;
-    return new Date(Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`) - 330 * 60_000);
+    return readPortalTimestamp(raw);
   }
 
   async #policyFor(companyId: CompanyId, on: IsoDate): Promise<EwayBillPolicy> {
