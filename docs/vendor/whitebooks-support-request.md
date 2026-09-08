@@ -43,7 +43,21 @@ e-way bill `501009126912` by sending `password` as a header directly to
 endpoint is vestigial. **Could you confirm that is correct**, so we are not relying on behaviour
 you intend to change?
 
-**3. Your published API documentation does not resolve.**
+**3. The GST returns token endpoint returns placeholder text, which blocks that lane entirely.**
+
+`GET /authentication/otprequest` works and returns a transaction id. Passing that transaction and
+the documented sandbox OTP `575757` to `GET /authentication/authtoken` gives:
+
+```json
+{"status_cd":"1","status_desc":"If authentication succeeds"}
+```
+
+There is no token. Without one we cannot call any GSTR endpoint, so we cannot test return filing at
+all. This is the same placeholder string the e-Way Bill authenticate route returns — harmless
+there, since that lane needs no token, but not here. **Could you either enable this endpoint on the
+sandbox or tell us the correct way to obtain a session token for the GST returns APIs?**
+
+**4. Your published API documentation does not resolve.**
 
 `https://whitebooks.in/llms.txt` advertises OpenAPI specifications at `/openapi/eway.json` and
 `/openapi/gst.json`, API references at `/docs/eway` and `/docs/einvoice`, developer guides at

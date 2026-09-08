@@ -156,7 +156,18 @@ since the two lanes are one service wearing two hats and two copies would drift.
 
 ## What is still open
 
-**GST returns is proven but not wired.** `GET /authentication/otprequest` answers with a
+**GST returns cannot be wired yet: its token endpoint is a stub too.**
+`GET /authentication/otprequest` works and answers with a transaction id. But
+`GET /authentication/authtoken`, given that transaction and the fixed sandbox OTP 575757, answers
+`{"status_cd":"1","status_desc":"If authentication succeeds"}` — the same placeholder the e-way
+bill authenticate route returns, with no token. Without a session token no GSTR endpoint can be
+called, so the lane stops one step in.
+
+That is now the **second** endpoint in this sandbox answering with placeholder text instead of
+data. On the e-way bill lane it turned out to be harmless, because that lane needs no token. Here
+it is not harmless, because the returns lane plainly does. It belongs in the support request.
+
+**Previously recorded:** `GET /authentication/otprequest` answers with a
 transaction id, so the lane works; `GovernmentReturnPort` in `packages/gst-returns` has no
 WhiteBooks adapter yet. That lane authenticates by OTP rather than password and wants
 `gst_username` and `state_cd` as headers, so it needs its own caller rather than reusing either of
