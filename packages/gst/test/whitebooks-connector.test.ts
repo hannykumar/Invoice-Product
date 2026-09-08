@@ -128,3 +128,51 @@ test("an unknown operation is refused before anything reaches the network", asyn
   assert.equal(error.code, "INVALID_REQUEST");
   assert.equal(calls.length, 0);
 });
+
+// The three below were found by running against the live NIC sandbox on 9 September 2026. Each
+// one passed the stubs above and still failed for real, which is why they are here.
+
+test("their errors hide in status_desc as a JSON string, not in an error object", async () => {
+  const { fetch } = stub([AUTH_OK, { status_cd: "0", status_desc: '[{"errorCode":"2150","errorMessage":"Duplicate IRN"}]' }, { status_cd: "1", data: JSON.stringify({ Irn: "existing-irn", AckNo: 152610027961228 }) }]);
+  const connector = whitebooksIrpConnector({ credentials: CREDENTIALS, email: "dev@example.com", fetch });
+
+  const response = await connector.execute({
+    tenantId: "t", operation: "einvoice.generate", idempotencyKey: "k", correlationId: "c",
+    payload: { SellerDtls: { Gstin: "33AAGCB1286Q003" }, DocDtls: { Typ: "INV", No: "TRIAL/1", Dt: "08/09/2026" } },
+  });
+
+  assert.equal(response.payload.ErrorCode, "2150", "read as 2150, not swallowed as UNKNOWN");
+});
+
+test("a duplicate comes back carrying the IRN, recovered from the portal's own record", async () => {
+  // Their duplicate reply does not include the IRN. It is a hash of four fields we sent, so the
+  // connector recomputes it and fetches the acknowledgement rather than returning a blank one.
+  const { fetch, calls } = stub([
+    AUTH_OK,
+    { status_cd: "0", status_desc: '[{"errorCode":"2150","errorMessage":"Duplicate IRN"}]' },
+    { status_cd: "1", data: JSON.stringify({ Irn: "existing-irn", AckNo: 152610027961228, AckDt: "2026-09-09 03:38:33" }) },
+  ]);
+  const connector = whitebooksIrpConnector({ credentials: CREDENTIALS, email: "dev@example.com", fetch });
+
+  const response = await connector.execute({
+    tenantId: "t", operation: "einvoice.generate", idempotencyKey: "k", correlationId: "c",
+    payload: { SellerDtls: { Gstin: "33AAGCB1286Q003" }, DocDtls: { Typ: "INV", No: "TRIAL/1", Dt: "08/09/2026" } },
+  });
+
+  assert.equal(response.payload.ErrorCode, "2150", "still a duplicate, so the caller is told so");
+  assert.equal(response.payload.Irn, "existing-irn", "and it holds the IRN the government already has");
+  assert.ok(calls.some((call) => call.url.includes("GETIRN")), "which took a second call to recover");
+});
+
+test("AckNo arrives as a number and must survive as text", async () => {
+  // The layer above reads acknowledgement fields as strings, so an un-coerced number vanished
+  // silently and produced a registered e-invoice with a blank acknowledgement number.
+  const { fetch } = stub([AUTH_OK, { status_cd: "1", data: JSON.stringify({ Irn: "abc", AckNo: 152610027961228 }) }]);
+  const connector = whitebooksIrpConnector({ credentials: CREDENTIALS, email: "dev@example.com", fetch });
+
+  const response = await connector.execute({
+    tenantId: "t", operation: "einvoice.generate", payload: {}, idempotencyKey: "k", correlationId: "c",
+  });
+
+  assert.equal(response.payload.AckNo, "152610027961228");
+});

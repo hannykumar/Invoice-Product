@@ -13,6 +13,8 @@
 import {
   ConnectorError, type ConnectorRequest, type ConnectorResponse, type ExternalConnector,
 } from "../../platform/src/connectors.ts";
+import { computeIrn } from "./irn.ts";
+import type { EInvoiceDocumentType } from "./einvoice-types.ts";
 
 export interface WhitebooksCredentials {
   readonly baseUrl: string;
@@ -41,6 +43,11 @@ const ROUTES: Readonly<Record<string, { readonly method: "GET" | "POST"; readonl
   "einvoice.cancel": { method: "POST", path: "/einvoice/type/CANCEL/version/V1_03" },
 });
 
+/** The schema's document codes, back to our own names. */
+const DOCUMENT_TYPES: Readonly<Record<string, EInvoiceDocumentType>> = Object.freeze({
+  INV: "INVOICE", CRN: "CREDIT_NOTE", DBN: "DEBIT_NOTE",
+});
+
 /** A token is good for a few hours; we keep it until it is nearly stale, then get another. */
 const TOKEN_SAFETY_MARGIN_MS = 60_000;
 
@@ -64,23 +71,52 @@ const networkFailure = (error: unknown): ConnectorError => {
   return new ConnectorError("OUTAGE", true);
 };
 
-/** Pull the government's own field names out of whatever WhiteBooks wrapped them in. */
-const unwrap = (body: Envelope): Record<string, unknown> => {
-  const errors = Array.isArray(body.error) ? body.error : [];
-  const first = errors[0] as { error_cd?: string; message?: string } | undefined;
-  if (first?.error_cd !== undefined) return { ErrorCode: String(first.error_cd), ErrorMessage: first.message ?? "" };
+/**
+ * Pull the government's own field names out of whatever WhiteBooks wrapped them in.
+ *
+ * Two things here were learned from the live sandbox rather than from a document. Their errors
+ * arrive as a JSON *string* in `status_desc` — `[{"errorCode":"2150","errorMessage":"..."}]` — not
+ * as the object one would expect. And numbers come back as numbers: `AckNo` is `152610027961200`,
+ * not `"152610027961200"`, which the layer above reads as a string and would otherwise drop.
+ */
+const asText = (value: unknown): unknown => (typeof value === "number" ? String(value) : value);
 
-  // A refusal with no itemised error still has to reach the caller as a refusal, or a rejected
-  // bill would look like a registered one with every field blank.
+const parseErrors = (description: string): { readonly code: string; readonly message: string } | undefined => {
+  const text = description.trim();
+  if (!text.startsWith("[") && !text.startsWith("{")) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const first = (Array.isArray(parsed) ? parsed[0] : parsed) as { errorCode?: unknown; errorMessage?: unknown } | undefined;
+    if (first?.errorCode === undefined) return undefined;
+    return { code: String(first.errorCode), message: typeof first.errorMessage === "string" ? first.errorMessage : "" };
+  } catch {
+    return undefined;
+  }
+};
+
+const unwrap = (body: Envelope): Record<string, unknown> => {
   if (String(body.status_cd) !== "1") {
+    const described = parseErrors(body.status_desc ?? "");
+    if (described !== undefined) return { ErrorCode: described.code, ErrorMessage: described.message };
+
+    const errors = Array.isArray(body.error) ? body.error : [];
+    const first = errors[0] as { error_cd?: string; message?: string } | undefined;
+    if (first?.error_cd !== undefined) return { ErrorCode: String(first.error_cd), ErrorMessage: first.message ?? "" };
+
+    // A refusal we cannot itemise still has to reach the caller as a refusal, or a rejected bill
+    // would look like a registered one with every field blank.
     return { ErrorCode: body.errorCode ?? "UNKNOWN", ErrorMessage: body.status_desc ?? "The e-invoice service refused this request." };
   }
+
   const data = body.data;
-  if (typeof data === "string") {
-    try { return JSON.parse(data) as Record<string, unknown>; } catch { return { ErrorCode: "UNREADABLE", ErrorMessage: data }; }
-  }
-  return (data ?? {}) as Record<string, unknown>;
+  const object = typeof data === "string"
+    ? (() => { try { return JSON.parse(data) as Record<string, unknown>; } catch { return { ErrorCode: "UNREADABLE", ErrorMessage: data }; } })()
+    : ((data ?? {}) as Record<string, unknown>);
+  return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, asText(value)]));
 };
+
+/** The government's "already registered" code. */
+const DUPLICATE_CODE = "2150";
 
 export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector => {
   const { credentials: creds, email } = deps;
@@ -134,6 +170,27 @@ export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector 
     return value;
   };
 
+  /** Recover the acknowledgement for a bill the portal says it already has. */
+  const fetchExisting = async (sent: Readonly<Record<string, unknown>>, authToken: string): Promise<Record<string, unknown> | undefined> => {
+    const seller = sent.SellerDtls as { Gstin?: string } | undefined;
+    const doc = sent.DocDtls as { Typ?: string; No?: string; Dt?: string } | undefined;
+    if (seller?.Gstin === undefined || doc?.No === undefined || doc.Dt === undefined || doc.Typ === undefined) return undefined;
+
+    const irn = computeIrn({
+      supplierGstin: seller.Gstin,
+      documentType: DOCUMENT_TYPES[doc.Typ] ?? "INVOICE",
+      documentNumber: doc.No,
+      // The schema sends dd/mm/yyyy; `computeIrn` works from the financial year of an ISO date.
+      documentDate: doc.Dt.split("/").reverse().join("-"),
+    });
+    try {
+      const found = unwrap(await call("GET", `/einvoice/type/GETIRN/version/V1_03?irn=${encodeURIComponent(irn)}`, { "auth-token": authToken }));
+      return typeof found.Irn === "string" ? found : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   return {
     kind: "irp",
 
@@ -150,12 +207,20 @@ export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector 
         route.method === "POST" ? request.payload : undefined,
       );
 
-      // Their duplicate reply is a 200 carrying the existing IRN; `irpAdapter` turns code 2150
-      // into a success, so it must arrive as payload rather than as a thrown error.
+      let payload = unwrap(body);
+
+      // Their duplicate reply carries the code but *not* the IRN, and the layer above must end up
+      // holding one — that is the whole point of a retry after a timeout. The IRN is a hash of
+      // four fields we already sent, so we recompute it and ask the portal for its record.
+      if (payload.ErrorCode === DUPLICATE_CODE && request.operation === "einvoice.generate") {
+        const existing = await fetchExisting(request.payload, authToken);
+        if (existing !== undefined) payload = { ...existing, ...payload };
+      }
+
       return Object.freeze({
         providerRequestId: typeof body.status_desc === "string" && body.status_desc !== "" ? `whitebooks:${request.idempotencyKey}` : `whitebooks:${request.correlationId}`,
         status: "completed" as const,
-        payload: Object.freeze(unwrap(body)),
+        payload: Object.freeze(payload),
       });
     },
 

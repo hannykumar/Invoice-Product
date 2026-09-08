@@ -48,18 +48,34 @@ Create API User** on the e-invoice or e-way-bill portal, picks the GSP, and **in
 and password there**. Nothing in a GSP dashboard can display that password, because the GSP never
 had it.
 
-## The blocker
+## It works, and here is what only the live service could tell us
 
-`/ewaybillapi/v1.03/authenticate` answers **"Invalid credentials provided or your account is not
-active"**. We hold three client id/secret pairs and four GSTN sandbox taxpayers
-(`33AAGCB1286Q1ZB`, `27AAGCB1286Q1Z4`, `33AAGCB1286Q2ZA`, `27AAGCB1286Q2Z3`), but **no taxpayer
-password**, and the login will not proceed without one. The four accounts are also labelled for
-*Returns*; e-invoice and e-way bill sandbox users are created separately on the NIC portals.
+On 9 September 2026 a bill went through the sandbox end to end and came back with an IRN, an
+acknowledgement number and NIC's signed QR code. Two defects survived the stubbed tests and were
+found only against the real thing:
 
-Until a password exists, `whitebooksIrpConnector` is exercised against recorded reply shapes in
-`packages/gst/test/whitebooks-connector.test.ts`, and `SyntheticIrp` remains the default. No
-acceptance criterion for #26 is affected: it was met against the synthetic portal, which computes
-real IRNs.
+1. **Errors hide in `status_desc` as a JSON string** — `[{"errorCode":"2150",...}]` — not in the
+   `error` object the shape suggested. A duplicate was being reported as an unknown rejection.
+2. **Numbers arrive as numbers.** `AckNo` is `152610027961228`, not a string, and the layer above
+   reads acknowledgement fields as text — so a registered e-invoice came back with a blank
+   acknowledgement number.
+
+A third thing is behaviour, not a defect: **their duplicate reply does not carry the IRN**. Since
+the IRN is a hash of four fields we sent, the connector recomputes it and fetches the portal's own
+record, so a retry after a timeout still ends holding the right IRN — which is what
+`purchase-intake` and `einvoice-v1` both require.
+
+**NIC's sandbox GSTINs do not carry a real checksum digit** (`33AAGCB1286Q003`), so our own payload
+validator refuses them, correctly. The trial script swaps them in after the payload is built.
+Nothing in the product does this, and the validator stays as it is.
+
+## What is still open
+
+The **GST-returns route** is still not found: `/gst`, `/gstr`, `/gstapi`, `/taxpayerapi`,
+`/returns` and `/gsp` all answer `WB_ERR_9404`. Returns needs no password — it is the portal switch
+plus an OTP — so this is a documentation gap, not a credential one.
+
+`SyntheticIrp` remains the default for tests and demos; nothing in CI depends on a network.
 
 ## Where it plugs in
 
