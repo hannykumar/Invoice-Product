@@ -31,6 +31,23 @@ plus `password` on the login and `auth-token` on everything after it. `email` is
 The GST-returns route is **not** under any of `/gst`, `/gstr`, `/gstapi`, `/taxpayerapi`,
 `/returns` or `/gsp` — all six answer `WB_ERR_9404`. It has not been found yet.
 
+## Two lanes, two different logins
+
+WhiteBooks' own help guide *Enable Access to Upload API* (screenshots, no text layer) settles how
+the GST-returns lane authenticates. The taxpayer signs in at `gst.gov.in`, opens **View Profile →
+Manage API Access**, sets **Enable API Request = Yes** with a **30-day duration**, and confirms.
+The portal's own wording is the important part: *"Your API session will be active during this
+duration. After this duration you have to initiate a new session by providing OTP again."*
+
+So the returns lane has **no API password at all** — access is a switch on the portal plus an OTP,
+which is why the four sandbox taxpayers arrived with usernames and none. Sandbox OTP is 575757.
+
+The guide covers only that switch. It says nothing about e-invoice or e-way bill, which are NIC
+systems rather than GSTN ones and take the other route: the taxpayer opens **API Registration →
+Create API User** on the e-invoice or e-way-bill portal, picks the GSP, and **invents a username
+and password there**. Nothing in a GSP dashboard can display that password, because the GSP never
+had it.
+
 ## The blocker
 
 `/ewaybillapi/v1.03/authenticate` answers **"Invalid credentials provided or your account is not
