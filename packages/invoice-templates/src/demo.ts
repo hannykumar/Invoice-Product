@@ -188,9 +188,7 @@ const main = async (): Promise<void> => {
     { templateId: 'india-standard', format: 'A4', locale: 'en-IN' },
     { templateId: 'india-standard', format: 'A4', locale: 'hi-IN' },
     { templateId: 'india-standard', format: 'THERMAL_80MM', locale: 'en-IN' },
-    { templateId: 'wholesale-classic', format: 'A4', locale: 'en-IN' },
-    { templateId: 'wholesale-classic', format: 'A4', locale: 'hi-IN' },
-    { templateId: 'wholesale-classic', format: 'MOBILE', locale: 'en-IN' },
+    { templateId: 'india-standard', format: 'MOBILE', locale: 'en-IN' },
     { templateId: 'bakery-warm', format: 'THERMAL_80MM', locale: 'en-IN' },
     { templateId: 'counter-thermal', format: 'THERMAL_58MM', locale: 'hi-IN' },
     { templateId: 'services-simple', format: 'A4', locale: 'en-IN' },
@@ -216,7 +214,7 @@ const main = async (): Promise<void> => {
   // Issue #148 — one page with every reserved slot showing at once, so the finished layout can be
   // reviewed as a picture before any provider is connected. Nothing here is filled in: this is
   // exactly what a bill looks like today, with the space blocked out for what is still coming.
-  const wholesaleTemplate = templateById('wholesale-classic');
+  const wholesaleTemplate = templateById('india-standard');
   if (wholesaleTemplate !== undefined) {
     const everySlot = captureSnapshot(
       { ...wholesaleTemplate, optionalFields: [...wholesaleTemplate.optionalFields, 'qr.upi'] },
@@ -239,7 +237,7 @@ const main = async (): Promise<void> => {
     description: `Plastic crate, size ${i + 1}`,
   }));
   const longDocument = { ...document, lines: longLines, number: 'INV/KB/2026-27/00099' };
-  for (const id of ['wholesale-classic', 'india-standard']) {
+  for (const id of ['india-standard']) {
     const template = templateById(id);
     if (template === undefined) continue;
     const snapshot = captureSnapshot(template, 'en-IN', '2026-08-29');

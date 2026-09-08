@@ -199,7 +199,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed table.summary tr.grand td { font-weight: 700; }
     .boxed table.section td { background: #f0f0f0; font-weight: 700; text-align: center; letter-spacing: .06em; }
     .boxed table.notice td { background: #fffbe6; }
-    .boxed table.foot td { width: 33.33%; }
+    .boxed table.foot td.upi-cell { width: 32mm; text-align: center; }
     .boxed .sign-cell { text-align: right; }
     .boxed .sign-space { height: 16mm; }
     .boxed .sign-line { font-weight: 700; }

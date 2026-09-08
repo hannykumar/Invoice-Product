@@ -30,9 +30,9 @@ const buyer = {
   stateName: 'Karnataka',
 };
 
-const wholesale = (): TemplateDefinition => {
-  const template = templateById('wholesale-classic');
-  assert.ok(template !== undefined);
+const design = (): TemplateDefinition => {
+  const template = templateById('india-standard');
+  assert.ok(template !== undefined, 'the one shipped design a wholesaler is offered');
   return template;
 };
 
@@ -60,7 +60,7 @@ const printedSaleWithFreight = async (format: PageFormat = 'A4') => {
   const document = toInvoiceDocument(issued.invoice, {
     title: 'TAX_INVOICE', seller, buyer, placeOfSupplyStateName: 'Karnataka',
   });
-  const snapshot = captureSnapshot(wholesale(), 'en-IN', '2026-08-29');
+  const snapshot = captureSnapshot(design(), 'en-IN', '2026-08-29');
   return { document, html: renderInvoice(document, snapshot, { format, locale: 'en-IN' }) };
 };
 
@@ -78,22 +78,37 @@ const rows = (html: string): string[][] =>
   [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)]
     .map((match) => [...(match[1] ?? '').matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map((c) => c[1] ?? ''));
 
+const text = (cell: string): string => cell.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+
+/** The item table, read the way a person reads it: find the headings, then use them. */
+const itemTable = (html: string): { columns: Record<string, number>; body: string[][] } => {
+  const all = rows(html);
+  const headerIndex = all.findIndex((cells) => cells.map(text).includes('Amount'));
+  assert.ok(headerIndex >= 0, 'the item table must have a heading row');
+  const headings = (all[headerIndex] as string[]).map(text);
+  const columns: Record<string, number> = {};
+  headings.forEach((h, i) => { columns[h] = i; });
+  const body = all.slice(headerIndex + 1).filter((cells) => cells.length === headings.length);
+  return { columns, body };
+};
+
 test('#131 — on the printed bill, quantity × rate is the amount on every goods line', async () => {
   const { html } = await printedSaleWithFreight();
 
-  // Columns on this design: Item, HSN, Qty, Rate, Discount, Batch, Taxable value, GST %, GST.
-  const goods = rows(html).filter((cells) => cells.length === 9 && /KGS|PCS|BOX/.test(cells[2] ?? ''));
+  const { columns, body } = itemTable(html);
+  const goods = body.filter((cells) => /^[\d.]+$/.test(text(cells[columns['Qty'] as number] ?? '')));
   assert.equal(goods.length, 1, 'the sale has one goods line');
 
   for (const cells of goods) {
-    const quantity = Number((cells[2] ?? '').replace(/[^\d.]/g, ''));
-    const rate = paise(cells[3] ?? '');
-    const discount = (cells[4] ?? '').includes('—') ? 0n : paise(cells[4] ?? '');
-    const amount = paise(cells[6] ?? '');
+    const quantity = Number(text(cells[columns['Qty'] as number] ?? ''));
+    const rate = paise(cells[columns['Rate'] as number] ?? '');
+    const discountCell = text(cells[columns['Discount'] as number] ?? '');
+    const discount = discountCell === '' || discountCell === '—' ? 0n : paise(cells[columns['Discount'] as number] ?? '');
+    const amount = paise(cells[columns['Amount'] as number] ?? '');
     assert.equal(
       amount,
       BigInt(Math.round(quantity * Number(rate))) - discount,
-      `${cells[0]}: quantity × rate less discount must be the printed amount`,
+      `${text(cells[columns['Item'] as number] ?? '')}: quantity × rate less discount must be the printed amount`,
     );
   }
   assert.ok(html.includes('₹10,000.00'), '100 × ₹100 prints as ₹10,000.00, with no freight folded in');
@@ -118,7 +133,7 @@ test('#131 — freight is its own line below the goods, and the bill still total
 });
 
 test('#148 — every reserved slot prints as a bordered box at its final size, with a label', async () => {
-  const template = wholesale();
+  const template = design();
   const snapshot = captureSnapshot(
     { ...template, optionalFields: [...template.optionalFields, 'qr.upi'] },
     'en-IN',
@@ -140,7 +155,7 @@ test('#148 — every reserved slot prints as a bordered box at its final size, w
 });
 
 test('#148 — a reserved slot is dropped on till-roll paper and never shifts the page when filled', async () => {
-  const template = wholesale();
+  const template = design();
   const snapshot = captureSnapshot(
     { ...template, optionalFields: [...template.optionalFields, 'qr.upi'], formats: ['A4', 'THERMAL_58MM', 'THERMAL_80MM'] },
     'en-IN',
@@ -168,7 +183,7 @@ test('#148 — a reserved slot is dropped on till-roll paper and never shifts th
 });
 
 test('#148 — the screen preview and the print show a reserved slot identically', async () => {
-  const template = wholesale();
+  const template = design();
   const snapshot = captureSnapshot(
     { ...template, optionalFields: [...template.optionalFields, 'qr.upi'] },
     'en-IN',
