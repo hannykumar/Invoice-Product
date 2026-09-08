@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isoDate, quantityFromString, rupees } from '@invoice/kernel';
 import {
-  captureSnapshot, renderInvoice, RESERVED_SLOTS, templateById, toInvoiceDocument,
+  captureSnapshot, hsnSummary, renderInvoice, RESERVED_SLOTS, templateById, toInvoiceDocument,
   type PageFormat, type TemplateDefinition,
 } from '@invoice/invoice-templates';
 import { COMPANY_GSTIN, COMPANY_STATE, CUSTOMER, CUSTOMER_GSTIN, CUSTOMER_NAME, makeBusiness, purchase } from './harness.ts';
@@ -181,4 +181,44 @@ test('#148 — the screen preview and the print show a reserved slot identically
     renderInvoice(empty, snapshot, { format: 'A4', locale: 'en-IN' }),
     'what a business approves on screen has to be what comes out of the printer',
   );
+});
+
+
+/**
+ * Issue #140 — the boxed design, driven through the real services rather than a fixture.
+ *
+ * The HSN summary's promise is that it agrees with the bill. A fixture can be made to agree with
+ * itself; only real calculator output proves the grouping and the rounding survive contact with a
+ * bill that has goods, freight and a rate the business declared.
+ */
+test('#140 — the India-standard bill prints a ruled grid whose HSN summary agrees with the totals', async () => {
+  const { document } = await printedSaleWithFreight();
+  const template = templateById('india-standard');
+  assert.ok(template !== undefined);
+  const html = renderInvoice(document, captureSnapshot(template, 'en-IN', '2026-09-08'), {
+    format: 'A4',
+    locale: 'en-IN',
+  });
+
+  assert.ok(html.includes('data-layout="BOXED"'));
+  assert.ok(html.includes('Tax summary by HSN / SAC'));
+
+  const summary = hsnSummary(document);
+  assert.equal(summary.totals.taxableValue.minor, document.totals.taxableValue.minor, 'taxable value must agree');
+  assert.equal(summary.totals.cgst.minor, document.totals.cgst.minor, 'CGST must agree');
+  assert.equal(summary.totals.sgst.minor, document.totals.sgst.minor, 'SGST must agree');
+  assert.equal(summary.totals.igst.minor, document.totals.igst.minor, 'IGST must agree');
+  assert.equal(summary.totals.cess.minor, document.totals.cess.minor, 'cess must agree');
+
+  // The freight line from #131 is grouped in the summary alongside the goods it rides with, so the
+  // buyer's accountant sees the same taxable value under the same rate as the goods above.
+  assert.ok(summary.rows.length >= 1);
+  assert.equal(
+    summary.rows.reduce((acc, r) => acc + r.taxableValue.minor, 0n),
+    document.totals.taxableValue.minor,
+    'every row together is the whole bill; nothing is left out of the summary',
+  );
+
+  // And the arithmetic rule from #131 still holds on this design: 100 KGS at Rs 100 is Rs 10,000.
+  assert.ok(html.includes('\u20b910,000.00'));
 });
