@@ -12,7 +12,7 @@
  *     template has no way to remove a legally required field, because it has no field for it.
  *  2. **Everything is escaped.** An item called `<script>` is a thing a shopkeeper can type.
  */
-import { formatDate, formatINR, sum, toDecimalString, type Money } from '@invoice/kernel';
+import { formatDate, sum, type Money } from '@invoice/kernel';
 import type {
   InvoiceDocument,
   Locale,
@@ -22,6 +22,11 @@ import type {
 } from './document.ts';
 import type { PageFormat } from './template.ts';
 import { renderReservedSlot, reservedSlotStyles } from './reserved.ts';
+import { renderBoxed } from './boxed.ts';
+import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
+
+/** Re-exported because this module has been the public home of the escaper since issue #13. */
+export { escapeHtml };
 
 export interface RenderOptions {
   readonly format: PageFormat;
@@ -29,68 +34,6 @@ export interface RenderOptions {
   /** Set for the preview shown on screen, which drops the print-only page furniture. */
   readonly screenPreview?: boolean;
 }
-
-/** Printable width and the character budget that follows from it. */
-const PAGE: Record<PageFormat, { widthCss: string; printableMm: number | null; narrow: boolean }> = {
-  A4: { widthCss: '210mm', printableMm: 190, narrow: false },
-  THERMAL_80MM: { widthCss: '80mm', printableMm: 72, narrow: true },
-  THERMAL_58MM: { widthCss: '58mm', printableMm: 48, narrow: true },
-  MOBILE: { widthCss: '100%', printableMm: null, narrow: true },
-};
-
-export const escapeHtml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-const T = {
-  TAX_INVOICE: { 'en-IN': 'Tax invoice', 'hi-IN': 'Tax invoice' },
-  BILL_OF_SUPPLY: { 'en-IN': 'Bill of supply', 'hi-IN': 'Bill of supply' },
-  CREDIT_NOTE: { 'en-IN': 'Return note', 'hi-IN': 'Wapsi note' },
-  DEBIT_NOTE: { 'en-IN': 'Extra charge note', 'hi-IN': 'Extra charge note' },
-  billedTo: { 'en-IN': 'Billed to', 'hi-IN': 'Kiske naam' },
-  invoiceNo: { 'en-IN': 'Bill number', 'hi-IN': 'Bill number' },
-  date: { 'en-IN': 'Date', 'hi-IN': 'Taarikh' },
-  dueDate: { 'en-IN': 'Payment due', 'hi-IN': 'Payment kab tak' },
-  placeOfSupply: { 'en-IN': 'This sale counts in', 'hi-IN': 'Bikri kis rajya ki' },
-  reverseCharge: { 'en-IN': 'Customer pays the GST directly', 'hi-IN': 'GST customer khud bharega' },
-  gstin: { 'en-IN': 'GST number', 'hi-IN': 'GST number' },
-  item: { 'en-IN': 'Item', 'hi-IN': 'Item' },
-  hsn: { 'en-IN': 'HSN / SAC', 'hi-IN': 'HSN / SAC' },
-  qty: { 'en-IN': 'Qty', 'hi-IN': 'Kitna' },
-  rate: { 'en-IN': 'Rate', 'hi-IN': 'Rate' },
-  discount: { 'en-IN': 'Discount', 'hi-IN': 'Chhoot' },
-  batch: { 'en-IN': 'Batch', 'hi-IN': 'Batch' },
-  note: { 'en-IN': 'Note', 'hi-IN': 'Note' },
-  taxable: { 'en-IN': 'Taxable value', 'hi-IN': 'Jis par tax laga' },
-  subTotal: { 'en-IN': 'Sub-total for goods', 'hi-IN': 'Maal ka sub-total' },
-  charges: { 'en-IN': 'Charges added to this bill', 'hi-IN': 'Bill mein jude charge' },
-  gstPercent: { 'en-IN': 'GST %', 'hi-IN': 'GST %' },
-  gstAmount: { 'en-IN': 'GST', 'hi-IN': 'GST' },
-  lineTotal: { 'en-IN': 'Amount', 'hi-IN': 'Rakam' },
-  totalBeforeGst: { 'en-IN': 'Total before GST', 'hi-IN': 'GST se pehle total' },
-  roundOff: { 'en-IN': 'Rounded', 'hi-IN': 'Round kiya' },
-  total: { 'en-IN': 'Total to pay', 'hi-IN': 'Kul dena' },
-  inWords: { 'en-IN': 'In words', 'hi-IN': 'Shabdon mein' },
-  paid: { 'en-IN': 'Paid', 'hi-IN': 'Diya' },
-  outstanding: { 'en-IN': 'Still due', 'hi-IN': 'Abhi baaki' },
-  rcmTax: { 'en-IN': 'GST you pay directly to the government', 'hi-IN': 'Jo GST aap seedha sarkar ko bharenge' },
-  transport: { 'en-IN': 'Transport', 'hi-IN': 'Transport' },
-  vehicle: { 'en-IN': 'Vehicle', 'hi-IN': 'Gaadi' },
-  eWayBill: { 'en-IN': 'E-way bill', 'hi-IN': 'E-way bill' },
-  irn: { 'en-IN': 'Government reference (IRN)', 'hi-IN': 'Sarkari reference (IRN)' },
-  bank: { 'en-IN': 'Pay into', 'hi-IN': 'Yahan bhejein' },
-  po: { 'en-IN': 'Your order reference', 'hi-IN': 'Aapka order reference' },
-} as const;
-
-const t = (key: keyof typeof T, locale: Locale): string => T[key][locale];
-
-const money = (m: Money): string => escapeHtml(formatINR(m));
-const percent = (rate: bigint | null): string => (rate === null ? '—' : `${Number(rate) / 100}%`);
-const isZero = (m: Money): boolean => m.minor === 0n;
 
 const partyBlock = (party: RenderableParty, heading: string, locale: Locale): string => {
   const lines = [
@@ -154,14 +97,6 @@ const lineRow = (line: RenderableLine, snapshot: TemplateSnapshot): string => {
   return `<tr${charge ? ' class="charge"' : ''}>${cells.join('')}</tr>`;
 };
 
-/** The narrow shapes get a list, because a nine-column table on 58mm of paper is unreadable. */
-const narrowLine = (line: RenderableLine, locale: Locale): string => `
-  <div class="tline">
-    <div class="tline-name">${escapeHtml(line.description)}${line.reverseCharge ? ' (RCM)' : ''}</div>
-    <div class="tline-detail"><span>${line.kind === 'CHARGE' ? '' : `${escapeHtml(line.quantityText)} × ${money(line.unitPrice)}`}</span><span class="num">${money(line.taxableValue)}</span></div>
-    ${line.ratePercentTimes100 === null ? '' : `<div class="tline-tax"><span>${escapeHtml(t('gstAmount', locale))} ${escapeHtml(percent(line.ratePercentTimes100))}</span><span class="num">${money(line.taxAmount)}</span></div>`}
-  </div>`;
-
 const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
   const page = PAGE[format];
   const { palette, typography } = snapshot;
@@ -218,6 +153,69 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .qr-lines { display: flex; flex-direction: column; gap: 1.5mm; }
     ${reservedSlotStyles(palette.border, palette.muted, Math.max(6, typography.baseSizePt - 2))}
     footer { margin-top: 4mm; border-top: 1px solid ${palette.border}; padding-top: 2mm; color: ${palette.muted}; }
+
+    /* Issue #140 — the boxed India-standard grid. Every table below shares one outer rule, so the
+       page reads as a single frame rather than a stack of separate tables. */
+    .boxed .sheet-inner { border: 1px solid ${palette.border}; border-bottom: 0; }
+    .boxed table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .boxed table.grid > tbody > tr > td, .boxed table.grid > tr > td, .boxed table.grid th {
+      border: 1px solid ${palette.border}; border-top: 0; border-left: 0;
+      padding: 1.2mm 1.4mm; vertical-align: top; overflow-wrap: anywhere;
+    }
+    .boxed table.grid > tbody > tr > td:last-child, .boxed table.grid > tr > td:last-child,
+    .boxed table.grid th:last-child { border-right: 0; }
+    /* Colour and background are both restated: the airy design paints its headings white on the
+       accent colour, and without both the boxed grid inherits white text on a pale grey band. */
+    .boxed table.grid th { background: #f0f0f0; color: ${palette.text}; font-weight: 700; text-align: left; }
+    .boxed table.grid th.num, .boxed table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .boxed table.inner { border: 0; }
+    /* The airy design draws the amount-in-words panel and the rate notice as loose dashed and
+       left-barred blocks. Inside a ruled grid those read as damage, so they are squared off. */
+    .boxed table.words, .boxed table.notice, .boxed table.section { margin: 0; border: 0; background: none; }
+    .boxed table.words td { border-left: 0; }
+    .boxed table.inner > tbody > tr > td:last-child, .boxed table.inner > tr > td:last-child { border-right: 0; }
+    .boxed .cap {
+      display: block; font-size: ${Math.max(6, typography.baseSizePt - 2)}pt; color: ${palette.muted};
+      text-transform: uppercase; letter-spacing: .04em; line-height: 1.3;
+    }
+    .boxed .cap-inline { color: ${palette.muted}; }
+    .boxed .val { display: block; min-height: ${typography.baseSizePt + 2}pt; }
+    .boxed .title-cell { text-align: center; }
+    .boxed h1 {
+      margin: 0; font-size: ${typography.baseSizePt + 3}pt; letter-spacing: .18em;
+      text-transform: uppercase; color: ${palette.text}; font-family: ${typography.headingStack};
+    }
+    .boxed .party-name { display: block; font-weight: 700; font-size: ${typography.baseSizePt + 1}pt; }
+    .boxed .meta-cell { padding: 0; }
+    /* The item table takes the height that is left, so the page ends at the bottom rule instead of
+       stopping halfway down with white space under it, the way a real bill does. */
+    .boxed table.items { table-layout: fixed; }
+    .boxed table.items td.sl { width: 7mm; }
+    .boxed table.items tbody tr { break-inside: avoid; page-break-inside: avoid; }
+    .boxed table.items tr.charge td { background: #fafafa; }
+    .boxed table.items tr.subtotal td { font-weight: 700; }
+    .boxed table.totals td:first-child { text-align: right; }
+    .boxed table.totals tr.grand td { font-weight: 700; font-size: ${typography.baseSizePt + 1}pt; }
+    .boxed table.summary tr.grand td { font-weight: 700; }
+    .boxed table.section td { background: #f0f0f0; font-weight: 700; text-align: center; letter-spacing: .06em; }
+    .boxed table.notice td { background: #fffbe6; }
+    .boxed table.foot td { width: 33.33%; }
+    .boxed .sign-cell { text-align: right; }
+    .boxed .sign-space { height: 16mm; }
+    .boxed .sign-line { font-weight: 700; }
+    .boxed table.head td.party-cell { width: 50%; }
+    .boxed table.head.with-qr td.party-cell { width: 34%; }
+    .boxed table.head.with-qr td.meta-cell { width: 48%; }
+    .boxed .qr-cell { width: 18%; text-align: center; vertical-align: top; }
+    /* A bill number is read as one token; only a 64-character IRN may be split mid-character. */
+    .boxed table.head td { overflow-wrap: break-word; }
+    .boxed table.head td .val { overflow-wrap: normal; }
+    /* An address wraps between words; only a long unbroken code may be split mid-character. */
+    .boxed table.head td { overflow-wrap: break-word; }
+    .boxed .irn-cell code, .boxed table.grid td.break { overflow-wrap: anywhere; }
+    .boxed .irn-cell code { word-break: break-all; }
+    .boxed .qr-acks { display: flex; flex-direction: column; gap: 1.5mm; margin-top: 1.5mm; align-items: center; }
+    .boxed .tag { font-size: ${typography.baseSizePt - 1}pt; border: 1px solid ${palette.border}; padding: 0 .8mm; }
     @media print {
       body { background: #fff; }
       .sheet { margin: 0; box-shadow: none; width: auto; max-width: none; }
@@ -243,6 +241,15 @@ export const renderInvoice = (
   const { locale, format } = options;
   const narrow = PAGE[format].narrow;
   const shows = (fieldId: string): boolean => snapshot.optionalFields.includes(fieldId);
+
+  // Issue #140 — the boxed grid is for the shapes that have room for a grid. Fifty-eight
+  // millimetres of till roll cannot hold a ten-column ruled table under any design, so a boxed
+  // template still prints the list there, and the compliance section survives either way. A
+  // snapshot taken before #140 has no layout at all, which correctly means the original airy page.
+  const boxed = snapshot.layout === 'BOXED' && !narrow;
+  if (boxed) {
+    return page(doc, snapshot, format, locale, 'boxed', `<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale)}</div>`);
+  }
 
   const title = t(doc.title, locale);
   const logo =
@@ -352,16 +359,7 @@ export const renderInvoice = (
     shows('footer.signature') ? `<div style="margin-top:8mm">${escapeHtml(doc.seller.name)}</div>` : '',
   ].join('');
 
-  return `<!doctype html>
-<html lang="${locale === 'hi-IN' ? 'hi' : 'en'}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(`${title} ${doc.number}`)}</title>
-<style>${styles(snapshot, format)}</style>
-</head>
-<body>
-<div class="sheet" data-format="${escapeHtml(format)}" data-template="${escapeHtml(snapshot.templateId)}@${escapeHtml(snapshot.templateVersion)}">
+  const body = `
   <div class="head">
     <div>
       ${logo}
@@ -382,8 +380,36 @@ export const renderInvoice = (
   ${notice}
   ${qr}
   ${upi}
-  <footer>${footerBits}</footer>
+  <footer>${footerBits}</footer>`;
+
+  return page(doc, snapshot, format, locale, '', body);
+};
+
+/**
+ * The document shell both layouts share: one head, one stylesheet, one sheet.
+ *
+ * Keeping it in one place is what guarantees that a boxed bill and an airy one are the same kind of
+ * file — same escaping, same print rules, same `data-template` stamp identifying exactly which
+ * design version produced the page.
+ */
+const page = (
+  doc: InvoiceDocument,
+  snapshot: TemplateSnapshot,
+  format: PageFormat,
+  locale: Locale,
+  bodyClass: string,
+  body: string,
+): string => `<!doctype html>
+<html lang="${locale === 'hi-IN' ? 'hi' : 'en'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(`${t(doc.title, locale)} ${doc.number}`)}</title>
+<style>${styles(snapshot, format)}</style>
+</head>
+<body class="${escapeHtml(bodyClass)}">
+<div class="sheet" data-format="${escapeHtml(format)}" data-template="${escapeHtml(snapshot.templateId)}@${escapeHtml(snapshot.templateVersion)}" data-layout="${escapeHtml(snapshot.layout ?? 'AIRY')}">
+${body}
 </div>
 </body>
 </html>`;
-};

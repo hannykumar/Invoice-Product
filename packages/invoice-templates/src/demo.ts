@@ -167,7 +167,10 @@ const main = async (): Promise<void> => {
     placeOfSupplyStateName: 'Delhi',
     transport: { transporter: 'Sharma Roadlines', vehicleNumber: 'DL01AB1234', eWayBillNumber: null },
     bankDetails: ['HDFC Bank, Karol Bagh', 'Account 50200012345678', 'IFSC HDFC0000123'],
-    terms: 'Payment within 30 days. Interest at 1.5% per month after that.',
+    // Sample text, invented for this walkthrough. A real bill carries the terms the business itself
+    // wrote and nothing else — this product never puts words in its mouth.
+    terms: 'SAMPLE TERMS, not a real business\u2019s: payment within 30 days.',
+    declaration: 'SAMPLE DECLARATION, not a real business\u2019s: the particulars above are true.',
     poReference: 'ABC/PO/2026/188',
     amountPaid: rupees(50000),
     // In real use this comes from the calculator in both languages; the demo renders each file in
@@ -181,6 +184,10 @@ const main = async (): Promise<void> => {
 
   const written: string[] = [];
   const jobs: { templateId: string; format: PageFormat; locale: 'en-IN' | 'hi-IN' }[] = [
+    // Issue #140 — the boxed India-standard design, first because it is now what a wholesaler gets.
+    { templateId: 'india-standard', format: 'A4', locale: 'en-IN' },
+    { templateId: 'india-standard', format: 'A4', locale: 'hi-IN' },
+    { templateId: 'india-standard', format: 'THERMAL_80MM', locale: 'en-IN' },
     { templateId: 'wholesale-classic', format: 'A4', locale: 'en-IN' },
     { templateId: 'wholesale-classic', format: 'A4', locale: 'hi-IN' },
     { templateId: 'wholesale-classic', format: 'MOBILE', locale: 'en-IN' },
@@ -232,10 +239,11 @@ const main = async (): Promise<void> => {
     description: `Plastic crate, size ${i + 1}`,
   }));
   const longDocument = { ...document, lines: longLines, number: 'INV/KB/2026-27/00099' };
-  const wholesale = templateById('wholesale-classic');
-  if (wholesale !== undefined) {
-    const snapshot = captureSnapshot(wholesale, 'en-IN', '2026-08-29');
-    const file = join(outDir, 'wholesale-classic-a4-100-items.html');
+  for (const id of ['wholesale-classic', 'india-standard']) {
+    const template = templateById(id);
+    if (template === undefined) continue;
+    const snapshot = captureSnapshot(template, 'en-IN', '2026-08-29');
+    const file = join(outDir, `${id}-a4-100-items.html`);
     writeFileSync(file, renderInvoice(longDocument, snapshot, { format: 'A4', locale: 'en-IN' }), 'utf8');
     written.push(file);
   }

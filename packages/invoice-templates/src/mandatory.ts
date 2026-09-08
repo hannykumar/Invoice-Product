@@ -75,6 +75,7 @@ export const OPTIONAL_FIELDS: readonly string[] = [
   'totals.amountPaid',
   'totals.outstanding',
   'footer.terms',
+  'footer.declaration',
   'footer.signature',
   'footer.thankYou',
   'transport.vehicleNumber',

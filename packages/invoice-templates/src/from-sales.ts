@@ -21,6 +21,8 @@ export interface PrintingContext {
   readonly logoDataUri?: string | null;
   readonly bankDetails?: readonly string[] | null;
   readonly terms?: string | null;
+  /** The business's own declaration. Never defaulted here; see `InvoiceDocument.declaration`. */
+  readonly declaration?: string | null;
   readonly poReference?: string | null;
   readonly amountPaid?: Money | null;
   /** Set when any rate came from the business rather than a checked notification. */
@@ -61,6 +63,10 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
       taxableValue: l.taxableValue,
       ratePercentTimes100: l.ratePercentTimes100,
       taxAmount: l.totalTax,
+      cgst: l.cgst,
+      sgst: l.sgst,
+      utgst: l.utgst,
+      igst: l.igst,
       cess: l.cess,
       reverseCharge: l.reverseCharge,
       batch: context.batchByLineId?.[l.lineId] ?? null,
@@ -82,10 +88,12 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     transport: context.transport ?? null,
     eInvoice: context.eInvoice ?? null,
     amountInWordsText: amountInWords(totals.invoiceValue),
+    taxAmountInWordsText: amountInWords(totals.totalTax),
     declaredRateNotice: context.declaredRateNotice ?? null,
     logoDataUri: context.logoDataUri ?? null,
     bankDetails: context.bankDetails ?? null,
     terms: context.terms ?? null,
+    declaration: context.declaration ?? null,
     poReference: context.poReference ?? null,
   };
 };

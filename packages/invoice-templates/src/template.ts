@@ -13,6 +13,19 @@ export type BusinessType = 'RETAIL' | 'WHOLESALE' | 'BAKERY' | 'SERVICES' | 'TRA
 /** The shapes a bill is printed on. Each is a real constraint, not a style preset. */
 export type PageFormat = 'A4' | 'THERMAL_80MM' | 'THERMAL_58MM' | 'MOBILE';
 
+/**
+ * Issue #140 — how the page is built, which is a deeper choice than how it is coloured.
+ *
+ * `AIRY` is the original: white space, rules under the rows, a coloured heading band. `BOXED` is
+ * how an Indian tax invoice is actually laid out — the whole page is one ruled grid, every fact in
+ * its own cell, closed on all four sides. Businesses judge a billing product on whether its output
+ * looks like the bills they already send, and on that test the airy page reads as foreign software.
+ *
+ * This is a structural choice, so it cannot be expressed through the palette: it changes which
+ * boxes exist, not what colour they are.
+ */
+export type PageLayout = 'AIRY' | 'BOXED';
+
 export interface Palette {
   /** Used for headings and rules. Must stay legible on white, and on a thermal printer. */
   readonly accent: string;
@@ -32,6 +45,8 @@ export interface TemplateDefinition {
   readonly id: string;
   /** Bumped whenever anything visual changes, so an old bill can be reprinted as it was. */
   readonly version: string;
+  /** How the page is built. See `PageLayout`. */
+  readonly layout: PageLayout;
   readonly name: { readonly 'en-IN': string; readonly 'hi-IN': string };
   readonly businessTypes: readonly BusinessType[];
   readonly formats: readonly PageFormat[];
@@ -102,8 +117,37 @@ const DEVANAGARI_SAFE = "'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', system-
  */
 export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
   {
+    // Issue #140. First in this list on purpose: `recommendTemplates` offers the earliest matching
+    // design first, and this is now what a wholesaler and a manufacturer should be shown.
+    id: 'india-standard',
+    version: '1.0.0',
+    layout: 'BOXED',
+    name: { 'en-IN': 'India standard, boxed', 'hi-IN': 'India standard, dabba' },
+    businessTypes: ['WHOLESALE', 'MANUFACTURING', 'TRANSPORT', 'SERVICES'],
+    formats: ['A4', 'THERMAL_80MM', 'THERMAL_58MM', 'MOBILE'],
+    // Black on white with grey rules. A bill is photocopied, faxed and printed on a tired laser
+    // printer, and a coloured heading band is the first thing to turn into a grey smear.
+    palette: { accent: '#000000', text: '#000000', muted: '#444444', border: '#000000' },
+    typography: { bodyStack: DEVANAGARI_SAFE, headingStack: DEVANAGARI_SAFE, baseSizePt: 8 },
+    optionalFields: [
+      'seller.logo', 'seller.phone', 'seller.email', 'seller.bankDetails',
+      'document.dueDate', 'document.poReference',
+      'line.batch', 'line.discount', 'totals.outstanding', 'totals.amountPaid',
+      'footer.terms', 'footer.declaration', 'footer.signature',
+      'transport.vehicleNumber', 'transport.transporter', 'transport.eWayBillNumber',
+      'qr.eInvoice',
+    ],
+    lineColumns: ['line.discount', 'line.batch'],
+    logo: { show: true, maxHeightPt: 42 },
+    // No footer note. A slogan or a returns policy is a commitment the business makes, and this
+    // product does not make one on its behalf. The business fills in its own terms and declaration.
+    footerNote: null,
+    publishedOn: '2026-09-08' as IsoDate,
+  },
+  {
     id: 'wholesale-classic',
     version: '1.0.0',
+    layout: 'AIRY',
     name: { 'en-IN': 'Wholesale, plain', 'hi-IN': 'Thok, saada' },
     businessTypes: ['WHOLESALE', 'MANUFACTURING'],
     formats: ['A4', 'MOBILE'],
@@ -125,6 +169,7 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
   {
     id: 'bakery-warm',
     version: '1.0.0',
+    layout: 'AIRY',
     name: { 'en-IN': 'Bakery', 'hi-IN': 'Bakery' },
     businessTypes: ['BAKERY', 'RETAIL'],
     formats: ['A4', 'THERMAL_80MM', 'MOBILE'],
@@ -139,6 +184,7 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
   {
     id: 'counter-thermal',
     version: '1.0.0',
+    layout: 'AIRY',
     name: { 'en-IN': 'Counter slip', 'hi-IN': 'Counter parchi' },
     businessTypes: ['RETAIL'],
     formats: ['THERMAL_58MM', 'THERMAL_80MM'],
@@ -153,6 +199,7 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
   {
     id: 'services-simple',
     version: '1.0.0',
+    layout: 'AIRY',
     name: { 'en-IN': 'Services', 'hi-IN': 'Service' },
     businessTypes: ['SERVICES'],
     formats: ['A4', 'MOBILE'],
@@ -167,6 +214,7 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
   {
     id: 'transport-consignment',
     version: '1.0.0',
+    layout: 'AIRY',
     name: { 'en-IN': 'Transport', 'hi-IN': 'Transport' },
     businessTypes: ['TRANSPORT'],
     formats: ['A4'],
