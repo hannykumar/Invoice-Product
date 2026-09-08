@@ -115,6 +115,26 @@ It also names an API in a shape the service does not serve — `POST /v1/ewaybil
 So the routes recorded above, found by probing, are the only ones known to exist. Treat that file
 as marketing copy aimed at crawlers, not as a specification.
 
+## The end-to-end run is blocked on their test data
+
+Running the real `EInvoiceService` path — preview and register, not a hand-built payload — stops in
+preview:
+
+```
+SellerDtls.Gstin: The your business's GST number is missing or is not a valid one.
+BuyerDtls.Gstin:  The customer's GST number is missing or is not a valid one.
+```
+
+Our validator is right and their data is wrong: a GSTIN carries `Z` in the fourteenth position and
+`33AAGCB1286Q003` does not. The earlier live IRN was obtained by bypassing the validator and
+swapping the GSTINs into the built payload, which proves the *connection* works but not the
+*product*.
+
+The decision taken was to **ask WhiteBooks for conforming sandbox GSTINs** rather than put a
+sandbox exception into GSTIN validation — see `docs/vendor/whitebooks-support-request.md`. Until
+they answer, the service layer is exercised against `SyntheticIrp` and the live sandbox is
+exercised at the connector level only.
+
 ## What is still open
 
 The **GST-returns route** is still not found: `/gst`, `/gstr`, `/gstapi`, `/taxpayerapi`,
