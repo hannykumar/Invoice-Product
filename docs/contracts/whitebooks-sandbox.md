@@ -115,6 +115,48 @@ It also names an API in a shape the service does not serve — `POST /v1/ewaybil
 So the routes recorded above, found by probing, are the only ones known to exist. Treat that file
 as marketing copy aimed at crawlers, not as a specification.
 
+## The full product path runs end to end
+
+`EInvoiceService.preview` then `.register` — the real path, no hand-built payload — now runs
+against the live sandbox and comes back `REGISTERED` with the government's acknowledgement:
+
+```
+IRN eb05eff9db58c87b91888dfdf1fae73a2dbb3ef9d5d4216e73b5ff21b6d77b97
+Ack 152610027961273 at 2026-09-09 04:34:18
+```
+
+This required one deliberate exception. NIC's sandbox issues taxpayers like `33AAGCB1286Q003`,
+where a real GSTIN carries `Z` in the fourteenth position, so our validation refused them and the
+product could not be exercised against the government's own sandbox at all.
+
+`allowSandboxGstins` on `EInvoiceServiceDeps` — off unless set — lets those through. **It admits
+only numbers that could never be real**: everything it accepts fails the published format in that
+same fourteenth position, so GSTN cannot have issued one and no shopkeeper can mistype into the
+set. `packages/gst/test/sandbox-gstins.test.ts` drives the boundary in both directions, including
+that a well-formed GSTIN never enters by this door and that nothing else on the bill is relaxed.
+
+The earlier approach — swapping GSTINs into the built payload — is now gone from the trial script,
+and it was worse than it looked: the IRN is a hash of the seller's GSTIN, so a swapped payload
+earns an IRN the service cannot verify against its own computation. Putting the sandbox GSTIN in
+the document instead means **the returned IRN is verified for real**, which is how this run passed.
+
+Asking WhiteBooks for conforming test data is still worth doing and the request still stands, but
+it is no longer a blocker.
+
+## Their public documentation does not exist
+
+`https://whitebooks.in/llms.txt` is real and 15 KB long, and it advertises OpenAPI specs
+(`/openapi/eway.json`), Redoc references (`/docs/eway`), developer guides (`/developer/e-way-bill`)
+and about a dozen e-way-bill API pages. **Every one of them redirects to the marketing home page or
+returns the single-page-app shell.** None is a document.
+
+It also names an API in a shape the service does not serve — `POST /v1/ewaybill/create`,
+`POST /v1/einvoice/create`, `GET /v1/gstin/validate`. All three answer `WB_ERR_9404` on both
+`apisandbox.whitebooks.in` and `api.whitebooks.in`.
+
+So the routes recorded above, found by probing, are the only ones known to exist. Treat that file
+as marketing copy aimed at crawlers, not as a specification.
+
 ## The end-to-end run is blocked on their test data
 
 Running the real `EInvoiceService` path — preview and register, not a hand-built payload — stops in

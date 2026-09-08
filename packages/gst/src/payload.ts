@@ -8,6 +8,7 @@
 // Money in the government's schema is rupees with two decimals, while everything inside this
 // product is `bigint` paise. The conversion happens here, at the boundary, and only here.
 
+import { isSandboxGstin, type PayloadOptions } from "./sandbox-gstins.ts";
 import type { Id, IsoDate, Paise } from "../../masters/src/types.ts";
 import { DOCUMENT_TYPE_CODES, financialYearOf } from "./irn.ts";
 import type { EInvoiceDocumentType, EInvoiceRecipientKind } from "./einvoice-types.ts";
@@ -94,12 +95,17 @@ export type PayloadResult =
 const PINCODE = /^\d{6}$/;
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$/;
 
-const checkParty = (party: PartyDetails | undefined, role: string, prefix: string, problems: PayloadProblem[], needGstin: boolean): void => {
+/** A GSTIN is acceptable when it is well formed — or, only when asked, when it is the state's own
+ * test data, which is malformed by the government's own hand. See `sandbox-gstins.ts`. */
+const gstinAcceptable = (gstin: string, options: PayloadOptions): boolean =>
+  GSTIN.test(gstin) || (options.allowSandboxGstins === true && isSandboxGstin(gstin));
+
+const checkParty = (party: PartyDetails | undefined, role: string, prefix: string, problems: PayloadProblem[], needGstin: boolean, options: PayloadOptions): void => {
   if (party === undefined) {
     problems.push({ field: prefix, message: `We do not have the ${role}'s details, so this bill cannot be sent to the government.` });
     return;
   }
-  if (needGstin && !GSTIN.test((party.gstin ?? "").toUpperCase())) {
+  if (needGstin && !gstinAcceptable((party.gstin ?? "").toUpperCase(), options)) {
     problems.push({ field: `${prefix}.Gstin`, message: `The ${role}'s GST number is missing or is not a valid one.` });
   }
   if ((party.legalName ?? "").trim() === "") {
@@ -126,7 +132,7 @@ const checkParty = (party: PartyDetails | undefined, role: string, prefix: strin
  * Every problem is returned at once rather than one per attempt, because a person filling gaps in
  * a form should see all of them, not discover a new one on each submission.
  */
-export const buildEInvoicePayload = (document: EInvoiceDocument): PayloadResult => {
+export const buildEInvoicePayload = (document: EInvoiceDocument, options: PayloadOptions = {}): PayloadResult => {
   const problems: PayloadProblem[] = [];
 
   if ((document.documentNumber ?? "").trim() === "") {
@@ -143,10 +149,10 @@ export const buildEInvoicePayload = (document: EInvoiceDocument): PayloadResult 
     problems.push({ field: "ValDtls.PosStateCd", message: "We could not work out which state this sale counts as being made in, and the government needs it." });
   }
 
-  checkParty(document.supplier, "your business", "SellerDtls", problems, true);
+  checkParty(document.supplier, "your business", "SellerDtls", problems, true, options);
   const buyerNeedsGstin = document.recipientKind === "B2B" || document.recipientKind === "SEZ_WITH_PAYMENT"
     || document.recipientKind === "SEZ_WITHOUT_PAYMENT" || document.recipientKind === "DEEMED_EXPORT";
-  checkParty(document.recipient, "customer", "BuyerDtls", problems, buyerNeedsGstin);
+  checkParty(document.recipient, "customer", "BuyerDtls", problems, buyerNeedsGstin, options);
 
   document.lines.forEach((line, index) => {
     if ((line.hsnOrSac ?? "").trim() === "") {
@@ -246,8 +252,8 @@ const supplyType = (kind: EInvoiceRecipientKind): string => {
  * The offline route matters more than it looks: when the IRP is down for a day, a business still
  * has to invoice, and a file it can upload later is the difference between working and stopping.
  */
-export const toOfflineJson = (document: EInvoiceDocument): string => {
-  const built = buildEInvoicePayload(document);
+export const toOfflineJson = (document: EInvoiceDocument, options: PayloadOptions = {}): string => {
+  const built = buildEInvoicePayload(document, options);
   if (!built.ok) {
     throw new Error(`This bill is not ready to send: ${built.problems[0]?.message ?? "something is missing."}`);
   }
@@ -268,3 +274,5 @@ export const toOfflineJson = (document: EInvoiceDocument): string => {
     2,
   );
 };
+
+export type { PayloadOptions };
