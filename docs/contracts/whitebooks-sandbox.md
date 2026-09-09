@@ -271,6 +271,46 @@ lower-case `genewaybill` already taught once.
 rather than broken: if returns works the way e-way bill does, there is no token to issue and the
 session is theirs to hold.
 
+## The GST returns auth chain, and the session limit that must shape our connector
+
+Their reference — behind the Developer Hub login, at `/apis/docs/gst-api` — settles the chain:
+
+1. `GET /authentication/otprequest` → returns `txn`, a transaction id.
+2. `GET /authentication/authtoken?email=…&otp=575757` with `txn` as a **header**. Note **`otp` is a
+   query parameter, not a header**, which is what made this look broken for a while.
+3. Any GSTR call carries that same `txn` header. Required headers are `gst_username`, `state_cd`,
+   `ip_address`, `txn`, `client_id`, `client_secret`; `gstin` and `rtnprd` are **query** parameters.
+4. `GET /authentication/logout` releases the session.
+
+**Step 4 is not optional, and this is the important operational finding.** GSTN limits how many
+sessions one GSP account may hold, and probing without logging out exhausted it:
+
+```json
+{"errorCode":"AUTH403","errorMessage":"Maximum session allowed for user with this GSP account exceeded."}
+```
+
+Once exhausted, `otprequest` fails outright and every later call fails in a way that looks like a
+different bug. `logout` frees a session immediately and the chain works again. **Any returns
+connector we write must release its session in a `finally`**, or a customer will eventually be
+locked out of their own filing by our leaked sessions — and the error they would see points nowhere
+near the cause.
+
+`authtoken` answers `"If authentication succeeds"` and returns no token. That now looks like the
+intended design rather than a stub: the `txn` *is* the session, exactly as the e-way bill lane
+carries no token.
+
+**Still blocked, and now precisely.** With a fresh, authenticated session and exactly the six
+documented headers, `/gstr2b/all?gstin=…&rtnprd=072026` answers:
+
+```json
+{"error":{"errorCode":"RET2B1001","errorMessage":"API Header Value Missing"}}
+```
+
+That is GSTN's error, not WhiteBooks'. Their documented header set is either incomplete or the
+sandbox route is misconfigured. `username`, `otp`, `auth-token` and dropping the `gstin` header were
+each tried; none changes it. This is a question for them with evidence behind it, not something to
+brute-force further.
+
 ## What is still open
 
 **GST returns cannot be wired yet: its token endpoint is a stub too.**

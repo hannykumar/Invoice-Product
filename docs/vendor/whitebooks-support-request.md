@@ -16,6 +16,26 @@ We are integrating your GST, e-Invoice and e-Way Bill APIs against the sandbox a
 IRNs and e-way bills successfully — so this is not a complaint about the APIs themselves. There are
 four things we would like your help with, in order of how much they hold us up.
 
+**0. `/gstr2b/all` rejects the exact header set your own reference documents.**
+
+Following your reference at `/apis/docs/gst-api`, with a fresh authenticated session:
+
+1. `GET /authentication/otprequest` → returns a `txn`.
+2. `GET /authentication/authtoken?email=…&otp=575757` with that `txn` as a header → succeeds.
+3. `GET /gstr2b/all?gstin=33AAGCB1286QQZM&rtnprd=072026&email=…` with the six headers your page
+   lists as required — `gst_username`, `state_cd`, `ip_address`, `txn`, `client_id`,
+   `client_secret` — returns:
+
+```json
+{"error":{"errorCode":"RET2B1001","errorMessage":"API Header Value Missing"}}
+```
+
+We have tried adding `username`, `otp` and `auth-token`, and removing the `gstin` header. None
+changes the result. **Which header is GSTN asking for, and should your reference page list it?**
+
+**(Separately, thank you — the new GSTIN `33AAGCB1286QQZM` passes our validation cleanly, and the
+confirmation that the e-way bill lane needs no token is noted. Both of those are resolved.)**
+
 **1. The GST returns lane stops at the token step, and this blocks us completely.**
 
 `GET /authentication/otprequest` works and returns a transaction id. Passing that transaction and
