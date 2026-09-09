@@ -55,6 +55,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     placeOfSupplyStateCode: pricing.placeOfSupplyStateCode,
     placeOfSupplyStateName: context.placeOfSupplyStateName,
     reverseCharge: pricing.lines.some((l) => l.reverseCharge),
+    supplyKind: invoice.supplyKind,
     split: pricing.split,
     lines: pricing.lines.map((l: ComputedTaxLine) => ({
       lineId: l.lineId,

@@ -119,6 +119,13 @@ export interface InvoiceDocument {
   readonly placeOfSupplyStateCode: string;
   readonly placeOfSupplyStateName: string;
   readonly reverseCharge: boolean;
+  /**
+   * Issue #137 — goods or services, which decides how many marked copies the bill needs.
+   *
+   * GST asks for three copies of a goods invoice (the buyer's, the transporter's, and the one the
+   * seller keeps) and two of a services invoice, because nothing is carried anywhere.
+   */
+  readonly supplyKind: 'GOODS' | 'SERVICES';
   readonly split: TaxSplit;
   readonly lines: readonly RenderableLine[];
   readonly totals: RenderableTotals;

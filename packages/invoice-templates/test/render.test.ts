@@ -62,6 +62,7 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   placeOfSupplyStateCode: '07',
   placeOfSupplyStateName: 'Delhi',
   reverseCharge: false,
+  supplyKind: 'GOODS',
   split: 'CGST_SGST',
   lines: [line()],
   totals: {
@@ -143,22 +144,22 @@ test('the required section is printed whatever the template says', () => {
   const html = renderInvoice(doc(), snapshotOf(bare), { format: 'A4', locale: 'en-IN' });
 
   for (const needle of [
-    'Tax invoice',
+    'Tax Invoice',
     'INV/KB/2026-27/00042',
     '20 August 2026',
     'Sharma Fruit Traders',
     '07AAAAA0000A1Z4',
     'ABC Traders',
     '07DDDDD3333D1ZV',
-    'This sale counts in',
+    'Place of Supply',
     'Plastic crate',
     '3923',
     '40 PCS',
-    'Taxable value',
+    'Taxable Value',
     'CGST',
     'SGST',
-    'Total to pay',
-    'In words',
+    'Total',
+    'Amount Chargeable (in words)',
   ]) {
     assert.ok(html.includes(needle), `the bill must always show "${needle}"`);
   }
@@ -207,8 +208,8 @@ test('a narrow paper prints a list, not a nine-column table', () => {
     assert.ok(!html.includes('<table class="items">'), `${format} must not use the wide table`);
     assert.ok(html.includes('class="tline"'), `${format} prints each item as a block`);
     assert.ok(html.includes('Item 12'));
-    assert.ok(html.includes('Total to pay'));
-    assert.ok(html.includes('Tax invoice'), 'the compliance section survives the narrowest paper');
+    assert.ok(html.includes('>Total<'));
+    assert.ok(html.includes('Tax Invoice'), 'the compliance section survives the narrowest paper');
   }
 });
 
@@ -322,7 +323,7 @@ test('what a shopkeeper types is escaped, not executed', () => {
 test('both languages render, and the Hindi one is actually different', () => {
   const en = renderInvoice(doc(), captureSnapshot(wholesale, 'en-IN', '2026-08-29'), { format: 'A4', locale: 'en-IN' });
   const hi = renderInvoice(doc(), captureSnapshot(wholesale, 'hi-IN', '2026-08-29'), { format: 'A4', locale: 'hi-IN' });
-  assert.ok(en.includes('Billed to'));
+  assert.ok(en.includes('Buyer (Bill to)'));
   assert.ok(hi.includes('Kiske naam'));
   assert.ok(hi.includes('Kul dena'));
   assert.ok(hi.includes('lang="hi"'));

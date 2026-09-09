@@ -14,7 +14,10 @@ import { isoDate, rupees, toDecimalString, type Money } from '@invoice/kernel';
 import { MANDATORY_FIELDS } from '../src/mandatory.ts';
 import { SHIPPED_TEMPLATES, recommendTemplates, templateById, validateTemplate, type PageFormat, type TemplateDefinition } from '../src/template.ts';
 import { captureSnapshot } from '../src/snapshot.ts';
-import { renderInvoice } from '../src/render.ts';
+import { renderInvoice, renderInvoiceCopies } from '../src/render.ts';
+import { copiesFor, copyMarking } from '../src/copies.ts';
+import { screenWord, t, WORDING_KEYS } from '../src/parts.ts';
+import { lintUserFacingText } from '../../ux-vocabulary/src/lint.ts';
 import { hsnSummary } from '../src/hsn-summary.ts';
 import { amountInWords } from '../src/words.ts';
 import type { InvoiceDocument, RenderableLine } from '../src/document.ts';
@@ -66,6 +69,7 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   placeOfSupplyStateCode: '07',
   placeOfSupplyStateName: 'Delhi',
   reverseCharge: false,
+  supplyKind: 'GOODS',
   split: 'CGST_SGST',
   lines: [line()],
   totals: {
@@ -116,7 +120,7 @@ test('the India-standard design prints a ruled grid, not an airy page with a col
 
 test('the item table reads like a bill: a serial column, the unit beside the rate, an amount', () => {
   const html = renderIndia(doc());
-  for (const heading of ['>Sl<', '>Item<', '>HSN / SAC<', '>Qty<', '>Rate<', '>per<', '>Amount<']) {
+  for (const heading of ['>Sl No.<', '>Description of Goods<', '>HSN / SAC<', '>Quantity<', '>Rate<', '>per<', '>Amount<']) {
     assert.ok(html.includes(heading), `the item table must have a ${heading} column`);
   }
   // "40 PCS" is split so the unit sits in its own column, exactly as a real bill prints it. The
@@ -143,10 +147,10 @@ test('there is one correct bill: every shipped design is boxed, and none is the 
   // design on paper wide enough for them carries them.
   for (const template of SHIPPED_TEMPLATES.filter((t) => t.formats.includes('A4'))) {
     const html = renderInvoice(doc(), snapshotOf(template), { format: 'A4', locale: 'en-IN' });
-    assert.ok(html.includes('Tax summary by HSN / SAC'), `${template.id} prints the tax summary`);
-    assert.ok(html.includes('Tax amount in words'), `${template.id} prints the tax total in words`);
-    assert.ok(html.includes('In words'), `${template.id} prints the amount in words`);
-    assert.ok(html.includes('>Sl<') && html.includes('>Amount<'), `${template.id} has a proper item table`);
+    assert.ok(html.includes('HSN / SAC Summary'), `${template.id} prints the tax summary`);
+    assert.ok(html.includes('Tax Amount (in words)'), `${template.id} prints the tax total in words`);
+    assert.ok(html.includes('Amount Chargeable (in words)'), `${template.id} prints the amount in words`);
+    assert.ok(html.includes('>Sl No.<') && html.includes('>Amount<'), `${template.id} has a proper item table`);
   }
 });
 
@@ -169,9 +173,9 @@ test('it still cannot drop a required field, and prints the compliance section o
 
   for (const format of ['A4', 'THERMAL_80MM', 'THERMAL_58MM', 'MOBILE'] as const) {
     const printed = renderIndia(doc(), format);
-    assert.ok(printed.includes('Tax invoice') || printed.includes('TAX INVOICE'), `${format} says what the document is`);
+    assert.ok(printed.includes('Tax Invoice'), `${format} says what the document is`);
     assert.ok(printed.includes('ABC Traders'), `${format} names the customer`);
-    assert.ok(printed.includes('Total to pay'), `${format} shows what is owed`);
+    assert.ok(printed.includes('Balance Due') || printed.includes('>Total<'), `${format} shows what is owed`);
   }
   // A ten-column ruled table does not fit on till roll, so the narrow shapes keep the list.
   assert.ok(!renderIndia(doc(), 'THERMAL_58MM').includes('grid items'));
@@ -227,8 +231,8 @@ test('the HSN summary groups by code and rate, and adds up to the bill exactly',
   assert.equal(toDecimalString(summary.totals.sgst), toDecimalString(bill.totals.sgst));
 
   const html = renderIndia(bill);
-  assert.ok(html.includes('Tax summary by HSN / SAC'));
-  assert.ok(html.includes('Tax amount in words'), 'the tax total is written out under it, as on a real bill');
+  assert.ok(html.includes('HSN / SAC Summary'));
+  assert.ok(html.includes('Tax Amount (in words)'), 'the tax total is written out under it, as on a real bill');
 });
 
 test('the summary shows the taxes this bill actually carries, and no column of zeroes', () => {
@@ -293,14 +297,14 @@ test('#138 — the trade fields print on A4 when the bill carries them', () => {
   for (const [what, expected] of [
     ['company PAN', 'AAAAA0000A'],
     ['number and kind of packages', '80 Bags'],
-    ['the packages column heading', '>Packages<'],
-    ['LR / RR number', 'SRL/2026/44120'],
+    ['the packages column heading', '>No. &amp; Kind of Pkgs<'],
+    ['LR / RR No.', 'SRL/2026/44120'],
     ['transport document number', 'GC-88213'],
     ['delivery destination', 'Ghazipur Cold Store, Gate 4'],
-    ['a serial number column', '>Sl<'],
+    ['a serial number column', '>Sl No.<'],
     ["the line's own amount", '>Amount<'],
     ['the unit beside the rate', '>per<'],
-    ['tax amount in words', 'Tax amount in words'],
+    ['tax amount in words', 'Tax Amount (in words)'],
   ] as const) {
     assert.ok(html.includes(expected), `${what} must be printed`);
   }
@@ -310,7 +314,7 @@ test('#138 — the trade fields print on A4 when the bill carries them', () => {
 test('#138 — a bill without a fact prints cleanly, with no empty label', () => {
   const bare = renderIndia(doc());
   assert.ok(!bare.includes('PAN'), 'no PAN line when the business has not given one');
-  assert.ok(!bare.includes('LR / RR number'), 'no transporter paperwork row without a transporter');
+  assert.ok(!bare.includes('LR / RR No.'), 'no transporter paperwork row without a transporter');
   assert.ok(!bare.includes('Destination'), 'no destination label with nothing to put in it');
 
   // The packages column is a design choice, so a design that does not show it prints no heading.
@@ -319,18 +323,18 @@ test('#138 — a bill without a fact prints cleanly, with no empty label', () =>
     { ...snapshotOf(india), lineColumns: ['line.discount'] },
     { format: 'A4', locale: 'en-IN' },
   );
-  assert.ok(!withoutColumn.includes('>Packages<'));
+  assert.ok(!withoutColumn.includes('Kind of Pkgs'));
 });
 
 test('#138 — none of them reach the till roll, where there is no room', () => {
   const html = renderIndia(withTradeFields(), 'THERMAL_58MM');
   // Checked by label rather than by value: a GSTIN has the PAN inside it (07**AAAAA0000A**1Z4), so
   // looking for the number alone would find the GSTIN and fail on a page that is perfectly correct.
-  for (const absent of ['PAN', 'Packages', '80 Bags', 'SRL/2026/44120', 'GC-88213', 'Ghazipur Cold Store', 'Authorised Signatory']) {
+  for (const absent of ['PAN', 'Kind of Pkgs', '80 Bags', 'SRL/2026/44120', 'GC-88213', 'Ghazipur Cold Store', 'Authorised Signatory']) {
     assert.ok(!html.includes(absent), `${absent} has no place on 58mm paper`);
   }
   // What a customer at a counter does need still prints.
-  assert.ok(html.includes('ABC Traders') && html.includes('Total to pay'));
+  assert.ok(html.includes('ABC Traders') && html.includes('Total'));
 });
 
 test('#138 — the signature is an uploaded image, with a reserved box until one exists', () => {
@@ -345,19 +349,118 @@ test('#138 — the signature is an uploaded image, with a reserved box until one
   assert.ok(signed.includes('Authorised Signatory'), 'the rule under it stays either way');
 });
 
-test('#138 — we state a fact about the document, but reserve nothing on the business behalf', () => {
+test('#138 — the bill states a fact and keeps the protection real bills carry', () => {
   const html = renderIndia(doc());
   // This product produced the page, so it can say so.
   assert.ok(html.includes('This is a computer generated invoice.'));
-  // "Errors and omissions excepted" is a reservation the business makes to its customer. It is off
-  // until a business turns it on, like every other commitment on this bill.
-  assert.ok(!html.includes('E. & O.E.'));
-  assert.ok(!india.optionalFields.includes('footer.eoe'));
 
-  const optedIn = renderInvoice(
+  // "E. & O.E." — errors and omissions excepted — lets a business correct a mistake on a bill it
+  // has already sent. It is on by default because it protects the business and costs the customer
+  // nothing, which is what separates it from a payment term or a returns policy: those give
+  // something away, and those are still never a default.
+  assert.ok(html.includes('E. &amp; O.E.'));
+  assert.ok(india.optionalFields.includes('footer.eoe'));
+
+  const withoutIt = renderInvoice(
     doc(),
-    { ...snapshotOf(india), optionalFields: [...india.optionalFields, 'footer.eoe'] },
+    { ...snapshotOf(india), optionalFields: india.optionalFields.filter((f) => f !== 'footer.eoe') },
     { format: 'A4', locale: 'en-IN' },
   );
-  assert.ok(optedIn.includes('E. &amp; O.E.'), 'and prints as soon as the business asks for it');
+  assert.ok(!withoutIt.includes('E. &amp; O.E.'), 'and a business can still take it off');
+});
+
+
+/**
+ * Issue #137 — the marked copies.
+ *
+ * GST asks for three copies of a goods invoice, each marked so anyone holding one knows which it
+ * is. A business cannot hand an unmarked sheet to a lorry driver and call it the transporter copy.
+ */
+test('#137 — a goods bill prints three marked copies, a services bill two', () => {
+  const goods = doc();
+  assert.deepEqual(copiesFor(goods), ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE']);
+  assert.equal(copyMarking(goods, 'ORIGINAL', 'en-IN'), 'ORIGINAL FOR RECIPIENT');
+  assert.equal(copyMarking(goods, 'DUPLICATE', 'en-IN'), 'DUPLICATE FOR TRANSPORTER');
+  assert.equal(copyMarking(goods, 'TRIPLICATE', 'en-IN'), 'TRIPLICATE FOR SUPPLIER');
+
+  // Nothing is carried anywhere on a services bill, so the second copy is the seller's own and
+  // there is no third. Asking for one returns nothing rather than inventing a transporter.
+  const services = doc({ supplyKind: 'SERVICES' });
+  assert.deepEqual(copiesFor(services), ['ORIGINAL', 'DUPLICATE']);
+  assert.equal(copyMarking(services, 'DUPLICATE', 'en-IN'), 'DUPLICATE FOR SUPPLIER');
+  assert.equal(copyMarking(services, 'TRIPLICATE', 'en-IN'), null);
+});
+
+test('#137 — the marking prints at the top, and an unmarked bill carries none', () => {
+  const marked = renderInvoice(doc(), snapshotOf(india), { format: 'A4', locale: 'en-IN', copy: 'DUPLICATE' });
+  assert.ok(marked.includes('DUPLICATE FOR TRANSPORTER'));
+  assert.ok(marked.includes('data-copy="DUPLICATE"'), 'the page says which copy it is');
+  // Beside the title, which is where an Indian bill carries it.
+  assert.ok(marked.includes('copy-mark-inline'));
+
+  const preview = renderIndia(doc());
+  assert.ok(!preview.includes('FOR TRANSPORTER'), 'a preview is not a copy of anything');
+  assert.ok(!preview.includes('data-copy='));
+});
+
+test('#137 — printing all the copies is one action, one document, one page each', () => {
+  const html = renderInvoiceCopies(doc(), snapshotOf(india), { format: 'A4', locale: 'en-IN' });
+
+  // One document, so one press of Print produces the set.
+  assert.equal(html.match(/<!doctype html>/gi)?.length, 1);
+  assert.equal(html.match(/<body/g)?.length, 1);
+  assert.equal(html.match(/class="sheet"/g)?.length, 3, 'three sheets for a goods bill');
+  for (const marking of ['ORIGINAL FOR RECIPIENT', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR SUPPLIER']) {
+    assert.ok(html.includes(marking), `${marking} is one of the pages`);
+  }
+  assert.match(html, /\.sheet \+ \.sheet \{[^}]*page-break-before: always/, 'each copy starts on a fresh sheet');
+
+  const services = renderInvoiceCopies(doc({ supplyKind: 'SERVICES' }), snapshotOf(india), {
+    format: 'A4',
+    locale: 'en-IN',
+  });
+  assert.equal(services.match(/class="sheet"/g)?.length, 2);
+  assert.ok(!services.includes('FOR TRANSPORTER'));
+});
+
+/**
+ * Issue #139 — two vocabularies, one place.
+ *
+ * The friendly wording is right on a screen and wrong on paper. A CA, a GST officer and the buyer's
+ * accounts clerk all scan a bill for the standard terms, and "Bill number" is not one of them.
+ */
+test('#139 — the printed bill uses the terms an accountant scans for', () => {
+  const html = renderIndia(doc({ totals: { ...doc().totals, amountPaid: rupees(5000), outstanding: rupees(4912) } }));
+  for (const [friendly, standard] of [
+    ['Bill number', 'Invoice No.'],
+    ['This sale counts in', 'Place of Supply'],
+    ['Total to pay', 'Total'],
+    ['Still due', 'Balance Due'],
+    ['GST number', 'GSTIN'],
+    // Escaped, because an apostrophe is escaped like everything else the page prints.
+    ['Your order reference', 'Buyer&#39;s Order No.'],
+  ] as const) {
+    assert.ok(html.includes(standard), `the paper must say "${standard}"`);
+    assert.ok(!html.includes(friendly), `and never "${friendly}", which nobody checking a bill looks for`);
+  }
+});
+
+test('#139 — the app keeps its plain wording, and Hindi keeps its own throughout', () => {
+  // Both vocabularies come out of the same table, so a change to one is made beside the other.
+  assert.equal(screenWord('invoiceNo', 'en-IN'), 'Bill number');
+  assert.equal(t('invoiceNo', 'en-IN'), 'Invoice No.');
+  assert.equal(screenWord('outstanding', 'en-IN'), 'Still due');
+  assert.equal(t('outstanding', 'en-IN'), 'Balance Due');
+
+  // There is no standard Hindi vocabulary on Indian bills to match, so inventing one would help
+  // nobody: Hindi says the same plain thing on the screen and on the paper.
+  for (const key of WORDING_KEYS) {
+    assert.equal(t(key, 'hi-IN'), screenWord(key, 'hi-IN'), `${key} must not have a separate printed Hindi`);
+  }
+
+  // And the screen half stays plain by the product's own standard, not by anyone remembering.
+  for (const key of WORDING_KEYS) {
+    const issues = lintUserFacingText(screenWord(key, 'en-IN'), { locale: 'en-IN' });
+    assert.deepEqual(issues, [], `the screen wording for ${key} must stay plain: ${JSON.stringify(issues)}`);
+  }
 });

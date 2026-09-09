@@ -25,7 +25,7 @@ import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
 import { InMemorySalesRepository, SalesService, noComplianceHooks, permissiveInventory } from '@invoice/sales';
 import { captureSnapshot } from './snapshot.ts';
-import { renderInvoice } from './render.ts';
+import { renderInvoice, renderInvoiceCopies } from './render.ts';
 import { toInvoiceDocument } from './from-sales.ts';
 import { recommendTemplates, templateById, type PageFormat } from './template.ts';
 
@@ -218,6 +218,22 @@ const main = async (): Promise<void> => {
     const html = renderInvoice(localised, snapshot, { format: job.format, locale: job.locale });
     const file = join(outDir, `${job.templateId}-${job.format.toLowerCase()}-${job.locale}.html`);
     writeFileSync(file, html, 'utf8');
+    written.push(file);
+  }
+
+  // Issue #137 — the three marked copies GST asks for, as one document. One press of Print in the
+  // browser produces the buyer's copy, the transporter's and the one the business keeps.
+  const standard = templateById('india-standard');
+  if (standard !== undefined) {
+    const file = join(outDir, 'india-standard-three-copies.html');
+    writeFileSync(
+      file,
+      renderInvoiceCopies(document, captureSnapshot(standard, 'en-IN', '2026-09-09'), {
+        format: 'A4',
+        locale: 'en-IN',
+      }),
+      'utf8',
+    );
     written.push(file);
   }
 
