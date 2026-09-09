@@ -25,8 +25,8 @@ import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
 import { InMemorySalesRepository, SalesService, noComplianceHooks, permissiveInventory } from '@invoice/sales';
 import { captureSnapshot } from './snapshot.ts';
-import { renderInvoice, renderInvoiceCopies } from './render.ts';
-import { toInvoiceDocument } from './from-sales.ts';
+import { renderInvoice, renderInvoiceCopies, renderInvoiceCopySet } from './render.ts';
+import { shipToFromDelivery, toInvoiceDocument } from './from-sales.ts';
 import { recommendTemplates, templateById, type PageFormat } from './template.ts';
 
 const COMPANY: CompanyId = asId<'Company'>('demo-sharma');
@@ -185,6 +185,19 @@ const main = async (): Promise<void> => {
     // In real use this comes from the calculator in both languages; the demo renders each file in
     // its own locale below, so it picks the matching sentence.
     declaredRateNotice: null,
+    // Issue #134 — the goods go to a cold store, not to the buyer's shop. This is the same delivery
+    // party the e-way bill is built from, passed through unchanged.
+    shipTo: shipToFromDelivery(
+      {
+        legalName: 'Azadpur Cold Store',
+        gstin: '07EEEEE4444E1ZR',
+        address1: 'Shed 12, Subzi Mandi Road',
+        place: 'New Delhi',
+        pincode: '110033',
+        stateCode: '07',
+      },
+      'Delhi',
+    ),
     batchByLineId: { l1: 'AP-2608', l3: 'JU-1912' },
     packagesByLineId: { l1: '70 Boxes', l2: '8 Bundles', l3: '10 Cartons' },
   });
@@ -235,6 +248,17 @@ const main = async (): Promise<void> => {
       'utf8',
     );
     written.push(file);
+
+    // And each copy on its own, for the business that has to send them to three different people.
+    for (const { copy, html } of renderInvoiceCopySet(
+      document,
+      captureSnapshot(standard, 'en-IN', '2026-09-09'),
+      { format: 'A4', locale: 'en-IN' },
+    )) {
+      const each = join(outDir, `india-standard-copy-${copy.toLowerCase()}.html`);
+      writeFileSync(each, html, 'utf8');
+      written.push(each);
+    }
   }
 
   // Issue #148 — one page with every reserved slot showing at once, so the finished layout can be

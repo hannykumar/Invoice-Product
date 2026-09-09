@@ -26,8 +26,14 @@ import { renderReservedSlot } from './reserved.ts';
 const cell = (caption: string, value: string, span = 1): string =>
   `<td colspan="${span}"><span class="cap">${escapeHtml(caption)}</span><span class="val">${value}</span></td>`;
 
-const partyCell = (party: RenderableParty, heading: string, locale: Locale, shows: (f: string) => boolean): string => `
-  <td class="party-cell">
+const partyCell = (
+  party: RenderableParty,
+  heading: string,
+  locale: Locale,
+  shows: (f: string) => boolean,
+  span = 1,
+): string => `
+  <td class="party-cell" colspan="${span}">
     <span class="cap">${escapeHtml(heading)}</span>
     <span class="party-name">${escapeHtml(party.name)}</span>
     ${party.addressLines.map((l) => `<div>${escapeHtml(l)}</div>`).join('')}
@@ -304,6 +310,9 @@ export const renderBoxed = (
             ${cell(t('eWayBill', locale), showTransport ? escapeHtml(transport.eWayBillNumber ?? '') : '')}
             ${cell(t('placeOfSupply', locale), `${escapeHtml(doc.placeOfSupplyStateName)} (${escapeHtml(doc.placeOfSupplyStateCode)})`)}
           </tr>
+          <tr>
+            ${cell(t('reverseCharge', locale), doc.reverseCharge ? 'Yes' : 'No', 2)}
+          </tr>
           ${
             // Issue #138 — the transporter's own paperwork. A whole row is only worth its space when
             // the design carries at least one of these, so a bill without them prints cleanly.
@@ -333,7 +342,14 @@ export const renderBoxed = (
     </tr>
     <tr>
       ${partyCell(doc.buyer, t('billedTo', locale), locale, shows)}
-      ${cell(t('reverseCharge', locale), doc.reverseCharge ? 'Yes' : 'No', showEInvoice ? 2 : 1)}
+      ${
+        // Issue #134 — the consignee box, beside the buyer, the way Blessing Export prints it. When
+        // the goods go to the buyer's own address it says so in one line: printing the same address
+        // twice is how a reader stops believing either copy of it.
+        doc.shipTo === null
+          ? `<td colspan="${showEInvoice ? 2 : 1}"><span class="cap">${escapeHtml(t('shipTo', locale))}</span>${escapeHtml(t('sameAsBillTo', locale))}</td>`
+          : partyCell(doc.shipTo, t('shipTo', locale), locale, shows, showEInvoice ? 2 : 1)
+      }
     </tr>
   </table>
   ${itemTable(goods, charges, snapshot, locale)}

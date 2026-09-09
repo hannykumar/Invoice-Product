@@ -143,6 +143,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .totals td { padding: 1mm 1.6mm; }
     .totals tr.grand td { border-top: 2px solid ${palette.accent}; font-weight: 700; font-size: ${typography.baseSizePt + 2}pt; }
     .words { margin-top: 2mm; border: 1px dashed ${palette.border}; padding: 2mm; }
+    .ship-line { margin: 1.5mm 0; }
     .notice { margin-top: 3mm; border-left: 3px solid ${palette.accent}; background: #fffbe6; padding: 2mm; }
     .tag { font-size: ${typography.baseSizePt - 1}pt; border: 1px solid ${palette.border}; padding: 0 .8mm; }
     table.items tbody.charges tr:first-child td { border-top: 1px solid ${palette.accent}; }
@@ -336,6 +337,15 @@ export const renderInvoice = (
       ${doc.totals.outstanding != null && shows('totals.outstanding') ? `<tr><td>${escapeHtml(t('outstanding', locale))}</td><td class="num">${money(doc.totals.outstanding)}</td></tr>` : ''}
     </table>`;
 
+  // Issue #134 — on till roll the consignee is one line, not a box. There is no room for a second
+  // address block, and a counter slip that only says where the goods went is still useful.
+  const shipToLine =
+    doc.shipTo === null
+      ? ''
+      : `<div class="ship-line"><span class="k">${escapeHtml(t('shipTo', locale))}:</span> ${escapeHtml(
+          [doc.shipTo.name, ...doc.shipTo.addressLines, doc.shipTo.stateName].join(', '),
+        )}</div>`;
+
   const words = `<div class="words"><span class="k">${escapeHtml(t('inWords', locale))}:</span> ${escapeHtml(doc.amountInWordsText)}</div>`;
 
   const transport =
@@ -402,7 +412,7 @@ export const renderInvoice = (
     </div>
     <div class="meta">${meta}</div>
   </div>
-  <div class="parties">${partyBlock(doc.buyer, t('billedTo', locale), locale)}${transport}${bank}</div>
+  <div class="parties">${partyBlock(doc.buyer, t('billedTo', locale), locale)}${shipToLine}${transport}${bank}</div>
   ${itemsBlock}
   ${totals}
   ${words}
@@ -415,11 +425,31 @@ export const renderInvoice = (
 };
 
 /**
+ * Each marked copy as its own document.
+ *
+ * The two ways of getting the copies are not alternatives, they answer different needs. A business
+ * printing on its own printer wants one press of Print for the set — that is `renderInvoiceCopies`
+ * below. A business **sending** them wants three separate files, because the transporter's copy goes
+ * to the transporter and the buyer's to the buyer, and asking someone to split a three-page PDF
+ * before they can send it is work we have handed them rather than done.
+ */
+export const renderInvoiceCopySet = (
+  doc: InvoiceDocument,
+  snapshot: TemplateSnapshot,
+  options: Omit<RenderOptions, 'copy'>,
+): readonly { readonly copy: InvoiceCopy; readonly marking: string; readonly html: string }[] =>
+  copiesFor(doc).map((copy) => ({
+    copy,
+    marking: copyMarking(doc, copy, options.locale) ?? '',
+    html: renderInvoice(doc, snapshot, { ...options, copy }),
+  }));
+
+/**
  * Every marked copy of a bill, in one printable document.
  *
- * "Printing all three at once is one action" is the acceptance criterion, and three separate files
- * is three actions and three trips to the printer. So the copies are pages of a single document,
- * each starting on a fresh sheet, and one press of Print produces the set.
+ * For the business printing the set on its own printer: the copies are pages of a single document,
+ * each starting on a fresh sheet, so one press of Print produces all of them. Use
+ * `renderInvoiceCopySet` when the copies are going to different people.
  */
 export const renderInvoiceCopies = (
   doc: InvoiceDocument,

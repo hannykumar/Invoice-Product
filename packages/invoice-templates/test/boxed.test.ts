@@ -14,9 +14,10 @@ import { isoDate, rupees, toDecimalString, type Money } from '@invoice/kernel';
 import { MANDATORY_FIELDS } from '../src/mandatory.ts';
 import { SHIPPED_TEMPLATES, recommendTemplates, templateById, validateTemplate, type PageFormat, type TemplateDefinition } from '../src/template.ts';
 import { captureSnapshot } from '../src/snapshot.ts';
-import { renderInvoice, renderInvoiceCopies } from '../src/render.ts';
+import { renderInvoice, renderInvoiceCopies, renderInvoiceCopySet } from '../src/render.ts';
 import { copiesFor, copyMarking } from '../src/copies.ts';
-import { screenWord, t, WORDING_KEYS } from '../src/parts.ts';
+import { shipToFromDelivery } from '../src/from-sales.ts';
+import { t, WORDING_KEYS } from '../src/parts.ts';
 import { lintUserFacingText } from '../../ux-vocabulary/src/lint.ts';
 import { hsnSummary } from '../src/hsn-summary.ts';
 import { amountInWords } from '../src/words.ts';
@@ -66,6 +67,7 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
     stateCode: '07',
     stateName: 'Delhi',
   },
+  shipTo: null,
   placeOfSupplyStateCode: '07',
   placeOfSupplyStateName: 'Delhi',
   reverseCharge: false,
@@ -445,22 +447,121 @@ test('#139 — the printed bill uses the terms an accountant scans for', () => {
   }
 });
 
-test('#139 — the app keeps its plain wording, and Hindi keeps its own throughout', () => {
-  // Both vocabularies come out of the same table, so a change to one is made beside the other.
-  assert.equal(screenWord('invoiceNo', 'en-IN'), 'Bill number');
+test('#139 — there is one English word per thing, and it is the one the world uses', () => {
+  // Corrected on 2026-09-09. Being easy for a shopkeeper who never studied accounting means the
+  // product is easy to operate, not that standard terms get renamed. A user who has only ever seen
+  // "Bill number" cannot follow a customer who says "invoice number".
   assert.equal(t('invoiceNo', 'en-IN'), 'Invoice No.');
-  assert.equal(screenWord('outstanding', 'en-IN'), 'Still due');
   assert.equal(t('outstanding', 'en-IN'), 'Balance Due');
+  assert.equal(t('placeOfSupply', 'en-IN'), 'Place of Supply');
 
-  // There is no standard Hindi vocabulary on Indian bills to match, so inventing one would help
-  // nobody: Hindi says the same plain thing on the screen and on the paper.
+  // Every key has exactly one English word: there is no second vocabulary to drift from.
   for (const key of WORDING_KEYS) {
-    assert.equal(t(key, 'hi-IN'), screenWord(key, 'hi-IN'), `${key} must not have a separate printed Hindi`);
+    assert.equal(typeof t(key, 'en-IN'), 'string');
+    assert.ok(t(key, 'en-IN').length > 0, `${key} must have a word`);
   }
 
-  // And the screen half stays plain by the product's own standard, not by anyone remembering.
-  for (const key of WORDING_KEYS) {
-    const issues = lintUserFacingText(screenWord(key, 'en-IN'), { locale: 'en-IN' });
-    assert.deepEqual(issues, [], `the screen wording for ${key} must stay plain: ${JSON.stringify(issues)}`);
+  // Hindi keeps its plain form throughout, because Indian bills carry no standard Hindi to match.
+  assert.equal(t('invoiceNo', 'hi-IN'), 'Bill number');
+  assert.equal(t('outstanding', 'hi-IN'), 'Abhi baaki');
+  const hindiIssues = WORDING_KEYS.flatMap((key) => lintUserFacingText(t(key, 'hi-IN'), { locale: 'hi-IN' }));
+  assert.deepEqual(hindiIssues, [], 'the Hindi wording stays plain by the product own standard');
+});
+
+/**
+ * Issue #137, as corrected on 2026-09-09 — the copies must also come out separately.
+ *
+ * One three-page file is right for a business printing the set on its own printer, and wrong for a
+ * business sending them: the transporter's copy goes to the transporter and the buyer's to the
+ * buyer, and splitting a PDF first is work handed back to the user.
+ */
+test('#137 — the copies come out separately as well as together', () => {
+  const set = renderInvoiceCopySet(doc(), snapshotOf(india), { format: 'A4', locale: 'en-IN' });
+  assert.equal(set.length, 3);
+  assert.deepEqual(set.map((c) => c.copy), ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE']);
+  assert.deepEqual(set.map((c) => c.marking), [
+    'ORIGINAL FOR RECIPIENT',
+    'DUPLICATE FOR TRANSPORTER',
+    'TRIPLICATE FOR SUPPLIER',
+  ]);
+  for (const { copy, marking, html } of set) {
+    // Each is a whole document on its own: sendable as it is, with nothing to split first.
+    assert.equal(html.match(/<!doctype html>/gi)?.length, 1, `${copy} is a complete document`);
+    assert.equal(html.match(/class="sheet"/g)?.length, 1, `${copy} is one sheet`);
+    assert.ok(html.includes(marking));
   }
+
+  const services = renderInvoiceCopySet(doc({ supplyKind: 'SERVICES' }), snapshotOf(india), {
+    format: 'A4',
+    locale: 'en-IN',
+  });
+  assert.equal(services.length, 2);
+});
+
+/**
+ * Issue #134 — the consignee box.
+ *
+ * Where goods are delivered is often not the customer's registered office, and both real bills we
+ * compared against print it as its own box.
+ */
+test('#134 — the bill prints where the goods went, beside who was billed', () => {
+  const consignee = {
+    name: 'Peenya Cold Store',
+    addressLines: ['Plot 44, Peenya Phase 2', 'Bengaluru 560058'],
+    gstin: '29ZZZZZ9999Z1Z9',
+    stateCode: '29',
+    stateName: 'Karnataka',
+  };
+  const html = renderIndia(doc({ shipTo: consignee }));
+  assert.ok(html.includes('Consignee (Ship to)'), 'the box is there and is named the way a bill names it');
+  assert.ok(html.includes('Peenya Cold Store'));
+  assert.ok(html.includes('Plot 44, Peenya Phase 2'));
+  assert.ok(html.includes('29ZZZZZ9999Z1Z9'), 'with its own GSTIN, which an officer checks');
+  assert.ok(html.includes('ABC Traders'), 'and the buyer is still shown separately');
+});
+
+test('#134 — goods going to the buyer say so once, instead of the address twice', () => {
+  const html = renderIndia(doc());
+  assert.ok(html.includes('Consignee (Ship to)'), 'the box still exists, so the page does not change shape');
+  assert.ok(html.includes('Same as Buyer (Bill to)'));
+  // Printing an identical address twice is how a reader stops believing either copy of it.
+  assert.equal(html.match(/Shop 8, Azadpur Mandi/g)?.length, 1);
+});
+
+test('#134 — the delivery party is the one the e-way bill uses, not a second copy typed by hand', () => {
+  // This is the shape `Movement.shipTo` already has in packages/transport. Taking it unchanged is
+  // what stops a bill and an e-way bill disagreeing about where a load went.
+  const movementShipTo = {
+    legalName: 'Peenya Cold Store',
+    gstin: '29ZZZZZ9999Z1Z9',
+    address1: 'Plot 44, Peenya Phase 2',
+    address2: 'Behind the weighbridge',
+    place: 'Bengaluru',
+    pincode: '560058',
+    stateCode: '29',
+  };
+  const printed = shipToFromDelivery(movementShipTo, 'Karnataka');
+  assert.equal(printed.name, 'Peenya Cold Store');
+  assert.equal(printed.gstin, '29ZZZZZ9999Z1Z9');
+  assert.equal(printed.stateCode, '29');
+  assert.deepEqual(printed.addressLines, ['Plot 44, Peenya Phase 2', 'Behind the weighbridge', 'Bengaluru 560058']);
+
+  // An unregistered delivery point has no GSTIN, and prints none rather than an empty label.
+  assert.equal(shipToFromDelivery({ ...movementShipTo, gstin: '' }, 'Karnataka').gstin, null);
+});
+
+test('#134 — till roll gets the delivery address as one line, not a second box', () => {
+  const consignee = {
+    name: 'Peenya Cold Store',
+    addressLines: ['Plot 44, Peenya Phase 2'],
+    gstin: null,
+    stateCode: '29',
+    stateName: 'Karnataka',
+  };
+  const html = renderIndia(doc({ shipTo: consignee }), 'THERMAL_58MM');
+  assert.ok(html.includes('ship-line'), 'one line, because there is no room for a box');
+  assert.ok(html.includes('Peenya Cold Store'));
+  // Checked on the markup, not the stylesheet: the boxed rules are in every page's CSS, and it is
+  // the boxes themselves that must not be drawn here.
+  assert.ok(!html.includes('<td class="party-cell"'), 'and none of the boxed grid comes with it');
 });
