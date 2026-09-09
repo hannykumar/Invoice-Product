@@ -24,6 +24,7 @@ import type { PageFormat } from './template.ts';
 import { renderReservedSlot, reservedSlotStyles } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
 import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
+import { copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 
 /** Re-exported because this module has been the public home of the escaper since issue #13. */
 export { escapeHtml };
@@ -33,6 +34,11 @@ export interface RenderOptions {
   readonly locale: Locale;
   /** Set for the preview shown on screen, which drops the print-only page furniture. */
   readonly screenPreview?: boolean;
+  /**
+   * Issue #137 — which marked copy this is. Omitted prints an unmarked bill, which is what a
+   * preview and a phone screen want.
+   */
+  readonly copy?: InvoiceCopy;
 }
 
 const partyBlock = (party: RenderableParty, heading: string, locale: Locale): string => {
@@ -153,6 +159,13 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .qr-lines { display: flex; flex-direction: column; gap: 1.5mm; }
     ${reservedSlotStyles(palette.border, palette.muted, Math.max(6, typography.baseSizePt - 2))}
     footer { margin-top: 4mm; border-top: 1px solid ${palette.border}; padding-top: 2mm; color: ${palette.muted}; }
+    /* Issue #137 — the copy marking, in the place Indian bills put it: top right, above the frame. */
+    .copy-mark {
+      text-align: right; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      font-size: ${Math.max(6, typography.baseSizePt - 1)}pt; color: ${palette.text}; margin-bottom: 1.5mm;
+    }
+    /* Each copy starts on a fresh sheet, so one press of Print produces the whole set. */
+    .sheet + .sheet { page-break-before: always; break-before: page; }
 
     /* Issue #140 — the boxed India-standard grid. Every table below shares one outer rule, so the
        page reads as a single frame rather than a stack of separate tables. */
@@ -180,7 +193,11 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     }
     .boxed .cap-inline { color: ${palette.muted}; }
     .boxed .val { display: block; min-height: ${typography.baseSizePt + 2}pt; }
-    .boxed .title-cell { text-align: center; }
+    .boxed .title-cell { text-align: center; position: relative; }
+    .boxed .copy-mark-inline {
+      position: absolute; right: 1.4mm; top: 50%; transform: translateY(-50%);
+      font-size: ${Math.max(6, typography.baseSizePt - 2)}pt; font-weight: 700; letter-spacing: .06em;
+    }
     .boxed h1 {
       margin: 0; font-size: ${typography.baseSizePt + 3}pt; letter-spacing: .18em;
       text-transform: uppercase; color: ${palette.text}; font-family: ${typography.headingStack};
@@ -249,8 +266,17 @@ export const renderInvoice = (
   // template still prints the list there, and the compliance section survives either way. A
   // snapshot taken before #140 has no layout at all, which correctly means the original airy page.
   const boxed = snapshot.layout === 'BOXED' && !narrow;
+  const marking = options.copy === undefined ? null : copyMarking(doc, options.copy, locale);
   if (boxed) {
-    return page(doc, snapshot, format, locale, 'boxed', `<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale)}</div>`);
+    return page(
+      doc,
+      snapshot,
+      format,
+      locale,
+      'boxed',
+      `<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking)}</div>`,
+      options.copy,
+    );
   }
 
   const title = t(doc.title, locale);
@@ -362,6 +388,7 @@ export const renderInvoice = (
   ].join('');
 
   const body = `
+  ${marking === null ? '' : `<div class="copy-mark">${escapeHtml(marking)}</div>`}
   <div class="head">
     <div>
       ${logo}
@@ -384,7 +411,34 @@ export const renderInvoice = (
   ${upi}
   <footer>${footerBits}</footer>`;
 
-  return page(doc, snapshot, format, locale, '', body);
+  return page(doc, snapshot, format, locale, '', body, options.copy);
+};
+
+/**
+ * Every marked copy of a bill, in one printable document.
+ *
+ * "Printing all three at once is one action" is the acceptance criterion, and three separate files
+ * is three actions and three trips to the printer. So the copies are pages of a single document,
+ * each starting on a fresh sheet, and one press of Print produces the set.
+ */
+export const renderInvoiceCopies = (
+  doc: InvoiceDocument,
+  snapshot: TemplateSnapshot,
+  options: Omit<RenderOptions, 'copy'>,
+): string => {
+  const copies = copiesFor(doc);
+  const sheets = copies
+    .map((copy) => {
+      const html = renderInvoice(doc, snapshot, { ...options, copy });
+      // Take the body of each rendered copy; the head is shared by the document that wraps them.
+      const body = html.slice(html.indexOf('<body'), html.lastIndexOf('</body>'));
+      return body.slice(body.indexOf('>') + 1);
+    })
+    .join('');
+  const first = renderInvoice(doc, snapshot, { ...options, copy: copies[0] as InvoiceCopy });
+  const head = first.slice(0, first.indexOf('<body'));
+  const bodyOpen = first.slice(first.indexOf('<body'), first.indexOf('>', first.indexOf('<body')) + 1);
+  return `${head}${bodyOpen}${sheets}</body>\n</html>`;
 };
 
 /**
@@ -401,6 +455,7 @@ const page = (
   locale: Locale,
   bodyClass: string,
   body: string,
+  copy?: InvoiceCopy,
 ): string => `<!doctype html>
 <html lang="${locale === 'hi-IN' ? 'hi' : 'en'}">
 <head>
@@ -410,7 +465,7 @@ const page = (
 <style>${styles(snapshot, format)}</style>
 </head>
 <body class="${escapeHtml(bodyClass)}">
-<div class="sheet" data-format="${escapeHtml(format)}" data-template="${escapeHtml(snapshot.templateId)}@${escapeHtml(snapshot.templateVersion)}" data-layout="${escapeHtml(snapshot.layout ?? 'AIRY')}">
+<div class="sheet" data-format="${escapeHtml(format)}" data-template="${escapeHtml(snapshot.templateId)}@${escapeHtml(snapshot.templateVersion)}" data-layout="${escapeHtml(snapshot.layout ?? 'AIRY')}"${copy === undefined ? '' : ` data-copy="${escapeHtml(copy)}"`}>
 ${body}
 </div>
 </body>

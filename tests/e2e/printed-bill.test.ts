@@ -96,11 +96,11 @@ test('#131 — on the printed bill, quantity × rate is the amount on every good
   const { html } = await printedSaleWithFreight();
 
   const { columns, body } = itemTable(html);
-  const goods = body.filter((cells) => /^[\d.]+$/.test(text(cells[columns['Qty'] as number] ?? '')));
+  const goods = body.filter((cells) => /^[\d.]+$/.test(text(cells[columns['Quantity'] as number] ?? '')));
   assert.equal(goods.length, 1, 'the sale has one goods line');
 
   for (const cells of goods) {
-    const quantity = Number(text(cells[columns['Qty'] as number] ?? ''));
+    const quantity = Number(text(cells[columns['Quantity'] as number] ?? ''));
     const rate = paise(cells[columns['Rate'] as number] ?? '');
     const discountCell = text(cells[columns['Discount'] as number] ?? '');
     const discount = discountCell === '' || discountCell === '—' ? 0n : paise(cells[columns['Discount'] as number] ?? '');
@@ -108,7 +108,7 @@ test('#131 — on the printed bill, quantity × rate is the amount on every good
     assert.equal(
       amount,
       BigInt(Math.round(quantity * Number(rate))) - discount,
-      `${text(cells[columns['Item'] as number] ?? '')}: quantity × rate less discount must be the printed amount`,
+      `${text(cells[columns['Description of Goods'] as number] ?? '')}: quantity × rate less discount must be the printed amount`,
     );
   }
   assert.ok(html.includes('₹10,000.00'), '100 × ₹100 prints as ₹10,000.00, with no freight folded in');
@@ -125,7 +125,7 @@ test('#131 — freight is its own line below the goods, and the bill still total
   const goodsIndex = html.indexOf('TMT Steel Bar');
   const freightIndex = html.indexOf('Freight');
   assert.ok(goodsIndex > -1 && freightIndex > goodsIndex, 'freight is printed after the goods it belongs to');
-  assert.ok(html.includes('Sub-total for goods'), 'the goods are sub-totalled before the charges');
+  assert.ok(html.includes('Sub Total'), 'the goods are sub-totalled before the charges');
 
   // ₹10,000 of goods and ₹500 of freight, both at 18%: ₹10,500 + ₹1,890 = ₹12,390.
   assert.equal(document.totals.taxableValue.minor, 1050000n);
@@ -216,7 +216,7 @@ test('#140 — the India-standard bill prints a ruled grid whose HSN summary agr
   });
 
   assert.ok(html.includes('data-layout="BOXED"'));
-  assert.ok(html.includes('Tax summary by HSN / SAC'));
+  assert.ok(html.includes('HSN / SAC Summary'));
 
   const summary = hsnSummary(document);
   assert.equal(summary.totals.taxableValue.minor, document.totals.taxableValue.minor, 'taxable value must agree');

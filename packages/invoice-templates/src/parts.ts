@@ -25,68 +25,114 @@ export const escapeHtml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+/**
+ * Issue #139 — two vocabularies, kept side by side so they cannot drift apart.
+ *
+ * `plain` is how the product speaks to a business owner, and it is what the app's own screens use.
+ * `printed` is what goes on the paper in English: the standard term a chartered accountant, a GST
+ * officer and the buyer's accounts clerk scan for. "Bill number" is the right thing to say on a
+ * screen and the wrong thing to print, because nobody checking a bill is looking for it.
+ *
+ * Hindi keeps the plain wording throughout. There is no standard Hindi vocabulary on Indian bills
+ * to match, and inventing one would help nobody.
+ */
+interface Wording {
+  /** What a screen says, and what this product would say out loud. */
+  readonly plain: string;
+  /** What the printed English document says. Falls back to `plain` where they agree. */
+  readonly printed?: string;
+  readonly hi: string;
+}
+
+const w = (plain: string, hi: string, printed?: string): Wording =>
+  printed === undefined ? { plain, hi } : { plain, hi, printed };
+
 const T = {
-  TAX_INVOICE: { 'en-IN': 'Tax invoice', 'hi-IN': 'Tax invoice' },
-  BILL_OF_SUPPLY: { 'en-IN': 'Bill of supply', 'hi-IN': 'Bill of supply' },
-  CREDIT_NOTE: { 'en-IN': 'Return note', 'hi-IN': 'Wapsi note' },
-  DEBIT_NOTE: { 'en-IN': 'Extra charge note', 'hi-IN': 'Extra charge note' },
-  billedTo: { 'en-IN': 'Billed to', 'hi-IN': 'Kiske naam' },
-  invoiceNo: { 'en-IN': 'Bill number', 'hi-IN': 'Bill number' },
-  date: { 'en-IN': 'Date', 'hi-IN': 'Taarikh' },
-  dueDate: { 'en-IN': 'Payment due', 'hi-IN': 'Payment kab tak' },
-  placeOfSupply: { 'en-IN': 'This sale counts in', 'hi-IN': 'Bikri kis rajya ki' },
-  reverseCharge: { 'en-IN': 'Customer pays the GST directly', 'hi-IN': 'GST customer khud bharega' },
-  gstin: { 'en-IN': 'GST number', 'hi-IN': 'GST number' },
-  item: { 'en-IN': 'Item', 'hi-IN': 'Item' },
-  hsn: { 'en-IN': 'HSN / SAC', 'hi-IN': 'HSN / SAC' },
-  qty: { 'en-IN': 'Qty', 'hi-IN': 'Kitna' },
-  rate: { 'en-IN': 'Rate', 'hi-IN': 'Rate' },
-  discount: { 'en-IN': 'Discount', 'hi-IN': 'Chhoot' },
-  batch: { 'en-IN': 'Batch', 'hi-IN': 'Batch' },
-  note: { 'en-IN': 'Note', 'hi-IN': 'Note' },
-  taxable: { 'en-IN': 'Taxable value', 'hi-IN': 'Jis par tax laga' },
-  subTotal: { 'en-IN': 'Sub-total for goods', 'hi-IN': 'Maal ka sub-total' },
-  charges: { 'en-IN': 'Charges added to this bill', 'hi-IN': 'Bill mein jude charge' },
-  gstPercent: { 'en-IN': 'GST %', 'hi-IN': 'GST %' },
-  gstAmount: { 'en-IN': 'GST', 'hi-IN': 'GST' },
-  lineTotal: { 'en-IN': 'Amount', 'hi-IN': 'Rakam' },
-  totalBeforeGst: { 'en-IN': 'Total before GST', 'hi-IN': 'GST se pehle total' },
-  roundOff: { 'en-IN': 'Rounded', 'hi-IN': 'Round kiya' },
-  total: { 'en-IN': 'Total to pay', 'hi-IN': 'Kul dena' },
-  inWords: { 'en-IN': 'In words', 'hi-IN': 'Shabdon mein' },
-  paid: { 'en-IN': 'Paid', 'hi-IN': 'Diya' },
-  outstanding: { 'en-IN': 'Still due', 'hi-IN': 'Abhi baaki' },
-  rcmTax: { 'en-IN': 'GST you pay directly to the government', 'hi-IN': 'Jo GST aap seedha sarkar ko bharenge' },
-  transport: { 'en-IN': 'Transport', 'hi-IN': 'Transport' },
-  vehicle: { 'en-IN': 'Vehicle', 'hi-IN': 'Gaadi' },
-  eWayBill: { 'en-IN': 'E-way bill', 'hi-IN': 'E-way bill' },
-  irn: { 'en-IN': 'Government reference (IRN)', 'hi-IN': 'Sarkari reference (IRN)' },
-  bank: { 'en-IN': 'Pay into', 'hi-IN': 'Yahan bhejein' },
-  po: { 'en-IN': 'Your order reference', 'hi-IN': 'Aapka order reference' },
-  // Issue #140 — wording the boxed design needs.
-  serial: { 'en-IN': 'Sl', 'hi-IN': 'Sl' },
-  per: { 'en-IN': 'per', 'hi-IN': 'per' },
-  taxSummary: { 'en-IN': 'Tax summary by HSN / SAC', 'hi-IN': 'HSN / SAC ke hisaab se tax' },
-  taxInWords: { 'en-IN': 'Tax amount in words', 'hi-IN': 'Tax ki rakam shabdon mein' },
-  declaration: { 'en-IN': 'Declaration', 'hi-IN': 'Ghoshna' },
-  forSeller: { 'en-IN': 'for', 'hi-IN': 'ki taraf se' },
-  authorisedSignatory: { 'en-IN': 'Authorised Signatory', 'hi-IN': 'Adhikrit hastakshar' },
-  totalWord: { 'en-IN': 'Total', 'hi-IN': 'Kul' },
-  // Issue #138 — the trade fields real bills carry.
-  pan: { 'en-IN': 'PAN', 'hi-IN': 'PAN' },
-  packages: { 'en-IN': 'Packages', 'hi-IN': 'Packet' },
-  lrNumber: { 'en-IN': 'LR / RR number', 'hi-IN': 'LR / RR number' },
-  transportDoc: { 'en-IN': 'Transport document', 'hi-IN': 'Transport document' },
-  destination: { 'en-IN': 'Destination', 'hi-IN': 'Kahan pahunchana hai' },
-  eoe: { 'en-IN': 'E. & O.E.', 'hi-IN': 'E. & O.E.' },
-  computerGenerated: {
-    'en-IN': 'This is a computer generated invoice.',
-    'hi-IN': 'Yeh bill computer se bana hai.',
-  },
+  TAX_INVOICE: w('Tax invoice', 'Tax invoice', 'Tax Invoice'),
+  BILL_OF_SUPPLY: w('Bill of supply', 'Bill of supply', 'Bill of Supply'),
+  CREDIT_NOTE: w('Return note', 'Wapsi note', 'Credit Note'),
+  DEBIT_NOTE: w('Extra charge note', 'Extra charge note', 'Debit Note'),
+  billedTo: w('Billed to', 'Kiske naam', 'Buyer (Bill to)'),
+  invoiceNo: w('Bill number', 'Bill number', 'Invoice No.'),
+  date: w('Date', 'Taarikh', 'Invoice Date'),
+  dueDate: w('Payment due', 'Payment kab tak', 'Due Date'),
+  placeOfSupply: w('This sale counts in', 'Bikri kis rajya ki', 'Place of Supply'),
+  reverseCharge: w('Customer pays the GST directly', 'GST customer khud bharega', 'Reverse Charge'),
+  gstin: w('GST number', 'GST number', 'GSTIN'),
+  item: w('Item', 'Item', 'Description of Goods'),
+  hsn: w('HSN / SAC', 'HSN / SAC'),
+  qty: w('Qty', 'Kitna', 'Quantity'),
+  rate: w('Rate', 'Rate'),
+  discount: w('Discount', 'Chhoot'),
+  batch: w('Batch', 'Batch'),
+  note: w('Note', 'Note'),
+  taxable: w('Taxable value', 'Jis par tax laga', 'Taxable Value'),
+  subTotal: w('Sub-total for goods', 'Maal ka sub-total', 'Sub Total'),
+  charges: w('Charges added to this bill', 'Bill mein jude charge', 'Other Charges'),
+  gstPercent: w('GST %', 'GST %', 'Tax Rate'),
+  gstAmount: w('GST', 'GST', 'Tax Amount'),
+  lineTotal: w('Amount', 'Rakam', 'Amount'),
+  totalBeforeGst: w('Total before GST', 'GST se pehle total', 'Total Taxable Value'),
+  roundOff: w('Rounded', 'Round kiya', 'Round Off'),
+  total: w('Total to pay', 'Kul dena', 'Total'),
+  inWords: w('In words', 'Shabdon mein', 'Amount Chargeable (in words)'),
+  paid: w('Paid', 'Diya', 'Amount Paid'),
+  outstanding: w('Still due', 'Abhi baaki', 'Balance Due'),
+  rcmTax: w(
+    'GST you pay directly to the government',
+    'Jo GST aap seedha sarkar ko bharenge',
+    'Tax Payable on Reverse Charge',
+  ),
+  transport: w('Transport', 'Transport', 'Dispatched through'),
+  vehicle: w('Vehicle', 'Gaadi', 'Vehicle No.'),
+  eWayBill: w('E-way bill', 'E-way bill', 'e-Way Bill No.'),
+  irn: w('Government reference (IRN)', 'Sarkari reference (IRN)', 'IRN'),
+  bank: w('Pay into', 'Yahan bhejein', 'Bank Details'),
+  po: w('Your order reference', 'Aapka order reference', "Buyer's Order No."),
+  serial: w('Sl', 'Sl', 'Sl No.'),
+  per: w('per', 'per'),
+  taxSummary: w('Tax summary by HSN / SAC', 'HSN / SAC ke hisaab se tax', 'HSN / SAC Summary'),
+  taxInWords: w('Tax amount in words', 'Tax ki rakam shabdon mein', 'Tax Amount (in words)'),
+  declaration: w('Declaration', 'Ghoshna'),
+  forSeller: w('for', 'ki taraf se'),
+  authorisedSignatory: w('Authorised Signatory', 'Adhikrit hastakshar'),
+  totalWord: w('Total', 'Kul'),
+  pan: w('PAN', 'PAN'),
+  packages: w('Packages', 'Packet', 'No. & Kind of Pkgs'),
+  lrNumber: w('LR / RR number', 'LR / RR number', 'LR / RR No.'),
+  transportDoc: w('Transport document', 'Transport document', 'Transport Doc No. & Date'),
+  destination: w('Destination', 'Kahan pahunchana hai', 'Destination'),
+  eoe: w('E. & O.E.', 'E. & O.E.'),
+  computerGenerated: w(
+    'This is a computer generated invoice.',
+    'Yeh bill computer se bana hai.',
+  ),
+  // Issue #137 — the copy markings GST asks a goods invoice to carry.
+  copyOriginal: w('Original, for the customer', 'Original, customer ke liye', 'ORIGINAL FOR RECIPIENT'),
+  copyDuplicateTransporter: w('Duplicate, for the transporter', 'Duplicate, transporter ke liye', 'DUPLICATE FOR TRANSPORTER'),
+  copyTriplicate: w('Triplicate, kept by you', 'Triplicate, aapke paas', 'TRIPLICATE FOR SUPPLIER'),
+  copyDuplicateSupplier: w('Duplicate, kept by you', 'Duplicate, aapke paas', 'DUPLICATE FOR SUPPLIER'),
 } as const;
 
-export type Wording = keyof typeof T;
-export const t = (key: Wording, locale: Locale): string => T[key][locale];
+export type WordingKey = keyof typeof T;
+
+/** What the printed document says. This is the one the renderers use. */
+export const t = (key: WordingKey, locale: Locale): string => {
+  const entry = T[key] as Wording;
+  return locale === 'hi-IN' ? entry.hi : (entry.printed ?? entry.plain);
+};
+
+/**
+ * What a screen says. Kept beside the printed wording precisely so the two cannot drift: a change
+ * to one is made in the same object as the other.
+ */
+export const screenWord = (key: WordingKey, locale: Locale): string => {
+  const entry = T[key] as Wording;
+  return locale === 'hi-IN' ? entry.hi : entry.plain;
+};
+
+/** Every wording key, so a test can walk both vocabularies. */
+export const WORDING_KEYS = Object.keys(T) as WordingKey[];
 
 export const money = (m: Money): string => escapeHtml(formatINR(m));
 export const percent = (rate: bigint | null): string => (rate === null ? '—' : `${Number(rate) / 100}%`);

@@ -63,15 +63,15 @@ const itemTable = (
    * normalised below, so adding or dropping a column keeps the rest in proportion.
    */
   const headings: { label: string; share: number }[] = [
-    { label: t('serial', locale), share: 4 },
-    { label: t('item', locale), share: 24 },
+    { label: t('serial', locale), share: 5 },
+    { label: t('item', locale), share: 22 },
     { label: t('hsn', locale), share: 8 },
     ...(showBatch ? [{ label: t('batch', locale), share: 8 }] : []),
     ...(showPackages ? [{ label: t('packages', locale), share: 8 }] : []),
-    { label: t('qty', locale), share: 7 },
+    { label: t('qty', locale), share: 9 },
     { label: t('rate', locale), share: 9 },
     { label: t('per', locale), share: 5 },
-    ...(showDiscount ? [{ label: t('discount', locale), share: 9 }] : []),
+    ...(showDiscount ? [{ label: t('discount', locale), share: 8 }] : []),
     { label: t('gstPercent', locale), share: 6 },
     { label: t('lineTotal', locale), share: 11 },
   ];
@@ -196,6 +196,8 @@ export const renderBoxed = (
   snapshot: TemplateSnapshot,
   format: PageFormat,
   locale: Locale,
+  /** Issue #137 — "ORIGINAL FOR RECIPIENT" and the rest. `null` prints an unmarked bill. */
+  copyMark: string | null = null,
 ): string => {
   const shows = (fieldId: string): boolean => snapshot.optionalFields.includes(fieldId);
   const reserved = (id: Parameters<typeof renderReservedSlot>[0]): string =>
@@ -282,7 +284,9 @@ export const renderBoxed = (
   // whole width — so without them the seller's name is squeezed into a one-character column.
   return `
   <table class="grid head${showEInvoice ? ' with-qr' : ''}">
-    <tr><td class="title-cell" colspan="${showEInvoice ? 3 : 2}"><h1>${escapeHtml(t(doc.title, locale))}</h1></td></tr>
+    <tr><td class="title-cell" colspan="${showEInvoice ? 3 : 2}"><h1>${escapeHtml(t(doc.title, locale))}</h1>${
+      copyMark === null ? '' : `<span class="copy-mark-inline">${escapeHtml(copyMark)}</span>`
+    }</td></tr>
     <tr>
       ${partyCell(doc.seller, '', locale, shows).replace('<span class="cap"></span>', logo)}
       <td class="meta-cell">

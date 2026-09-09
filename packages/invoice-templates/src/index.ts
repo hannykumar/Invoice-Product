@@ -8,5 +8,6 @@ export * from './reserved.ts';
 export * from './parts.ts';
 export * from './hsn-summary.ts';
 export * from './boxed.ts';
+export * from './copies.ts';
 export * from './render.ts';
 export * from './from-sales.ts';
