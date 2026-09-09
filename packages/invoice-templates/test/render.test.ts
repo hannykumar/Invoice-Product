@@ -59,6 +59,7 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
     stateCode: '07',
     stateName: 'Delhi',
   },
+  shipTo: null,
   placeOfSupplyStateCode: '07',
   placeOfSupplyStateName: 'Delhi',
   reverseCharge: false,

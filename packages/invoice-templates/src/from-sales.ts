@@ -15,6 +15,8 @@ export interface PrintingContext {
   readonly title: DocumentTitle;
   readonly seller: RenderableParty;
   readonly buyer: RenderableParty;
+  /** Issue #134 — omit, or pass `null`, when the goods go to the buyer's own address. */
+  readonly shipTo?: RenderableParty | null;
   readonly placeOfSupplyStateName: string;
   readonly transport?: RenderableTransport | null;
   readonly eInvoice?: { irn: string; qrSvg: string | null } | null;
@@ -52,6 +54,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     dueDate: invoice.dueDate,
     seller: context.seller,
     buyer: context.buyer,
+    shipTo: context.shipTo ?? null,
     placeOfSupplyStateCode: pricing.placeOfSupplyStateCode,
     placeOfSupplyStateName: context.placeOfSupplyStateName,
     reverseCharge: pricing.lines.some((l) => l.reverseCharge),
@@ -107,3 +110,35 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
 
 export const todayIso = (): IsoDate => isoDate(new Date().toISOString().slice(0, 10));
 export { nil };
+
+/**
+ * Issue #134 — the delivery party, as the e-way bill already describes it.
+ *
+ * This shape is `MovementParty` from `packages/transport` written out structurally, so the printed
+ * bill takes **the same object** the e-way bill is built from rather than a second copy typed in by
+ * hand. That is the whole point: a bill and an e-way bill that disagree about where a load went is
+ * exactly the discrepancy an officer stops a lorry over.
+ */
+export interface DeliveryParty {
+  readonly legalName: string;
+  readonly gstin: string;
+  readonly address1: string;
+  readonly address2?: string;
+  readonly place: string;
+  readonly pincode: string;
+  /** GST state code, "29" for Karnataka. */
+  readonly stateCode: string;
+}
+
+/** Turns that delivery party into something printable. The state's name is not on the movement. */
+export const shipToFromDelivery = (party: DeliveryParty, stateName: string): RenderableParty => ({
+  name: party.legalName,
+  addressLines: [
+    party.address1,
+    ...(party.address2 === undefined || party.address2 === '' ? [] : [party.address2]),
+    `${party.place} ${party.pincode}`.trim(),
+  ],
+  gstin: party.gstin === '' ? null : party.gstin,
+  stateCode: party.stateCode,
+  stateName,
+});

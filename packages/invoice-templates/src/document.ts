@@ -116,6 +116,14 @@ export interface InvoiceDocument {
   readonly dueDate: IsoDate | null;
   readonly seller: RenderableParty;
   readonly buyer: RenderableParty;
+  /**
+   * Issue #134 — where the goods actually go, when that is not the buyer's own address.
+   *
+   * `null` means the goods go to the buyer, and the bill says so in one line rather than printing
+   * the same address twice. It is built from the same delivery party the e-way bill is built from
+   * (see `shipToFromDelivery`), so the two documents cannot disagree about where a load went.
+   */
+  readonly shipTo: RenderableParty | null;
   readonly placeOfSupplyStateCode: string;
   readonly placeOfSupplyStateName: string;
   readonly reverseCharge: boolean;
