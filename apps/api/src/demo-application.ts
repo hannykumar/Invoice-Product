@@ -297,7 +297,10 @@ export class DemoApplication {
     // also exercises an effective-date boundary rather than a single flat rate.
     masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '3923', treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'PCS' });
     const calculator = new GstCalculator({ masterData: masters, rates: FIXTURE_RATE_TABLE, gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'development' }), mode: 'development' });
-    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: 'WEB', padding: 5 } } });
+    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, // "INV/WEB/2026-27/00005" is twenty-one characters and the government allows sixteen in a
+    // document number, so an e-invoice built from it is refused. Shortened until the shipped
+    // default is settled — see the note in packages/sales/src/numbering.ts.
+    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'I', branchCode: 'W', padding: 4 } } });
 
     const purchases = purchaseDocumentLedger(shop.bills, async () => config.supplierName);
     const documents: DocumentLedgerPort = {

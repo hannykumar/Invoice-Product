@@ -61,6 +61,8 @@ const T = {
   vehicle: { 'en-IN': 'Vehicle', 'hi-IN': 'Gaadi' },
   eWayBill: { 'en-IN': 'E-way bill', 'hi-IN': 'E-way bill' },
   irn: { 'en-IN': 'Government reference (IRN)', 'hi-IN': 'Sarkari reference (IRN)' },
+  ackNumber: { 'en-IN': 'Ack number', 'hi-IN': 'Ack number' },
+  ackDate: { 'en-IN': 'Ack date', 'hi-IN': 'Ack ki taarikh' },
   bank: { 'en-IN': 'Pay into', 'hi-IN': 'Yahan bhejein' },
   po: { 'en-IN': 'Your order reference', 'hi-IN': 'Aapka order reference' },
   // Issue #140 — wording the boxed design needs.

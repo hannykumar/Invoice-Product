@@ -335,7 +335,11 @@ export const renderInvoice = (
               ? reserved('einvoice.irn')
               : `<div><span class="k">${escapeHtml(t('irn', locale))}:</span><br><code>${escapeHtml(doc.eInvoice.irn)}</code></div>`
           }
-          <div class="qr-pair">${reserved('einvoice.ackNumber')}${reserved('einvoice.ackDate')}</div>
+          ${`<div class="qr-pair">${
+          doc.eInvoice?.ackNumber == null ? reserved('einvoice.ackNumber') : `<span class="cap">${escapeHtml(t('ackNumber', locale))}</span> ${escapeHtml(doc.eInvoice.ackNumber)}`
+        }${
+          doc.eInvoice?.ackDate == null ? reserved('einvoice.ackDate') : `<span class="cap">${escapeHtml(t('ackDate', locale))}</span> ${escapeHtml(doc.eInvoice.ackDate)}`
+        }</div>`}
         </div>
       </div>`;
 

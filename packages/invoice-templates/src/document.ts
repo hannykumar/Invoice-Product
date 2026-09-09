@@ -81,6 +81,15 @@ export interface RenderableEInvoice {
   readonly irn: string;
   /** Produced by issue #26. This module never generates one; it prints what it is given. */
   readonly qrSvg: string | null;
+  /**
+   * The government's acknowledgement, when we have it.
+   *
+   * The layout has always reserved space for these two, because a bill that shifts when a value
+   * lands is a bill somebody re-checks. They stay optional: an offline bill genuinely has no
+   * acknowledgement yet, and the reserved slot is the honest thing to print in that case.
+   */
+  readonly ackNumber?: string | null;
+  readonly ackDate?: string | null;
 }
 
 export interface InvoiceDocument {

@@ -17,7 +17,7 @@ export interface PrintingContext {
   readonly buyer: RenderableParty;
   readonly placeOfSupplyStateName: string;
   readonly transport?: RenderableTransport | null;
-  readonly eInvoice?: { irn: string; qrSvg: string | null } | null;
+  readonly eInvoice?: { irn: string; qrSvg: string | null; ackNumber?: string | null; ackDate?: string | null } | null;
   readonly logoDataUri?: string | null;
   readonly bankDetails?: readonly string[] | null;
   readonly terms?: string | null;

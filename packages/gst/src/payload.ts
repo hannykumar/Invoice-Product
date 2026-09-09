@@ -93,6 +93,9 @@ export type PayloadResult =
   | { readonly ok: false; readonly problems: readonly PayloadProblem[] };
 
 const PINCODE = /^\d{6}$/;
+/** The government's own ceiling on a document number. */
+export const MAX_DOCUMENT_NUMBER = 16;
+
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$/;
 
 /** A GSTIN is acceptable when it is well formed — or, only when asked, when it is the state's own
@@ -141,6 +144,15 @@ export const buildEInvoicePayload = (document: EInvoiceDocument, options: Payloa
   // The portal rejects a document number with these characters outright.
   if (/[^A-Za-z0-9/-]/.test(document.documentNumber ?? "")) {
     problems.push({ field: "DocDtls.No", message: "A bill number sent to the government may only contain letters, numbers, a slash and a dash." });
+  }
+  // Sixteen characters is the government's own limit, and a numbering series that looks perfectly
+  // sensible can exceed it — "INV/CH/2026-27/00001" is twenty. Caught here so the shopkeeper is
+  // told in words they can act on, rather than the portal answering with its schema.
+  if ((document.documentNumber ?? "").length > MAX_DOCUMENT_NUMBER) {
+    problems.push({
+      field: "DocDtls.No",
+      message: `The government allows at most ${MAX_DOCUMENT_NUMBER} characters in a bill number, and this one has ${(document.documentNumber ?? "").length}. Shorten your numbering series — a shorter prefix or fewer digits — before sending it.`,
+    });
   }
   if (document.lines.length === 0) {
     problems.push({ field: "ItemList", message: "There is nothing on this bill, so there is nothing to report." });

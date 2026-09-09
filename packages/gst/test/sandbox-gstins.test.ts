@@ -64,3 +64,31 @@ test("the allowance does not relax anything else on the bill", async () => {
   assert.equal(built.ok, false);
   assert.ok(built.problems.some((problem) => problem.field === "ItemList[0].HsnCd"));
 });
+
+test("a bill number longer than the government allows is caught before it is sent", async () => {
+  // Found by running a real sale through to the live sandbox: the default sales series produces
+  // "INV/CH/2026-27/00001", which is twenty characters, and NIC refused it with its own schema
+  // message. A shopkeeper cannot act on "minimum length of 1 and a maximum length of 16".
+  const built = buildEInvoicePayload(
+    sandboxDocument(),
+    { allowSandboxGstins: true },
+  );
+  assert.equal(built.ok, true, "the fixture's own number is short enough");
+
+  const tooLong = buildEInvoicePayload(
+    invoiceDocument({
+      documentNumber: "INV/CH/2026-27/00001",
+      supplier: { gstin: "33AAGCB1286Q003", legalName: "BVM TN", address1: "14 Anna Salai", location: "Chennai", pincode: "600002", stateCode: "33" },
+      recipient: { gstin: "27AAGCB1286Q005", legalName: "BVM MH", address1: "22 Laxmi Road", location: "Pune", pincode: "411030", stateCode: "27" },
+      placeOfSupplyStateCode: "27",
+      lines: [cementLine()],
+    }),
+    { allowSandboxGstins: true },
+  );
+
+  assert.equal(tooLong.ok, false);
+  const problem = tooLong.problems.find((p) => p.field === "DocDtls.No");
+  assert.ok(problem, "the number is the problem, and it is named as such");
+  assert.match(problem.message, /at most 16 characters.*has 20/, "says the limit and the actual length");
+  assert.match(problem.message, /Shorten your numbering series/, "and what to do about it");
+});

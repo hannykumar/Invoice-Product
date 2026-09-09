@@ -20,7 +20,7 @@ import { asId, isoDate, rupees, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type Account, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { InMemorySalesRepository, SalesService, noComplianceHooks, type ComplianceHookPort } from '@invoice/sales';
+import { DEFAULT_SALES_POLICY, InMemorySalesRepository, SalesService, noComplianceHooks, type ComplianceHookPort } from '@invoice/sales';
 import type { EInvoiceService } from '../../packages/gst/src/einvoice-service.ts';
 import type { EInvoiceDocument } from '../../packages/gst/src/payload.ts';
 import { salesInventoryAdapter } from '@invoice/inventory';
@@ -160,6 +160,11 @@ export const makeBusiness = async (options: {
     permissions: permissionPortFromActor,
     audit: shop.audit,
     clock,
+    // A series short enough for the government's sixteen-character limit on a document number.
+    // The shipped default, "INV/MAIN/2026-27/00001", is twenty-two and NIC refuses it — see the
+    // note in packages/sales/src/numbering.ts. These scenarios are about outages and seams, not
+    // numbering, so they use a compliant series rather than carrying that defect into every test.
+    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'I', branchCode: 'M', padding: 4 } },
   });
 
   const documents: DocumentLedgerPort = {

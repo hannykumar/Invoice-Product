@@ -19,6 +19,23 @@ export interface NumberSeries {
   readonly padding: number;
 }
 
+/**
+ * **This default does not fit the government's e-invoice limit, and that is a decision waiting to
+ * be made rather than an oversight.**
+ *
+ * `formatNumber` produces `PREFIX/BRANCH/2026-27/00001`. The three slashes and the financial year
+ * are ten characters before a business writes anything of its own, so this default comes to
+ * twenty-two — and NIC refuses any document number over **sixteen**, which it did when a real sale
+ * was put through the sandbox. A business below the e-invoice threshold is unaffected; one above it
+ * cannot register a single bill.
+ *
+ * Nothing is quietly truncated, because an invoice number is a legally significant series and
+ * shortening one already issued would be worse than refusing to send it. `buildEInvoicePayload`
+ * catches the length and says so in words a shopkeeper can act on.
+ *
+ * Fixing the default properly means choosing what to give up — a shorter financial year in the
+ * number, no branch code, or fewer digits — and that changes what customers and auditors see.
+ */
 export const DEFAULT_SERIES: NumberSeries = { prefix: 'INV', branchCode: 'MAIN', padding: 5 };
 
 export const seriesScope = (series: NumberSeries, date: IsoDate): string =>

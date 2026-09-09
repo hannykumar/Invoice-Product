@@ -229,7 +229,11 @@ export const renderBoxed = (
     ? ''
     : `<td class="qr-cell">
         ${doc.eInvoice?.qrSvg == null ? reserved('einvoice.qr') : `<div class="qr-slot">${doc.eInvoice.qrSvg}</div>`}
-        <div class="qr-acks">${reserved('einvoice.ackNumber')}${reserved('einvoice.ackDate')}</div>
+        ${`<div class="qr-acks">${
+          doc.eInvoice?.ackNumber == null ? reserved('einvoice.ackNumber') : `<span class="cap">${escapeHtml(t('ackNumber', locale))}</span> ${escapeHtml(doc.eInvoice.ackNumber)}`
+        }${
+          doc.eInvoice?.ackDate == null ? reserved('einvoice.ackDate') : `<span class="cap">${escapeHtml(t('ackDate', locale))}</span> ${escapeHtml(doc.eInvoice.ackDate)}`
+        }</div>`}
       </td>`;
   const irnRow = !showEInvoice
     ? ''
