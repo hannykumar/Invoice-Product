@@ -242,6 +242,35 @@ already carrying one. The connector now gives the fetch the name the adapter rea
 The envelope handling is shared with the e-invoice lane in `packages/gst/src/whitebooks-http.ts`,
 since the two lanes are one service wearing two hats and two copies would drift.
 
+## WhiteBooks answered: a conforming GSTIN, and no token by design
+
+On 9 September 2026 they replied with a new sandbox taxpayer and one confirmation.
+
+**`33AAGCB1286QQZM` / `TN_CO4.2038`** — and this one carries `Z` in the fourteenth position, so it
+**passes our real validation and needs no sandbox exception at all**. That is item 3 of the request
+answered properly rather than worked around.
+
+They also confirmed **"there will be no token for e-way bill"**, which settles item 2: the
+header-based authentication that lane already uses is the intended design, not an accident we were
+relying on.
+
+The returns lane now reaches GSTN rather than stopping at WhiteBooks. `/authentication/otprequest`
+answers with a transaction id, and two routes exist that guessing had missed: **`/gstr2b/all`**
+(wants `rtnprd`) and **`/gstr1/retsave`**. `/gstr2b/all?rtnprd=072026` returns GSTN's own error —
+
+```json
+{"error":{"errorCode":"RET2B1001","errorMessage":"API Header Value Missing"}}
+```
+
+— which is progress: `WB_ERR_9404` meant no such route, and this means the route is real and one
+header short. `username`, `otp` and `auth-token` were each tried and none is it. **The remaining
+header must come from their reference rather than from more guessing**, which is the lesson the
+lower-case `genewaybill` already taught once.
+
+`/authentication/authtoken` still answers with the placeholder string, but that may now be correct
+rather than broken: if returns works the way e-way bill does, there is no token to issue and the
+session is theirs to hold.
+
 ## What is still open
 
 **GST returns cannot be wired yet: its token endpoint is a stub too.**
