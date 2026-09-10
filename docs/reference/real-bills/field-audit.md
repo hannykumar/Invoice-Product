@@ -116,5 +116,5 @@ Ours matches, wording included (#137).
 **Known compliance gap**
 
 Rule 46 requires a signature or digital signature on a printed invoice, but `footer.signature` is an
-optional template field, so a design can switch it off and produce a bill that is not valid. Filed
-separately.
+optional template field, so a design can switch it off and produce a bill that is not valid.
+`bakery-warm` and `counter-thermal` do not carry it. Filed as #158.
