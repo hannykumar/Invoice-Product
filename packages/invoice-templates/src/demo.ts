@@ -187,17 +187,7 @@ const main = async (): Promise<void> => {
     declaredRateNotice: null,
     // Issue #134 — the goods go to a cold store, not to the buyer's shop. This is the same delivery
     // party the e-way bill is built from, passed through unchanged.
-    shipTo: shipToFromDelivery(
-      {
-        legalName: 'Azadpur Cold Store',
-        gstin: '07EEEEE4444E1ZR',
-        address1: 'Shed 12, Subzi Mandi Road',
-        place: 'New Delhi',
-        pincode: '110033',
-        stateCode: '07',
-      },
-      'Delhi',
-    ),
+    shipTo: null,
     batchByLineId: { l1: 'AP-2608', l3: 'JU-1912' },
     packagesByLineId: { l1: '70 Boxes', l2: '8 Bundles', l3: '10 Cartons' },
   });

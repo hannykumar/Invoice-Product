@@ -138,6 +138,28 @@ export const splitQuantity = (quantityText: string): { amount: string; unit: str
     : { amount: quantityText.slice(0, at), unit: quantityText.slice(at + 1) };
 };
 
+/**
+ * Adds up the quantities on the goods lines, e.g. "2,000.000 KGS".
+ *
+ * Both real bills total the quantity next to the money, because that is the figure a godown counts
+ * the load against. Lines in different units cannot be added — a bill of 80 bags and 12 metres has
+ * no single total — so in that case nothing is printed rather than a meaningless number.
+ */
+export const totalQuantityText = (lines: readonly RenderableLine[]): string => {
+  const goods = lines.filter((l) => l.kind !== 'CHARGE').map((l) => splitQuantity(l.quantityText));
+  if (goods.length === 0) return '';
+  const unit = goods[0]?.unit ?? '';
+  if (!goods.every((q) => q.unit === unit)) return '';
+  let total = 0;
+  for (const q of goods) {
+    const value = Number(q.amount.replace(/,/g, ''));
+    if (!Number.isFinite(value)) return '';
+    total += value;
+  }
+  const decimals = Math.max(...goods.map((q) => (q.amount.split('.')[1] ?? '').length));
+  return `${total.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${unit === '' ? '' : ` ${unit}`}`;
+};
+
 /** The narrow shapes get a list, because a nine-column table on 58mm of paper is unreadable. */
 export const narrowLine = (line: RenderableLine, locale: Locale): string => `
   <div class="tline">

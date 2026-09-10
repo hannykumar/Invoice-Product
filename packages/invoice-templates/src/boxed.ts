@@ -18,7 +18,7 @@ import { formatDate, sum, type Money } from '@invoice/kernel';
 import type { InvoiceDocument, RenderableLine, RenderableParty, TemplateSnapshot } from './document.ts';
 import type { PageFormat } from './template.ts';
 import { hsnSummary, hsnSummaryColumns, type HsnSummaryRow } from './hsn-summary.ts';
-import { escapeHtml, isZero, money, percent, splitQuantity, t } from './parts.ts';
+import { escapeHtml, isZero, money, percent, splitQuantity, t, totalQuantityText } from './parts.ts';
 import type { Locale } from './document.ts';
 import { renderReservedSlot } from './reserved.ts';
 
@@ -102,7 +102,10 @@ const itemTable = (
   };
 
   const goodsTotal = sum(goods.map((l) => l.taxableValue));
-  const span = headings.length - 1;
+  // Both real bills total the quantity as well as the money: 2,000.000 KGS on Blessing Export,
+  // 1400 on KK Polyplast. It is what a godown checks the load against.
+  const quantityTotal = totalQuantityText(goods);
+  const quantityAt = headings.findIndex((h) => h.label === t('qty', locale));
 
   return `<table class="grid items">
     <thead><tr>${headings
@@ -113,7 +116,19 @@ const itemTable = (
       charges.length === 0
         ? ''
         : `<tbody class="charges">
-            <tr class="subtotal"><td class="num" colspan="${span}">${escapeHtml(t('subTotal', locale))}</td><td class="num">${money(goodsTotal)}</td></tr>
+            <tr class="subtotal">${headings
+              .map((h, i) =>
+                i === 0
+                  ? `<td class="num" colspan="${quantityAt}">${escapeHtml(t('subTotal', locale))}</td>`
+                  : i < quantityAt
+                    ? ''
+                    : i === quantityAt
+                      ? `<td class="num">${escapeHtml(quantityTotal)}</td>`
+                      : i === headings.length - 1
+                        ? `<td class="num">${money(goodsTotal)}</td>`
+                        : '<td></td>',
+              )
+              .join('')}</tr>
             ${charges.map((l) => row(l, null)).join('')}
           </tbody>`
     }
@@ -343,12 +358,15 @@ export const renderBoxed = (
     <tr>
       ${partyCell(doc.buyer, t('billedTo', locale), locale, shows)}
       ${
-        // Issue #134 — the consignee box, beside the buyer, the way Blessing Export prints it. When
-        // the goods go to the buyer's own address it says so in one line: printing the same address
-        // twice is how a reader stops believing either copy of it.
-        doc.shipTo === null
-          ? `<td colspan="${showEInvoice ? 2 : 1}"><span class="cap">${escapeHtml(t('shipTo', locale))}</span>${escapeHtml(t('sameAsBillTo', locale))}</td>`
-          : partyCell(doc.shipTo, t('shipTo', locale), locale, shows, showEInvoice ? 2 : 1)
+        // Issue #134 — the consignee box, beside the buyer, as both real bills print it.
+        //
+        // When the goods go to the buyer's own address the box **repeats it in full** rather than
+        // saying "same as above". That is what the samples do: Blessing Export prints the buyer's
+        // name, address, GSTIN and state again under Consignee (Ship to), identical to the box
+        // beside it, and KK Polyplast prints the delivery address on its own. Neither ever
+        // cross-references. Anyone handling the goods reads one box and needs the whole address in
+        // it, so a bill that makes them look somewhere else is the worse bill.
+        partyCell(doc.shipTo ?? doc.buyer, t('shipTo', locale), locale, shows, showEInvoice ? 2 : 1)
       }
     </tr>
   </table>
