@@ -17,7 +17,7 @@ import { captureSnapshot } from '../src/snapshot.ts';
 import { renderInvoice, renderInvoiceCopies, renderInvoiceCopySet } from '../src/render.ts';
 import { copiesFor, copyMarking } from '../src/copies.ts';
 import { shipToFromDelivery } from '../src/from-sales.ts';
-import { t, WORDING_KEYS } from '../src/parts.ts';
+import { t, totalQuantityText, WORDING_KEYS } from '../src/parts.ts';
 import { lintUserFacingText } from '../../ux-vocabulary/src/lint.ts';
 import { hsnSummary } from '../src/hsn-summary.ts';
 import { amountInWords } from '../src/words.ts';
@@ -520,12 +520,38 @@ test('#134 — the bill prints where the goods went, beside who was billed', () 
   assert.ok(html.includes('ABC Traders'), 'and the buyer is still shown separately');
 });
 
-test('#134 — goods going to the buyer say so once, instead of the address twice', () => {
+test('#134 — goods going to the buyer repeat the address in full, as both real bills do', () => {
+  // Corrected on 2026-09-10 against the samples in docs/reference/real-bills. Blessing Export
+  // repeats the buyer's name, address, GSTIN and state in full under Consignee (Ship to), identical
+  // to the box beside it; KK Polyplast prints the delivery address on its own. Neither ever
+  // cross-references. Anyone handling the goods reads one box and needs the whole address in it.
   const html = renderIndia(doc());
-  assert.ok(html.includes('Consignee (Ship to)'), 'the box still exists, so the page does not change shape');
-  assert.ok(html.includes('Same as Buyer (Bill to)'));
-  // Printing an identical address twice is how a reader stops believing either copy of it.
-  assert.equal(html.match(/Shop 8, Azadpur Mandi/g)?.length, 1);
+  assert.ok(html.includes('Consignee (Ship to)'));
+  assert.ok(!html.includes('Same as'), 'a real bill never sends the reader to another box');
+  assert.equal(html.match(/Shop 8, Azadpur Mandi/g)?.length, 2, 'the address stands in both boxes');
+  assert.equal(html.match(/ABC Traders/g)?.length, 2);
+  assert.equal(html.match(/07DDDDD3333D1ZV/g)?.length, 2, 'with the GSTIN an officer checks');
+});
+
+test('#134 — the item table totals the quantity, as both real bills do', () => {
+  const html = renderIndia(doc({
+    lines: [
+      line({ lineId: 'a', quantityText: '2000.000 KGS' }),
+      line({ lineId: 'b', quantityText: '550.500 KGS' }),
+      line({ lineId: 'c', kind: 'CHARGE', description: 'Freight', quantityText: '1 NOS' }),
+    ],
+  }));
+  // The charge line carries no goods, so it is not counted into the load.
+  assert.ok(html.includes('2,550.500 KGS'), 'the total a godown counts the load against');
+
+  // Lines in different units cannot be added, so nothing is printed rather than a wrong number.
+  // Asserted on the helper, because "92" appears in plenty of amounts and HSN codes on the page.
+  assert.equal(
+    totalQuantityText([line({ lineId: 'a', quantityText: '80 BAGS' }), line({ lineId: 'b', quantityText: '12 MTR' })]),
+    '',
+    'bags and metres have no sensible total',
+  );
+  assert.equal(totalQuantityText([line({ quantityText: '70 BOX' })]), '70 BOX');
 });
 
 test('#134 — the delivery party is the one the e-way bill uses, not a second copy typed by hand', () => {
