@@ -175,7 +175,23 @@ const main = async (): Promise<void> => {
       documentDate: isoDate('2026-08-20'),
       destination: 'Azadpur Mandi, New Delhi',
     },
-    bankDetails: ['HDFC Bank, Karol Bagh', 'Account 50200012345678', 'IFSC HDFC0000123'],
+    // Issue #156 — named bank fields, the way a buyer's clerk can safely copy them.
+    bank: {
+      bankName: 'HDFC Bank Ltd.',
+      accountNumber: '50200012345678',
+      branch: 'Karol Bagh',
+      ifsc: 'HDFC0000123',
+    },
+    references: {
+      deliveryNoteNumber: 'DN/2026/0912',
+      deliveryNoteDate: isoDate('2026-08-19'),
+      dispatchDocNumber: 'DSP-4471',
+      referenceNumber: 'ABC/REF/2026/77',
+      referenceDate: isoDate('2026-08-18'),
+      otherReferences: 'Weekly supply contract',
+      termsOfDelivery: 'Delivered at the buyer godown',
+      paymentTerms: 'Credit, 30 days',
+    },
     // Sample text, invented for this walkthrough. A real bill carries the terms the business itself
     // wrote and nothing else — this product never puts words in its mouth.
     terms: 'SAMPLE TERMS, not a real business\u2019s: payment within 30 days.',

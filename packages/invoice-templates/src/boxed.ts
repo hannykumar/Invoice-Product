@@ -14,7 +14,7 @@
  *  - It will not decide what a tax invoice must contain. Like the airy layout, the compliance
  *    section is assembled from the document, and the template has no field with which to remove it.
  */
-import { formatDate, sum, type Money } from '@invoice/kernel';
+import { formatDate, sum, type IsoDate, type Money } from '@invoice/kernel';
 import type { InvoiceDocument, RenderableLine, RenderableParty, TemplateSnapshot } from './document.ts';
 import type { PageFormat } from './template.ts';
 import { hsnSummary, hsnSummaryColumns, type HsnSummaryRow } from './hsn-summary.ts';
@@ -255,10 +255,26 @@ export const renderBoxed = (
       ? ''
       : `<td><span class="cap">${escapeHtml(t('declaration', locale))}</span>${escapeHtml(doc.declaration)}</td>`;
 
+  /**
+   * Issue #156 — named bank fields where a business has them, its own lines where it does not.
+   *
+   * Nothing already entered is lost: a business that only ever typed free text keeps printing it.
+   */
+  const bankLines =
+    doc.bank !== null
+      ? ([
+          [t('bankName', locale), doc.bank.bankName],
+          [t('accountNumber', locale), doc.bank.accountNumber],
+          [t('branchIfsc', locale), [doc.bank.branch, doc.bank.ifsc].filter((v) => v != null && v !== '').join(' & ')],
+        ] as const)
+          .filter(([, v]) => v != null && v !== '')
+          .map(([label, v]) => `<div><span class="cap-inline">${escapeHtml(label)}</span> ${escapeHtml(v as string)}</div>`)
+      : (doc.bankDetails ?? []).map((l) => `<div>${escapeHtml(l)}</div>`);
+
   const bank =
-    doc.bankDetails === null || !shows('seller.bankDetails')
+    bankLines.length === 0 || !shows('seller.bankDetails')
       ? ''
-      : `<td><span class="cap">${escapeHtml(t('bank', locale))}</span>${doc.bankDetails.map((l) => `<div>${escapeHtml(l)}</div>`).join('')}</td>`;
+      : `<td><span class="cap">${escapeHtml(t('bank', locale))}</span>${bankLines.join('')}</td>`;
 
   // The pay-by-scan square sits beside the bank details, which is where a customer looks for a way
   // to pay. Issue #144 supplies the business's UPI id; issue #148's reserved box holds the space.
@@ -278,6 +294,52 @@ export const renderBoxed = (
     shows('footer.computerGenerated') ? t('computerGenerated', locale) : '',
     shows('footer.eoe') ? t('eoe', locale) : '',
   ].filter((n) => n !== '');
+
+  // Issue #156 — the order-and-delivery references, two to a row. Tally prints these labels even
+  // with nothing in them; we draw a row only when at least one of its cells has a value, because
+  // eight empty labels make a header that is mostly blank paper. Inside a row that is drawn, an
+  // empty cell keeps its label, as Tally does.
+  const references = doc.references;
+  const dated = (number: string | null | undefined, date: IsoDate | null | undefined): string =>
+    [number, date == null ? null : formatDate(date)].filter((v): v is string => v != null && v !== '').join(', ');
+
+  const referenceRow = (
+    fieldId: string,
+    left: readonly [string, string],
+    right: readonly [string, string],
+  ): string =>
+    !shows(fieldId) || (left[1] === '' && right[1] === '')
+      ? ''
+      : `<tr>${cell(left[0], escapeHtml(left[1]))}${cell(right[0], escapeHtml(right[1]))}</tr>`;
+
+  const referenceRows =
+    references === null
+      ? ''
+      : [
+          referenceRow(
+            'document.deliveryNote',
+            [t('deliveryNote', locale), references.deliveryNoteNumber ?? ''],
+            [
+              t('deliveryNoteDate', locale),
+              references.deliveryNoteDate == null ? '' : formatDate(references.deliveryNoteDate),
+            ],
+          ),
+          referenceRow(
+            'document.dispatchDoc',
+            [t('dispatchDoc', locale), references.dispatchDocNumber ?? ''],
+            [t('termsOfDelivery', locale), shows('document.termsOfDelivery') ? references.termsOfDelivery ?? '' : ''],
+          ),
+          referenceRow(
+            'document.references',
+            [t('referenceNo', locale), dated(references.referenceNumber, references.referenceDate)],
+            [t('otherReferences', locale), references.otherReferences ?? ''],
+          ),
+          referenceRow(
+            'document.paymentTerms',
+            [t('paymentTerms', locale), references.paymentTerms ?? ''],
+            ['', ''],
+          ),
+        ].join('');
 
   // The government block belongs at the top of the page, which is where a registered e-invoice
   // carries it and where anyone checking the bill looks first. Putting it here also means the QR
@@ -350,6 +412,7 @@ export const renderBoxed = (
                   ${cell(t('destination', locale), shows('transport.destination') ? escapeHtml(transport.destination ?? '') : '', 2)}
                 </tr>`
           }
+          ${referenceRows}
           ${irnRow}
         </table>
       </td>

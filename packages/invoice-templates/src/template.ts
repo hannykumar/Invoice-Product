@@ -141,6 +141,8 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     optionalFields: [
       'seller.logo', 'seller.phone', 'seller.email', 'seller.bankDetails', 'seller.pan',
       'document.dueDate', 'document.poReference',
+      'document.deliveryNote', 'document.dispatchDoc', 'document.references',
+      'document.termsOfDelivery', 'document.paymentTerms',
       'line.batch', 'line.packages', 'line.discount', 'totals.outstanding', 'totals.amountPaid',
       'footer.terms', 'footer.declaration', 'footer.signature', 'footer.computerGenerated', 'footer.eoe',
       'transport.vehicleNumber', 'transport.transporter', 'transport.eWayBillNumber',
@@ -193,7 +195,7 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     formats: ['A4', 'MOBILE'],
     palette: { accent: '#2f5d50', text: '#111111', muted: '#4d4d4d', border: '#a8bdb6' },
     typography: { bodyStack: DEVANAGARI_SAFE, headingStack: DEVANAGARI_SAFE, baseSizePt: 10 },
-    optionalFields: ['seller.logo', 'seller.email', 'seller.bankDetails', 'seller.pan', 'document.dueDate', 'line.note', 'footer.terms', 'footer.signature', 'footer.computerGenerated'],
+    optionalFields: ['seller.logo', 'seller.email', 'seller.bankDetails', 'seller.pan', 'document.dueDate', 'document.references', 'document.paymentTerms', 'line.note', 'footer.terms', 'footer.signature', 'footer.computerGenerated'],
     lineColumns: ['line.note'],
     logo: { show: true, maxHeightPt: 48 },
     footerNote: null,
@@ -210,6 +212,7 @@ export const SHIPPED_TEMPLATES: readonly TemplateDefinition[] = [
     typography: { bodyStack: DEVANAGARI_SAFE, headingStack: DEVANAGARI_SAFE, baseSizePt: 9 },
     optionalFields: [
       'seller.logo', 'seller.phone', 'seller.pan', 'document.poReference', 'line.note', 'line.packages',
+      'document.deliveryNote', 'document.dispatchDoc', 'document.references', 'document.termsOfDelivery',
       'transport.vehicleNumber', 'transport.transporter', 'transport.eWayBillNumber',
       'transport.lrNumber', 'transport.document', 'transport.destination',
       'footer.signature', 'footer.computerGenerated', 'footer.eoe',

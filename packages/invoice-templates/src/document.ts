@@ -99,6 +99,38 @@ export interface RenderableTransport {
   readonly destination?: string | null;
 }
 
+/**
+ * Issue #156 — the order-and-delivery references a buyer quotes back when it queries a bill.
+ *
+ * Every one of them is a reference to another piece of paper: the delivery note the goods moved on,
+ * the transporter's docket, the buyer's own file number. None is required by Rule 46; all of them
+ * are on the Tally sample, and a buyer's accounts department matches on them.
+ */
+export interface RenderableReferences {
+  readonly deliveryNoteNumber?: string | null;
+  readonly deliveryNoteDate?: IsoDate | null;
+  readonly dispatchDocNumber?: string | null;
+  readonly referenceNumber?: string | null;
+  readonly referenceDate?: IsoDate | null;
+  readonly otherReferences?: string | null;
+  readonly termsOfDelivery?: string | null;
+  /** How and when the buyer pays: "Credit", "30 days", "Against delivery". */
+  readonly paymentTerms?: string | null;
+}
+
+/**
+ * Issue #156 — bank details as named fields rather than free text.
+ *
+ * Labelling each part is what makes an account number safe to copy: a buyer's clerk reading
+ * "A/c No." types an account number, and reading a run-on line types whatever looks longest.
+ */
+export interface RenderableBank {
+  readonly bankName?: string | null;
+  readonly accountNumber?: string | null;
+  readonly branch?: string | null;
+  readonly ifsc?: string | null;
+}
+
 export interface RenderableEInvoice {
   readonly irn: string;
   /** Produced by issue #26. This module never generates one; it prints what it is given. */
@@ -153,7 +185,13 @@ export interface InvoiceDocument {
   /** Present when any rate on the bill came from the business rather than a checked notification. */
   readonly declaredRateNotice: string | null;
   readonly logoDataUri: string | null;
+  /**
+   * Free-text bank lines, kept so a business that entered them this way loses nothing. When `bank`
+   * is present it is used instead, because named fields read better and copy more safely.
+   */
   readonly bankDetails: readonly string[] | null;
+  readonly bank: RenderableBank | null;
+  readonly references: RenderableReferences | null;
   readonly terms: string | null;
   /**
    * The declaration the business makes about the bill, printed in its own box on the boxed design.

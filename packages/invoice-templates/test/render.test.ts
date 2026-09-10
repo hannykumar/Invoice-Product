@@ -88,6 +88,8 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   declaredRateNotice: null,
   logoDataUri: null,
   bankDetails: null,
+  bank: null,
+  references: null,
   terms: null,
   poReference: null,
   ...overrides,

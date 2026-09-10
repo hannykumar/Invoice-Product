@@ -9,7 +9,14 @@ import { formatQuantity, isoDate, subtract, zero, type IsoDate, type Money } fro
 import type { SalesInvoice } from '@invoice/sales';
 import type { ComputedTaxLine } from '@invoice/gst-calc';
 import { amountInWords } from './words.ts';
-import type { DocumentTitle, InvoiceDocument, RenderableParty, RenderableTransport } from './document.ts';
+import type {
+  DocumentTitle,
+  InvoiceDocument,
+  RenderableBank,
+  RenderableParty,
+  RenderableReferences,
+  RenderableTransport,
+} from './document.ts';
 
 export interface PrintingContext {
   readonly title: DocumentTitle;
@@ -22,6 +29,8 @@ export interface PrintingContext {
   readonly eInvoice?: { irn: string; qrSvg: string | null } | null;
   readonly logoDataUri?: string | null;
   readonly bankDetails?: readonly string[] | null;
+  readonly bank?: RenderableBank | null;
+  readonly references?: RenderableReferences | null;
   readonly terms?: string | null;
   /** The business's own declaration. Never defaulted here; see `InvoiceDocument.declaration`. */
   readonly declaration?: string | null;
@@ -101,6 +110,8 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     declaredRateNotice: context.declaredRateNotice ?? null,
     logoDataUri: context.logoDataUri ?? null,
     bankDetails: context.bankDetails ?? null,
+    bank: context.bank ?? null,
+    references: context.references ?? null,
     terms: context.terms ?? null,
     declaration: context.declaration ?? null,
     signatureDataUri: context.signatureDataUri ?? null,
