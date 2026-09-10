@@ -21,7 +21,7 @@ import type {
   TemplateSnapshot,
 } from './document.ts';
 import type { PageFormat } from './template.ts';
-import { renderReservedSlot, reservedSlotStyles } from './reserved.ts';
+import { printsReservedSlots, renderReservedSlot, reservedSlotStyles } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
 import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
 import { copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
@@ -223,6 +223,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed .sign-image { max-height: 16mm; max-width: 48mm; }
     .boxed table.notations td { text-align: center; color: ${palette.muted}; }
     .boxed .sign-line { font-weight: 700; }
+    .boxed .sign-digital { margin-top: 2mm; color: ${palette.muted}; text-align: left; }
     .boxed table.head td.party-cell { width: 50%; }
     .boxed table.head.with-qr td.party-cell { width: 34%; }
     .boxed table.head.with-qr td.meta-cell { width: 48%; }
@@ -394,7 +395,11 @@ export const renderInvoice = (
   const footerBits = [
     doc.terms !== null && shows('footer.terms') ? `<div>${escapeHtml(doc.terms)}</div>` : '',
     snapshot.footerNote === null ? '' : `<div>${escapeHtml(snapshot.footerNote)}</div>`,
-    shows('footer.signature') ? `<div style="margin-top:8mm">${escapeHtml(doc.seller.name)}</div>` : '',
+    // Required by Rule 46, so it is printed whatever the design says (#158) — except on till roll,
+    // where a counter slip is not the copy anyone signs and there is no room for a rule to sign on.
+    printsReservedSlots(format)
+      ? `<div style="margin-top:8mm">${escapeHtml(t('forSeller', locale))} ${escapeHtml(doc.seller.name)}</div><div><strong>${escapeHtml(t('authorisedSignatory', locale))}</strong></div>`
+      : '',
   ].join('');
 
   const body = `

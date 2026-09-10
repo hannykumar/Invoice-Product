@@ -235,19 +235,31 @@ export const renderBoxed = (
   const transport = doc.transport;
   const showTransport = transport !== null && shows('transport.vehicleNumber');
 
-  // Issue #138 — a real signature image where the business has uploaded one, and issue #148's
-  // reserved box at the same size until it does, so the footer does not move on the day it arrives.
-  const signature = !shows('footer.signature')
-    ? ''
-    : `<td class="sign-cell">
-        <span class="cap">${escapeHtml(t('forSeller', locale))} ${escapeHtml(doc.seller.name)}</span>
-        <div class="sign-space">${
-          doc.signatureDataUri === null
-            ? reserved('signature')
-            : `<img class="sign-image" src="${escapeHtml(doc.signatureDataUri)}" alt="">`
-        }</div>
-        <div class="sign-line">${escapeHtml(t('authorisedSignatory', locale))}</div>
-      </td>`;
+  /**
+   * Issue #158 — the signature is part of the compliance section, not something a design chooses.
+   *
+   * CGST Rule 46 lists a signature or digital signature among the mandatory particulars of a tax
+   * invoice, so this is assembled from the document and there is no field with which to remove it.
+   *
+   * The one exemption is real: an invoice registered with the government carries an IRN and is
+   * digitally signed, and needs no handwritten one. The page says so rather than leaving a rule
+   * nobody will sign. Until a business uploads its signature image, issue #148's reserved box holds
+   * the space at the size the image will take (#138).
+   */
+  const signedByGovernment = doc.eInvoice !== null && doc.eInvoice.irn !== '';
+  const signature = `<td class="sign-cell">
+      <span class="cap">${escapeHtml(t('forSeller', locale))} ${escapeHtml(doc.seller.name)}</span>
+      ${
+        signedByGovernment
+          ? `<div class="sign-digital">${escapeHtml(t('digitallySigned', locale))}</div>`
+          : `<div class="sign-space">${
+              doc.signatureDataUri === null
+                ? reserved('signature')
+                : `<img class="sign-image" src="${escapeHtml(doc.signatureDataUri)}" alt="">`
+            }</div>
+            <div class="sign-line">${escapeHtml(t('authorisedSignatory', locale))}</div>`
+      }
+    </td>`;
 
   // No declaration is invented. The box exists only once the business has written one.
   const declaration =
@@ -299,23 +311,24 @@ export const renderBoxed = (
   // with nothing in them; we draw a row only when at least one of its cells has a value, because
   // eight empty labels make a header that is mostly blank paper. Inside a row that is drawn, an
   // empty cell keeps its label, as Tally does.
-  const references = doc.references;
+  const references = doc.references ?? {};
   const dated = (number: string | null | undefined, date: IsoDate | null | undefined): string =>
     [number, date == null ? null : formatDate(date)].filter((v): v is string => v != null && v !== '').join(', ');
 
+  // The label prints whether or not there is anything in it, which is what Tally does: Blessing
+  // Export's own bill carries an empty Delivery Note and an empty Dispatch Doc No. A buyer reading
+  // a familiar form finds the same box in the same place on every bill, and an empty one tells them
+  // the seller had nothing to put there rather than leaving them to wonder where it went.
   const referenceRow = (
     fieldId: string,
     left: readonly [string, string],
     right: readonly [string, string],
   ): string =>
-    !shows(fieldId) || (left[1] === '' && right[1] === '')
+    !shows(fieldId)
       ? ''
       : `<tr>${cell(left[0], escapeHtml(left[1]))}${cell(right[0], escapeHtml(right[1]))}</tr>`;
 
-  const referenceRows =
-    references === null
-      ? ''
-      : [
+  const referenceRows = [
           referenceRow(
             'document.deliveryNote',
             [t('deliveryNote', locale), references.deliveryNoteNumber ?? ''],
@@ -339,7 +352,7 @@ export const renderBoxed = (
             [t('paymentTerms', locale), references.paymentTerms ?? ''],
             ['', ''],
           ),
-        ].join('');
+  ].join('');
 
   // The government block belongs at the top of the page, which is where a registered e-invoice
   // carries it and where anyone checking the bill looks first. Putting it here also means the QR
