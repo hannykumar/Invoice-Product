@@ -107,14 +107,16 @@ Ours matches, wording included (#137).
   state it.
 - **The ship-to box prints on every bill.** The rule requires it only where delivery differs from
   the place of supply; both samples print it always, repeated in full, and so do we (#134).
-- **An empty row is not printed.** Tally prints labelled cells with nothing in them — Blessing
-  Export's bill carries an empty "Delivery Note", "Reference No. & Date" and "Dispatch Doc No." A
-  row here appears only when at least one of its cells has a value, because eight empty labels make
-  a header that is mostly blank paper. Within a row that does appear, an empty cell keeps its label,
-  as Tally does.
+- **Empty labels print, as Tally prints them.** Blessing Export's bill carries an empty "Delivery
+  Note", "Reference No. & Date" and "Dispatch Doc No." We do the same: a buyer reading a familiar
+  form finds the same box in the same place on every bill, and an empty one says the seller had
+  nothing to put there rather than leaving them to wonder where it went. A design can still leave a
+  field out altogether; what it cannot do is show the box only sometimes.
 
-**Known compliance gap**
+**Signature (#158, done)**
 
-Rule 46 requires a signature or digital signature on a printed invoice, but `footer.signature` is an
-optional template field, so a design can switch it off and produce a bill that is not valid.
-`bakery-warm` and `counter-thermal` do not carry it. Filed as #158.
+Rule 46 requires a signature or digital signature, so it is part of the compliance section and no
+design can drop it — `validateTemplate` now refuses a design that claims `footer.signature` as
+optional. Two exemptions are handled rather than ignored: a registered e-invoice carrying an IRN is
+digitally signed by the government and says so instead of printing a rule nobody will sign, and
+58 mm till roll prints none, because a counter slip is not the copy anyone signs.

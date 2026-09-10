@@ -55,6 +55,10 @@ export const MANDATORY_FIELDS: readonly MandatoryField[] = [
   field('totals.roundOff', 'TOTALS', 'Rounded', 'Round kiya', 'The few paise added or removed.', true),
   field('totals.invoiceValue', 'TOTALS', 'Total', 'Kul', 'What the customer must pay.'),
   field('totals.amountInWords', 'TOTALS', 'Amount in words', 'Rakam shabdon mein', 'Guards against a misread figure.'),
+  // Issue #158. CGST Rule 46 lists a signature or digital signature among the mandatory particulars,
+  // so it belongs here rather than among the things a design may drop. An e-invoice carrying an IRN
+  // is signed by the government instead, which the renderer states on the page.
+  field('footer.signature', 'DOCUMENT', 'Signature', 'Hastakshar', 'Rule 46 requires the supplier or their authorised representative to sign the bill.'),
 ];
 
 export const MANDATORY_FIELD_IDS: ReadonlySet<string> = new Set(MANDATORY_FIELDS.map((f) => f.id));
@@ -83,7 +87,6 @@ export const OPTIONAL_FIELDS: readonly string[] = [
   'totals.outstanding',
   'footer.terms',
   'footer.declaration',
-  'footer.signature',
   'footer.eoe',
   'footer.computerGenerated',
   'footer.thankYou',

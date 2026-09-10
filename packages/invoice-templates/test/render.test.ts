@@ -117,7 +117,7 @@ const wholesale: TemplateDefinition = {
   },
   optionalFields: [
     'seller.logo', 'seller.phone', 'seller.bankDetails', 'document.dueDate', 'document.poReference',
-    'line.batch', 'line.discount', 'totals.outstanding', 'footer.terms', 'footer.signature',
+    'line.batch', 'line.discount', 'totals.outstanding', 'footer.terms',
     'transport.vehicleNumber', 'transport.transporter', 'transport.eWayBillNumber', 'qr.eInvoice',
   ],
   lineColumns: ['line.batch', 'line.discount'],

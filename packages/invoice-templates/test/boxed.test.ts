@@ -10,7 +10,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isoDate, rupees, toDecimalString, type Money } from '@invoice/kernel';
+import { DomainError, isoDate, rupees, toDecimalString, type Money } from '@invoice/kernel';
 import { MANDATORY_FIELDS } from '../src/mandatory.ts';
 import { SHIPPED_TEMPLATES, recommendTemplates, templateById, validateTemplate, type PageFormat, type TemplateDefinition } from '../src/template.ts';
 import { captureSnapshot } from '../src/snapshot.ts';
@@ -337,6 +337,8 @@ test('#138 — none of them reach the till roll, where there is no room', () => 
   for (const absent of ['PAN', 'Kind of Pkgs', '80 Bags', 'SRL/2026/44120', 'GC-88213', 'Ghazipur Cold Store', 'Authorised Signatory']) {
     assert.ok(!html.includes(absent), `${absent} has no place on 58mm paper`);
   }
+  // The signature is required by Rule 46 and still does not go here: a counter slip is not the copy
+  // anyone signs, and there is no room for a rule to sign on. Recorded so it is a decision, not luck.
   // What a customer at a counter does need still prints.
   assert.ok(html.includes('ABC Traders') && html.includes('Total'));
 });
@@ -631,18 +633,25 @@ test('#156 — the order and delivery references print when the bill carries the
   }
 });
 
-test('#156 — a bill without them prints no empty labels', () => {
+test('#156 — the labels print whether or not there is anything in them, as Tally does', () => {
+  // Decided on 2026-09-10: match Tally. Blessing Export's own bill carries an empty Delivery Note
+  // and an empty Dispatch Doc No. A buyer reading a familiar form finds the same box in the same
+  // place on every bill, and an empty one says the seller had nothing to put there rather than
+  // leaving them to wonder where it went.
   const bare = renderIndia(doc());
   for (const label of ['Delivery Note', 'Dispatch Doc No.', 'Reference No.', 'Other References', 'Terms of Delivery', 'Mode / Terms of Payment']) {
-    assert.ok(!bare.includes(label), `${label} must not stand on a bill that has no such reference`);
+    assert.ok(bare.includes(label), `${label} is part of the form, so its box is always there`);
   }
 
-  // A row appears as soon as one of its two cells has something, and the empty cell keeps its
-  // label — which is what Tally does inside a row it draws.
-  const half = renderIndia(doc({ references: { deliveryNoteNumber: 'DN/1' } }));
-  assert.ok(half.includes('Delivery Note'));
-  assert.ok(half.includes('Delivery Note Date'), 'the other half of a drawn row keeps its label');
-  assert.ok(!half.includes('Dispatch Doc No.'), 'but a row with nothing in it is not drawn at all');
+  // A design that does not carry the field at all still drops it, so this is a design choice and
+  // not a free-for-all.
+  const without = renderInvoice(
+    withReferences(),
+    { ...snapshotOf(india), optionalFields: india.optionalFields.filter((f) => f !== 'document.deliveryNote') },
+    { format: 'A4', locale: 'en-IN' },
+  );
+  assert.ok(!without.includes('Delivery Note'));
+  assert.ok(without.includes('Dispatch Doc No.'), 'and the rows it does carry are unaffected');
 });
 
 test('#156 — bank details are named fields, and free text still works', () => {
@@ -669,4 +678,49 @@ test('#156 — none of it reaches the till roll', () => {
   for (const absent of ['Delivery Note', 'Dispatch Doc No.', 'Terms of Delivery', 'Mode / Terms of Payment']) {
     assert.ok(!html.includes(absent), `${absent} has no place on 58mm paper`);
   }
+});
+
+
+/**
+ * Issue #158 — the signature is required by law, so no design can drop it.
+ *
+ * CGST Rule 46 lists a signature or digital signature among the mandatory particulars of a tax
+ * invoice. It had been an optional template field, and two shipped designs did not carry it, so
+ * those designs printed bills that were missing a required particular.
+ */
+test('#158 — every design signs the bill, even one that shows nothing optional', () => {
+  const bare: TemplateDefinition = { ...india, optionalFields: [], lineColumns: [] };
+  const html = renderInvoice(doc(), snapshotOf(bare), { format: 'A4', locale: 'en-IN' });
+  assert.ok(html.includes('Authorised Signatory'), 'a design has no field with which to remove it');
+  assert.ok(html.includes('for Sharma Fruit Traders'));
+
+  // Every shipped design, on every paper that has room for it.
+  for (const template of SHIPPED_TEMPLATES.filter((t) => t.formats.includes('A4'))) {
+    const printed = renderInvoice(doc(), snapshotOf(template), { format: 'A4', locale: 'en-IN' });
+    assert.ok(printed.includes('Authorised Signatory'), `${template.id} must sign the bill`);
+  }
+});
+
+test('#158 — a design may not claim the signature as one of its optional fields', () => {
+  assert.throws(
+    () => validateTemplate({ ...india, optionalFields: [...india.optionalFields, 'footer.signature'] }),
+    (e: unknown) => e instanceof DomainError && e.code === 'TEMPLATE_TOUCHES_MANDATORY_FIELD',
+  );
+  for (const template of SHIPPED_TEMPLATES) {
+    assert.ok(!template.optionalFields.includes('footer.signature'), `${template.id} must not claim it`);
+  }
+});
+
+test('#158 — a registered e-invoice says the government signed it, instead of an unsigned rule', () => {
+  // The exemption is real: an invoice with an IRN is digitally signed and needs no handwritten one.
+  // Saying so beats printing a rule nobody is going to sign.
+  const registered = renderIndia(doc({ eInvoice: { irn: 'a'.repeat(64), qrSvg: '<svg role="img"></svg>' } }));
+  assert.ok(registered.includes('Digitally signed by the government'));
+  assert.ok(!registered.includes('Authorised Signatory'), 'and no empty rule under it');
+  assert.ok(!registered.includes('data-reserved="signature"'), 'nor a box waiting for an image');
+
+  // Without an IRN it is the business that signs, and the box waits for the image (#138, #148).
+  const unregistered = renderIndia(doc());
+  assert.ok(unregistered.includes('Authorised Signatory'));
+  assert.ok(unregistered.includes('data-reserved="signature"'));
 });
