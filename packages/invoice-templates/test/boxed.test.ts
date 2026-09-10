@@ -94,6 +94,8 @@ const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   declaredRateNotice: null,
   logoDataUri: null,
   bankDetails: null,
+  bank: null,
+  references: null,
   terms: null,
   declaration: null,
   signatureDataUri: null,
@@ -590,4 +592,81 @@ test('#134 — till roll gets the delivery address as one line, not a second box
   // Checked on the markup, not the stylesheet: the boxed rules are in every page's CSS, and it is
   // the boxes themselves that must not be drawn here.
   assert.ok(!html.includes('<td class="party-cell"'), 'and none of the boxed grid comes with it');
+});
+
+
+/**
+ * Issue #156 — the order-and-delivery references, and bank details as named fields.
+ *
+ * All of these are on the Tally sample in docs/reference/real-bills and none is required by Rule
+ * 46. They are carried because a buyer's accounts department matches on them when it queries a bill.
+ */
+const withReferences = (): InvoiceDocument =>
+  doc({
+    references: {
+      deliveryNoteNumber: 'DN/2026/0912',
+      deliveryNoteDate: isoDate('2026-08-19'),
+      dispatchDocNumber: 'DSP-4471',
+      referenceNumber: 'ABC/REF/2026/77',
+      referenceDate: isoDate('2026-08-18'),
+      otherReferences: 'Weekly supply contract',
+      termsOfDelivery: 'Delivered at the buyer godown',
+      paymentTerms: 'Credit, 30 days',
+    },
+  });
+
+test('#156 — the order and delivery references print when the bill carries them', () => {
+  const html = renderIndia(withReferences());
+  for (const [label, value] of [
+    ['Delivery Note', 'DN/2026/0912'],
+    ['Delivery Note Date', '19 August 2026'],
+    ['Dispatch Doc No.', 'DSP-4471'],
+    ['Reference No. &amp; Date', 'ABC/REF/2026/77, 18 August 2026'],
+    ['Other References', 'Weekly supply contract'],
+    ['Terms of Delivery', 'Delivered at the buyer godown'],
+    ['Mode / Terms of Payment', 'Credit, 30 days'],
+  ] as const) {
+    assert.ok(html.includes(label), `${label} must be labelled`);
+    assert.ok(html.includes(value), `${label} must show ${value}`);
+  }
+});
+
+test('#156 — a bill without them prints no empty labels', () => {
+  const bare = renderIndia(doc());
+  for (const label of ['Delivery Note', 'Dispatch Doc No.', 'Reference No.', 'Other References', 'Terms of Delivery', 'Mode / Terms of Payment']) {
+    assert.ok(!bare.includes(label), `${label} must not stand on a bill that has no such reference`);
+  }
+
+  // A row appears as soon as one of its two cells has something, and the empty cell keeps its
+  // label — which is what Tally does inside a row it draws.
+  const half = renderIndia(doc({ references: { deliveryNoteNumber: 'DN/1' } }));
+  assert.ok(half.includes('Delivery Note'));
+  assert.ok(half.includes('Delivery Note Date'), 'the other half of a drawn row keeps its label');
+  assert.ok(!half.includes('Dispatch Doc No.'), 'but a row with nothing in it is not drawn at all');
+});
+
+test('#156 — bank details are named fields, and free text still works', () => {
+  const named = renderIndia(doc({
+    bank: { bankName: 'HDFC Bank Ltd.', accountNumber: '50200012345678', branch: 'Karol Bagh', ifsc: 'HDFC0000123' },
+  }));
+  // Labelling each part is what makes an account number safe to copy.
+  assert.ok(named.includes('Bank Name') && named.includes('HDFC Bank Ltd.'));
+  assert.ok(named.includes('A/c No.') && named.includes('50200012345678'));
+  assert.ok(named.includes('Branch &amp; IFS Code') && named.includes('Karol Bagh &amp; HDFC0000123'));
+
+  // A business that only ever typed free lines loses nothing.
+  const free = renderIndia(doc({ bankDetails: ['State Bank, Sadar Bazar', 'A/c 3311 2255 8899'] }));
+  assert.ok(free.includes('State Bank, Sadar Bazar'));
+  assert.ok(free.includes('A/c 3311 2255 8899'));
+  assert.ok(!free.includes('Bank Name'), 'and gets no labels it did not fill in');
+
+  const neither = renderIndia(doc());
+  assert.ok(!neither.includes('Bank Details'), 'a bill with no bank details prints no bank box');
+});
+
+test('#156 — none of it reaches the till roll', () => {
+  const html = renderIndia(withReferences(), 'THERMAL_58MM');
+  for (const absent of ['Delivery Note', 'Dispatch Doc No.', 'Terms of Delivery', 'Mode / Terms of Payment']) {
+    assert.ok(!html.includes(absent), `${absent} has no place on 58mm paper`);
+  }
 });

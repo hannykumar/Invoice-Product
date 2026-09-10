@@ -43,12 +43,13 @@ Done 2026-09-10 by reading both PDFs and rendering our own `india-standard` desi
 | "E. & O.E" | no | yes | on the amount-in-words line |
 | "This is a Computer Generated Invoice" | no | yes | |
 
-## On a real bill and **missing from ours**
+## On a real bill and once missing from ours
 
-Each is filed as an issue rather than left in this document.
+Nothing outstanding. The seven fields #156 listed all print now:
 
-| Missing | Seen on | Issue |
+| Field | Seen on | Done in |
 | --- | --- | --- |
+| Total quantity on the item table's total row | KK and BE | reference audit |
 | Delivery Note number and date | BE | #156 |
 | Dispatch Doc No. | BE | #156 |
 | Reference No. & Date, Other References | BE | #156 |
@@ -66,3 +67,54 @@ Each is filed as an issue rather than left in this document.
   kept by the business. GST asks for the markings, and Tally prints them, so we do (#137).
 - **Hindi, thermal paper, honest rate notices.** Neither bill has these and neither needs them; they
   are ours to add, after the convention above is matched.
+
+## When the two bills disagree: required, conventional, or one company's choice
+
+Two samples are not a survey, so a field on one bill and not the other was checked against the law
+before deciding. Method agreed 2026-09-10: default to the Tally output, search for what the rule
+actually says, then use judgement and record the answer here.
+
+**Required by CGST Rule 46** — a bill without these is not a valid tax invoice:
+
+supplier name, address and GSTIN; a consecutive number of at most 16 characters; date of issue;
+recipient name, address and GSTIN; HSN/SAC; description; quantity with its unit; taxable value after
+discount; rate and amount of each tax; total value; **place of supply, for an inter-state supply**;
+**address of delivery, where it differs from the place of supply**; whether reverse charge applies;
+and a signature or digital signature. An e-invoice additionally carries the IRN and QR under Rule
+48(4).
+
+**Required by CGST Rule 48** — the copy markings, in these exact words:
+
+- Goods, in triplicate: `ORIGINAL FOR RECIPIENT`, `DUPLICATE FOR TRANSPORTER`, `TRIPLICATE FOR SUPPLIER`
+- Services, in duplicate: `ORIGINAL FOR RECIPIENT`, `DUPLICATE FOR SUPPLIER`
+
+Ours matches, wording included (#137).
+
+**Conventional, not required** — Tally prints them, KK Polyplast does not, and no rule asks for them:
+
+| Field | What it is | Ours |
+| --- | --- | --- |
+| E. & O.E. | Errors and omissions excepted: the seller may correct a mistake on a bill already sent. Protects the seller, costs the buyer nothing. | on by default |
+| Declaration | "We declare that this invoice shows the actual price..." A statement the business makes. | printed only when the business writes one |
+| Company's PAN | A registration requirement, not an invoice field. Useful because the buyer's accounts department needs it to deduct tax at source. | printed when known |
+| Bank details | Furnishing them to the GST portal is a registration requirement; printing them on the bill is not. It is simply how a business gets paid. | printed when known |
+| "This is a Computer Generated Invoice" | A fact about the document. | on by default |
+
+**Judgement calls we have made, and why**
+
+- **Place of supply prints on every bill**, not only inter-state ones. The rule requires it only
+  across states, but KK Polyplast prints it on an intra-Delhi sale and it can never be wrong to
+  state it.
+- **The ship-to box prints on every bill.** The rule requires it only where delivery differs from
+  the place of supply; both samples print it always, repeated in full, and so do we (#134).
+- **An empty row is not printed.** Tally prints labelled cells with nothing in them — Blessing
+  Export's bill carries an empty "Delivery Note", "Reference No. & Date" and "Dispatch Doc No." A
+  row here appears only when at least one of its cells has a value, because eight empty labels make
+  a header that is mostly blank paper. Within a row that does appear, an empty cell keeps its label,
+  as Tally does.
+
+**Known compliance gap**
+
+Rule 46 requires a signature or digital signature on a printed invoice, but `footer.signature` is an
+optional template field, so a design can switch it off and produce a bill that is not valid. Filed
+separately.
