@@ -7,6 +7,7 @@ import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
+import { ChallanDesk } from './challan-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from './government-webhooks.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 
@@ -87,6 +88,16 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/einvoices/cancel') return json(200, await app.cancelEInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/einvoices/offline') return json(200, await app.eInvoiceOfflineJson(actor, body));
     // Issue #27 — do these goods need an e-way bill, and its life with the portal.
+    // Issue #141 — delivery challans: goods that move before the bill exists.
+    if (method === 'GET' && pathname === '/api/challans/reasons') return json(200, ChallanDesk.reasons());
+    if (method === 'GET' && pathname === '/api/challans') return json(200, await app.challans.list(actor));
+    if (method === 'GET' && pathname === '/api/challans/movable') return json(200, { challans: await app.challans.movable(actor) });
+    if (method === 'POST' && pathname === '/api/challans/preview') return json(200, await app.challans.preview(actor, body));
+    if (method === 'POST' && pathname === '/api/challans/issue') return json(200, await app.challans.issue(actor, body));
+    if (method === 'POST' && pathname === '/api/challans/print') return json(200, await app.challans.print(actor, body));
+    if (method === 'POST' && pathname === '/api/challans/eway') return json(200, await app.challans.attachEwayBill(actor, body));
+    if (method === 'POST' && pathname === '/api/challans/link-invoice') return json(200, await app.challans.linkInvoice(actor, body));
+    if (method === 'POST' && pathname === '/api/challans/cancel') return json(200, await app.challans.cancel(actor, body));
     if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
     if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
     if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));

@@ -119,9 +119,18 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/itc\/import/);
   assert.match(script, /\/api\/itc\/typed/);
   assert.match(script, /\/api\/itc\/decide/);
+  // Issue #141 — the delivery challan: checked, then issued, then printed, linked or cancelled from
+  // the one challan that is open, and offered on the e-way bill screen as the document on the lorry.
+  assert.match(html, /id="view-challan"[^>]+aria-labelledby=/);
+  assert.match(script, /\/api\/challans\/preview/);
+  assert.match(script, /\/api\/challans\/issue/);
+  assert.match(script, /\/api\/challans\/print/);
+  assert.match(script, /\/api\/challans\/link-invoice/);
+  assert.match(script, /\/api\/challans\/eway/);
+  assert.match(script, /\/api\/challans\/movable/);
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
-  // #34's "Ask", #30's GST returns and #31's purchase check make twenty-one between them.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 21);
+  // #34's "Ask", #30's GST returns, #31's purchase check and #141's challans make twenty-two.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 22);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

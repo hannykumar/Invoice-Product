@@ -7,7 +7,8 @@ import { invalid, isoDate, money, notFound, quantityFromString, sum, type Compan
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { InMemorySalesRepository, noComplianceHooks, permissiveInventory, SalesService } from '@invoice/sales';
+import { ChallanService, InMemoryChallanRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, SalesService } from '@invoice/sales';
+import { ChallanDesk } from './challan-application.ts';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import {
   TradeTermsService,
@@ -90,7 +91,7 @@ import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
 import type {
-  ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
+  ConsignmentDocument, ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
 } from '../../../packages/transport/src/types.ts';
 import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
 import { outstandingOf } from '../../../packages/transport/src/suitability-service.ts';
@@ -236,6 +237,8 @@ export class DemoApplication {
   private readonly agent: ActionAgentService;
   private readonly agentAudit: AuditLog;
   private readonly gstReturns: GstReturnService;
+  /** Issue #141 — delivery challans, for goods that move before the bill exists. */
+  readonly challans: ChallanDesk;
 
   private constructor(
     config: CompanySeed,
@@ -258,8 +261,10 @@ export class DemoApplication {
     agent: ActionAgentService,
     agentAudit: AuditLog,
     gstReturns: GstReturnService,
+    challans: ChallanDesk,
   ) {
     this.config = config;
+    this.challans = challans;
     this.shop = shop;
     this.sales = sales;
     this.salesRepository = salesRepository;
@@ -652,7 +657,17 @@ export class DemoApplication {
       clock: { now: () => new Date() },
     });
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns);
+    // Issue #141. Challans share the store, so a number is allocated in the same transaction that
+    // saves the challan; they read the same master data and calculator the invoice does, so a sale
+    // challan shows the tax its invoice will charge.
+    const challanRepository = new InMemoryChallanRepository();
+    shop.store.join(challanRepository);
+    const challans = new ChallanDesk(config, new ChallanService({
+      store: shop.store, calculator, masterData: masters, repository: challanRepository, invoices: salesRepository,
+      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, invoicePrefix: 'INV',
+    }));
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans);
     await app.seed();
     return app;
   }
@@ -2142,6 +2157,11 @@ export class DemoApplication {
    */
   private async movementFor(actor: ActorContext, invoiceId: string, input: Record<string, unknown>): Promise<Movement> {
     const companyId = this.companyOf(actor);
+    // Issue #141 — a delivery challan travels in place of an invoice (CGST Rule 55(3)). It brings
+    // its own reason for moving, so the form's reason is not asked for a second time.
+    const challan = await this.challans.forMovement(actor, invoiceId);
+    if (challan !== null) return this.movementOf(challan.document, challan.reason, input);
+
     const invoice = await this.salesRepository.findById(companyId, invoiceId);
     if (invoice === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
     if (invoice.state !== 'FINAL' || invoice.number === null) {
@@ -2150,6 +2170,29 @@ export class DemoApplication {
     const pricing = invoice.pricing;
     if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
 
+    const lines: ConsignmentLine[] = pricing.lines.map((line) => ({
+      description: line.itemName,
+      hsnCode: line.hsnOrSac ?? '',
+      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
+      unit: line.quantity.unit,
+      taxableValuePaise: line.taxableValue.minor,
+      cgstPaise: line.cgst.minor,
+      sgstPaise: line.sgst.minor,
+      igstPaise: line.igst.minor,
+      cessPaise: line.cess.minor,
+    }));
+    const document: ConsignmentDocument = {
+      documentId: invoice.id,
+      documentType: 'TAX_INVOICE',
+      documentNumber: invoice.number,
+      documentDate: invoice.documentDate,
+      lines,
+    };
+    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input);
+  }
+
+  /** One movement of goods: the document on the lorry, why it is moving, and what the form said. */
+  private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>): Movement {
     const consignor: MovementParty = {
       legalName: this.config.name,
       gstin: this.config.gstin,
@@ -2180,18 +2223,6 @@ export class DemoApplication {
       stateCode: shipToState,
     };
 
-    const lines: ConsignmentLine[] = pricing.lines.map((line) => ({
-      description: line.itemName,
-      hsnCode: line.hsnOrSac ?? '',
-      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
-      unit: line.quantity.unit,
-      taxableValuePaise: line.taxableValue.minor,
-      cgstPaise: line.cgst.minor,
-      sgstPaise: line.sgst.minor,
-      igstPaise: line.igst.minor,
-      cessPaise: line.cess.minor,
-    }));
-
     const distance = String(input.distanceKm ?? '').trim();
     const vehicleNumber = String(input.vehicle ?? '').trim();
     const withinSameCity = String(input.withinSameCity ?? '').trim();
@@ -2203,18 +2234,12 @@ export class DemoApplication {
     };
 
     return {
-      movementId: invoice.id,
-      reason: (String(input.reason ?? 'SUPPLY') as MovementReason),
+      movementId: document.documentId,
+      reason,
       consignor,
       billTo,
       ...(shipTo === undefined ? {} : { shipTo }),
-      documents: [{
-        documentId: invoice.id,
-        documentType: 'TAX_INVOICE',
-        documentNumber: invoice.number,
-        documentDate: invoice.documentDate,
-        lines,
-      }],
+      documents: [document],
       transportMode: 'ROAD',
       vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
       conveyance: 'OWN_VEHICLE',
@@ -2306,6 +2331,11 @@ export class DemoApplication {
   async generateEwayBill(actor: ActorContext, input: Record<string, unknown>) {
     const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
     const record = await this.shop.ewayBill.generate(actor, movement);
+    // Issue #141 — the number the portal gave goes straight onto the challan, so it prints there.
+    const number = record.acknowledgement?.ewayBillNumber;
+    if (movement.documents[0]?.documentType === 'DELIVERY_CHALLAN' && number !== undefined) {
+      await this.challans.recordPortalEwayBill(actor, movement.movementId, number, movement.vehicle?.registrationNumber ?? null);
+    }
     return DemoApplication.ewayJson(record, this.shop.clock.now());
   }
 

@@ -24,7 +24,8 @@ import type { PageFormat } from './template.ts';
 import { printsReservedSlots, renderReservedSlot, reservedSlotStyles } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
 import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
-import { copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
+import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
+import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
 
 /** Re-exported because this module has been the public home of the escaper since issue #13. */
 export { escapeHtml };
@@ -195,6 +196,8 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed .cap-inline { color: ${palette.muted}; }
     .boxed .val { display: block; min-height: ${typography.baseSizePt + 2}pt; }
     .boxed .title-cell { text-align: center; position: relative; }
+    /* Issue #141 — a challan says under its title that it is not a tax invoice. */
+    .boxed .not-invoice { font-size: ${Math.max(6, typography.baseSizePt - 1)}pt; letter-spacing: .06em; margin-top: .6mm; }
     .boxed .copy-mark-inline {
       position: absolute; right: 1.4mm; top: 50%; transform: translateY(-50%);
       font-size: ${Math.max(6, typography.baseSizePt - 2)}pt; font-weight: 700; letter-spacing: .06em;
@@ -207,6 +210,11 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed .meta-cell { padding: 0; }
     /* The item table takes the height that is left, so the page ends at the bottom rule instead of
        stopping halfway down with white space under it, the way a real bill does. */
+    /* The airy layout's header, item table and totals share these class names, and its spacing — a
+       padded, rule-underlined header and gaps above the items and the totals — opened bands of blank
+       paper inside the frame. In the ruled grid every table sits flush against the next. */
+    .boxed table.head { padding: 0; margin: 0; border-bottom: 0; }
+    .boxed table.items, .boxed table.totals { margin-top: 0; }
     .boxed table.items { table-layout: fixed; }
     .boxed table.items td.sl { width: 7mm; }
     .boxed table.items tbody tr { break-inside: avoid; page-break-inside: avoid; }
@@ -271,7 +279,7 @@ export const renderInvoice = (
   const marking = options.copy === undefined ? null : copyMarking(doc, options.copy, locale);
   if (boxed) {
     return page(
-      doc,
+      `${t(doc.title, locale)} ${doc.number}`,
       snapshot,
       format,
       locale,
@@ -426,7 +434,7 @@ export const renderInvoice = (
   ${upi}
   <footer>${footerBits}</footer>`;
 
-  return page(doc, snapshot, format, locale, '', body, options.copy);
+  return page(`${t(doc.title, locale)} ${doc.number}`, snapshot, format, locale, '', body, options.copy);
 };
 
 /**
@@ -461,20 +469,62 @@ export const renderInvoiceCopies = (
   snapshot: TemplateSnapshot,
   options: Omit<RenderOptions, 'copy'>,
 ): string => {
-  const copies = copiesFor(doc);
-  const sheets = copies
-    .map((copy) => {
-      const html = renderInvoice(doc, snapshot, { ...options, copy });
-      // Take the body of each rendered copy; the head is shared by the document that wraps them.
+  return combineCopies(copiesFor(doc).map((copy) => renderInvoice(doc, snapshot, { ...options, copy })));
+};
+
+/**
+ * Several rendered copies as one document: the first copy's head, then every copy's sheet.
+ *
+ * Each copy is rendered whole and then taken apart, rather than assembled from pieces, so a copy in
+ * the combined file is byte for byte the copy that would have been printed on its own.
+ */
+const combineCopies = (rendered: readonly string[]): string => {
+  const sheets = rendered
+    .map((html) => {
       const body = html.slice(html.indexOf('<body'), html.lastIndexOf('</body>'));
       return body.slice(body.indexOf('>') + 1);
     })
     .join('');
-  const first = renderInvoice(doc, snapshot, { ...options, copy: copies[0] as InvoiceCopy });
+  const first = rendered[0] as string;
   const head = first.slice(0, first.indexOf('<body'));
   const bodyOpen = first.slice(first.indexOf('<body'), first.indexOf('>', first.indexOf('<body')) + 1);
   return `${head}${bodyOpen}${sheets}</body>\n</html>`;
 };
+
+/**
+ * Issue #141 — one delivery challan, on the same engine and stylesheet as the invoice.
+ *
+ * The boxed grid on A4 and the phone screen, whatever the template's layout: a challan has no page
+ * from before #140 to reprint as it was, so there is no reason to draw it any other way. On till
+ * roll it is a list, for the same reason an invoice is.
+ */
+export const renderChallan = (doc: ChallanDocument, snapshot: TemplateSnapshot, options: RenderOptions): string => {
+  const { locale, format } = options;
+  const marking = options.copy === undefined ? null : challanCopyMarking(options.copy, locale);
+  const heading = `${t('DELIVERY_CHALLAN', locale)} ${doc.number}`;
+  return PAGE[format].narrow
+    ? page(heading, snapshot, format, locale, '', renderChallanNarrow(doc, locale, marking), options.copy)
+    : page(heading, snapshot, format, locale, 'boxed', `<div class="sheet-inner">${renderChallanBoxed(doc, snapshot, format, locale, marking)}</div>`, options.copy);
+};
+
+/** The three marked copies of a challan as separate files, for sending to three different people. */
+export const renderChallanCopySet = (
+  doc: ChallanDocument,
+  snapshot: TemplateSnapshot,
+  options: Omit<RenderOptions, 'copy'>,
+): readonly { readonly copy: InvoiceCopy; readonly marking: string; readonly html: string }[] =>
+  CHALLAN_COPIES.map((copy) => ({
+    copy,
+    marking: challanCopyMarking(copy, options.locale),
+    html: renderChallan(doc, snapshot, { ...options, copy }),
+  }));
+
+/** The three marked copies of a challan in one document, so one press of Print produces the set. */
+export const renderChallanCopies = (
+  doc: ChallanDocument,
+  snapshot: TemplateSnapshot,
+  options: Omit<RenderOptions, 'copy'>,
+): string => combineCopies(CHALLAN_COPIES.map((copy) => renderChallan(doc, snapshot, { ...options, copy })));
 
 /**
  * The document shell both layouts share: one head, one stylesheet, one sheet.
@@ -484,7 +534,8 @@ export const renderInvoiceCopies = (
  * design version produced the page.
  */
 const page = (
-  doc: InvoiceDocument,
+  /** What the browser tab and a saved PDF are called, e.g. "Tax Invoice INV/KB/2026-27/00001". */
+  heading: string,
   snapshot: TemplateSnapshot,
   format: PageFormat,
   locale: Locale,
@@ -496,7 +547,7 @@ const page = (
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(`${t(doc.title, locale)} ${doc.number}`)}</title>
+<title>${escapeHtml(heading)}</title>
 <style>${styles(snapshot, format)}</style>
 </head>
 <body class="${escapeHtml(bodyClass)}">

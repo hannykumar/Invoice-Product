@@ -121,6 +121,20 @@ const T = {
   copyDuplicateTransporter: w('DUPLICATE FOR TRANSPORTER', 'Duplicate, transporter ke liye'),
   copyTriplicate: w('TRIPLICATE FOR SUPPLIER', 'Triplicate, aapke paas'),
   copyDuplicateSupplier: w('DUPLICATE FOR SUPPLIER', 'Duplicate, aapke paas'),
+  // Issue #141 — the delivery challan. Its copy markings are the words CGST Rule 55(2) prints, which
+  // differ from an invoice's: the goods go to a consignee, who may not be a buyer at all.
+  DELIVERY_CHALLAN: w('Delivery Challan', 'Delivery challan'),
+  notTaxInvoice: w('Not a tax invoice', 'Yeh tax invoice nahin hai'),
+  cancelledMark: w('CANCELLED', 'Radd kiya gaya'),
+  challanNo: w('Challan No.', 'Challan number'),
+  challanDate: w('Challan Date', 'Challan ki taarikh'),
+  consignee: w('Consignee', 'Maal paane wala'),
+  deliveryAddress: w('Delivery Address', 'Delivery ka pata'),
+  reasonForMovement: w('Reason for Movement', 'Maal kyon ja raha hai'),
+  provisional: w('provisional', 'andaaz se'),
+  invoiceRef: w('Invoice No. & Date', 'Invoice number aur taarikh'),
+  copyOriginalConsignee: w('ORIGINAL FOR CONSIGNEE', 'Original, maal paane wale ke liye'),
+  copyTriplicateConsigner: w('TRIPLICATE FOR CONSIGNER', 'Triplicate, aapke paas'),
 } as const;
 
 export type WordingKey = keyof typeof T;

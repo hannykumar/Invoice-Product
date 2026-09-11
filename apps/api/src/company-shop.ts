@@ -142,7 +142,7 @@ const SETUP_PERMISSIONS = [
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
   'itc.view', 'itc.import', 'itc.decide', 'itc.claim_at_risk',
-  'eway.view', 'eway.generate', 'eway.update', 'eway.cancel',
+  'eway.view', 'eway.generate', 'eway.update', 'eway.cancel', 'challan.issue', 'challan.cancel',
   'transport.vehicle.view', 'transport.vehicle.check', 'transport.vehicle.override', 'transport.vehicle.connect',
 ];
 

@@ -50,7 +50,7 @@ Nothing outstanding. The seven fields #156 listed all print now:
 | Field | Seen on | Done in |
 | --- | --- | --- |
 | Total quantity on the item table's total row | KK and BE | reference audit |
-| Delivery Note number and date | BE | #156 |
+| Delivery Note number and date | BE | #156; since #141 filled from the delivery challan the invoice is linked to (`deliveryNoteFromChallans`) |
 | Dispatch Doc No. | BE | #156 |
 | Reference No. & Date, Other References | BE | #156 |
 | Terms of Delivery | BE | #156 |

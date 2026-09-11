@@ -209,8 +209,9 @@ it. The transporter's day-to-day act — putting a lorry on — is separate from
 
 Migration `20260829T230150061Z_transport_f5901402df63_eway_bill_lifecycle`: `eway_bills`,
 `eway_consolidated_trips`, `eway_bill_policies`, `eway_state_thresholds`. The sales invoice (#9)
-and the delivery challan (#18) are not created here; only the movement id and document number are
-stored. Constraints enforce what the module promises: nothing claims a portal state without a
+and the delivery challan (#141, `packages/sales`) are not created here; only the movement id and
+document number are stored. A challan becomes the movement's document through
+`consignmentFromChallan`, as document type `CHL`. Constraints enforce what the module promises: nothing claims a portal state without a
 number, and nothing is `ACTIVE` without a validity.
 
 ## Provider

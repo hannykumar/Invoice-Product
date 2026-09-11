@@ -164,6 +164,19 @@ const copy = {
     overrideWhy: "Why is it alright to send it?", overrideButton: "Send it anyway, on my authority",
     overrideSafety: "This adds your name, the time and your reason beside the findings. It changes no weight, no capacity and no government record.",
     heldBack: "Held back at the dispatch desk", heldBackHelp: "Movements a vehicle problem is stopping, and what is still to be answered.",
+    // Issue #141 — delivery challans.
+    navChallan: "Delivery challan",
+    challanTitle: "Send goods on a delivery challan", challanHelp: "A delivery challan is the paper that travels with goods when no tax invoice goes with them — job work, goods sent on approval, or a sale that is billed after delivery. GST allows it only for the reasons listed here, and says what it must show.",
+    challanWhy: "Why are the goods moving?", challanDocDate: "Challan date", challanItem: "Goods", challanItemSoap: "Herbal Bath Soap 100g, counted in pieces", challanValuePerUnit: "Value of one unit",
+    challanConsigneeAddress: "Consignee's address", challanAddressHelp: "One line per row. It prints on the challan exactly as typed, because the goods travel with it.",
+    challanReasonNote: "Say why, in a few words", challanStateHelp: "Leave it on the consignee's own state unless the goods are delivered somewhere else.",
+    checkChallan: "Check this challan", challanSafety: "Checking saves nothing and uses no number. The number is given only when you issue it.",
+    issueChallan: "Issue the challan", challansIssued: "Challans issued", challansIssuedHelp: "Newest first. Open one to print it, add its e-way bill, link the invoice that followed, or cancel it.",
+    noChallans: "No challan has been issued yet.", openChallan: "Open", printChallan: "Print all three copies",
+    linkInvoiceTitle: "The tax invoice raised after delivery", linkInvoiceHelp: "Only for goods that were sold. Pick the invoice; we check it is for the same customer, dated after the challan, and bills the same goods.", linkInvoice: "Link this invoice",
+    challanEwayTitle: "E-way bill number", challanEwayHelp: "Type it in if it was raised somewhere else. One raised on the e-way bill screen lands here by itself.", ewayBillNumberLabel: "E-way bill number (12 digits)", transporterName: "Transporter", recordEwayNumber: "Put it on the challan",
+    cancelChallanTitle: "Cancel this challan", cancelChallanHelp: "Only if the goods never moved on it. The number stays used, so the series has no gap.", cancelChallanReason: "Why is it being cancelled?", ewayCancelledOnPortal: "Its e-way bill has been cancelled on the portal", cancelChallan: "Cancel the challan",
+    ewayChallanReasonHelp: "For a delivery challan, the reason written on the challan is used, not this one.",
     navEway: "E-way bill",
     ewayTitle: "Do these goods need an e-way bill?", ewayHelp: "An e-way bill is a permit for moving goods, not a tax paper. Most small consignments need none. We work it out from what is on the lorry, where it is going and which state's rule applies, and show you the rule that decided it.",
     whyMoving: "Why are the goods moving?", moveSupply: "A sale", moveJobWork: "Going out for job work", moveBranch: "Moving between your own places", moveReturn: "Coming back from a customer",
@@ -387,6 +400,19 @@ const copy = {
     overrideWhy: "Bhejna kyon theek hai?", overrideButton: "Meri zimmedari par bhejein",
     overrideSafety: "Isse aapka naam, samay aur wajah findings ke saath jud jati hai. Koi wazan, koi capacity aur koi sarkari record nahin badalta.",
     heldBack: "Dispatch desk par ruka hua", heldBackHelp: "Wo movements jinhen gaadi ki koi dikkat rok rahi hai, aur kya baaki hai.",
+    // Issue #141 — delivery challans.
+    navChallan: "Delivery challan",
+    challanTitle: "Maal delivery challan par bhejein", challanHelp: "Delivery challan woh kagaz hai jo maal ke saath jata hai jab tax invoice saath nahin jata — job work, pasand aane par bikri, ya aisi bikri jiska bill delivery ke baad banta hai. GST ise sirf yahan likhi wajahon ke liye maanta hai, aur batata hai ki us par kya likhna zaroori hai.",
+    challanWhy: "Maal kyon ja raha hai?", challanDocDate: "Challan ki taarikh", challanItem: "Maal", challanItemSoap: "Herbal Bath Soap 100g, piece mein gine", challanValuePerUnit: "Ek unit ki keemat",
+    challanConsigneeAddress: "Maal paane wale ka pata", challanAddressHelp: "Har line alag likhein. Challan par bilkul yahi chhapega, kyonki maal iske saath jata hai.",
+    challanReasonNote: "Kuch shabdon mein wajah likhein", challanStateHelp: "Agar maal paane wale ke apne rajya mein hi ja raha hai to ise waise hi rehne den.",
+    checkChallan: "Challan jaanchen", challanSafety: "Jaanchne se kuch save nahin hota aur koi number nahin lagta. Number sirf challan banane par milta hai.",
+    issueChallan: "Challan banayen", challansIssued: "Bane hue challan", challansIssuedHelp: "Naye pehle. Kholkar print karein, e-way bill joden, baad wala invoice joden, ya radd karein.",
+    noChallans: "Abhi koi challan nahin bana.", openChallan: "Kholen", printChallan: "Teeno copy print karein",
+    linkInvoiceTitle: "Delivery ke baad bana tax invoice", linkInvoiceHelp: "Sirf beche gaye maal ke liye. Invoice chunein; hum dekhenge ki woh usi customer ka hai, challan ke baad ka hai, aur wahi maal bill karta hai.", linkInvoice: "Yeh invoice joden",
+    challanEwayTitle: "E-way bill number", challanEwayHelp: "Agar kahin aur bana hai to yahan likhein. E-way bill wali screen se bana number yahan apne aap aa jata hai.", ewayBillNumberLabel: "E-way bill number (12 ank)", transporterName: "Transporter", recordEwayNumber: "Challan par joden",
+    cancelChallanTitle: "Yeh challan radd karein", cancelChallanHelp: "Sirf tab jab maal is par gaya hi nahin. Number istemal hua hi maana jayega, taaki ginti mein khali jagah na rahe.", cancelChallanReason: "Radd kyon kar rahe hain?", ewayCancelledOnPortal: "Iska e-way bill portal par radd ho chuka hai", cancelChallan: "Challan radd karein",
+    ewayChallanReasonHelp: "Delivery challan ke liye challan par likhi wajah hi li jaati hai, yeh wali nahin.",
     navEway: "E-way bill",
     ewayTitle: "Kya is maal ko e-way bill chahiye?", ewayHelp: "E-way bill maal le jaane ka parwana hai, tax ka kagaz nahin. Chhoti kheponi ko aksar zaroorat nahin hoti. Hum gaadi par kya hai, kahan ja raha hai aur kis rajya ka niyam lagta hai, isse tay karte hain aur wahi niyam aapko dikhate hain.",
     whyMoving: "Maal kyon ja raha hai?", moveSupply: "Bikri", moveJobWork: "Job work ke liye ja raha hai", moveBranch: "Apni hi jagah par ja raha hai", moveReturn: "Customer se wapas aa raha hai",
@@ -615,6 +641,9 @@ function openView(view) {
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
+  if (target === "challan") openChallans();
+  // The document picker must include anything issued since sign-in, invoices and challans alike.
+  if (target === "eway") loadEwayRoad();
   if (target === "itc") openItc();
   if (target === "gst-returns") openGstReturns();
   if (target === "bank-feeds") loadBankFeeds();
@@ -2773,6 +2802,176 @@ async function loadIssuedInvoices() {
 }
 
 
+// ------------------------------------------------ issue #141: delivery challans
+//
+// The screen follows the law's order: why the goods are moving decides whether tax prints at all,
+// so the reason comes first and says what it means before anything is checked. Checking uses no
+// number; issuing does. Everything that happens to a challan afterwards — its printout, its e-way
+// bill, the invoice that followed, a cancellation — is done from the one challan that is open.
+
+const challanState = { reasons: [], open: null, list: [], reference: null };
+
+async function openChallans() {
+  const form = document.querySelector("#challan-form");
+  if (!form) return;
+  if (!form.elements.namedItem("date").value) form.elements.namedItem("date").value = dateInput();
+  try {
+    if (challanState.reasons.length === 0) {
+      challanState.reasons = (await api("/api/challans/reasons")).reasons;
+      const select = document.querySelector("#challan-reasons");
+      select.replaceChildren(...challanState.reasons.map((reason) => {
+        const option = document.createElement("option");
+        option.value = reason.reason;
+        option.textContent = `${t(reason.label)} · ${reason.legalBasis}`;
+        return option;
+      }));
+      select.addEventListener("change", showChallanReason);
+      const states = document.querySelector("#challan-states");
+      const { states: rows } = await api("/api/eway/states");
+      const own = document.createElement("option");
+      own.value = "";
+      own.textContent = copy[state.locale].buyerOwnState;
+      states.replaceChildren(own, ...rows.filter((row) => row.kind !== "RETIRED").map((row) => {
+        const option = document.createElement("option");
+        option.value = row.code;
+        option.textContent = `${row.name} (${row.code})`;
+        return option;
+      }));
+    }
+    showChallanReason();
+    await loadChallans();
+  } catch (error) {
+    showDialog({ title: "The challan screen could not load", message: error.message }, "failed");
+  }
+}
+
+function showChallanReason() {
+  const chosen = challanState.reasons.find((reason) => reason.reason === document.querySelector("#challan-reasons").value);
+  if (!chosen) return;
+  document.querySelector("#challan-reason-rule").textContent = chosen.showsTax
+    ? `Allowed by ${chosen.legalBasis}. These goods move as a sale, so the tax rate and amount print on the challan (Rule 55(1)(vii)), and the tax invoice follows later.`
+    : `Allowed by ${chosen.legalBasis}. These goods are not being sold, so the challan shows their value and no tax (Rule 55(1)(vii)). No invoice follows it.`;
+  document.querySelector("#challan-note-field").hidden = !chosen.needsNote;
+}
+
+const challanInput = () => ({ ...formValues(document.querySelector("#challan-form")), reference: challanState.reference });
+
+submitStep("#challan-form", async () => {
+  // A fresh key per check, reused by the issue that follows it, so a double press issues one challan.
+  challanState.reference = crypto.randomUUID();
+  try {
+    renderChallanCheck(await api("/api/challans/preview", { method: "POST", body: JSON.stringify(challanInput()) }));
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+function renderChallanCheck(result) {
+  document.querySelector("#challan-panel").hidden = false;
+  document.querySelector("#challan-result-title").textContent = result.title;
+  document.querySelector("#challan-result-message").textContent = result.message;
+  const badge = document.querySelector("#challan-status");
+  badge.textContent = result.state === "problems" ? "needs attention" : result.showsTax ? "tax shown" : "value only";
+  badge.className = `pill ${result.state === "problems" ? "hold" : "done"}`;
+  const detail = document.querySelector("#challan-detail");
+  detail.replaceChildren();
+  if (result.state === "problems") {
+    result.problems.forEach((problem) => detail.append(detailRow("Missing", t(problem.message))));
+  } else {
+    result.lines.forEach((line) => detail.append(detailRow(line.item, `${line.quantity} · ${money(line.value)}`, `HSN ${line.hsn}${line.rate === null ? "" : ` · GST ${line.rate}%`}`)));
+    detail.append(detailRow("Value of the goods", money(result.value)));
+    if (result.showsTax) detail.append(detailRow("Tax shown on the challan", money(result.tax), "Shown because the law asks for it on a sale challan. It is charged on the invoice, not on this paper."));
+    if (result.placeOfSupply) detail.append(detailRow("Place of supply", result.placeOfSupply, result.interState ? "The goods cross a state border, so the challan must show it." : undefined));
+  }
+  document.querySelector("#challan-issue").hidden = result.state === "problems";
+}
+
+document.querySelector("#challan-issue")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/challans/issue", { method: "POST", body: JSON.stringify(challanInput()) });
+    document.querySelector("#challan-panel").hidden = true;
+    showDialog({ title: result.title, message: result.message }, "recorded");
+    await loadChallans();
+    await openChallan(result.challan.id);
+    loadEwayRoad();
+  } catch (error) {
+    showDialog({ title: "No challan was issued", message: error.message }, "failed");
+  }
+});
+
+async function loadChallans() {
+  const list = document.querySelector("#challan-list");
+  if (!list) return;
+  const { challans } = await api("/api/challans");
+  challanState.list = challans;
+  list.replaceChildren(...(challans.length === 0 ? [simpleRow(copy[state.locale].noChallans, "")] : challans.map((challan) => {
+    const row = detailRow(
+      `${challan.number} · ${t(challan.reason)}`,
+      `${money(challan.value)}${challan.showsTax ? ` + tax ${money(challan.tax)}` : ""}`,
+      [
+        challan.state === "INVOICED" ? `Billed on ${challan.invoice.number}` : challan.state === "CANCELLED" ? `Cancelled: ${challan.cancelReason}` : "Goods may move on it",
+        challan.ewayBill ? `e-way bill ${challan.ewayBill.number}${challan.ewayBill.source === "TYPED" ? " (typed in)" : ""}` : "",
+      ].filter(Boolean).join(" · "),
+    );
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary-button";
+    open.textContent = copy[state.locale].openChallan;
+    open.addEventListener("click", () => openChallan(challan.id));
+    row.append(open);
+    return row;
+  })));
+}
+
+async function openChallan(id) {
+  const challan = (challanState.list ?? []).find((row) => row.id === id);
+  if (!challan) return;
+  challanState.open = challan;
+  const printed = await api("/api/challans/print", { method: "POST", body: JSON.stringify({ challan: id, locale: state.locale }) });
+  document.querySelector("#challan-print-panel").hidden = false;
+  document.querySelector("#challan-print-title").textContent = `${challan.number} · ${t(challan.reason)}`;
+  document.querySelector("#challan-frame").srcdoc = printed.html;
+  const open = challan.state === "ISSUED";
+  document.querySelector("#challan-link-form").hidden = !(open && challan.invoiceFollows);
+  document.querySelector("#challan-eway-form").hidden = !open;
+  document.querySelector("#challan-cancel-form").hidden = !open;
+  if (open && challan.invoiceFollows) {
+    const { invoices } = await api("/api/einvoices/invoices");
+    document.querySelector("#challan-invoices").replaceChildren(...invoices.map((invoice) => {
+      const option = document.createElement("option");
+      option.value = invoice.id;
+      option.textContent = `${invoice.number} · ${invoice.date} · ${money(invoice.amount)}`;
+      return option;
+    }));
+  }
+  document.querySelector("#challan-print-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.querySelector("#challan-print")?.addEventListener("click", () => {
+  document.querySelector("#challan-frame").contentWindow?.print();
+});
+
+const challanAction = (selector, path, failureTitle) => submitStep(selector, async (form) => {
+  if (!challanState.open) return;
+  try {
+    const values = formValues(form);
+    const checkbox = form.querySelector('input[type="checkbox"]');
+    const result = await api(path, { method: "POST", body: JSON.stringify({ ...values, ...(checkbox ? { [checkbox.name]: checkbox.checked } : {}), challan: challanState.open.id }) });
+    showDialog({ title: result.title, message: result.message, effects: result.effects }, "recorded");
+    form.reset();
+    await loadChallans();
+    await openChallan(challanState.open.id);
+    loadEwayRoad();
+  } catch (error) {
+    showDialog({ title: failureTitle, message: error.message }, "failed");
+  }
+});
+
+challanAction("#challan-link-form", "/api/challans/link-invoice", "The invoice was not linked");
+challanAction("#challan-eway-form", "/api/challans/eway", "The e-way bill was not recorded");
+challanAction("#challan-cancel-form", "/api/challans/cancel", "The challan was not cancelled");
+
+
 // ------------------------------------------------ issue #27: e-way bills for goods on the road
 //
 // The screen leads with the decision and the facts behind it, because most consignments a small
@@ -2940,16 +3139,16 @@ async function loadEwayRoad() {
   const select = document.querySelector("#eway-invoices");
   if (!list || !select) return;
   try {
-    const { invoices } = await api("/api/einvoices/invoices");
+    // Issue #141 — a delivery challan can be the document on the lorry, in place of an invoice. Both
+    // lists are fetched before the picker is touched, so two loads racing cannot interleave rows.
+    const [{ invoices }, { challans }] = await Promise.all([api("/api/einvoices/invoices"), api("/api/challans/movable")]);
     const chosen = select.value;
-    select.replaceChildren();
-    invoices.forEach((invoice) => {
-      const option = document.createElement("option");
-      option.value = invoice.id;
-      option.textContent = `${invoice.number} · ${money(invoice.amount)}`;
-      select.append(option);
-    });
-    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+    const option = (value, label) => Object.assign(document.createElement("option"), { value, textContent: label });
+    select.replaceChildren(
+      ...invoices.map((invoice) => option(invoice.id, `${invoice.number} · ${money(invoice.amount)}`)),
+      ...challans.map((challan) => option(challan.id, `${copy[state.locale].navChallan} ${challan.number} · ${money(challan.value)}`)),
+    );
+    if ([...select.options].some((entry) => entry.value === chosen)) select.value = chosen;
 
     const { consignments } = await api("/api/eway/on-the-road");
     list.replaceChildren();
