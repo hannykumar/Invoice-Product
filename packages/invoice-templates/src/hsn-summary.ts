@@ -46,7 +46,7 @@ const nil = (): Money => zero('INR');
  * them — the customer pays it to the government directly, and the totals block says so on its own
  * line. Adding it here would make the summary disagree with the amount the customer owes.
  */
-export const hsnSummary = (doc: InvoiceDocument): HsnSummary => {
+export const hsnSummary = (doc: Pick<InvoiceDocument, 'lines' | 'split'>): HsnSummary => {
   const order: string[] = [];
   const groups = new Map<string, { lines: RenderableLine[]; code: string | null; rate: bigint | null }>();
 

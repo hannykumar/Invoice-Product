@@ -13,6 +13,7 @@ import type {
   DocumentTitle,
   InvoiceDocument,
   RenderableBank,
+  RenderableLine,
   RenderableParty,
   RenderableReferences,
   RenderableTransport,
@@ -48,6 +49,35 @@ export interface PrintingContext {
 
 const nil = (): Money => zero('INR');
 
+/**
+ * One priced line as it prints. Shared with issue #142's quotation and proforma, which are priced by
+ * the same calculator, so a line reads identically on all three papers.
+ */
+export const renderableLine = (
+  l: ComputedTaxLine,
+  extras: Pick<PrintingContext, 'batchByLineId' | 'noteByLineId' | 'packagesByLineId'> = {},
+): RenderableLine => ({
+  lineId: l.lineId,
+  description: l.itemName,
+  hsnOrSac: l.hsnOrSac,
+  kind: l.kind,
+  quantityText: formatQuantity(l.quantity),
+  unitPrice: l.unitPrice,
+  discount: l.discountAmount.minor === 0n ? null : l.discountAmount,
+  taxableValue: l.taxableValue,
+  ratePercentTimes100: l.ratePercentTimes100,
+  taxAmount: l.totalTax,
+  cgst: l.cgst,
+  sgst: l.sgst,
+  utgst: l.utgst,
+  igst: l.igst,
+  cess: l.cess,
+  reverseCharge: l.reverseCharge,
+  batch: extras.batchByLineId?.[l.lineId] ?? null,
+  packages: extras.packagesByLineId?.[l.lineId] ?? null,
+  note: extras.noteByLineId?.[l.lineId] ?? null,
+});
+
 export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContext): InvoiceDocument => {
   if (invoice.pricing === null) {
     throw new Error('A bill without worked-out totals cannot be printed. Price it first.');
@@ -69,27 +99,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     reverseCharge: pricing.lines.some((l) => l.reverseCharge),
     supplyKind: invoice.supplyKind,
     split: pricing.split,
-    lines: pricing.lines.map((l: ComputedTaxLine) => ({
-      lineId: l.lineId,
-      description: l.itemName,
-      hsnOrSac: l.hsnOrSac,
-      kind: l.kind,
-      quantityText: formatQuantity(l.quantity),
-      unitPrice: l.unitPrice,
-      discount: l.discountAmount.minor === 0n ? null : l.discountAmount,
-      taxableValue: l.taxableValue,
-      ratePercentTimes100: l.ratePercentTimes100,
-      taxAmount: l.totalTax,
-      cgst: l.cgst,
-      sgst: l.sgst,
-      utgst: l.utgst,
-      igst: l.igst,
-      cess: l.cess,
-      reverseCharge: l.reverseCharge,
-      batch: context.batchByLineId?.[l.lineId] ?? null,
-      packages: context.packagesByLineId?.[l.lineId] ?? null,
-      note: context.noteByLineId?.[l.lineId] ?? null,
-    })),
+    lines: pricing.lines.map((l: ComputedTaxLine) => renderableLine(l, context)),
     totals: {
       taxableValue: totals.taxableValue,
       cgst: totals.cgst,

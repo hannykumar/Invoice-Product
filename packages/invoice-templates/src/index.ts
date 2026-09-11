@@ -13,3 +13,5 @@ export * from './render.ts';
 export * from './from-sales.ts';
 // Issue #141 — the delivery challan, printed on the same engine.
 export * from './challan.ts';
+// Issue #142 — the quotation and the proforma invoice, printed on the same engine.
+export * from './presale.ts';

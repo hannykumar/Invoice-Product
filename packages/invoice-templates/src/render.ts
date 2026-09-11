@@ -26,6 +26,7 @@ import { renderBoxed } from './boxed.ts';
 import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
+import { preSaleTitle, renderPreSaleBoxed, renderPreSaleNarrow, type PreSalePrint } from './presale.ts';
 
 /** Re-exported because this module has been the public home of the escaper since issue #13. */
 export { escapeHtml };
@@ -525,6 +526,21 @@ export const renderChallanCopies = (
   snapshot: TemplateSnapshot,
   options: Omit<RenderOptions, 'copy'>,
 ): string => combineCopies(CHALLAN_COPIES.map((copy) => renderChallan(doc, snapshot, { ...options, copy })));
+
+/**
+ * Issue #142 — a quotation or a proforma invoice, on the same engine and stylesheet as the invoice.
+ *
+ * One copy, unmarked: the marked copies are what GST asks of a tax invoice and a challan, for goods
+ * that travel. A price offer and a request for payment travel with nothing, so a "copy" option is
+ * ignored rather than printing a marking that would claim otherwise.
+ */
+export const renderPreSale = (doc: PreSalePrint, snapshot: TemplateSnapshot, options: Omit<RenderOptions, 'copy'>): string => {
+  const { locale, format } = options;
+  const heading = `${preSaleTitle(doc.kind, locale)} ${doc.number}`;
+  return PAGE[format].narrow
+    ? page(heading, snapshot, format, locale, '', renderPreSaleNarrow(doc, locale))
+    : page(heading, snapshot, format, locale, 'boxed', `<div class="sheet-inner">${renderPreSaleBoxed(doc, snapshot, format, locale)}</div>`);
+};
 
 /**
  * The document shell both layouts share: one head, one stylesheet, one sheet.
