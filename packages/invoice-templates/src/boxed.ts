@@ -23,10 +23,11 @@ import type { Locale } from './document.ts';
 import { renderReservedSlot } from './reserved.ts';
 
 /** A cell in the header grid: a small grey caption with the value under it. */
-const cell = (caption: string, value: string, span = 1): string =>
+export const cell = (caption: string, value: string, span = 1): string =>
   `<td colspan="${span}"><span class="cap">${escapeHtml(caption)}</span><span class="val">${value}</span></td>`;
 
-const partyCell = (
+/** A party's box: name, address, state, GSTIN, and whatever optional contact lines the design shows. */
+export const partyCell = (
   party: RenderableParty,
   heading: string,
   locale: Locale,

@@ -29,6 +29,7 @@
           <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
           <button class="nav-item" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button>
           <button class="nav-item" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button>
+          <button class="nav-item" data-view="challan"><span aria-hidden="true">⇢</span><span data-i18n="navChallan"></span></button>
           <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
           <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
           <button class="nav-item" data-view="itc"><span aria-hidden="true">⚖</span><span data-i18n="navItc"></span></button>
@@ -219,6 +220,78 @@
         </section>
 
 
+        <section class="view" id="view-challan" aria-labelledby="challan-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="challan-title" tabindex="-1" data-i18n="challanTitle"></h1>
+              <p data-i18n="challanHelp"></p>
+            </div>
+          </div>
+
+          <article class="panel form-panel">
+            <form id="challan-form">
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="challanWhy"></span><select name="reason" id="challan-reasons" required></select><small id="challan-reason-rule"></small></label>
+                <label class="full-field" id="challan-note-field" hidden><span data-i18n="challanReasonNote"></span><input name="reasonNote" placeholder="Sent for repair" /></label>
+                <label><span data-i18n="challanDocDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="challanItem"></span><select name="item"><option value="SOAP" data-i18n="challanItemSoap"></option></select></label>
+                <label><span data-i18n="quantity"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
+                <label><span data-i18n="challanValuePerUnit"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="25" required /></span></label>
+                <label class="full-field"><span data-i18n="challanConsigneeAddress"></span><textarea name="consigneeAddress" rows="2" placeholder="Plot 14, Hosur Road&#10;Bengaluru 560068" required></textarea><small data-i18n="challanAddressHelp"></small></label>
+                <label><span data-i18n="deliveryState"></span><select name="deliveryState" id="challan-states"></select><small data-i18n="challanStateHelp"></small></label>
+                <label><span data-i18n="deliveryPlace"></span><input name="deliveryPlace" placeholder="Hosur" /></label>
+              </div>
+              <button type="submit" class="primary-button wide" data-i18n="checkChallan"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="challanSafety"></span></p>
+            </form>
+          </article>
+
+          <article class="panel" id="challan-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="challan-result-title">—</h2><p id="challan-result-message"></p></div>
+              <span class="pill" id="challan-status">—</span>
+            </div>
+            <div class="activity-list" id="challan-detail"></div>
+            <div class="dialog-actions"><button type="button" class="primary-button" id="challan-issue" hidden data-i18n="issueChallan"></button></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading"><div><h2 data-i18n="challansIssued"></h2><p data-i18n="challansIssuedHelp"></p></div></div>
+            <div class="activity-list" id="challan-list"></div>
+          </article>
+
+          <article class="panel" id="challan-print-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="challan-print-title">—</h2></div>
+              <button type="button" class="primary-button" id="challan-print" data-i18n="printChallan"></button>
+            </div>
+            <form id="challan-link-form" class="form-panel" hidden>
+              <h2 data-i18n="linkInvoiceTitle"></h2><p data-i18n="linkInvoiceHelp"></p>
+              <div class="field-grid"><label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="challan-invoices" required></select></label></div>
+              <button type="submit" class="secondary-button wide" data-i18n="linkInvoice"></button>
+            </form>
+            <form id="challan-eway-form" class="form-panel" hidden>
+              <h2 data-i18n="challanEwayTitle"></h2><p data-i18n="challanEwayHelp"></p>
+              <div class="field-grid">
+                <label><span data-i18n="ewayBillNumberLabel"></span><input name="ewayBillNumber" inputmode="numeric" placeholder="3210 0123 4567" required /></label>
+                <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA01AB1234" /></label>
+                <label><span data-i18n="transporterName"></span><input name="transporter" placeholder="Sharma Roadlines" /></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="recordEwayNumber"></button>
+            </form>
+            <form id="challan-cancel-form" class="form-panel" hidden>
+              <h2 data-i18n="cancelChallanTitle"></h2><p data-i18n="cancelChallanHelp"></p>
+              <div class="field-grid">
+                <label class="full-field"><span data-i18n="cancelChallanReason"></span><input name="reason" placeholder="The lorry did not come" required /></label>
+                <label class="full-field"><span><input type="checkbox" name="ewayBillCancelledOnPortal" /> <span data-i18n="ewayCancelledOnPortal"></span></span></label>
+              </div>
+              <button type="submit" class="secondary-button wide" data-i18n="cancelChallan"></button>
+            </form>
+            <iframe id="challan-frame" title="Printed delivery challan" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
+          </article>
+        </section>
+
         <section class="view" id="view-eway" aria-labelledby="eway-title">
           <div class="page-heading">
             <div>
@@ -232,7 +305,7 @@
             <form id="eway-form">
               <div class="field-grid">
                 <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="eway-invoices" required></select></label>
-                <label><span data-i18n="whyMoving"></span><select name="reason"><option value="SUPPLY" data-i18n="moveSupply"></option><option value="JOB_WORK" data-i18n="moveJobWork"></option><option value="BRANCH_TRANSFER" data-i18n="moveBranch"></option><option value="SALES_RETURN" data-i18n="moveReturn"></option></select></label>
+                <label><span data-i18n="whyMoving"></span><select name="reason"><option value="SUPPLY" data-i18n="moveSupply"></option><option value="JOB_WORK" data-i18n="moveJobWork"></option><option value="BRANCH_TRANSFER" data-i18n="moveBranch"></option><option value="SALES_RETURN" data-i18n="moveReturn"></option></select><small data-i18n="ewayChallanReasonHelp"></small></label>
                 <label><span data-i18n="deliveryState"></span><select name="shipToState" id="eway-states"></select><small data-i18n="deliveryStateHelp"></small><small id="eway-state-rule"></small></label>
                 <label><span data-i18n="deliveryPlace"></span><input name="shipToPlace" placeholder="Hyderabad" /></label>
                 <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /><small data-i18n="distanceHelp"></small></label>
@@ -890,6 +963,7 @@
         <button data-view="itc"><span aria-hidden="true">⚖</span><small data-i18n="navItc"></small></button>
         <button data-view="reminders"><span aria-hidden="true">⏰</span><small data-i18n="navReminders"></small></button>
         <button data-view="plan"><span aria-hidden="true">◈</span><small data-i18n="navPlan"></small></button>
+        <button data-view="challan"><span aria-hidden="true">⇢</span><small data-i18n="navChallan"></small></button>
         <button data-view="eway"><span aria-hidden="true">▸</span><small data-i18n="navEway"></small></button>
         <button data-view="vehicle"><span aria-hidden="true">⚙</span><small data-i18n="navVehicle"></small></button>
         <button data-view="migration"><span aria-hidden="true">⇪</span><small data-i18n="navMigration"></small></button>

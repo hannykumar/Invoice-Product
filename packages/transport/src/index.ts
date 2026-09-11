@@ -8,6 +8,8 @@ export * from "./service.ts";
 export * from "./adapters.ts";
 export * from "./whitebooks-eway-connector.ts";
 export * from "./migrations.ts";
+// Issue #141 — a delivery challan as the document an e-way bill carries.
+export * from "./challan-consignment.ts";
 // Issue #28 — transport details and vehicle suitability.
 export * from "./suitability-types.ts";
 export * from "./suitability-ports.ts";

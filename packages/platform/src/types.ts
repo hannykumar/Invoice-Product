@@ -28,6 +28,9 @@ export type Permission =
   | "eway.generate"
   | "eway.update"
   | "eway.cancel"
+  // Issue #141 — delivery challans: issuing one (and linking the invoice or e-way bill to it), and cancelling one.
+  | "challan.issue"
+  | "challan.cancel"
   // Issue #30. Preparing a GST return, approving it and sending it are four separate acts, because
   // looking at what a month says is harmless and filing it on a business's behalf is not.
   | "gst_returns.view"

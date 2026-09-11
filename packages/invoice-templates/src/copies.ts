@@ -40,3 +40,20 @@ export const copyMarking = (doc: InvoiceDocument, copy: InvoiceCopy, locale: Loc
   const key = LABEL[doc.supplyKind][copy];
   return key === undefined ? null : t(key, locale);
 };
+
+/**
+ * Issue #141 — a delivery challan's copies, in the words CGST Rule 55(2) prescribes.
+ *
+ * Always three, because a challan always carries goods: the Original travels to the consignee, the
+ * Duplicate with the transporter, and the Triplicate stays with the consigner. The words differ from
+ * an invoice's on purpose — the consignee of a job-work challan is not a recipient of any supply.
+ */
+export const CHALLAN_COPIES: readonly InvoiceCopy[] = ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE'];
+
+const CHALLAN_LABEL: Record<InvoiceCopy, WordingKey> = {
+  ORIGINAL: 'copyOriginalConsignee',
+  DUPLICATE: 'copyDuplicateTransporter',
+  TRIPLICATE: 'copyTriplicateConsigner',
+};
+
+export const challanCopyMarking = (copy: InvoiceCopy, locale: Locale): string => t(CHALLAN_LABEL[copy], locale);
