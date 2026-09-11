@@ -135,6 +135,20 @@ const T = {
   invoiceRef: w('Invoice No. & Date', 'Invoice number aur taarikh'),
   copyOriginalConsignee: w('ORIGINAL FOR CONSIGNEE', 'Original, maal paane wale ke liye'),
   copyTriplicateConsigner: w('TRIPLICATE FOR CONSIGNER', 'Triplicate, aapke paas'),
+  // Issue #142 — the quotation and the proforma invoice. Both say "Not a tax invoice" under the title
+  // (`notTaxInvoice` above). Where a word already exists for the invoice and means the same thing on
+  // these papers — "Buyer's Order No.", "Mode / Terms of Payment" — the same word is used.
+  QUOTATION: w('Quotation', 'Quotation'),
+  PROFORMA_INVOICE: w('Proforma Invoice', 'Proforma invoice'),
+  quotationNo: w('Quotation No.', 'Quotation number'),
+  proformaNo: w('Proforma Invoice No.', 'Proforma invoice number'),
+  documentDate: w('Date', 'Taarikh'),
+  validUntil: w('Valid Until', 'Kab tak valid'),
+  // "Chargeable" is the invoice's word: it is what the buyer is being charged. Nothing is charged yet.
+  amountInWords: w('Amount (in words)', 'Rakam shabdon mein'),
+  termsAndConditions: w('Terms & Conditions', 'Sharten'),
+  // The invoice's own line says "invoice", which these papers are not.
+  computerGeneratedDocument: w('This is a computer generated document.', 'Yeh document computer se bana hai.'),
 } as const;
 
 export type WordingKey = keyof typeof T;

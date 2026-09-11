@@ -52,7 +52,7 @@ Nothing outstanding. The seven fields #156 listed all print now:
 | Total quantity on the item table's total row | KK and BE | reference audit |
 | Delivery Note number and date | BE | #156; since #141 filled from the delivery challan the invoice is linked to (`deliveryNoteFromChallans`) |
 | Dispatch Doc No. | BE | #156 |
-| Reference No. & Date, Other References | BE | #156 |
+| Reference No. & Date, Other References | BE | #156; since #142 Reference No. & Date can be filled from the quotation or proforma behind the invoice (`invoiceReferencesFromPreSale`) |
 | Terms of Delivery | BE | #156 |
 | Mode / Terms of Payment, and KK's "Payment mode: Credit" | KK and BE | #156 |
 | Bank details as labelled fields (Bank Name, A/c No., Branch & IFS Code) rather than free text | BE | #156 |

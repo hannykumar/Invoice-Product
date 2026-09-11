@@ -164,6 +164,26 @@ const copy = {
     overrideWhy: "Why is it alright to send it?", overrideButton: "Send it anyway, on my authority",
     overrideSafety: "This adds your name, the time and your reason beside the findings. It changes no weight, no capacity and no government record.",
     heldBack: "Held back at the dispatch desk", heldBackHelp: "Movements a vehicle problem is stopping, and what is still to be answered.",
+    // Issue #142 — quotations and proforma invoices.
+    navPresale: "Quotation / Proforma",
+    presaleTitle: "Quotation and proforma invoice", presaleHelp: "A quotation is a price offer you send before the sale. A proforma invoice is an advance bill, usually sent so the customer pays before the goods go. Neither is a tax invoice: nothing goes into your books, your stock or GST until you issue the real bill.",
+    presaleWhich: "Which paper?", presaleQuotation: "Quotation — a price offer", presaleProforma: "Proforma invoice — an advance bill",
+    presaleQuotationRule: "A price offer. Nothing is recorded in your books. If the customer accepts, you turn it into a bill without typing it again.",
+    presaleProformaRule: "An advance bill, to collect payment before the goods go. It says \u201cNot a tax invoice\u201d and carries your bank details. The tax invoice you raise later is linked back to it.",
+    presaleDate: "Date", presaleValidUntil: "Valid until (optional)", presaleValidHelp: "How long your price holds. Leave it empty if you do not want to promise a date.",
+    presaleRate: "Rate per unit", presaleRateHelp: "Before GST. The GST is worked out the same way as on your bill.",
+    presaleBuyerAddress: "Customer's address", presaleAddressHelp: "One line per row. It prints exactly as typed.",
+    presalePurpose: "What is this proforma for?", presalePurposeHelp: "Kept with the proforma, not printed. It is how the bill raised later is matched to it.",
+    presaleBuyerOrder: "Customer's order number (optional)", presalePaymentTerms: "How should they pay? (optional)",
+    presaleBank: "Your bank details (optional)", presaleBankHelp: "Printed on the proforma so the customer knows where to pay. One line per row.",
+    presaleTerms: "Your terms (optional)", presaleTermsHelp: "Printed exactly as typed. Nothing is added for you.",
+    presaleCheck: "Check", presaleSafety: "Checking saves nothing and uses no number. The number is given only when you issue it.",
+    presaleIssue: "Issue it", presaleIssued: "Quotations and proformas", presaleIssuedHelp: "Newest first. Open one to print it, turn a quotation into a sale, link a proforma to its bill, or cancel it.",
+    presaleNone: "Nothing issued yet.", presaleOpen: "Open", presalePrint: "Print",
+    presaleConvertTitle: "Did the customer accept?", presaleConvertHelp: "Turn this quotation into a bill without typing it again. You see the bill and its checks before anything is issued.", presaleConvert: "Turn into a sale", presaleOpenBill: "Open the bill made from it",
+    presaleIssueBill: "Issue the bill",
+    presaleLinkTitle: "The tax invoice raised later", presaleLinkHelp: "Pick the bill that followed this proforma. We check it is for the same customer and not dated before it, and note anything that differs.",
+    presaleCancelTitle: "Cancel this", presaleCancelHelp: "If the customer did not take it up. The number stays used, so the series has no gap.", presaleCancelReason: "Why is it being cancelled?", presaleCancel: "Cancel it",
     // Issue #141 — delivery challans.
     navChallan: "Delivery challan",
     challanTitle: "Send goods on a delivery challan", challanHelp: "A delivery challan is the paper that travels with goods when no tax invoice goes with them — job work, goods sent on approval, or a sale that is billed after delivery. GST allows it only for the reasons listed here, and says what it must show.",
@@ -400,6 +420,26 @@ const copy = {
     overrideWhy: "Bhejna kyon theek hai?", overrideButton: "Meri zimmedari par bhejein",
     overrideSafety: "Isse aapka naam, samay aur wajah findings ke saath jud jati hai. Koi wazan, koi capacity aur koi sarkari record nahin badalta.",
     heldBack: "Dispatch desk par ruka hua", heldBackHelp: "Wo movements jinhen gaadi ki koi dikkat rok rahi hai, aur kya baaki hai.",
+    // Issue #142 — quotations and proforma invoices.
+    navPresale: "Quotation / Proforma",
+    presaleTitle: "Quotation aur proforma invoice", presaleHelp: "Quotation bikri se pehle bheja gaya rate ka offer hai. Proforma invoice advance ka bill hai, jo aksar isliye bheja jata hai ki customer maal jaane se pehle payment kare. Dono tax invoice nahin hain: asli bill banne tak aapke khaate, stock ya GST mein kuch nahin jata.",
+    presaleWhich: "Kaunsa kagaz?", presaleQuotation: "Quotation — rate ka offer", presaleProforma: "Proforma invoice — advance ka bill",
+    presaleQuotationRule: "Rate ka offer. Aapke khaate mein kuch nahin likha jata. Customer maan le to ise bina dobara likhe bill bana sakte hain.",
+    presaleProformaRule: "Advance ka bill, maal jaane se pehle payment lene ke liye. Is par \u201cYeh tax invoice nahin hai\u201d likha hota hai aur aapke bank ki jaankari hoti hai. Baad wala tax invoice iske saath joda jata hai.",
+    presaleDate: "Taarikh", presaleValidUntil: "Kab tak valid (zaroori nahin)", presaleValidHelp: "Aapka rate kab tak rahega. Taarikh ka vaada nahin karna ho to khali chhod den.",
+    presaleRate: "Ek unit ka rate", presaleRateHelp: "GST se pehle. GST bill ki tarah hi lagaya jata hai.",
+    presaleBuyerAddress: "Customer ka pata", presaleAddressHelp: "Har line alag likhein. Bilkul yahi chhapega.",
+    presalePurpose: "Yeh proforma kis liye hai?", presalePurposeHelp: "Proforma ke saath rakha jata hai, chhapta nahin. Isi se baad wala bill iske saath milaya jata hai.",
+    presaleBuyerOrder: "Customer ka order number (zaroori nahin)", presalePaymentTerms: "Payment kaise karein? (zaroori nahin)",
+    presaleBank: "Aapke bank ki jaankari (zaroori nahin)", presaleBankHelp: "Proforma par chhapti hai taaki customer ko pata ho ki payment kahan bhejein. Har line alag likhein.",
+    presaleTerms: "Aapki sharten (zaroori nahin)", presaleTermsHelp: "Bilkul waisi hi chhapti hain. Hum apni taraf se kuch nahin jodte.",
+    presaleCheck: "Jaanchen", presaleSafety: "Jaanchne se kuch save nahin hota aur koi number nahin lagta. Number sirf banane par milta hai.",
+    presaleIssue: "Banayen", presaleIssued: "Quotation aur proforma", presaleIssuedHelp: "Naye pehle. Kholkar print karein, quotation ko bikri banayen, proforma ko uske bill se joden, ya radd karein.",
+    presaleNone: "Abhi kuch nahin bana.", presaleOpen: "Kholen", presalePrint: "Print karein",
+    presaleConvertTitle: "Customer ne maan liya?", presaleConvertHelp: "Is quotation ko bina dobara likhe bill banayen. Kuch jaari hone se pehle aap bill aur uski jaanch dekhenge.", presaleConvert: "Bikri banayen", presaleOpenBill: "Isse bana bill kholen",
+    presaleIssueBill: "Bill jaari karein",
+    presaleLinkTitle: "Baad mein bana tax invoice", presaleLinkHelp: "Is proforma ke baad bana bill chunein. Hum dekhenge ki woh usi customer ka hai aur isse pehle ki taarikh ka nahin, aur jo alag hai woh likh denge.",
+    presaleCancelTitle: "Ise radd karein", presaleCancelHelp: "Agar customer ne nahin liya. Number istemal hua hi maana jayega, taaki ginti mein khali jagah na rahe.", presaleCancelReason: "Radd kyon kar rahe hain?", presaleCancel: "Radd karein",
     // Issue #141 — delivery challans.
     navChallan: "Delivery challan",
     challanTitle: "Maal delivery challan par bhejein", challanHelp: "Delivery challan woh kagaz hai jo maal ke saath jata hai jab tax invoice saath nahin jata — job work, pasand aane par bikri, ya aisi bikri jiska bill delivery ke baad banta hai. GST ise sirf yahan likhi wajahon ke liye maanta hai, aur batata hai ki us par kya likhna zaroori hai.",
@@ -641,6 +681,7 @@ function openView(view) {
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
+  if (target === "presale") openPresale();
   if (target === "challan") openChallans();
   // The document picker must include anything issued since sign-in, invoices and challans alike.
   if (target === "eway") loadEwayRoad();
@@ -1174,7 +1215,9 @@ function updateCalculations() {
   document.querySelector("[data-payment-total]").textContent = money(payment);
 }
 
-document.querySelectorAll("input[type=date]").forEach((field) => { if (!field.value) field.value = dateInput(); });
+// A date the business must choose for itself — how long a quoted price holds (#142) — is marked
+// `data-no-default` and left empty: filling it with today would print a promise nobody made.
+document.querySelectorAll("input[type=date]:not([data-no-default])").forEach((field) => { if (!field.value) field.value = dateInput(); });
 document.querySelectorAll(".draft-form").forEach((form) => {
   restoreDraft(form);
   form.addEventListener("input", () => { saveDraft(form); updateCalculations(); });
@@ -2800,6 +2843,198 @@ async function loadIssuedInvoices() {
     if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
   } catch { /* the picker is a convenience; the rest of the page still works */ }
 }
+
+
+// ------------------------------------------------ issue #142: quotations and proforma invoices
+//
+// Which paper comes first, because it decides which questions are asked: a proforma must say what it
+// is for and may carry bank details; a quotation asks for neither. Checking uses no number; issuing
+// does. A quotation becomes a sale in two steps — the bill is shown with every check a typed sale
+// gets, and only then issued — so accepting an old offer never skips the credit or stock checks.
+
+const presaleState = { open: null, list: [], reference: null, saleToken: null };
+const PROFORMA_ONLY = ["purpose", "buyerOrderNumber", "paymentTerms", "bankDetails"];
+
+function showPresaleKind() {
+  const select = document.querySelector("#presale-kind");
+  if (!select) return;
+  const proforma = select.value === "PROFORMA";
+  document.querySelectorAll("#presale-form [data-proforma-only]").forEach((field) => { field.hidden = !proforma; });
+  const purpose = document.querySelector('#presale-form input[name="purpose"]');
+  if (purpose) purpose.required = proforma;
+  document.querySelector("#presale-kind-rule").textContent = copy[state.locale][proforma ? "presaleProformaRule" : "presaleQuotationRule"];
+}
+
+document.querySelector("#presale-kind")?.addEventListener("change", showPresaleKind);
+
+async function openPresale() {
+  const form = document.querySelector("#presale-form");
+  if (!form) return;
+  if (!form.elements.namedItem("date").value) form.elements.namedItem("date").value = dateInput();
+  showPresaleKind();
+  try {
+    await loadPresale();
+  } catch (error) {
+    showDialog({ title: "This screen could not load", message: error.message }, "failed");
+  }
+}
+
+const presaleInput = () => {
+  const values = formValues(document.querySelector("#presale-form"));
+  // A proforma's fields are not sent with a quotation, so nothing typed there earlier leaks onto it.
+  if (values.kind !== "PROFORMA") PROFORMA_ONLY.forEach((name) => delete values[name]);
+  return { ...values, reference: presaleState.reference };
+};
+
+submitStep("#presale-form", async () => {
+  // A fresh key per check, reused by the issue that follows it, so a double press issues one document.
+  presaleState.reference = crypto.randomUUID();
+  try {
+    renderPresaleCheck(await api("/api/presale/preview", { method: "POST", body: JSON.stringify(presaleInput()) }));
+  } catch (error) {
+    showDialog({ title: "Nothing was checked", message: error.message }, "failed");
+  }
+});
+
+function renderPresaleCheck(result) {
+  document.querySelector("#presale-panel").hidden = false;
+  document.querySelector("#presale-result-title").textContent = result.title;
+  document.querySelector("#presale-result-message").textContent = result.message;
+  const badge = document.querySelector("#presale-status");
+  badge.textContent = result.state === "problems" ? "needs attention" : "not a tax invoice";
+  badge.className = `pill ${result.state === "problems" ? "hold" : "done"}`;
+  const detail = document.querySelector("#presale-detail");
+  detail.replaceChildren();
+  if (result.state === "problems") {
+    result.problems.forEach((problem) => detail.append(detailRow("Missing", t(problem.message))));
+  } else {
+    result.lines.forEach((line) => detail.append(detailRow(line.item, `${line.quantity} · ${money(line.value)}`, `HSN ${line.hsn}${line.rate === null ? "" : ` · GST ${line.rate}%`}`)));
+    detail.append(detailRow("Before GST", money(result.value)));
+    detail.append(detailRow("GST shown to the customer", money(result.tax), "Worked out the same way as on your bill. It is charged on the bill, not on this paper."));
+    detail.append(detailRow("Total", money(result.total)));
+    detail.append(detailRow("Place of supply", result.placeOfSupply));
+    if (result.validUntil) detail.append(detailRow("Price holds until", result.validUntil));
+  }
+  document.querySelector("#presale-issue").hidden = result.state === "problems";
+}
+
+document.querySelector("#presale-issue")?.addEventListener("click", async () => {
+  try {
+    const result = await api("/api/presale/issue", { method: "POST", body: JSON.stringify(presaleInput()) });
+    document.querySelector("#presale-panel").hidden = true;
+    showDialog({ title: result.title, message: result.message }, "recorded");
+    await loadPresale();
+    await openPresaleDocument(result.document.id);
+  } catch (error) {
+    showDialog({ title: "Nothing was issued", message: error.message }, "failed");
+  }
+});
+
+function presaleStatus(entry) {
+  if (entry.state === "CONVERTED") return "Turned into a bill";
+  if (entry.state === "INVOICED") return `Billed on ${entry.invoice.number}${entry.invoice.differences.length ? ` · ${entry.invoice.differences.length} difference(s) noted` : ""}`;
+  if (entry.state === "CANCELLED") return `Cancelled: ${entry.cancelReason}`;
+  if (entry.lapsed) return `Validity ended on ${entry.validUntil}`;
+  // Not "Open": that is the word on the button beside it.
+  const waiting = entry.kind === "QUOTATION" ? "Waiting for the customer" : "Waiting for the bill";
+  return entry.validUntil ? `${waiting} · valid until ${entry.validUntil}` : waiting;
+}
+
+async function loadPresale() {
+  const list = document.querySelector("#presale-list");
+  if (!list) return;
+  const { documents } = await api("/api/presale");
+  presaleState.list = documents;
+  list.replaceChildren(...(documents.length === 0 ? [simpleRow(copy[state.locale].presaleNone, "")] : documents.map((entry) => {
+    const row = detailRow(
+      `${entry.number} · ${t(entry.label)}`,
+      money(entry.total),
+      [presaleStatus(entry), entry.purpose ? `For: ${entry.purpose}` : ""].filter(Boolean).join(" · "),
+    );
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary-button";
+    open.textContent = copy[state.locale].presaleOpen;
+    open.addEventListener("click", () => openPresaleDocument(entry.id));
+    row.append(open);
+    return row;
+  })));
+}
+
+async function openPresaleDocument(id) {
+  const entry = (presaleState.list ?? []).find((row) => row.id === id);
+  if (!entry) return;
+  presaleState.open = entry;
+  const printed = await api("/api/presale/print", { method: "POST", body: JSON.stringify({ document: id, locale: state.locale }) });
+  document.querySelector("#presale-print-panel").hidden = false;
+  document.querySelector("#presale-print-title").textContent = `${entry.number} · ${t(entry.label)}`;
+  document.querySelector("#presale-frame").srcdoc = printed.html;
+  const quotation = entry.kind === "QUOTATION";
+  const open = entry.state === "ISSUED";
+  document.querySelector("#presale-convert").hidden = !(quotation && (open || entry.state === "CONVERTED"));
+  document.querySelector("#presale-convert-button").textContent = copy[state.locale][entry.state === "CONVERTED" ? "presaleOpenBill" : "presaleConvert"];
+  document.querySelector("#presale-sale").hidden = true;
+  document.querySelector("#presale-link-form").hidden = !(open && !quotation);
+  document.querySelector("#presale-cancel-form").hidden = !open;
+  if (open && !quotation) {
+    const { invoices } = await api("/api/einvoices/invoices");
+    document.querySelector("#presale-invoices").replaceChildren(...invoices.map((invoice) => Object.assign(document.createElement("option"), {
+      value: invoice.id,
+      textContent: `${invoice.number} · ${invoice.date} · ${money(invoice.amount)}`,
+    })));
+  }
+  document.querySelector("#presale-print-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.querySelector("#presale-print")?.addEventListener("click", () => {
+  document.querySelector("#presale-frame").contentWindow?.print();
+});
+
+document.querySelector("#presale-convert-button")?.addEventListener("click", async () => {
+  if (!presaleState.open) return;
+  try {
+    const result = await api("/api/presale/convert", { method: "POST", body: JSON.stringify({ document: presaleState.open.id }) });
+    presaleState.saleToken = result.token;
+    document.querySelector("#presale-convert").hidden = true;
+    document.querySelector("#presale-cancel-form").hidden = true;
+    document.querySelector("#presale-sale").hidden = false;
+    document.querySelector("#presale-sale-title").textContent = result.title;
+    document.querySelector("#presale-sale-message").textContent = result.message;
+    const detail = document.querySelector("#presale-sale-detail");
+    detail.replaceChildren(detailRow("The bill comes to", money(result.amount)), ...(result.effects ?? []).map((effect) => simpleRow(effect, "")));
+    await loadPresale();
+  } catch (error) {
+    showDialog({ title: "The quotation did not become a bill", message: error.message }, "failed");
+  }
+});
+
+document.querySelector("#presale-sale-issue")?.addEventListener("click", async () => {
+  if (!presaleState.saleToken) return;
+  try {
+    const result = await api("/api/presale/issue-sale", { method: "POST", body: JSON.stringify({ token: presaleState.saleToken }) });
+    document.querySelector("#presale-sale").hidden = true;
+    showDialog({ title: result.title, message: result.message }, "recorded");
+    await loadPresale();
+  } catch (error) {
+    showDialog({ title: "The bill was not issued", message: error.message }, "failed");
+  }
+});
+
+const presaleAction = (selector, path, failureTitle) => submitStep(selector, async (form) => {
+  if (!presaleState.open) return;
+  try {
+    const result = await api(path, { method: "POST", body: JSON.stringify({ ...formValues(form), document: presaleState.open.id }) });
+    showDialog({ title: result.title, message: result.message, effects: result.effects }, "recorded");
+    form.reset();
+    await loadPresale();
+    await openPresaleDocument(presaleState.open.id);
+  } catch (error) {
+    showDialog({ title: failureTitle, message: error.message }, "failed");
+  }
+});
+
+presaleAction("#presale-link-form", "/api/presale/link-invoice", "The invoice was not linked");
+presaleAction("#presale-cancel-form", "/api/presale/cancel", "It was not cancelled");
 
 
 // ------------------------------------------------ issue #141: delivery challans

@@ -1103,3 +1103,66 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
   assert.equal((await request('POST', '/api/challans/issue', { ...jobWork, reference: 'viewer' }, viewer)).status, 403);
 });
+
+test('#142 — a quotation becomes a sale without retyping, and a proforma is linked to the bill that followed it', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const quote = { kind: 'QUOTATION', date: '2026-08-28', validUntil: '2026-09-30', quantity: '100', rate: '25', buyerAddress: 'Plot 14, Hosur Road\nBengaluru 560068', terms: 'Prices ex-godown.', reference: 'api-142-q' };
+
+  const checked = await request('POST', '/api/presale/preview', quote, owner);
+  assert.equal(checked.status, 200, JSON.stringify(checked.body));
+  assert.equal(checked.body.state, 'preview');
+  assert.equal(checked.body.value, 2500);
+  assert.equal(checked.body.tax, 300, '12% on ₹2,500 of soap, worked out as on the bill');
+  assert.equal(checked.body.total, 2800);
+
+  const issued = await request('POST', '/api/presale/issue', quote, owner);
+  assert.equal(issued.status, 200, JSON.stringify(issued.body));
+  assert.equal(issued.body.document.number, 'QTN/26-27/00001');
+  const printed = await request('POST', '/api/presale/print', { document: issued.body.document.id }, owner);
+  assert.equal(printed.status, 200);
+  assert.match(printed.body.html, /<h1>Quotation<\/h1><div class="not-invoice">Not a tax invoice/);
+  assert.match(printed.body.html, /Plot 14, Hosur Road/, 'the typed address, as it was on the day');
+  assert.match(printed.body.html, /Prices ex-godown\./);
+  assert.doesNotMatch(printed.body.html, /Bank Details/, 'a price offer asks for no money');
+
+  // Accepted: the quoted lines become a bill, checked like any sale, then issued.
+  const converted = await request('POST', '/api/presale/convert', { document: issued.body.document.id }, owner);
+  assert.equal(converted.status, 200, JSON.stringify(converted.body));
+  assert.equal(converted.body.state, 'preview');
+  assert.equal(converted.body.title, 'Bill ready from QTN/26-27/00001');
+  assert.equal(converted.body.amount, 2800);
+  assert.equal(converted.body.quotation.state, 'CONVERTED');
+  const sold = await request('POST', '/api/presale/issue-sale', { token: converted.body.token }, owner);
+  assert.equal(sold.status, 200, JSON.stringify(sold.body));
+  assert.match(sold.body.invoice.number, /^INV\//);
+  assert.equal(sold.body.invoice.amount, 2800, 'the bill charges what was quoted');
+
+  // A proforma must say what it is for, and carries the bank details.
+  const proforma = { ...quote, kind: 'PROFORMA', validUntil: '', terms: '', reference: 'api-142-p', bankDetails: 'State Bank of India, A/c 30001234567\nIFSC SBIN0001234', paymentTerms: '100% advance' };
+  const missing = await request('POST', '/api/presale/preview', proforma, owner);
+  assert.equal(missing.body.state, 'problems');
+  assert.deepEqual(missing.body.problems.map((p: { code: string }) => p.code), ['PRESALE_PURPOSE_REQUIRED']);
+  const pi = await request('POST', '/api/presale/issue', { ...proforma, purpose: 'Advance for 100 soap before dispatch' }, owner);
+  assert.equal(pi.status, 200, JSON.stringify(pi.body));
+  assert.equal(pi.body.document.number, 'PI/26-27/00001');
+  const piPrinted = await request('POST', '/api/presale/print', { document: pi.body.document.id }, owner);
+  assert.match(piPrinted.body.html, /<h1>Proforma Invoice<\/h1>/);
+  assert.match(piPrinted.body.html, /State Bank of India, A\/c 30001234567/);
+  assert.match(piPrinted.body.html, /Mode \/ Terms of Payment/);
+  assert.doesNotMatch(piPrinted.body.html, /Advance for 100 soap/, 'what it was for is kept, not printed');
+
+  // Only 80 went: the bill is linked, and the difference is noted rather than refused.
+  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '80', rate: '25', date: '2026-08-29', terms: '0', reference: 'api-142-bill' }, owner);
+  assert.equal(bill.status, 200, JSON.stringify(bill.body));
+  const linked = await request('POST', '/api/presale/link-invoice', { document: pi.body.document.id, invoice: bill.body.invoice.id }, owner);
+  assert.equal(linked.status, 200, JSON.stringify(linked.body));
+  assert.equal(linked.body.document.state, 'INVOICED');
+  assert.equal(linked.body.title, 'Invoice linked — with differences');
+  assert.match(linked.body.effects[0], /the proforma asked for 100 PCS; the invoice bills 80 PCS/);
+
+  const listed = (await request('GET', '/api/presale', {}, owner)).body.documents.map((d: { number: string; state: string }) => `${d.number}:${d.state}`);
+  assert.deepEqual(listed.sort(), ['PI/26-27/00001:INVOICED', 'QTN/26-27/00001:CONVERTED']);
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('POST', '/api/presale/issue', { ...quote, reference: 'viewer' }, viewer)).status, 403);
+});

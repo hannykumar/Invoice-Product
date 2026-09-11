@@ -128,9 +128,19 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/challans\/link-invoice/);
   assert.match(script, /\/api\/challans\/eway/);
   assert.match(script, /\/api\/challans\/movable/);
+  // Issue #142 — quotations and proformas: checked, issued, printed, and from the one that is open,
+  // a quotation turned into a sale (a bill shown first, then issued) or a proforma linked to its bill.
+  assert.match(html, /id="view-presale"[^>]+aria-labelledby=/);
+  // How long a price holds is the business's promise, so that date box is never filled in for it.
+  assert.match(html, /name="validUntil" type="date" data-no-default/);
+  assert.match(script, /input\[type=date\]:not\(\[data-no-default\]\)/);
+  for (const route of ['preview', 'issue', 'print', 'convert', 'issue-sale', 'link-invoice', 'cancel']) {
+    assert.match(script, new RegExp(`/api/presale/${route}"`));
+  }
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
-  // #34's "Ask", #30's GST returns, #31's purchase check and #141's challans make twenty-two.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 22);
+  // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans and #142's quotations and
+  // proformas make twenty-three.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 23);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

@@ -98,6 +98,16 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/challans/eway') return json(200, await app.challans.attachEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/challans/link-invoice') return json(200, await app.challans.linkInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/challans/cancel') return json(200, await app.challans.cancel(actor, body));
+    // Issue #142 — quotations and proforma invoices: the papers sent before a sale. None of these posts
+    // anything; a quotation becomes a sale only through the ordinary sale, as a draft first.
+    if (method === 'GET' && pathname === '/api/presale') return json(200, await app.presale.list(actor));
+    if (method === 'POST' && pathname === '/api/presale/preview') return json(200, await app.presale.preview(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/issue') return json(200, await app.presale.issue(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/print') return json(200, await app.presale.print(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/convert') return json(200, await app.convertQuotation(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/issue-sale') return json(200, await app.issueConvertedSale(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/link-invoice') return json(200, await app.presale.linkInvoice(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/cancel') return json(200, await app.presale.cancel(actor, body));
     if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
     if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
     if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));

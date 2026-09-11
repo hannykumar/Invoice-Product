@@ -31,6 +31,13 @@ export type Permission =
   // Issue #141 — delivery challans: issuing one (and linking the invoice or e-way bill to it), and cancelling one.
   | "challan.issue"
   | "challan.cancel"
+  // Issue #142 — quotations and proforma invoices: issuing one (and turning a quotation into a sale, or
+  // linking a proforma to its invoice), and withdrawing one. Separate from selling: turning a
+  // quotation into a sale still needs "sales.draft.write".
+  | "quotation.issue"
+  | "quotation.cancel"
+  | "proforma.issue"
+  | "proforma.cancel"
   // Issue #30. Preparing a GST return, approving it and sending it are four separate acts, because
   // looking at what a month says is harmless and filing it on a business's behalf is not.
   | "gst_returns.view"

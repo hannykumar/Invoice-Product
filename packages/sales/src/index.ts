@@ -11,3 +11,8 @@ export * from './challan-model.ts';
 export * from './challan-numbering.ts';
 export * from './challan-repository.ts';
 export * from './challan-service.ts';
+// Issue #142 — the quotation and the proforma invoice, the two papers sent before a sale.
+export * from './presale-model.ts';
+export * from './presale-numbering.ts';
+export * from './presale-repository.ts';
+export * from './presale-service.ts';

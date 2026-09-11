@@ -7,8 +7,9 @@ import { invalid, isoDate, money, notFound, quantityFromString, sum, type Compan
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { ChallanService, InMemoryChallanRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, SalesService } from '@invoice/sales';
+import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
 import { ChallanDesk } from './challan-application.ts';
+import { PreSaleDesk } from './presale-application.ts';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import {
   TradeTermsService,
@@ -239,6 +240,8 @@ export class DemoApplication {
   private readonly gstReturns: GstReturnService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
   readonly challans: ChallanDesk;
+  /** Issue #142 — quotations and proforma invoices, the papers sent before a sale. */
+  readonly presale: PreSaleDesk;
 
   private constructor(
     config: CompanySeed,
@@ -262,9 +265,11 @@ export class DemoApplication {
     agentAudit: AuditLog,
     gstReturns: GstReturnService,
     challans: ChallanDesk,
+    presale: PreSaleDesk,
   ) {
     this.config = config;
     this.challans = challans;
+    this.presale = presale;
     this.shop = shop;
     this.sales = sales;
     this.salesRepository = salesRepository;
@@ -667,7 +672,17 @@ export class DemoApplication {
       permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, invoicePrefix: 'INV',
     }));
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans);
+    // Issue #142. Quotations and proformas share the store only so a number and the document are
+    // saved together; they post nothing to it. They are priced by the invoice's own calculator, and a
+    // quotation becomes a sale through the invoice's own service, as a draft.
+    const presaleRepository = new InMemoryPreSaleRepository();
+    shop.store.join(presaleRepository);
+    const presale = new PreSaleDesk(config, new PreSaleService({
+      store: shop.store, calculator, repository: presaleRepository, invoices: salesRepository, sales,
+      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, takenPrefixes: ['INV', 'DC'],
+    }));
+
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale);
     await app.seed();
     return app;
   }
@@ -1022,18 +1037,27 @@ export class DemoApplication {
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: this.saleInput(input) });
+    return this.checkSale(actor, draft, String(input.item || 'Herbal Bath Soap 100g'));
+  }
+
+  /**
+   * The checks shown before a bill is issued: its tax, what was last agreed with this customer, and
+   * their credit. Issue #142 — a draft made from a quotation is checked here too, so a converted
+   * quotation meets exactly the checks a typed sale does.
+   */
+  private async checkSale(actor: ActorContext, draft: SalesInvoice, itemName: string) {
     if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
 
     // Issue #11: what was last agreed, what the discount is, and whether this customer should be
     // given more credit. The draft is excluded from its own pending value.
     const quote = await this.terms.quote(actor, {
       partyId: this.config.customerId,
-      documentDate: isoDate(String(input.date)),
+      documentDate: draft.documentDate,
       documentId: draft.id,
       lines: draft.lines.map((line) => ({
         lineId: line.lineId,
         itemId: line.itemId,
-        itemName: String(input.item || 'Herbal Bath Soap 100g'),
+        itemName,
         unit: line.quantity.unit,
         quantity: String(Number(line.quantity.scaled) / 1_000_000),
         unitPrice: line.unitPrice,
@@ -1083,7 +1107,12 @@ export class DemoApplication {
     const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
-    const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${preview.token}`, invoiceId: preview.token });
+    return this.issueCheckedSale(actor, preview.token, usageDate);
+  }
+
+  /** Issues a bill that has been checked, and counts it against the plan once it exists. */
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
+    const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1092,6 +1121,34 @@ export class DemoApplication {
       on: usageDate,
     });
     return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
+  }
+
+  /**
+   * Issue #142 — turns an accepted quotation into a sale without retyping it.
+   *
+   * Step one: the quoted lines become a draft bill, shown with the same checks as a typed sale.
+   * Nothing is issued yet; the person sees the bill and presses issue, which is step two.
+   */
+  async convertQuotation(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const converted = await this.presale.convert(actor, input);
+    const checked = await this.checkSale(actor, converted.invoice, converted.invoice.pricing?.lines[0]?.itemName ?? 'Herbal Bath Soap 100g');
+    return {
+      ...checked,
+      title: `Bill ready from ${converted.quotation.number}`,
+      effects: [...converted.notes, ...checked.effects],
+      quotation: this.presale.describe(converted.quotation),
+    };
+  }
+
+  /** Step two: the bill made from the quotation is issued like any other sale. */
+  async issueConvertedSale(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
+    const token = String(input.token ?? '');
+    if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    return this.issueCheckedSale(actor, token, usageDate);
   }
 
   // ------------------------------------------------ issue #47: letting the assistant do the work

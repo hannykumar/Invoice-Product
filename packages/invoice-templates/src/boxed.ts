@@ -51,8 +51,11 @@ export const partyCell = (
  * A serial number down the left and the unit in its own "per" column are what make this read as a
  * bill rather than a spreadsheet. The amount column is the line's own amount — quantity times rate,
  * less its discount — which since issue #131 is exactly what it says.
+ *
+ * Exported for issue #142: a quotation and a proforma print their items with this same table, so the
+ * three papers a buyer compares side by side cannot drift apart column by column.
  */
-const itemTable = (
+export const itemTable = (
   goods: readonly RenderableLine[],
   charges: readonly RenderableLine[],
   snapshot: TemplateSnapshot,
@@ -136,7 +139,7 @@ const itemTable = (
   </table>`;
 };
 
-const totalsTable = (doc: InvoiceDocument, locale: Locale, shows: (f: string) => boolean): string => {
+export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale, shows: (f: string) => boolean): string => {
   const rows: [string, Money][] = [
     [t('totalBeforeGst', locale), doc.totals.taxableValue],
     ['CGST', doc.totals.cgst],
@@ -167,7 +170,7 @@ const totalsTable = (doc: InvoiceDocument, locale: Locale, shows: (f: string) =>
  * Its totals row is the invoice's own totals, so the two can never disagree. Only the taxes this
  * bill actually carries get a column; a column of zeroes is noise on a page that is already dense.
  */
-const summaryTable = (doc: InvoiceDocument, locale: Locale): string => {
+export const summaryTable = (doc: Pick<InvoiceDocument, 'lines' | 'split'>, locale: Locale): string => {
   const summary = hsnSummary(doc);
   const columns = hsnSummaryColumns(summary);
   const amountOf = (row: HsnSummaryRow, column: (typeof columns)[number]): Money =>
