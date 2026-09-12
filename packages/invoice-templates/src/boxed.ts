@@ -149,6 +149,9 @@ export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale
     ['Cess', doc.totals.cess],
   ];
   const optional: [string, Money | null | undefined][] = [
+    // Issue #145 — above the round-off and below the GST, because it is charged on the GST-inclusive
+    // value and is then part of what gets rounded.
+    [t('tcs', locale), doc.totals.tcs == null || isZero(doc.totals.tcs) ? null : doc.totals.tcs],
     [t('roundOff', locale), isZero(doc.totals.roundOff) ? null : doc.totals.roundOff],
     [t('rcmTax', locale), isZero(doc.totals.reverseChargeTax) ? null : doc.totals.reverseChargeTax],
     [t('paid', locale), shows('totals.amountPaid') ? doc.totals.amountPaid : null],
@@ -460,6 +463,7 @@ export const renderBoxed = (
   <table class="grid words">
     <tr><td><span class="cap">${escapeHtml(t('taxInWords', locale))}</span>${escapeHtml(doc.taxAmountInWordsText)}</td></tr>
   </table>
+  ${doc.tcsNotice == null ? '' : `<table class="grid notice"><tr><td>${escapeHtml(doc.tcsNotice)}</td></tr></table>`}
   ${doc.declaredRateNotice === null ? '' : `<table class="grid notice"><tr><td>${escapeHtml(doc.declaredRateNotice)}</td></tr></table>`}
   ${doc.terms !== null && shows('footer.terms') ? `<table class="grid words"><tr><td>${escapeHtml(doc.terms)}</td></tr></table>` : ''}
   ${footerCells.length === 0 ? '' : `<table class="grid foot"><tr>${footerCells.join('')}</tr></table>`}

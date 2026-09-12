@@ -340,6 +340,7 @@ export const renderInvoice = (
     <table class="totals">
       <tr><td>${escapeHtml(t('totalBeforeGst', locale))}</td><td class="num">${money(doc.totals.taxableValue)}</td></tr>
       ${taxRows(doc, locale)}
+      ${doc.totals.tcs == null || isZero(doc.totals.tcs) ? '' : `<tr><td>${escapeHtml(t('tcs', locale))}</td><td class="num">${money(doc.totals.tcs)}</td></tr>`}
       ${isZero(doc.totals.roundOff) ? '' : `<tr><td>${escapeHtml(t('roundOff', locale))}</td><td class="num">${money(doc.totals.roundOff)}</td></tr>`}
       <tr class="grand"><td>${escapeHtml(t('total', locale))}</td><td class="num">${money(doc.totals.invoiceValue)}</td></tr>
       ${isZero(doc.totals.reverseChargeTax) ? '' : `<tr><td>${escapeHtml(t('rcmTax', locale))}</td><td class="num">${money(doc.totals.reverseChargeTax)}</td></tr>`}
@@ -396,10 +397,11 @@ export const renderInvoice = (
       ? ''
       : `<section class="party"><h2>${escapeHtml(t('bank', locale))}</h2>${doc.bankDetails.map((l) => `<div>${escapeHtml(l)}</div>`).join('')}</section>`;
 
-  const notice =
-    doc.declaredRateNotice === null
-      ? ''
-      : `<div class="notice">${escapeHtml(doc.declaredRateNotice)}</div>`;
+  const notice = [
+    // Issue #145 — the customer is entitled to see why an extra amount appeared on their bill.
+    doc.tcsNotice == null ? '' : `<div class="notice">${escapeHtml(doc.tcsNotice)}</div>`,
+    doc.declaredRateNotice === null ? '' : `<div class="notice">${escapeHtml(doc.declaredRateNotice)}</div>`,
+  ].join('');
 
   const footerBits = [
     doc.terms !== null && shows('footer.terms') ? `<div>${escapeHtml(doc.terms)}</div>` : '',

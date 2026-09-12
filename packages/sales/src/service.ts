@@ -46,7 +46,13 @@ import {
 } from './model.ts';
 import { formatNumber, seriesScope, validateSeries } from './numbering.ts';
 import { DEFAULT_SALES_POLICY, dueDateFor, needsApproval, withinCancellationWindow, type SalesPolicy } from './policy.ts';
-import type { ComplianceHookPort, InventoryPort, SalesRepository } from './ports.ts';
+import {
+  customerYearSalesFromRepository,
+  type ComplianceHookPort,
+  type CustomerYearSalesPort,
+  type InventoryPort,
+  type SalesRepository,
+} from './ports.ts';
 
 const nil = (): Money => zero('INR');
 
@@ -57,6 +63,11 @@ export interface SalesServiceDeps {
   readonly repository: SalesRepository;
   readonly inventory: InventoryPort;
   readonly compliance: ComplianceHookPort;
+  /**
+   * Issue #145 — the year's sales to each customer, used to decide tax collected at source.
+   * Defaults to adding up the bills this business has already issued.
+   */
+  readonly customerYearSales?: CustomerYearSalesPort;
   readonly permissions: PermissionPort;
   readonly audit: AuditPort;
   readonly clock: Clock;
@@ -96,6 +107,7 @@ export class SalesService {
   readonly #repo: SalesRepository;
   readonly #inventory: InventoryPort;
   readonly #compliance: ComplianceHookPort;
+  readonly #customerYearSales: CustomerYearSalesPort;
   readonly #permissions: PermissionPort;
   readonly #audit: AuditPort;
   readonly #clock: Clock;
@@ -109,6 +121,7 @@ export class SalesService {
     this.#repo = deps.repository;
     this.#inventory = deps.inventory;
     this.#compliance = deps.compliance;
+    this.#customerYearSales = deps.customerYearSales ?? customerYearSalesFromRepository(deps.repository);
     this.#permissions = deps.permissions;
     this.#audit = deps.audit;
     this.#clock = deps.clock;
@@ -232,7 +245,7 @@ export class SalesService {
   }
 
   async #priceInternal(actor: ActorContext, invoice: SalesInvoice): Promise<SalesInvoice> {
-    const result = this.#compute(invoice);
+    const result = await this.#compute(invoice);
     const next: SalesInvoice =
       result.status === 'COMPUTED'
         ? {
@@ -245,6 +258,7 @@ export class SalesService {
               mayChargeGst: result.mayChargeGst,
               lines: result.lines,
               totals: result.totals,
+              tcs: result.tcsCharge,
               explanation: result.explanation,
               decisions: result.decisions.map((d) => ({ ruleId: d.ruleId, ruleVersion: d.ruleVersion, topic: d.topic })),
             },
@@ -271,7 +285,23 @@ export class SalesService {
     return next;
   }
 
-  #compute(invoice: SalesInvoice): ComputeResult {
+  async #compute(invoice: SalesInvoice): Promise<ComputeResult> {
+    // Issue #145 — tax collected at source depends on the whole financial year, not on this bill
+    // alone, so the year so far is fetched before the bill is priced. A business that does not
+    // collect it is asked nothing and the calculator is told nothing.
+    const financialYear = financialYearOf(invoice.documentDate);
+    const tcs = this.#policy.tcs.collects
+      ? {
+          policy: this.#policy.tcs,
+          financialYear,
+          priorSalesThisYear: await this.#customerYearSales.billedSoFar(
+            invoice.companyId,
+            invoice.partyId,
+            financialYear,
+            invoice.id,
+          ),
+        }
+      : undefined;
     return this.#calculator.compute({
       companyId: invoice.companyId,
       documentDate: invoice.documentDate,
@@ -290,6 +320,7 @@ export class SalesService {
       freight: invoice.freight,
       otherCharges: invoice.otherCharges,
       roundToWholeRupee: invoice.roundToWholeRupee,
+      ...(tcs === undefined ? {} : { tcs }),
       source: { kind: 'sales_invoice', id: invoice.id },
     });
   }
@@ -427,7 +458,7 @@ export class SalesService {
 
     // Totals must still be what the person looked at. If a rate or a rule moved underneath them,
     // stop rather than issue a bill they never saw.
-    const recomputed = this.#compute(priced);
+    const recomputed = await this.#compute(priced);
     if (recomputed.status !== 'COMPUTED') {
       throw notAllowed(
         'SALES_PRICING_CHANGED',

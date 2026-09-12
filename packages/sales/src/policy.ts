@@ -6,6 +6,7 @@
  * is an acceptance criterion of this issue.
  */
 import { compareDates, type IsoDate, type Money } from '@invoice/kernel';
+import { DEFAULT_TCS_POLICY, type TcsPolicy } from '@invoice/gst-calc';
 import { DEFAULT_SERIES, type NumberSeries } from './numbering.ts';
 
 export interface SalesPolicy {
@@ -21,6 +22,12 @@ export interface SalesPolicy {
   readonly allowCancelAfterGovernmentRegistration: boolean;
   readonly defaultDueDays: number;
   readonly roundToWholeRupee: boolean;
+  /**
+   * Issue #145 — whether this business collects tax at source, and at what threshold and rate.
+   * Kept here, with the other billing choices, because the government changes the figures and a
+   * business must be able to follow that change without a release.
+   */
+  readonly tcs: TcsPolicy;
 }
 
 export const DEFAULT_SALES_POLICY: SalesPolicy = {
@@ -30,6 +37,7 @@ export const DEFAULT_SALES_POLICY: SalesPolicy = {
   allowCancelAfterGovernmentRegistration: false,
   defaultDueDays: 30,
   roundToWholeRupee: true,
+  tcs: DEFAULT_TCS_POLICY,
 };
 
 export const needsApproval = (policy: SalesPolicy, invoiceValue: Money): boolean =>

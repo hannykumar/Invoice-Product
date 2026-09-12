@@ -531,6 +531,8 @@ export class PreSaleService {
           mayChargeGst: result.mayChargeGst,
           lines: result.lines,
           totals: result.totals,
+          // A quotation is not a sale, so nothing is collected at source on one (issue #145).
+          tcs: null,
           explanation: result.explanation,
           decisions: result.decisions.map((d) => ({ ruleId: d.ruleId, ruleVersion: d.ruleVersion, topic: d.topic })),
         },

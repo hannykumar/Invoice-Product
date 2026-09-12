@@ -43,6 +43,8 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
   // collected this from anyone. The business owes it to the government directly, and a shopkeeper
   // reading the two under one heading would draw the wrong conclusion about what they hold.
   { code: '2300', name: 'GST you owe the government yourself', type: 'LIABILITY', parentCode: '2000', isGroup: false, systemRole: 'REVERSE_CHARGE_PAYABLE' },
+  // Issue #145 — collected from the customer for the government, never the business's own money.
+  { code: '2400', name: 'Tax collected from customers for the government', type: 'LIABILITY', parentCode: '2000', isGroup: false, systemRole: 'TCS_PAYABLE' },
 
   { code: '3000', name: "The owner's money in the business", type: 'EQUITY', parentCode: null, isGroup: true, systemRole: null },
   { code: '3100', name: 'Capital', type: 'EQUITY', parentCode: '3000', isGroup: false, systemRole: null },

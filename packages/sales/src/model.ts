@@ -5,7 +5,7 @@
  * that is not in that file does not exist here; propose it there first.
  */
 import type { BranchId, CompanyId, IsoDate, Money, PartyId, Quantity, UserId, VoucherId } from '@invoice/kernel';
-import type { ComputedTaxLine, PriceBasis, TaxSplit, TaxTotals, Discount } from '@invoice/gst-calc';
+import type { ComputedTaxLine, PriceBasis, TaxSplit, TaxTotals, TcsCharge, Discount } from '@invoice/gst-calc';
 
 export type InvoiceState = 'DRAFT' | 'PENDING_APPROVAL' | 'NEEDS_INFO' | 'FINAL' | 'CANCELLED';
 
@@ -47,6 +47,8 @@ export interface InvoicePricing {
   readonly mayChargeGst: boolean;
   readonly lines: readonly ComputedTaxLine[];
   readonly totals: TaxTotals;
+  /** Issue #145 — the working behind the tax collected at source, or `null` when none was due. */
+  readonly tcs: TcsCharge | null;
   readonly explanation: { readonly 'en-IN': string; readonly 'hi-IN': string };
   /** Rule ids and versions behind the tax treatment, so the bill can be explained later. */
   readonly decisions: readonly { ruleId: string | null; ruleVersion: string | null; topic: string }[];

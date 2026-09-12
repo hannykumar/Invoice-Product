@@ -79,6 +79,11 @@ export interface RenderableTotals {
   readonly roundOff: Money;
   readonly invoiceValue: Money;
   readonly reverseChargeTax: Money;
+  /**
+   * Issue #145 — tax collected at source. It is part of what the customer pays and is shown on a
+   * line of its own, after the GST and before the total, so it is never read as GST.
+   */
+  readonly tcs?: Money | null;
   readonly amountPaid?: Money | null;
   readonly outstanding?: Money | null;
 }
@@ -184,6 +189,11 @@ export interface InvoiceDocument {
   readonly taxAmountInWordsText: string;
   /** Present when any rate on the bill came from the business rather than a checked notification. */
   readonly declaredRateNotice: string | null;
+  /**
+   * Issue #145 — the sentence that says why tax was collected at source: which customer threshold
+   * was crossed, and what this bill's share of it was. Printed whenever a TCS amount is.
+   */
+  readonly tcsNotice?: string | null;
   readonly logoDataUri: string | null;
   /**
    * Free-text bank lines, kept so a business that entered them this way loses nothing. When `bank`
