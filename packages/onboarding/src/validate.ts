@@ -7,7 +7,7 @@
  */
 import { compareDates, isoDate, type IsoDate } from '@invoice/kernel';
 import { GST_STATE_CODES, validateGstin } from '../../masters/src/validation.ts';
-import { templateById } from '@invoice/invoice-templates';
+import { MAX_TRADE_MARK_OPACITY_PERCENT, templateById, tradeMarkPicture } from '@invoice/invoice-templates';
 import { profileFor } from './business-types.ts';
 import { checkOpeningBalances } from './opening-balances.ts';
 import type { OnboardingAnswers, StepId, StepProblem } from './model.ts';
@@ -125,6 +125,33 @@ const validateBranding = (a: OnboardingAnswers): StepProblem[] => {
   } else if (templateById(templateId) === undefined) {
     problems.push(p('BRANDING_TEMPLATE_UNKNOWN', 'That bill design is not one we have.', 'Woh bill design hamare paas nahin hai.', 'templateId'));
   }
+  // Issue #147 — the mark of the trade is an extra, so its absence is never a problem. What is
+  // checked is a mark that was set to something the bill cannot honour: a picture we do not have,
+  // or a darkness that would sit on top of the tax figures.
+  const mark = a.branding.tradeMark;
+  if (mark != null) {
+    if (mark.source === 'LIBRARY' && (mark.pictureId === null || tradeMarkPicture(mark.pictureId) === null)) {
+      problems.push(
+        p(
+          'BRANDING_TRADE_MARK_UNKNOWN',
+          'That picture is not one we have. Search again and pick another.',
+          'Woh tasveer hamare paas nahin hai. Dobara dhoondh kar dusri chunein.',
+          'tradeMark',
+        ),
+      );
+    }
+    if (mark.opacityPercent > MAX_TRADE_MARK_OPACITY_PERCENT) {
+      problems.push(
+        p(
+          'BRANDING_TRADE_MARK_TOO_DARK',
+          `The picture behind your bill can be at most ${MAX_TRADE_MARK_OPACITY_PERCENT}% dark, so the amounts on top of it stay easy to read.`,
+          `Bill ke peeche wali tasveer zyada se zyada ${MAX_TRADE_MARK_OPACITY_PERCENT}% gehri ho sakti hai, taaki upar ke figures saaf padhe jaayein.`,
+          'tradeMark',
+        ),
+      );
+    }
+  }
+
   const prefix = a.branding.invoicePrefix ?? '';
   if (prefix !== '' && !/^[A-Z0-9]{1,6}$/.test(prefix)) {
     problems.push(

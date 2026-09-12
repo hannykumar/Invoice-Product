@@ -3,7 +3,11 @@
     "allow": [
       "Bash(git checkout *)",
       "Bash(git rm *)",
-      "Bash(git commit --allow-empty -q -m 'chore: initialise repository *)"
+      "Bash(git commit --allow-empty -q -m 'chore: initialise repository *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh issue view *)"
     ]
   }
 }

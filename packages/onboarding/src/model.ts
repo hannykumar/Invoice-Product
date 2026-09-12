@@ -11,6 +11,7 @@
  *     the product does not actually know. A default that looks like a fact is worse than a blank.
  */
 import type { CompanyId, IsoDate, Money, UserId } from '@invoice/kernel';
+import type { TradeMarkChoice } from '@invoice/invoice-templates';
 
 export type StepId =
   | 'business'
@@ -70,6 +71,15 @@ export interface TaxProfileAnswers {
 export interface BrandingAnswers {
   readonly templateId?: string;
   readonly logoDataUri?: string | null;
+  /**
+   * Issue #147 — the mark of the trade, faint behind the items on the bill.
+   *
+   * Left out means no mark, which is what a business gets unless it goes looking for a picture and
+   * picks one. Nothing is chosen from the kind of business: a bakery is not given a cake because
+   * it said "bakery" during setup. Stored as the finished picture, so a bill prints with no
+   * internet and a reprint years later shows the same drawing.
+   */
+  readonly tradeMark?: TradeMarkChoice | null;
   readonly invoicePrefix?: string;
   readonly branchCode?: string;
 }

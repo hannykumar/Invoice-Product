@@ -54,7 +54,8 @@
     "demo:gst-returns": "node --experimental-strip-types packages/gst-returns/src/demo.ts",
     "demo:calendar": "node --experimental-strip-types packages/compliance-calendar/src/demo.ts",
     "demo:gsp": "node --experimental-strip-types packages/gsp/src/demo.ts",
-    "demo:rates": "node --experimental-strip-types packages/rate-advisor/src/demo.ts"
+    "demo:rates": "node --experimental-strip-types packages/rate-advisor/src/demo.ts",
+    "marks:build": "node --experimental-strip-types tools/trade-marks/build-library.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",
@@ -63,6 +64,7 @@
     "read-excel-file": "^9.3.10"
   },
   "devDependencies": {
+    "@tabler/icons": "^3.46.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.5",
     "typescript": "^5.9.0"

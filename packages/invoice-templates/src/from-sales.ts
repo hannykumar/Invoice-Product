@@ -9,6 +9,7 @@ import { formatQuantity, isoDate, subtract, zero, type IsoDate, type Money } fro
 import type { SalesInvoice } from '@invoice/sales';
 import type { ComputedTaxLine } from '@invoice/gst-calc';
 import { amountInWords } from './words.ts';
+import type { TradeMarkChoice } from './marks.ts';
 import type {
   DocumentTitle,
   InvoiceDocument,
@@ -45,6 +46,11 @@ export interface PrintingContext {
   readonly packagesByLineId?: Readonly<Record<string, string>>;
   /** Issue #138 — the business's signature image, supplied the same way as its logo. */
   readonly signatureDataUri?: string | null;
+  /**
+   * Issue #147 — the mark of the trade, if the business has chosen one. Omitted prints no mark,
+   * which is what every bill does until somebody picks a picture.
+   */
+  readonly tradeMark?: TradeMarkChoice | null;
 }
 
 const nil = (): Money => zero('INR');
@@ -123,6 +129,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     // on the bill can never drift apart.
     tcsNotice: pricing.tcs === null ? null : pricing.tcs.note['en-IN'],
     logoDataUri: context.logoDataUri ?? null,
+    tradeMark: context.tradeMark ?? null,
     bankDetails: context.bankDetails ?? null,
     bank: context.bank ?? null,
     references: context.references ?? null,
