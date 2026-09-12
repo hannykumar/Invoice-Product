@@ -15,3 +15,5 @@ export * from './from-sales.ts';
 export * from './challan.ts';
 // Issue #142 — the quotation and the proforma invoice, printed on the same engine.
 export * from './presale.ts';
+// Issue #147 — the mark of the trade a business may print behind its bill.
+export * from './marks.ts';

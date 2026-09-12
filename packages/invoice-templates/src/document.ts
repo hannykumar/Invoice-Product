@@ -8,6 +8,7 @@
  */
 import type { IsoDate, Money } from '@invoice/kernel';
 import type { PageLayout } from './template.ts';
+import type { TradeMarkChoice } from './marks.ts';
 
 export type DocumentTitle = 'TAX_INVOICE' | 'BILL_OF_SUPPLY' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
 export type TaxSplit = 'CGST_SGST' | 'CGST_UTGST' | 'IGST';
@@ -195,6 +196,17 @@ export interface InvoiceDocument {
    */
   readonly tcsNotice?: string | null;
   readonly logoDataUri: string | null;
+  /**
+   * Issue #147 — the faint mark of the trade printed behind the items.
+   *
+   * `null` on every bill until a business goes and chooses one, and a bill without it is complete.
+   * It is frozen onto the document like the logo and the design, so a reprint years later carries
+   * the picture the customer was given rather than whatever the business picked since.
+   *
+   * The renderer caps how dark it may be and drops it entirely on till-roll paper. Decoration is
+   * never allowed to cost a tax figure its legibility.
+   */
+  readonly tradeMark?: TradeMarkChoice | null;
   /**
    * Free-text bank lines, kept so a business that entered them this way loses nothing. When `bank`
    * is present it is used instead, because named fields read better and copy more safely.

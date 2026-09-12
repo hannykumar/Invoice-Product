@@ -27,6 +27,7 @@ import { InMemorySalesRepository, SalesService, noComplianceHooks, permissiveInv
 import { captureSnapshot } from './snapshot.ts';
 import { renderInvoice, renderInvoiceCopies, renderInvoiceCopySet } from './render.ts';
 import { shipToFromDelivery, toInvoiceDocument } from './from-sales.ts';
+import { searchTradeMarks, tradeMarkFromLibrary, tradeMarkPictures, tradeMarkSvg } from './marks.ts';
 import { recommendTemplates, templateById, type PageFormat } from './template.ts';
 
 const COMPANY: CompanyId = asId<'Company'>('demo-sharma');
@@ -205,6 +206,10 @@ const main = async (): Promise<void> => {
     // Issue #134 — the goods go to a cold store, not to the buyer's shop. This is the same delivery
     // party the e-way bill is built from, passed through unchanged.
     shipTo: null,
+    // Issue #147 — the mark of the trade. Sharma Fruit Traders sells fruit, so for this walkthrough
+    // it has gone and picked the apple. Nothing chose it for them: a business that picks nothing
+    // prints no mark, and the bill is complete either way.
+    tradeMark: tradeMarkFromLibrary('apple'),
     batchByLineId: { l1: 'AP-2608', l3: 'JU-1912' },
     packagesByLineId: { l1: '70 Boxes', l2: '8 Bundles', l3: '10 Cartons' },
   });
@@ -287,6 +292,42 @@ const main = async (): Promise<void> => {
     written.push(file);
   }
 
+  // Issue #147 — a page showing what a business sees when it looks for its mark: it types what it
+  // sells, and gets drawings to choose from. Written out so the search can be looked at rather than
+  // taken on trust.
+  {
+    const searches = ['fruit', 'mithai', 'kapda', 'plastic', 'tyre', 'dawa', 'kirana', 'hardware', 'bakery', 'transport'];
+    const sections = searches
+      .map((query) => {
+        const found = searchTradeMarks(query, 10);
+        const pictures = found
+          .map((r) => `<figure><div class="pic">${tradeMarkSvg(r.picture, '#1f2933')}</div><figcaption>${r.picture.id}</figcaption></figure>`)
+          .join('');
+        return `<section><h2>Typed: &ldquo;${query}&rdquo;</h2><div class="row">${pictures}</div></section>`;
+      })
+      .join('');
+    const file = join(outDir, 'trade-marks.html');
+    writeFileSync(
+      file,
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pick the mark of your trade</title>
+<style>
+ body { font-family: system-ui, sans-serif; margin: 24px; color: #1f2933; background: #f7f7f7; }
+ h1 { font-size: 20px; } h2 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; }
+ .row { display: flex; flex-wrap: wrap; gap: 10px; }
+ figure { margin: 0; width: 96px; background: #fff; border: 1px solid #dcdcdc; border-radius: 6px; padding: 8px; text-align: center; }
+ .pic svg { width: 44px; height: 44px; }
+ figcaption { font-size: 10px; color: #62707d; margin-top: 6px; overflow-wrap: anywhere; }
+ p.note { font-size: 13px; color: #47525d; max-width: 60em; }
+</style></head><body>
+<h1>Pick the mark of your trade</h1>
+<p class="note">${tradeMarkPictures().length} drawings, searched by what a business actually sells. Nothing is chosen for a business: a bill carries a mark only after somebody picks one here, and a bill with no mark is a complete bill.</p>
+${sections}
+</body></html>`,
+      'utf8',
+    );
+    written.push(file);
+  }
+
   // A hundred-line bill, to show the A4 layout still holds up.
   const longLines = Array.from({ length: 100 }, (_unused, i) => ({
     ...(document.lines[1] as (typeof document.lines)[number]),
@@ -306,6 +347,14 @@ const main = async (): Promise<void> => {
   console.log(`Bill ${invoice.number} issued for ${document.totals.invoiceValue.minor / 100n} rupees.`);
   console.log(`Tax treatment: ${invoice.pricing?.split}, place of supply ${document.placeOfSupplyStateName}.`);
   console.log(`Rates: declared by the business, not yet checked against a notification.\n`);
+  // Issue #147 — what a business actually sees when it goes looking for its mark. The words are
+  // the ones a shopkeeper would type, including the Hindi ones.
+  console.log('Pictures found for what a business sells:');
+  for (const query of ['fruit', 'mithai', 'kapda', 'plastic dana', 'tyre', 'dawa']) {
+    const found = searchTradeMarks(query, 5).map((r) => r.picture.id);
+    console.log(`  "${query}" -> ${found.join(', ')}`);
+  }
+  console.log('');
   console.log('Templates suggested for a wholesaler, best first:');
   for (const t of recommendTemplates('WHOLESALE')) console.log(`  - ${t.name['en-IN']} (${t.id})`);
   console.log('\nOpen any of these in a browser. Use the browser’s print dialogue to get a PDF.\n');

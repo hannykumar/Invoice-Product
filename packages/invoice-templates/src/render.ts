@@ -27,6 +27,7 @@ import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
 import { preSaleTitle, renderPreSaleBoxed, renderPreSaleNarrow, type PreSalePrint } from './presale.ts';
+import { MAX_TRADE_MARK_OPACITY_PERCENT } from './marks.ts';
 
 /** Re-exported because this module has been the public home of the escaper since issue #13. */
 export { escapeHtml };
@@ -105,6 +106,28 @@ const lineRow = (line: RenderableLine, snapshot: TemplateSnapshot): string => {
   return `<tr${charge ? ' class="charge"' : ''}>${cells.join('')}</tr>`;
 };
 
+/**
+ * Issue #147 — the faint mark of the trade, if the business has chosen one.
+ *
+ * Three rules live here rather than in a template, because a template must not be able to decide
+ * any of them:
+ *
+ *  - It prints only when a business has picked a picture. There is no default and no guess from
+ *    the kind of business; a bill with no mark is a complete bill.
+ *  - It is never darker than `MAX_TRADE_MARK_OPACITY_PERCENT`, whatever is stored against the
+ *    business, because the figures on top of it are the tax on the bill.
+ *  - It does not print on till roll at all. A thermal printer has one ink and no grey, so a
+ *    watermark there comes out as a smudge across the amounts.
+ */
+const watermark = (doc: InvoiceDocument, format: PageFormat): string => {
+  const mark = doc.tradeMark;
+  if (mark == null) return '';
+  if (format === 'THERMAL_58MM' || format === 'THERMAL_80MM') return '';
+  const percent = Math.min(mark.opacityPercent, MAX_TRADE_MARK_OPACITY_PERCENT);
+  if (!(percent > 0)) return '';
+  return `<div class="watermark" aria-hidden="true"><img src="${escapeHtml(mark.imageDataUri)}" alt="" style="opacity:${(percent / 100).toFixed(3)}"></div>`;
+};
+
 const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
   const page = PAGE[format];
   const { palette, typography } = snapshot;
@@ -117,6 +140,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
       font-size: ${typography.baseSizePt}pt; color: ${palette.text}; line-height: 1.4;
     }
     .sheet {
+      position: relative;
       width: ${page.widthCss};
       /* On paper this is exactly ${page.widthCss}. On a screen narrower than the page it shrinks
          rather than running off the edge, because a bill nobody can read on a phone is a bill
@@ -125,6 +149,17 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
       margin: 12px auto; background: #fff; padding: ${page.narrow ? '6mm 4mm' : '12mm 10mm'};
       box-shadow: 0 1px 4px rgba(0,0,0,.18);
     }
+    /* Issue #147 — the mark of the trade, behind everything and touching nothing.
+       It is drawn once per sheet, sized against the page rather than the content, so it does not
+       move when a bill has four lines instead of forty. Every other block on the sheet is lifted
+       above it, so no figure is ever printed through a picture rather than over it. */
+    .watermark {
+      position: absolute; inset: 0; z-index: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    .watermark img { width: 55%; max-width: 110mm; max-height: 45%; }
+    .sheet > *:not(.watermark) { position: relative; z-index: 1; }
     table.items { table-layout: fixed; }
     table.items td, table.items th { overflow-wrap: anywhere; }
     h1 { font-family: ${typography.headingStack}; font-size: ${typography.baseSizePt + 4}pt; margin: 0 0 2mm; color: ${palette.accent}; letter-spacing: .04em; }
@@ -248,6 +283,9 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed .tag { font-size: ${typography.baseSizePt - 1}pt; border: 1px solid ${palette.border}; padding: 0 .8mm; }
     @media print {
       body { background: #fff; }
+      /* Drawn as a picture rather than as a background, because a browser printing a page throws
+         backgrounds away by default and a business that switched its mark on would get nothing. */
+      .watermark img { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
       .sheet { margin: 0; box-shadow: none; width: auto; max-width: none; }
       table.items thead { display: table-header-group; }
       table.items tfoot { display: table-footer-group; }
@@ -285,7 +323,7 @@ export const renderInvoice = (
       format,
       locale,
       'boxed',
-      `<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking)}</div>`,
+      `${watermark(doc, format)}<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking)}</div>`,
       options.copy,
     );
   }
@@ -414,6 +452,7 @@ export const renderInvoice = (
   ].join('');
 
   const body = `
+  ${watermark(doc, format)}
   ${marking === null ? '' : `<div class="copy-mark">${escapeHtml(marking)}</div>`}
   <div class="head">
     <div>
