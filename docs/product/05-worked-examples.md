@@ -88,7 +88,7 @@ not as money already saved.
 
 ## Example 3 — Intra-state sale, with round-off
 
-Invoice `INV/26-27/00041` to ABC Traders (Delhi), dated 10 April 2026: 3 plastic crates at
+Invoice `INV/26-27/000041` to ABC Traders (Delhi), dated 10 April 2026: 3 plastic crates at
 ₹333.33 each. Seller is in Delhi and the place of supply is Delhi, so CGST and SGST apply.
 
 | Step | Working | Result |
@@ -118,7 +118,7 @@ repeatedly.
 Stock of `APL-BOX-10` at Narela godown after Example 1: 100 BOX physical, 0 reserved,
 100 available.
 
-**Sale A**, invoice `INV/26-27/00042` to ABC Traders, 12 April 2026: 70 boxes at ₹800.
+**Sale A**, invoice `INV/26-27/000042` to ABC Traders, 12 April 2026: 70 boxes at ₹800.
 
 | Line | Quantity | Rate | Taxable value | GST | Total |
 | --- | --- | --- | --- | --- | --- |
@@ -149,7 +149,7 @@ race cannot produce two invoices for the same 30 boxes.
 
 ## Example 5 — Partial payment across two modes
 
-Invoice `INV/26-27/00044` to ABC Traders, dated 15 April 2026: 125 apple boxes at ₹800,
+Invoice `INV/26-27/000044` to ABC Traders, dated 15 April 2026: 125 apple boxes at ₹800,
 nil-rated, invoice value **₹1,00,000.00**, payment terms 30 days, due 15 May 2026.
 
 **Receipt 1** — cheque `112233` for ₹30,000 dated 20 April 2026, allocated fully to invoice 44.

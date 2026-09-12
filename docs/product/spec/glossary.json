@@ -281,7 +281,7 @@
         "hi-IN": "Customer ko diya gaya bill"
       },
       "definition": "The legal document for a sale. When finalised it gets a permanent number, reduces stock, records tax payable and creates a receivable from the customer.",
-      "example": "Invoice INV/26-27/00042 to ABC Traders for 70 boxes of apples.",
+      "example": "Invoice INV/26-27/000042 to ABC Traders for 70 boxes of apples.",
       "alsoCalled": [
         "tax invoice",
         "bill",

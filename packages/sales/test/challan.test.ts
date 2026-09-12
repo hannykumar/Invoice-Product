@@ -10,7 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DomainError, toDecimalString } from '@invoice/kernel';
-import { CHALLAN_NUMBER_MAX_LENGTH, formatChallanNumber, validateChallanSeries } from '../src/challan-numbering.ts';
+import { CHALLAN_NUMBER_MAX_LENGTH, challansPerYear, DEFAULT_CHALLAN_SERIES, formatChallanNumber, validateChallanSeries } from '../src/challan-numbering.ts';
 import { CHALLAN_REASONS, challanReason } from '../src/challan-model.ts';
 import { ABC, GURUGRAM, ALL_PERMISSIONS, actorWith, inr, on, qty } from './fixtures.ts';
 import { crateChallan, makeDispatchDesk } from './challan-fixtures.ts';
@@ -88,9 +88,9 @@ test('challans have their own number series, and it never touches the invoice se
   const invoice = await issueInvoice(desk, 'n');
   const second = await desk.challans.issue(desk.actor, { idempotencyKey: 'n2', input: crateChallan() });
 
-  assert.equal(first.number, 'DC/26-27/00001');
-  assert.equal(second.number, 'DC/26-27/00002', 'consecutive, with no gap for the invoice issued in between');
-  assert.equal(invoice.number, 'INV/26-27/00001', 'the invoice series started at 1, untouched by challans');
+  assert.equal(first.number, 'DC/26-27/0000001');
+  assert.equal(second.number, 'DC/26-27/0000002', 'consecutive, with no gap for the invoice issued in between');
+  assert.equal(invoice.number, 'INV/26-27/000001', 'the invoice series started at 1, untouched by challans');
   assert.ok(first.number.length <= CHALLAN_NUMBER_MAX_LENGTH, 'Rule 55(1): at most sixteen characters');
 });
 
@@ -103,7 +103,7 @@ test('a retry returns the challan already issued, and a refused challan does not
   const once = await desk.challans.issue(desk.actor, { idempotencyKey: 'same', input: crateChallan() });
   const twice = await desk.challans.issue(desk.actor, { idempotencyKey: 'same', input: crateChallan() });
   assert.equal(once.id, twice.id);
-  assert.equal(once.number, 'DC/26-27/00001', 'the refused challan left no gap');
+  assert.equal(once.number, 'DC/26-27/0000001', 'the refused challan left no gap');
   assert.equal((await desk.challans.list(desk.actor)).length, 1);
 });
 
@@ -124,11 +124,21 @@ test('everything stopping a challan is listed at once, and nothing is guessed', 
   assert.deepEqual(codes.sort(), ['CHALLAN_HSN_MISSING', 'CHALLAN_NOT_GOODS', 'CHALLAN_QUANTITY', 'CHALLAN_REASON_NOTE_REQUIRED'].sort());
 });
 
-test('a series that could print a number over sixteen characters, or look like an invoice, is refused', () => {
-  assert.throws(() => validateChallanSeries({ prefix: 'CHALLAN', branchCode: 'MAIN', padding: 5 }), refusedWith('CHALLAN_NUMBER_TOO_LONG'));
-  assert.throws(() => validateChallanSeries({ prefix: 'INV', branchCode: '', padding: 5 }, 'INV'), refusedWith('CHALLAN_SERIES_SHARES_INVOICE_PREFIX'));
-  assert.doesNotThrow(() => validateChallanSeries({ prefix: 'DC', branchCode: 'KB', padding: 4 }));
-  assert.equal(formatChallanNumber({ prefix: 'DC', branchCode: 'KB', padding: 4 }, on('2027-02-01'), 7), 'DC/KB/26-27/0007');
+test('the challan number fills all sixteen characters, and a series too small or too like an invoice is refused', () => {
+  const number = formatChallanNumber(DEFAULT_CHALLAN_SERIES, on('2027-02-01'), 7);
+  assert.equal(number, 'DC/26-27/0000007');
+  assert.equal(number.length, CHALLAN_NUMBER_MAX_LENGTH, 'not one character is left unused');
+  assert.equal(challansPerYear(DEFAULT_CHALLAN_SERIES), 9_999_999);
+
+  assert.throws(() => validateChallanSeries({ prefix: 'CHALLAN', branchCode: 'MAIN' }), refusedWith('CHALLAN_SERIES_TOO_FEW_CHALLANS'));
+  assert.throws(() => validateChallanSeries({ prefix: 'DC', branchCode: 'MAIN' }), refusedWith('CHALLAN_SERIES_TOO_FEW_CHALLANS'));
+  assert.throws(() => validateChallanSeries({ prefix: 'INV', branchCode: '' }, 'INV'), refusedWith('CHALLAN_SERIES_SHARES_INVOICE_PREFIX'));
+
+  // A branch code in the number costs challans, and "DC/KB" leaves only 9,999 a year, so it is
+  // refused too. A one-letter prefix buys the room back.
+  assert.throws(() => validateChallanSeries({ prefix: 'DC', branchCode: 'KB' }), refusedWith('CHALLAN_SERIES_TOO_FEW_CHALLANS'));
+  assert.doesNotThrow(() => validateChallanSeries({ prefix: 'D', branchCode: 'KB' }));
+  assert.equal(formatChallanNumber({ prefix: 'D', branchCode: 'KB' }, on('2027-02-01'), 7), 'D/KB/26-27/00007');
 });
 
 test('every reason is one Rule 55 or section 31(7) allows, and only a sale carries tax', () => {
@@ -148,7 +158,7 @@ test('the invoice raised after delivery links back to the challan — Rule 55(4)
   assert.equal(linked.state, 'INVOICED');
   assert.equal(linked.invoice?.invoiceNumber, invoice.number);
   assert.deepEqual(linked.invoice?.differences, []);
-  assert.deepEqual((await desk.challans.forInvoice(desk.actor, invoice.id)).map((c) => c.number), ['DC/26-27/00001']);
+  assert.deepEqual((await desk.challans.forInvoice(desk.actor, invoice.id)).map((c) => c.number), ['DC/26-27/0000001']);
 
   // Linking again is harmless; linking it to a second invoice is not.
   assert.equal((await desk.challans.linkInvoice(desk.actor, { challanId: challan.id, invoiceId: invoice.id })).version, linked.version);
@@ -230,10 +240,10 @@ test('a challan with a live e-way bill is cancelled only once the person confirm
   await assert.rejects(desk.challans.cancel(desk.actor, { challanId: challan.id, reason: ' ', ewayBillCancelledOnPortal: true }), refusedWith('CHALLAN_REASON_REQUIRED'));
   const cancelled = await desk.challans.cancel(desk.actor, { challanId: challan.id, reason: 'Lorry did not come', ewayBillCancelledOnPortal: true });
   assert.equal(cancelled.state, 'CANCELLED');
-  assert.equal(cancelled.number, 'DC/26-27/00001', 'the number stays used, so the series keeps no gap');
+  assert.equal(cancelled.number, 'DC/26-27/0000001', 'the number stays used, so the series keeps no gap');
 
   const next = await desk.challans.issue(desk.actor, { idempotencyKey: 'x2', input: crateChallan() });
-  assert.equal(next.number, 'DC/26-27/00002');
+  assert.equal(next.number, 'DC/26-27/0000002');
 });
 
 test('a billed challan cannot be cancelled — the goods really moved', async () => {

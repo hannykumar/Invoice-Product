@@ -630,7 +630,7 @@ Each entry gives the word we use in code and contracts, the plain sentence we sh
 - **Plain (en-IN)**: The bill you give a customer
 - **Plain (hi-IN)**: Customer ko diya gaya bill
 - **Means**: The legal document for a sale. When finalised it gets a permanent number, reduces stock, records tax payable and creates a receivable from the customer.
-- **Example**: Invoice INV/26-27/00042 to ABC Traders for 70 boxes of apples.
+- **Example**: Invoice INV/26-27/000042 to ABC Traders for 70 boxes of apples.
 - **Also called**: tax invoice, bill, sale bill
 - **Not the same as**: purchase-invoice, proforma, quotation
 

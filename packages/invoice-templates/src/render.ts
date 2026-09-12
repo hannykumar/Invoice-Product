@@ -550,7 +550,7 @@ export const renderPreSale = (doc: PreSalePrint, snapshot: TemplateSnapshot, opt
  * design version produced the page.
  */
 const page = (
-  /** What the browser tab and a saved PDF are called, e.g. "Tax Invoice INV/26-27/00001". */
+  /** What the browser tab and a saved PDF are called, e.g. "Tax Invoice INV/26-27/000001". */
   heading: string,
   snapshot: TemplateSnapshot,
   format: PageFormat,

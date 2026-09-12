@@ -1,4 +1,4 @@
-# Contract: `sales` v1.1.0
+# Contract: `sales` v1.2.0
 
 | | |
 | --- | --- |
@@ -49,7 +49,7 @@ error.
 
 ```ts
 interface SalesPolicy {
-  series: { prefix, branchCode, padding };       // INV/26-27/00042
+  series: { prefix, branchCode };               // INV/26-27/000042
   approvalRequiredAtOrAbove: Money | null;
   cancellationWindowDays: number;
   allowCancelAfterGovernmentRegistration: boolean;
@@ -65,24 +65,32 @@ The person who sends a bill for approval can never be the one who approves it.
 `{prefix}/{branchCode}/{shortFinancialYear}/{sequence}` — unique per company, branch and financial
 year, allocated inside the finalisation transaction. Fifty concurrent finalisations produce fifty
 different numbers with no gaps, and that is a test. `branchCode` may be empty, and is then left out
-of the number altogether; the default series is `INV/26-27/00001`.
+of the number altogether; the default series is `INV/26-27/000001`.
 
-**Sixteen characters, never more (v1.1.0, issue #162).** CGST Rule 46(b) asks for "a consecutive
-serial number not exceeding sixteen characters", and the e-invoice portal refuses a document number
-longer than that. So:
+**Sixteen characters, and all sixteen of them (v1.2.0, issue #162).** CGST Rule 46(b) asks for "a
+consecutive serial number not exceeding sixteen characters", and the e-invoice portal refuses a
+document number longer than that. So:
 
 - The financial year is written short — `26-27`, not `2026-27`. The long form spent seven of the
   sixteen characters on the year alone, which is what made the old numbers twenty to twenty-two
   characters long.
-- `validateSeries(series)` runs in the `SalesService` constructor and refuses a series whose widest
-  possible number would pass sixteen. A series is therefore rejected on the day it is configured,
-  not on the day the sequence grows a digit and overflows.
-- `formatNumber` refuses the same way, so nothing can get past it at issue time either.
-- `INVOICE_NUMBER_MAX_LENGTH` is exported for consumers that display or re-check the number.
+- **The width of the running number is not configurable.** `NumberSeries` has no `padding` field.
+  The sequence is padded to exactly the room the prefix and year leave behind, so a number is always
+  sixteen characters and never fifteen. A character not spent on the running number is an order of
+  magnitude of headroom given away, and it cannot be reclaimed later without renumbering bills that
+  are already in customers' hands.
+- `sequenceDigits(series)` and `billsPerYear(series)` report the derived width and the resulting
+  ceiling. The default carries a business to **999,999 bills in one financial year**.
+- `validateSeries` runs in the `SalesService` constructor and refuses a series that could not reach
+  `MIN_BILLS_PER_YEAR` (99,999 — what this product managed before the widening, so no choice can
+  leave a business worse off than it already was). What is checked is whether the prefix and branch
+  code have eaten too much of the number, not whether the business guessed its volume correctly.
+- `formatNumber` refuses with `SALES_SERIES_EXHAUSTED` if a sequence somehow runs past the ceiling,
+  rather than printing a seventeenth character.
 
-A branch code costs four characters (the code itself plus a separator, plus the year and its
-separators), so a series that wants one needs a shorter prefix or less padding —
-`INV/KB/26-27/001` fits, `INV/KB/26-27/0001` does not.
+A branch code costs its own length plus a separator, straight out of the bills-per-year figure:
+`INV/26-27/000001` gives 999,999 a year, `I/KB/26-27/00001` gives 99,999, and `INV/KB/26-27/...`
+is refused because it would leave only 999.
 
 **`invoice.financialYear` is computed from `documentDate`, not parsed out of the number**, and is
 still the long form (`2026-27`). `parseNumber` returns the year as printed (`26-27`) and accepts
@@ -90,9 +98,13 @@ numbers with or without a branch code.
 
 ### Migration from v1.0.0
 
-Numbers already issued under the old format stay as they are; nothing rewrites history. Any consumer
-that pattern-matched `INV/{branch}/{4-digit year}/...`, or that read the financial year out of the
-third segment of the number, must be updated — `financialYear` on the invoice is the field to read.
+Numbers already issued under the old format stay as they are; nothing rewrites history. Consumers
+must change in two ways:
+
+- `NumberSeries` no longer takes `padding`. Remove the field; the width is derived.
+- Anything that pattern-matched `INV/{branch}/{4-digit year}/{5 digits}`, or that read the financial
+  year out of the third segment of the number, must be updated — `financialYear` on the invoice is
+  the field to read.
 
 ## Ports it consumes
 
@@ -119,10 +131,10 @@ never unmakes a bill; it comes back as a retryable status, worded by `gov.servic
 | `SALES_CONCURRENT_EDIT` | Someone else changed this draft first |
 | `SALES_ACCOUNT_MISSING`, `SALES_CUSTOMER_ACCOUNT_MISSING` | The chart of accounts is not set up for this |
 | `SALES_REASON_REQUIRED` | Cancelling needs a written reason |
-| `SALES_NUMBER_TOO_LONG` | The series would print a number past the sixteen characters GST allows |
+| `SALES_SERIES_TOO_FEW_BILLS` | The prefix and branch code leave too little room; fewer than 99,999 bills a year |
+| `SALES_SERIES_EXHAUSTED` | Every number this series can issue this financial year has been used |
 | `SALES_PREFIX_REQUIRED` | An invoice series needs a prefix, such as `INV` |
 | `SALES_SERIES_CHARACTERS` | A number may contain only letters, digits, `-` and `/` |
-| `SALES_SERIES_PADDING` | An invoice series needs at least one digit of sequence |
 
 ## Known limitations
 

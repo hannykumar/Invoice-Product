@@ -75,7 +75,7 @@ test('SALE — an intra-state sale splits CGST and SGST and balances after round
     idempotencyKey: key('inv-41'),
     type: 'SALE',
     date: isoDate('2026-04-10'),
-    source: { kind: 'sales_invoice', id: 'si-41', number: 'INV/26-27/00041' },
+    source: { kind: 'sales_invoice', id: 'si-41', number: 'INV/26-27/000041' },
     lines: [
       { accountId: l.abcTradersAccount, partyId: ABC_TRADERS, debit: invoiceValue, credit: nil },
       { accountId: l.account('SALES_GOODS'), debit: nil, credit: taxable },
@@ -101,7 +101,7 @@ test('RECEIPT, cheque clearing and a second RECEIPT leave the exact outstanding 
     idempotencyKey: key('inv-44'),
     type: 'SALE',
     date: isoDate('2026-04-15'),
-    source: { kind: 'sales_invoice', id: 'si-44', number: 'INV/26-27/00044' },
+    source: { kind: 'sales_invoice', id: 'si-44', number: 'INV/26-27/000044' },
     lines: [
       { accountId: l.abcTradersAccount, partyId: ABC_TRADERS, debit: invoiceValue, credit: nil },
       { accountId: l.account('SALES_GOODS'), debit: nil, credit: invoiceValue },

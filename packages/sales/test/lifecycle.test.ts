@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DomainError, toDecimalString } from '@invoice/kernel';
 import { partyBalance, trialBalance } from '@invoice/ledger';
-import { DEFAULT_SERIES, formatNumber, INVOICE_NUMBER_MAX_LENGTH, parseNumber, validateSeries } from '../src/numbering.ts';
+import { billsPerYear, DEFAULT_SERIES, formatNumber, INVOICE_NUMBER_MAX_LENGTH, parseNumber, sequenceDigits, validateSeries } from '../src/numbering.ts';
 import { ABC, GURUGRAM, PRIYA, RAJESH, WALK_IN, actorWith, ALL_PERMISSIONS, inr, makeTill, on, OTHER, qty } from './fixtures.ts';
 import type { DraftInvoiceInput } from '../src/model.ts';
 
@@ -36,13 +36,13 @@ test('draft to final — an intra-state bill is priced, issued, numbered and pos
 
   const result = await till.service.finalise(till.actor, { idempotencyKey: 'f1', invoiceId: draft.id });
   assert.equal(result.invoice.state, 'FINAL');
-  assert.equal(result.invoice.number, 'INV/26-27/00001');
+  assert.equal(result.invoice.number, 'INV/26-27/000001');
   assert.equal(result.invoice.financialYear, '2026-27');
 
   const voucher = await till.ledger.getVoucher(till.actor, result.voucherId);
   assert.ok(voucher !== null);
   assert.equal(voucher.type, 'SALE');
-  assert.equal(voucher.source?.number, 'INV/26-27/00001');
+  assert.equal(voucher.source?.number, 'INV/26-27/000001');
 
   const debits = voucher.lines.reduce((a, l) => a + l.debit.minor, 0n);
   const credits = voucher.lines.reduce((a, l) => a + l.credit.minor, 0n);
@@ -142,7 +142,7 @@ test('numbering is unique and gapless under fifty concurrent finalisations', asy
   assert.equal(new Set(numbers).size, count, 'two bills must never share a number');
   const sequence = numbers.map((n) => parseNumber(n)?.sequence as number).sort((a, b) => a - b);
   assert.deepEqual(sequence, Array.from({ length: count }, (_unused, i) => i + 1), 'the series has no gaps');
-  for (const n of numbers) assert.match(n, /^INV\/26-27\/\d{5}$/);
+  for (const n of numbers) assert.match(n, /^INV\/26-27\/\d{6}$/);
 
   assert.ok((await trialBalance(till.store.read(), till.actor.companyId)).balanced);
   const owed = await partyBalance(till.store.read(), till.actor.companyId, ABC);
@@ -389,7 +389,7 @@ test('a failed finalisation writes nothing, and burns no number', async () => {
   const healthy = await makeTill();
   const good = await healthy.service.createDraft(healthy.actor, { idempotencyKey: 'k18b', input: crateBill() });
   const result = await healthy.service.finalise(healthy.actor, { idempotencyKey: 'f18b', invoiceId: good.id });
-  assert.equal(result.invoice.number, 'INV/26-27/00001');
+  assert.equal(result.invoice.number, 'INV/26-27/000001');
 });
 
 test('permission is checked for each step separately', async () => {
@@ -529,45 +529,55 @@ const refusedWith = (code: string) => (error: unknown): boolean => {
   return true;
 };
 
-test('numbering — a number never exceeds the sixteen characters GST allows', () => {
-  assert.equal(formatNumber(DEFAULT_SERIES, on('2026-04-10'), 1), 'INV/26-27/00001');
-  assert.equal(formatNumber(DEFAULT_SERIES, on('2027-03-31'), 99999), 'INV/26-27/99999');
-  assert.equal(formatNumber(DEFAULT_SERIES, on('2026-03-31'), 1), 'INV/25-26/00001', 'March belongs to the previous year');
+test('numbering — the running number fills every one of the sixteen characters GST allows', () => {
+  const number = formatNumber(DEFAULT_SERIES, on('2026-04-10'), 1);
+  assert.equal(number, 'INV/26-27/000001');
+  assert.equal(number.length, INVOICE_NUMBER_MAX_LENGTH, 'not one character is left unused');
 
-  for (const [series, date] of [
-    [DEFAULT_SERIES, on('2026-04-10')],
-    [{ prefix: 'INV', branchCode: 'KB', padding: 3 }, on('2026-04-10')],
-    [{ prefix: 'MB', branchCode: 'JPR', padding: 3 }, on('2027-02-01')],
-  ] as const) {
-    const widest = formatNumber(series, date, 10 ** series.padding - 1);
-    assert.ok(widest.length <= INVOICE_NUMBER_MAX_LENGTH, `${widest} is ${widest.length} characters`);
+  assert.equal(formatNumber(DEFAULT_SERIES, on('2027-03-31'), 999999), 'INV/26-27/999999', 'the last bill of the year');
+  assert.equal(formatNumber(DEFAULT_SERIES, on('2026-03-31'), 1), 'INV/25-26/000001', 'March belongs to the previous year');
+
+  // The width is worked out, never chosen: whatever the prefix and branch code leave behind.
+  assert.equal(sequenceDigits(DEFAULT_SERIES), 6);
+  assert.equal(billsPerYear(DEFAULT_SERIES), 999_999);
+  assert.equal(billsPerYear({ prefix: 'I', branchCode: '' }), 99_999_999, 'a shorter prefix buys bills');
+  assert.equal(billsPerYear({ prefix: 'I', branchCode: 'KB' }), 99_999, 'a branch code costs them again');
+
+  for (const series of [DEFAULT_SERIES, { prefix: 'I', branchCode: '' }, { prefix: 'I', branchCode: 'KB' }, { prefix: 'MB', branchCode: '' }]) {
+    const last = formatNumber(series, on('2026-04-10'), billsPerYear(series));
+    assert.equal(last.length, INVOICE_NUMBER_MAX_LENGTH, `${last} should be exactly sixteen characters`);
   }
 });
 
-test('numbering — a series that could overflow is refused when it is configured, not on the day it overflows', async () => {
-  // The old defaults, each of which printed a number too long to be legal.
-  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'MAIN', padding: 5 }), refusedWith('SALES_NUMBER_TOO_LONG'));
-  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'WEB', padding: 5 }), refusedWith('SALES_NUMBER_TOO_LONG'));
-  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'KB', padding: 5 }), refusedWith('SALES_NUMBER_TOO_LONG'));
-
-  // Fits bill 1 at fifteen characters but bill 1,000 at seventeen — refused on day one, not on the thousandth.
-  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'KB', padding: 4 }), refusedWith('SALES_NUMBER_TOO_LONG'));
-  assert.doesNotThrow(() => validateSeries({ prefix: 'INV', branchCode: 'KB', padding: 3 }));
+test('numbering — a series is refused when it is set up if it could not number enough bills', async () => {
+  // Nobody is asked to predict their volume, so what is checked is whether the prefix and branch
+  // code have eaten so much of the sixteen characters that too little is left for the bills.
   assert.doesNotThrow(() => validateSeries(DEFAULT_SERIES));
+  assert.doesNotThrow(() => validateSeries({ prefix: 'I', branchCode: 'KB' }), 'exactly 99,999 bills is the floor');
 
-  assert.throws(() => validateSeries({ prefix: '  ', branchCode: '', padding: 5 }), refusedWith('SALES_PREFIX_REQUIRED'));
-  assert.throws(() => validateSeries({ prefix: 'IN V', branchCode: '', padding: 5 }), refusedWith('SALES_SERIES_CHARACTERS'));
-  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: '', padding: 0 }), refusedWith('SALES_SERIES_PADDING'));
+  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'MAIN' }), refusedWith('SALES_SERIES_TOO_FEW_BILLS'));
+  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'WEB' }), refusedWith('SALES_SERIES_TOO_FEW_BILLS'));
+  assert.throws(() => validateSeries({ prefix: 'INV', branchCode: 'KB' }), refusedWith('SALES_SERIES_TOO_FEW_BILLS'));
+  assert.throws(() => validateSeries({ prefix: 'INVOICE', branchCode: '' }), refusedWith('SALES_SERIES_TOO_FEW_BILLS'));
 
-  // The refusal happens when the till is set up, so no bill is ever issued on an illegal series.
+  assert.throws(() => validateSeries({ prefix: '  ', branchCode: '' }), refusedWith('SALES_PREFIX_REQUIRED'));
+  assert.throws(() => validateSeries({ prefix: 'IN V', branchCode: '' }), refusedWith('SALES_SERIES_CHARACTERS'));
+  assert.throws(() => validateSeries({ prefix: 'IN/V', branchCode: '' }), refusedWith('SALES_SERIES_CHARACTERS'));
+
+  // The refusal happens when the till is set up, so no bill is ever issued on a series that runs out.
   await assert.rejects(
-    makeTill({ policy: { series: { prefix: 'INV', branchCode: 'MAIN', padding: 5 } } }),
-    refusedWith('SALES_NUMBER_TOO_LONG'),
+    makeTill({ policy: { series: { prefix: 'INV', branchCode: 'MAIN' } } }),
+    refusedWith('SALES_SERIES_TOO_FEW_BILLS'),
   );
 });
 
+test('numbering — running past the end of a series refuses rather than printing a seventeenth character', () => {
+  const series = { prefix: 'INV', branchCode: '' };
+  assert.throws(() => formatNumber(series, on('2026-04-10'), billsPerYear(series) + 1), refusedWith('SALES_SERIES_EXHAUSTED'));
+});
+
 test('numbering — a number splits back apart with or without a branch code', () => {
-  assert.deepEqual(parseNumber('INV/26-27/00001'), { prefix: 'INV', branchCode: '', financialYear: '26-27', sequence: 1 });
+  assert.deepEqual(parseNumber('INV/26-27/000001'), { prefix: 'INV', branchCode: '', financialYear: '26-27', sequence: 1 });
   assert.deepEqual(parseNumber('INV/KB/26-27/001'), { prefix: 'INV', branchCode: 'KB', financialYear: '26-27', sequence: 1 });
   assert.equal(parseNumber('INV/26-27/0000'), null, 'a sequence starts at 1');
   assert.equal(parseNumber('INV/26-27'), null);
