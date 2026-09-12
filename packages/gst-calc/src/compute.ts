@@ -44,6 +44,7 @@ import { GST_STATE_CODES } from '../../masters/src/validation.ts';
 import type { MasterDataReader, TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
 import type { DeclaredRateReader } from './declared-rates.ts';
+import { computeTcs, type TcsCharge, type TcsContext } from './tcs.ts';
 
 export type PriceBasis = 'EXCLUSIVE' | 'INCLUSIVE';
 
@@ -93,6 +94,11 @@ export interface ComputeInput {
   readonly freight?: Money;
   readonly otherCharges?: Money;
   readonly roundToWholeRupee?: boolean;
+  /**
+   * Issue #145 — what this customer has already been billed this financial year, so that tax
+   * collected at source can be worked out. Left out when the business does not collect it.
+   */
+  readonly tcs?: TcsContext;
   /** Identifies the document, so an exception queued twice is one item. */
   readonly source: { readonly kind: string; readonly id: string };
 }
@@ -149,6 +155,11 @@ export interface TaxTotals {
   readonly totalTax: Money;
   /** Tax the recipient owes the government directly; not part of the invoice value. */
   readonly reverseChargeTax: Money;
+  /**
+   * Issue #145 — tax collected at source, an amount held for the government. It is part of what
+   * the customer pays but is never part of any GST figure above.
+   */
+  readonly tcs: Money;
   readonly beforeRounding: Money;
   readonly roundOff: Money;
   readonly invoiceValue: Money;
@@ -183,6 +194,8 @@ export type ComputeResult =
       readonly mayChargeGst: boolean;
       readonly lines: readonly ComputedTaxLine[];
       readonly totals: TaxTotals;
+      /** Issue #145 — the working behind `totals.tcs`, or `null` when none was due. */
+      readonly tcsCharge: TcsCharge | null;
       readonly decisions: readonly Decision[];
       readonly explanation: { readonly 'en-IN': string; readonly 'hi-IN': string };
       /** True when any line's rate came from the business rather than from a checked notification. */
@@ -247,6 +260,21 @@ const applyDiscount = (gross: Money, discount: Discount | undefined): Money => {
   if (discount.kind === 'AMOUNT') return discount.amount;
   return mulDiv(gross, discount.percentTimes100, 10000n);
 };
+
+/**
+ * Issue #145 — the sentence about TCS goes after the sentence about GST, never inside it. A person
+ * reading the explanation must be able to see the two amounts as two separate things.
+ */
+const withTcsNote = (
+  explanation: { readonly 'en-IN': string; readonly 'hi-IN': string },
+  tcsCharge: TcsCharge | null,
+): { readonly 'en-IN': string; readonly 'hi-IN': string } =>
+  tcsCharge === null
+    ? explanation
+    : {
+        'en-IN': `${explanation['en-IN']} ${tcsCharge.note['en-IN']}`,
+        'hi-IN': `${explanation['hi-IN']} ${tcsCharge.note['hi-IN']}`,
+      };
 
 export class GstCalculator {
   readonly #masterData: MasterDataReader;
@@ -392,10 +420,17 @@ export class GstCalculator {
       ], split),
     ];
 
-    const totals = this.#totals(computedLines, input.roundToWholeRupee ?? true);
+    // Issue #145 — the higher TCS rate applies when the customer has given no tax number, which is
+    // a fact this module already holds. The caller may still state it, and then that is used.
+    const tcsContext: TcsContext | undefined =
+      input.tcs === undefined
+        ? undefined
+        : { ...input.tcs, customerHasTaxNumber: input.tcs.customerHasTaxNumber ?? party.gstin !== null };
+    const { totals, tcsCharge } = this.#totals(computedLines, input.roundToWholeRupee ?? true, tcsContext);
     const declaredLines = computedLines.filter((l) => l.rateBasis === 'BUSINESS_DECLARED');
     return {
       status: 'COMPUTED',
+      tcsCharge,
       usesBusinessDeclaredRates: declaredLines.length > 0,
       declaredRateNotice:
         declaredLines.length === 0
@@ -410,7 +445,7 @@ export class GstCalculator {
       lines: computedLines,
       totals,
       decisions,
-      explanation: this.#explainDocument(split, placeOfSupply, totals, mayChargeGst),
+      explanation: withTcsNote(this.#explainDocument(split, placeOfSupply, totals, mayChargeGst), tcsCharge),
     };
   }
 
@@ -797,7 +832,11 @@ export class GstCalculator {
     };
   }
 
-  #totals(lines: readonly ComputedTaxLine[], roundToWholeRupee: boolean): TaxTotals {
+  #totals(
+    lines: readonly ComputedTaxLine[],
+    roundToWholeRupee: boolean,
+    tcsContext: TcsContext | undefined,
+  ): { totals: TaxTotals; tcsCharge: TcsCharge | null } {
     const billable = lines.filter((l) => !l.reverseCharge);
     const taxableValue = sum(lines.map((l) => l.taxableValue));
     const cgst = sum(billable.map((l) => l.cgst));
@@ -807,21 +846,30 @@ export class GstCalculator {
     const cess = sum(billable.map((l) => l.cess));
     const totalTax = sum([cgst, sgst, utgst, igst, cess]);
     const reverseChargeTax = sum(lines.filter((l) => l.reverseCharge).map((l) => l.totalTax));
-    const beforeRounding = add(taxableValue, totalTax);
+    // Issue #145 — TCS is worked out on what the customer is being charged for the supply,
+    // including GST, and is then added on top. It is kept out of every GST figure above.
+    const valueWithGst = add(taxableValue, totalTax);
+    const tcsCharge = computeTcs(tcsContext, valueWithGst);
+    const tcs = tcsCharge === null ? nil() : tcsCharge.amount;
+    const beforeRounding = add(valueWithGst, tcs);
     // One rounding, at the very end, using the product-wide half-up rule from the kernel.
     const invoiceValue = roundToWholeRupee ? roundToWholeUnits(beforeRounding) : beforeRounding;
     return {
-      taxableValue,
-      cgst,
-      sgst,
-      utgst,
-      igst,
-      cess,
-      totalTax,
-      reverseChargeTax,
-      beforeRounding,
-      roundOff: subtract(invoiceValue, beforeRounding),
-      invoiceValue,
+      totals: {
+        taxableValue,
+        cgst,
+        sgst,
+        utgst,
+        igst,
+        cess,
+        totalTax,
+        reverseChargeTax,
+        tcs,
+        beforeRounding,
+        roundOff: subtract(invoiceValue, beforeRounding),
+        invoiceValue,
+      },
+      tcsCharge,
     };
   }
 

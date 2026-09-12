@@ -5,7 +5,7 @@
  * issues. They are consumed here as narrow ports with mocks, so finalisation can be built and
  * tested now and the real modules drop in without touching this file.
  */
-import type { CompanyId, IsoDate, Quantity } from '@invoice/kernel';
+import { subtract, sum, zero, type CompanyId, type IsoDate, type Money, type Quantity } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
 import type { SalesInvoice } from './model.ts';
 
@@ -96,3 +96,43 @@ export const noComplianceHooks: ComplianceHookPort = {
   },
   async onInvoiceCancelled() {},
 };
+
+
+/**
+ * Issue #145 — how much this customer has already been billed this financial year.
+ *
+ * Tax collected at source starts once sales to one customer cross a threshold in one financial
+ * year, so the amount on today's bill cannot be worked out without the year so far. It is a port
+ * of its own because a business with years of history will answer it from a running total in the
+ * database, not by adding up every bill again.
+ */
+export interface CustomerYearSalesPort {
+  billedSoFar(
+    companyId: CompanyId,
+    partyId: string,
+    financialYear: string,
+    exceptInvoiceId: string,
+  ): Promise<Money>;
+}
+
+/**
+ * The obvious implementation: add up the bills that were actually issued.
+ *
+ * Only final bills count — a draft is not a sale and a cancelled bill never was one. TCS already
+ * collected is taken back out, because money held for the government is not a sale to the customer
+ * and must not push them closer to the threshold a second time.
+ */
+export const customerYearSalesFromRepository = (repository: SalesRepository): CustomerYearSalesPort => ({
+  async billedSoFar(companyId, partyId, financialYear, exceptInvoiceId) {
+    const issued = await repository.list(companyId, { partyId, state: 'FINAL' });
+    return sum(
+      issued
+        .filter((invoice) => invoice.id !== exceptInvoiceId && invoice.financialYear === financialYear)
+        .map((invoice) =>
+          invoice.pricing === null
+            ? zero('INR')
+            : subtract(invoice.pricing.totals.invoiceValue, invoice.pricing.totals.tcs),
+        ),
+    );
+  },
+});

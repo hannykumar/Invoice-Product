@@ -36,6 +36,7 @@ const EXPECTED: readonly { role: SystemAccountRole; type: 'ASSET' | 'LIABILITY' 
   { role: 'OUTPUT_IGST', type: 'LIABILITY' },
   { role: 'OUTPUT_CESS', type: 'LIABILITY' },
   { role: 'REVERSE_CHARGE_PAYABLE', type: 'LIABILITY' },
+  { role: 'TCS_PAYABLE', type: 'LIABILITY' },
   { role: 'INPUT_CGST', type: 'ASSET' },
   { role: 'INPUT_SGST', type: 'ASSET' },
   { role: 'INPUT_IGST', type: 'ASSET' },

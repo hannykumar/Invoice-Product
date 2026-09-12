@@ -27,6 +27,7 @@ const nil = (): Money => zero('INR');
  *   Customer                        debit   invoice value
  *     Sales of goods or services   credit   taxable value
  *     Output CGST / SGST / UTGST / IGST / cess
+ *     Tax collected for govt       credit   tax collected at source, when any is due
  *     Rounding difference          credit   the few paise
  * ```
  *
@@ -100,6 +101,18 @@ export const buildSalePosting = async (
       debit: nil(),
       credit: amount,
       narration: 'GST collected',
+    });
+  }
+
+  // Issue #145 — tax collected at source is the customer's money passing through this business on
+  // its way to the government. It is a liability of its own, never income and never GST.
+  if (!isZero(totals.tcs)) {
+    lines.push({
+      accountId: await need('TCS_PAYABLE'),
+      partyId: null,
+      debit: nil(),
+      credit: totals.tcs,
+      narration: 'Tax collected for the government',
     });
   }
 

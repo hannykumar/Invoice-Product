@@ -50,6 +50,13 @@ export type SystemAccountRole =
    * credit claim (#31) both find it by this role.
    */
   | 'REVERSE_CHARGE_PAYABLE'
+  /**
+   * Tax collected at source: money taken from a customer on the seller's behalf once the year's
+   * sales to them cross the government's threshold, and held until it is paid over (issue #145).
+   * It is not GST, so it is kept well away from the GST headings — a business that reads it as
+   * GST collected would both overstate its GST and understate what it still owes.
+   */
+  | 'TCS_PAYABLE'
   | 'INPUT_CGST'
   | 'INPUT_SGST'
   | 'INPUT_IGST'

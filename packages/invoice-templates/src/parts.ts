@@ -76,6 +76,7 @@ const T = {
   paid: w('Amount Paid', 'Diya'),
   outstanding: w('Balance Due', 'Abhi baaki'),
   rcmTax: w('Tax Payable on Reverse Charge', 'Jo GST aap seedha sarkar ko bharenge'),
+  tcs: w('TCS', 'Sarkar ke liye liya gaya tax'),
   transport: w('Dispatched through', 'Transport'),
   vehicle: w('Vehicle No.', 'Gaadi'),
   eWayBill: w('e-Way Bill No.', 'E-way bill'),

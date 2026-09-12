@@ -30,7 +30,7 @@ import {
   type Account,
   type ActorContext,
 } from '@invoice/ledger';
-import { GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
+import { DEFAULT_TCS_POLICY, GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { InMemorySalesRepository, SalesService, noComplianceHooks } from '@invoice/sales';
 import { createDefaultUnitRegistry, formatQuantity, quantity, type UnitRegistry } from '../../masters/src/units.ts';
@@ -126,6 +126,7 @@ const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE
       series: { prefix: 'INV', branchCode: '' },
       approvalRequiredAtOrAbove: null, cancellationWindowDays: 7,
       allowCancelAfterGovernmentRegistration: false, defaultDueDays: 30, roundToWholeRupee: true,
+      tcs: DEFAULT_TCS_POLICY,
     },
     idFactory,
   });
