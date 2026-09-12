@@ -41,7 +41,7 @@ const line = (overrides: Partial<RenderableLine> = {}): RenderableLine => ({
 
 const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   title: 'TAX_INVOICE',
-  number: 'INV/KB/2026-27/00042',
+  number: 'INV/26-27/00042',
   date: isoDate('2026-08-20'),
   dueDate: isoDate('2026-09-19'),
   seller: {
@@ -148,7 +148,7 @@ test('the required section is printed whatever the template says', () => {
 
   for (const needle of [
     'Tax Invoice',
-    'INV/KB/2026-27/00042',
+    'INV/26-27/00042',
     '20 August 2026',
     'Sharma Fruit Traders',
     '07AAAAA0000A1Z4',

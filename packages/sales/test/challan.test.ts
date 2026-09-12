@@ -90,7 +90,7 @@ test('challans have their own number series, and it never touches the invoice se
 
   assert.equal(first.number, 'DC/26-27/00001');
   assert.equal(second.number, 'DC/26-27/00002', 'consecutive, with no gap for the invoice issued in between');
-  assert.equal(invoice.number, 'INV/KB/2026-27/00001', 'the invoice series started at 1, untouched by challans');
+  assert.equal(invoice.number, 'INV/26-27/00001', 'the invoice series started at 1, untouched by challans');
   assert.ok(first.number.length <= CHALLAN_NUMBER_MAX_LENGTH, 'Rule 55(1): at most sixteen characters');
 });
 

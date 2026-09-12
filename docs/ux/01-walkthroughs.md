@@ -73,7 +73,7 @@ A block is never a dead end and never a bare "not allowed".
 ```
 Saving…                                                 (state.saving)
 
-Done. INV/KB/2026-27/00042 is recorded in your books.   (state.saved)
+Done. INV/26-27/00042 is recorded in your books.   (state.saved)
 Your stock, your dues and your GST have all been updated together.
 
 [ Send on WhatsApp ]   [ Print ]   [ Make another bill ]
@@ -87,7 +87,7 @@ If the network fails, nothing is half-saved:
 
 If the person taps twice, they get the bill they already made, not a second one:
 
-> This was already saved a moment ago as **INV/KB/2026-27/00042**, so we opened it instead of
+> This was already saved a moment ago as **INV/26-27/00042**, so we opened it instead of
 > making a second one.
 
 ---
@@ -149,8 +149,8 @@ Cheque no [ 112233   ]   Date [ 20 April 2026 ]
 ```
 Which bills does this settle?
 
-  ☑ INV/KB/2026-27/00044   15 Apr   Due ₹1,00,000   Apply [ ₹30,000.00 ]
-  ☐ INV/KB/2026-27/00042   12 Apr   Due   ₹56,000   Apply [       ₹0.00 ]
+  ☑ INV/26-27/00044   15 Apr   Due ₹1,00,000   Apply [ ₹30,000.00 ]
+  ☐ INV/26-27/00042   12 Apr   Due   ₹56,000   Apply [       ₹0.00 ]
 
   Applying ₹30,000 of ₹30,000.        Nothing left over.
 

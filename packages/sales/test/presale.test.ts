@@ -49,7 +49,7 @@ test('a quotation and a proforma are each numbered in a series of their own, and
 
   // Three documents issued, and the first tax invoice is still number one.
   const invoice = await issueInvoice(counter, 'first');
-  assert.equal(invoice.number, 'INV/KB/2026-27/00001');
+  assert.equal(invoice.number, 'INV/26-27/00001');
 });
 
 test('the tax shown is worked out by the invoice calculator, so the quote and the bill agree', async () => {
@@ -186,7 +186,7 @@ test('an accepted quotation becomes a draft bill without retyping, and only the 
 
   // The bill is issued through the ordinary sale, and that is the only thing that posts.
   const final = await counter.till.service.finalise(counter.till.actor, { idempotencyKey: 'fin', invoiceId: converted.invoice.id });
-  assert.equal(final.invoice.number, 'INV/KB/2026-27/00001');
+  assert.equal(final.invoice.number, 'INV/26-27/00001');
   assert.equal((await vouchers(counter)).length, 1);
   assert.deepEqual((await counter.presale.forInvoice(counter.actor, final.invoice.id)).map((d) => d.number), ['QTN/26-27/00001']);
 });

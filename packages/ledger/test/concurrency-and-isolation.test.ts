@@ -189,14 +189,14 @@ test('every posting is written to the audit trail with actor, time and source, a
   const l = await makeLedger();
   const posted = await l.service.postVoucher(l.actor, {
     ...saleCommand(l, key('audited')),
-    source: { kind: 'sales_invoice', id: 'si-9', number: 'INV/KB/2026-27/00009' },
+    source: { kind: 'sales_invoice', id: 'si-9', number: 'INV/26-27/00009' },
   });
   const event = l.audit.forSubject(posted.voucher.id)[0];
   assert.ok(event !== undefined);
   assert.equal(event.action, 'ledger.voucher_posted');
   assert.equal(event.actorId, l.actor.userId);
   assert.equal(event.companyId, l.actor.companyId);
-  assert.equal(event.details.sourceNumber, 'INV/KB/2026-27/00009');
+  assert.equal(event.details.sourceNumber, 'INV/26-27/00009');
   assert.ok(event.at.endsWith('Z'), 'audit timestamps are instants in UTC');
   const serialised = JSON.stringify(l.audit.events);
   for (const forbiddenWord of ['password', 'token', 'secret', 'apiKey']) {

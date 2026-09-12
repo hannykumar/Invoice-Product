@@ -272,7 +272,7 @@ export const makeBusiness = async (
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: 'KB', padding: 5 } },
+    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '', padding: 5 } },
     idFactory,
   });
 

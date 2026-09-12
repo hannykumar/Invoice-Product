@@ -17,6 +17,7 @@
  */
 import {
   conflict,
+  financialYearOf,
   forbidden,
   invalid,
   isoDate,
@@ -43,7 +44,7 @@ import {
   type SalesInvoice,
   type SalesInvoiceLineInput,
 } from './model.ts';
-import { formatNumber, seriesScope } from './numbering.ts';
+import { formatNumber, seriesScope, validateSeries } from './numbering.ts';
 import { DEFAULT_SALES_POLICY, dueDateFor, needsApproval, withinCancellationWindow, type SalesPolicy } from './policy.ts';
 import type { ComplianceHookPort, InventoryPort, SalesRepository } from './ports.ts';
 
@@ -112,6 +113,7 @@ export class SalesService {
     this.#audit = deps.audit;
     this.#clock = deps.clock;
     this.#policy = deps.policy ?? DEFAULT_SALES_POLICY;
+    validateSeries(this.#policy.series);
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
   }
 
@@ -458,7 +460,8 @@ export class SalesService {
         ...priced,
         state: 'FINAL',
         number,
-        financialYear: number.split('/')[2] ?? null,
+        // From the date, never scraped out of the printed number: the number writes the year short.
+        financialYear: financialYearOf(priced.documentDate),
         voucherId: posted.voucher.id,
         finalisedBy: actor.userId,
         finalisedAt: at,

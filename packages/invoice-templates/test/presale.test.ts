@@ -162,7 +162,7 @@ test('an invoiced proforma shows the invoice it was billed on; a withdrawn one s
   });
   const final = (await counter.till.service.finalise(counter.till.actor, { idempotencyKey: 'bill-f', invoiceId: draft.id })).invoice;
   const linked = await counter.presale.linkInvoice(counter.actor, { proformaId: proforma.id, invoiceId: final.id });
-  assert.match(text(renderPreSale(toPreSalePrint(linked, context()), snapshot, { format: 'A4', locale: 'en-IN' })), /Invoice No\. & Date INV\/KB\/2026-27\/00001, 12 May 2026/);
+  assert.match(text(renderPreSale(toPreSalePrint(linked, context()), snapshot, { format: 'A4', locale: 'en-IN' })), /Invoice No\. & Date INV\/26-27\/00001, 12 May 2026/);
 
   const quotation = await counter.presale.issue(counter.actor, { kind: 'QUOTATION', idempotencyKey: 'q', input: crateOffer() });
   const withdrawn = await counter.presale.cancel(counter.actor, { id: quotation.id, reason: 'Customer bought elsewhere' });

@@ -224,7 +224,7 @@ export const replay = async (fixture: GoldenFixture): Promise<ReplayResult> => {
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: 'GD', padding: 5 } },
+    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '', padding: 5 } },
     idFactory,
   });
 
