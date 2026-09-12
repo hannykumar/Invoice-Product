@@ -164,7 +164,7 @@ test('authenticated sales and customer payments still reach their service module
   assert.equal(salePreview.body.state, 'preview');
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.body.state, 'recorded');
-  assert.match(recorded.body.invoice.number, /^INV\/WEB\//);
+  assert.match(recorded.body.invoice.number, /^INV\/26-27\//);
   const payment = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: '50', date: '2026-08-29', reference: 'AUTH-PAY-80', invoice: recorded.body.invoice.id }, owner);
   assert.equal(payment.body.state, 'recorded');
 });

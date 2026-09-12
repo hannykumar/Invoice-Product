@@ -123,7 +123,7 @@ const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE
     compliance: noComplianceHooks,
     permissions: permissionPortFromActor, audit, clock,
     policy: {
-      series: { prefix: 'INV', branchCode: 'KB', padding: 5 },
+      series: { prefix: 'INV', branchCode: '', padding: 5 },
       approvalRequiredAtOrAbove: null, cancellationWindowDays: 7,
       allowCancelAfterGovernmentRegistration: false, defaultDueDays: 30, roundToWholeRupee: true,
     },

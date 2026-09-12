@@ -157,7 +157,7 @@ export const makeTill = async (
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: 'KB', padding: 5 }, ...options.policy },
+    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '', padding: 5 }, ...options.policy },
     idFactory,
   });
 

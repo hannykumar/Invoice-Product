@@ -105,7 +105,7 @@ const main = async (): Promise<void> => {
     permissions: permissionPortFromActor,
     audit, clock,
     policy: {
-      series: { prefix: 'INV', branchCode: 'KB', padding: 5 },
+      series: { prefix: 'INV', branchCode: '', padding: 5 },
       approvalRequiredAtOrAbove: null,
       cancellationWindowDays: 7,
       allowCancelAfterGovernmentRegistration: false,
@@ -292,7 +292,7 @@ const main = async (): Promise<void> => {
     lineId: `long-${i}`,
     description: `Plastic crate, size ${i + 1}`,
   }));
-  const longDocument = { ...document, lines: longLines, number: 'INV/KB/2026-27/00099' };
+  const longDocument = { ...document, lines: longLines, number: 'INV/26-27/00099' };
   for (const id of ['india-standard']) {
     const template = templateById(id);
     if (template === undefined) continue;

@@ -138,7 +138,7 @@ test('the invoice raised later names the challan in its Delivery Note box', asyn
   const linked = await desk.challans.linkInvoice(desk.actor, { challanId: challan.id, invoiceId: invoice.id });
   assert.match(
     text(renderChallan(toChallanDocument(linked, context()), snapshot, { format: 'A4', locale: 'en-IN' })),
-    /Invoice No\. &amp; Date INV\/KB\/2026-27\/00001, 12 May 2026/,
+    /Invoice No\. &amp; Date INV\/26-27\/00001, 12 May 2026/,
     'the challan names the invoice that followed it',
   );
 
