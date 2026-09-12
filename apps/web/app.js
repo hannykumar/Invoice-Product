@@ -253,6 +253,11 @@ const copy = {
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
     navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected",
     navOperations: "Operations", operationsEyebrow: "Service health", operationsTitle: "Is the service working?", operationsHelp: "See service checks, failed external calls, safe retries and customer incident updates without opening invoices or bank records.", operationsSafetyTitle: "Customer data stays private. ", operationsSafety: "This page shows error codes and correlation IDs only. A retry is offered only for work declared safe and duplicate-proof.", operationsHealth: "Health checks", operationsFailures: "External failures", operationsQueue: "Safe retry queue", operationsRecurring: "Recurring work", operationsIncidents: "Customer status timeline", operationsHealthy: "All checks are working", operationsDegraded: "One or more checks need attention", operationsNoFailures: "No external failures for this company.", operationsNoJobs: "No jobs are waiting.", operationsNoRecurring: "No recurring work is registered.", operationsNextRun: "Next", operationsLastRun: "Last", operationsNeverRun: "Not run yet", operationsRunning: "Running", operationsSucceeded: "Succeeded", operationsFailed: "Failed", operationsDeadLettered: "Stopped after repeated failures", operationsReplay: "Retry safely", operationsNoIncidents: "No current or recent incidents.",
+    navBranding: "Bill design", brandingEyebrow: "Your bill", brandingTitle: "Make the bill look like yours", brandingHelp: "Put your logo, your colour and a picture of your trade on the bill. All three are extra. A bill with none of them is still a complete, lawful bill.",
+    brandingLogoTitle: "Your logo", brandingLogoHelp: "A PNG, JPG, WEBP or SVG picture. It is shrunk here before it is saved, and it prints about two centimetres tall at the top of the bill.", brandingNoLogo: "No logo yet", brandingChooseLogo: "Choose a picture", brandingRemoveLogo: "Take the logo off", brandingAccentTaken: "Headings and rules use this colour, taken from your logo.", brandingAccentReset: "Use the design's own colour",
+    brandingMarkTitle: "The mark of your trade", brandingMarkHelp: "Type what you sell and pick a picture. It prints very faintly behind the items, and never on till-roll paper.", brandingSearchLabel: "What do you sell?", brandingSearchPlaceholder: "mithai, kapda, tyre, dawa", brandingSearchButton: "Find pictures", brandingMarkChosen: "On your bill:", brandingRemoveMark: "Take the picture off", brandingNoMarkResults: "Nothing matched that. Try another word for what you sell.",
+    brandingDesignTitle: "Design and paper", brandingDesignLabel: "Bill design", brandingPaperLabel: "Paper", brandingPaperA4: "A4 sheet", brandingPaperThermal: "Till roll, 80mm", brandingThermalNote: "A till-roll printer has one ink and no grey, so the faint picture is never printed there.",
+    brandingPreviewTitle: "A sample bill", brandingPreviewHelp: "Every figure below is made up. This is the real bill printer, so what you see here is what your customer gets.", brandingPreviewFrame: "Sample bill preview", brandingSaved: "Saved. New bills will carry this.", brandingSaving: "Saving…", brandingLoadFailed: "Could not load the preview.",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -509,6 +514,11 @@ const copy = {
     differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
     navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya",
     navOperations: "Seva ki sthiti", operationsEyebrow: "Seva ki sehat", operationsTitle: "Kya seva sahi chal rahi hai?", operationsHelp: "Invoice ya bank record khole bina service check, bahari nakaami, surakshit retry aur grahak ko dikhne wali ghatna dekhein.", operationsSafetyTitle: "Grahak ka data niji rehta hai. ", operationsSafety: "Yahan sirf error code aur correlation ID dikhte hain. Retry tabhi milta hai jab kaam surakshit aur duplicate-proof ghoshit ho.", operationsHealth: "Sehat ki jaanch", operationsFailures: "Bahari nakaami", operationsQueue: "Surakshit retry queue", operationsRecurring: "Niyamit kaam", operationsIncidents: "Grahak sthiti ka itihaas", operationsHealthy: "Sabhi jaanch sahi chal rahi hain", operationsDegraded: "Ek ya adhik jaanch par dhyan chahiye", operationsNoFailures: "Is company ke liye koi bahari nakaami nahin.", operationsNoJobs: "Koi kaam intezar mein nahin.", operationsNoRecurring: "Koi niyamit kaam darj nahin hai.", operationsNextRun: "Agli baar", operationsLastRun: "Pichhli baar", operationsNeverRun: "Abhi nahin chala", operationsRunning: "Chal raha hai", operationsSucceeded: "Poora hua", operationsFailed: "Nakaam hua", operationsDeadLettered: "Baar-baar nakaami ke baad roka gaya", operationsReplay: "Surakshit dobara chalayen", operationsNoIncidents: "Koi maujooda ya haal ki ghatna nahin.",
+    navBranding: "Bill ka design", brandingEyebrow: "Aapka bill", brandingTitle: "Bill ko apna banayein", brandingHelp: "Bill par apna logo, apna rang aur apne kaam ki tasveer lagayein. Teenon extra hain. Bina inke bhi bill poora aur kanooni hai.",
+    brandingLogoTitle: "Aapka logo", brandingLogoHelp: "PNG, JPG, WEBP ya SVG tasveer. Save karne se pehle yahin chhoti kar di jaati hai, aur bill ke upar do centimeter ki chhapti hai.", brandingNoLogo: "Abhi koi logo nahin", brandingChooseLogo: "Tasveer chunein", brandingRemoveLogo: "Logo hata dein", brandingAccentTaken: "Heading aur lakeerein isi rang mein, jo aapke logo se liya gaya hai.", brandingAccentReset: "Design ka apna rang rakhein",
+    brandingMarkTitle: "Aapke kaam ki tasveer", brandingMarkHelp: "Jo aap bechte hain woh likhein aur tasveer chunein. Yeh saman ke peeche bahut halki chhapti hai, aur chhoti parchi wale printer par kabhi nahin.", brandingSearchLabel: "Aap kya bechte hain?", brandingSearchPlaceholder: "mithai, kapda, tyre, dawa", brandingSearchButton: "Tasveerein dhoondhein", brandingMarkChosen: "Aapke bill par:", brandingRemoveMark: "Tasveer hata dein", brandingNoMarkResults: "Us shabd se kuch nahin mila. Jo bechte hain uske liye doosra shabd likhein.",
+    brandingDesignTitle: "Design aur kagaz", brandingDesignLabel: "Bill ka design", brandingPaperLabel: "Kagaz", brandingPaperA4: "A4 panna", brandingPaperThermal: "Chhoti parchi, 80mm", brandingThermalNote: "Chhoti parchi wale printer mein ek hi ink hoti hai aur grey nahin, isliye halki tasveer wahan kabhi nahin chhapti.",
+    brandingPreviewTitle: "Namoone ka bill", brandingPreviewHelp: "Neeche ke sabhi ank banawati hain. Yeh wahi asli bill printer hai, to jo yahan dikh raha hai wahi customer ko milega.", brandingPreviewFrame: "Namoone ke bill ki jhalak", brandingSaved: "Save ho gaya. Naye bill par yeh aayega.", brandingSaving: "Save ho raha hai…", brandingLoadFailed: "Jhalak nahin aa payi.",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -691,6 +701,7 @@ function openView(view) {
   if (target === "operations") loadOperations();
   if (target === "ask") loadAskExamples();
   if (target === "ask") { loadAskExamples(); loadAgentCapabilities(); }
+  if (target === "branding") openBranding();
 }
 
 function draftData(form) {
@@ -1762,6 +1773,241 @@ document.querySelector("#ask-form")?.addEventListener("submit", (event) => { eve
 document.querySelector("#setup-form")?.addEventListener("submit", (event) => { event.preventDefault(); checkSetup(); });
 document.querySelector("#setup-form")?.addEventListener("input", () => { document.querySelector("#setup-create").hidden = true; });
 document.querySelector("#setup-create")?.addEventListener("click", createSetup);
+
+/* ---------------------------------------------------------------- Issues #146 and #147: bill design
+ *
+ * A business puts its logo, its colour and a picture of its trade on its own bill, and sees a real
+ * bill change as it does it. Three rules hold here:
+ *
+ *  - Nothing is chosen for anybody. Every one of the three starts empty and can be taken off again.
+ *  - The picture is shrunk in the browser before it is ever sent, because a logo is copied onto
+ *    every bill and a four-megabyte photograph off a phone would be copied onto every bill too.
+ *  - The preview is the real bill printer on the server, not a drawing of a bill made here. A
+ *    screen that shows something the printer would not is worse than no screen.
+ */
+const brandingState = { branding: null, results: [], pictureId: null, unsavedLogo: null, unsavedAccent: null };
+
+/** The longest side a stored logo is allowed, in pixels. It prints about two centimetres tall. */
+const LOGO_MAX_PIXELS = 320;
+
+const readFileAsDataUri = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(new Error("unreadable"));
+  reader.readAsDataURL(file);
+});
+
+/**
+ * Shrinks a picture to something a bill can carry, and reads a colour out of it.
+ *
+ * An SVG is left exactly as it is: it is already small, and it stays sharp at any size, which is
+ * the whole point of the format. Redrawing one through a canvas would throw that away.
+ */
+async function prepareLogo(file) {
+  const original = await readFileAsDataUri(file);
+  if (file.type === "image/svg+xml") return { dataUri: original, accent: null };
+  const image = new Image();
+  await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; });
+  const scale = Math.min(1, LOGO_MAX_PIXELS / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return { dataUri: canvas.toDataURL("image/png"), accent: accentFrom(context, canvas) };
+}
+
+/**
+ * The strongest colour in a logo, which becomes the colour of the headings and rules.
+ *
+ * Near-white and near-black pixels are ignored, because almost every logo is mostly one or the
+ * other and the answer would always be grey. The colour is then darkened if it is too pale to read
+ * as text on white paper — a legible heading matters more than an exact match.
+ */
+function accentFrom(context, canvas) {
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  const buckets = new Map();
+  for (let i = 0; i < data.length; i += 4) {
+    const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+    if (a < 200) continue;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max > 235 && min > 235) continue;
+    if (max < 25) continue;
+    if (max - min < 20) continue;
+    const key = `${r >> 4}-${g >> 4}-${b >> 4}`;
+    const bucket = buckets.get(key) ?? { r: 0, g: 0, b: 0, n: 0 };
+    bucket.r += r; bucket.g += g; bucket.b += b; bucket.n += 1;
+    buckets.set(key, bucket);
+  }
+  let best = null;
+  for (const bucket of buckets.values()) if (best === null || bucket.n > best.n) best = bucket;
+  if (best === null) return null;
+  let [r, g, b] = [Math.round(best.r / best.n), Math.round(best.g / best.n), Math.round(best.b / best.n)];
+  // Keep darkening until the colour would be readable as text on white paper.
+  let guard = 0;
+  while (0.2126 * r + 0.7152 * g + 0.0722 * b > 140 && guard < 12) {
+    r = Math.round(r * 0.85); g = Math.round(g * 0.85); b = Math.round(b * 0.85); guard += 1;
+  }
+  const hex = (value) => value.toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+function renderBrandingLogo() {
+  const logo = brandingState.unsavedLogo ?? brandingState.branding?.logoDataUri ?? null;
+  const box = document.querySelector("#branding-logo-box");
+  const empty = document.querySelector("#branding-logo-empty");
+  box.querySelector("img")?.remove();
+  empty.hidden = logo !== null;
+  if (logo !== null) {
+    const image = document.createElement("img");
+    image.src = logo;
+    image.alt = "";
+    box.append(image);
+  }
+  document.querySelector("#branding-logo-remove").hidden = logo === null;
+
+  const accent = brandingState.unsavedAccent ?? brandingState.branding?.accent ?? null;
+  document.querySelector("#branding-accent-row").hidden = accent === null;
+  if (accent !== null) document.querySelector("#branding-swatch").style.background = accent;
+}
+
+function renderBrandingMark() {
+  const chosen = brandingState.pictureId ?? brandingState.branding?.tradeMark?.pictureId ?? null;
+  const row = document.querySelector("#branding-mark-chosen");
+  row.hidden = chosen === null;
+  if (chosen !== null) document.querySelector("#branding-mark-name").textContent = chosen;
+
+  const results = document.querySelector("#branding-mark-results");
+  results.replaceChildren();
+  if (brandingState.results.length === 0) return;
+  for (const picture of brandingState.results) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mark-choice";
+    button.classList.toggle("chosen", picture.pictureId === chosen);
+    button.setAttribute("aria-pressed", String(picture.pictureId === chosen));
+    // The drawing comes from our own library on the server, never from anything a person typed.
+    const drawing = document.createElement("span");
+    drawing.className = "mark-drawing";
+    drawing.innerHTML = picture.svg;
+    const name = document.createElement("small");
+    name.textContent = picture.pictureId;
+    button.append(drawing, name);
+    button.addEventListener("click", () => {
+      brandingState.pictureId = brandingState.pictureId === picture.pictureId ? null : picture.pictureId;
+      renderBrandingMark();
+      saveBrandingChoices();
+    });
+    results.append(button);
+  }
+}
+
+async function refreshBrandingPreview() {
+  const status = document.querySelector("#branding-status");
+  try {
+    const result = await api("/api/branding/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        templateId: document.querySelector("#branding-template").value,
+        format: document.querySelector("#branding-format").value,
+        locale: state.locale,
+        logoDataUri: brandingState.unsavedLogo ?? "",
+        accent: brandingState.unsavedAccent ?? "",
+        pictureId: brandingState.pictureId ?? "",
+      }),
+    });
+    document.querySelector("#branding-preview").srcdoc = result.html;
+  } catch {
+    status.textContent = copy[state.locale].brandingLoadFailed;
+  }
+}
+
+async function saveBrandingChoices(clear = []) {
+  const status = document.querySelector("#branding-status");
+  status.textContent = copy[state.locale].brandingSaving;
+  const result = await api("/api/branding", {
+    method: "POST",
+    body: JSON.stringify({
+      logoDataUri: brandingState.unsavedLogo ?? "",
+      accent: brandingState.unsavedAccent ?? "",
+      pictureId: brandingState.pictureId ?? "",
+      clear,
+    }),
+  });
+  brandingState.branding = result.branding;
+  brandingState.unsavedLogo = null;
+  brandingState.unsavedAccent = null;
+  brandingState.pictureId = result.branding.tradeMark?.pictureId ?? null;
+  status.textContent = copy[state.locale].brandingSaved;
+  renderBrandingLogo();
+  renderBrandingMark();
+  await refreshBrandingPreview();
+}
+
+async function openBranding() {
+  if (brandingState.branding === null) {
+    const result = await api("/api/branding");
+    brandingState.branding = result.branding;
+    brandingState.pictureId = result.branding.tradeMark?.pictureId ?? null;
+    const select = document.querySelector("#branding-template");
+    select.replaceChildren();
+    for (const template of result.templates) {
+      const option = document.createElement("option");
+      option.value = template.id;
+      option.textContent = template.name[state.locale] ?? template.name["en-IN"];
+      select.append(option);
+    }
+  }
+  renderBrandingLogo();
+  renderBrandingMark();
+  await refreshBrandingPreview();
+}
+
+document.querySelector("#branding-logo-input")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const prepared = await prepareLogo(file);
+  brandingState.unsavedLogo = prepared.dataUri;
+  // A colour is only ever suggested from the logo when one was actually found in it, and the
+  // business can put the design's own colour back with one press.
+  if (prepared.accent !== null) brandingState.unsavedAccent = prepared.accent;
+  renderBrandingLogo();
+  await saveBrandingChoices();
+  event.target.value = "";
+});
+
+document.querySelector("#branding-logo-remove")?.addEventListener("click", async () => {
+  brandingState.unsavedLogo = null;
+  brandingState.unsavedAccent = null;
+  await saveBrandingChoices(["logo", "accent"]);
+});
+
+document.querySelector("#branding-accent-reset")?.addEventListener("click", async () => {
+  brandingState.unsavedAccent = null;
+  await saveBrandingChoices(["accent"]);
+});
+
+document.querySelector("#branding-mark-remove")?.addEventListener("click", async () => {
+  brandingState.pictureId = null;
+  await saveBrandingChoices(["tradeMark"]);
+});
+
+async function searchBrandingMarks() {
+  const query = document.querySelector("#branding-mark-query").value;
+  const result = await api("/api/trade-marks/search", { method: "POST", body: JSON.stringify({ query, limit: 24 }) });
+  brandingState.results = result.pictures;
+  renderBrandingMark();
+  if (result.pictures.length === 0) document.querySelector("#branding-status").textContent = copy[state.locale].brandingNoMarkResults;
+}
+
+document.querySelector("#branding-mark-search")?.addEventListener("click", searchBrandingMarks);
+document.querySelector("#branding-mark-query")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); searchBrandingMarks(); }
+});
+document.querySelector("#branding-template")?.addEventListener("change", refreshBrandingPreview);
+document.querySelector("#branding-format")?.addEventListener("change", refreshBrandingPreview);
+
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); loadReturnDocuments(); });

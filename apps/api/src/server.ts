@@ -6,6 +6,7 @@ import { PlatformError } from '../../../packages/platform/src/index.ts';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { chooseMark, searchMarks } from './trade-mark-application.ts';
+import { previewBranding, readBranding, saveBranding } from './branding-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
 import { ChallanDesk } from './challan-application.ts';
@@ -75,6 +76,12 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // Issue #147 — the mark of a trade: search the picture library, then keep what was picked.
     if (method === 'POST' && pathname === '/api/trade-marks/search') return json(200, searchMarks(body));
     if (method === 'POST' && pathname === '/api/trade-marks/choose') return json(200, chooseMark(body));
+    // Issues #146 and #147 — the business's own logo, mark and colour, and a real bill to see them
+    // on. The preview goes through the same renderer a finalised sale is printed with.
+    if (method === 'GET' && pathname === '/api/branding') return json(200, readBranding(context.companyId));
+    if (method === 'POST' && pathname === '/api/branding') return json(200, saveBranding(context.companyId, body));
+    if (method === 'POST' && pathname === '/api/branding/preview')
+      return json(200, previewBranding(context.companyId, runtime.companySummary(context.companyId).name, body));
     // Issue #37 — bringing a business in from Tally, BUSY or Vyapar. Like setting up a business,
     // this runs against its own fresh company, so nothing it reads in touches the demo books.
     if (method === 'POST' && pathname === '/api/migration/start') return json(200, await startMigration(context));

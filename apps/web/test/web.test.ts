@@ -138,9 +138,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
     assert.match(script, new RegExp(`/api/presale/${route}"`));
   }
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
-  // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans and #142's quotations and
-  // proformas make twenty-three.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 23);
+  // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
+  // proformas, and #146/#147's bill design make twenty-four.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 24);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

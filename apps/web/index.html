@@ -38,6 +38,7 @@
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
+          <button class="nav-item" data-view="branding"><span aria-hidden="true">◐</span><span data-i18n="navBranding"></span></button>
           <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
           <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
           <button class="nav-item" data-view="ask"><span aria-hidden="true">?</span><span data-i18n="navAsk"></span></button>
@@ -941,6 +942,56 @@
           </form>
           <div id="setup-result" aria-live="polite"></div>
         </section>
+        <section class="view" id="view-branding" aria-labelledby="branding-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="brandingEyebrow"></p><h1 id="branding-title" tabindex="-1" data-i18n="brandingTitle"></h1><p data-i18n="brandingHelp"></p></div></div>
+          <div class="branding-grid">
+            <div class="branding-controls">
+              <article class="panel">
+                <h2 data-i18n="brandingLogoTitle"></h2>
+                <p class="setup-hint" data-i18n="brandingLogoHelp"></p>
+                <div class="branding-logo-row">
+                  <div class="branding-logo-box" id="branding-logo-box"><span class="branding-empty" id="branding-logo-empty" data-i18n="brandingNoLogo"></span></div>
+                  <div class="branding-logo-actions">
+                    <label class="file-button"><span data-i18n="brandingChooseLogo"></span><input type="file" id="branding-logo-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" /></label>
+                    <button type="button" class="text-button" id="branding-logo-remove" hidden data-i18n="brandingRemoveLogo"></button>
+                  </div>
+                </div>
+                <div class="branding-accent" id="branding-accent-row" hidden>
+                  <span class="branding-swatch" id="branding-swatch" aria-hidden="true"></span>
+                  <span data-i18n="brandingAccentTaken"></span>
+                  <button type="button" class="text-button" id="branding-accent-reset" data-i18n="brandingAccentReset"></button>
+                </div>
+              </article>
+              <article class="panel">
+                <h2 data-i18n="brandingMarkTitle"></h2>
+                <p class="setup-hint" data-i18n="brandingMarkHelp"></p>
+                <div class="branding-search-row">
+                  <label class="branding-search"><span class="sr-only" data-i18n="brandingSearchLabel"></span><input id="branding-mark-query" type="search" data-i18n-placeholder="brandingSearchPlaceholder" /></label>
+                  <button type="button" class="primary-button" id="branding-mark-search" data-i18n="brandingSearchButton"></button>
+                </div>
+                <div class="branding-mark-results" id="branding-mark-results" aria-live="polite"></div>
+                <p class="branding-chosen" id="branding-mark-chosen" hidden><span data-i18n="brandingMarkChosen"></span> <strong id="branding-mark-name"></strong> <button type="button" class="text-button" id="branding-mark-remove" data-i18n="brandingRemoveMark"></button></p>
+              </article>
+              <article class="panel">
+                <h2 data-i18n="brandingDesignTitle"></h2>
+                <label><span data-i18n="brandingDesignLabel"></span><select id="branding-template"></select></label>
+                <label><span data-i18n="brandingPaperLabel"></span>
+                  <select id="branding-format">
+                    <option value="A4" data-i18n="brandingPaperA4"></option>
+                    <option value="THERMAL_80MM" data-i18n="brandingPaperThermal"></option>
+                  </select>
+                </label>
+                <p class="setup-hint" data-i18n="brandingThermalNote"></p>
+              </article>
+            </div>
+            <article class="panel branding-preview-panel">
+              <h2 data-i18n="brandingPreviewTitle"></h2>
+              <p class="setup-hint" data-i18n="brandingPreviewHelp"></p>
+              <iframe id="branding-preview" title="Sample bill" data-i18n-aria="brandingPreviewFrame"></iframe>
+              <p class="branding-status" id="branding-status" role="status"></p>
+            </article>
+          </div>
+        </section>
         <section class="view" id="view-operations" aria-labelledby="operations-title">
           <div class="page-heading">
             <div><p class="eyebrow" data-i18n="operationsEyebrow"></p><h1 id="operations-title" tabindex="-1" data-i18n="operationsTitle"></h1><p data-i18n="operationsHelp"></p></div>
@@ -1029,6 +1080,7 @@
         <button data-view="returns"><span aria-hidden="true">↩</span><small data-i18n="navReturns"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
+        <button data-view="branding"><span aria-hidden="true">◐</span><small data-i18n="navBranding"></small></button>
         <button data-view="operations"><span aria-hidden="true">●</span><small data-i18n="navOperations"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
         <button data-view="supplier"><span aria-hidden="true">⚑</span><small data-i18n="navSupplier"></small></button>
