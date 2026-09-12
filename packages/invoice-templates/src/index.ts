@@ -17,3 +17,5 @@ export * from './challan.ts';
 export * from './presale.ts';
 // Issue #147 — the mark of the trade a business may print behind its bill.
 export * from './marks.ts';
+// Issues #146 and #147 — what a business has said about how its own bill should look.
+export * from './branding.ts';

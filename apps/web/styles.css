@@ -225,3 +225,29 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .row-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .1rem 0 1.1rem 2.1rem; }
 .row-actions input { flex: 1 1 16rem; min-width: 10rem; }
 .row-actions button { padding: .45rem .9rem; font-size: .84rem; }
+
+/* Issues #146 and #147 — the screen where a business makes the bill look like its own. */
+.branding-grid { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1.1fr); gap: 16px; align-items: start; }
+.branding-controls { display: grid; gap: 16px; }
+.branding-logo-row { display: flex; gap: 16px; align-items: center; }
+.branding-logo-box { width: 120px; height: 80px; border: 1px dashed #c7ccd1; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
+.branding-logo-box img { max-width: 100%; max-height: 100%; }
+.branding-empty { font-size: 12px; color: #6b7680; }
+.branding-logo-actions { display: grid; gap: 8px; }
+.file-button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 14px; border-radius: 8px; background: #12325c; color: #fff; cursor: pointer; font-size: 14px; }
+.file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+/* A flex row still needs telling that `hidden` wins, or it shows with nothing in it. */
+.branding-accent[hidden], .branding-search-row[hidden] { display: none; }
+.branding-accent { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: #47525d; flex-wrap: wrap; }
+.branding-swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #c7ccd1; display: inline-block; }
+.branding-search-row { display: flex; gap: 8px; align-items: end; }
+.branding-search { flex: 1; }
+.branding-mark-results { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mark-choice { width: 78px; padding: 8px 4px; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; cursor: pointer; display: grid; gap: 4px; justify-items: center; }
+.mark-choice.chosen { border-color: #12325c; box-shadow: 0 0 0 2px rgba(18, 50, 92, .18); }
+.mark-choice small { font-size: 10px; color: #62707d; overflow-wrap: anywhere; }
+.mark-drawing svg { width: 34px; height: 34px; }
+.branding-chosen { margin-top: 12px; font-size: 13px; }
+.branding-preview-panel iframe { width: 100%; height: 620px; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; }
+.branding-status { font-size: 13px; color: #47525d; min-height: 1.2em; }
+@media (max-width: 900px) { .branding-grid { grid-template-columns: 1fr; } .branding-preview-panel iframe { height: 460px; } }
