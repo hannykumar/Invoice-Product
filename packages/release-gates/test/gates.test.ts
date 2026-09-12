@@ -213,9 +213,9 @@ test('a gate that throws while being checked counts against the release, not for
 
 test('the report names the figure, not the function', () => {
   const report = runGates(withDefect({
-    tax: [{ documentNumber: 'INV/26-27/00001', cgst: 1n, sgst: 1n, utgst: 0n, igst: 0n, cess: 0n, totalTax: 99n }],
+    tax: [{ documentNumber: 'INV/26-27/000001', cgst: 1n, sgst: 1n, utgst: 0n, igst: 0n, cess: 0n, totalTax: 99n }],
   }));
   const rendered = renderReport(report);
-  assert.match(rendered, /INV\/26-27\/00001/, 'a person should be able to go and look at the bill');
+  assert.match(rendered, /INV\/26-27\/000001/, 'a person should be able to go and look at the bill');
   assert.match(rendered, /99 paise of GST, but its parts come to 2/);
 });

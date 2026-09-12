@@ -99,7 +99,7 @@ test('example 3 — intra-state sale splits CGST and SGST and still balances aft
   const invoiceValue = rupees(1180);
   const roundOff = invoiceValue - beforeRounding;
   assert.equal(roundOff, rupees(0, 1));
-  assertBalanced('sale INV/26-27/00041', [
+  assertBalanced('sale INV/26-27/000041', [
     { account: 'ABC Traders', debit: invoiceValue, credit: 0n },
     { account: 'Sales – Goods', debit: 0n, credit: taxable },
     { account: 'Output CGST', debit: 0n, credit: cgst },
@@ -123,7 +123,7 @@ test('example 4 — availability blocks the second sale and the shortfall is exa
   onPage('**40 are missing**');
   const value = 70n * rupees(800);
   assert.equal(value, rupees(56000));
-  assertBalanced('sale INV/26-27/00042', [
+  assertBalanced('sale INV/26-27/000042', [
     { account: 'ABC Traders', debit: value, credit: 0n },
     { account: 'Sales – Goods', debit: 0n, credit: value },
   ]);

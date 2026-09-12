@@ -1063,7 +1063,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
 
   const issued = await request('POST', '/api/challans/issue', jobWork, owner);
   assert.equal(issued.status, 200, JSON.stringify(issued.body));
-  assert.equal(issued.body.challan.number, 'DC/26-27/00001');
+  assert.equal(issued.body.challan.number, 'DC/26-27/0000001');
 
   const printed = await request('POST', '/api/challans/print', { challan: issued.body.challan.id }, owner);
   assert.equal(printed.status, 200);
@@ -1077,7 +1077,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   assert.equal(decision.status, 200, JSON.stringify(decision.body));
   assert.equal(decision.body.outcome, 'REQUIRED');
   assert.equal(decision.body.ruleId, 'EWB.ANY_VALUE.INTER_STATE_JOB_WORK');
-  assert.equal(decision.body.documentNumber, 'DC/26-27/00001');
+  assert.equal(decision.body.documentNumber, 'DC/26-27/0000001');
   const raised = await request('POST', '/api/eway/generate', movement, owner);
   assert.equal(raised.status, 200, JSON.stringify(raised.body));
   const afterEway = (await request('GET', '/api/challans', {}, owner)).body.challans[0];
@@ -1087,7 +1087,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   // A sale challan, then the invoice after delivery, linked back.
   const sale = { ...jobWork, reason: 'SUPPLY_INVOICE_TO_FOLLOW', quantity: '4', rate: '250', reference: 'api-141-sale' };
   const saleChallan = await request('POST', '/api/challans/issue', sale, owner);
-  assert.equal(saleChallan.body.challan.number, 'DC/26-27/00002');
+  assert.equal(saleChallan.body.challan.number, 'DC/26-27/0000002');
   assert.equal(saleChallan.body.challan.showsTax, true);
   assert.equal(saleChallan.body.challan.tax, 120, '12% on ₹1,000 of soap');
   const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'api-141-bill' }, owner);

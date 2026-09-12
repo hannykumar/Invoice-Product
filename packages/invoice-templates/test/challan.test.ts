@@ -50,7 +50,7 @@ test('the page says what it is: a delivery challan, not a tax invoice', async ()
   assert.match(visible, /Delivery Challan/);
   assert.match(visible, /Not a tax invoice/);
   assert.doesNotMatch(visible, /Tax Invoice/, 'the invoice title never appears on a challan');
-  assert.match(html, /<title>Delivery Challan DC\/26-27\/00001<\/title>/);
+  assert.match(html, /<title>Delivery Challan DC\/26-27\/0000001<\/title>/);
   assert.match(html, /data-template="india-standard@/, 'the same engine and stamp as the invoice');
 });
 
@@ -66,7 +66,7 @@ test('every Rule 55(1) particular is on a job-work challan, and no tax is', asyn
   const html = renderChallan(toChallanDocument(await issue('t3'), context()), snapshot, { format: 'A4', locale: 'en-IN' });
   const visible = text(html);
   const present: Record<string, boolean> = {
-    'challan.number': visible.includes('Challan No.') && visible.includes('DC/26-27/00001'),
+    'challan.number': visible.includes('Challan No.') && visible.includes('DC/26-27/0000001'),
     'challan.date': visible.includes('Challan Date') && visible.includes('10 May 2026'),
     'consigner.nameAddressGstin': visible.includes('Sharma Fruit Traders') && visible.includes('Ajmal Khan Road') && visible.includes('07AAAAA0000A1Z4'),
     'consignee.nameAddressGstin': visible.includes('Consignee') && visible.includes('ABC Traders') && visible.includes('Azadpur Mandi') && visible.includes('07DDDDD3333D1ZV'),
@@ -138,12 +138,12 @@ test('the invoice raised later names the challan in its Delivery Note box', asyn
   const linked = await desk.challans.linkInvoice(desk.actor, { challanId: challan.id, invoiceId: invoice.id });
   assert.match(
     text(renderChallan(toChallanDocument(linked, context()), snapshot, { format: 'A4', locale: 'en-IN' })),
-    /Invoice No\. &amp; Date INV\/26-27\/00001, 12 May 2026/,
+    /Invoice No\. &amp; Date INV\/26-27\/000001, 12 May 2026/,
     'the challan names the invoice that followed it',
   );
 
   const references = deliveryNoteFromChallans(await desk.challans.forInvoice(desk.actor, invoice.id));
-  assert.deepEqual(references, { deliveryNoteNumber: 'DC/26-27/00001', deliveryNoteDate: isoDate('2026-05-10') });
+  assert.deepEqual(references, { deliveryNoteNumber: 'DC/26-27/0000001', deliveryNoteDate: isoDate('2026-05-10') });
   const bill = text(
     renderInvoice(
       toInvoiceDocument(invoice, { title: 'TAX_INVOICE', seller: context().consigner, buyer: context().consignee, placeOfSupplyStateName: 'Delhi', references }),
@@ -151,17 +151,17 @@ test('the invoice raised later names the challan in its Delivery Note box', asyn
       { format: 'A4', locale: 'en-IN' },
     ),
   );
-  assert.match(bill, /Delivery Note DC\/26-27\/00001/);
+  assert.match(bill, /Delivery Note DC\/26-27\/0000001/);
   assert.match(bill, /Delivery Note Date 10 May 2026/);
 
   // Several challans on one invoice list every number; a cancelled one is left off.
   assert.deepEqual(
     deliveryNoteFromChallans([
-      { number: 'DC/26-27/00001', documentDate: isoDate('2026-05-10'), state: 'INVOICED' },
-      { number: 'DC/26-27/00002', documentDate: isoDate('2026-05-11'), state: 'INVOICED' },
-      { number: 'DC/26-27/00003', documentDate: isoDate('2026-05-11'), state: 'CANCELLED' },
+      { number: 'DC/26-27/0000001', documentDate: isoDate('2026-05-10'), state: 'INVOICED' },
+      { number: 'DC/26-27/0000002', documentDate: isoDate('2026-05-11'), state: 'INVOICED' },
+      { number: 'DC/26-27/0000003', documentDate: isoDate('2026-05-11'), state: 'CANCELLED' },
     ]),
-    { deliveryNoteNumber: 'DC/26-27/00001, DC/26-27/00002', deliveryNoteDate: null },
+    { deliveryNoteNumber: 'DC/26-27/0000001, DC/26-27/0000002', deliveryNoteDate: null },
   );
 });
 

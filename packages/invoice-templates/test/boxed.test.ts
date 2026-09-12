@@ -49,7 +49,7 @@ const line = (overrides: Partial<RenderableLine> = {}): RenderableLine => ({
 
 const doc = (overrides: Partial<InvoiceDocument> = {}): InvoiceDocument => ({
   title: 'TAX_INVOICE',
-  number: 'INV/26-27/00042',
+  number: 'INV/26-27/000042',
   date: isoDate('2026-08-20'),
   dueDate: isoDate('2026-09-19'),
   seller: {
@@ -170,7 +170,7 @@ test('it still cannot drop a required field, and prints the compliance section o
   // leaves the compliance section standing.
   const bare: TemplateDefinition = { ...india, optionalFields: [], lineColumns: [] };
   const html = renderInvoice(doc(), snapshotOf(bare), { format: 'A4', locale: 'en-IN' });
-  for (const required of ['INV/26-27/00042', 'Sharma Fruit Traders', 'ABC Traders', '07AAAAA0000A1Z4', 'Delhi']) {
+  for (const required of ['INV/26-27/000042', 'Sharma Fruit Traders', 'ABC Traders', '07AAAAA0000A1Z4', 'Delhi']) {
     assert.ok(html.includes(required), `${required} survives a design that shows nothing optional`);
   }
   assert.ok(MANDATORY_FIELDS.length > 0);

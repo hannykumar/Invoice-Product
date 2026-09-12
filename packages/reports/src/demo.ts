@@ -207,7 +207,7 @@ const main = async (): Promise<void> => {
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '', padding: 5 } },
+    policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } },
     idFactory,
   });
 

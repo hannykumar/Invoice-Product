@@ -24,7 +24,7 @@ test("a job-work challan becomes a CHL document with the job-work reason", async
 
   const document = consignmentFromChallan(challan);
   assert.equal(document.documentType, "DELIVERY_CHALLAN");
-  assert.equal(document.documentNumber, "DC/26-27/00001");
+  assert.equal(document.documentNumber, "DC/26-27/0000001");
   assert.equal(document.lines[0]?.taxableValuePaise, 105000n);
   assert.equal(document.lines[0]?.quantity, "5");
   assert.equal(document.lines[0]?.igstPaise, 0n, "no tax on goods out for job work");
@@ -37,7 +37,7 @@ test("a job-work challan becomes a CHL document with the job-work reason", async
   const partA = buildPartA(movement);
   assert.ok(partA.ok, partA.ok ? "" : partA.problems.map((p) => p.message).join(" "));
   assert.equal(partA.payload.docType, "CHL");
-  assert.equal(partA.payload.docNo, "DC/26-27/00001");
+  assert.equal(partA.payload.docNo, "DC/26-27/0000001");
   assert.equal(partA.payload.subSupplyType, SUB_SUPPLY_CODES.JOB_WORK);
 });
 

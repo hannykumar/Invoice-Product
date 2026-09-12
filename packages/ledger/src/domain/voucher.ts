@@ -59,7 +59,7 @@ export interface SourceDocument {
   /** e.g. "sales_invoice", "purchase_invoice", "payment", "import_batch". */
   readonly kind: string;
   readonly id: string;
-  /** The number a person would recognise, e.g. "INV/26-27/00042". */
+  /** The number a person would recognise, e.g. "INV/26-27/000042". */
   readonly number: string | null;
 }
 

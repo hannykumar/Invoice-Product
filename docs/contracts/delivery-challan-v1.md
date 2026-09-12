@@ -29,10 +29,13 @@ not strictly needed is harmless; leaving it off where it was needed is not.
 
 ## Numbering
 
-Own series, never the invoice counter: `DC/26-27/00001` by default (`ChallanSeries`). A number is
+Own series, never the invoice counter: `DC/26-27/0000001` by default (`ChallanSeries`). A number is
 allocated in the same transaction that saves the challan, so a refused or failed challan uses no
-number. Rule 55(1) caps a number at sixteen characters; `validateChallanSeries` refuses a series
-that could exceed it at its widest, and refuses a prefix equal to the invoice prefix.
+number. Rule 55(1) caps a number at sixteen characters, and the challan spends all sixteen: the
+running number is padded to whatever room the prefix and the short year leave behind, never to a
+width anyone chooses. `DC/26-27/0000001` carries a business to 9,999,999 challans in a financial
+year. `validateChallanSeries` refuses a series that could not reach 99,999, or that shares the
+invoice's prefix; `challanSequenceDigits` and `challansPerYear` report the derived width and ceiling.
 
 ## States
 
