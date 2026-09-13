@@ -28,6 +28,7 @@ import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type Invoic
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
 import { preSaleTitle, renderPreSaleBoxed, renderPreSaleNarrow, type PreSalePrint } from './presale.ts';
 import { MAX_TRADE_MARK_OPACITY_PERCENT } from './marks.ts';
+import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
 
 /** Re-exported because this module has been the public home of the escaper since issue #13. */
 export { escapeHtml };
@@ -193,6 +194,11 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .qr { margin-top: 3mm; display: flex; gap: 3mm; align-items: center; }
     .qr-slot { width: 26mm; height: 26mm; border: 1px solid ${palette.border}; padding: 2mm; display: flex; align-items: center; justify-content: center; text-align: center; font-size: ${typography.baseSizePt - 2}pt; color: ${palette.muted}; background: #fff; }
     .qr-slot svg { width: 100%; height: 100%; }
+    /* Issue #144 — the same 26 mm the reserved box takes, so nothing moves when a UPI id is saved. */
+    .upi-square { width: 26mm; height: 26mm; flex: none; margin: 0 auto; background: #fff; }
+    .upi-square svg { display: block; width: 100%; height: 100%; }
+    .boxed .upi-cell .reserved { margin: 0 auto; }
+    .boxed .upi-cell .upi-id { font-size: 7pt; margin-top: 1mm; word-break: break-all; }
     .qr-pair { display: flex; gap: 3mm; align-items: flex-start; flex-wrap: wrap; }
     .qr-lines { display: flex; flex-direction: column; gap: 1.5mm; }
     ${reservedSlotStyles(palette.border, palette.muted, Math.max(6, typography.baseSizePt - 2))}
@@ -426,9 +432,18 @@ export const renderInvoice = (
         </div>
       </div>`;
 
-  // The pay-by-scan square. No shipped design carries it yet; issue #144 turns it on and supplies
-  // the business's UPI id, and finds the space already waiting for it here.
-  const upi = !shows('qr.upi') ? '' : `<div class="qr qr-pair">${reserved('upi.qr')}</div>`;
+  // Issue #144 — the pay-by-scan square, for the amount still due. Never on 58 mm till roll, where it
+  // would print too small to scan, and never on a bill with nothing left to pay. On 80 mm it prints
+  // once the UPI id is saved; the empty reserved box does not, by issue #148's till-roll rule.
+  const upiId = doc.upiId ?? null;
+  const upi =
+    !shows('qr.upi') || !billHasSomethingToPay(doc) || !paperFitsUpiSquare(format)
+      ? ''
+      : upiId === null
+        ? printsReservedSlots(format)
+          ? `<div class="qr qr-pair">${reserved('upi.qr')}</div>`
+          : ''
+        : `<div class="qr qr-pair"><div class="upi-square" data-upi="${escapeHtml(upiId)}">${upiSquareSvg(doc, upiId)}</div><div>${escapeHtml(t('scanToPay', locale))}<br>${escapeHtml(t('upiId', locale))}: ${escapeHtml(upiId)}</div></div>`;
 
   const bank =
     doc.bankDetails === null || !shows('seller.bankDetails')

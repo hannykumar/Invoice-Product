@@ -57,7 +57,7 @@ test('the page says what it is: a delivery challan, not a tax invoice', async ()
 test('nothing that belongs only on a bill is printed on a challan', async () => {
   const html = renderChallan(toChallanDocument(await issue('t2', crateChallan({ reason: 'SUPPLY_INVOICE_TO_FOLLOW' })), context()), snapshot, { format: 'A4', locale: 'en-IN' });
   const visible = text(html);
-  for (const billOnly of ['Amount Chargeable', 'Balance Due', 'Due Date', 'Bank Details', 'Round Off', 'HSN / SAC Summary', 'IRN', 'Pay by scan', 'Government QR']) {
+  for (const billOnly of ['Amount Chargeable', 'Balance Due', 'Due Date', 'Bank Details', 'Round Off', 'HSN / SAC Summary', 'IRN', 'Pay by scan', 'Scan to pay', 'Government QR']) {
     assert.ok(!visible.includes(billOnly), `a challan must not carry "${billOnly}"`);
   }
 });

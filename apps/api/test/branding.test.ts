@@ -149,3 +149,26 @@ test('branding needs a signed-in session, like everything else about a company',
   assert.equal((await request('POST', '/api/branding', { accent: '#8a2f14' })).status, 401);
   assert.equal((await request('POST', '/api/branding/preview')).status, 401);
 });
+
+test('issue #144 — a UPI id is saved once, a mistyped one is refused, and the sample bill carries the square', async () => {
+  const session = await signIn();
+  const before = await request('POST', '/api/branding/preview', {}, session);
+  assert.ok(before.body.html.includes('data-reserved="upi.qr"'), 'before saving, the bill keeps the empty box');
+
+  const wrong = await request('POST', '/api/branding/upi', { upiId: 'sharmafruits' }, session);
+  assert.equal(wrong.status, 422);
+  assert.equal((await request('GET', '/api/branding', {}, session)).body.upiId, null, 'nothing was saved');
+
+  const saved = await request('POST', '/api/branding/upi', { upiId: ' Sharma.Fruits@OKICICI ' }, session);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.upiId, 'sharma.fruits@okicici');
+  assert.equal((await request('GET', '/api/branding', {}, session)).body.upiId, 'sharma.fruits@okicici');
+
+  const after = await request('POST', '/api/branding/preview', {}, session);
+  assert.ok(after.body.html.includes('data-upi="sharma.fruits@okicici"'));
+  assert.ok(after.body.html.includes('UPI ID: sharma.fruits@okicici'));
+
+  const removed = await request('POST', '/api/branding/upi', { clear: true }, session);
+  assert.equal(removed.body.upiId, null);
+  assert.ok((await request('POST', '/api/branding/preview', {}, session)).body.html.includes('data-reserved="upi.qr"'));
+});

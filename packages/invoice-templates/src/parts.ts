@@ -90,6 +90,9 @@ const T = {
   declaration: w('Declaration', 'Ghoshna'),
   forSeller: w('for', 'ki taraf se'),
   authorisedSignatory: w('Authorised Signatory', 'Adhikrit hastakshar'),
+  // Issue #144 — the caption over the pay-by-scan square, and the line naming where the money goes.
+  scanToPay: w('Scan to pay by UPI', 'UPI se scan karke payment'),
+  upiId: w('UPI ID', 'UPI ID'),
   digitallySigned: w(
     'Digitally signed by the government against the IRN above. No handwritten signature is needed.',
     'Sarkar ne upar wale IRN par digital hastakshar kiye hain. Haath se hastakshar ki zaroorat nahin.',

@@ -213,6 +213,14 @@ export interface InvoiceDocument {
    */
   readonly bankDetails: readonly string[] | null;
   readonly bank: RenderableBank | null;
+  /**
+   * Issue #144 — the business's UPI id, frozen onto the bill like its bank details.
+   *
+   * When it is present the bill prints a pay-by-scan square for the amount still due. When it is
+   * absent a design that carries the square keeps a reserved box at the square's size, so the page
+   * does not change shape on the day a business saves its id (issue #148's rule).
+   */
+  readonly upiId?: string | null;
   readonly references: RenderableReferences | null;
   readonly terms: string | null;
   /**

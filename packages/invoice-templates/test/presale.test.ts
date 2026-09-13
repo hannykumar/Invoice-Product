@@ -119,7 +119,7 @@ test('nothing that belongs only on a registered tax invoice, or on goods on the 
   for (const kind of ['QUOTATION', 'PROFORMA'] as const) {
     const visible = text(renderPreSale(toPreSalePrint(await issue(kind), context()), snapshot, { format: 'A4', locale: 'en-IN' }));
     for (const invoiceOnly of [
-      'Amount Chargeable', 'Balance Due', 'Amount Paid', 'Due Date', 'IRN', 'Government QR', 'Pay by scan', 'ORIGINAL FOR', 'DUPLICATE FOR',
+      'Amount Chargeable', 'Balance Due', 'Amount Paid', 'Due Date', 'IRN', 'Government QR', 'Pay by scan', 'Scan to pay', 'ORIGINAL FOR', 'DUPLICATE FOR',
       'Reverse Charge', 'e-Way Bill', 'Dispatched through', 'Vehicle No.', 'Delivery Note', 'computer generated invoice',
     ]) {
       assert.ok(!visible.includes(invoiceOnly), `a ${kind.toLowerCase()} must not carry "${invoiceOnly}"`);

@@ -21,6 +21,7 @@ import { hsnSummary, hsnSummaryColumns, type HsnSummaryRow } from './hsn-summary
 import { escapeHtml, isZero, money, percent, splitQuantity, t, totalQuantityText } from './parts.ts';
 import type { Locale } from './document.ts';
 import { renderReservedSlot } from './reserved.ts';
+import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
 
 /** A cell in the header grid: a small grey caption with the value under it. */
 export const cell = (caption: string, value: string, span = 1): string =>
@@ -295,9 +296,20 @@ export const renderBoxed = (
       ? ''
       : `<td><span class="cap">${escapeHtml(t('bank', locale))}</span>${bankLines.join('')}</td>`;
 
-  // The pay-by-scan square sits beside the bank details, which is where a customer looks for a way
-  // to pay. Issue #144 supplies the business's UPI id; issue #148's reserved box holds the space.
-  const upi = !shows('qr.upi') ? '' : `<td class="upi-cell">${reserved('upi.qr')}</td>`;
+  // Issue #144 — the pay-by-scan square sits beside the bank details, which is where a customer
+  // looks for a way to pay. It carries the amount still due, so there is no square at all on a bill
+  // with nothing left to pay. Until the business saves its UPI id, issue #148's reserved box holds
+  // the space, and the caption and the line under it are kept blank so the footer is the same height
+  // either way.
+  const upiId = doc.upiId ?? null;
+  const upi =
+    !shows('qr.upi') || !billHasSomethingToPay(doc) || !paperFitsUpiSquare(format)
+      ? ''
+      : `<td class="upi-cell">
+          <span class="cap">${upiId === null ? '&nbsp;' : escapeHtml(t('scanToPay', locale))}</span>
+          ${upiId === null ? reserved('upi.qr') : `<div class="upi-square" data-upi="${escapeHtml(upiId)}">${upiSquareSvg(doc, upiId)}</div>`}
+          <div class="upi-id">${upiId === null ? '&nbsp;' : `${escapeHtml(t('upiId', locale))}: ${escapeHtml(upiId)}`}</div>
+        </td>`;
 
   const footerCells = [declaration, bank, upi, signature].filter((c) => c !== '');
 

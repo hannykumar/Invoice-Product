@@ -19,3 +19,6 @@ export * from './presale.ts';
 export * from './marks.ts';
 // Issues #146 and #147 — what a business has said about how its own bill should look.
 export * from './branding.ts';
+// Issue #144 — the pay-by-scan UPI square, and the QR drawing it is made from.
+export * from './qr.ts';
+export * from './upi.ts';

@@ -63,9 +63,27 @@ engine would mean the PDF could differ from the preview the user approved.
 - **Decide GST liability.** It prints what #25 worked out.
 - **Decide the document's title.** Whether a bill is a tax invoice or a bill of supply is a
   compliance question; the caller supplies it. Tracked as a gap in the #54 decision log.
-- **Generate a QR code.** #26 produces the e-invoice QR; this prints what it is given, and shows a
-  labelled empty slot otherwise. **A styled PDF is never an e-invoice** — a bill with no government
+- **Generate the government's QR code.** #26 produces the e-invoice QR; this prints what it is
+  given, and shows a labelled empty slot otherwise. The one QR this module does draw is the
+  pay-by-scan UPI square (#144), below, which is the business's own payment link and not a
+  government record. **A styled PDF is never an e-invoice** — a bill with no government
   reference never implies one, and there is a test.
+
+## Pay-by-scan UPI square (#144)
+
+- `InvoiceDocument.upiId` is frozen onto the bill like the bank details. Every shipped design
+  (version 1.1.0) carries the optional field `qr.upi`; snapshots taken before it do not, so old bills
+  reprint unchanged.
+- The square carries `upi://pay?pa=<upi id>&pn=<seller name>&am=<amount still due>&cu=INR&tn=<bill
+  number>`. The amount is `totals.outstanding`, else the total less `totals.amountPaid`, else the
+  total.
+- No square, and no empty box, when nothing is due or on a credit note. No square on 58 mm paper.
+  On 80 mm the square prints once an id is saved; the empty box does not, by the till-roll rule.
+- Until an id is saved, A4 and phone show the `upi.qr` reserved slot at the square's 26 mm size.
+- `validateUpiId` refuses an id no UPI app could pay to. `encodeQr` is a self-contained QR encoder
+  (byte mode, level M, versions 1–15, at most 412 bytes); it throws rather than cutting text short.
+- The app saves the id through `POST /api/branding/upi` (`{ upiId }` or `{ clear: true }`), and
+  `GET /api/branding` returns it.
 
 ## Safety
 
