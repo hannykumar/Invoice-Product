@@ -1167,3 +1167,46 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
   assert.equal((await request('POST', '/api/presale/issue', { ...quote, reference: 'viewer' }, viewer)).status, 403);
 });
+
+// Issue #132 — the bill itself, which the web app could not show or print until now.
+test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper it will be printed on', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const sale = {
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30',
+    reference: 'api-132-sale', customerAddress: 'Shop 8, Commercial Street\nBengaluru 560001',
+  };
+  const recorded = await request('POST', '/api/sales/record', sale, owner);
+  assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
+
+  const printed = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, owner);
+  assert.equal(printed.status, 200, JSON.stringify(printed.body));
+  assert.equal(printed.body.number, recorded.body.invoice.number);
+  assert.equal(printed.body.hasBuyerAddress, true);
+  assert.match(printed.body.html, /^<!doctype html>/);
+  assert.match(printed.body.html, /Tax Invoice/);
+  assert.match(printed.body.html, new RegExp(recorded.body.invoice.number.replace(/\//g, '\\/')));
+  assert.match(printed.body.html, /Shop 8, Commercial Street/, 'the address as it was typed on the day');
+  assert.match(printed.body.html, /Sampoorna Traders/);
+  // The paper is in the page itself, so the browser's print dialogue offers the right size.
+  assert.match(printed.body.html, /@page \{ size: A4/);
+
+  // Till roll is a different page, and the same bill on it is the same bill.
+  const roll = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id, format: 'THERMAL_80MM' }, owner);
+  assert.equal(roll.body.format, 'THERMAL_80MM');
+  assert.match(roll.body.html, /@page \{ size: 80mm auto/);
+
+  const hindi = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id, locale: 'hi-IN' }, owner);
+  assert.match(hindi.body.html, /<html lang="hi">/);
+
+  // Once the government has registered the bill, its own signed square prints on it.
+  const registered = await request('POST', '/api/einvoices/register', { invoice: recorded.body.invoice.id, turnover: '80000000' }, owner);
+  assert.equal(registered.body.status, 'REGISTERED');
+  const withIrn = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, owner);
+  assert.match(withIrn.body.html, new RegExp(registered.body.irn));
+  assert.match(withIrn.body.html, /<svg/, 'the signed QR the government sent back, drawn on the page');
+
+  // A bill nobody issued cannot be printed, and another company's session cannot reach this one.
+  assert.equal((await request('POST', '/api/sales/print', { invoice: 'not-a-bill' }, owner)).status, 404);
+  const other = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  assert.equal((await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, other)).status, 404);
+});

@@ -137,6 +137,14 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   for (const route of ['preview', 'issue', 'print', 'convert', 'issue-sale', 'link-invoice', 'cancel']) {
     assert.match(script, new RegExp(`/api/presale/${route}"`));
   }
+  // Issue #132 — the bill after a sale: the server's own printer in a frame, the browser's print
+  // box for the paper, and any bill already issued opened again from the recorded activity.
+  assert.match(html, /id="sale-bill-panel"/);
+  assert.match(html, /id="sale-bill-frame"/);
+  assert.match(html, /name="customerAddress"/);
+  assert.match(script, /\/api\/sales\/print/);
+  assert.match(script, /#sale-bill-frame"\)\.contentWindow\?\.print\(\)/);
+  assert.match(script, /copy\[state\.locale\]\.openBill/);
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
   // proformas, and #146/#147's bill design make twenty-four.

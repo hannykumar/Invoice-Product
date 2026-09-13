@@ -8,6 +8,19 @@ import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
+import {
+  brandedSnapshot,
+  qrSvg,
+  renderInvoice,
+  templateById,
+  toInvoiceDocument,
+  type Locale,
+  type PageFormat,
+  type RenderableParty,
+  type TemplateSnapshot,
+} from '@invoice/invoice-templates';
+import { brandingOf, upiIdOf } from './branding-application.ts';
+import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
@@ -137,6 +150,14 @@ const daysAfter = (date: string, days: number): string => {
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
+/** An address as typed: one line per row, blank rows dropped. Nothing is invented for it. */
+const addressLines = (value: unknown): readonly string[] =>
+  String(value ?? '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
+
+const party = (stateCode: string, name: string, gstin: string, addressLines_: readonly string[]): RenderableParty => ({
+  name, addressLines: addressLines_, gstin, stateCode, stateName: STATE_NAMES[stateCode] ?? stateCode,
+});
+
 /**
  * The slice of master data the stock report needs to name things. Item and warehouse names come
  * from `namesFrom` in the report service; this only has to satisfy the interface and supply a unit
@@ -242,6 +263,8 @@ export class DemoApplication {
   readonly challans: ChallanDesk;
   /** Issue #142 — quotations and proforma invoices, the papers sent before a sale. */
   readonly presale: PreSaleDesk;
+  /** Issue #132 — the design each bill was printed with, frozen when it was issued. */
+  private readonly billDesign = new Map<string, { readonly buyerAddress: readonly string[]; readonly snapshot: TemplateSnapshot }>();
 
   private constructor(
     config: CompanySeed,
@@ -1106,12 +1129,13 @@ export class DemoApplication {
     const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
-    return this.issueCheckedSale(actor, preview.token, usageDate);
+    return this.issueCheckedSale(actor, preview.token, usageDate, addressLines(input.customerAddress));
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, buyerAddress: readonly string[] = []) {
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
+    this.freezeBillDesign(final.invoice, buyerAddress);
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1147,7 +1171,69 @@ export class DemoApplication {
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const token = String(input.token ?? '');
     if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
-    return this.issueCheckedSale(actor, token, usageDate);
+    return this.issueCheckedSale(actor, token, usageDate, addressLines(input.customerAddress));
+  }
+
+  /**
+   * Issue #132 — the design a bill is printed with, frozen onto it the moment it is issued.
+   *
+   * A template id would not do: a design can be edited, and then every old bill silently changes
+   * shape. The whole visual definition is copied here instead, with the business's own colour as it
+   * was that day, so a bill reprinted in three years is the page the customer was handed.
+   */
+  private freezeBillDesign(invoice: SalesInvoice, buyerAddress: readonly string[]): void {
+    if (this.billDesign.has(invoice.id)) return;
+    const template = templateById('india-standard');
+    if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
+    this.billDesign.set(invoice.id, {
+      buyerAddress,
+      snapshot: brandedSnapshot(template, 'en-IN', invoice.documentDate, brandingOf(invoice.companyId)),
+    });
+  }
+
+  /**
+   * Issue #132 — the finished bill, on screen and ready for the printer.
+   *
+   * It is the real renderer, the design stored on the bill and the figures the sales module worked
+   * out. Nothing about the page is rebuilt in the browser, so what a shopkeeper checks here is
+   * exactly what the printer puts on paper. When the bill carries an IRN, the government's own
+   * signed square prints on it.
+   */
+  async printSale(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const invoice = await this.sales.get(actor, String(input.invoice ?? ''));
+    if (invoice === null || invoice.state !== 'FINAL') throw notFound('API_BILL_NOT_FOUND', 'We could not find that bill.');
+    const design = this.billDesign.get(invoice.id);
+    if (design === undefined) throw notFound('API_BILL_DESIGN', 'This bill was issued before its design was recorded, so it cannot be printed here.');
+    const locale: Locale = input.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
+    const format: PageFormat = input.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : input.format === 'MOBILE' ? 'MOBILE' : 'A4';
+    const registered = (await this.shop.eInvoice.list(actor)).find((record) => record.documentId === invoice.id && record.status === 'REGISTERED');
+    const acknowledgement = registered?.acknowledgement ?? null;
+    // A finalised bill is always priced, and pricing decides the place of supply.
+    const place = invoice.pricing?.placeOfSupplyStateCode ?? invoice.placeOfSupplyStateCode ?? this.config.gstin.slice(0, 2);
+    const document = toInvoiceDocument(invoice, {
+      title: 'TAX_INVOICE',
+      seller: party(this.config.gstin.slice(0, 2), this.config.name, this.config.gstin, [this.config.location]),
+      buyer: party(this.config.customerGstin.slice(0, 2), this.config.customerName, this.config.customerGstin, design.buyerAddress),
+      placeOfSupplyStateName: STATE_NAMES[place] ?? place,
+      logoDataUri: brandingOf(companyId).logoDataUri,
+      tradeMark: brandingOf(companyId).tradeMark,
+      eInvoice: acknowledgement === null ? null : {
+        irn: acknowledgement.irn,
+        // Drawn from the government's own signed string, never from anything we made up.
+        qrSvg: qrSvg(acknowledgement.signedQrCode, `IRN ${acknowledgement.irn}`),
+      },
+    });
+    const upiId = upiIdOf(companyId);
+    return {
+      state: 'print' as const,
+      number: invoice.number,
+      format,
+      // The bill prints without the customer's address until somebody types one, and the screen
+      // says so rather than inventing a line of it.
+      hasBuyerAddress: design.buyerAddress.length > 0,
+      html: renderInvoice(upiId === null ? document : { ...document, upiId }, design.snapshot, { format, locale }),
+    };
   }
 
   // ------------------------------------------------ issue #47: letting the assistant do the work

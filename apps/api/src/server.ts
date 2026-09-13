@@ -156,6 +156,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
+    // Issue #132 — the finished bill, on screen and ready for the printer.
+    if (method === 'POST' && pathname === '/api/sales/print') return json(200, await app.printSale(actor, body));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
     // Issue #47 — asking the assistant to do something: what it would do, and then doing it.

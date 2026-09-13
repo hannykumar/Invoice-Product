@@ -114,10 +114,20 @@
                 <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
                 <label><span data-i18n="paymentTerms"></span><select name="terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
               </div>
-              <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
+              <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label><label class="full-field"><span data-i18n="saleCustomerAddress"></span><textarea name="customerAddress" rows="3"></textarea><small data-i18n="saleAddressHelp"></small></label></div></details>
             </article>
             <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">—</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
+          <article class="panel bill-panel" id="sale-bill-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="sale-bill-title">—</h2><p id="sale-bill-note"></p></div>
+              <div class="bill-actions">
+                <label><span data-i18n="billPaper"></span><select id="sale-bill-format"><option value="A4" data-i18n="billPaperA4"></option><option value="THERMAL_80MM" data-i18n="billPaperThermal"></option><option value="MOBILE" data-i18n="billPaperMobile"></option></select></label>
+                <button type="button" class="primary-button" id="sale-bill-print" data-i18n="printBill"></button>
+              </div>
+            </div>
+            <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
+          </article>
         </section>
 
         <section class="view" id="view-purchase" aria-labelledby="purchase-title">
