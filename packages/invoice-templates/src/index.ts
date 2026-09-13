@@ -10,6 +10,7 @@ export * from './hsn-summary.ts';
 export * from './boxed.ts';
 export * from './copies.ts';
 export * from './render.ts';
+export * from './pdf.ts';
 export * from './from-sales.ts';
 // Issue #141 — the delivery challan, printed on the same engine.
 export * from './challan.ts';

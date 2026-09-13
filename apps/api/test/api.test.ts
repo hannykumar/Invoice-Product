@@ -7,7 +7,7 @@ const COMPANY_B = '00000000-0000-4000-8000-000000000011';
 
 const request = async (method: string, path: string, body: Record<string, unknown> = {}, sessionId?: string) => {
   const response = await handleApi(method, path, body, sessionId === undefined ? undefined : `Bearer ${sessionId}`);
-  return { status: response.status, body: JSON.parse(response.body) as Record<string, any> };
+  return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
 const signIn = async (companyId: string, email: string, password = 'karobar-demo'): Promise<string> => {
@@ -165,6 +165,18 @@ test('authenticated sales and customer payments still reach their service module
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.body.state, 'recorded');
   assert.match(recorded.body.invoice.number, /^INV\/26-27\//);
+  const preview = await request('GET', `/api/sales/${recorded.body.invoice.id}/preview`, {}, owner);
+  assert.ok(preview.body.html.includes(recorded.body.invoice.number));
+  assert.equal((await request('POST', '/api/branding', { accent: '#aa0000' }, owner)).status, 200);
+  assert.equal((await request('GET', `/api/sales/${recorded.body.invoice.id}/preview`, {}, owner)).body.html, preview.body.html);
+  await request('POST', '/api/branding', { clear: ['accent'] }, owner);
+  const pdf = await handleApi('GET', `/api/sales/${recorded.body.invoice.id}/pdf`, {}, `Bearer ${owner}`);
+  assert.equal(pdf.status, 200, String(pdf.body));
+  assert.equal(pdf.headers['content-type'], 'application/pdf');
+  assert.ok(Buffer.isBuffer(pdf.body));
+  assert.equal(pdf.body.subarray(0, 5).toString(), '%PDF-');
+  const other = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
+  assert.equal((await handleApi('GET', `/api/sales/${recorded.body.invoice.id}/pdf`, {}, `Bearer ${other}`)).status, 404);
   const payment = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: '50', date: '2026-08-29', reference: 'AUTH-PAY-80', invoice: recorded.body.invoice.id }, owner);
   assert.equal(payment.body.state, 'recorded');
 });
@@ -1016,7 +1028,7 @@ test('GST return APIs require both a session and the dedicated permission', asyn
  */
 const postCallback = async (kind: string, rawBody: string, signature: string) => {
   const response = await handleApi('POST', `/api/webhooks/government/${kind}`, {}, undefined, { rawBody, signature });
-  return { status: response.status, body: JSON.parse(response.body) as Record<string, any> };
+  return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
 test('a provider callback needs no session, but does need a signature over the bytes it sent', async () => {

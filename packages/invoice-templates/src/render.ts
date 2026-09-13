@@ -303,9 +303,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
 /**
  * Renders one bill.
  *
- * The output is a complete HTML document, so it can be opened, printed, or saved as PDF from the
- * browser's own print dialogue. Generating PDF bytes here would mean shipping a rendering engine;
- * the browser already has one, and it is the one that renders the preview the user approved.
+ * The output is a complete HTML document used by both the on-screen preview and the PDF renderer.
  */
 export const renderInvoice = (
   doc: InvoiceDocument,
