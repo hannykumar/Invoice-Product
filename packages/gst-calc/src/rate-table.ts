@@ -119,6 +119,7 @@ export const FIXTURE_RATE_TABLE = new RateTable([
   draft('3923', 'GOODS', 'Plastic crates and packing articles', 1800n, '2026-04-01' as IsoDate, '2026-06-30' as IsoDate),
   // The same code at a different rate from 1 July, so an effective-date boundary can be proved.
   draft('3923', 'GOODS', 'Plastic crates and packing articles', 1200n, '2026-07-01' as IsoDate),
+  draft('3401', 'GOODS', 'Soap and organic surface-active products', 1800n, '2026-04-01' as IsoDate),
   draft('2202', 'GOODS', 'Aerated drinks', 2800n, '2026-04-01' as IsoDate, null, {
     percentTimes100: 1200n,
   }),

@@ -290,12 +290,11 @@ export class DemoApplication {
     const masters = new InMemoryMasterData();
     masters.putCompany({ companyId: config.companyId, gstin: config.gstin, stateCode: config.gstin.slice(0, 2), registration: 'REGULAR' });
     masters.putParty(config.companyId, { partyId: config.customerId, gstin: config.customerGstin, stateCode: config.customerGstin.slice(0, 2), registration: 'REGULAR' });
-    // Soap is a taxed good (#116). It was previously nil-rated against `0808`, which is fresh
-    // apples — copied from the reports fixture, where that HSN belongs to a box of apples. Every
-    // GST figure in the local app was therefore zero, and no screen involving tax could be looked
-    // at. `3923` sits on both sides of its 1 July rate change in `FIXTURE_RATE_TABLE`, so the demo
-    // also exercises an effective-date boundary rather than a single flat rate.
-    masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '3923', treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'PCS' });
+    // Soap is a taxed good (#116). It was nil-rated against `0808` (fresh apples) and then taxed
+    // against `3923` (plastic packing articles) — both borrowed codes, so every demo invoice,
+    // challan, quotation and HSN summary printed an HSN a buyer's accountant would reject (#166).
+    // Chapter `3401` is soap's own code and `FIXTURE_RATE_TABLE` now carries its own rate.
+    masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '34011190', treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'PCS' });
     const calculator = new GstCalculator({ masterData: masters, rates: FIXTURE_RATE_TABLE, gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'development' }), mode: 'development' });
     const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, // "INV/WEB/2026-27/00005" is twenty-one characters and the government allows sixteen in a
     // document number, so an e-invoice built from it is refused. Shortened until the shipped
