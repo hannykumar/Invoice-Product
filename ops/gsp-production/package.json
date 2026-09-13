@@ -1,0 +1,8 @@
+{
+  "name": "@invoice/gsp-production",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Issue #51 [X03] — the go-live gate for production GSP/IRP access, and the onboarding, rotation and revocation drills that can be run without it.",
+  "exports": { ".": "./src/index.ts" }
+}
