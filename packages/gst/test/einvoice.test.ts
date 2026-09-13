@@ -11,6 +11,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DomainError, fixedClock } from "@invoice/kernel";
+import { INVOICE_NUMBER_MAX_LENGTH } from "@invoice/sales";
 import { decideApplicability, thresholdOn, TURNOVER_THRESHOLDS } from "../src/applicability.ts";
 import { buildEInvoicePayload, toOfflineJson, toRupees } from "../src/payload.ts";
 import { checkAcknowledgement, computeIrn, financialYearOf, readAckDate } from "../src/irn.ts";
@@ -214,6 +215,29 @@ test("a bill number the portal would reject is caught before it is sent", () => 
   assert.equal(built.ok, false);
   if (built.ok) return;
   assert.match(built.problems[0]!.message, /only contain letters, numbers, a slash and a dash/);
+});
+
+test("a bill number longer than sixteen characters is refused here, naming the bill and its length", () => {
+  // Twenty-one characters: the kind of number older billing software issued before #162.
+  const tooLong = "INV/MAIN/2026-27/0001";
+  assert.equal(tooLong.length, 21);
+  const built = buildEInvoicePayload(invoiceDocument({ documentNumber: tooLong }));
+  assert.equal(built.ok, false);
+  if (built.ok) return;
+  assert.deepEqual(built.problems.map((problem) => problem.field), ["DocDtls.No"]);
+  assert.equal(
+    built.problems[0]!.message,
+    "Bill number INV/MAIN/2026-27/0001 is 21 characters long, and the government accepts no more than 16, so it would refuse this bill. Raise this sale again under a shorter bill number, then send that one.",
+  );
+  assert.throws(() => toOfflineJson(invoiceDocument({ documentNumber: tooLong })), /is 21 characters long/);
+});
+
+test("a bill number of exactly sixteen characters still goes through", () => {
+  const exact = "INV/26-27/000001";
+  assert.equal(exact.length, INVOICE_NUMBER_MAX_LENGTH);
+  const built = buildEInvoicePayload(invoiceDocument({ documentNumber: exact }));
+  assert.ok(built.ok);
+  assert.equal((built.payload as Record<string, any>).DocDtls.No, exact);
 });
 
 test("the offline file says inside itself that it is not yet an e-invoice", () => {
