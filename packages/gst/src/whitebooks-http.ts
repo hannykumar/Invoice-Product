@@ -10,6 +10,7 @@
  * Everything here was confirmed against `https://apisandbox.whitebooks.in`, not from a document.
  */
 import { ConnectorError } from "../../platform/src/connectors.ts";
+import { assertGovernmentEndpoint } from "./environments.ts";
 
 export interface WhitebooksCredentials {
   readonly baseUrl: string;
@@ -110,6 +111,10 @@ export type Caller = (method: "GET" | "POST", path: string, extraHeaders: Readon
 /** One HTTP shape for every lane: their headers, their query string, their failure modes. */
 export const makeCaller = (options: CallerOptions): Caller => {
   const { credentials: creds } = options;
+  // Issue #51 — which address this build may call is decided once, here, before a credential is
+  // put in a header. Refused at construction rather than per call, so a misconfiguration fails
+  // when the connector is composed instead of in front of a shopkeeper with a loaded lorry.
+  assertGovernmentEndpoint(creds.baseUrl);
   const doFetch = options.fetch ?? globalThis.fetch;
 
   return async (method, path, extraHeaders, body) => {

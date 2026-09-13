@@ -9,6 +9,7 @@
 // product is `bigint` paise. The conversion happens here, at the boundary, and only here.
 
 import { isSandboxGstin, type PayloadOptions } from "./sandbox-gstins.ts";
+import { PRODUCTION_ACCESS } from "./environments.ts";
 import type { Id, IsoDate, Paise } from "../../masters/src/types.ts";
 import { INVOICE_NUMBER_MAX_LENGTH } from "@invoice/sales";
 import { DOCUMENT_TYPE_CODES, financialYearOf } from "./irn.ts";
@@ -98,8 +99,15 @@ const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$/;
 
 /** A GSTIN is acceptable when it is well formed — or, only when asked, when it is the state's own
  * test data, which is malformed by the government's own hand. See `sandbox-gstins.ts`. */
+/**
+ * Issue #51 — the government's malformed sandbox numbers are admitted only while this build is a
+ * sandbox build. The day production access is switched on, the door shuts by itself: an invoice
+ * built on a sandbox taxpayer is not a real invoice, and nobody should have to remember to unset a
+ * flag before the first live bill.
+ */
 const gstinAcceptable = (gstin: string, options: PayloadOptions): boolean =>
-  GSTIN.test(gstin) || (options.allowSandboxGstins === true && isSandboxGstin(gstin));
+  GSTIN.test(gstin)
+  || (options.allowSandboxGstins === true && !PRODUCTION_ACCESS.active && isSandboxGstin(gstin));
 
 const checkParty = (party: PartyDetails | undefined, role: string, prefix: string, problems: PayloadProblem[], needGstin: boolean, options: PayloadOptions): void => {
   if (party === undefined) {
