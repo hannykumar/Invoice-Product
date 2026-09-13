@@ -57,6 +57,12 @@ const copy = {
     reportsLoading: "Loading reports from the live company…",
     signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Your session chooses the company and the work you are allowed to do.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Synthetic local credentials are filled in for this development workspace.",
     salesFromModule: "Issued from the sales module", openSalesInvoices: "From open sales invoices", postedSupplierBills: "From posted supplier bills", calculatedLive: "Calculated from live company state", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Reading the inventory module", loadingSupplier: "Loading supplier balance…", readingReceivables: "Reading the receivables module",
+    // Issue #132 — the bill itself: shown after a sale is recorded, and printed from the browser.
+    saleCustomerAddress: "Customer's address", saleAddressHelp: "One line per row. It prints on the bill exactly as typed.",
+    billTitle: "The bill", billReady: "This is the bill your customer gets. Print it, or save it as PDF from the print box.",
+    billNoAddress: "No customer address was typed, so the bill prints without one. A GST-registered customer's bill should carry their address.",
+    billPaper: "Paper", billPaperA4: "A4 sheet", billPaperThermal: "Till roll, 80mm", billPaperMobile: "Phone screen", printBill: "Print the bill",
+    billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
@@ -319,6 +325,11 @@ const copy = {
     reportsLoading: "Live company se report aa rahi hai…",
     signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Aapka session company aur aapke kaam ki permission chunta hai.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Is development workspace ke synthetic local credentials pehle se bhare hain.",
     salesFromModule: "Sales module se jaari", openSalesInvoices: "Khule sales invoices se", postedSupplierBills: "Darj supplier bills se", calculatedLive: "Live company state se hisaab", loadingActivity: "Darj kaam load ho raha hai…", loadingStock: "Stock load ho raha hai…", readingInventory: "Inventory module padh rahe hain", loadingSupplier: "Supplier balance load ho raha hai…", readingReceivables: "Receivables module padh rahe hain",
+    saleCustomerAddress: "Customer ka pata", saleAddressHelp: "Har line alag rakhein. Bill par bilkul waise hi chhapta hai.",
+    billTitle: "Bill", billReady: "Yehi bill aapke customer ko milega. Print karein, ya print box se PDF save karein.",
+    billNoAddress: "Customer ka pata nahin likha gaya, isliye bill bina pate ke chhapega. GST wale customer ke bill par uska pata hona chahiye.",
+    billPaper: "Kagaz", billPaperA4: "A4 panna", billPaperThermal: "Chhoti parchi, 80mm", billPaperMobile: "Phone ki screen", printBill: "Bill print karein",
+    billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
@@ -781,6 +792,15 @@ function activityRow(item) {
   status.textContent = item.status === "Recorded" ? copy[state.locale].recorded : item.status;
   value.append(amount, status);
   row.append(icon, description, value);
+  // Issue #132 — any bill already issued opens again, printed with the design it carried that day.
+  if (item.kind === "sale") {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary-button";
+    open.textContent = copy[state.locale].openBill;
+    open.addEventListener("click", () => { openView("sale"); showSaleBill(item.id); });
+    row.append(open);
+  }
   return row;
 }
 
@@ -2072,7 +2092,7 @@ document.querySelector("#branding-format")?.addEventListener("change", refreshBr
 
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
-document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); loadReturnDocuments(); });
+document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
 document.querySelector("#menu-button").addEventListener("click", (event) => { const open = !document.body.classList.contains("menu-open"); document.body.classList.toggle("menu-open", open); event.currentTarget.setAttribute("aria-expanded", String(open)); });
 document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
   const email = document.querySelector('#login-form [name="email"]');
@@ -2199,11 +2219,52 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     const result = await api(`/api/${state.pendingForm.dataset.draft}s/record`, { method: "POST", body: JSON.stringify(state.pendingInput) });
     storage?.removeItem(`karobar.draft.${state.pendingForm.dataset.draft}`);
     showDialog(localizeResult(result, state.pendingForm.dataset.draft, "recorded"), "recorded");
+    // Issue #132 — the bill is waiting on the screen behind the dialog, not on a developer's laptop.
+    if (state.pendingForm.dataset.draft === "sale" && result.invoice) await showSaleBill(result.invoice.id);
     await Promise.all([loadDashboard(), loadReturnDocuments()]);
   } catch (error) {
     showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
   }
 });
+
+// ------------------------------------------------- issue #132: the bill, on screen and on paper
+//
+// The page in the frame is rendered by the server's own bill printer, from the design frozen onto
+// that bill when it was issued. The browser draws nothing of its own, so what a shopkeeper checks
+// here is what the printer puts on paper, and an old bill comes back as it was printed. Printing is
+// the browser's print box: the page carries its own paper size, so A4 and till roll come out right.
+
+const billOnScreen = { invoiceId: null, paperChosen: false };
+
+async function showSaleBill(invoiceId) {
+  if (!invoiceId) return;
+  billOnScreen.invoiceId = invoiceId;
+  const panel = document.querySelector("#sale-bill-panel");
+  // An A4 grid shrunk into a phone is unreadable, so a phone opens the page made for a phone —
+  // until somebody picks the paper themselves, which is then respected.
+  const paper = document.querySelector("#sale-bill-format");
+  if (!billOnScreen.paperChosen && window.innerWidth <= 760) paper.value = "MOBILE";
+  const note = document.querySelector("#sale-bill-note");
+  panel.hidden = false;
+  try {
+    const printed = await api("/api/sales/print", {
+      method: "POST",
+      body: JSON.stringify({ invoice: invoiceId, locale: state.locale, format: document.querySelector("#sale-bill-format").value }),
+    });
+    document.querySelector("#sale-bill-title").textContent = `${copy[state.locale].billTitle} · ${printed.number}`;
+    note.textContent = copy[state.locale][printed.hasBuyerAddress ? "billReady" : "billNoAddress"];
+    document.querySelector("#sale-bill-frame").srcdoc = printed.html;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    document.querySelector("#sale-bill-title").textContent = copy[state.locale].billLoadFailed;
+    note.textContent = localizedError(error);
+  }
+}
+
+document.querySelector("#sale-bill-print")?.addEventListener("click", () => {
+  document.querySelector("#sale-bill-frame").contentWindow?.print();
+});
+document.querySelector("#sale-bill-format")?.addEventListener("change", () => { billOnScreen.paperChosen = true; showSaleBill(billOnScreen.invoiceId); });
 
 // ----------------------------------------------------------- issue #45: linked return notes
 //

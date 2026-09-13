@@ -156,9 +156,14 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
+    // Issue #132 — the finished bill, on screen and ready for the printer, in the chosen language
+    // and on the paper it will be printed on. Issue #133's PDF comes off the same page.
+    if (method === 'POST' && pathname === '/api/sales/print') {
+      return json(200, await app.invoicePrint(actor, String(body.invoice ?? ''), { format: body.format, locale: body.locale }));
+    }
     const invoicePdf = /^\/api\/sales\/([^/]+)\/pdf$/.exec(pathname);
     if (method === 'GET' && invoicePdf?.[1]) {
-      const result = await app.invoicePrint(actor, decodeURIComponent(invoicePdf[1]), true);
+      const result = await app.invoicePrint(actor, decodeURIComponent(invoicePdf[1]), { pdf: true });
       if (!('pdf' in result)) throw new Error('PDF generation failed.');
       return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${result.number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
     }

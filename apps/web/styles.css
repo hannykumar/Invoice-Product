@@ -251,3 +251,10 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .branding-preview-panel iframe { width: 100%; height: 620px; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; }
 .branding-status { font-size: 13px; color: #47525d; min-height: 1.2em; }
 @media (max-width: 900px) { .branding-grid { grid-template-columns: 1fr; } .branding-preview-panel iframe { height: 460px; } }
+
+/* Issue #132 — the finished bill on the sale screen, and the printer it goes to. */
+.bill-panel { margin-top: 1rem; }
+.bill-actions { display: flex; align-items: end; gap: .6rem; flex-wrap: wrap; }
+.bill-actions label { display: grid; gap: .2rem; font-size: .72rem; color: var(--muted); }
+.bill-panel iframe { width: 100%; height: 900px; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; }
+@media (max-width: 760px) { .bill-panel iframe { height: 560px; } .bill-actions { width: 100%; } .bill-actions button { flex: 1; } }

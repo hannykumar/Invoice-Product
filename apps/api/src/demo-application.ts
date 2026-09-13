@@ -8,10 +8,22 @@ import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
-import { ChallanDesk } from './challan-application.ts';
-import { brandedSnapshot, invoicePdf, renderInvoice, templateById, toInvoiceDocument, type InvoiceDocument, type TemplateSnapshot } from '@invoice/invoice-templates';
+import {
+  brandedSnapshot,
+  invoicePdf,
+  qrSvg,
+  renderInvoice,
+  templateById,
+  toInvoiceDocument,
+  type InvoiceDocument,
+  type Locale,
+  type PageFormat,
+  type RenderableParty,
+  type TemplateSnapshot,
+} from '@invoice/invoice-templates';
+import { brandingOf, upiIdOf } from './branding-application.ts';
 import { STATE_NAMES } from '@invoice/transport';
-import { brandingOf } from './branding-application.ts';
+import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import {
@@ -139,6 +151,14 @@ const daysAfter = (date: string, days: number): string => {
 };
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
+
+/** An address as typed: one line per row, blank rows dropped. Nothing is invented for it. */
+const addressLines = (value: unknown): readonly string[] =>
+  String(value ?? '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
+
+const party = (stateCode: string, name: string, gstin: string, addressLines_: readonly string[]): RenderableParty => ({
+  name, addressLines: addressLines_, gstin, stateCode, stateName: STATE_NAMES[stateCode] ?? stateCode,
+});
 
 /**
  * The slice of master data the stock report needs to name things. Item and warehouse names come
@@ -1110,30 +1130,13 @@ export class DemoApplication {
     const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
-    return this.issueCheckedSale(actor, preview.token, usageDate);
+    return this.issueCheckedSale(actor, preview.token, usageDate, addressLines(input.customerAddress));
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, buyerAddress: readonly string[] = []) {
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
-    if (!this.invoicePrints.has(final.invoice.id)) {
-      const branding = brandingOf(actor.companyId);
-      const stateCode = this.config.gstin.slice(0, 2);
-      const buyerStateCode = this.config.customerGstin.slice(0, 2);
-      const template = templateById('india-standard');
-      if (!template) throw new Error('The invoice template is missing.');
-      this.invoicePrints.set(final.invoice.id, {
-        document: toInvoiceDocument(final.invoice, {
-          title: 'TAX_INVOICE',
-          seller: { name: this.config.name, addressLines: [this.config.location], gstin: this.config.gstin, stateCode, stateName: STATE_NAMES[stateCode] ?? stateCode },
-          buyer: { name: this.config.customerName, addressLines: [], gstin: this.config.customerGstin, stateCode: buyerStateCode, stateName: STATE_NAMES[buyerStateCode] ?? buyerStateCode },
-          placeOfSupplyStateName: STATE_NAMES[final.invoice.pricing!.placeOfSupplyStateCode] ?? final.invoice.pricing!.placeOfSupplyStateCode,
-          logoDataUri: branding.logoDataUri,
-          tradeMark: branding.tradeMark,
-        }),
-        snapshot: brandedSnapshot(template, 'en-IN', String(final.invoice.documentDate), branding),
-      });
-    }
+    this.freezeBillPrint(final.invoice, buyerAddress);
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1144,17 +1147,6 @@ export class DemoApplication {
     return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
   }
 
-  async invoicePrint(actor: ActorContext, invoiceId: string, pdf = false) {
-    const companyId = this.companyOf(actor);
-    const invoice = await this.salesRepository.findById(companyId, invoiceId);
-    if (invoice?.state !== 'FINAL') throw notFound('API_INVOICE_NOT_FOUND', 'No issued bill was found.');
-    const facts = this.invoicePrints.get(invoiceId);
-    if (!facts) throw notFound('API_INVOICE_PRINT_FACTS', 'The issued bill has no stored print snapshot.');
-    const options = { format: 'A4' as const, locale: 'en-IN' as const };
-    return pdf
-      ? { number: invoice.number!, pdf: await invoicePdf(facts.document, facts.snapshot, options) }
-      : { number: invoice.number!, html: renderInvoice(facts.document, facts.snapshot, options) };
-  }
 
   /**
    * Issue #142 — turns an accepted quotation into a sale without retyping it.
@@ -1181,7 +1173,81 @@ export class DemoApplication {
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const token = String(input.token ?? '');
     if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
-    return this.issueCheckedSale(actor, token, usageDate);
+    return this.issueCheckedSale(actor, token, usageDate, addressLines(input.customerAddress));
+  }
+
+  /**
+   * Issues #132 and #133 — the bill as it was handed over, frozen the moment it is issued.
+   *
+   * A template id would not do: a design can be edited, and then every old bill silently changes
+   * shape. The whole page is copied here instead — the design in the business's own colour, the
+   * parties and the priced lines as they were that day — so a bill reprinted in three years is the
+   * page the customer was given, whatever has changed since.
+   */
+  private freezeBillPrint(invoice: SalesInvoice, buyerAddress: readonly string[]): void {
+    if (this.invoicePrints.has(invoice.id)) return;
+    const template = templateById('india-standard');
+    if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
+    const branding = brandingOf(invoice.companyId);
+    // A finalised bill is always priced, and pricing decides the place of supply.
+    const place = invoice.pricing?.placeOfSupplyStateCode ?? invoice.placeOfSupplyStateCode ?? this.config.gstin.slice(0, 2);
+    this.invoicePrints.set(invoice.id, {
+      document: toInvoiceDocument(invoice, {
+        title: 'TAX_INVOICE',
+        seller: party(this.config.gstin.slice(0, 2), this.config.name, this.config.gstin, [this.config.location]),
+        buyer: party(this.config.customerGstin.slice(0, 2), this.config.customerName, this.config.customerGstin, buyerAddress),
+        placeOfSupplyStateName: STATE_NAMES[place] ?? place,
+        logoDataUri: branding.logoDataUri,
+        tradeMark: branding.tradeMark,
+      }),
+      snapshot: brandedSnapshot(template, 'en-IN', String(invoice.documentDate), branding),
+    });
+  }
+
+  /**
+   * Issue #132 — the finished bill: on screen, on the printer, and as a PDF for #133.
+   *
+   * One path serves all three, so the page a shopkeeper checks is the page that prints and the page
+   * that is sent. The stored document is the bill as it was issued; the two facts that can only
+   * arrive later are layered on here — the government's IRN and its own signed square once the bill
+   * is registered, and the pay-by-scan UPI square for whatever is still due.
+   */
+  async invoicePrint(
+    actor: ActorContext,
+    invoiceId: string,
+    options: { readonly pdf?: boolean; readonly format?: unknown; readonly locale?: unknown } = {},
+  ) {
+    const companyId = this.companyOf(actor);
+    const invoice = await this.salesRepository.findById(companyId, invoiceId);
+    if (invoice?.state !== 'FINAL') throw notFound('API_INVOICE_NOT_FOUND', 'No issued bill was found.');
+    const facts = this.invoicePrints.get(invoiceId);
+    if (facts === undefined) throw notFound('API_INVOICE_PRINT_FACTS', 'The issued bill has no stored print snapshot.');
+    const locale: Locale = options.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
+    const format: PageFormat = options.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : options.format === 'MOBILE' ? 'MOBILE' : 'A4';
+    const acknowledgement = (await this.shop.eInvoice.list(actor))
+      .find((record) => record.documentId === invoice.id && record.status === 'REGISTERED')?.acknowledgement ?? null;
+    const upiId = upiIdOf(companyId);
+    const document: InvoiceDocument = {
+      ...facts.document,
+      ...(upiId === null ? {} : { upiId }),
+      eInvoice: acknowledgement === null ? facts.document.eInvoice : {
+        irn: acknowledgement.irn,
+        // Drawn from the government's own signed string, never from anything we made up.
+        qrSvg: qrSvg(acknowledgement.signedQrCode, `IRN ${acknowledgement.irn}`),
+      },
+    };
+    const rendered = { format, locale };
+    return {
+      state: 'print' as const,
+      number: invoice.number ?? '',
+      format,
+      // The bill prints without the customer's address until somebody types one, and the screen
+      // says so rather than inventing a line of it.
+      hasBuyerAddress: facts.document.buyer.addressLines.length > 0,
+      ...(options.pdf === true
+        ? { pdf: await invoicePdf(document, facts.snapshot, rendered) }
+        : { html: renderInvoice(document, facts.snapshot, rendered) }),
+    };
   }
 
   // ------------------------------------------------ issue #47: letting the assistant do the work
