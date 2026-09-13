@@ -18,7 +18,7 @@ const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 
 const request = async (method: string, path: string, body: Record<string, unknown> = {}, sessionId?: string) => {
   const response = await handleApi(method, path, body, sessionId === undefined ? undefined : `Bearer ${sessionId}`);
-  return { status: response.status, body: JSON.parse(response.body) as Record<string, any> };
+  return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
 const signIn = async (): Promise<string> => {

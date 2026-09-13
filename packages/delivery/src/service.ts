@@ -46,8 +46,10 @@ export interface DocumentLink {
 }
 
 export interface DeliveryProvider {
-  send(input: Readonly<{ channel: DeliveryChannel; recipientId: string; invoiceId: string; documentUrl: string; idempotencyKey: string }>): Promise<{ providerMessageId: string }>;
+  send(input: Readonly<{ channel: DeliveryChannel; recipientId: string; invoiceId: string; documentUrl: string; idempotencyKey: string; attachment?: Readonly<{ filename: string; contentType: 'application/pdf'; bytes: Buffer }> }>): Promise<{ providerMessageId: string }>;
 }
+
+export type InvoicePdfSource = (companyId: string, invoiceId: string) => Promise<Readonly<{ filename: string; bytes: Buffer }>>;
 
 const tokenHash = (token: string): string => createHash('sha256').update(token).digest('hex');
 const deliveryKey = (companyId: string, key: string): string => `${companyId}:${key}`;
@@ -65,9 +67,11 @@ export class InvoiceDeliveryService {
   #links = new Map<string, DocumentLink>();
   private readonly provider: DeliveryProvider;
   private readonly now: () => number;
+  private readonly pdfForInvoice: InvoicePdfSource;
 
-  constructor(provider: DeliveryProvider, now: () => number = Date.now) {
+  constructor(provider: DeliveryProvider, pdfForInvoice: InvoicePdfSource, now: () => number = Date.now) {
     this.provider = provider;
+    this.pdfForInvoice = pdfForInvoice;
     this.now = now;
   }
 
@@ -109,7 +113,9 @@ export class InvoiceDeliveryService {
     const delivery = this.get(context, id);
     if (isTerminal(delivery.status)) return delivery;
     try {
-      const outcome = await this.provider.send({ channel: delivery.channel, recipientId: delivery.recipientId, invoiceId: delivery.invoiceId, documentUrl, idempotencyKey: delivery.idempotencyKey });
+      const pdf = delivery.channel === 'sms' ? null : await this.pdfForInvoice(delivery.companyId, delivery.invoiceId);
+      if (pdf && (pdf.bytes.subarray(0, 5).toString() !== '%PDF-' || !pdf.filename.toLowerCase().endsWith('.pdf'))) throw new Error('The bill PDF is invalid.');
+      const outcome = await this.provider.send({ channel: delivery.channel, recipientId: delivery.recipientId, invoiceId: delivery.invoiceId, documentUrl, idempotencyKey: delivery.idempotencyKey, ...(pdf ? { attachment: { filename: pdf.filename, contentType: 'application/pdf' as const, bytes: pdf.bytes } } : {}) });
       const sent = Object.freeze({ ...delivery, status: 'sent' as const, attempts: delivery.attempts + 1, providerMessageId: outcome.providerMessageId, lastError: null });
       this.#deliveries.set(id, sent);
       this.record(context.actorId, sent, 'sent', outcome.providerMessageId);

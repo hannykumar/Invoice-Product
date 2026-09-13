@@ -9,6 +9,9 @@ import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
 import { ChallanDesk } from './challan-application.ts';
+import { brandedSnapshot, invoicePdf, renderInvoice, templateById, toInvoiceDocument, type InvoiceDocument, type TemplateSnapshot } from '@invoice/invoice-templates';
+import { STATE_NAMES } from '@invoice/transport';
+import { brandingOf } from './branding-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import {
@@ -222,6 +225,7 @@ export class DemoApplication {
   private readonly shop: Awaited<ReturnType<typeof createCompanyShop>>;
   private readonly sales: SalesService;
   private readonly salesRepository: InMemorySalesRepository;
+  private readonly invoicePrints = new Map<string, { document: InvoiceDocument; snapshot: TemplateSnapshot }>();
   private readonly payments: ReceivablesService;
   private readonly paymentRepository: InMemoryPaymentRepository;
   private readonly documents: DocumentLedgerPort;
@@ -1112,6 +1116,24 @@ export class DemoApplication {
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
   private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
+    if (!this.invoicePrints.has(final.invoice.id)) {
+      const branding = brandingOf(actor.companyId);
+      const stateCode = this.config.gstin.slice(0, 2);
+      const buyerStateCode = this.config.customerGstin.slice(0, 2);
+      const template = templateById('india-standard');
+      if (!template) throw new Error('The invoice template is missing.');
+      this.invoicePrints.set(final.invoice.id, {
+        document: toInvoiceDocument(final.invoice, {
+          title: 'TAX_INVOICE',
+          seller: { name: this.config.name, addressLines: [this.config.location], gstin: this.config.gstin, stateCode, stateName: STATE_NAMES[stateCode] ?? stateCode },
+          buyer: { name: this.config.customerName, addressLines: [], gstin: this.config.customerGstin, stateCode: buyerStateCode, stateName: STATE_NAMES[buyerStateCode] ?? buyerStateCode },
+          placeOfSupplyStateName: STATE_NAMES[final.invoice.pricing!.placeOfSupplyStateCode] ?? final.invoice.pricing!.placeOfSupplyStateCode,
+          logoDataUri: branding.logoDataUri,
+          tradeMark: branding.tradeMark,
+        }),
+        snapshot: brandedSnapshot(template, 'en-IN', String(final.invoice.documentDate), branding),
+      });
+    }
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1120,6 +1142,18 @@ export class DemoApplication {
       on: usageDate,
     });
     return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
+  }
+
+  async invoicePrint(actor: ActorContext, invoiceId: string, pdf = false) {
+    const companyId = this.companyOf(actor);
+    const invoice = await this.salesRepository.findById(companyId, invoiceId);
+    if (invoice?.state !== 'FINAL') throw notFound('API_INVOICE_NOT_FOUND', 'No issued bill was found.');
+    const facts = this.invoicePrints.get(invoiceId);
+    if (!facts) throw notFound('API_INVOICE_PRINT_FACTS', 'The issued bill has no stored print snapshot.');
+    const options = { format: 'A4' as const, locale: 'en-IN' as const };
+    return pdf
+      ? { number: invoice.number!, pdf: await invoicePdf(facts.document, facts.snapshot, options) }
+      : { number: invoice.number!, html: renderInvoice(facts.document, facts.snapshot, options) };
   }
 
   /**
