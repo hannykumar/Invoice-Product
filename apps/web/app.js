@@ -258,6 +258,7 @@ const copy = {
     brandingMarkTitle: "The mark of your trade", brandingMarkHelp: "Type what you sell and pick a picture. It prints very faintly behind the items, and never on till-roll paper.", brandingSearchLabel: "What do you sell?", brandingSearchPlaceholder: "mithai, kapda, tyre, dawa", brandingSearchButton: "Find pictures", brandingMarkChosen: "On your bill:", brandingRemoveMark: "Take the picture off", brandingNoMarkResults: "Nothing matched that. Try another word for what you sell.",
     brandingDesignTitle: "Design and paper", brandingDesignLabel: "Bill design", brandingPaperLabel: "Paper", brandingPaperA4: "A4 sheet", brandingPaperThermal: "Till roll, 80mm", brandingThermalNote: "A till-roll printer has one ink and no grey, so the faint picture is never printed there.",
     brandingPreviewTitle: "A sample bill", brandingPreviewHelp: "Every figure below is made up. This is the real bill printer, so what you see here is what your customer gets.", brandingPreviewFrame: "Sample bill preview", brandingSaved: "Saved. New bills will carry this.", brandingSaving: "Saving…", brandingLoadFailed: "Could not load the preview.",
+    brandingUpiTitle: "Take payment by UPI", brandingUpiHelp: "Save your UPI id once. Every bill then prints a square your customer scans with PhonePe, Google Pay or Paytm, with your name, the bill number and the amount still due already filled in. There is no square on a bill that is fully paid, or on small 58mm till-roll paper.", brandingUpiLabel: "Your UPI id", brandingUpiPlaceholder: "yourshop@okicici", brandingUpiSave: "Save UPI id", brandingUpiSaved: "Bills are paid to:", brandingUpiRemove: "Take the UPI id off",
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
@@ -519,6 +520,7 @@ const copy = {
     brandingMarkTitle: "Aapke kaam ki tasveer", brandingMarkHelp: "Jo aap bechte hain woh likhein aur tasveer chunein. Yeh saman ke peeche bahut halki chhapti hai, aur chhoti parchi wale printer par kabhi nahin.", brandingSearchLabel: "Aap kya bechte hain?", brandingSearchPlaceholder: "mithai, kapda, tyre, dawa", brandingSearchButton: "Tasveerein dhoondhein", brandingMarkChosen: "Aapke bill par:", brandingRemoveMark: "Tasveer hata dein", brandingNoMarkResults: "Us shabd se kuch nahin mila. Jo bechte hain uske liye doosra shabd likhein.",
     brandingDesignTitle: "Design aur kagaz", brandingDesignLabel: "Bill ka design", brandingPaperLabel: "Kagaz", brandingPaperA4: "A4 panna", brandingPaperThermal: "Chhoti parchi, 80mm", brandingThermalNote: "Chhoti parchi wale printer mein ek hi ink hoti hai aur grey nahin, isliye halki tasveer wahan kabhi nahin chhapti.",
     brandingPreviewTitle: "Namoone ka bill", brandingPreviewHelp: "Neeche ke sabhi ank banawati hain. Yeh wahi asli bill printer hai, to jo yahan dikh raha hai wahi customer ko milega.", brandingPreviewFrame: "Namoone ke bill ki jhalak", brandingSaved: "Save ho gaya. Naye bill par yeh aayega.", brandingSaving: "Save ho raha hai…", brandingLoadFailed: "Jhalak nahin aa payi.",
+    brandingUpiTitle: "UPI se payment lein", brandingUpiHelp: "Apni UPI id ek baar save karein. Phir har bill par ek square chhapega jise customer PhonePe, Google Pay ya Paytm se scan karega, aur aapka naam, bill number aur baaki rakam pehle se bhari hogi. Poora chuka hua bill, ya chhoti 58mm parchi par square nahin chhapta.", brandingUpiLabel: "Aapki UPI id", brandingUpiPlaceholder: "aapkidukaan@okicici", brandingUpiSave: "UPI id save karein", brandingUpiSaved: "Bill ka payment yahan aayega:", brandingUpiRemove: "UPI id hata dein",
     draftReady: "Draft review ke liye taiyar hai", draftReadyBody: "Yeh development preview books mein entry karne se pehle rukta hai. Draft isi device par save rahega.", keepEditing: "Badlav karen", understand: "Samajh gaya"
   }
 };
@@ -1785,7 +1787,7 @@ document.querySelector("#setup-create")?.addEventListener("click", createSetup);
  *  - The preview is the real bill printer on the server, not a drawing of a bill made here. A
  *    screen that shows something the printer would not is worse than no screen.
  */
-const brandingState = { branding: null, results: [], pictureId: null, unsavedLogo: null, unsavedAccent: null };
+const brandingState = { branding: null, upiId: null, results: [], pictureId: null, unsavedLogo: null, unsavedAccent: null };
 
 /** The longest side a stored logo is allowed, in pixels. It prints about two centimetres tall. */
 const LOGO_MAX_PIXELS = 320;
@@ -1950,6 +1952,7 @@ async function openBranding() {
     const result = await api("/api/branding");
     brandingState.branding = result.branding;
     brandingState.pictureId = result.branding.tradeMark?.pictureId ?? null;
+    brandingState.upiId = result.upiId ?? null;
     const select = document.querySelector("#branding-template");
     select.replaceChildren();
     for (const template of result.templates) {
@@ -1961,8 +1964,43 @@ async function openBranding() {
   }
   renderBrandingLogo();
   renderBrandingMark();
+  renderBrandingUpi();
   await refreshBrandingPreview();
 }
+
+/** Issue #144 — shows the saved UPI id, or the empty box to type one into. */
+function renderBrandingUpi() {
+  const saved = brandingState.upiId;
+  document.querySelector("#branding-upi-saved").hidden = saved === null;
+  if (saved !== null) document.querySelector("#branding-upi-value").textContent = saved;
+}
+
+/** Saves or removes the UPI id. A mistyped id is refused by the server, and its reason shown here. */
+async function saveBrandingUpi(clear) {
+  const status = document.querySelector("#branding-status");
+  const input = document.querySelector("#branding-upi-input");
+  status.textContent = copy[state.locale].brandingSaving;
+  try {
+    const result = await api("/api/branding/upi", {
+      method: "POST",
+      body: JSON.stringify(clear ? { clear: true } : { upiId: input.value }),
+    });
+    brandingState.upiId = result.upiId;
+    input.value = "";
+    status.textContent = copy[state.locale].brandingSaved;
+  } catch (error) {
+    status.textContent = error.message;
+    return;
+  }
+  renderBrandingUpi();
+  await refreshBrandingPreview();
+}
+
+document.querySelector("#branding-upi-save")?.addEventListener("click", () => saveBrandingUpi(false));
+document.querySelector("#branding-upi-input")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); saveBrandingUpi(false); }
+});
+document.querySelector("#branding-upi-remove")?.addEventListener("click", () => saveBrandingUpi(true));
 
 document.querySelector("#branding-logo-input")?.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];

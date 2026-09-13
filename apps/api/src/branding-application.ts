@@ -2,7 +2,8 @@
  * Issues #146 and #147 wired into the running app — the screen where a business makes its bill
  * look like its own.
  *
- * It holds three things per company: the logo, the mark of the trade, and the colour. Every one of
+ * It holds three things per company: the logo, the mark of the trade, and the colour. Since issue
+ * #144 it also keeps the business's UPI id, which is not how the bill looks but where it is paid. Every one of
  * them starts empty and stays empty until somebody sets it, and every one can be taken off again.
  *
  * The preview is a **real bill**. It goes through the same renderer, the same template snapshot and
@@ -24,6 +25,7 @@ import {
   type Locale,
   type PageFormat,
   type TemplateDefinition,
+  validateUpiId,
 } from '@invoice/invoice-templates';
 import { amountInWords } from '@invoice/invoice-templates';
 
@@ -39,9 +41,32 @@ const put = (companyId: CompanyId | string, next: CompanyBranding): CompanyBrand
   return next;
 };
 
+/**
+ * Issue #144 — the business's UPI id, saved once and printed as a pay-by-scan square on every bill.
+ *
+ * Kept apart from the branding, which is how the bill looks. This is where the money goes, and it
+ * is checked as such: an id no UPI app could pay to is refused, never saved.
+ */
+const upiStore = new Map<string, string>();
+
+export const upiIdOf = (companyId: CompanyId | string): string | null => upiStore.get(String(companyId)) ?? null;
+
+/** Saves the UPI id, or takes it off when the request says `clear`. */
+export const saveUpiId = (companyId: CompanyId | string, body: unknown): { upiId: string | null } => {
+  const input = (body ?? {}) as { upiId?: unknown; clear?: unknown };
+  if (input.clear === true) {
+    upiStore.delete(String(companyId));
+    return { upiId: null };
+  }
+  const upiId = validateUpiId(str(input.upiId));
+  upiStore.set(String(companyId), upiId);
+  return { upiId };
+};
+
 /** What the screen shows when it opens: what is set now, and what it is allowed to set. */
 export const readBranding = (companyId: CompanyId | string) => ({
   branding: brandingOf(companyId),
+  upiId: upiIdOf(companyId),
   templates: TEMPLATE_CHOICES,
 });
 
@@ -97,7 +122,7 @@ const TEMPLATE_CHOICES = TEMPLATE_IDS.map((id) => templateById(id))
  * Every figure on it is made up, and the screen says so in as many words. It exists to show what a
  * business's own branding does to a real page — not to stand in for that business's books.
  */
-const sampleDocument = (companyName: string, branding: CompanyBranding): InvoiceDocument => {
+const sampleDocument = (companyName: string, branding: CompanyBranding, upiId: string | null): InvoiceDocument => {
   const nil = zero('INR');
   return {
     title: 'TAX_INVOICE',
@@ -168,6 +193,7 @@ const sampleDocument = (companyName: string, branding: CompanyBranding): Invoice
     tradeMark: branding.tradeMark,
     bankDetails: null,
     bank: null,
+    upiId,
     references: null,
     terms: null,
     declaration: null,
@@ -194,8 +220,11 @@ export const previewBranding = (
     logoDataUri?: unknown;
     accent?: unknown;
     pictureId?: unknown;
+    upiId?: unknown;
   };
   const saved = brandingOf(companyId);
+  // A UPI id typed but not yet saved is shown on the sample so the business sees the square first.
+  const upiId = str(input.upiId) === '' ? upiIdOf(companyId) : validateUpiId(str(input.upiId));
 
   const logoDataUri = typeof input.logoDataUri === 'string' && input.logoDataUri !== '' ? input.logoDataUri : saved.logoDataUri;
   if (logoDataUri !== null) validateLogo(logoDataUri);
@@ -212,7 +241,7 @@ export const previewBranding = (
 
   const snapshot = brandedSnapshot(template, locale, new Date().toISOString().slice(0, 10), branding);
   return {
-    html: renderInvoice(sampleDocument(companyName, branding), snapshot, { format, locale }),
+    html: renderInvoice(sampleDocument(companyName, branding, upiId), snapshot, { format, locale }),
     templateId: template.id,
     format,
   };

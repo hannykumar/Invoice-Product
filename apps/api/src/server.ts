@@ -6,7 +6,7 @@ import { PlatformError } from '../../../packages/platform/src/index.ts';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { chooseMark, searchMarks } from './trade-mark-application.ts';
-import { previewBranding, readBranding, saveBranding } from './branding-application.ts';
+import { previewBranding, readBranding, saveBranding, saveUpiId } from './branding-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
 import { ChallanDesk } from './challan-application.ts';
@@ -80,6 +80,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // on. The preview goes through the same renderer a finalised sale is printed with.
     if (method === 'GET' && pathname === '/api/branding') return json(200, readBranding(context.companyId));
     if (method === 'POST' && pathname === '/api/branding') return json(200, saveBranding(context.companyId, body));
+    // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
+    if (method === 'POST' && pathname === '/api/branding/upi') return json(200, saveUpiId(context.companyId, body));
     if (method === 'POST' && pathname === '/api/branding/preview')
       return json(200, previewBranding(context.companyId, runtime.companySummary(context.companyId).name, body));
     // Issue #37 — bringing a business in from Tally, BUSY or Vyapar. Like setting up a business,
