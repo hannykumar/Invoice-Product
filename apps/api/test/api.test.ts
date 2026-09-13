@@ -1090,7 +1090,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   const saleChallan = await request('POST', '/api/challans/issue', sale, owner);
   assert.equal(saleChallan.body.challan.number, 'DC/26-27/0000002');
   assert.equal(saleChallan.body.challan.showsTax, true);
-  assert.equal(saleChallan.body.challan.tax, 120, '12% on ₹1,000 of soap');
+  assert.equal(saleChallan.body.challan.tax, 180, '18% on ₹1,000 of soap');
   const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'api-141-bill' }, owner);
   assert.equal(bill.status, 200, JSON.stringify(bill.body));
   const linked = await request('POST', '/api/challans/link-invoice', { challan: saleChallan.body.challan.id, invoice: bill.body.invoice.id }, owner);
@@ -1113,8 +1113,8 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.equal(checked.status, 200, JSON.stringify(checked.body));
   assert.equal(checked.body.state, 'preview');
   assert.equal(checked.body.value, 2500);
-  assert.equal(checked.body.tax, 300, '12% on ₹2,500 of soap, worked out as on the bill');
-  assert.equal(checked.body.total, 2800);
+  assert.equal(checked.body.tax, 450, '18% on ₹2,500 of soap, worked out as on the bill');
+  assert.equal(checked.body.total, 2950);
 
   const issued = await request('POST', '/api/presale/issue', quote, owner);
   assert.equal(issued.status, 200, JSON.stringify(issued.body));
@@ -1131,12 +1131,12 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.equal(converted.status, 200, JSON.stringify(converted.body));
   assert.equal(converted.body.state, 'preview');
   assert.equal(converted.body.title, 'Bill ready from QTN/26-27/00001');
-  assert.equal(converted.body.amount, 2800);
+  assert.equal(converted.body.amount, 2950);
   assert.equal(converted.body.quotation.state, 'CONVERTED');
   const sold = await request('POST', '/api/presale/issue-sale', { token: converted.body.token }, owner);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   assert.match(sold.body.invoice.number, /^INV\//);
-  assert.equal(sold.body.invoice.amount, 2800, 'the bill charges what was quoted');
+  assert.equal(sold.body.invoice.amount, 2950, 'the bill charges what was quoted');
 
   // A proforma must say what it is for, and carries the bank details.
   const proforma = { ...quote, kind: 'PROFORMA', validUntil: '', terms: '', reference: 'api-142-p', bankDetails: 'State Bank of India, A/c 30001234567\nIFSC SBIN0001234', paymentTerms: '100% advance' };
