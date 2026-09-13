@@ -181,7 +181,8 @@ test('authenticated customer and supplier returns preview and post through real 
   const salePreview = await request('POST', '/api/returns/preview', saleReturn, owner);
   assert.equal(salePreview.body.state, 'preview');
   // ₹200 of goods plus the GST that was charged on them: a credit note gives back the tax too.
-  assert.equal(salePreview.body.amount, 224);
+  // Soap is 18% against HSN 3401 (#166), so ₹200 comes back with ₹36.
+  assert.equal(salePreview.body.amount, 236);
   const postedSaleReturn = await request('POST', '/api/returns/record', saleReturn, owner);
   assert.equal(postedSaleReturn.body.note.kind, 'SALES_RETURN');
   assert.match(postedSaleReturn.body.note.number, /^CN\//);
