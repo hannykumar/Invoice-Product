@@ -15,7 +15,7 @@ import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 
 const json = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
 
-export interface ApiResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: string; }
+export interface ApiResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: string | Buffer; }
 
 const statusOf = (error: unknown): number => {
   if (error instanceof AuthenticationError) return 401;
@@ -156,8 +156,19 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
-    // Issue #132 — the finished bill, on screen and ready for the printer.
-    if (method === 'POST' && pathname === '/api/sales/print') return json(200, await app.printSale(actor, body));
+    // Issue #132 — the finished bill, on screen and ready for the printer, in the chosen language
+    // and on the paper it will be printed on. Issue #133's PDF comes off the same page.
+    if (method === 'POST' && pathname === '/api/sales/print') {
+      return json(200, await app.invoicePrint(actor, String(body.invoice ?? ''), { format: body.format, locale: body.locale }));
+    }
+    const invoicePdf = /^\/api\/sales\/([^/]+)\/pdf$/.exec(pathname);
+    if (method === 'GET' && invoicePdf?.[1]) {
+      const result = await app.invoicePrint(actor, decodeURIComponent(invoicePdf[1]), { pdf: true });
+      if (!('pdf' in result)) throw new Error('PDF generation failed.');
+      return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${result.number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
+    }
+    const invoicePreview = /^\/api\/sales\/([^/]+)\/preview$/.exec(pathname);
+    if (method === 'GET' && invoicePreview?.[1]) return json(200, await app.invoicePrint(actor, decodeURIComponent(invoicePreview[1])));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
     // Issue #47 — asking the assistant to do something: what it would do, and then doing it.
