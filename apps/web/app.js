@@ -3038,7 +3038,7 @@ function renderEInvoice(result, mode) {
     detail.append(detailRow("Why", result.reason));
     if (result.expectedIrn) detail.append(detailRow("The number this bill will get", `${result.expectedIrn.slice(0, 24)}…`, "Worked out before sending, and checked against what comes back."));
     if (result.reportableUntil) detail.append(detailRow("Must be reported by", result.reportableUntil));
-    result.problems.forEach((problem) => detail.append(detailRow("Missing", problem.message, problem.field)));
+    result.problems.forEach((problem) => detail.append(detailRow("Needs fixing", problem.message, problem.field)));
   } else {
     detail.append(detailRow("The rule that decided it", result.applicability.ruleId, result.applicability.sourceRef || undefined));
     if (result.irn) {
@@ -3521,7 +3521,7 @@ function renderEway(result, mode) {
   if (mode === "preview") {
     if (result.threshold) detail.append(detailRow("Limit compared against", money(result.threshold.amount), result.threshold.note || undefined));
     if (result.validityDays) detail.append(detailRow("Days it would be valid for", String(result.validityDays), "One day for every 200 km, or part of it. The clock starts when a vehicle goes on."));
-    result.problems.forEach((problem) => detail.append(detailRow("Missing", problem.message, problem.field)));
+    result.problems.forEach((problem) => detail.append(detailRow("Needs fixing", problem.message, problem.field)));
   } else {
     if (result.ewayBillNumber) detail.append(detailRow("E-way bill number", result.ewayBillNumber, "Keep this number with the driver."));
     if (result.validUntil) detail.append(detailRow("Valid until", result.validUntilLabel ?? result.validUntil, result.timeLeft || undefined));

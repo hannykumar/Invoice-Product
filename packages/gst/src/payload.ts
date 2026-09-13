@@ -10,6 +10,7 @@
 
 import { isSandboxGstin, type PayloadOptions } from "./sandbox-gstins.ts";
 import type { Id, IsoDate, Paise } from "../../masters/src/types.ts";
+import { INVOICE_NUMBER_MAX_LENGTH } from "@invoice/sales";
 import { DOCUMENT_TYPE_CODES, financialYearOf } from "./irn.ts";
 import type { EInvoiceDocumentType, EInvoiceRecipientKind } from "./einvoice-types.ts";
 
@@ -141,6 +142,15 @@ export const buildEInvoicePayload = (document: EInvoiceDocument, options: Payloa
   // The portal rejects a document number with these characters outright.
   if (/[^A-Za-z0-9/-]/.test(document.documentNumber ?? "")) {
     problems.push({ field: "DocDtls.No", message: "A bill number sent to the government may only contain letters, numbers, a slash and a dash." });
+  }
+  // Sales cannot issue a longer number any more, but bills brought in from older software can
+  // carry one, and the portal refuses it. Say so here, in words, instead of as its error code.
+  const numberLength = (document.documentNumber ?? "").length;
+  if (numberLength > INVOICE_NUMBER_MAX_LENGTH) {
+    problems.push({
+      field: "DocDtls.No",
+      message: `Bill number ${document.documentNumber} is ${numberLength} characters long, and the government accepts no more than ${INVOICE_NUMBER_MAX_LENGTH}, so it would refuse this bill. Raise this sale again under a shorter bill number, then send that one.`,
+    });
   }
   if (document.lines.length === 0) {
     problems.push({ field: "ItemList", message: "There is nothing on this bill, so there is nothing to report." });
