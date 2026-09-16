@@ -31,6 +31,7 @@ import {
   type Registration,
   type StepId,
 } from '@invoice/onboarding';
+import { rememberBusinessPrefill } from './business-details-application.ts';
 
 const ONBOARDING_PERMISSIONS = ['ledger.setup', 'ledger.post.opening_balance', 'onboarding.run', 'onboarding.finish'];
 
@@ -94,12 +95,18 @@ const answersFrom = (input: Record<string, unknown>): { patches: Partial<Record<
   const booksStartDate = str(input.booksStartDate) === '' ? isoDate('2026-04-01') : isoDate(str(input.booksStartDate));
 
   const filingFrequency = oneOf(input.filingFrequency, ['MONTHLY', 'QUARTERLY'] as const);
+  // Issue #180 — the address is asked once, here, so the Business details screen opens with it
+  // already filled in rather than asking the same person for the same street a second time.
+  const addressLines = [str(input.address1), str(input.address2)].filter((line) => line !== '');
   const business: Partial<OnboardingAnswers> = {
     business: {
       legalName: str(input.legalName),
       tradeName: str(input.tradeName) || str(input.legalName),
       ...(businessType === undefined ? {} : { businessType }),
       stateCode: str(input.stateCode),
+      ...(addressLines.length === 0 ? {} : { addressLines }),
+      ...(str(input.city) === '' ? {} : { city: str(input.city) }),
+      ...(str(input.pincode) === '' ? {} : { pincode: str(input.pincode) }),
       ...(str(input.phone) === '' ? {} : { phone: str(input.phone) }),
     },
   };
@@ -174,8 +181,22 @@ interface RunResult {
   };
 }
 
-const runSetup = async (input: Record<string, unknown>, finish: boolean): Promise<RunResult> => {
+const runSetup = async (input: Record<string, unknown>, finish: boolean, companyId?: string): Promise<RunResult> => {
   const { patches, openingProvided, rateProvided } = answersFrom(input);
+  // Issue #180 — whatever was typed here is offered back on the Business details screen. It is a
+  // suggestion, not a saved record: nothing prints until somebody saves it there.
+  if (companyId !== undefined && str(input.legalName) !== '') {
+    rememberBusinessPrefill(companyId, {
+      legalName: str(input.legalName),
+      tradeName: str(input.tradeName),
+      stateCode: str(input.stateCode),
+      phone: str(input.phone),
+      address1: str(input.address1),
+      address2: str(input.address2),
+      city: str(input.city),
+      pincode: str(input.pincode),
+    });
+  }
   const company = await freshCompany();
   const { service, actor } = company;
 
@@ -241,5 +262,5 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean): Promis
   };
 };
 
-export const previewOnboarding = (input: Record<string, unknown>): Promise<RunResult> => runSetup(input, false);
-export const finishOnboarding = (input: Record<string, unknown>): Promise<RunResult> => runSetup(input, true);
+export const previewOnboarding = (input: Record<string, unknown>, companyId?: string): Promise<RunResult> => runSetup(input, false, companyId);
+export const finishOnboarding = (input: Record<string, unknown>, companyId?: string): Promise<RunResult> => runSetup(input, true, companyId);

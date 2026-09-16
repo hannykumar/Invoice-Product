@@ -38,6 +38,7 @@
           <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
           <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
           <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
+          <button class="nav-item" data-view="business"><span aria-hidden="true">▣</span><span data-i18n="navBusiness"></span></button>
           <button class="nav-item" data-view="branding"><span aria-hidden="true">◐</span><span data-i18n="navBranding"></span></button>
           <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
           <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
@@ -902,6 +903,10 @@
                   <option value="03">Punjab (03)</option>
                 </select>
               </label>
+              <label><span data-i18n="setupAddress1"></span><input name="address1" placeholder="No. 14, 2nd Main, Peenya Industrial Area" /></label>
+              <label><span data-i18n="setupAddress2"></span><input name="address2" placeholder="Phase 1" /></label>
+              <label><span data-i18n="setupCity"></span><input name="city" placeholder="Bengaluru" /></label>
+              <label><span data-i18n="setupPincode"></span><input name="pincode" inputmode="numeric" placeholder="560058" /></label>
               <label><span data-i18n="setupPhone"></span><input name="phone" placeholder="98290 11223" /></label>
             </fieldset>
             <fieldset>
@@ -951,6 +956,64 @@
             </div>
           </form>
           <div id="setup-result" aria-live="polite"></div>
+        </section>
+        <!-- Issue #180 — the business's own particulars. One place holds what every printed document
+             says about the seller, and nothing is issued until the address is in it. -->
+        <section class="view" id="view-business" aria-labelledby="business-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="businessEyebrow"></p><h1 id="business-title" tabindex="-1" data-i18n="businessTitle"></h1><p data-i18n="businessHelp"></p></div></div>
+          <form class="panel setup-form" id="business-form" novalidate>
+            <fieldset>
+              <legend data-i18n="businessNameLegend"></legend>
+              <label><span data-i18n="businessLegalName"></span><input name="legalName" required /></label>
+              <label><span data-i18n="businessTradeName"></span><input name="tradeName" /></label>
+              <p class="setup-hint" data-i18n="businessTradeNameHint"></p>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="businessAddressLegend"></legend>
+              <p class="setup-hint" data-i18n="businessAddressHint"></p>
+              <label><span data-i18n="businessAddress1"></span><input name="address1" required /></label>
+              <label><span data-i18n="businessAddress2"></span><input name="address2" /></label>
+              <label><span data-i18n="businessCity"></span><input name="city" required /></label>
+              <label><span data-i18n="businessPincode"></span><input name="pincode" inputmode="numeric" required /></label>
+              <label><span data-i18n="businessState"></span><select name="stateCode" id="business-state"></select></label>
+              <p class="setup-hint" id="business-gstin-note"></p>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="businessContactLegend"></legend>
+              <label><span data-i18n="businessPhone"></span><input name="phone" /></label>
+              <label><span data-i18n="businessEmail"></span><input name="email" type="email" /></label>
+              <label><span data-i18n="businessPan"></span><input name="pan" autocapitalize="characters" spellcheck="false" /></label>
+              <p class="setup-hint" id="business-pan-note"></p>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="businessBankLegend"></legend>
+              <p class="setup-hint" data-i18n="businessBankHint"></p>
+              <label><span data-i18n="businessBankName"></span><input name="bankName" /></label>
+              <label><span data-i18n="businessAccountNumber"></span><input name="accountNumber" inputmode="numeric" /></label>
+              <label><span data-i18n="businessBranch"></span><input name="branch" /></label>
+              <label><span data-i18n="businessIfsc"></span><input name="ifsc" autocapitalize="characters" spellcheck="false" /></label>
+              <button type="button" class="text-button" id="business-bank-remove" hidden data-i18n="businessBankRemove"></button>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="businessWordsLegend"></legend>
+              <p class="setup-hint" data-i18n="businessWordsHint"></p>
+              <label><span data-i18n="businessDeclaration"></span><textarea name="declaration" rows="3"></textarea></label>
+              <label><span data-i18n="businessTerms"></span><textarea name="terms" rows="3"></textarea></label>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="businessSignatureLegend"></legend>
+              <p class="setup-hint" data-i18n="businessSignatureHint"></p>
+              <div class="branding-logo-row">
+                <div class="branding-logo-box" id="business-signature-box"><span class="branding-empty" id="business-signature-empty" data-i18n="businessNoSignature"></span></div>
+                <div class="branding-logo-actions">
+                  <label class="file-button"><span data-i18n="businessChooseSignature"></span><input type="file" id="business-signature-input" accept="image/png,image/jpeg" /></label>
+                  <button type="button" class="text-button" id="business-signature-remove" hidden data-i18n="businessRemoveSignature"></button>
+                </div>
+              </div>
+            </fieldset>
+            <div class="setup-actions"><button type="submit" class="primary-button" id="business-save" data-i18n="businessSave"></button></div>
+          </form>
+          <p class="branding-status" id="business-status" role="status"></p>
         </section>
         <section class="view" id="view-branding" aria-labelledby="branding-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="brandingEyebrow"></p><h1 id="branding-title" tabindex="-1" data-i18n="brandingTitle"></h1><p data-i18n="brandingHelp"></p></div></div>
@@ -1099,6 +1162,7 @@
         <button data-view="returns"><span aria-hidden="true">↩</span><small data-i18n="navReturns"></small></button>
         <button data-view="reports"><span aria-hidden="true">▤</span><small data-i18n="navReports"></small></button>
         <button data-view="setup"><span aria-hidden="true">✦</span><small data-i18n="navSetup"></small></button>
+        <button data-view="business"><span aria-hidden="true">▣</span><small data-i18n="navBusiness"></small></button>
         <button data-view="branding"><span aria-hidden="true">◐</span><small data-i18n="navBranding"></small></button>
         <button data-view="operations"><span aria-hidden="true">●</span><small data-i18n="navOperations"></small></button>
         <button data-view="deliveries"><span aria-hidden="true">⇄</span><small data-i18n="navDeliveries"></small></button>
