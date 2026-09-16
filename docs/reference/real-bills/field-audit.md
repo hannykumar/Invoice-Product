@@ -3,6 +3,12 @@
 Done 2026-09-10 by reading both PDFs and rendering our own `india-standard` design through
 `npm run demo:invoice`. Update this file whenever either side changes.
 
+Re-checked 2026-09-16 against **the app's own bill**, not the demo script: `npm run web`, signed in
+as Sampoorna Traders, Business details saved, one sale recorded, bill `INV/26-27/000004` printed. The
+seller block now reads the business's own particulars (issue #180) rather than a town and a godown
+name, so the "Seller name, address, GSTIN" and "Company's PAN" and "Company's bank details" rows
+below describe what the app prints, not only what the renderer is capable of printing.
+
 `KK` = KK Polyplast invoice 285. `BE` = Blessing Export BE/DL/25-26/0139 (Tally).
 
 ## Present on a real bill and on ours
@@ -11,8 +17,8 @@ Done 2026-09-10 by reading both PDFs and rendering our own `india-standard` desi
 | --- | --- | --- | --- |
 | Title "Tax Invoice", centred above the frame | yes | yes | |
 | Whole page as one ruled grid | yes | yes | |
-| Seller name, address, GSTIN, state name + code | yes | yes | |
-| Seller phone / e-mail | yes | e-mail | |
+| Seller name, address, GSTIN, state name + code | yes | yes | typed in Business details (#180); no bill is issued without the street, town and PIN code |
+| Seller phone / e-mail | yes | e-mail | typed in Business details, printed when entered |
 | Logo, top left | yes | no | |
 | Invoice No., Date | yes | yes | |
 | Place of supply | yes | no | BE carries state codes on the party blocks instead |
@@ -37,9 +43,9 @@ Done 2026-09-10 by reading both PDFs and rendering our own `india-standard` desi
 | Signature image above "Authorised Signature" | yes | line only | KK's is a scanned signature; ours supports the image (#138) |
 | "for <company>" above the signature | yes | yes | |
 | Tax amount in words | no | yes | |
-| Company's PAN | no | yes | BE puts it by the declaration, not under the GSTIN |
+| Company's PAN | no | yes | BE puts it by the declaration, not under the GSTIN; ours is typed in Business details and must match the PAN inside the GSTIN |
 | Declaration | no | yes | |
-| Company's bank details | no | yes | |
+| Company's bank details | no | yes | typed in Business details, held in `packages/masters`, printed as Bank Name / A/c No. / Branch & IFS Code |
 | "E. & O.E" | no | yes | on the amount-in-words line |
 | "This is a Computer Generated Invoice" | no | yes | |
 

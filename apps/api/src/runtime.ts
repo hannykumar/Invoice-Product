@@ -5,6 +5,7 @@ import type { ActorContext } from '@invoice/ledger';
 import { AccessControl, AuthenticationService, PlatformError, type Permission, type RequestContext } from '../../../packages/platform/src/index.ts';
 import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
 import { DemoApplication } from './demo-application.ts';
+import { businessDetailsOf, saveBusinessDetails } from './business-details-application.ts';
 import type { CompanySeed } from './company-shop.ts';
 import { createOperations } from '../../../ops/operations/src/index.ts';
 
@@ -39,6 +40,38 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
     customerId: asId<'Party'>('konkan:party:customer'), customerName: 'Mapusa Family Stores', customerGstin: '30BBBBB1111B1Z0',
     supplierId: asId<'Party'>('konkan:party:supplier'), supplierName: 'Western Coast Supplies',
     supplierGstin: '30AAFCW7788Q1ZE',
+  },
+};
+
+/**
+ * Issue #180 — the particulars the two synthetic companies would have typed into Business details.
+ *
+ * They are seeded so the local app opens with a company that can issue a bill, exactly as a real
+ * business does the moment it fills that screen in. They are not a fallback and nothing reads them
+ * at print time: the screen can change or clear any of it, and a company with no address is refused
+ * a bill like any other. Both addresses are invented and belong to nobody.
+ */
+const SYNTHETIC_BUSINESS_DETAILS: Readonly<Record<string, Record<string, string>>> = {
+  '00000000-0000-4000-8000-000000000001': {
+    legalName: 'Sampoorna Traders',
+    address1: 'No. 14, 2nd Main, Peenya Industrial Area',
+    address2: 'Phase 1',
+    city: 'Bengaluru',
+    pincode: '560058',
+    stateCode: '29',
+    phone: '080 4000 1234',
+    email: 'billing@sampoorna.example.invalid',
+    pan: 'AAAAA0000A',
+  },
+  '00000000-0000-4000-8000-000000000011': {
+    legalName: 'Konkan Fresh Foods',
+    address1: 'Shop 7, Municipal Market Road',
+    city: 'Panaji',
+    pincode: '403001',
+    stateCode: '30',
+    phone: '0832 240 5678',
+    email: 'billing@konkan.example.invalid',
+    pan: 'AAAAA0000A',
   },
 };
 
@@ -130,6 +163,10 @@ export class ApiRuntime {
       const company = SYNTHETIC_PLATFORM_COMPANIES.find((candidate) => candidate.companyId === context.companyId);
       const details = COMPANY_DETAILS[context.companyId];
       if (company === undefined || details === undefined) throw notFound('API_COMPANY_NOT_FOUND', 'That company is not available.');
+      const seeded = SYNTHETIC_BUSINESS_DETAILS[context.companyId];
+      if (seeded !== undefined && businessDetailsOf(context.companyId) === null) {
+        saveBusinessDetails(context.companyId, { name: details.name, gstin: details.gstin }, seeded);
+      }
       application = DemoApplication.create({
         companyId: asId<'Company'>(company.companyId),
         branchId: asId<'Branch'>(company.branchId),
@@ -159,6 +196,17 @@ export class ApiRuntime {
     const company = SYNTHETIC_PLATFORM_COMPANIES.find((candidate) => candidate.companyId === companyId);
     if (company === undefined) throw new AuthenticationError('That company is not available.');
     return { id: company.companyId, name: company.legalName, branch: company.branchName };
+  }
+
+  /**
+   * Issue #180 — the two facts about a company that a printed document cannot be built without:
+   * the registered name and the GST number. The address is not here; the business types it into
+   * Business details, and `business-details-application.ts` holds it.
+   */
+  companyIdentity(companyId: string): { readonly name: string; readonly gstin: string } {
+    const details = COMPANY_DETAILS[companyId];
+    if (details === undefined) throw new AuthenticationError('That company is not available.');
+    return { name: details.name, gstin: details.gstin };
   }
 
   async operationsWorkspace(context: RequestContext) {

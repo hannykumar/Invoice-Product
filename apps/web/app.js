@@ -259,6 +259,15 @@ const copy = {
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
     navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected",
     navOperations: "Operations", operationsEyebrow: "Service health", operationsTitle: "Is the service working?", operationsHelp: "See service checks, failed external calls, safe retries and customer incident updates without opening invoices or bank records.", operationsSafetyTitle: "Customer data stays private. ", operationsSafety: "This page shows error codes and correlation IDs only. A retry is offered only for work declared safe and duplicate-proof.", operationsHealth: "Health checks", operationsFailures: "External failures", operationsQueue: "Safe retry queue", operationsRecurring: "Recurring work", operationsIncidents: "Customer status timeline", operationsHealthy: "All checks are working", operationsDegraded: "One or more checks need attention", operationsNoFailures: "No external failures for this company.", operationsNoJobs: "No jobs are waiting.", operationsNoRecurring: "No recurring work is registered.", operationsNextRun: "Next", operationsLastRun: "Last", operationsNeverRun: "Not run yet", operationsRunning: "Running", operationsSucceeded: "Succeeded", operationsFailed: "Failed", operationsDeadLettered: "Stopped after repeated failures", operationsReplay: "Retry safely", operationsNoIncidents: "No current or recent incidents.",
+    navBusiness: "Business details", businessEyebrow: "Your business", businessTitle: "Your business, as it prints on every bill", businessHelp: "The law asks every bill to carry your name, your address and your GST number. Type them once here and every bill, challan and quotation carries them.",
+    businessNameLegend: "Name", businessLegalName: "Registered name", businessTradeName: "Trading name (optional)", businessTradeNameHint: "If you fill this in, the bill prints it instead of the registered name.",
+    businessAddressLegend: "Address", businessAddressHint: "A town on its own is not an address. The street and the PIN code are both required on a bill.", businessAddress1: "Address line 1", businessAddress2: "Address line 2 (optional)", businessCity: "Town or city", businessPincode: "PIN code", businessState: "State",
+    businessContactLegend: "Phone, e-mail and PAN", businessPhone: "Phone (optional)", businessEmail: "E-mail (optional)", businessPan: "PAN (optional)",
+    businessBankLegend: "Bank account (optional)", businessBankHint: "This is where your customer pays you. Fill in all four, or leave all of them empty.", businessBankName: "Bank name", businessAccountNumber: "Account number", businessBranch: "Branch", businessIfsc: "IFSC", businessBankRemove: "Take the bank details off",
+    businessWordsLegend: "Your own words (optional)", businessWordsHint: "Anything you type here prints at the foot of the bill, exactly as you typed it. We never write it for you.", businessDeclaration: "Declaration", businessTerms: "Terms",
+    businessSignatureLegend: "Signature (optional)", businessSignatureHint: "A PNG or JPG under 200 KB. It prints above \u201cAuthorised Signatory\u201d.", businessNoSignature: "No signature yet", businessChooseSignature: "Choose a picture", businessRemoveSignature: "Take the signature off",
+    businessSave: "Save business details", businessSaved: "Saved. Every new bill carries this.", businessSaving: "Saving\u2026", businessGstinNote: "Your GST number is {gstin}, registered in {state}. The address on the bill must be in that state.", businessPanNote: "Your GST number already carries the PAN {pan}. A business has one PAN, so this must be the same.",
+    setupAddress1: "Address line 1", setupAddress2: "Address line 2 (optional)", setupCity: "Town or city", setupPincode: "PIN code",
     navBranding: "Bill design", brandingEyebrow: "Your bill", brandingTitle: "Make the bill look like yours", brandingHelp: "Put your logo, your colour and a picture of your trade on the bill. All three are extra. A bill with none of them is still a complete, lawful bill.",
     brandingLogoTitle: "Your logo", brandingLogoHelp: "A PNG, JPG, WEBP or SVG picture. It is shrunk here before it is saved, and it prints about two centimetres tall at the top of the bill.", brandingNoLogo: "No logo yet", brandingChooseLogo: "Choose a picture", brandingRemoveLogo: "Take the logo off", brandingAccentTaken: "Headings and rules use this colour, taken from your logo.", brandingAccentReset: "Use the design's own colour",
     brandingMarkTitle: "The mark of your trade", brandingMarkHelp: "Type what you sell and pick a picture. It prints very faintly behind the items, and never on till-roll paper.", brandingSearchLabel: "What do you sell?", brandingSearchPlaceholder: "mithai, kapda, tyre, dawa", brandingSearchButton: "Find pictures", brandingMarkChosen: "On your bill:", brandingRemoveMark: "Take the picture off", brandingNoMarkResults: "Nothing matched that. Try another word for what you sell.",
@@ -526,6 +535,15 @@ const copy = {
     differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
     navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya",
     navOperations: "Seva ki sthiti", operationsEyebrow: "Seva ki sehat", operationsTitle: "Kya seva sahi chal rahi hai?", operationsHelp: "Invoice ya bank record khole bina service check, bahari nakaami, surakshit retry aur grahak ko dikhne wali ghatna dekhein.", operationsSafetyTitle: "Grahak ka data niji rehta hai. ", operationsSafety: "Yahan sirf error code aur correlation ID dikhte hain. Retry tabhi milta hai jab kaam surakshit aur duplicate-proof ghoshit ho.", operationsHealth: "Sehat ki jaanch", operationsFailures: "Bahari nakaami", operationsQueue: "Surakshit retry queue", operationsRecurring: "Niyamit kaam", operationsIncidents: "Grahak sthiti ka itihaas", operationsHealthy: "Sabhi jaanch sahi chal rahi hain", operationsDegraded: "Ek ya adhik jaanch par dhyan chahiye", operationsNoFailures: "Is company ke liye koi bahari nakaami nahin.", operationsNoJobs: "Koi kaam intezar mein nahin.", operationsNoRecurring: "Koi niyamit kaam darj nahin hai.", operationsNextRun: "Agli baar", operationsLastRun: "Pichhli baar", operationsNeverRun: "Abhi nahin chala", operationsRunning: "Chal raha hai", operationsSucceeded: "Poora hua", operationsFailed: "Nakaam hua", operationsDeadLettered: "Baar-baar nakaami ke baad roka gaya", operationsReplay: "Surakshit dobara chalayen", operationsNoIncidents: "Koi maujooda ya haal ki ghatna nahin.",
+    navBusiness: "Business ki jaankari", businessEyebrow: "Aapka business", businessTitle: "Aapka business, jaisa har bill par chhapta hai", businessHelp: "Kanoon kehta hai ki har bill par aapka naam, aapka pata aur aapka GST number ho. Yahan ek baar likhein, phir har bill, challan aur quotation par yeh aayega.",
+    businessNameLegend: "Naam", businessLegalName: "Registered naam", businessTradeName: "Kaam ka naam (optional)", businessTradeNameHint: "Yeh bhar dein to bill par registered naam ki jagah yahi chhapega.",
+    businessAddressLegend: "Pata", businessAddressHint: "Sirf shehar ka naam pata nahin hota. Bill par gali aur PIN code dono zaroori hain.", businessAddress1: "Pata, pehli line", businessAddress2: "Pata, doosri line (optional)", businessCity: "Shehar ya kasba", businessPincode: "PIN code", businessState: "Rajya",
+    businessContactLegend: "Phone, e-mail aur PAN", businessPhone: "Phone (optional)", businessEmail: "E-mail (optional)", businessPan: "PAN (optional)",
+    businessBankLegend: "Bank account (optional)", businessBankHint: "Customer yahin paisa bhejta hai. Chaaron bharein, ya chaaron khali chhod dein.", businessBankName: "Bank ka naam", businessAccountNumber: "Account number", businessBranch: "Branch", businessIfsc: "IFSC", businessBankRemove: "Bank ki jaankari hata dein",
+    businessWordsLegend: "Aapke apne shabd (optional)", businessWordsHint: "Yahan jo likhenge wahi bill ke neeche waise ka waisa chhapega. Hum aapki taraf se kuch nahin likhte.", businessDeclaration: "Declaration", businessTerms: "Shartein",
+    businessSignatureLegend: "Dastakhat (optional)", businessSignatureHint: "PNG ya JPG, 200 KB se chhoti. Yeh \u201cAuthorised Signatory\u201d ke upar chhapti hai.", businessNoSignature: "Abhi koi dastakhat nahin", businessChooseSignature: "Tasveer chunein", businessRemoveSignature: "Dastakhat hata dein",
+    businessSave: "Business ki jaankari save karein", businessSaved: "Save ho gaya. Har naye bill par yeh aayega.", businessSaving: "Save ho raha hai\u2026", businessGstinNote: "Aapka GST number {gstin} hai, jo {state} mein registered hai. Bill ka pata usi rajya ka hona chahiye.", businessPanNote: "Aapke GST number mein PAN {pan} pehle se hai. Ek business ka ek hi PAN hota hai, to yeh wahi hona chahiye.",
+    setupAddress1: "Pata, pehli line", setupAddress2: "Pata, doosri line (optional)", setupCity: "Shehar ya kasba", setupPincode: "PIN code",
     navBranding: "Bill ka design", brandingEyebrow: "Aapka bill", brandingTitle: "Bill ko apna banayein", brandingHelp: "Bill par apna logo, apna rang aur apne kaam ki tasveer lagayein. Teenon extra hain. Bina inke bhi bill poora aur kanooni hai.",
     brandingLogoTitle: "Aapka logo", brandingLogoHelp: "PNG, JPG, WEBP ya SVG tasveer. Save karne se pehle yahin chhoti kar di jaati hai, aur bill ke upar do centimeter ki chhapti hai.", brandingNoLogo: "Abhi koi logo nahin", brandingChooseLogo: "Tasveer chunein", brandingRemoveLogo: "Logo hata dein", brandingAccentTaken: "Heading aur lakeerein isi rang mein, jo aapke logo se liya gaya hai.", brandingAccentReset: "Design ka apna rang rakhein",
     brandingMarkTitle: "Aapke kaam ki tasveer", brandingMarkHelp: "Jo aap bechte hain woh likhein aur tasveer chunein. Yeh saman ke peeche bahut halki chhapti hai, aur chhoti parchi wale printer par kabhi nahin.", brandingSearchLabel: "Aap kya bechte hain?", brandingSearchPlaceholder: "mithai, kapda, tyre, dawa", brandingSearchButton: "Tasveerein dhoondhein", brandingMarkChosen: "Aapke bill par:", brandingRemoveMark: "Tasveer hata dein", brandingNoMarkResults: "Us shabd se kuch nahin mila. Jo bechte hain uske liye doosra shabd likhein.",
@@ -714,6 +732,7 @@ function openView(view) {
   if (target === "operations") loadOperations();
   if (target === "ask") loadAskExamples();
   if (target === "ask") { loadAskExamples(); loadAgentCapabilities(); }
+  if (target === "business") openBusinessDetails();
   if (target === "branding") openBranding();
 }
 
@@ -1831,6 +1850,120 @@ document.querySelector("#setup-create")?.addEventListener("click", createSetup);
  *  - The preview is the real bill printer on the server, not a drawing of a bill made here. A
  *    screen that shows something the printer would not is worse than no screen.
  */
+
+/**
+ * Issue #180 — the business's own particulars.
+ *
+ * One screen holds the name, address, PIN code, phone, e-mail, PAN, bank account, and the two
+ * pieces of free text the business writes itself. Every printed document reads them from the API,
+ * which is the only copy; nothing on this page is invented for the business.
+ */
+const businessState = { loaded: null, unsavedSignature: null };
+
+function renderBusinessSignature() {
+  const signature = businessState.unsavedSignature ?? businessState.loaded?.details?.signatureDataUri ?? null;
+  const box = document.querySelector("#business-signature-box");
+  const empty = document.querySelector("#business-signature-empty");
+  if (!box) return;
+  box.querySelector("img")?.remove();
+  if (signature === null) {
+    if (empty) empty.hidden = false;
+  } else {
+    if (empty) empty.hidden = true;
+    const image = new Image();
+    image.src = signature;
+    image.alt = "";
+    box.append(image);
+  }
+  document.querySelector("#business-signature-remove").hidden = signature === null;
+}
+
+async function openBusinessDetails() {
+  const form = document.querySelector("#business-form");
+  if (!form) return;
+  const text = copy[state.locale];
+  let read;
+  try { read = await api("/api/business-details"); }
+  catch (error) { document.querySelector("#business-status").textContent = error.message; return; }
+  businessState.loaded = read;
+  businessState.unsavedSignature = null;
+
+  const select = document.querySelector("#business-state");
+  select.replaceChildren(...read.states.map((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.code;
+    option.textContent = `${entry.name} (${entry.code})`;
+    return option;
+  }));
+
+  // What is saved wins; otherwise what was typed while setting the business up is offered.
+  const saved = read.details;
+  const fill = (name, value) => { const field = form.elements.namedItem(name); if (field) field.value = value ?? ""; };
+  fill("legalName", saved?.legalName ?? read.prefill.legalName);
+  fill("tradeName", saved?.tradeName ?? read.prefill.tradeName);
+  fill("address1", saved?.address1 ?? read.prefill.address1);
+  fill("address2", saved?.address2 ?? read.prefill.address2);
+  fill("city", saved?.city ?? read.prefill.city);
+  fill("pincode", saved?.pincode ?? read.prefill.pincode);
+  fill("stateCode", saved?.stateCode ?? read.gstinStateCode);
+  fill("phone", saved?.phone ?? read.prefill.phone);
+  fill("email", saved?.email);
+  fill("pan", saved?.pan);
+  fill("declaration", saved?.declaration);
+  fill("terms", saved?.terms);
+  fill("bankName", read.bank?.bankName);
+  fill("accountNumber", read.bank?.accountNumber);
+  fill("branch", read.bank?.branchName);
+  fill("ifsc", read.bank?.ifsc);
+  document.querySelector("#business-bank-remove").hidden = read.bank === null;
+
+  document.querySelector("#business-gstin-note").textContent =
+    text.businessGstinNote.replace("{gstin}", read.gstin).replace("{state}", `${read.gstinStateName} (${read.gstinStateCode})`);
+  document.querySelector("#business-pan-note").textContent = text.businessPanNote.replace("{pan}", read.gstinPan);
+  renderBusinessSignature();
+}
+
+async function saveBusinessDetails(clear = []) {
+  const form = document.querySelector("#business-form");
+  const status = document.querySelector("#business-status");
+  status.textContent = copy[state.locale].businessSaving;
+  const body = { ...draftData(form), clear };
+  if (businessState.unsavedSignature !== null) body.signatureDataUri = businessState.unsavedSignature;
+  try {
+    const result = await api("/api/business-details", { method: "POST", body: JSON.stringify(body) });
+    businessState.loaded = { ...businessState.loaded, details: result.details, bank: result.bank };
+    businessState.unsavedSignature = null;
+    status.textContent = copy[state.locale].businessSaved;
+    document.querySelector("#business-bank-remove").hidden = result.bank === null;
+    if (result.bank === null) {
+      for (const name of ["bankName", "accountNumber", "branch", "ifsc"]) {
+        const field = form.elements.namedItem(name);
+        if (field) field.value = "";
+      }
+    }
+    renderBusinessSignature();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+document.querySelector("#business-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveBusinessDetails();
+});
+document.querySelector("#business-bank-remove")?.addEventListener("click", () => saveBusinessDetails(["bank"]));
+document.querySelector("#business-signature-remove")?.addEventListener("click", () => {
+  businessState.unsavedSignature = null;
+  renderBusinessSignature();
+  saveBusinessDetails(["signature"]);
+});
+document.querySelector("#business-signature-input")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  businessState.unsavedSignature = await readFileAsDataUri(file);
+  renderBusinessSignature();
+});
+
 const brandingState = { branding: null, upiId: null, results: [], pictureId: null, unsavedLogo: null, unsavedAccent: null };
 
 /** The longest side a stored logo is allowed, in pixels. It prints about two centimetres tall. */

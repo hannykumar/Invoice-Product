@@ -30,6 +30,7 @@ import {
   type TemplateSnapshot,
 } from '@invoice/invoice-templates';
 import { STATE_NAMES } from '@invoice/transport';
+import { requireIssuable, sellerPrint } from './business-details-application.ts';
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
@@ -141,6 +142,8 @@ export class PreSaleDesk {
   }
 
   async issue(actor: ActorContext, input: Record<string, unknown>) {
+    // Issue #180 — checked first, so a quotation number is never spent on a refusal.
+    requireIssuable(this.#config.companyId);
     const kind = this.#kind(input);
     const document = await this.#service.issue(actor, {
       kind,
@@ -207,7 +210,8 @@ export class PreSaleDesk {
     const format = input.format === 'MOBILE' ? 'MOBILE' as const : 'A4' as const;
     const place = document.pricing.placeOfSupplyStateCode;
     const printable = toPreSalePrint(document, {
-      seller: this.#party(this.#config.gstin.slice(0, 2), this.#config.name, this.#config.gstin, [this.#config.location]),
+      // Issue #180 — the same seller block the tax invoice carries, from the one saved source.
+      seller: sellerPrint(this.#config.companyId, { name: this.#config.name, gstin: this.#config.gstin }).seller,
       buyer: this.#party(this.#config.customerGstin.slice(0, 2), this.#config.customerName, this.#config.customerGstin, facts.buyerAddress),
       placeOfSupplyStateName: STATE_NAMES[place] ?? place,
       bankDetails: facts.bankDetails.length === 0 ? null : facts.bankDetails,

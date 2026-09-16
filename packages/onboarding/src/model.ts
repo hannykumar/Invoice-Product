@@ -57,6 +57,9 @@ export interface BusinessAnswers {
   readonly businessType?: BusinessType;
   readonly stateCode?: string;
   readonly addressLines?: readonly string[];
+  /** Issue #180 — the town and the PIN code, which a printed bill needs beside the street lines. */
+  readonly city?: string;
+  readonly pincode?: string;
   readonly phone?: string;
 }
 

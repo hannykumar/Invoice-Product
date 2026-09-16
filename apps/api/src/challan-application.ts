@@ -29,6 +29,7 @@ import {
   type TemplateSnapshot,
 } from '@invoice/invoice-templates';
 import { consignmentFromChallan, STATE_NAMES, type ConsignmentDocument, type MovementReason } from '@invoice/transport';
+import { requireIssuable, sellerPrint } from './business-details-application.ts';
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
@@ -150,6 +151,8 @@ export class ChallanDesk {
   }
 
   async issue(actor: ActorContext, input: Record<string, unknown>) {
+    // Issue #180 — checked first, so a challan number is never spent on a refusal.
+    requireIssuable(this.#config.companyId);
     const address = this.#addressOf(input);
     const challan = await this.#service.issue(actor, {
       idempotencyKey: `web-challan:${String(input.reference || crypto.randomUUID())}`,
@@ -211,7 +214,10 @@ export class ChallanDesk {
     const consigneeState = this.#config.customerGstin.slice(0, 2);
     const deliveryState = challan.deliveryStateCode;
     const document = toChallanDocument(challan, {
-      consigner: this.#party(this.#config.gstin.slice(0, 2), this.#config.name, this.#config.gstin, [this.#config.location]),
+      // Issue #180 — the consigner is the business's own saved address. Rule 55 asks a challan for
+      // the same particulars a bill carries, and the goods leave from a street, not from a godown
+      // nickname.
+      consigner: sellerPrint(this.#config.companyId, { name: this.#config.name, gstin: this.#config.gstin }).seller,
       consignee: this.#party(consigneeState, this.#config.customerName, this.#config.customerGstin, facts.consigneeAddress),
       // Only when the goods go somewhere other than the consignee's own state and address.
       deliveryAddress: deliveryState === null || deliveryState === consigneeState

@@ -7,6 +7,7 @@ import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { chooseMark, searchMarks } from './trade-mark-application.ts';
 import { previewBranding, readBranding, saveBranding, saveUpiId } from './branding-application.ts';
+import { readBusinessDetails, saveBusinessDetails } from './business-details-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
 import { ChallanDesk } from './challan-application.ts';
@@ -71,8 +72,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/assistant/ask') return json(200, await app.ask(actor, body));
     // Setting up a business runs against its own fresh company, so it needs a signed-in session but
     // not the session's company. Gated by authentication above, like the rest of the app.
-    if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body));
-    if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body));
+    if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body, context.companyId));
+    if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body, context.companyId));
     // Issue #147 — the mark of a trade: search the picture library, then keep what was picked.
     if (method === 'POST' && pathname === '/api/trade-marks/search') return json(200, searchMarks(body));
     if (method === 'POST' && pathname === '/api/trade-marks/choose') return json(200, chooseMark(body));
@@ -80,6 +81,10 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // on. The preview goes through the same renderer a finalised sale is printed with.
     if (method === 'GET' && pathname === '/api/branding') return json(200, readBranding(context.companyId));
     if (method === 'POST' && pathname === '/api/branding') return json(200, saveBranding(context.companyId, body));
+    // Issue #180 — the business's own name, address, PIN code, phone, PAN and bank, in one place.
+    // Every printed document takes its seller block from here, and nothing is issued without an address.
+    if (method === 'GET' && pathname === '/api/business-details') return json(200, readBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId)));
+    if (method === 'POST' && pathname === '/api/business-details') return json(200, saveBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId), body));
     // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
     if (method === 'POST' && pathname === '/api/branding/upi') return json(200, saveUpiId(context.companyId, body));
     if (method === 'POST' && pathname === '/api/branding/preview')

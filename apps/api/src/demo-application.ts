@@ -22,6 +22,7 @@ import {
   type TemplateSnapshot,
 } from '@invoice/invoice-templates';
 import { brandingOf, upiIdOf } from './branding-application.ts';
+import { dispatchFrom, requireIssuable, sellerPrint } from './business-details-application.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
@@ -1128,6 +1129,9 @@ export class DemoApplication {
     // In that order, because a bill that failed to post is not a bill, and charging somebody's
     // allowance for the product's own failure would be the wrong way round.
     const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    // Issue #180 — checked before anything is drafted or numbered, so a business without an address
+    // is refused without burning an invoice number on the refusal.
+    requireIssuable(this.config.companyId);
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
     return this.issueCheckedSale(actor, preview.token, usageDate, addressLines(input.customerAddress));
@@ -1135,6 +1139,7 @@ export class DemoApplication {
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
   private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, buyerAddress: readonly string[] = []) {
+    requireIssuable(this.config.companyId);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
     this.freezeBillPrint(final.invoice, buyerAddress);
     await this.subscriptions.recordUsage(actor, {
@@ -1191,10 +1196,18 @@ export class DemoApplication {
     const branding = brandingOf(invoice.companyId);
     // A finalised bill is always priced, and pricing decides the place of supply.
     const place = invoice.pricing?.placeOfSupplyStateCode ?? invoice.placeOfSupplyStateCode ?? this.config.gstin.slice(0, 2);
+    // Issue #180 — the seller block, and the bank, declaration, terms and signature beside it, come
+    // from the business's own saved particulars. Frozen here with everything else, so changing the
+    // address tomorrow never alters a bill issued today.
+    const us = sellerPrint(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
     this.invoicePrints.set(invoice.id, {
       document: toInvoiceDocument(invoice, {
         title: 'TAX_INVOICE',
-        seller: party(this.config.gstin.slice(0, 2), this.config.name, this.config.gstin, [this.config.location]),
+        seller: us.seller,
+        bank: us.bank,
+        declaration: us.declaration,
+        terms: us.terms,
+        signatureDataUri: us.signatureDataUri,
         buyer: party(this.config.customerGstin.slice(0, 2), this.config.customerName, this.config.customerGstin, buyerAddress),
         placeOfSupplyStateName: STATE_NAMES[place] ?? place,
         logoDataUri: branding.logoDataUri,
@@ -2349,14 +2362,10 @@ export class DemoApplication {
 
   /** One movement of goods: the document on the lorry, why it is moving, and what the form said. */
   private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>): Movement {
-    const consignor: MovementParty = {
-      legalName: this.config.name,
-      gstin: this.config.gstin,
-      address1: this.config.location,
-      place: this.config.location.split('·')[0]?.trim() ?? this.config.location,
-      pincode: '560058',
-      stateCode: this.config.gstin.slice(0, 2),
-    };
+    // Issue #180 — where the goods actually leave from, taken from the business's own address. An
+    // e-way bill that disagrees with the invoice about the dispatch place is exactly the
+    // discrepancy an officer stops a lorry over.
+    const consignor: MovementParty = dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
     const billTo: MovementParty = {
       legalName: this.config.customerName,
       gstin: this.config.customerGstin,
