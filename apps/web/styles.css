@@ -258,3 +258,20 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .bill-actions label { display: grid; gap: .2rem; font-size: .72rem; color: var(--muted); }
 .bill-panel iframe { width: 100%; height: 900px; border: 1px solid #dcdcdc; border-radius: 8px; background: #fff; }
 @media (max-width: 760px) { .bill-panel iframe { height: 560px; } .bill-actions { width: 100%; } .bill-actions button { flex: 1; } }
+
+/* Issue #181 — the lines of one bill: the item, how many, and the price of one, per row. */
+.sale-lines { display: grid; gap: .7rem; margin-top: 1rem; }
+.sale-line { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: .8rem; align-items: end; padding: .8rem; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); }
+.sale-line label { display: grid; gap: .38rem; color: #34443f; font-size: .75rem; font-weight: 700; }
+.sale-line input, .sale-line select { width: 100%; border: 1px solid #ced9d4; border-radius: 8px; background: white; padding: .6rem .7rem; color: var(--ink); font-weight: 500; }
+.sale-line .input-with-prefix input, .sale-line .input-with-suffix input { border: 0; border-radius: 0; }
+.sale-line [data-remove-line] { padding-bottom: .7rem; }
+.sale-lines .sale-line:only-child [data-remove-line] { visibility: hidden; }
+#sale-add-line { margin-top: .8rem; }
+#customer-dialog, #item-dialog { max-width: 460px; text-align: left; }
+#customer-dialog .login-form, #item-dialog .login-form { display: grid; gap: .75rem; margin-top: 1rem; }
+#customer-dialog label, #item-dialog label { display: grid; gap: .35rem; font-size: .75rem; font-weight: 700; color: #34443f; }
+#customer-dialog input, #customer-dialog select, #item-dialog input, #item-dialog select { border: 1px solid #ced9d4; border-radius: 8px; padding: .65rem .7rem; font-weight: 500; }
+#customer-dialog small, #item-dialog small { font-weight: 500; color: var(--muted); line-height: 1.4; }
+#customer-dialog label[hidden], #item-dialog label[hidden] { display: none; }
+@media (max-width: 900px) { .sale-line { grid-template-columns: 1fr; } .sale-line [data-remove-line] { justify-self: start; } }

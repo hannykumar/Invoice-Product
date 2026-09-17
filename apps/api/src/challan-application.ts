@@ -5,9 +5,9 @@
  * and prints it through the real rendering engine. Nothing here decides a rule: the service decides
  * what the law allows, and the renderer decides nothing a template could change.
  *
- * The consignee's address is typed on the form and kept with the challan as it was on the day the
- * goods left, the way the printed page must show it. This local app has no customer address book
- * yet, and printing a made-up address on a document that travels with goods is not an option.
+ * Issue #181 — the consignee and the goods are the ones that were chosen. Both are master-data
+ * records, so the address on the challan is the customer's own saved address as it stood on the day
+ * the goods left, and the line describes the item that actually went.
  */
 import { invalid, isoDate, money, notFound, quantityFromString, type CompanyId, type PartyId } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
@@ -30,6 +30,7 @@ import {
 } from '@invoice/invoice-templates';
 import { consignmentFromChallan, STATE_NAMES, type ConsignmentDocument, type MovementReason } from '@invoice/transport';
 import { requireIssuable, sellerPrint } from './business-details-application.ts';
+import { customerPrint, resolveCustomer, resolveItem } from './catalogue-application.ts';
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
@@ -46,20 +47,14 @@ export interface ChallanDeskConfig {
   readonly name: string;
   readonly location: string;
   readonly gstin: string;
-  readonly customerId: PartyId;
-  readonly customerName: string;
-  readonly customerGstin: string;
 }
 
 /** What is frozen onto a challan when it is issued, besides the challan itself. */
 interface PrintFacts {
-  readonly consigneeAddress: readonly string[];
+  readonly consignee: RenderableParty;
   readonly deliveryPlace: string | null;
   readonly snapshot: TemplateSnapshot;
 }
-
-/** The only item this local company stocks, as the demo masters hold it. */
-const DEMO_ITEM = { itemId: 'SOAP', unit: 'PCS' } as const;
 
 export class ChallanDesk {
   readonly #config: ChallanDeskConfig;
@@ -85,32 +80,44 @@ export class ChallanDesk {
     };
   }
 
+  #consignee(input: Record<string, unknown>) {
+    return resolveCustomer(this.#config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+  }
+
   #input(input: Record<string, unknown>): ChallanInput {
     const reason = String(input.reason ?? '');
     if (!isChallanReason(reason)) throw invalid('API_CHALLAN_REASON', 'Choose why the goods are moving.');
     const deliveryState = String(input.deliveryState ?? '').trim();
+    const consignee = this.#consignee(input);
+    const item = resolveItem(this.#config.companyId, String(input.itemId ?? input.item ?? ''));
     return {
-      partyId: this.#config.customerId,
+      partyId: consignee.id as PartyId,
       reason,
       reasonNote: String(input.reasonNote ?? '').trim() || null,
       documentDate: isoDate(String(input.date ?? '')),
       deliveryStateCode: deliveryState === '' ? null : deliveryState,
       lines: [{
         lineId: 'line-1',
-        itemId: DEMO_ITEM.itemId,
-        quantity: quantityFromString(String(input.quantity ?? ''), DEMO_ITEM.unit),
+        itemId: item.id,
+        quantity: quantityFromString(String(input.quantity ?? ''), String(input.unit ?? '').trim().toUpperCase() || item.baseUnit),
         unitPrice: money(paise(input.rate)),
         warehouseId: 'wh-main',
       }],
     };
   }
 
-  #addressOf(input: Record<string, unknown>): string[] {
-    const lines = String(input.consigneeAddress ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
-    if (lines.length === 0) {
-      throw invalid('API_CHALLAN_ADDRESS', 'Type the consignee’s address. A challan must show where the goods are going (CGST Rule 55).');
+  /**
+   * The consignee block the challan prints: the chosen customer's own name, address and GST number.
+   * Rule 55 asks a challan for the same particulars a bill carries, so a challan to a customer with
+   * no address saved is refused rather than sent out without one.
+   */
+  #consigneeBlock(input: Record<string, unknown>): RenderableParty {
+    const consignee = this.#consignee(input);
+    const block = customerPrint(this.#config.companyId, consignee.id);
+    if (block.addressLines.length === 0) {
+      throw invalid('API_CHALLAN_ADDRESS', `${block.name} has no address saved. A challan must show where the goods are going (CGST Rule 55), so add their address first.`);
     }
-    return lines;
+    return block;
   }
 
   async preview(actor: ActorContext, input: Record<string, unknown>) {
@@ -153,7 +160,7 @@ export class ChallanDesk {
   async issue(actor: ActorContext, input: Record<string, unknown>) {
     // Issue #180 — checked first, so a challan number is never spent on a refusal.
     requireIssuable(this.#config.companyId);
-    const address = this.#addressOf(input);
+    const consignee = this.#consigneeBlock(input);
     const challan = await this.#service.issue(actor, {
       idempotencyKey: `web-challan:${String(input.reference || crypto.randomUUID())}`,
       input: this.#input(input),
@@ -162,7 +169,7 @@ export class ChallanDesk {
       const template = templateById('india-standard');
       if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
       this.#facts.set(challan.id, {
-        consigneeAddress: address,
+        consignee,
         deliveryPlace: String(input.deliveryPlace ?? '').trim() || null,
         snapshot: captureSnapshot(template, 'en-IN', challan.createdAt.slice(0, 10)),
       });
@@ -211,18 +218,18 @@ export class ChallanDesk {
     if (facts === undefined) throw notFound('API_CHALLAN_PRINT_FACTS', 'This challan was issued before the address was recorded, so it cannot be printed here.');
     const locale = input.locale === 'hi-IN' ? 'hi-IN' as const : 'en-IN' as const;
     const format = input.format === 'MOBILE' ? 'MOBILE' as const : 'A4' as const;
-    const consigneeState = this.#config.customerGstin.slice(0, 2);
+    const consigneeState = facts.consignee.stateCode;
     const deliveryState = challan.deliveryStateCode;
     const document = toChallanDocument(challan, {
       // Issue #180 — the consigner is the business's own saved address. Rule 55 asks a challan for
       // the same particulars a bill carries, and the goods leave from a street, not from a godown
       // nickname.
       consigner: sellerPrint(this.#config.companyId, { name: this.#config.name, gstin: this.#config.gstin }).seller,
-      consignee: this.#party(consigneeState, this.#config.customerName, this.#config.customerGstin, facts.consigneeAddress),
+      consignee: facts.consignee,
       // Only when the goods go somewhere other than the consignee's own state and address.
       deliveryAddress: deliveryState === null || deliveryState === consigneeState
         ? null
-        : this.#party(deliveryState, this.#config.customerName, this.#config.customerGstin, facts.deliveryPlace === null ? [] : [facts.deliveryPlace]),
+        : this.#party(deliveryState, facts.consignee.name, facts.consignee.gstin ?? '', facts.deliveryPlace === null ? [] : [facts.deliveryPlace]),
       placeOfSupplyStateName: challan.placeOfSupplyStateCode === null ? null : STATE_NAMES[challan.placeOfSupplyStateCode] ?? null,
     });
     const copy = String(input.copy ?? 'ALL');
@@ -280,12 +287,12 @@ export class ChallanDesk {
    * from the challan so nobody answers them twice. `null` when the id is not a challan, so the
    * caller can look for an invoice instead.
    */
-  async forMovement(actor: ActorContext, id: string): Promise<{ document: ConsignmentDocument; reason: MovementReason } | null> {
+  async forMovement(actor: ActorContext, id: string): Promise<{ document: ConsignmentDocument; reason: MovementReason; partyId: string } | null> {
     const challan = await this.#service.get(actor, id);
     if (challan === null) return null;
     if (challan.state !== 'ISSUED') {
       throw invalid('API_CHALLAN_NOT_OPEN', `Challan ${challan.number} is ${challan.state === 'CANCELLED' ? 'cancelled' : 'already billed'}, so no goods move on it.`);
     }
-    return { document: consignmentFromChallan(challan), reason: challanReason(challan.reason).movementReason };
+    return { document: consignmentFromChallan(challan), reason: challanReason(challan.reason).movementReason, partyId: String(challan.partyId) };
   }
 }

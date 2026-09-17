@@ -5,9 +5,9 @@
  * service, and prints it through the real rendering engine. Nothing here decides a rule: the service
  * decides what may be issued, and the renderer decides what prints.
  *
- * The buyer's address and the business's bank lines are typed on the form and kept with the document
- * as they were on the day it was sent, the way the printed page must show them. This local app has
- * no customer address book or bank setup yet, and printing made-up details is not an option.
+ * Issue #181 — the buyer and the item are the ones that were chosen, taken from the same customer
+ * and item lists the Sale screen uses, and nothing else about these two documents changed: the
+ * standing instruction is that the quotation and the proforma are kept working, not developed.
  */
 import { invalid, isoDate, money, notFound, quantityFromString, type CompanyId, type IsoDate, type PartyId } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
@@ -31,6 +31,7 @@ import {
 } from '@invoice/invoice-templates';
 import { STATE_NAMES } from '@invoice/transport';
 import { requireIssuable, sellerPrint } from './business-details-application.ts';
+import { customerPrint, resolveCustomer, resolveItem } from './catalogue-application.ts';
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
@@ -51,20 +52,14 @@ export interface PreSaleDeskConfig {
   readonly name: string;
   readonly location: string;
   readonly gstin: string;
-  readonly customerId: PartyId;
-  readonly customerName: string;
-  readonly customerGstin: string;
 }
 
 /** What is frozen onto a document when it is issued, besides the document itself. */
 interface PrintFacts {
-  readonly buyerAddress: readonly string[];
+  readonly buyer: RenderableParty;
   readonly bankDetails: readonly string[];
   readonly snapshot: TemplateSnapshot;
 }
-
-/** The only item this local company stocks, as the demo masters hold it. */
-const DEMO_ITEM = { itemId: 'SOAP', unit: 'PCS' } as const;
 
 export class PreSaleDesk {
   readonly #config: PreSaleDeskConfig;
@@ -82,17 +77,23 @@ export class PreSaleDesk {
     return kind;
   }
 
+  #buyer(input: Record<string, unknown>) {
+    return resolveCustomer(this.#config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+  }
+
   #input(input: Record<string, unknown>): PreSaleInput {
+    const buyer = this.#buyer(input);
+    const item = resolveItem(this.#config.companyId, String(input.itemId ?? input.item ?? ''));
     return {
-      partyId: this.#config.customerId,
-      customerType: 'B2B',
+      partyId: buyer.id as PartyId,
+      customerType: buyer.gstRegistrationType === 'unregistered' ? 'B2C' : 'B2B',
       supplyKind: 'GOODS',
       documentDate: isoDate(String(input.date ?? '')),
       validUntil: optionalDate(input.validUntil),
       lines: [{
         lineId: 'line-1',
-        itemId: DEMO_ITEM.itemId,
-        quantity: quantityFromString(String(input.quantity ?? ''), DEMO_ITEM.unit),
+        itemId: item.id,
+        quantity: quantityFromString(String(input.quantity ?? ''), String(input.unit ?? '').trim().toUpperCase() || item.baseUnit),
         unitPrice: money(paise(input.rate)),
         priceBasis: 'EXCLUSIVE',
         warehouseId: 'wh-main',
@@ -154,7 +155,7 @@ export class PreSaleDesk {
       const template = templateById('india-standard');
       if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
       this.#facts.set(document.id, {
-        buyerAddress: linesOf(input.buyerAddress),
+        buyer: customerPrint(this.#config.companyId, this.#buyer(input).id),
         // A price offer asks for no money, so bank lines typed on a quotation are not kept.
         bankDetails: kind === 'PROFORMA' ? linesOf(input.bankDetails) : [],
         snapshot: captureSnapshot(template, 'en-IN', document.createdAt.slice(0, 10)),
@@ -197,10 +198,6 @@ export class PreSaleDesk {
     return document;
   }
 
-  #party(stateCode: string, name: string, gstin: string, addressLines: readonly string[]): RenderableParty {
-    return { name, addressLines, gstin, stateCode, stateName: STATE_NAMES[stateCode] ?? stateCode };
-  }
-
   /** The printed quotation or proforma. One copy: neither is a paper that travels with goods. */
   async print(actor: ActorContext, input: Record<string, unknown>) {
     const document = await this.#require(actor, String(input.document ?? ''));
@@ -212,7 +209,7 @@ export class PreSaleDesk {
     const printable = toPreSalePrint(document, {
       // Issue #180 — the same seller block the tax invoice carries, from the one saved source.
       seller: sellerPrint(this.#config.companyId, { name: this.#config.name, gstin: this.#config.gstin }).seller,
-      buyer: this.#party(this.#config.customerGstin.slice(0, 2), this.#config.customerName, this.#config.customerGstin, facts.buyerAddress),
+      buyer: facts.buyer,
       placeOfSupplyStateName: STATE_NAMES[place] ?? place,
       bankDetails: facts.bankDetails.length === 0 ? null : facts.bankDetails,
     });

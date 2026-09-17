@@ -193,8 +193,9 @@ test('authenticated customer and supplier returns preview and post through real 
   const salePreview = await request('POST', '/api/returns/preview', saleReturn, owner);
   assert.equal(salePreview.body.state, 'preview');
   // ₹200 of goods plus the GST that was charged on them: a credit note gives back the tax too.
-  // Soap is 18% against HSN 3401 (#166), so ₹200 comes back with ₹36.
-  assert.equal(salePreview.body.amount, 236);
+  // The demo company declares 5% on toilet soap (HSN 3401), the rate in force since 22 September
+  // 2025, so ₹200 comes back with ₹10.
+  assert.equal(salePreview.body.amount, 210);
   const postedSaleReturn = await request('POST', '/api/returns/record', saleReturn, owner);
   assert.equal(postedSaleReturn.body.note.kind, 'SALES_RETURN');
   assert.match(postedSaleReturn.body.note.number, /^CN\//);
@@ -254,12 +255,15 @@ test('reports require a session and are computed from that company alone', async
   // including ₹453 of GST earned ₹3,650. The older form of this assertion compared income with the
   // bill total, which is only ever equal when there is no tax in the books at all — which is what
   // the demo's nil-rated item used to arrange, so the check never once compared what it claimed to.
-  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.taxable);
+  // A bill whose total lands on a half rupee is rounded to the nearest rupee, and that difference
+  // is income of its own, so income is the taxable value plus whatever the rounding came to.
+  const roundingOff = reports.body.sales.total - (reports.body.sales.taxable + reports.body.sales.tax);
+  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.taxable + roundingOff);
   assert.ok(reports.body.sales.tax > 0, 'and there is real tax in these books to be excluded');
   assert.equal(
-    reports.body.sales.taxable + reports.body.sales.tax,
+    reports.body.sales.taxable + reports.body.sales.tax + roundingOff,
     reports.body.sales.total,
-    'the three totals are one identity: what was earned, plus what was collected for the government, is what was billed',
+    'the three totals are one identity: what was earned, plus what was collected for the government, plus the rounding, is what was billed',
   );
   assert.ok(
     reports.body.profitAndLoss.income.total < reports.body.sales.total,
@@ -1066,7 +1070,7 @@ test('a callback address for something that is not a government connector does n
 
 test('#141 — a delivery challan is issued, printed, carried on an e-way bill and billed later', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const jobWork = { reason: 'JOB_WORK', date: '2026-08-28', quantity: '500', rate: '40', consigneeAddress: 'Plot 14, Hosur Road\nBengaluru 560068', reference: 'api-141-jw' };
+  const jobWork = { reason: 'JOB_WORK', date: '2026-08-28', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '500', rate: '40', reference: 'api-141-jw' };
 
   const checked = await request('POST', '/api/challans/preview', jobWork, owner);
   assert.equal(checked.status, 200);
@@ -1081,7 +1085,9 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   const printed = await request('POST', '/api/challans/print', { challan: issued.body.challan.id }, owner);
   assert.equal(printed.status, 200);
   assert.match(printed.body.html, /Delivery Challan/);
-  assert.match(printed.body.html, /Plot 14, Hosur Road/, 'the typed address, as it was on the day');
+  // Issue #181 — the consignee is the customer that was chosen, with their own saved address.
+  assert.match(printed.body.html, /ABC Traders/);
+  assert.match(printed.body.html, /No. 3, Avenue Road/, 'the consignee’s own address, as it stood on the day');
   for (const marking of ['ORIGINAL FOR CONSIGNEE', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR CONSIGNER']) assert.match(printed.body.html, new RegExp(marking));
 
   // Job work into another state needs an e-way bill at any value; the challan is the document on it.
@@ -1102,7 +1108,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   const saleChallan = await request('POST', '/api/challans/issue', sale, owner);
   assert.equal(saleChallan.body.challan.number, 'DC/26-27/0000002');
   assert.equal(saleChallan.body.challan.showsTax, true);
-  assert.equal(saleChallan.body.challan.tax, 180, '18% on ₹1,000 of soap');
+  assert.equal(saleChallan.body.challan.tax, 50, '5% on ₹1,000 of soap, the rate this business declares');
   const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'api-141-bill' }, owner);
   assert.equal(bill.status, 200, JSON.stringify(bill.body));
   const linked = await request('POST', '/api/challans/link-invoice', { challan: saleChallan.body.challan.id, invoice: bill.body.invoice.id }, owner);
@@ -1119,14 +1125,14 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
 
 test('#142 — a quotation becomes a sale without retyping, and a proforma is linked to the bill that followed it', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const quote = { kind: 'QUOTATION', date: '2026-08-28', validUntil: '2026-09-30', quantity: '100', rate: '25', buyerAddress: 'Plot 14, Hosur Road\nBengaluru 560068', terms: 'Prices ex-godown.', reference: 'api-142-q' };
+  const quote = { kind: 'QUOTATION', date: '2026-08-28', validUntil: '2026-09-30', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', terms: 'Prices ex-godown.', reference: 'api-142-q' };
 
   const checked = await request('POST', '/api/presale/preview', quote, owner);
   assert.equal(checked.status, 200, JSON.stringify(checked.body));
   assert.equal(checked.body.state, 'preview');
   assert.equal(checked.body.value, 2500);
-  assert.equal(checked.body.tax, 450, '18% on ₹2,500 of soap, worked out as on the bill');
-  assert.equal(checked.body.total, 2950);
+  assert.equal(checked.body.tax, 125, '5% on ₹2,500 of soap, worked out as on the bill');
+  assert.equal(checked.body.total, 2625);
 
   const issued = await request('POST', '/api/presale/issue', quote, owner);
   assert.equal(issued.status, 200, JSON.stringify(issued.body));
@@ -1134,7 +1140,7 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   const printed = await request('POST', '/api/presale/print', { document: issued.body.document.id }, owner);
   assert.equal(printed.status, 200);
   assert.match(printed.body.html, /<h1>Quotation<\/h1><div class="not-invoice">Not a tax invoice/);
-  assert.match(printed.body.html, /Plot 14, Hosur Road/, 'the typed address, as it was on the day');
+  assert.match(printed.body.html, /No. 3, Avenue Road/, 'the buyer’s own address, as it stood on the day');
   assert.match(printed.body.html, /Prices ex-godown\./);
   assert.doesNotMatch(printed.body.html, /Bank Details/, 'a price offer asks for no money');
 
@@ -1143,12 +1149,12 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.equal(converted.status, 200, JSON.stringify(converted.body));
   assert.equal(converted.body.state, 'preview');
   assert.equal(converted.body.title, 'Bill ready from QTN/26-27/00001');
-  assert.equal(converted.body.amount, 2950);
+  assert.equal(converted.body.amount, 2625);
   assert.equal(converted.body.quotation.state, 'CONVERTED');
   const sold = await request('POST', '/api/presale/issue-sale', { token: converted.body.token }, owner);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   assert.match(sold.body.invoice.number, /^INV\//);
-  assert.equal(sold.body.invoice.amount, 2950, 'the bill charges what was quoted');
+  assert.equal(sold.body.invoice.amount, 2625, 'the bill charges what was quoted');
 
   // A proforma must say what it is for, and carries the bank details.
   const proforma = { ...quote, kind: 'PROFORMA', validUntil: '', terms: '', reference: 'api-142-p', bankDetails: 'State Bank of India, A/c 30001234567\nIFSC SBIN0001234', paymentTerms: '100% advance' };
@@ -1185,7 +1191,7 @@ test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper i
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const sale = {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30',
-    reference: 'api-132-sale', customerAddress: 'Shop 8, Commercial Street\nBengaluru 560001',
+    reference: 'api-132-sale',
   };
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
@@ -1197,7 +1203,9 @@ test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper i
   assert.match(printed.body.html, /^<!doctype html>/);
   assert.match(printed.body.html, /Tax Invoice/);
   assert.match(printed.body.html, new RegExp(recorded.body.invoice.number.replace(/\//g, '\\/')));
-  assert.match(printed.body.html, /Shop 8, Commercial Street/, 'the address as it was typed on the day');
+  // Issue #181 — the buyer is the customer the bill was made out to, with their saved address.
+  assert.match(printed.body.html, /ABC Traders/);
+  assert.match(printed.body.html, /No. 3, Avenue Road/, 'the customer’s own address, as it stood on the day');
   assert.match(printed.body.html, /Sampoorna Traders/);
   // The paper is in the page itself, so the browser's print dialogue offers the right size.
   assert.match(printed.body.html, /@page \{ size: A4/);

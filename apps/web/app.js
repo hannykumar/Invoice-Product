@@ -6,7 +6,7 @@ const copy = {
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
     recentActivity: "Recent activity", recentBody: "The latest work in this demo company", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
-    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", boxes: "boxes", rate: "Rate per box", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
+    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", supplierState: "Where the supplier is", stateOther: "Another state", stateSame: "Same state as your godown", supplierStateHelp: "This decides whether the bill carries IGST, or CGST and SGST.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "If you choose later, the payment remains clearly marked as not matched to a bill.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     returnsTitle: "Record a return", returnsHelp: "Choose the original bill and what came back. The original stays unchanged; a linked credit or debit note records the correction.", originalBill: "Original customer or supplier bill", returnItem: "Item being returned", returnQuantity: "Quantity returned", disposition: "What happens to the goods", dispAccepted: "Accepted back into usable stock", dispDamaged: "Move to damaged stock", dispScrapped: "Scrap after receiving", dispReplacement: "Replacement is being arranged", returnDate: "Return date", returnReference: "Return reference", returnReason: "Why is it being returned?", returnReasonHelp: "This explanation stays in the audit trail.", returnRemaining: "Choose a bill to see the quantity still eligible.", returnEligible: "{quantity} {unit} still eligible on the original bill.", returnLineChoice: "{item} · {quantity} {unit} left", customerSale: "Customer sale", supplierPurchase: "Supplier purchase", returnCheckQuantity: "Returned quantity cannot exceed the original eligible quantity", returnCheckBooks: "Stock, GST and the customer or supplier balance change together", returnCheckCompliance: "Registered documents are marked for a compliance adjustment", returnSafety: "Checking changes nothing. Recording creates a linked note; it never edits or hides the original bill.", checkReturn: "Review return", noReturnDocuments: "No issued bills are available for return yet.", returnActivity: "Linked return note posted without changing the original", customerReturnChecked: "Customer return checked", supplierReturnChecked: "Supplier return checked", returnCheckedBody: "The checked return comes to {amount}.", returnCustomerEffect: "A credit note will reduce what the customer owes.", returnSupplierEffect: "A debit note will reduce what you owe the supplier.", returnSalesStockEffect: "Accepted goods will go back into stock.", returnPurchaseStockEffect: "Returned goods will leave stock.", returnComplianceEffect: "The registered document needs a compliance adjustment.", returnNoComplianceEffect: "No government-document adjustment is needed.", returnRecorded: "Return recorded", returnAlreadyRecorded: "Return already recorded once", returnRecordedBody: "Linked note {number} was recorded without changing the original bill.",
@@ -58,7 +58,22 @@ const copy = {
     signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Your session chooses the company and the work you are allowed to do.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Synthetic local credentials are filled in for this development workspace.",
     salesFromModule: "Issued from the sales module", openSalesInvoices: "From open sales invoices", postedSupplierBills: "From posted supplier bills", calculatedLive: "Calculated from live company state", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Reading the inventory module", loadingSupplier: "Loading supplier balance…", readingReceivables: "Reading the receivables module",
     // Issue #132 — the bill itself: shown after a sale is recorded, and printed from the browser.
-    saleCustomerAddress: "Customer's address", saleAddressHelp: "One line per row. It prints on the bill exactly as typed.",
+    // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
+    saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item",
+    noCustomersYet: "No customers saved yet", noItemsYet: "No items saved yet", cancel: "Cancel",
+    addCustomerTitle: "Add a customer", addCustomerHelp: "The bill will carry this name, address and GST number, so they have to be right.",
+    customerLegalName: "Name the customer is billed under", customerRegistration: "Registered for GST?", customerRegular: "Yes, regular", customerComposition: "Yes, composition", customerUnregistered: "Not registered",
+    customerGstin: "GST number", customerGstinHelp: "We check the last character against the rest, so a mistyped digit is caught here and not by their accountant.",
+    customerAddress1: "Address line 1", customerAddress2: "Address line 2 (optional)", customerCity: "Town or city", customerPincode: "PIN code", customerState: "Which state?",
+    customerStateHelp: "For a registered customer the state comes from the first two digits of their GST number, and cannot be changed.",
+    customerPhone: "Phone (optional)", saveCustomer: "Save customer",
+    addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
+    itemName: "What it is called on the bill", itemKind: "Goods or a service?", itemGoods: "Goods", itemService: "A service",
+    itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits. A service carries a 6-digit SAC starting 99.",
+    itemUnit: "How is it counted?", itemTax: "The GST you charge on it", itemTaxHelp: "This is the rate your business charges. We record it as yours and the bill says so; we never pick one for you.",
+    itemExempt: "Exempt or nil-rated", itemOtherRateChoice: "Another rate", itemOtherRate: "What rate, in per cent?",
+    itemBasis: "Where does the rate come from?", itemBasisHelp: "For example: our accountant, or the rate printed on our supplier's bills.", saveItem: "Save item",
+    challanConsignee: "Who the goods are going to", challanConsigneeHelp: "The challan prints their saved name, address and GST number.",
     billTitle: "The bill", billReady: "This is the bill your customer gets. Print it, or save it as PDF from the print box.",
     billNoAddress: "No customer address was typed, so the bill prints without one. A GST-registered customer's bill should carry their address.",
     billPaper: "Paper", billPaperA4: "A4 sheet", billPaperThermal: "Till roll, 80mm", billPaperMobile: "Phone screen", printBill: "Print the bill",
@@ -178,7 +193,6 @@ const copy = {
     presaleProformaRule: "An advance bill, to collect payment before the goods go. It says \u201cNot a tax invoice\u201d and carries your bank details. The tax invoice you raise later is linked back to it.",
     presaleDate: "Date", presaleValidUntil: "Valid until (optional)", presaleValidHelp: "How long your price holds. Leave it empty if you do not want to promise a date.",
     presaleRate: "Rate per unit", presaleRateHelp: "Before GST. The GST is worked out the same way as on your bill.",
-    presaleBuyerAddress: "Customer's address", presaleAddressHelp: "One line per row. It prints exactly as typed.",
     presalePurpose: "What is this proforma for?", presalePurposeHelp: "Kept with the proforma, not printed. It is how the bill raised later is matched to it.",
     presaleBuyerOrder: "Customer's order number (optional)", presalePaymentTerms: "How should they pay? (optional)",
     presaleBank: "Your bank details (optional)", presaleBankHelp: "Printed on the proforma so the customer knows where to pay. One line per row.",
@@ -193,8 +207,7 @@ const copy = {
     // Issue #141 — delivery challans.
     navChallan: "Delivery challan",
     challanTitle: "Send goods on a delivery challan", challanHelp: "A delivery challan is the paper that travels with goods when no tax invoice goes with them — job work, goods sent on approval, or a sale that is billed after delivery. GST allows it only for the reasons listed here, and says what it must show.",
-    challanWhy: "Why are the goods moving?", challanDocDate: "Challan date", challanItem: "Goods", challanItemSoap: "Herbal Bath Soap 100g, counted in pieces", challanValuePerUnit: "Value of one unit",
-    challanConsigneeAddress: "Consignee's address", challanAddressHelp: "One line per row. It prints on the challan exactly as typed, because the goods travel with it.",
+    challanWhy: "Why are the goods moving?", challanDocDate: "Challan date", challanItem: "Goods", challanValuePerUnit: "Value of one unit",
     challanReasonNote: "Say why, in a few words", challanStateHelp: "Leave it on the consignee's own state unless the goods are delivered somewhere else.",
     checkChallan: "Check this challan", challanSafety: "Checking saves nothing and uses no number. The number is given only when you issue it.",
     issueChallan: "Issue the challan", challansIssued: "Challans issued", challansIssuedHelp: "Newest first. Open one to print it, add its e-way bill, link the invoice that followed, or cancel it.",
@@ -283,7 +296,7 @@ const copy = {
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
     recentActivity: "Abhi ka kaam", recentBody: "Demo company mein hua naya kaam", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
-    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", boxes: "boxes", rate: "Har box ka daam", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
+    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", supplierState: "Supplier kahan hai", stateOther: "Doosre rajya mein", stateSame: "Aapke godown wale rajya mein", supplierStateHelp: "Isse tay hota hai ki bill par IGST lagega ya CGST aur SGST.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Baad mein chunne par payment saaf taur par bina bill ke dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     returnsTitle: "Wapsi darj karen", returnsHelp: "Asli bill aur wapas aaya saman chunen. Asli bill nahi badlega; juda hua credit ya debit note sudhar darj karega.", originalBill: "Asli customer ya supplier bill", returnItem: "Wapas ho raha saman", returnQuantity: "Wapas matra", disposition: "Saman ka kya hoga", dispAccepted: "Sahi stock mein wapas rakhen", dispDamaged: "Kharab stock mein rakhen", dispScrapped: "Wapas lekar scrap karen", dispReplacement: "Badla hua saman aayega", returnDate: "Wapsi ki tareekh", returnReference: "Wapsi reference", returnReason: "Wapas kyon ho raha hai?", returnReasonHelp: "Yeh wajah audit record mein rahegi.", returnRemaining: "Bachi hui eligible matra dekhne ke liye bill chunen.", returnEligible: "Asli bill par abhi {quantity} {unit} wapas ho sakta hai.", returnLineChoice: "{item} · {quantity} {unit} bacha", customerSale: "Customer ki bikri", supplierPurchase: "Supplier ki kharid", returnCheckQuantity: "Wapas matra asli eligible matra se zyada nahi ho sakti", returnCheckBooks: "Stock, GST aur customer ya supplier balance ek saath badlenge", returnCheckCompliance: "Registered document ko compliance adjustment ke liye mark kiya jayega", returnSafety: "Jaanchne se kuch nahi badalta. Darj karne par juda hua note banta hai; asli bill kabhi badalta ya chhupta nahi.", checkReturn: "Wapsi dekhen", noReturnDocuments: "Wapsi ke liye abhi koi jaari bill nahi hai.", returnActivity: "Asli bill badle bina juda hua return note darj hua", customerReturnChecked: "Customer wapsi jaanch li", supplierReturnChecked: "Supplier wapsi jaanch li", returnCheckedBody: "Jaanchi hui wapsi {amount} ki hai.", returnCustomerEffect: "Credit note customer se lene wali rakam ghataega.", returnSupplierEffect: "Debit note supplier ko dene wali rakam ghataega.", returnSalesStockEffect: "Sahi saman stock mein wapas jayega.", returnPurchaseStockEffect: "Wapas saman stock se bahar jayega.", returnComplianceEffect: "Registered document ke liye compliance adjustment karna hoga.", returnNoComplianceEffect: "Kisi government-document adjustment ki zaroorat nahi hai.", returnRecorded: "Wapsi darj hui", returnAlreadyRecorded: "Wapsi pehle hi ek baar darj hai", returnRecordedBody: "Asli bill badle bina juda note {number} darj hua.",
@@ -334,7 +347,21 @@ const copy = {
     reportsLoading: "Live company se report aa rahi hai…",
     signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Aapka session company aur aapke kaam ki permission chunta hai.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Is development workspace ke synthetic local credentials pehle se bhare hain.",
     salesFromModule: "Sales module se jaari", openSalesInvoices: "Khule sales invoices se", postedSupplierBills: "Darj supplier bills se", calculatedLive: "Live company state se hisaab", loadingActivity: "Darj kaam load ho raha hai…", loadingStock: "Stock load ho raha hai…", readingInventory: "Inventory module padh rahe hain", loadingSupplier: "Supplier balance load ho raha hai…", readingReceivables: "Receivables module padh rahe hain",
-    saleCustomerAddress: "Customer ka pata", saleAddressHelp: "Har line alag rakhein. Bill par bilkul waise hi chhapta hai.",
+    saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
+    noCustomersYet: "Abhi koi customer save nahin hai", noItemsYet: "Abhi koi saman save nahin hai", cancel: "Rehne den",
+    addCustomerTitle: "Customer joden", addCustomerHelp: "Bill par yahi naam, pata aur GST number chhapega, isliye sahi hona chahiye.",
+    customerLegalName: "Customer ka bill wala naam", customerRegistration: "GST mein registered hain?", customerRegular: "Haan, regular", customerComposition: "Haan, composition", customerUnregistered: "Registered nahin",
+    customerGstin: "GST number", customerGstinHelp: "Aakhri akshar ko baaki number se milakar dekhte hain, taaki galat digit yahin pakdi jaye.",
+    customerAddress1: "Pate ki pehli line", customerAddress2: "Pate ki doosri line (marzi se)", customerCity: "Shehar ya kasba", customerPincode: "PIN code", customerState: "Kaunsa rajya?",
+    customerStateHelp: "Registered customer ka rajya unke GST number ke pehle do ank se aata hai, aur badla nahin ja sakta.",
+    customerPhone: "Phone (marzi se)", saveCustomer: "Customer save karen",
+    addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
+    itemName: "Bill par iska naam", itemKind: "Maal hai ya seva?", itemGoods: "Maal", itemService: "Seva",
+    itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai. Seva ka SAC 6 ank ka, 99 se shuru.",
+    itemUnit: "Kaise gina jata hai?", itemTax: "Aap ispar kitna GST lete hain", itemTaxHelp: "Yeh aapke vyapar ka rate hai. Hum ise aapka rate likhte hain aur bill par bhi yahi likha jata hai; hum khud koi rate nahin chunte.",
+    itemExempt: "Chhoot ya shunya rate", itemOtherRateChoice: "Koi aur rate", itemOtherRate: "Kitne pratishat?",
+    itemBasis: "Yeh rate kahan se aaya?", itemBasisHelp: "Jaise: hamare accountant se, ya supplier ke bill par chhape rate se.", saveItem: "Saman save karen",
+    challanConsignee: "Maal kiske paas ja raha hai", challanConsigneeHelp: "Challan par unka save kiya naam, pata aur GST number chhapta hai.",
     billTitle: "Bill", billReady: "Yehi bill aapke customer ko milega. Print karein, ya print box se PDF save karein.",
     billNoAddress: "Customer ka pata nahin likha gaya, isliye bill bina pate ke chhapega. GST wale customer ke bill par uska pata hona chahiye.",
     billPaper: "Kagaz", billPaperA4: "A4 panna", billPaperThermal: "Chhoti parchi, 80mm", billPaperMobile: "Phone ki screen", printBill: "Bill print karein",
@@ -454,7 +481,6 @@ const copy = {
     presaleProformaRule: "Advance ka bill, maal jaane se pehle payment lene ke liye. Is par \u201cYeh tax invoice nahin hai\u201d likha hota hai aur aapke bank ki jaankari hoti hai. Baad wala tax invoice iske saath joda jata hai.",
     presaleDate: "Taarikh", presaleValidUntil: "Kab tak valid (zaroori nahin)", presaleValidHelp: "Aapka rate kab tak rahega. Taarikh ka vaada nahin karna ho to khali chhod den.",
     presaleRate: "Ek unit ka rate", presaleRateHelp: "GST se pehle. GST bill ki tarah hi lagaya jata hai.",
-    presaleBuyerAddress: "Customer ka pata", presaleAddressHelp: "Har line alag likhein. Bilkul yahi chhapega.",
     presalePurpose: "Yeh proforma kis liye hai?", presalePurposeHelp: "Proforma ke saath rakha jata hai, chhapta nahin. Isi se baad wala bill iske saath milaya jata hai.",
     presaleBuyerOrder: "Customer ka order number (zaroori nahin)", presalePaymentTerms: "Payment kaise karein? (zaroori nahin)",
     presaleBank: "Aapke bank ki jaankari (zaroori nahin)", presaleBankHelp: "Proforma par chhapti hai taaki customer ko pata ho ki payment kahan bhejein. Har line alag likhein.",
@@ -469,8 +495,7 @@ const copy = {
     // Issue #141 — delivery challans.
     navChallan: "Delivery challan",
     challanTitle: "Maal delivery challan par bhejein", challanHelp: "Delivery challan woh kagaz hai jo maal ke saath jata hai jab tax invoice saath nahin jata — job work, pasand aane par bikri, ya aisi bikri jiska bill delivery ke baad banta hai. GST ise sirf yahan likhi wajahon ke liye maanta hai, aur batata hai ki us par kya likhna zaroori hai.",
-    challanWhy: "Maal kyon ja raha hai?", challanDocDate: "Challan ki taarikh", challanItem: "Maal", challanItemSoap: "Herbal Bath Soap 100g, piece mein gine", challanValuePerUnit: "Ek unit ki keemat",
-    challanConsigneeAddress: "Maal paane wale ka pata", challanAddressHelp: "Har line alag likhein. Challan par bilkul yahi chhapega, kyonki maal iske saath jata hai.",
+    challanWhy: "Maal kyon ja raha hai?", challanDocDate: "Challan ki taarikh", challanItem: "Maal", challanValuePerUnit: "Ek unit ki keemat",
     challanReasonNote: "Kuch shabdon mein wajah likhein", challanStateHelp: "Agar maal paane wale ke apne rajya mein hi ja raha hai to ise waise hi rehne den.",
     checkChallan: "Challan jaanchen", challanSafety: "Jaanchne se kuch save nahin hota aur koi number nahin lagta. Number sirf challan banane par milta hai.",
     issueChallan: "Challan banayen", challansIssued: "Bane hue challan", challansIssuedHelp: "Naye pehle. Kholkar print karein, e-way bill joden, baad wala invoice joden, ya radd karein.",
@@ -1281,9 +1306,12 @@ function setFormBusy(form, busy) {
 
 function updateCalculations() {
   const sale = document.querySelector('[data-draft="sale"]');
-  const quantity = Number(sale.elements.namedItem("quantity").value) || 0;
-  const rate = Number(sale.elements.namedItem("rate").value) || 0;
-  const subtotal = quantity * rate;
+  // Every line on the bill, not only the first one.
+  const subtotal = [...sale.querySelectorAll(".sale-line")].reduce((total, line) => {
+    const quantity = Number(line.querySelector("[data-line-field=quantity]")?.value) || 0;
+    const rate = Number(line.querySelector("[data-line-field=rate]")?.value) || 0;
+    return total + quantity * rate;
+  }, 0);
   sale.querySelector('[data-calculated="subtotal"]').textContent = money(subtotal);
   sale.querySelector('[data-calculated="tax"]').textContent = "—";
   sale.querySelector('[data-calculated="total"]').textContent = "—";
@@ -1302,6 +1330,9 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     event.preventDefault();
     saveDraft(form);
     const input = draftData(form);
+    // Issue #181 — the lines as they are on the screen go with the request, so what was typed is
+    // what is priced, what is stored and what prints.
+    if (form.dataset.draft === "sale") input.lines = JSON.stringify(saleLineValues());
     state.pendingForm = form;
     state.pendingInput = input;
     state.pendingReturnInput = null;
@@ -2245,6 +2276,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     storage?.setItem("karobar.session", state.sessionId);
     document.querySelector("#login-dialog").close("signed-in");
     await loadDashboard();
+    loadCatalogue();
     loadSupplierChoices();
     loadIssuedInvoices();
     loadReturnDocuments();
@@ -4499,3 +4531,258 @@ submitStep("#itc-typed-form", async (form) => {
     document.querySelector("#itc-typed-result").textContent = error.message;
   }
 });
+
+// ------------------------------------------------- issue #181: the customers and items we keep
+//
+// The Sale screen used to take a customer and an item as typed words, and then print one fixed
+// demo customer and one fixed demo product on the bill — a bill of a different sale from the one
+// that was made. Every customer and every item is now a record: the pickers below are filled from
+// the business's own two lists, and a sale carries the customer and the goods that were chosen,
+// on as many lines as it takes.
+
+const catalogue = { customers: [], items: [], units: [], rates: [], states: [] };
+
+const itemById = (id) => catalogue.items.find((item) => item.id === id) ?? null;
+
+/** Fills every customer and item picker on every screen, keeping what was already chosen. */
+function renderPickers() {
+  document.querySelectorAll("[data-customer-picker]").forEach((select) => {
+    const chosen = select.value;
+    select.replaceChildren();
+    if (catalogue.customers.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = copy[state.locale].noCustomersYet;
+      select.append(empty);
+    }
+    catalogue.customers.forEach((customer) => {
+      const option = document.createElement("option");
+      option.value = customer.id;
+      option.textContent = customer.gstin === null
+        ? `${customer.name} · ${customer.stateName ?? ""}`
+        : `${customer.name} · ${customer.gstin}`;
+      select.append(option);
+    });
+    const add = document.createElement("option");
+    add.value = "__add__";
+    add.textContent = copy[state.locale].addCustomer;
+    select.append(add);
+    if (chosen !== "" && select.querySelector(`option[value="${CSS.escape(chosen)}"]`)) select.value = chosen;
+  });
+
+  document.querySelectorAll("[data-item-picker]").forEach((select) => {
+    const chosen = select.value;
+    select.replaceChildren();
+    if (catalogue.items.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = copy[state.locale].noItemsYet;
+      select.append(empty);
+    }
+    catalogue.items.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = `${item.name} · ${item.hsnSac} · ${item.unit}`;
+      select.append(option);
+    });
+    const add = document.createElement("option");
+    add.value = "__add__";
+    add.textContent = copy[state.locale].addItem;
+    select.append(add);
+    if (chosen !== "" && select.querySelector(`option[value="${CSS.escape(chosen)}"]`)) select.value = chosen;
+  });
+
+  showChosenCustomer();
+  document.querySelectorAll("#sale-lines .sale-line").forEach(showLineUnit);
+}
+
+/** The address a bill to this customer will carry, shown before it is issued rather than after. */
+function showChosenCustomer() {
+  const detail = document.querySelector("#sale-customer-detail");
+  const picker = document.querySelector('[data-draft="sale"] [data-customer-picker]');
+  if (!detail || !picker) return;
+  const customer = catalogue.customers.find((row) => row.id === picker.value) ?? null;
+  detail.textContent = customer === null
+    ? ""
+    : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin === null ? ` · ${copy[state.locale].customerUnregistered}` : ` · ${customer.gstin}`}`;
+}
+
+/** The unit beside a quantity is the chosen item's own unit, never a hard-coded word. */
+function showLineUnit(line) {
+  const item = itemById(line.querySelector("[data-line-field=item]")?.value ?? "");
+  const unit = line.querySelector("[data-line-unit]");
+  if (unit) unit.textContent = item === null ? "—" : item.unit;
+}
+
+function addSaleLine() {
+  const template = document.querySelector("#sale-line-template");
+  const lines = document.querySelector("#sale-lines");
+  if (!template || !lines) return null;
+  const line = template.content.firstElementChild.cloneNode(true);
+  lines.append(line);
+  translate();
+  renderPickers();
+  updateCalculations();
+  return line;
+}
+
+/** What the person typed, line by line: the same lines that are priced, stored and printed. */
+function saleLineValues() {
+  return [...document.querySelectorAll("#sale-lines .sale-line")].map((line) => ({
+    itemId: line.querySelector("[data-line-field=item]")?.value ?? "",
+    quantity: line.querySelector("[data-line-field=quantity]")?.value ?? "",
+    unit: itemById(line.querySelector("[data-line-field=item]")?.value ?? "")?.unit ?? "",
+    rate: line.querySelector("[data-line-field=rate]")?.value ?? "",
+  }));
+}
+
+async function loadCatalogue() {
+  try {
+    const read = await api("/api/catalogue");
+    catalogue.customers = read.customers;
+    catalogue.items = read.items;
+    catalogue.units = read.units;
+    catalogue.rates = read.rates;
+    catalogue.states = read.states;
+  } catch { return; }
+  const states = document.querySelector("#customer-states");
+  if (states) {
+    states.replaceChildren(...catalogue.states.map((row) => {
+      const option = document.createElement("option");
+      option.value = row.code;
+      option.textContent = `${row.name} (${row.code})`;
+      return option;
+    }));
+  }
+  const units = document.querySelector("#item-units");
+  if (units) {
+    units.replaceChildren(...catalogue.units.map((unit) => {
+      const option = document.createElement("option");
+      option.value = unit.code;
+      option.textContent = `${unit.name} (${unit.code})`;
+      return option;
+    }));
+  }
+  const taxes = document.querySelector("#item-tax");
+  if (taxes) {
+    const choices = [
+      ...catalogue.rates.map((rate) => ({ value: String(rate.ratePercentTimes100), label: rate.label })),
+      { value: "exempt", label: copy[state.locale].itemExempt },
+      { value: "other", label: copy[state.locale].itemOtherRateChoice },
+    ];
+    taxes.replaceChildren(...choices.map((choice) => {
+      const option = document.createElement("option");
+      option.value = choice.value;
+      option.textContent = choice.label;
+      return option;
+    }));
+  }
+  if (document.querySelectorAll("#sale-lines .sale-line").length === 0) addSaleLine();
+  renderPickers();
+}
+
+/** "Add new customer" and "Add new item" are choices in the picker itself, where they are needed. */
+let pickerAwaitingNewRecord = null;
+
+document.addEventListener("change", (event) => {
+  const select = event.target;
+  if (!(select instanceof HTMLSelectElement)) return;
+  if (select.matches("[data-customer-picker]") && select.value === "__add__") {
+    pickerAwaitingNewRecord = select;
+    select.value = catalogue.customers[0]?.id ?? "";
+    showCustomerRegistrationFields();
+    document.querySelector("#customer-dialog")?.showModal();
+    return;
+  }
+  if (select.matches("[data-item-picker]") && select.value === "__add__") {
+    pickerAwaitingNewRecord = select;
+    select.value = catalogue.items[0]?.id ?? "";
+    document.querySelector("#item-other-rate").hidden = document.querySelector("#item-tax")?.value !== "other";
+    document.querySelector("#item-dialog")?.showModal();
+    return;
+  }
+  if (select.matches("[data-customer-picker]")) showChosenCustomer();
+  if (select.matches("[data-line-field=item]")) showLineUnit(select.closest(".sale-line"));
+});
+
+document.querySelector("#sale-add-line")?.addEventListener("click", () => addSaleLine());
+document.querySelector("#sale-lines")?.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-remove-line]")) return;
+  // One line is the least a bill can carry, so the last one stays.
+  if (document.querySelectorAll("#sale-lines .sale-line").length <= 1) return;
+  event.target.closest(".sale-line").remove();
+  updateCalculations();
+});
+
+document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+  button.addEventListener("click", () => button.closest("dialog")?.close());
+});
+
+/**
+ * A customer with no GST number has no GST number to ask for, and their state becomes a choice.
+ * For everybody else the state is the first two digits of the GST number, so the form does not
+ * offer a second answer that could disagree with it.
+ */
+function showCustomerRegistrationFields() {
+  const unregistered = document.querySelector('#customer-form [name="registration"]')?.value === "unregistered";
+  document.querySelector("#customer-gstin-field").hidden = unregistered;
+  document.querySelector("#customer-state-field").hidden = !unregistered;
+}
+document.querySelector('#customer-form [name="registration"]')?.addEventListener("change", showCustomerRegistrationFields);
+
+document.querySelector("#customer-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#customer-error");
+  error.textContent = "";
+  const values = Object.fromEntries(new FormData(form));
+  if (values.registration !== "unregistered") delete values.stateCode;
+  try {
+    const created = await api("/api/customers", { method: "POST", body: JSON.stringify(values) });
+    await loadCatalogue();
+    if (pickerAwaitingNewRecord) {
+      pickerAwaitingNewRecord.value = created.customer.id;
+      showChosenCustomer();
+    }
+    form.reset();
+    document.querySelector("#customer-dialog").close();
+  } catch (requestError) { error.textContent = requestError.message; }
+});
+
+document.querySelector("#item-tax")?.addEventListener("change", (event) => {
+  document.querySelector("#item-other-rate").hidden = event.target.value !== "other";
+});
+
+document.querySelector("#item-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#item-error");
+  error.textContent = "";
+  const values = Object.fromEntries(new FormData(form));
+  const choice = String(values.taxChoice ?? "");
+  const body = {
+    name: values.name,
+    kind: values.kind,
+    hsnSac: values.hsnSac,
+    unit: values.unit,
+    basis: values.basis,
+    ...(choice === "exempt"
+      ? { taxKind: "exempt" }
+      : choice === "other"
+        ? { taxKind: "taxable", ratePercent: values.otherRate }
+        : { taxKind: "taxable", ratePercentTimes100: choice }),
+  };
+  try {
+    const created = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
+    await loadCatalogue();
+    if (pickerAwaitingNewRecord) {
+      pickerAwaitingNewRecord.value = created.item.id;
+      const line = pickerAwaitingNewRecord.closest(".sale-line");
+      if (line) showLineUnit(line);
+    }
+    form.reset();
+    document.querySelector("#item-dialog").close();
+  } catch (requestError) { error.textContent = requestError.message; }
+});
+
+if (state.sessionId) loadCatalogue();

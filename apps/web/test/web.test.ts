@@ -141,7 +141,12 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // box for the paper, and any bill already issued opened again from the recorded activity.
   assert.match(html, /id="sale-bill-panel"/);
   assert.match(html, /id="sale-bill-frame"/);
-  assert.match(html, /name="customerAddress"/);
+  // Issue #181 — the customer is chosen from the business's own list, and the address the bill
+  // carries is the one saved on that customer. The free-text address box is gone.
+  assert.doesNotMatch(html, /name="customerAddress"/);
+  assert.match(html, /<select name="party" data-customer-picker required>/);
+  assert.match(html, /id="sale-lines"/);
+  assert.match(html, /data-line-field="item" data-item-picker/);
   assert.match(script, /\/api\/sales\/print/);
   assert.match(script, /#sale-bill-frame"\)\.contentWindow\?\.print\(\)/);
   assert.match(script, /copy\[state\.locale\]\.openBill/);

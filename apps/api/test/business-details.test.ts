@@ -134,9 +134,10 @@ test('a delivery challan carries the same address as the consigner', async () =>
   const issued = await request('POST', '/api/challans/issue', {
     reason: 'JOB_WORK',
     date: '2026-08-29',
+    customerId: 'ABC Traders',
+    item: 'Herbal Bath Soap 100g',
     quantity: '4',
     rate: '250',
-    consigneeAddress: 'Plot 22, Industrial Estate\nMysuru 570016',
     reference: 'challan-address',
   }, session);
   assert.equal(issued.status, 200, issued.body.message);
