@@ -114,6 +114,27 @@
               </div>
               <div class="sale-lines" id="sale-lines" aria-label="Items on this bill" data-i18n-aria="saleLinesLabel"></div>
               <button type="button" class="secondary-button" id="sale-add-line" data-i18n="addLine"></button>
+              <!-- Issue #182 — where the goods go, who carries them, and what the bill refers back
+                   to. Closed by default, so a counter sale stays as short as it was. -->
+              <details id="sale-delivery">
+                <summary data-i18n="deliveryAndReferences"></summary>
+                <div class="field-grid extra-fields">
+                  <label class="full-field"><span data-i18n="shipToWhere"></span><select name="shipTo" id="sale-ship-to"><option value="same" data-i18n="shipToSame"></option><option value="address" data-i18n="shipToAddress"></option><option value="party" data-i18n="shipToParty"></option></select></label>
+                  <label id="sale-ship-address-field" hidden><span data-i18n="shipToWhichAddress"></span><select name="shipToAddressId" id="sale-ship-address"></select><button type="button" class="text-button" id="sale-add-address" data-i18n="addDeliveryAddress"></button></label>
+                  <label id="sale-ship-party-field" hidden><span data-i18n="shipToWhichParty"></span><select name="shipToPartyId" data-customer-picker></select></label>
+                  <p class="safety-note full-field" id="sale-place-of-supply"><span aria-hidden="true">i</span><span data-i18n="placeOfSupplyPending"></span></p>
+                  <label><span data-i18n="transporterLabel"></span><select name="transporterId" id="sale-transporters"></select><button type="button" class="text-button" id="sale-add-transporter" data-i18n="addTransporter"></button></label>
+                  <label><span data-i18n="vehicleNumberLabel"></span><input name="vehicleNumber" autocapitalize="characters" placeholder="KA01AB1234" /><small data-i18n="vehicleNumberHelp"></small></label>
+                  <label><span data-i18n="lrNumberLabel"></span><input name="lrNumber" /><small data-i18n="lrNumberHelp"></small></label>
+                  <label><span data-i18n="lrDateLabel"></span><input name="lrDate" type="date" data-no-default /></label>
+                  <label><span data-i18n="destinationLabel"></span><input name="destination" /><small data-i18n="destinationHelp"></small></label>
+                  <label><span data-i18n="ewayBillNumberLabel"></span><input name="ewayBillNumber" inputmode="numeric" /><small data-i18n="ewayBillNumberHelp"></small></label>
+                  <label><span data-i18n="buyerOrderLabel"></span><input name="buyerOrderNumber" /></label>
+                  <label><span data-i18n="modeOfPaymentLabel"></span><input name="paymentTerms" /><small data-i18n="modeOfPaymentHelp"></small></label>
+                  <label><span data-i18n="termsOfDeliveryLabel"></span><input name="termsOfDelivery" /></label>
+                  <label><span data-i18n="otherReferencesLabel"></span><input name="otherReferences" /></label>
+                </div>
+              </details>
               <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
             </article>
             <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">—</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
@@ -1240,6 +1261,38 @@
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
           <button class="primary-button" type="submit" data-i18n="saveItem"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="transporter-dialog" aria-labelledby="transporter-dialog-title">
+      <h2 id="transporter-dialog-title" data-i18n="addTransporterTitle"></h2>
+      <p data-i18n="addTransporterHelp"></p>
+      <form id="transporter-form" class="login-form">
+        <label><span data-i18n="transporterName"></span><input name="name" required /></label>
+        <label><span data-i18n="transporterId"></span><input name="transporterId" autocapitalize="characters" required /><small data-i18n="transporterIdHelp"></small></label>
+        <label><span data-i18n="transporterPhone"></span><input name="phone" inputmode="tel" /></label>
+        <p class="login-error" id="transporter-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="saveTransporter"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="address-dialog" aria-labelledby="address-dialog-title">
+      <h2 id="address-dialog-title" data-i18n="addAddressTitle"></h2>
+      <p data-i18n="addAddressHelp"></p>
+      <form id="address-form" class="login-form">
+        <label><span data-i18n="addressLabelName"></span><input name="label" placeholder="Godown" /></label>
+        <label><span data-i18n="customerAddress1"></span><input name="line1" required /></label>
+        <label><span data-i18n="customerAddress2"></span><input name="line2" /></label>
+        <label><span data-i18n="customerCity"></span><input name="city" required /></label>
+        <label><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" required /></label>
+        <label><span data-i18n="customerState"></span><select name="stateCode" id="address-states"></select><small data-i18n="deliveryStateHelp"></small></label>
+        <label><span data-i18n="customerGstin"></span><input name="gstin" autocapitalize="characters" /><small data-i18n="deliveryGstinHelp"></small></label>
+        <p class="login-error" id="address-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="saveAddress"></button>
         </div>
       </form>
     </dialog>
