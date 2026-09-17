@@ -9,6 +9,15 @@ seller block now reads the business's own particulars (issue #180) rather than a
 name, so the "Seller name, address, GSTIN" and "Company's PAN" and "Company's bank details" rows
 below describe what the app prints, not only what the renderer is capable of printing.
 
+Re-checked 2026-09-17 after issue #181, on the app again: a new customer (Delhi Polymers, GSTIN
+`07EEEEE4444E1ZG`, Plot 7 Bawana Industrial Area, New Delhi 110039) and two new items (PP Regrind,
+HSN `39021000`, KGS; HDPE Bags, HSN `39232100`, BAG) were added on the Sale screen, and a two-line
+bill `INV/26-27/000004` was issued to them. The buyer block, the description, the HSN code, the
+quantity and the unit on that bill are the customer and the goods that were chosen: before #181 the
+bill printed one fixed demo customer and one fixed demo product whatever was typed. The rows for
+"Buyer (Bill to)", "Description of goods", "HSN / SAC", "Quantity" and "Place of supply" below
+therefore describe the app's own bill.
+
 `KK` = KK Polyplast invoice 285. `BE` = Blessing Export BE/DL/25-26/0139 (Tally).
 
 ## Present on a real bill and on ours
@@ -21,8 +30,8 @@ below describe what the app prints, not only what the renderer is capable of pri
 | Seller phone / e-mail | yes | e-mail | typed in Business details, printed when entered |
 | Logo, top left | yes | no | |
 | Invoice No., Date | yes | yes | |
-| Place of supply | yes | no | BE carries state codes on the party blocks instead |
-| Buyer (Bill to) with GSTIN and state | yes | yes | |
+| Place of supply | yes | no | BE carries state codes on the party blocks instead; ours is the state of the customer's own billing address (#181), never the seller's |
+| Buyer (Bill to) with GSTIN and state | yes | yes | the customer chosen on the sale, with the name, address and GSTIN saved on their record (#181) |
 | Consignee (Ship to) | yes | yes | **always printed, never "same as above"** |
 | Vehicle number | yes | yes | KK: "Vehicle Number". BE: "Motor Vehicle No." |
 | Transporter name | yes | yes | KK: "Transport Name". BE: "Dispatched through" |
@@ -30,9 +39,9 @@ below describe what the app prints, not only what the renderer is capable of pri
 | e-Way Bill No. | on the e-way bill | yes | |
 | IRN, Ack No., Ack Date, QR | no | yes | BE is a registered e-invoice; ours reserves the space (#136) |
 | Serial number column | yes | yes | |
-| Description of goods | yes | yes | |
-| HSN / SAC | yes | yes | |
-| Quantity | yes | yes | BE prints 3 decimals and the unit: "2,000.000 KGS" |
+| Description of goods | yes | yes | the item chosen on each line, one line or many (#181) |
+| HSN / SAC | yes | yes | the code saved on that item (#181) |
+| Quantity | yes | yes | BE prints 3 decimals and the unit: "2,000.000 KGS"; ours prints the item's own unit (#181) |
 | Rate per unit | yes | yes | KK: "Price/unit". BE: "Rate" + a separate "per" column |
 | Number and kind of packages | no | yes | "80 Bags" |
 | Amount | yes | yes | **see the warning in README.md — the two bills mean different things by it** |
@@ -71,6 +80,9 @@ Nothing outstanding. The seven fields #156 listed all print now:
 - **"Amount" is the taxable value on ours**, following BE and Tally, not KK's tax-inclusive column.
 - **Copy markings.** Neither sample is marked Original/Duplicate/Triplicate — both are single copies
   kept by the business. GST asks for the markings, and Tally prints them, so we do (#137).
+- **The rate on a line is the rate the business declared** for that item's code (option C, #54), and
+  the bill says so. No rate is guessed from an HSN code, and since #181 the app carries no fixture
+  rate table at all: an item nobody has declared a rate for cannot be billed.
 - **Hindi, thermal paper, honest rate notices.** Neither bill has these and neither needs them; they
   are ours to add, after the convention above is matched.
 

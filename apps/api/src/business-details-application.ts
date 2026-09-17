@@ -23,14 +23,6 @@ import { invalid, type CompanyId } from '@invoice/kernel';
 import type { RenderableBank, RenderableParty } from '@invoice/invoice-templates';
 import { validateLogo } from '@invoice/invoice-templates';
 import {
-  AccessControl,
-  AuditLog,
-  PlatformCommandService,
-  type RequestContext,
-} from '../../../packages/platform/src/index.ts';
-import {
-  MASTER_APPROVAL_POLICIES,
-  MasterDataService,
   gstinPan,
   gstinStateCode,
   normaliseIdentifier,
@@ -42,6 +34,7 @@ import {
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
+import { masterData, mastersContext } from './master-data.ts';
 
 /** What one business has told us about itself. Everything but the address may be absent. */
 export interface BusinessDetails {
@@ -86,43 +79,9 @@ const require_ = (result: ValidationResult, code: string, fallback: string): voi
 
 // ------------------------------------------------------------------ the bank account, in masters
 
-/**
- * One `MasterDataService` for the running app, with its own platform command log.
- *
- * It is created lazily and shared, because a service per request would lose every account the
- * moment the request ended. Tenancy is preserved the ordinary way: each write and read carries the
- * signed-in company's own request context, and the store keys every record by company.
- */
-let masterData: { readonly service: MasterDataService; readonly access: AccessControl } | null = null;
-
-const masters = () => {
-  if (masterData === null) {
-    const audit = new AuditLog();
-    masterData = {
-      service: new MasterDataService(new PlatformCommandService(audit, MASTER_APPROVAL_POLICIES), audit),
-      access: new AccessControl(),
-    };
-  }
-  return masterData;
-};
-
-/** A request context for this company's own master data. Granted once, then reused. */
-const mastersContext = (companyId: CompanyId | string): RequestContext => {
-  const { access } = masters();
-  const company = String(companyId);
-  access.grant({
-    companyId: company,
-    userId: `${company}:business-details`,
-    branchIds: new Set([`${company}:main`]),
-    active: true,
-    permissions: new Set(['approval.decide', 'access.review']),
-  });
-  return access.context(company, `${company}:main`, `${company}:business-details`, `${company}:business-details-session`);
-};
-
 const bankAccountOf = (companyId: CompanyId | string, accountId: string | null): BankAccount | null => {
   if (accountId === null) return null;
-  return masters().service.bankAccounts(mastersContext(companyId)).find((account: BankAccount) => account.id === accountId) ?? null;
+  return masterData().bankAccounts(mastersContext(companyId)).find((account: BankAccount) => account.id === accountId) ?? null;
 };
 
 // ---------------------------------------------------------------------------------- reading them
@@ -272,7 +231,7 @@ const saveBankAccount = (
   require_(validateBankAccountNumber(accountNumber), 'BUSINESS_BANK_ACCOUNT', 'A bank account number has 9 to 18 digits.');
   require_(validateIfsc(ifsc), 'BUSINESS_BANK_IFSC', 'An IFSC has 4 bank letters, a 0, then 6 characters, like HDFC0001234.');
 
-  const created = masters().service.createBankAccount(
+  const created = masterData().createBankAccount(
     mastersContext(companyId),
     {
       ownerType: 'company',

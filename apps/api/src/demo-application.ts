@@ -5,7 +5,7 @@
  */
 import { invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
-import { GstCalculator, FIXTURE_RATE_TABLE, InMemoryMasterData } from '@invoice/gst-calc';
+import { GstCalculator, RateTable } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
 import {
@@ -22,6 +22,23 @@ import {
   type TemplateSnapshot,
 } from '@invoice/invoice-templates';
 import { brandingOf, upiIdOf } from './branding-application.ts';
+import { masterData as masterDataService, mastersContext } from './master-data.ts';
+import {
+  billingAddressOf,
+  catalogueTaxReader,
+  customers,
+  createCustomer,
+  createItem,
+  readCatalogue,
+  customerPrint,
+  customerView,
+  declaredRatesOf,
+  itemView,
+  items as catalogueItems,
+  resolveCustomer,
+  resolveItem,
+  seedCatalogue,
+} from './catalogue-application.ts';
 import { dispatchFrom, requireIssuable, sellerPrint } from './business-details-application.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
@@ -38,7 +55,6 @@ import {
 import {
   ReportService,
   duesFrom,
-  namesFrom,
   type Figure,
   type PurchaseDocument,
   type PurchaseReadPort,
@@ -322,15 +338,21 @@ export class DemoApplication {
     const paymentRepository = new InMemoryPaymentRepository();
     const returnNotes = new InMemoryReturnNoteRepository();
     shop.store.join(salesRepository).join(paymentRepository).join(returnNotes);
-    const masters = new InMemoryMasterData();
-    masters.putCompany({ companyId: config.companyId, gstin: config.gstin, stateCode: config.gstin.slice(0, 2), registration: 'REGULAR' });
-    masters.putParty(config.companyId, { partyId: config.customerId, gstin: config.customerGstin, stateCode: config.customerGstin.slice(0, 2), registration: 'REGULAR' });
-    // Soap is a taxed good (#116). It was nil-rated against `0808` (fresh apples) and then taxed
-    // against `3923` (plastic packing articles) — both borrowed codes, so every demo invoice,
-    // challan, quotation and HSN summary printed an HSN a buyer's accountant would reject (#166).
-    // Chapter `3401` is soap's own code and `FIXTURE_RATE_TABLE` now carries its own rate.
-    masters.putItem(config.companyId, { itemId: 'SOAP', name: 'Herbal Bath Soap 100g', kind: 'GOODS', hsnOrSac: '34011190', treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'PCS' });
-    const calculator = new GstCalculator({ masterData: masters, rates: FIXTURE_RATE_TABLE, gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'development' }), mode: 'development' });
+    // Issue #181 — the customers and items this company actually keeps, in `packages/masters`.
+    // The screens add to the same records, so a customer added at the counter is a customer the
+    // bill can be made out to a moment later.
+    seedCatalogue(config.companyId, config.catalogue);
+    const masters = catalogueTaxReader(config);
+    // The rates are the ones this business declared (option C, #54), and nothing else. The fixture
+    // rate table is gone from this app: it described itself as "not a statement of Indian law", and
+    // a bill charged from it charged a rate nobody stands behind.
+    const calculator = new GstCalculator({
+      masterData: masters,
+      rates: new RateTable([]),
+      gstEngine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'production' }),
+      mode: 'production',
+      declaredRates: declaredRatesOf(config.companyId),
+    });
     const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } } });
 
     const purchases = purchaseDocumentLedger(shop.bills, async () => config.supplierName);
@@ -347,8 +369,12 @@ export class DemoApplication {
         const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: money((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - returnedValue(invoice.id, 'SALES_RETURN')), side: 'RECEIVABLE' }));
         return [...purchaseDocuments, ...saleDocuments];
       },
-      async parties(companyId) { return [...new Set([...(await purchases.parties(companyId)), config.customerId])] as readonly PartyId[]; },
-      async nameOf(companyId, partyId) { return partyId === config.customerId ? config.customerName : purchases.nameOf(companyId, partyId); },
+      async parties(companyId) {
+        return [...new Set([...(await purchases.parties(companyId)), ...customers(companyId).map((party) => party.id)])] as unknown as readonly PartyId[];
+      },
+      async nameOf(companyId, partyId) {
+        return customers(companyId).find((party) => party.id === partyId)?.legalName ?? purchases.nameOf(companyId, partyId);
+      },
     };
     const payments = new ReceivablesService({ store: shop.store, ledger: shop.ledger, repository: paymentRepository, documents, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() } });
 
@@ -361,11 +387,18 @@ export class DemoApplication {
       stockMasterData: demoStockMasterData(),
       dues: duesFrom(documents, payments),
       purchases: livePurchaseReadPort(shop),
-      names: namesFrom({
-        parties: { [config.customerId]: config.customerName, [config.supplierId]: config.supplierName },
-        items: { TMT12: 'TMT Steel Bar 12mm', SOAP: 'Herbal Bath Soap 100g' },
-        warehouses: { 'wh-main': config.location },
-      }),
+      // Names are read from master data as they stand, so a customer or an item added today is
+      // named in today's reports rather than showing as an id.
+      names: {
+        party: (companyId, partyId) => partyId === String(config.supplierId)
+          ? config.supplierName
+          : masterDataService().parties(mastersContext(companyId)).find((p) => p.id === partyId)?.legalName,
+        // Purchases keep their own short item ids, so those fall back to the purchase catalogue.
+        item: (companyId, itemId) => catalogueItems(companyId).find((item) => item.id === itemId)?.name
+          ?? DemoApplication.CATALOGUE[itemId]?.description,
+        warehouse: (_companyId, warehouseId) => warehouseId === 'wh-main' ? config.location : undefined,
+        branch: () => undefined,
+      },
       permissions: permissionPortFromActor,
       audit: shop.audit,
       clock: { now: () => new Date() },
@@ -411,8 +444,11 @@ export class DemoApplication {
       async creditLimit() {
         return money(5_000_00n);
       },
-      async nameOf(_companyId, partyId) {
-        return partyId === config.customerId ? config.customerName : config.supplierName;
+      // Issue #181 — whoever this party actually is. Naming the supplier in a customer's credit
+      // sentence told a shopkeeper the wrong business was over their limit.
+      async nameOf(companyId, partyId) {
+        if (partyId === config.supplierId) return config.supplierName;
+        return customers(companyId).find((party) => party.id === partyId)?.legalName ?? String(partyId);
       },
     };
     const stockCost: StockCostPort = {
@@ -631,11 +667,16 @@ export class DemoApplication {
     const outwardSupplies: OutwardSupplyPort = {
       async documentsFor(companyId, period): Promise<readonly OutwardDocument[]> {
         const supplier = { gstin: config.gstin, stateCode: config.gstin.slice(0, 2) };
-        const customer = {
-          name: config.customerName,
-          gstin: config.customerGstin,
-          stateCode: config.customerGstin.slice(0, 2),
-          unregisteredConfirmed: false,
+        // Issue #181 — the customer each bill was made out to. A return that names one customer on
+        // every bill tells the government the wrong buyer claimed the credit.
+        const customerOn = (partyId: string) => {
+          const view = customerView(config.companyId, partyId);
+          return {
+            name: view.name,
+            gstin: view.gstin ?? '',
+            stateCode: view.stateCode ?? config.gstin.slice(0, 2),
+            unregisteredConfirmed: view.gstin === null,
+          };
         };
         const invoices = (await salesRepository.list(companyId, { state: 'FINAL' }))
           .filter((invoice) => taxPeriodOf(invoice.documentDate) === period);
@@ -656,14 +697,14 @@ export class DemoApplication {
               totals: { invoiceValue: invoice.pricing.totals.invoiceValue },
             },
           },
-          customer,
+          customerOn(String(invoice.partyId)),
           supplier,
         ));
         const notes = (await returnNotes.list(companyId))
           .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
-          .map((note) => returnNoteToDocument(note, customer, supplier, {
+          .map((note) => returnNoteToDocument(note, customerOn(String(note.partyId)), supplier, {
             placeOfSupplyStateCode: config.gstin.slice(0, 2),
-            hsnByItem: { SOAP: '3401', TMT12: '7214' },
+            hsnByItem: Object.fromEntries(catalogueItems(companyId).map((item) => [item.id, item.hsnSac])),
           }));
         return [...documents, ...notes];
       },
@@ -1058,10 +1099,36 @@ export class DemoApplication {
     return { state: 'recorded', title: 'Reminders started again', message: `${this.config.customerName} will receive automatic reminders again.` };
   }
 
+  /**
+   * Issue #181 — the customer list and the item list this business bills from.
+   *
+   * Adding a customer does two things at once, because a name without a place in the books cannot
+   * be billed: the master record is written, and the customer's own account is opened in the
+   * ledger. Both or neither.
+   */
+  catalogue(actor: ActorContext) {
+    return readCatalogue(this.companyOf(actor));
+  }
+
+  async addCustomer(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const created = createCustomer(companyId, input);
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, {
+      partyId: created.customer.id,
+      name: created.customer.name,
+      kind: 'CUSTOMER',
+    });
+    return created;
+  }
+
+  addItem(actor: ActorContext, input: Record<string, unknown>) {
+    return createItem(this.companyOf(actor), input, String(actor.userId));
+  }
+
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: this.saleInput(input) });
-    return this.checkSale(actor, draft, String(input.item || 'Herbal Bath Soap 100g'));
+    return this.checkSale(actor, draft);
   }
 
   /**
@@ -1069,19 +1136,21 @@ export class DemoApplication {
    * their credit. Issue #142 — a draft made from a quotation is checked here too, so a converted
    * quotation meets exactly the checks a typed sale does.
    */
-  private async checkSale(actor: ActorContext, draft: SalesInvoice, itemName: string) {
+  private async checkSale(actor: ActorContext, draft: SalesInvoice) {
     if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
 
     // Issue #11: what was last agreed, what the discount is, and whether this customer should be
     // given more credit. The draft is excluded from its own pending value.
     const quote = await this.terms.quote(actor, {
-      partyId: this.config.customerId,
+      // The customer and the goods this bill is actually for, so "last time you charged them" is
+      // about them and about these goods, not about a demo party's soap.
+      partyId: draft.partyId,
       documentDate: draft.documentDate,
       documentId: draft.id,
       lines: draft.lines.map((line) => ({
         lineId: line.lineId,
         itemId: line.itemId,
-        itemName,
+        itemName: draft.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? itemView(this.config.companyId, line.itemId).name,
         unit: line.quantity.unit,
         quantity: String(Number(line.quantity.scaled) / 1_000_000),
         unitPrice: line.unitPrice,
@@ -1134,14 +1203,14 @@ export class DemoApplication {
     requireIssuable(this.config.companyId);
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const preview = await this.previewSale(actor, input);
-    return this.issueCheckedSale(actor, preview.token, usageDate, addressLines(input.customerAddress));
+    return this.issueCheckedSale(actor, preview.token, usageDate);
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, buyerAddress: readonly string[] = []) {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
     requireIssuable(this.config.companyId);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
-    this.freezeBillPrint(final.invoice, buyerAddress);
+    this.freezeBillPrint(final.invoice);
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1162,7 +1231,7 @@ export class DemoApplication {
   async convertQuotation(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const converted = await this.presale.convert(actor, input);
-    const checked = await this.checkSale(actor, converted.invoice, converted.invoice.pricing?.lines[0]?.itemName ?? 'Herbal Bath Soap 100g');
+    const checked = await this.checkSale(actor, converted.invoice);
     return {
       ...checked,
       title: `Bill ready from ${converted.quotation.number}`,
@@ -1178,7 +1247,7 @@ export class DemoApplication {
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const token = String(input.token ?? '');
     if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
-    return this.issueCheckedSale(actor, token, usageDate, addressLines(input.customerAddress));
+    return this.issueCheckedSale(actor, token, usageDate);
   }
 
   /**
@@ -1189,7 +1258,7 @@ export class DemoApplication {
    * parties and the priced lines as they were that day — so a bill reprinted in three years is the
    * page the customer was given, whatever has changed since.
    */
-  private freezeBillPrint(invoice: SalesInvoice, buyerAddress: readonly string[]): void {
+  private freezeBillPrint(invoice: SalesInvoice): void {
     if (this.invoicePrints.has(invoice.id)) return;
     const template = templateById('india-standard');
     if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
@@ -1208,7 +1277,10 @@ export class DemoApplication {
         declaration: us.declaration,
         terms: us.terms,
         signatureDataUri: us.signatureDataUri,
-        buyer: party(this.config.customerGstin.slice(0, 2), this.config.customerName, this.config.customerGstin, buyerAddress),
+        // Issue #181 — the customer this bill was actually made out to, with the address saved on
+        // their own record. Frozen here with everything else, so moving them tomorrow never alters
+        // a bill issued today.
+        buyer: customerPrint(this.config.companyId, invoice.partyId),
         placeOfSupplyStateName: STATE_NAMES[place] ?? place,
         logoDataUri: branding.logoDataUri,
         tradeMark: branding.tradeMark,
@@ -2143,13 +2215,17 @@ export class DemoApplication {
       pincode: '560058',
       stateCode: this.config.gstin.slice(0, 2),
     };
+    // Issue #181 — the buyer this bill names, read from their own record.
+    const buyerView = customerView(this.config.companyId, invoice.partyId);
     const buyer: PartyDetails = {
-      gstin: this.config.customerGstin,
-      legalName: this.config.customerName,
-      address1: 'Customer address on file',
-      location: 'Bengaluru',
-      pincode: '560001',
-      stateCode: this.config.customerGstin.slice(0, 2),
+      // "URP" — unregistered person — is what the portal expects when a buyer has no GST number.
+      gstin: buyerView.gstin ?? 'URP',
+      legalName: buyerView.name,
+      address1: buyerView.line1 ?? '',
+      ...(buyerView.line2 === null ? {} : { address2: buyerView.line2 }),
+      location: buyerView.city ?? '',
+      pincode: buyerView.pincode ?? '',
+      stateCode: buyerView.stateCode ?? '',
     };
 
     const lines: EInvoiceLine[] = pricing.lines.map((line, index) => ({
@@ -2329,7 +2405,7 @@ export class DemoApplication {
     // Issue #141 — a delivery challan travels in place of an invoice (CGST Rule 55(3)). It brings
     // its own reason for moving, so the form's reason is not asked for a second time.
     const challan = await this.challans.forMovement(actor, invoiceId);
-    if (challan !== null) return this.movementOf(challan.document, challan.reason, input);
+    if (challan !== null) return this.movementOf(challan.document, challan.reason, input, challan.partyId);
 
     const invoice = await this.salesRepository.findById(companyId, invoiceId);
     if (invoice === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
@@ -2357,34 +2433,42 @@ export class DemoApplication {
       documentDate: invoice.documentDate,
       lines,
     };
-    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input);
+    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input, String(invoice.partyId));
   }
 
   /** One movement of goods: the document on the lorry, why it is moving, and what the form said. */
-  private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>): Movement {
+  /** One customer, as an e-way bill names a party: their own record, never a stand-in. */
+  private movementParty(partyId: string): MovementParty {
+    const view = customerView(this.config.companyId, partyId);
+    return {
+      legalName: view.name,
+      gstin: view.gstin ?? 'URP',
+      address1: view.line1 ?? '',
+      ...(view.line2 === null ? {} : { address2: view.line2 }),
+      place: view.city ?? '',
+      pincode: view.pincode ?? '',
+      stateCode: view.stateCode ?? '',
+    };
+  }
+
+  private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>, partyId: string): Movement {
     // Issue #180 — where the goods actually leave from, taken from the business's own address. An
     // e-way bill that disagrees with the invoice about the dispatch place is exactly the
     // discrepancy an officer stops a lorry over.
     const consignor: MovementParty = dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
-    const billTo: MovementParty = {
-      legalName: this.config.customerName,
-      gstin: this.config.customerGstin,
-      address1: 'Customer address on file',
-      place: 'Bengaluru',
-      pincode: '560001',
-      stateCode: this.config.customerGstin.slice(0, 2),
-    };
+    // Issue #181 — the customer this document was actually made out to, with their own saved
+    // address. An e-way bill naming a different buyer is a discrepancy against its own invoice.
+    const billTo: MovementParty = this.movementParty(partyId);
 
     // Where the goods really go. Left off entirely when the form did not say, so the rules read the
     // buyer's own address rather than a made-up delivery address.
     const shipToState = String(input.shipToState ?? '').trim();
     const shipToPlace = String(input.shipToPlace ?? '').trim();
     const shipTo: MovementParty | undefined = shipToState === '' ? undefined : {
-      legalName: `${this.config.customerName} — delivery address`,
-      gstin: this.config.customerGstin,
+      ...billTo,
+      legalName: `${billTo.legalName} — delivery address`,
       address1: 'Delivery address given on the movement',
       place: shipToPlace === '' ? 'Delivery address' : shipToPlace,
-      pincode: '500037',
       stateCode: shipToState,
     };
 
@@ -3050,10 +3134,55 @@ export class DemoApplication {
     };
   }
 
+  /**
+   * Issue #181 — the lines somebody actually typed, as records rather than as words.
+   *
+   * A sale carries one line or many. Each line names an item from the business's own item list, in
+   * that item's own unit, and the customer is the customer that was chosen. Nothing here falls back
+   * to a demo party or a demo product: a name that matches no record is refused, because a bill
+   * that names goods the business does not keep is not a bill of this sale.
+   */
+  private saleLines(input: Record<string, unknown>) {
+    const raw = input.lines;
+    const parsed: unknown = typeof raw === 'string' && raw.trim() !== '' ? JSON.parse(raw) : raw;
+    const rows: Record<string, unknown>[] = Array.isArray(parsed) && parsed.length > 0
+      ? parsed as Record<string, unknown>[]
+      : [{ item: input.itemId ?? input.item, quantity: input.quantity, unit: input.unit, rate: input.rate }];
+    return rows.map((row, index) => {
+      const item = resolveItem(this.config.companyId, String(row.itemId ?? row.item ?? ''));
+      const unit = String(row.unit ?? '').trim().toUpperCase() || item.baseUnit;
+      return {
+        lineId: `line-${index + 1}`,
+        itemId: item.id,
+        warehouseId: 'wh-main',
+        quantity: quantityFromString(String(row.quantity ?? ''), unit),
+        unitPrice: money(paise(row.rate)),
+        priceBasis: 'EXCLUSIVE' as const,
+      };
+    });
+  }
+
   private saleInput(input: Record<string, unknown>) {
     const date = isoDate(String(input.date));
     const terms = Number(input.terms ?? 0);
-    return { partyId: this.config.customerId, customerType: 'B2B' as const, supplyKind: 'GOODS' as const, documentDate: date, dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)), deliveryStateCode: this.config.gstin.slice(0, 2), lines: [{ lineId: 'line-1', itemId: 'SOAP', warehouseId: 'wh-main', quantity: quantityFromString(String(input.quantity), 'PCS'), unitPrice: money(paise(input.rate)), priceBasis: 'EXCLUSIVE' as const, note: String(input.item || 'Herbal Bath Soap 100g') }], narration: String(input.notes || '') || null };
+    const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+    // The place of supply is where the customer is, never where we are. Billing our own state to
+    // an out-of-state customer charges CGST and SGST where the law asks for IGST, and the buyer
+    // cannot claim either of them back.
+    const address = billingAddressOf(this.config.companyId, customer.id);
+    if (address === null) {
+      throw invalid('CUSTOMER_ADDRESS_MISSING', `${customer.legalName} has no address saved. A bill must carry the customer's address, so add it before billing them.`);
+    }
+    return {
+      partyId: customer.id as PartyId,
+      customerType: customer.gstRegistrationType === 'unregistered' ? 'B2C' as const : 'B2B' as const,
+      supplyKind: 'GOODS' as const,
+      documentDate: date,
+      dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)),
+      deliveryStateCode: address.stateCode,
+      lines: this.saleLines(input),
+      narration: String(input.notes || '') || null,
+    };
   }
 
   private returnInput(input: Record<string, unknown>) {

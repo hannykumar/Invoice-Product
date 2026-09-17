@@ -7,6 +7,7 @@ import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../.
 import { DemoApplication } from './demo-application.ts';
 import { businessDetailsOf, saveBusinessDetails } from './business-details-application.ts';
 import type { CompanySeed } from './company-shop.ts';
+import type { CatalogueSeed } from './catalogue-application.ts';
 import { createOperations } from '../../../ops/operations/src/index.ts';
 
 export class AuthenticationError extends Error {
@@ -34,12 +35,38 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
     customerId: asId<'Party'>('sampoorna:party:customer'), customerName: 'ABC Traders', customerGstin: '29BBBBB1111B1ZJ',
     supplierId: asId<'Party'>('sampoorna:party:supplier'), supplierName: 'Shree Ram Steels Private Limited',
     supplierGstin: '27AAECS5678D1Z4',
+    catalogue: {
+      customerId: 'sampoorna:party:customer',
+      customerName: 'ABC Traders',
+      customerGstin: '29BBBBB1111B1ZJ',
+      customerAddress1: 'No. 3, Avenue Road',
+      customerCity: 'Bengaluru',
+      customerPincode: '560002',
+      items: [
+      { id: 'sampoorna:item:SOAP', name: 'Herbal Bath Soap 100g', kind: 'goods', hsnSac: '34011190', unit: 'PCS', ratePercentTimes100: 500n, effectiveFrom: '2025-09-22', basis: 'Toilet soap has been 5% since 22 September 2025' },
+      { id: 'sampoorna:item:TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate this business has always charged on steel bar' },
+      { id: 'sampoorna:item:FRT', name: 'Inward freight', kind: 'service', hsnSac: '996511', unit: 'NOS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate our transporter bills us at' },
+      ],
+    } satisfies CatalogueSeed,
   },
   '00000000-0000-4000-8000-000000000011': {
     name: 'Konkan Fresh Foods', location: 'Panaji · Market godown', gstin: '30AAAAA0000A1ZF',
     customerId: asId<'Party'>('konkan:party:customer'), customerName: 'Mapusa Family Stores', customerGstin: '30BBBBB1111B1Z0',
     supplierId: asId<'Party'>('konkan:party:supplier'), supplierName: 'Western Coast Supplies',
     supplierGstin: '30AAFCW7788Q1ZE',
+    catalogue: {
+      customerId: 'konkan:party:customer',
+      customerName: 'Mapusa Family Stores',
+      customerGstin: '30BBBBB1111B1Z0',
+      customerAddress1: 'Shop 12, Municipal Market',
+      customerCity: 'Mapusa',
+      customerPincode: '403507',
+      items: [
+      { id: 'konkan:item:SOAP', name: 'Herbal Bath Soap 100g', kind: 'goods', hsnSac: '34011190', unit: 'PCS', ratePercentTimes100: 500n, effectiveFrom: '2025-09-22', basis: 'Toilet soap has been 5% since 22 September 2025' },
+      { id: 'konkan:item:TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate this business has always charged on steel bar' },
+      { id: 'konkan:item:FRT', name: 'Inward freight', kind: 'service', hsnSac: '996511', unit: 'NOS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate our transporter bills us at' },
+      ],
+    } satisfies CatalogueSeed,
   },
 };
 

@@ -108,14 +108,13 @@
           <form class="transaction-layout draft-form" data-draft="sale">
             <article class="panel form-panel">
               <div class="field-grid">
-                <label><span data-i18n="customer"></span><input name="party" autocomplete="organization" data-i18n-placeholder="saleCustomerPlaceholder" required /></label>
+                <label><span data-i18n="customer"></span><select name="party" data-customer-picker required></select><small id="sale-customer-detail"></small></label>
                 <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
-                <label><span data-i18n="item"></span><input name="item" data-i18n-placeholder="saleItemPlaceholder" required /></label>
-                <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input name="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-i18n="boxes"></span></span></label>
-                <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
                 <label><span data-i18n="paymentTerms"></span><select name="terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
               </div>
-              <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label><label class="full-field"><span data-i18n="saleCustomerAddress"></span><textarea name="customerAddress" rows="3"></textarea><small data-i18n="saleAddressHelp"></small></label></div></details>
+              <div class="sale-lines" id="sale-lines" aria-label="Items on this bill" data-i18n-aria="saleLinesLabel"></div>
+              <button type="button" class="secondary-button" id="sale-add-line" data-i18n="addLine"></button>
+              <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
             </article>
             <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">—</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
@@ -130,6 +129,15 @@
             <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
           </article>
         </section>
+
+        <template id="sale-line-template">
+          <div class="sale-line">
+            <label><span data-i18n="item"></span><select data-line-field="item" data-item-picker required></select></label>
+            <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
+            <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
+            <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
+          </div>
+        </template>
 
         <section class="view" id="view-purchase" aria-labelledby="purchase-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" tabindex="-1" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
@@ -248,10 +256,10 @@
                 <label class="full-field"><span data-i18n="presaleWhich"></span><select name="kind" id="presale-kind"><option value="QUOTATION" data-i18n="presaleQuotation"></option><option value="PROFORMA" data-i18n="presaleProforma"></option></select><small id="presale-kind-rule"></small></label>
                 <label><span data-i18n="presaleDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="presaleValidUntil"></span><input name="validUntil" type="date" data-no-default /><small data-i18n="presaleValidHelp"></small></label>
-                <label><span data-i18n="challanItem"></span><select name="item"><option value="SOAP" data-i18n="challanItemSoap"></option></select></label>
+                <label><span data-i18n="customer"></span><select name="customerId" data-customer-picker required></select></label>
+                <label><span data-i18n="challanItem"></span><select name="item" data-item-picker required></select></label>
                 <label><span data-i18n="quantity"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
                 <label><span data-i18n="presaleRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="25" required /></span><small data-i18n="presaleRateHelp"></small></label>
-                <label class="full-field"><span data-i18n="presaleBuyerAddress"></span><textarea name="buyerAddress" rows="2" placeholder="Plot 14, Hosur Road&#10;Bengaluru 560068"></textarea><small data-i18n="presaleAddressHelp"></small></label>
                 <label class="full-field" data-proforma-only hidden><span data-i18n="presalePurpose"></span><input name="purpose" placeholder="Advance for 500 soap before dispatch" /><small data-i18n="presalePurposeHelp"></small></label>
                 <label data-proforma-only hidden><span data-i18n="presaleBuyerOrder"></span><input name="buyerOrderNumber" placeholder="PO-4471" /></label>
                 <label data-proforma-only hidden><span data-i18n="presalePaymentTerms"></span><input name="paymentTerms" placeholder="100% advance" /></label>
@@ -320,10 +328,10 @@
                 <label class="full-field"><span data-i18n="challanWhy"></span><select name="reason" id="challan-reasons" required></select><small id="challan-reason-rule"></small></label>
                 <label class="full-field" id="challan-note-field" hidden><span data-i18n="challanReasonNote"></span><input name="reasonNote" placeholder="Sent for repair" /></label>
                 <label><span data-i18n="challanDocDate"></span><input name="date" type="date" required /></label>
-                <label><span data-i18n="challanItem"></span><select name="item"><option value="SOAP" data-i18n="challanItemSoap"></option></select></label>
+                <label><span data-i18n="challanConsignee"></span><select name="customerId" data-customer-picker required></select><small data-i18n="challanConsigneeHelp"></small></label>
+                <label><span data-i18n="challanItem"></span><select name="item" data-item-picker required></select></label>
                 <label><span data-i18n="quantity"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
                 <label><span data-i18n="challanValuePerUnit"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="25" required /></span></label>
-                <label class="full-field"><span data-i18n="challanConsigneeAddress"></span><textarea name="consigneeAddress" rows="2" placeholder="Plot 14, Hosur Road&#10;Bengaluru 560068" required></textarea><small data-i18n="challanAddressHelp"></small></label>
                 <label><span data-i18n="deliveryState"></span><select name="deliveryState" id="challan-states"></select><small data-i18n="challanStateHelp"></small></label>
                 <label><span data-i18n="deliveryPlace"></span><input name="deliveryPlace" placeholder="Hosur" /></label>
               </div>
@@ -1194,5 +1202,43 @@
       <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
     <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <dialog id="customer-dialog" aria-labelledby="customer-dialog-title">
+      <h2 id="customer-dialog-title" data-i18n="addCustomerTitle"></h2>
+      <p data-i18n="addCustomerHelp"></p>
+      <form id="customer-form" class="login-form">
+        <label><span data-i18n="customerLegalName"></span><input name="legalName" required /></label>
+        <label><span data-i18n="customerRegistration"></span><select name="registration"><option value="regular" data-i18n="customerRegular"></option><option value="composition" data-i18n="customerComposition"></option><option value="unregistered" data-i18n="customerUnregistered"></option></select></label>
+        <label id="customer-gstin-field"><span data-i18n="customerGstin"></span><input name="gstin" autocapitalize="characters" placeholder="07EEEEE4444E1ZG" /><small data-i18n="customerGstinHelp"></small></label>
+        <label><span data-i18n="customerAddress1"></span><input name="line1" required /></label>
+        <label><span data-i18n="customerAddress2"></span><input name="line2" /></label>
+        <label><span data-i18n="customerCity"></span><input name="city" required /></label>
+        <label><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" required /></label>
+        <label id="customer-state-field"><span data-i18n="customerState"></span><select name="stateCode" id="customer-states"></select><small data-i18n="customerStateHelp"></small></label>
+        <label><span data-i18n="customerPhone"></span><input name="phone" inputmode="tel" /></label>
+        <p class="login-error" id="customer-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="saveCustomer"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="item-dialog" aria-labelledby="item-dialog-title">
+      <h2 id="item-dialog-title" data-i18n="addItemTitle"></h2>
+      <p data-i18n="addItemHelp"></p>
+      <form id="item-form" class="login-form">
+        <label><span data-i18n="itemName"></span><input name="name" required /></label>
+        <label><span data-i18n="itemKind"></span><select name="kind"><option value="goods" data-i18n="itemGoods"></option><option value="service" data-i18n="itemService"></option></select></label>
+        <label><span data-i18n="itemHsn"></span><input name="hsnSac" inputmode="numeric" required /><small data-i18n="itemHsnHelp"></small></label>
+        <label><span data-i18n="itemUnit"></span><select name="unit" id="item-units"></select></label>
+        <label><span data-i18n="itemTax"></span><select name="taxChoice" id="item-tax"></select><small data-i18n="itemTaxHelp"></small></label>
+        <label id="item-other-rate" hidden><span data-i18n="itemOtherRate"></span><input name="otherRate" type="number" min="0" max="100" step="0.01" /></label>
+        <label><span data-i18n="itemBasis"></span><input name="basis" /><small data-i18n="itemBasisHelp"></small></label>
+        <p class="login-error" id="item-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="saveItem"></button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>

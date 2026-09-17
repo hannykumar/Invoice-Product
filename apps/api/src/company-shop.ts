@@ -55,6 +55,7 @@ import {
   mastersVehicleAdapter,
 } from '../../../packages/transport/src/suitability-adapters.ts';
 import type { Vehicle } from '../../../packages/masters/src/types.ts';
+import { items as catalogueItems, type CatalogueSeed } from './catalogue-application.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -66,6 +67,8 @@ export interface CompanySeed {
   readonly customerId: ReturnType<typeof asId<'Party'>>;
   readonly customerName: string;
   readonly customerGstin: string;
+  /** Issue #181 — the customer and items this company opens with, as master-data records. */
+  readonly catalogue: CatalogueSeed;
   readonly supplierId: ReturnType<typeof asId<'Party'>>;
   readonly supplierName: string;
   /** Synthetic throughout — built by `syntheticGstin`, belonging to no real taxpayer. */
@@ -82,12 +85,26 @@ class CompanyMasters implements StockMasterData {
   readonly #units = createDefaultUnitRegistry();
   readonly #warehouse: Warehouse;
 
-  constructor(location: string) {
+  constructor(location: string, itemIds: readonly string[]) {
     this.#warehouse = { warehouseId: 'wh-main', name: location };
-    this.#units.registerConversion({ fromUnit: 'BOX', toUnit: 'PCS', numerator: 24n, denominator: 1n, itemId: 'SOAP' });
+    // One box of this soap is 24 pieces, whichever of its ids a screen names it by.
+    for (const itemId of ['SOAP', ...itemIds.filter((id) => id.endsWith(':item:SOAP'))]) {
+      this.#units.registerConversion({ fromUnit: 'BOX', toUnit: 'PCS', numerator: 24n, denominator: 1n, itemId });
+    }
   }
 
-  item(_companyId: CompanyId, itemId: string): StockItem | undefined { return ITEMS.find((item) => item.itemId === itemId); }
+  /**
+   * Issue #181 — stock is held against the items the business keeps, so an item somebody added is
+   * an item that can be sold, returned and counted. The three short ids below are the purchase
+   * screens' own catalogue, which is separate.
+   */
+  item(companyId: CompanyId, itemId: string): StockItem | undefined {
+    const fromCatalogue = catalogueItems(companyId).find((item) => item.id === itemId);
+    if (fromCatalogue !== undefined) {
+      return { itemId, name: fromCatalogue.name, baseUnit: fromCatalogue.baseUnit, tracksBatches: fromCatalogue.trackBatches, tracksSerials: fromCatalogue.trackSerials };
+    }
+    return ITEMS.find((item) => item.itemId === itemId);
+  }
   warehouse(_companyId: CompanyId, warehouseId: string): Warehouse | undefined { return warehouseId === this.#warehouse.warehouseId ? this.#warehouse : undefined; }
   units(): UnitRegistry { return this.#units; }
 }
@@ -167,7 +184,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   store.join(inventory).join(bills).join(orders).join(receipts).join(approvals);
   const audit = new InMemoryAuditPort();
   const clock = fixedClock('2026-08-29T10:00:00.000Z');
-  const masters = new CompanyMasters(seed.location);
+  const masters = new CompanyMasters(seed.location, seed.catalogue.items.map((item) => item.id));
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock });
   let sequence = 0;
   const inventoryService = new InventoryService({

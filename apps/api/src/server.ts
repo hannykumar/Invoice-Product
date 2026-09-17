@@ -85,6 +85,12 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // Every printed document takes its seller block from here, and nothing is issued without an address.
     if (method === 'GET' && pathname === '/api/business-details') return json(200, readBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId)));
     if (method === 'POST' && pathname === '/api/business-details') return json(200, saveBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId), body));
+    // Issue #181 — the customers and items this business keeps. Every sale, challan and quotation
+    // is made out to a record from these two lists, so the bill names the customer and the goods
+    // that were actually chosen.
+    if (method === 'GET' && pathname === '/api/catalogue') return json(200, app.catalogue(actor));
+    if (method === 'POST' && pathname === '/api/customers') return json(200, await app.addCustomer(actor, body));
+    if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
     // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
     if (method === 'POST' && pathname === '/api/branding/upi') return json(200, saveUpiId(context.companyId, body));
     if (method === 'POST' && pathname === '/api/branding/preview')
