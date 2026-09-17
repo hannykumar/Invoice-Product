@@ -10,7 +10,11 @@ import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
+  copiesFor,
+  copyMarking,
   invoicePdf,
+  invoicePdfCopies,
+  renderInvoiceCopies,
   qrSvg,
   renderInvoice,
   templateById,
@@ -1300,7 +1304,13 @@ export class DemoApplication {
   async invoicePrint(
     actor: ActorContext,
     invoiceId: string,
-    options: { readonly pdf?: boolean; readonly format?: unknown; readonly locale?: unknown } = {},
+    options: {
+      readonly pdf?: boolean;
+      readonly format?: unknown;
+      readonly locale?: unknown;
+      /** Issue #183 — every marked copy in one document, for the business's own printer. */
+      readonly allCopies?: boolean;
+    } = {},
   ) {
     const companyId = this.companyOf(actor);
     const invoice = await this.salesRepository.findById(companyId, invoiceId);
@@ -1321,17 +1331,32 @@ export class DemoApplication {
         qrSvg: qrSvg(acknowledgement.signedQrCode, `IRN ${acknowledgement.irn}`),
       },
     };
-    const rendered = { format, locale };
+    // Issue #183 — CGST Rule 48 prepares a goods invoice in triplicate and a services invoice in
+    // duplicate, each copy marked. The app printed one unmarked page. The customer is always given
+    // the Original; the whole set is for the business's own printer.
+    const copies = copiesFor(document);
+    const allCopies = options.allCopies === true && format === 'A4';
+    const rendered = { format, locale, copy: 'ORIGINAL' as const };
     return {
       state: 'print' as const,
       number: invoice.number ?? '',
       format,
+      copies: copies.length,
+      copyMarkings: copies.map((copy) => copyMarking(document, copy, locale)).filter((marking): marking is string => marking !== null),
       // The bill prints without the customer's address until somebody types one, and the screen
       // says so rather than inventing a line of it.
       hasBuyerAddress: facts.document.buyer.addressLines.length > 0,
       ...(options.pdf === true
-        ? { pdf: await invoicePdf(document, facts.snapshot, rendered) }
-        : { html: renderInvoice(document, facts.snapshot, rendered) }),
+        ? {
+          pdf: allCopies
+            ? await invoicePdfCopies(document, facts.snapshot, { format, locale })
+            : await invoicePdf(document, facts.snapshot, rendered),
+        }
+        : {
+          html: allCopies
+            ? renderInvoiceCopies(document, facts.snapshot, { format, locale })
+            : renderInvoice(document, facts.snapshot, rendered),
+        }),
     };
   }
 

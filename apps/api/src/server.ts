@@ -170,7 +170,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // Issue #132 — the finished bill, on screen and ready for the printer, in the chosen language
     // and on the paper it will be printed on. Issue #133's PDF comes off the same page.
     if (method === 'POST' && pathname === '/api/sales/print') {
-      return json(200, await app.invoicePrint(actor, String(body.invoice ?? ''), { format: body.format, locale: body.locale }));
+      // Issue #183 — `copies: "all"` is the business's own printer taking the whole marked set in
+      // one job. Everything else, and every PDF a customer receives, is the Original alone.
+      return json(200, await app.invoicePrint(actor, String(body.invoice ?? ''), {
+        format: body.format, locale: body.locale, allCopies: body.copies === 'all',
+      }));
     }
     const invoicePdf = /^\/api\/sales\/([^/]+)\/pdf$/.exec(pathname);
     if (method === 'GET' && invoicePdf?.[1]) {

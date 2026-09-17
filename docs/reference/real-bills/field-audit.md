@@ -18,6 +18,12 @@ bill printed one fixed demo customer and one fixed demo product whatever was typ
 "Buyer (Bill to)", "Description of goods", "HSN / SAC", "Quantity" and "Place of supply" below
 therefore describe the app's own bill.
 
+Re-checked 2026-09-17 after issue #183, on the app again, on all three papers. The A4 bill carries
+`ORIGINAL FOR RECIPIENT`, and one press of Print produces three marked sheets. The phone and
+till-roll bills now carry the HSN code under each item, `Reverse Charge: No`, the HSN summary and
+`for <seller> / Authorised Signatory` — all four of which the narrow layouts used to drop, on the
+very layout a shopkeeper billing from a phone is served by default.
+
 `KK` = KK Polyplast invoice 285. `BE` = Blessing Export BE/DL/25-26/0139 (Tally).
 
 ## Present on a real bill and on ours
@@ -47,9 +53,9 @@ therefore describe the app's own bill.
 | Amount | yes | yes | **see the warning in README.md — the two bills mean different things by it** |
 | Amount in words | yes | yes | |
 | Total quantity on the item table's total row | yes | yes | ours totals it where every line shares a unit; bags and metres have no sensible total, so nothing is printed |
-| HSN-wise tax summary with a totals row | yes | yes | KK heads the columns CGST/SGST, BE heads them Central Tax/State Tax |
+| HSN-wise tax summary with a totals row | yes | yes | on narrow paper it is one compact line per code and rate, never dropped (#183); KK heads the columns CGST/SGST, BE heads them Central Tax/State Tax |
 | Sub total / total / received / balance | yes | Total only | |
-| Signature image above "Authorised Signature" | yes | line only | KK's is a scanned signature; ours supports the image (#138) |
+| Signature image above "Authorised Signature" | yes | line only | KK's is a scanned signature; ours supports the image (#138), and the signing line now prints on every paper size including till roll (#183) |
 | "for <company>" above the signature | yes | yes | |
 | Tax amount in words | no | yes | |
 | Company's PAN | no | yes | BE puts it by the declaration, not under the GSTIN; ours is typed in Business details and must match the PAN inside the GSTIN |
@@ -79,7 +85,12 @@ Nothing outstanding. The seven fields #156 listed all print now:
   that fails quantity x rate is the first thing a customer queries.
 - **"Amount" is the taxable value on ours**, following BE and Tally, not KK's tax-inclusive column.
 - **Copy markings.** Neither sample is marked Original/Duplicate/Triplicate — both are single copies
-  kept by the business. GST asks for the markings, and Tally prints them, so we do (#137).
+  kept by the business. GST asks for the markings, and Tally prints them, so we do (#137). Since
+  #183 the app itself asks for them: the screen and the customer's PDF carry the Original, and one
+  press of Print produces the whole set — three sheets for goods, two for services.
+- **Prescribed words are not translated.** The Hindi bill prints `ORIGINAL FOR RECIPIENT`,
+  `Reverse Charge` and `Authorised Signatory` in those words, with a Hindi gloss in brackets. The
+  rule prescribes the words themselves, and a buyer's accountant reads them (#183, #139).
 - **The rate on a line is the rate the business declared** for that item's code (option C, #54), and
   the bill says so. No rate is guessed from an HSN code, and since #181 the app carries no fixture
   rate table at all: an item nobody has declared a rate for cannot be billed.

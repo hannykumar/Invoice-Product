@@ -76,7 +76,7 @@ const copy = {
     challanConsignee: "Who the goods are going to", challanConsigneeHelp: "The challan prints their saved name, address and GST number.",
     billTitle: "The bill", billReady: "This is the bill your customer gets. Print it, or save it as PDF from the print box.",
     billNoAddress: "No customer address was typed, so the bill prints without one. A GST-registered customer's bill should carry their address.",
-    billPaper: "Paper", billPaperA4: "A4 sheet", billPaperThermal: "Till roll, 80mm", billPaperMobile: "Phone screen", printBill: "Print the bill",
+    billPaper: "Paper", billPaperA4: "A4 sheet", billPaperThermal: "Till roll, 80mm", billPaperMobile: "Phone screen", printBill: "Print the bill", printBillCopies: "Print the bill ({copies} copies)",
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
@@ -364,7 +364,7 @@ const copy = {
     challanConsignee: "Maal kiske paas ja raha hai", challanConsigneeHelp: "Challan par unka save kiya naam, pata aur GST number chhapta hai.",
     billTitle: "Bill", billReady: "Yehi bill aapke customer ko milega. Print karein, ya print box se PDF save karein.",
     billNoAddress: "Customer ka pata nahin likha gaya, isliye bill bina pate ke chhapega. GST wale customer ke bill par uska pata hona chahiye.",
-    billPaper: "Kagaz", billPaperA4: "A4 panna", billPaperThermal: "Chhoti parchi, 80mm", billPaperMobile: "Phone ki screen", printBill: "Bill print karein",
+    billPaper: "Kagaz", billPaperA4: "A4 panna", billPaperThermal: "Chhoti parchi, 80mm", billPaperMobile: "Phone ki screen", printBill: "Bill print karein", printBillCopies: "Bill print karein ({copies} copy)",
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
@@ -2399,7 +2399,7 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
 // here is what the printer puts on paper, and an old bill comes back as it was printed. Printing is
 // the browser's print box: the page carries its own paper size, so A4 and till roll come out right.
 
-const billOnScreen = { invoiceId: null, paperChosen: false };
+const billOnScreen = { invoiceId: null, paperChosen: false, copies: 1 };
 
 async function showSaleBill(invoiceId) {
   if (!invoiceId) return;
@@ -2419,6 +2419,16 @@ async function showSaleBill(invoiceId) {
     document.querySelector("#sale-bill-title").textContent = `${copy[state.locale].billTitle} · ${printed.number}`;
     note.textContent = copy[state.locale][printed.hasBuyerAddress ? "billReady" : "billNoAddress"];
     document.querySelector("#sale-bill-frame").srcdoc = printed.html;
+    // Issue #183 — the button says how many sheets one press will produce, because a goods bill is
+    // prepared in triplicate and a services bill in duplicate, and the person pressing Print is
+    // entitled to know before the paper comes out.
+    billOnScreen.copies = printed.copies ?? 1;
+    const printButton = document.querySelector("#sale-bill-print");
+    if (printButton) {
+      printButton.textContent = paper.value === "A4" && billOnScreen.copies > 1
+        ? text("printBillCopies", { copies: String(billOnScreen.copies) })
+        : copy[state.locale].printBill;
+    }
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     document.querySelector("#sale-bill-title").textContent = copy[state.locale].billLoadFailed;
@@ -2426,8 +2436,25 @@ async function showSaleBill(invoiceId) {
   }
 }
 
-document.querySelector("#sale-bill-print")?.addEventListener("click", () => {
-  document.querySelector("#sale-bill-frame").contentWindow?.print();
+/**
+ * Issue #183 — on A4, Print produces every marked copy in one job: the Original for the customer,
+ * the Duplicate for the transporter and the Triplicate for the business. The screen keeps showing
+ * the Original, so what is printed is fetched for the printing rather than swapped on screen.
+ * A till roll prints one slip, marked Original; three counter slips would be waste, not compliance.
+ */
+document.querySelector("#sale-bill-print")?.addEventListener("click", async () => {
+  const frame = document.querySelector("#sale-bill-frame");
+  const paper = document.querySelector("#sale-bill-format").value;
+  if (paper !== "A4" || (billOnScreen.copies ?? 1) <= 1) { frame.contentWindow?.print(); return; }
+  try {
+    const printed = await api("/api/sales/print", {
+      method: "POST",
+      body: JSON.stringify({ invoice: billOnScreen.invoiceId, locale: state.locale, format: paper, copies: "all" }),
+    });
+    const sheets = document.querySelector("#sale-bill-copies");
+    sheets.srcdoc = printed.html;
+    sheets.addEventListener("load", () => sheets.contentWindow?.print(), { once: true });
+  } catch { frame.contentWindow?.print(); }
 });
 document.querySelector("#sale-bill-format")?.addEventListener("change", () => { billOnScreen.paperChosen = true; showSaleBill(billOnScreen.invoiceId); });
 

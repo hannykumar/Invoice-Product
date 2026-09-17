@@ -24,6 +24,7 @@ import type { PageFormat } from './template.ts';
 import { printsReservedSlots, renderReservedSlot, reservedSlotStyles } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
 import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
+import { hsnSummary } from './hsn-summary.ts';
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
 import { preSaleTitle, renderPreSaleBoxed, renderPreSaleNarrow, type PreSalePrint } from './presale.ts';
@@ -348,7 +349,10 @@ export const renderInvoice = (
       ? `<div><span class="k">${escapeHtml(t('po', locale))}:</span> ${escapeHtml(doc.poReference)}</div>`
       : '',
     `<div><span class="k">${escapeHtml(t('placeOfSupply', locale))}:</span> ${escapeHtml(doc.placeOfSupplyStateName)} (${escapeHtml(doc.placeOfSupplyStateCode)})</div>`,
-    doc.reverseCharge ? `<div><strong>${escapeHtml(t('reverseCharge', locale))}</strong></div>` : '',
+    // Issue #183 — Rule 46(p) asks whether tax is payable on reverse charge, and "no" is an answer
+    // the bill has to give. Printing the line only when the answer is yes leaves the question
+    // unanswered on almost every bill.
+    `<div><span class="k">${escapeHtml(t('reverseCharge', locale))}:</span> <strong>${escapeHtml(t(doc.reverseCharge ? 'yes' : 'no', locale))}</strong></div>`,
   ].join('');
 
   // Issue #131 — goods first, then charges on lines of their own. A goods line on the printed bill
@@ -400,6 +404,16 @@ export const renderInvoice = (
         )}</div>`;
 
   const words = `<div class="words"><span class="k">${escapeHtml(t('inWords', locale))}:</span> ${escapeHtml(doc.amountInWordsText)}</div>`;
+
+  // Issue #183 — the HSN-wise summary on narrow paper too. It is what a buyer's accountant matches
+  // against the GST portal, and dropping it for want of width simply moves the work onto them. One
+  // line per code and rate; on 58 mm it wraps, which is allowed, and disappearing is not.
+  const narrowSummary = !narrow
+    ? ''
+    : `<div class="hsn-narrow"><div class="tline-name">${escapeHtml(t('taxSummary', locale))}</div>${
+      hsnSummary(doc).rows.map((row) => `
+        <div class="tline-detail"><span>${escapeHtml(row.code ?? '—')}${row.ratePercentTimes100 === null ? '' : ` · ${escapeHtml(percent(row.ratePercentTimes100))}`}</span><span class="num">${money(row.taxableValue)} · ${money(row.totalTax)}</span></div>`).join('')
+    }</div>`;
 
   const transport =
     doc.transport === null || !shows('transport.vehicleNumber')
@@ -457,11 +471,13 @@ export const renderInvoice = (
   const footerBits = [
     doc.terms !== null && shows('footer.terms') ? `<div>${escapeHtml(doc.terms)}</div>` : '',
     snapshot.footerNote === null ? '' : `<div>${escapeHtml(snapshot.footerNote)}</div>`,
-    // Required by Rule 46, so it is printed whatever the design says (#158) — except on till roll,
-    // where a counter slip is not the copy anyone signs and there is no room for a rule to sign on.
-    printsReservedSlots(format)
-      ? `<div style="margin-top:8mm">${escapeHtml(t('forSeller', locale))} ${escapeHtml(doc.seller.name)}</div><div><strong>${escapeHtml(t('authorisedSignatory', locale))}</strong></div>`
-      : '',
+    // Required by Rule 46(q), so it is printed whatever the design says (#158) and whatever paper
+    // the bill is on. Issue #183 brought it back to till roll: "a counter slip is not the copy
+    // anyone signs" was our own reasoning, not a rule, and the law is settled before the design.
+    // The reserved boxes stay off till roll; this is a plain signing space, not a reserved box.
+    doc.eInvoice !== null
+      ? `<div class="signed">${escapeHtml(t('digitallySigned', locale))}</div>`
+      : `<div style="margin-top:12mm">${escapeHtml(t('forSeller', locale))} ${escapeHtml(doc.seller.name)}</div><div><strong>${escapeHtml(t('authorisedSignatory', locale))}</strong></div>`,
   ].join('');
 
   const body = `
@@ -483,6 +499,7 @@ export const renderInvoice = (
   <div class="parties">${partyBlock(doc.buyer, t('billedTo', locale), locale)}${shipToLine}${transport}${bank}</div>
   ${itemsBlock}
   ${totals}
+  ${narrowSummary}
   ${words}
   ${notice}
   ${qr}

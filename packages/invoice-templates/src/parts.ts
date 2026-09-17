@@ -54,7 +54,9 @@ const T = {
   date: w('Invoice Date', 'Taarikh'),
   dueDate: w('Due Date', 'Payment kab tak'),
   placeOfSupply: w('Place of Supply', 'Bikri kis rajya ki'),
-  reverseCharge: w('Reverse Charge', 'GST customer khud bharega'),
+  // Issue #183 — the prescribed term stays the prescribed term. A Hindi gloss may follow it in
+  // brackets; it never replaces it, because a buyer's accountant and an officer both read the term.
+  reverseCharge: w('Reverse Charge', 'Reverse Charge (GST customer khud bharega)'),
   gstin: w('GSTIN', 'GST number'),
   item: w('Description of Goods', 'Item'),
   hsn: w('HSN / SAC', 'HSN / SAC'),
@@ -86,10 +88,15 @@ const T = {
   serial: w('Sl No.', 'Sl'),
   per: w('per', 'per'),
   taxSummary: w('HSN / SAC Summary', 'HSN / SAC ke hisaab se tax'),
+  // Issue #183 — the answer to "is tax payable on reverse charge", which every tax invoice gives.
+  yes: w('Yes', 'Haan'),
+  no: w('No', 'Nahin'),
   taxInWords: w('Tax Amount (in words)', 'Tax ki rakam shabdon mein'),
   declaration: w('Declaration', 'Ghoshna'),
   forSeller: w('for', 'ki taraf se'),
-  authorisedSignatory: w('Authorised Signatory', 'Adhikrit hastakshar'),
+  // Issue #183 — the standard trade words stay the standard trade words (#139), in both languages,
+  // with the Hindi gloss in brackets. This is the line a buyer's accountant looks for.
+  authorisedSignatory: w('Authorised Signatory', 'Authorised Signatory (adhikrit hastakshar)'),
   // Issue #144 — the caption over the pay-by-scan square, and the line naming where the money goes.
   scanToPay: w('Scan to pay by UPI', 'UPI se scan karke payment'),
   upiId: w('UPI ID', 'UPI ID'),
@@ -121,10 +128,14 @@ const T = {
     'Yeh bill computer se bana hai.',
   ),
   // Issue #137 — the copy markings GST asks a goods invoice to carry.
-  copyOriginal: w('ORIGINAL FOR RECIPIENT', 'Original, customer ke liye'),
-  copyDuplicateTransporter: w('DUPLICATE FOR TRANSPORTER', 'Duplicate, transporter ke liye'),
-  copyTriplicate: w('TRIPLICATE FOR SUPPLIER', 'Triplicate, aapke paas'),
-  copyDuplicateSupplier: w('DUPLICATE FOR SUPPLIER', 'Duplicate, aapke paas'),
+  //
+  // Issue #183 — CGST Rule 48 prescribes these words themselves, so the Hindi bill prints them
+  // unchanged and puts the explanation in brackets after. A copy marked `Original, customer ke
+  // liye` is not marked with what the rule asks for.
+  copyOriginal: w('ORIGINAL FOR RECIPIENT', 'ORIGINAL FOR RECIPIENT (customer ke liye)'),
+  copyDuplicateTransporter: w('DUPLICATE FOR TRANSPORTER', 'DUPLICATE FOR TRANSPORTER (transporter ke liye)'),
+  copyTriplicate: w('TRIPLICATE FOR SUPPLIER', 'TRIPLICATE FOR SUPPLIER (aapke paas)'),
+  copyDuplicateSupplier: w('DUPLICATE FOR SUPPLIER', 'DUPLICATE FOR SUPPLIER (aapke paas)'),
   // Issue #141 — the delivery challan. Its copy markings are the words CGST Rule 55(2) prints, which
   // differ from an invoice's: the goods go to a consignee, who may not be a buyer at all.
   DELIVERY_CHALLAN: w('Delivery Challan', 'Delivery challan'),
@@ -137,8 +148,9 @@ const T = {
   reasonForMovement: w('Reason for Movement', 'Maal kyon ja raha hai'),
   provisional: w('provisional', 'andaaz se'),
   invoiceRef: w('Invoice No. & Date', 'Invoice number aur taarikh'),
-  copyOriginalConsignee: w('ORIGINAL FOR CONSIGNEE', 'Original, maal paane wale ke liye'),
-  copyTriplicateConsigner: w('TRIPLICATE FOR CONSIGNER', 'Triplicate, aapke paas'),
+  // "CONSIGNER" is CGST Rule 55(2)'s own spelling. It is kept exactly, not corrected.
+  copyOriginalConsignee: w('ORIGINAL FOR CONSIGNEE', 'ORIGINAL FOR CONSIGNEE (maal paane wale ke liye)'),
+  copyTriplicateConsigner: w('TRIPLICATE FOR CONSIGNER', 'TRIPLICATE FOR CONSIGNER (aapke paas)'),
   // Issue #142 — the quotation and the proforma invoice. Both say "Not a tax invoice" under the title
   // (`notTaxInvoice` above). Where a word already exists for the invoice and means the same thing on
   // these papers — "Buyer's Order No.", "Mode / Terms of Payment" — the same word is used.
@@ -206,10 +218,18 @@ export const totalQuantityText = (lines: readonly RenderableLine[]): string => {
   return `${total.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${unit === '' ? '' : ` ${unit}`}`;
 };
 
-/** The narrow shapes get a list, because a nine-column table on 58mm of paper is unreadable. */
+/**
+ * The narrow shapes get a list, because a nine-column table on 58mm of paper is unreadable.
+ *
+ * Issue #183 — the HSN or SAC code goes under the description. Rule 46(g) asks every tax invoice
+ * for it, and there is no exemption for the paper it is printed on: a phone bill and a till-roll
+ * slip are tax invoices like any other. A charge line carries no code of its own (#188), so it
+ * simply has none to print.
+ */
 export const narrowLine = (line: RenderableLine, locale: Locale): string => `
   <div class="tline">
     <div class="tline-name">${escapeHtml(line.description)}${line.reverseCharge ? ' (RCM)' : ''}</div>
+    ${line.hsnOrSac === null ? '' : `<div class="tline-hsn">${escapeHtml(t('hsn', locale))} ${escapeHtml(line.hsnOrSac)}</div>`}
     <div class="tline-detail"><span>${line.kind === 'CHARGE' ? '' : `${escapeHtml(line.quantityText)} × ${money(line.unitPrice)}`}</span><span class="num">${money(line.taxableValue)}</span></div>
     ${line.ratePercentTimes100 === null ? '' : `<div class="tline-tax"><span>${escapeHtml(t('gstAmount', locale))} ${escapeHtml(percent(line.ratePercentTimes100))}</span><span class="num">${money(line.taxAmount)}</span></div>`}
   </div>`;
