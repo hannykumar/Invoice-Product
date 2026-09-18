@@ -180,7 +180,8 @@ test('every shape prints, in Hindi too, and a typed name cannot break the page',
       assert.ok(!html.includes('<script>alert'), `${format}/${locale} escapes what a person typed`);
       assert.match(text(html), locale === 'hi-IN' ? /Yeh tax invoice nahin hai/ : /Not a tax invoice/);
       // Rule 55(1)(ix): the signature is on every shape, till roll included.
-      assert.match(text(html), locale === 'hi-IN' ? /Adhikrit hastakshar/ : /Authorised Signatory/, `${format}/${locale} carries the signature`);
+      // Issue #183 — the standard trade words in both languages, with the Hindi gloss in brackets.
+      assert.match(text(html), /Authorised Signatory/, `${format}/${locale} carries the signature`);
     }
   }
 });

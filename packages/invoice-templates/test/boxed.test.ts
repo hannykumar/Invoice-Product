@@ -334,11 +334,14 @@ test('#138 — none of them reach the till roll, where there is no room', () => 
   const html = renderIndia(withTradeFields(), 'THERMAL_58MM');
   // Checked by label rather than by value: a GSTIN has the PAN inside it (07**AAAAA0000A**1Z4), so
   // looking for the number alone would find the GSTIN and fail on a page that is perfectly correct.
-  for (const absent of ['PAN', 'Kind of Pkgs', '80 Bags', 'SRL/2026/44120', 'GC-88213', 'Ghazipur Cold Store', 'Authorised Signatory']) {
+  for (const absent of ['PAN', 'Kind of Pkgs', '80 Bags', 'SRL/2026/44120', 'GC-88213', 'Ghazipur Cold Store']) {
     assert.ok(!html.includes(absent), `${absent} has no place on 58mm paper`);
   }
-  // The signature is required by Rule 46 and still does not go here: a counter slip is not the copy
-  // anyone signs, and there is no room for a rule to sign on. Recorded so it is a decision, not luck.
+  // Issue #183 — the signature line is the one thing that came back. Rule 46(q) asks every tax
+  // invoice for a signature and exempts no paper size; "a counter slip is not the copy anyone
+  // signs" was our own reasoning, and the law is settled before the design. The reserved boxes
+  // still do not print here — this is a plain signing space, not a reserved box.
+  assert.ok(html.includes('Authorised Signatory'), 'a tax invoice is signed, whatever it is printed on');
   // What a customer at a counter does need still prints.
   assert.ok(html.includes('ABC Traders') && html.includes('Total'));
 });

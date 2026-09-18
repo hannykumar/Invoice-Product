@@ -275,3 +275,6 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 #customer-dialog small, #item-dialog small { font-weight: 500; color: var(--muted); line-height: 1.4; }
 #customer-dialog label[hidden], #item-dialog label[hidden] { display: none; }
 @media (max-width: 900px) { .sale-line { grid-template-columns: 1fr; } .sale-line [data-remove-line] { justify-self: start; } }
+
+/* Issue #183 — the marked copies are fetched for the printer only; nothing of them is on screen. */
+#sale-bill-copies { position: absolute; width: 0; height: 0; border: 0; visibility: hidden; }

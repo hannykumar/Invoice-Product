@@ -148,7 +148,11 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /id="sale-lines"/);
   assert.match(html, /data-line-field="item" data-item-picker/);
   assert.match(script, /\/api\/sales\/print/);
-  assert.match(script, /#sale-bill-frame"\)\.contentWindow\?\.print\(\)/);
+  // Issue #183 — printing is still the browser's own print box; on A4 it prints the whole marked
+  // set, and on till roll or a phone the one slip on screen.
+  assert.match(script, /frame\.contentWindow\?\.print\(\)/);
+  assert.match(script, /copies: "all"/);
+  assert.match(html, /id="sale-bill-copies"/);
   assert.match(script, /copy\[state\.locale\]\.openBill/);
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and

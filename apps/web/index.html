@@ -127,6 +127,9 @@
               </div>
             </div>
             <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
+            <!-- Issue #183 — the whole marked set, fetched only when Print is pressed on A4, so the
+                 screen keeps showing the Original the customer is given. -->
+            <iframe id="sale-bill-copies" title="Printed copies" aria-hidden="true" hidden></iframe>
           </article>
         </section>
 

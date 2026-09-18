@@ -420,7 +420,7 @@ export const renderBoxed = (
             ${cell(t('placeOfSupply', locale), `${escapeHtml(doc.placeOfSupplyStateName)} (${escapeHtml(doc.placeOfSupplyStateCode)})`)}
           </tr>
           <tr>
-            ${cell(t('reverseCharge', locale), doc.reverseCharge ? 'Yes' : 'No', 2)}
+            ${cell(t('reverseCharge', locale), t(doc.reverseCharge ? 'yes' : 'no', locale), 2)}
           </tr>
           ${
             // Issue #138 — the transporter's own paperwork. A whole row is only worth its space when
