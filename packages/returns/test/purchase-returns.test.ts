@@ -41,7 +41,7 @@ test('a partial purchase return posts a debit note, reverses input GST and remov
 
   const { note } = await f.service.postPurchase(f.actor, command(f.bill.id));
   assert.equal(note.kind, 'PURCHASE_RETURN');
-  assert.match(note.number, /^DN\/000001$/);
+  assert.match(note.number, /^DN\/26-27\/0000001$/);
   const supplier = await partyBalance(f.store.read(), COMPANY, asId<'Party'>(SUPPLIER));
   assert.equal(toDecimalString(supplier.balance), '-30208.00');
   const stock = await f.inventoryService.balance(f.actor, { itemId: 'TMT12', warehouseId: 'wh-main' });
@@ -115,4 +115,19 @@ test('a purchase return cannot cross companies or omit its dedicated permission'
     f.service.previewPurchase({ ...f.actor, permissions: permissions.filter((permission) => permission !== 'returns.create') }, command(f.bill.id)),
     (error: any) => error.code === 'PERMISSION_DENIED',
   );
+});
+
+// Issue #185 — debit notes follow the financial year too.
+test('debit note numbers run on across 1 January and start again on 1 April', async () => {
+  const f = await setup();
+  const numbers: string[] = [];
+  for (const date of ['2026-12-31', '2027-01-01', '2027-04-01']) {
+    const { note } = await f.service.postPurchase(f.actor, command(f.bill.id, {
+      idempotencyKey: `fy-${date}`, documentDate: isoDate(date),
+      lines: [{ originalLineId: '1', quantity: quantityFromString('10', 'KGS'), disposition: 'ACCEPTED' }],
+    }));
+    numbers.push(note.number);
+  }
+  assert.deepEqual(numbers, ['DN/26-27/0000001', 'DN/26-27/0000002', 'DN/27-28/0000001']);
+  for (const number of numbers) assert.equal(number.length, 16, `${number} must use all sixteen characters`);
 });

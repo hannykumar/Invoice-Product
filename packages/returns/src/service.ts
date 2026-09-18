@@ -4,6 +4,15 @@ import {
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort } from '@invoice/ledger';
 import { buildPurchaseReturnPosting, buildSalesReturnPosting } from './posting.ts';
+import { formatDocumentNumber, documentSeriesScope } from '@invoice/sales';
+import {
+  CREDIT_NOTE_SERIES_KIND,
+  DEBIT_NOTE_SERIES_KIND,
+  DEFAULT_NOTE_SERIES,
+  DEFAULT_OTHER_DOCUMENT_PREFIXES,
+  validateNoteSeries,
+  type NoteSeries,
+} from './note-series.ts';
 import { RETURN_PERMISSIONS, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts } from './model.ts';
 import type { OriginalReturnLine, PurchaseReturnSourcePort, ReturnInventoryPort, ReturnNoteRepository, SalesReturnSourcePort } from './ports.ts';
 
@@ -58,6 +67,10 @@ export interface ReturnServiceDeps {
   readonly audit: AuditPort;
   readonly clock: Clock;
   readonly idFactory?: () => string;
+  /** Issue #185 — the credit and debit note series. Defaults to `CN/26-27/…` and `DN/26-27/…`. */
+  readonly noteSeries?: NoteSeries;
+  /** The prefixes the business's invoices, challans and other papers use, so no note can share one. */
+  readonly otherDocumentPrefixes?: readonly string[];
 }
 
 const divideHalfUp = (numerator: bigint, denominator: bigint): bigint => {
@@ -85,11 +98,14 @@ export class ReturnService {
   readonly #audit: AuditPort;
   readonly #clock: Clock;
   readonly #newId: () => string;
+  readonly #noteSeries: NoteSeries;
 
   constructor(deps: ReturnServiceDeps) {
     this.#store = deps.store; this.#ledger = deps.ledger; this.#repo = deps.repository;
     this.#sales = deps.sales; this.#purchases = deps.purchases; this.#inventory = deps.inventory; this.#permissions = deps.permissions;
     this.#audit = deps.audit; this.#clock = deps.clock; this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
+    this.#noteSeries = deps.noteSeries ?? DEFAULT_NOTE_SERIES;
+    validateNoteSeries(this.#noteSeries, deps.otherDocumentPrefixes ?? DEFAULT_OTHER_DOCUMENT_PREFIXES);
   }
 
   async get(actor: ActorContext, id: string): Promise<ReturnNote | null> { return this.#repo.findById(actor.companyId, id); }
@@ -150,7 +166,11 @@ export class ReturnService {
       // Re-check while holding the company transaction lock, so two simultaneous returns cannot
       // both claim the final eligible quantity.
       const checked = await this.previewSales(actor, command);
-      const number = `CN/${String(await uow.sequences.next(actor.companyId, `sales-return:${command.documentDate.slice(0, 4)}`)).padStart(6, '0')}`;
+      // Issue #185 — one counter per financial year, allocated inside this transaction so a failed
+      // posting burns no number and two returns at once cannot receive the same one.
+      const series = this.#noteSeries.creditNote;
+      const sequence = await uow.sequences.next(actor.companyId, documentSeriesScope(CREDIT_NOTE_SERIES_KIND, series, command.documentDate));
+      const number = formatDocumentNumber(CREDIT_NOTE_SERIES_KIND, series, command.documentDate, sequence);
       const posting = await buildSalesReturnPosting(uow.accounts, actor.companyId, original.partyId, checked.totals);
       const posted = await this.#ledger.postVoucherIn(uow, actor, {
         idempotencyKey: `sales-return:ledger:${command.idempotencyKey}`,
@@ -252,7 +272,9 @@ export class ReturnService {
     const at = this.#clock.now().toISOString();
     const outcome = await this.#store.transaction(actor.companyId, async (uow) => {
       const checked = await this.previewPurchase(actor, command);
-      const number = `DN/${String(await uow.sequences.next(actor.companyId, `purchase-return:${command.documentDate.slice(0, 4)}`)).padStart(6, '0')}`;
+      const series = this.#noteSeries.debitNote;
+      const sequence = await uow.sequences.next(actor.companyId, documentSeriesScope(DEBIT_NOTE_SERIES_KIND, series, command.documentDate));
+      const number = formatDocumentNumber(DEBIT_NOTE_SERIES_KIND, series, command.documentDate, sequence);
       const posting = await buildPurchaseReturnPosting(uow.accounts, actor.companyId, original.partyId, checked.totals);
       const posted = await this.#ledger.postVoucherIn(uow, actor, {
         idempotencyKey: `purchase-return:ledger:${command.idempotencyKey}`,

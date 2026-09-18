@@ -21,6 +21,24 @@ compliance state.
   original period is never reopened. A note dated inside a hard-locked period is refused; the
   ledger's reasoned override rules apply only to soft locks.
 
+## Note numbers (issue #185)
+
+Credit notes are numbered `CN/26-27/0000001` and debit notes `DN/26-27/0000001`: sixteen characters,
+from a counter per company, series and **financial year** (1 April to 31 March), as CGST Rule
+53(1A)(c) requires. The arithmetic is the one shared with invoices and challans
+(`packages/sales/src/document-series.ts`), so the running number gets every character left after the
+prefix and the year, and a series that cannot reach 99,999 notes a year is refused.
+
+- `ReturnServiceDeps.noteSeries` sets the prefixes; the default is `DEFAULT_NOTE_SERIES`.
+- `ReturnServiceDeps.otherDocumentPrefixes` lists the prefixes other documents use (default: `INV`,
+  `DC`, `QTN`, `PI`). The constructor refuses a credit note prefix that matches any of them, and a
+  debit note prefix that matches any of them or the credit note's, with
+  `RETURN_NOTE_SERIES_SHARES_PREFIX`.
+- The number is allocated inside the transaction that posts the note, so a failed posting burns no
+  number and two simultaneous returns cannot receive the same one.
+- Notes issued before this change (`CN/000001`) keep their numbers. They carry no year, so they can
+  never collide with a new one.
+
 ## Money and refunds
 
 The credit or debit note changes the party subledger atomically with inventory and GST. It does

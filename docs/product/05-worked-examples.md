@@ -188,7 +188,7 @@ bank's reason, and the whole history stays visible. Nothing is deleted or edited
 
 ## Example 6 — Partial sales return
 
-ABC Traders returns 25 of the 125 boxes on 2 May 2026. Credit note `CN/KB/2026-27/0003`.
+ABC Traders returns 25 of the 125 boxes on 2 May 2026. Credit note `CN/26-27/0000003`.
 
 | Line | Quantity | Rate | Value | GST | Total |
 | --- | --- | --- | --- | --- | --- |
@@ -199,7 +199,7 @@ ABC Traders returns 25 of the 125 boxes on 2 May 2026. Credit note `CN/KB/2026-2
 | Sales returns | ₹20,000.00 | |
 | ABC Traders (customer) | | ₹20,000.00 |
 
-**Stock:** +25 BOX back into Narela godown, linked to `CN/KB/2026-27/0003` and to invoice 44.
+**Stock:** +25 BOX back into Narela godown, linked to `CN/26-27/0000003` and to invoice 44.
 **Outstanding on invoice 44:** ₹50,000.00 − ₹20,000.00 = **₹30,000.00**.
 
 Rules exercised: the return quantity cannot exceed 125 less earlier returns; the tax treatment is
