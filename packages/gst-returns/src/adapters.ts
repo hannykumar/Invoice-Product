@@ -116,6 +116,11 @@ export interface SalesInvoiceLike {
       readonly itemName: string;
       readonly hsnOrSac: string | null;
       /**
+       * Issue #188 — `CHARGE` for freight or another charge on the bill, which has no code of its
+       * own. Optional because a bill from before #131 has none; such a line is treated as goods.
+       */
+      readonly kind?: 'GOODS' | 'CHARGE';
+      /**
        * The quantity as the sales module holds it: an exact scaled decimal with its unit.
        *
        * It used to be declared here as a `string`, which is what the return form wants, and the
@@ -228,6 +233,7 @@ export const salesInvoiceToDocument = (
     itemId: line.itemId,
     description: line.itemName,
     hsnOrSac: line.hsnOrSac,
+    lineKind: line.kind ?? 'GOODS',
     supplyKind: 'GOODS',
     unit: line.quantity.unit,
     quantity: toQuantityString(line.quantity),

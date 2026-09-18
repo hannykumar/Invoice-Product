@@ -127,6 +127,12 @@ export interface OutwardLine {
   readonly itemId: string;
   readonly description: string;
   readonly hsnOrSac: string | null;
+  /**
+   * Issue #188 — `CHARGE` is freight or another charge on a bill of goods. It has no code of its
+   * own, and the HSN table reports it under the codes of the goods it travelled with. Absent means
+   * goods.
+   */
+  readonly lineKind?: 'GOODS' | 'CHARGE';
   readonly supplyKind: 'GOODS' | 'SERVICES';
   readonly unit: string | null;
   /** Exact decimal string, as quantities are held everywhere in this product. */

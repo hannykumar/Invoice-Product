@@ -43,7 +43,7 @@ answer.** A caller must handle both; a bill that cannot be taxed is never posted
 | Treatments | `TAXABLE`, `NIL_RATED`, `EXEMPT`, `NON_GST`, and `UNKNOWN` which blocks |
 | Pricing | Tax-exclusive and tax-inclusive, with the parts adding back to exactly the quoted price |
 | Discounts | Percentage and amount, applied before tax |
-| Charges | Freight and other charges apportioned across lines by value, then taxed with them |
+| Charges | Freight and other charges become their own lines, taxed at the rate of the goods they travelled with (#131). `apportionChargesToHsn` shares each one into those goods' HSN codes for the code-wise summaries (#188) |
 | Cess | Percentage of value, fixed amount per unit, or the higher of the two |
 | Reverse charge | Tax is computed and reported separately, and is **not** billed to the customer |
 | Composition | No GST is charged, and the bill says so in plain words |
