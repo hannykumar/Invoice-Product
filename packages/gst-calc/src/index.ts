@@ -3,4 +3,3 @@ export * from './master-data-port.ts';
 export * from './rate-table.ts';
 export * from './declared-rates.ts';
 export * from './compute.ts';
-export * from './tcs.ts';

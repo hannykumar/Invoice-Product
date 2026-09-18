@@ -116,7 +116,6 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
       roundOff: totals.roundOff,
       invoiceValue: totals.invoiceValue,
       reverseChargeTax: totals.reverseChargeTax,
-      tcs: totals.tcs,
       amountPaid: paid,
       outstanding: paid === null ? null : subtract(totals.invoiceValue, paid),
     },
@@ -125,9 +124,6 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     amountInWordsText: amountInWords(totals.invoiceValue),
     taxAmountInWordsText: amountInWords(totals.totalTax),
     declaredRateNotice: context.declaredRateNotice ?? null,
-    // Issue #145 — taken from the priced invoice, never rebuilt here, so the note and the amount
-    // on the bill can never drift apart.
-    tcsNotice: pricing.tcs === null ? null : pricing.tcs.note['en-IN'],
     logoDataUri: context.logoDataUri ?? null,
     tradeMark: context.tradeMark ?? null,
     bankDetails: context.bankDetails ?? null,
