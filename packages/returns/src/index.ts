@@ -6,5 +6,6 @@ export * from './inventory-adapter.ts';
 export * from './sales-adapter.ts';
 export * from './purchase-adapter.ts';
 export * from './note-series.ts';
+export * from './credit-note-deadline.ts';
 export * from './service.ts';
 export * from './migrations.ts';

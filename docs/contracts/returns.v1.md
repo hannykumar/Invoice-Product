@@ -39,6 +39,21 @@ prefix and the year, and a series that cannot reach 99,999 notes a year is refus
 - Notes issued before this change (`CN/000001`) keep their numbers. They carry no year, so they can
   never collide with a new one.
 
+## The printed note and the 30 November deadline (issue #186)
+
+- Each note line keeps `hsnOrSac`, `ratePercentTimes100` and `unitPrice` from the original line,
+  so a reprint never depends on the original bill still being readable. Purchase lines take the HSN
+  from the item list (`purchaseReturnSource(bills, hsnOf)`) and read the rate back from the tax the
+  supplier charged.
+- `packages/invoice-templates/src/credit-note.ts` prints the note (`toCreditNoteDocument`,
+  `renderCreditNote`, `creditNotePdf`) with every Rule 53(1A) particular, including "Against Invoice
+  No. … dated …". The app freezes the page when the note is recorded and serves it at
+  `POST /api/returns/print` and `GET /api/returns/:id/pdf`; `GET /api/returns/notes` lists notes.
+- Section 34(2): `previewSales` and `postSales` refuse a credit note dated after 30 November
+  following the end of the original bill's financial year (`RETURN_CREDIT_NOTE_TOO_LATE`), and the
+  preview carries a warning in the 30 days before it (`warnings`). The annual-return date, which can
+  make the deadline earlier, is not known to the product and is not guessed.
+
 ## Money and refunds
 
 The credit or debit note changes the party subledger atomically with inventory and GST. It does

@@ -220,6 +220,22 @@
               <button type="submit" class="primary-button wide" data-i18n="checkReturn"></button>
             </aside>
           </form>
+          <!-- Issue #186 — the credit or debit note on paper, exactly like the sale bill. -->
+          <article class="panel bill-panel" id="note-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="note-title">—</h2><p id="note-help" data-i18n="noteHelp"></p></div>
+              <div class="bill-actions">
+                <label><span data-i18n="billPaper"></span><select id="note-format"><option value="A4" data-i18n="billPaperA4"></option><option value="THERMAL_80MM" data-i18n="billPaperThermal"></option><option value="MOBILE" data-i18n="billPaperMobile"></option></select></label>
+                <button type="button" class="primary-button" id="note-print" data-i18n="notePrint"></button>
+                <button type="button" class="secondary-button" id="note-download" data-i18n="downloadPdf"></button>
+              </div>
+            </div>
+            <iframe id="note-frame" title="Printed note" data-i18n-aria="noteFrame"></iframe>
+          </article>
+          <article class="panel" id="note-list-panel" hidden>
+            <h2 data-i18n="notesTitle"></h2>
+            <ul class="activity-list" id="note-list"></ul>
+          </article>
         </section>
 
         <section class="view" id="view-einvoice" aria-labelledby="einvoice-title">

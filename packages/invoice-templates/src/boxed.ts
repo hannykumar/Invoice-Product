@@ -39,7 +39,7 @@ export const partyCell = (
     <span class="cap">${escapeHtml(heading)}</span>
     <span class="party-name">${escapeHtml(party.name)}</span>
     ${party.addressLines.map((l) => `<div>${escapeHtml(l)}</div>`).join('')}
-    <div>${escapeHtml(party.stateName)} (${escapeHtml(party.stateCode)})</div>
+    ${party.stateCode === '' ? '' : `<div>${escapeHtml(party.stateName)} (${escapeHtml(party.stateCode)})</div>`}
     ${party.gstin === null ? '' : `<div><span class="cap-inline">${escapeHtml(t('gstin', locale))}</span> ${escapeHtml(party.gstin)}</div>`}
     ${party.pan == null || !shows('seller.pan') ? '' : `<div><span class="cap-inline">${escapeHtml(t('pan', locale))}</span> ${escapeHtml(party.pan)}</div>`}
     ${party.phone != null && shows('seller.phone') ? `<div>${escapeHtml(party.phone)}</div>` : ''}

@@ -16,7 +16,10 @@ export interface OriginalReturnLine {
   readonly igst: Money;
   readonly cess: Money;
   /** What the customer was charged for this line. Reverse-charge tax is excluded. */
-  readonly total: Money;
+  readonly total: Money;  /** Issue #186 — carried onto the note line for printing. Absent when the source does not hold it. */
+  readonly hsnOrSac?: string | null;
+  readonly ratePercentTimes100?: bigint | null;
+  readonly unitPrice?: Money | null;
 }
 
 export interface OriginalSalesDocument {

@@ -28,6 +28,15 @@ export interface ReturnNoteLine {
   readonly serialNumbers: readonly string[];
   readonly replacementSerialNumbers: readonly string[];
   readonly amounts: ReturnTaxAmounts;
+  /**
+   * Issue #186 — the HSN or SAC code, the tax rate and the rate per unit of the original bill's
+   * line, copied when the note is posted. The printed note needs them (Rule 53(1A)(h)), and a
+   * reprint must never depend on the original bill still being readable. `null` when the original
+   * did not carry the figure.
+   */
+  readonly hsnOrSac: string | null;
+  readonly ratePercentTimes100: bigint | null;
+  readonly unitPrice: Money | null;
 }
 
 export interface ReturnNote {
