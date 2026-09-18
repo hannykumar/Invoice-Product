@@ -15,6 +15,7 @@ import { lintUserFacingText } from '../../ux-vocabulary/src/lint.ts';
 import { RateTable } from '../src/rate-table.ts';
 import { SOURCE, SHARMA, inr, makeCalculator, on, qty } from './fixtures.ts';
 import type { ComputeInput, ComputeResult } from '../src/compute.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 const computed = (result: ComputeResult) => {
   assert.equal(result.status, 'COMPUTED', result.status === 'CANNOT_COMPUTE' ? result.explanation['en-IN'] : '');
@@ -392,7 +393,7 @@ test('a business on the composition scheme charges no GST, and the bill says so'
 
 test('a GST number that disagrees with the state is refused, not resolved by preference', () => {
   const { calculator, masterData } = makeCalculator();
-  masterData.putCompany({ companyId: SHARMA, gstin: '27AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId: SHARMA, gstin: '27AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   const result = refused(calculator.compute(crateSale()));
   assert.deepEqual(result.reasons.map((r) => r.code), ['GSTIN_STATE_MISMATCH']);
 });

@@ -29,6 +29,7 @@ import { renderInvoice, renderInvoiceCopies, renderInvoiceCopySet } from './rend
 import { shipToFromDelivery, toInvoiceDocument } from './from-sales.ts';
 import { searchTradeMarks, tradeMarkFromLibrary, tradeMarkPictures, tradeMarkSvg } from './marks.ts';
 import { recommendTemplates, templateById, type PageFormat } from './template.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 const COMPANY: CompanyId = asId<'Company'>('demo-sharma');
 const OWNER = asId<'User'>('demo-owner');
@@ -67,7 +68,7 @@ const main = async (): Promise<void> => {
   await ledger.initialiseCompany(actor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, customer] });
 
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   masterData.putParty(COMPANY, { partyId: 'abc-traders', gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' });
   masterData.putItem(COMPANY, { itemId: 'APL-BOX-10', name: 'Apple box, 10 kg', kind: 'GOODS', hsnOrSac: '0808', treatment: 'NIL_RATED', reverseCharge: false, baseUnit: 'BOX' });
   masterData.putItem(COMPANY, { itemId: 'CRATE-P', name: 'Plastic crate', kind: 'GOODS', hsnOrSac: '3923', treatment: 'TAXABLE', reverseCharge: false, baseUnit: 'PCS' });

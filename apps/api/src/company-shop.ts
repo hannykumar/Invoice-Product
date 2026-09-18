@@ -56,6 +56,7 @@ import {
 } from '../../../packages/transport/src/suitability-adapters.ts';
 import type { Vehicle } from '../../../packages/masters/src/types.ts';
 import { items as catalogueItems, type CatalogueSeed } from './catalogue-application.ts';
+import { turnoverAnswerForYear } from './business-details-application.ts';
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -358,6 +359,8 @@ export async function createCompanyShop(seed: CompanySeed) {
     audit,
     clock,
     policy: ewayPolicies,
+    // Issue #187 — how many HSN digits the portal needs depends on the business's turnover answer.
+    turnoverAbove5Crore: (financialYear) => turnoverAnswerForYear(seed.companyId, financialYear),
     idFactory: () => `${seed.companyId}:ewb:${sequence += 1}`,
   });
   // Issue #29. The registering authority, reached the way production reaches it: this product's

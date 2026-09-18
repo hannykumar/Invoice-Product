@@ -34,7 +34,8 @@ test("a job-work challan becomes a CHL document with the job-work reason", async
   assert.equal(decision.outcome, "REQUIRED", "job work across a state border needs an e-way bill at any value");
   assert.equal(decision.ruleId, "EWB.ANY_VALUE.INTER_STATE_JOB_WORK");
 
-  const partA = buildPartA(movement);
+  // The crate carries a 4-digit HSN; this business told us its turnover was ₹5 crore or less (#187).
+  const partA = buildPartA(movement, { turnoverAbove5Crore: "NO" });
   assert.ok(partA.ok, partA.ok ? "" : partA.problems.map((p) => p.message).join(" "));
   assert.equal(partA.payload.docType, "CHL");
   assert.equal(partA.payload.docNo, "DC/26-27/0000001");

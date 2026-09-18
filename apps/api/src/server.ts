@@ -91,6 +91,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/catalogue') return json(200, app.catalogue(actor));
     if (method === 'POST' && pathname === '/api/customers') return json(200, await app.addCustomer(actor, body));
     if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
+    if (method === 'POST' && pathname === '/api/items/code') return json(200, app.changeItemCode(actor, body));
     // Issue #182 — where the goods go and who carries them: the customer's other addresses, and
     // the transporters this business uses.
     if (method === 'POST' && pathname === '/api/delivery/choices') return json(200, app.deliveryChoices(actor, String(body.customerId ?? '')));

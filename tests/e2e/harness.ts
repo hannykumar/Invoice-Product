@@ -39,6 +39,7 @@ import {
   COMPANY,
   makeShop,
 } from '../../packages/purchasing/src/posting-fixtures.ts';
+import { turnoverAnsweredEveryYear } from '../../packages/masters/src/fixtures.ts';
 
 export {
   ALL_PERMISSIONS, COMPANY, SUPPLIER, SUPPLIER_GSTIN, makeShop, purchase, steelLine,
@@ -120,7 +121,7 @@ export const makeBusiness = async (options: {
   shop.store.join(salesRepository).join(paymentRepository).join(returnRepository);
 
   const taxMasters = new InMemoryMasterData();
-  taxMasters.putCompany({ companyId: COMPANY, gstin: COMPANY_GSTIN, stateCode: COMPANY_STATE, registration: 'REGULAR' });
+  taxMasters.putCompany({ companyId: COMPANY, gstin: COMPANY_GSTIN, stateCode: COMPANY_STATE, registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   taxMasters.putParty(COMPANY, { partyId: CUSTOMER, gstin: CUSTOMER_GSTIN, stateCode: COMPANY_STATE, registration: 'REGULAR' });
   taxMasters.putItem(COMPANY, {
     itemId: 'TMT12', name: 'TMT Steel Bar 12mm', kind: 'GOODS', hsnOrSac: '72142090',

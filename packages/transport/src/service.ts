@@ -13,10 +13,11 @@
 //   4. **Nothing is guessed.** A missing fact is a question with the movement held back, not a
 //      default that lets a lorry leave.
 
-import { conflict, forbidden, invalid, notFound, type CompanyId, type Clock } from "@invoice/kernel";
+import { conflict, financialYearOf, forbidden, invalid, isoDate, notFound, type CompanyId, type Clock } from "@invoice/kernel";
 import type { ActorContext, AuditPort } from "@invoice/ledger";
 import { consignmentValueOf, decideEwayApplicability, movementRoute } from "./applicability.ts";
-import { buildPartA, buildPartB, toOfflineJson, type PayloadProblem } from "./payload.ts";
+import { buildPartA, buildPartB, toOfflineJson, type PartABuildOptions, type PayloadProblem } from "./payload.ts";
+import type { TurnoverAbove5Crore } from "../../masters/src/hsn-digits.ts";
 import {
   canExtendNow, describeExpiry, describeTimeLeft, isExpired, normaliseVehicleNumber,
   readPortalTimestamp, validityDays,
@@ -51,6 +52,11 @@ export interface EwayBillServiceDeps {
   /** Accept the government's malformed sandbox GSTINs, so this lane can be tested against its own
    * sandbox. Off unless set, and it admits nothing that could be a real GST number. */
   readonly allowSandboxGstins?: boolean;
+  /**
+   * Issue #187 — the business's turnover answer for a financial year ("2026-27"), which sets how
+   * many HSN digits the portal needs. Without it every bill is held to 6 digits.
+   */
+  readonly turnoverAbove5Crore?: (financialYear: string) => TurnoverAbove5Crore;
 }
 
 /** What a preview returns: the decision, what is missing, and nothing written anywhere. */
@@ -75,16 +81,25 @@ export class EwayBillService {
   readonly #policy: EwayBillPolicyPort | undefined;
   readonly #newId: () => string;
   readonly #payloadOptions: { readonly allowSandboxGstins?: boolean };
+  readonly #turnover: ((financialYear: string) => TurnoverAbove5Crore) | undefined;
 
   constructor(deps: EwayBillServiceDeps) {
     this.#portal = deps.portal;
     this.#payloadOptions = deps.allowSandboxGstins === true ? { allowSandboxGstins: true } : {};
+    this.#turnover = deps.turnoverAbove5Crore;
     this.#records = deps.records;
     this.#trips = deps.trips;
     this.#audit = deps.audit;
     this.#clock = deps.clock;
     this.#policy = deps.policy;
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
+  }
+
+  /** The payload options for one movement: the sandbox switch, and the turnover answer for its bill's year. */
+  #optionsFor(movement: Movement): PartABuildOptions {
+    const date = movement.documents[0]?.documentDate;
+    if (this.#turnover === undefined || date === undefined) return this.#payloadOptions;
+    return { ...this.#payloadOptions, turnoverAbove5Crore: this.#turnover(financialYearOf(isoDate(date))) };
   }
 
   // ------------------------------------------------------------------------ reading
@@ -150,7 +165,7 @@ export class EwayBillService {
       };
     }
 
-    const built = buildPartA(movement, this.#payloadOptions);
+    const built = buildPartA(movement, this.#optionsFor(movement));
     const days = movement.approximateDistanceKm === undefined
       ? undefined
       : validityDays(movement.approximateDistanceKm, movement.vehicle?.vehicleType ?? movement.vehicleType, policy);
@@ -211,7 +226,7 @@ export class EwayBillService {
       );
     }
 
-    const partA = buildPartA(movement, this.#payloadOptions);
+    const partA = buildPartA(movement, this.#optionsFor(movement));
     if (!partA.ok) {
       throw invalid(
         "EWAY_INCOMPLETE",

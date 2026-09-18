@@ -68,3 +68,13 @@ export const SAMPLE_VEHICLES = Object.freeze([
   { registrationNumber: "MH12CD5678", vehicleType: "regular" as const, bodyType: "container" as const, ratedCapacityKg: 16000 },
   { registrationNumber: "KA05EF9012", vehicleType: "regular" as const, bodyType: "two_wheeler" as const, ratedCapacityKg: 150 },
 ]);
+
+/**
+ * Issue #187 — test support: a business that has answered the turnover question the same way for
+ * every financial year a test is likely to date a bill in (2017-18 to 2035-36).
+ */
+export const turnoverAnsweredEveryYear = (answer: "YES" | "NO" | "UNKNOWN"): readonly { answer: "YES" | "NO" | "UNKNOWN"; forFinancialYear: string }[] =>
+  Array.from({ length: 19 }, (_, index) => {
+    const start = 2017 + index;
+    return { answer, forFinancialYear: `${start}-${String((start + 1) % 100).padStart(2, "0")}` };
+  });

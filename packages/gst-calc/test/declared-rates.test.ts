@@ -16,6 +16,7 @@ import { InMemoryDeclaredRates, validateDeclaredRate, type DeclaredRate } from '
 import { InMemoryMasterData } from '../src/master-data-port.ts';
 import { SHARMA, inr, on, qty } from './fixtures.ts';
 import type { ComputeInput, ComputeResult } from '../src/compute.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 const declared = (overrides: Partial<DeclaredRate> = {}): DeclaredRate => ({
   companyId: SHARMA,
@@ -33,7 +34,7 @@ const declared = (overrides: Partial<DeclaredRate> = {}): DeclaredRate => ({
 /** A production calculator: no rate in the register is approved yet, so nothing is sourced. */
 const productionCalculator = (rates: InMemoryDeclaredRates | undefined) => {
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId: SHARMA, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId: SHARMA, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   masterData.putParty(SHARMA, { partyId: 'abc', gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' });
   masterData.putItem(SHARMA, {
     itemId: 'CRATE-P',
@@ -117,7 +118,7 @@ test('a bill with no declared rates carries no notice, so the warning never beco
     },
   ]);
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId: SHARMA, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId: SHARMA, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   masterData.putParty(SHARMA, { partyId: 'abc', gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' });
   masterData.putItem(SHARMA, {
     itemId: 'CRATE-P', name: 'Plastic crate', kind: 'GOODS', hsnOrSac: '3923',

@@ -156,7 +156,7 @@
 
         <template id="sale-line-template">
           <div class="sale-line">
-            <label><span data-i18n="item"></span><select data-line-field="item" data-item-picker required></select></label>
+            <label><span data-i18n="item"></span><select data-line-field="item" data-item-picker required></select><button type="button" class="text-button" data-change-code data-i18n="changeItemCode"></button></label>
             <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
             <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
@@ -960,6 +960,14 @@
                 </select>
               </label>
               <label><span data-i18n="setupBooksFrom"></span><input type="date" name="booksStartDate" value="2026-04-01" /></label>
+              <label><span data-i18n="turnoverQuestion"></span>
+                <select name="turnoverAbove5Crore">
+                  <option value="UNKNOWN" data-i18n="turnoverUnsure"></option>
+                  <option value="NO" data-i18n="turnoverNo"></option>
+                  <option value="YES" data-i18n="turnoverYes"></option>
+                </select>
+              </label>
+              <p class="setup-hint" data-i18n="turnoverWhy"></p>
             </fieldset>
             <fieldset>
               <legend data-i18n="setupOneThing"></legend>
@@ -1009,6 +1017,14 @@
               <label><span data-i18n="businessPincode"></span><input name="pincode" inputmode="numeric" required /></label>
               <label><span data-i18n="businessState"></span><select name="stateCode" id="business-state"></select></label>
               <p class="setup-hint" id="business-gstin-note"></p>
+            </fieldset>
+            <fieldset>
+              <legend data-i18n="turnoverLegend"></legend>
+              <p class="setup-hint" data-i18n="turnoverQuestion"></p>
+              <label class="choice"><input type="radio" name="turnoverAbove5Crore" value="YES" /> <span data-i18n="turnoverYes"></span></label>
+              <label class="choice"><input type="radio" name="turnoverAbove5Crore" value="NO" /> <span data-i18n="turnoverNo"></span></label>
+              <label class="choice"><input type="radio" name="turnoverAbove5Crore" value="UNKNOWN" /> <span data-i18n="turnoverUnsure"></span></label>
+              <p class="setup-hint" id="business-turnover-note"></p>
             </fieldset>
             <fieldset>
               <legend data-i18n="businessContactLegend"></legend>
@@ -1261,6 +1277,19 @@
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
           <button class="primary-button" type="submit" data-i18n="saveItem"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="item-code-dialog" aria-labelledby="item-code-dialog-title">
+      <h2 id="item-code-dialog-title" data-i18n="itemCodeTitle"></h2>
+      <p id="item-code-current"></p>
+      <form id="item-code-form" class="login-form">
+        <input type="hidden" name="itemId" />
+        <label><span data-i18n="itemCodeNew"></span><input name="hsnSac" inputmode="numeric" required /><small data-i18n="itemCodeHelp"></small></label>
+        <p class="login-error" id="item-code-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="itemCodeSave"></button>
         </div>
       </form>
     </dialog>

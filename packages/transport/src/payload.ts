@@ -15,6 +15,7 @@ import type {
   ConsignmentLine, Movement, MovementParty, MovementReason, TransportMode, VehicleAssignment,
 } from "./types.ts";
 import type { Paise } from "../../masters/src/types.ts";
+import { minimumHsnDigitsOnEWayBill, type TurnoverAbove5Crore } from "../../masters/src/hsn-digits.ts";
 import { consignmentValueOf, lineValueWithTax, movementRoute } from "./applicability.ts";
 
 /** Paise to the rupee number the portal's schema expects. Exact: no float ever touches this. */
@@ -125,6 +126,12 @@ export interface PartABuildOptions {
   readonly distanceKm?: number;
   /** Accept the government's malformed sandbox GSTINs. Never set against the live portal. */
   readonly allowSandboxGstins?: boolean;
+  /**
+   * Issue #187 — the business's answer for the bill's financial year: was last year's turnover above
+   * ₹5 crore? The portal wants at least 6 HSN digits above it and 4 below. Left out, it counts as "not
+   * sure", which asks for 6, because 6 is always accepted.
+   */
+  readonly turnoverAbove5Crore?: TurnoverAbove5Crore;
 }
 
 /**
@@ -155,8 +162,14 @@ export const buildPartA = (movement: Movement, options: PartABuildOptions = {}):
   checkParty(movement.shipTo ?? movement.billTo, "receiver", "to", problems, options);
 
   primary.lines.forEach((line, index) => {
-    if ((line.hsnCode ?? "").trim() === "") {
+    const hsn = (line.hsnCode ?? "").trim();
+    if (hsn === "") {
       problems.push({ field: `itemList[${index}].hsnCode`, message: `"${line.description}" has no HSN code, and every line on an e-way bill needs one.` });
+    } else if (!hsn.startsWith("99") && hsn.length < minimumHsnDigitsOnEWayBill(options.turnoverAbove5Crore ?? "UNKNOWN")) {
+      // Issue #187 — the portal refuses a code shorter than 6 digits above ₹5 crore, 4 below. SAC
+      // (services, starting 99) is always 6 digits and is checked where the item is saved.
+      const minimum = minimumHsnDigitsOnEWayBill(options.turnoverAbove5Crore ?? "UNKNOWN");
+      problems.push({ field: `itemList[${index}].hsnCode`, message: `"${line.description}" has the HSN code ${hsn} (${hsn.length} digits). The e-way bill portal needs at least ${minimum} digits for this business. Update the item's HSN code.` });
     }
     if (line.taxableValuePaise < 0n) {
       problems.push({ field: `itemList[${index}].taxableAmount`, message: `"${line.description}" has a value below zero, which the portal will not accept.` });
