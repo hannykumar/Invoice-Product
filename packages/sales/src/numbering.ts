@@ -28,65 +28,60 @@
  * away for no reason, and it cannot be reclaimed later without renumbering bills that are already
  * in customers' hands.
  */
-import { financialYearOf, invalid, type IsoDate } from '@invoice/kernel';
+import type { IsoDate } from '@invoice/kernel';
+import {
+  DOCUMENT_NUMBER_MAX_LENGTH,
+  MIN_DOCUMENTS_PER_YEAR,
+  documentSequenceDigits,
+  documentSeriesScope,
+  documentsPerYear,
+  formatDocumentNumber,
+  validateDocumentSeries,
+  type DocumentSeries,
+  type DocumentSeriesKind,
+} from './document-series.ts';
 
-export interface NumberSeries {
-  /** Shown in the number, e.g. "INV". */
-  readonly prefix: string;
-  /**
-   * Shown in the number, usually the branch's short code, e.g. "KB". Empty for one series across the
-   * business, which is the default — every character it takes is taken from the running number.
-   */
-  readonly branchCode: string;
-}
+/** The arithmetic is shared with challans and credit and debit notes (#185). */
+export type NumberSeries = DocumentSeries;
 
 /** `INV/26-27/000001` — sixteen characters, and room for 999,999 bills in a financial year. */
 export const DEFAULT_SERIES: NumberSeries = { prefix: 'INV', branchCode: '' };
 
 /** Rule 46(b). */
-export const INVOICE_NUMBER_MAX_LENGTH = 16;
+export const INVOICE_NUMBER_MAX_LENGTH = DOCUMENT_NUMBER_MAX_LENGTH;
 
 /**
  * A series that cannot reach 99,999 bills in a year is refused outright. That is what this product
  * managed before the running number was widened, so no choice a business makes here can leave it
  * worse off than it already was.
  */
-export const MIN_BILLS_PER_YEAR = 99_999;
+export const MIN_BILLS_PER_YEAR = MIN_DOCUMENTS_PER_YEAR;
 
-const SHORT_YEAR_LENGTH = 5; // "26-27"
-const ALLOWED = /^[A-Za-z0-9-]+$/;
-
-const shortYear = (date: IsoDate): string => financialYearOf(date).slice(2);
-const partsOf = (series: NumberSeries, year: string, sequence: string): string =>
-  [series.prefix, ...(series.branchCode === '' ? [] : [series.branchCode]), year, sequence].join('/');
-
-/** Everything in the number that is not the running number, separators included. */
-const fixedLength = (series: NumberSeries): number =>
-  series.prefix.length + 1 + (series.branchCode === '' ? 0 : series.branchCode.length + 1) + SHORT_YEAR_LENGTH + 1;
+export const INVOICE_SERIES_KIND: DocumentSeriesKind = {
+  scope: 'sales',
+  noun: 'invoice',
+  plural: 'bills',
+  examplePrefix: 'INV',
+  codes: {
+    badSequence: 'SALES_BAD_SEQUENCE',
+    exhausted: 'SALES_SERIES_EXHAUSTED',
+    prefixRequired: 'SALES_PREFIX_REQUIRED',
+    characters: 'SALES_SERIES_CHARACTERS',
+    tooFew: 'SALES_SERIES_TOO_FEW_BILLS',
+    sharesPrefix: 'SALES_SERIES_SHARES_PREFIX',
+  },
+};
 
 /** How many digits are left for the running number once the prefix and the year have had their share. */
-export const sequenceDigits = (series: NumberSeries): number => INVOICE_NUMBER_MAX_LENGTH - fixedLength(series);
+export const sequenceDigits = (series: NumberSeries): number => documentSequenceDigits(series);
 
 /** The most bills this series can number in one financial year. */
-export const billsPerYear = (series: NumberSeries): number => {
-  const digits = sequenceDigits(series);
-  return digits < 1 ? 0 : 10 ** digits - 1;
-};
+export const billsPerYear = (series: NumberSeries): number => documentsPerYear(series);
 
-export const seriesScope = (series: NumberSeries, date: IsoDate): string =>
-  `sales:${series.prefix}:${series.branchCode}:${financialYearOf(date)}`;
+export const seriesScope = (series: NumberSeries, date: IsoDate): string => documentSeriesScope(INVOICE_SERIES_KIND, series, date);
 
-export const formatNumber = (series: NumberSeries, date: IsoDate, sequence: number): string => {
-  if (!Number.isInteger(sequence) || sequence < 1) throw invalid('SALES_BAD_SEQUENCE', 'An invoice number starts at 1.');
-  const ceiling = billsPerYear(series);
-  if (sequence > ceiling) {
-    throw invalid(
-      'SALES_SERIES_EXHAUSTED',
-      `This series has issued all ${ceiling.toLocaleString('en-IN')} of the bills it can number this financial year. Start a second series with its own prefix; GST allows more than one.`,
-    );
-  }
-  return partsOf(series, shortYear(date), String(sequence).padStart(sequenceDigits(series), '0'));
-};
+export const formatNumber = (series: NumberSeries, date: IsoDate, sequence: number): string =>
+  formatDocumentNumber(INVOICE_SERIES_KIND, series, date, sequence);
 
 /**
  * Refuses a series that could not number enough bills, before a single one is issued on it.
@@ -95,22 +90,7 @@ export const formatNumber = (series: NumberSeries, date: IsoDate, sequence: numb
  * sixteen characters allow — so what is checked here is whether the prefix and branch code have
  * eaten so much of the number that too little is left.
  */
-export const validateSeries = (series: NumberSeries): void => {
-  if (series.prefix.trim() === '') throw invalid('SALES_PREFIX_REQUIRED', 'An invoice series needs a prefix, such as INV.');
-  for (const part of [series.prefix, series.branchCode]) {
-    if (part !== '' && !ALLOWED.test(part)) {
-      throw invalid('SALES_SERIES_CHARACTERS', 'An invoice prefix and branch code may contain only letters, digits and "-".');
-    }
-  }
-  const ceiling = billsPerYear(series);
-  if (ceiling < MIN_BILLS_PER_YEAR) {
-    const sample = partsOf(series, '26-27', '0'.repeat(Math.max(sequenceDigits(series) - 1, 0)) + '1');
-    throw invalid(
-      'SALES_SERIES_TOO_FEW_BILLS',
-      `A number like ${sample} leaves room for only ${ceiling.toLocaleString('en-IN')} bills in a financial year, and GST allows the number no more than ${INVOICE_NUMBER_MAX_LENGTH} characters in total. Shorten the prefix or drop the branch code so the running number has more digits.`,
-    );
-  }
-};
+export const validateSeries = (series: NumberSeries): void => validateDocumentSeries(INVOICE_SERIES_KIND, series);
 
 /**
  * Splits a number back apart, so a person quoting one can be found. The branch code is optional, so

@@ -88,6 +88,10 @@ document number longer than that. So:
 - `formatNumber` refuses with `SALES_SERIES_EXHAUSTED` if a sequence somehow runs past the ceiling,
   rather than printing a seventeenth character.
 
+The arithmetic lives in `document-series.ts` (issue #185) and is shared with the challan series and
+with credit and debit notes, so all four documents are numbered by one set of rules. The names above
+are kept as thin wrappers.
+
 A branch code costs its own length plus a separator, straight out of the bills-per-year figure:
 `INV/26-27/000001` gives 999,999 a year, `I/KB/26-27/00001` gives 99,999, and `INV/KB/26-27/...`
 is refused because it would leave only 999.

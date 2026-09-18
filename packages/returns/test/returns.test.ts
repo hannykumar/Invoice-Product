@@ -14,7 +14,7 @@ import {
 } from '@invoice/inventory';
 import { createDefaultUnitRegistry } from '../../masters/src/units.ts';
 import {
-  InMemoryReturnNoteRepository, ReturnService, returnInventoryAdapter,
+  DEFAULT_NOTE_SERIES, InMemoryReturnNoteRepository, ReturnService, returnInventoryAdapter, validateNoteSeries,
   type OriginalSalesDocument, type SalesReturnCommand,
 } from '../src/index.ts';
 
@@ -123,7 +123,7 @@ test('a partial sales return credits the customer, reverses GST and puts accepte
 
   const result = await f.service.postSales(actor, command());
   assert.equal(result.deduplicated, false);
-  assert.match(result.note.number, /^CN\/000001$/);
+  assert.match(result.note.number, /^CN\/26-27\/0000001$/);
   assert.equal(result.note.originalDocument.number, 'INV/KB/00070');
   const customer = await partyBalance(f.store.read(), COMPANY, CUSTOMER);
   assert.equal(toDecimalString(customer.balance), '7080.00');
@@ -220,4 +220,55 @@ test('another company cannot discover or return this company\'s invoice', async 
   const f = await setup();
   const outsider = { ...actor, companyId: OTHER };
   await assert.rejects(f.service.previewSales(outsider, command()), (error: any) => error.code === 'RETURN_ORIGINAL_NOT_FOUND');
+});
+
+// Issue #185 — the counter follows the financial year (1 April to 31 March), not the calendar year.
+test('credit note numbers run on across 1 January and start again on 1 April', async () => {
+  const f = await setup();
+  const numbers: string[] = [];
+  for (const date of ['2026-12-31', '2027-01-01', '2027-03-31', '2027-04-01']) {
+    const { note } = await f.service.postSales(actor, command({
+      idempotencyKey: `fy-${date}`, documentDate: isoDate(date),
+      lines: [{ originalLineId: 'line-apples', quantity: quantityFromString('1', 'BOX'), disposition: 'ACCEPTED' }],
+    }));
+    numbers.push(note.number);
+  }
+  assert.deepEqual(numbers, ['CN/26-27/0000001', 'CN/26-27/0000002', 'CN/26-27/0000003', 'CN/27-28/0000001']);
+  for (const number of numbers) assert.equal(number.length, 16, `${number} must use all sixteen characters`);
+});
+
+test('a credit note series that shares a prefix with invoices is refused', async () => {
+  const f = await setup();
+  assert.throws(
+    () => new ReturnService({
+      store: f.store, ledger: f.ledger, repository: f.notes,
+      sales: { async findSalesDocument() { return null; } },
+      inventory: returnInventoryAdapter(f.inventory), permissions: permissionPortFromActor, audit: f.audit,
+      clock: fixedClock('2026-08-30T10:00:00.000Z'),
+      noteSeries: { creditNote: { prefix: 'INV', branchCode: '' }, debitNote: { prefix: 'DN', branchCode: '' } },
+    }),
+    (error: unknown) => (error as { code?: string }).code === 'RETURN_NOTE_SERIES_SHARES_PREFIX',
+  );
+  assert.throws(
+    () => validateNoteSeries({ creditNote: { prefix: 'CN', branchCode: '' }, debitNote: { prefix: 'CN', branchCode: '' } }),
+    (error: unknown) => (error as { code?: string }).code === 'RETURN_NOTE_SERIES_SHARES_PREFIX',
+    'a debit note must not share the credit note prefix either',
+  );
+  assert.doesNotThrow(() => validateNoteSeries(DEFAULT_NOTE_SERIES));
+});
+
+test('returns across one financial year never repeat a number, so the database never refuses one', async () => {
+  // The dates from issue #185: under the old calendar-year counter, 8 January restarted at 000001
+  // and the database's UNIQUE(company_id, kind, number) refused the January return.
+  const f = await setup();
+  const numbers: string[] = [];
+  for (const date of ['2026-08-10', '2026-09-05', '2027-01-08', '2027-02-02']) {
+    const { note } = await f.service.postSales(actor, command({
+      idempotencyKey: `unique-${date}`, documentDate: isoDate(date),
+      lines: [{ originalLineId: 'line-apples', quantity: quantityFromString('1', 'BOX'), disposition: 'ACCEPTED' }],
+    }));
+    numbers.push(note.number);
+  }
+  assert.deepEqual(numbers, ['CN/26-27/0000001', 'CN/26-27/0000002', 'CN/26-27/0000003', 'CN/26-27/0000004']);
+  assert.equal(new Set(numbers).size, numbers.length);
 });
