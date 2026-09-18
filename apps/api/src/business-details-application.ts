@@ -19,7 +19,7 @@
  * 3. **The bank account lives in `packages/masters`, not here.** This module holds the id of the
  *    account that `MasterDataService` stores, and reads the account back for printing.
  */
-import { invalid, type CompanyId } from '@invoice/kernel';
+import { financialYearOf, invalid, isoDate, type CompanyId } from '@invoice/kernel';
 import type { RenderableBank, RenderableParty } from '@invoice/invoice-templates';
 import { validateLogo } from '@invoice/invoice-templates';
 import {
@@ -30,7 +30,11 @@ import {
   validateBankAccountNumber,
   validatePan,
   validatePincode,
+  turnoverAnswerOn,
+  withTurnoverAnswer,
   type BankAccount,
+  type TurnoverAbove5Crore,
+  type TurnoverAnswer,
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
@@ -69,6 +73,8 @@ export interface BusinessPrefill {
 
 const details = new Map<string, BusinessDetails>();
 const prefills = new Map<string, BusinessPrefill>();
+/** Issue #187 — the turnover answer, one per financial year, kept apart from the address. */
+const turnoverAnswers = new Map<string, readonly TurnoverAnswer[]>();
 
 const str = (value: unknown): string => String(value ?? '').trim();
 
@@ -125,7 +131,40 @@ export const readBusinessDetails = (
       pincode: remembered?.pincode ?? '',
     },
     states: Object.entries(STATE_NAMES).map(([code, name]) => ({ code, name })),
+    turnover: turnoverView(companyId),
   };
+};
+
+// ------------------------------------------------------------- the turnover question (#187)
+
+const TURNOVER_ANSWERS: readonly TurnoverAbove5Crore[] = ['YES', 'NO', 'UNKNOWN'];
+const todayIso = () => isoDate(new Date().toISOString().slice(0, 10));
+
+/** Every answer this business has given, one per financial year. The calculator reads these. */
+export const turnoverAnswersOf = (companyId: CompanyId | string): readonly TurnoverAnswer[] =>
+  turnoverAnswers.get(String(companyId)) ?? [];
+
+/** The answer for one financial year ("2026-27"), or "not sure" when that year was never answered. */
+export const turnoverAnswerForYear = (companyId: CompanyId | string, financialYear: string): TurnoverAbove5Crore =>
+  turnoverAnswersOf(companyId).find((answer) => answer.forFinancialYear === financialYear)?.answer ?? 'UNKNOWN';
+
+/**
+ * Records "was last financial year's turnover above ₹5 crore?" for the financial year running today.
+ * The answer is about the year before, so it governs this year's bills, and on 1 April the question
+ * is open again.
+ */
+export const recordTurnoverAnswer = (companyId: CompanyId | string, raw: unknown, today = todayIso()): void => {
+  const answer = str(raw).toUpperCase() as TurnoverAbove5Crore;
+  if (answer === ('' as TurnoverAbove5Crore)) return;
+  if (!TURNOVER_ANSWERS.includes(answer)) throw invalid('BUSINESS_TURNOVER_ANSWER', 'Choose Yes, No or Not sure.');
+  turnoverAnswers.set(String(companyId), withTurnoverAnswer(turnoverAnswersOf(companyId), { answer, forFinancialYear: financialYearOf(today) }));
+};
+
+const turnoverView = (companyId: CompanyId | string) => {
+  const today = todayIso();
+  const financialYear = financialYearOf(today);
+  const answered = turnoverAnswersOf(companyId).some((answer) => answer.forFinancialYear === financialYear);
+  return { answer: answered ? turnoverAnswerOn(turnoverAnswersOf(companyId), today) : null, financialYear };
 };
 
 // ---------------------------------------------------------------------------------- saving them
@@ -188,6 +227,7 @@ export const saveBusinessDetails = (
   }
 
   const bankAccountId = saveBankAccount(companyId, legalName, input, clear, current);
+  recordTurnoverAnswer(companyId, input.turnoverAbove5Crore);
 
   const next: BusinessDetails = {
     legalName,
@@ -208,7 +248,7 @@ export const saveBusinessDetails = (
     signatureDataUri,
   };
   details.set(String(companyId), next);
-  return { details: next, bank: bankAccountOf(companyId, bankAccountId) };
+  return { details: next, bank: bankAccountOf(companyId, bankAccountId), turnover: turnoverView(companyId) };
 };
 
 /** Writes the bank account into `packages/masters`, or leaves the saved one alone. */
@@ -329,4 +369,5 @@ export const requireIssuable = (companyId: CompanyId | string): BusinessDetails 
 /** Test support: forgets everything, so one test's saved address cannot leak into another's. */
 export const forgetBusinessDetails = (companyId: CompanyId | string): void => {
   details.delete(String(companyId));
+  turnoverAnswers.delete(String(companyId));
 };

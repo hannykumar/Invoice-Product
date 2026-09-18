@@ -53,6 +53,7 @@ import { ReportService, duesFrom, namesFrom, purchasesNotBuiltYet } from '@invoi
 import { createDefaultUnitRegistry, type UnitRegistry } from '../../masters/src/units.ts';
 import { AssistantService } from './service.ts';
 import type { BlockedDocument, BlockedDocumentPort } from './ports.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 const COMPANY: CompanyId = asId<'Company'>('demo-assistant');
 const SHOP: BranchId = asId<'Branch'>('shop');
@@ -205,7 +206,7 @@ const build = async () => {
   });
 
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   masterData
     .putParty(COMPANY, { partyId: ABC, gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' })
     .putParty(COMPANY, { partyId: GURUGRAM, gstin: '06BBBBB1111B1ZR', stateCode: '06', registration: 'REGULAR' });

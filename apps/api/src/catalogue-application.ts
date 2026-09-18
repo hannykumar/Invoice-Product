@@ -47,6 +47,8 @@ import {
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { masterData, mastersContext } from './master-data.ts';
+import { turnoverAnswersOf } from './business-details-application.ts';
+import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
 
@@ -367,7 +369,11 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   const created = service.createItem(
     ctx,
     { name, kind, hsnSac, baseUnit: unit, trackBatches: false, trackSerials: false },
-    { idempotencyKey: `item:${String(companyId)}:${str(input.reference) || `${name.toLowerCase()}:${hsnSac}`}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
+    {
+      idempotencyKey: `item:${String(companyId)}:${str(input.reference) || `${name.toLowerCase()}:${hsnSac}`}`,
+      acknowledgeSimilar: input.acknowledgeSimilar === true,
+      turnoverAbove5Crore: turnoverAnswerOn(turnoverAnswersOf(companyId), isoDate(new Date().toISOString().slice(0, 10))),
+    },
   );
 
   itemTaxes.set(taxKey(companyId, created.record.id), { kind: kindOfTax, ratePercentTimes100 });
@@ -388,8 +394,56 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   return {
     state: 'recorded' as const,
     title: 'Item added',
-    message: `${created.record.name} is in your item list, counted in ${unit}${ratePercentTimes100 === null ? ', with no GST on it' : ` and charged at ${Number(ratePercentTimes100) / 100}%`}.`,
+    message: `${created.record.name} is in your item list, counted in ${unit}${ratePercentTimes100 === null ? ', with no GST on it' : ` and charged at ${Number(ratePercentTimes100) / 100}%`}.${created.warnings.map((warning) => ` ${warning.message}`).join('')}`,
+    warnings: created.warnings.map((warning) => warning.message),
     item: itemViewOf(companyId, created.record),
+  };
+};
+
+/**
+ * Issue #187 — corrects an item's HSN or SAC code, which is what a bill held up for a code that is
+ * too short asks the person to do. The GST rate the business declared is kept: it is stored against
+ * the code, so it is declared again under the new one, with the same figure and the same basis.
+ */
+export const changeItemCode = (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const itemId = str(input.itemId);
+  const current = items(companyId).find((candidate) => candidate.id === itemId);
+  if (current === undefined) throw invalid('ITEM_NOT_FOUND', 'That item is not in your item list.');
+  const hsnSac = normaliseIdentifier(str(input.hsnSac || input.hsn));
+  if (hsnSac === '') throw invalid('ITEM_HSN_REQUIRED', 'Type the new code.');
+  require_(validateHsnOrSac(hsnSac, current.kind), 'ITEM_HSN', 'That is not an HSN or SAC code.');
+  const today = isoDate(new Date().toISOString().slice(0, 10));
+
+  const updated = masterData().updateItem(context(companyId), current.id, { hsnSac }, {
+    idempotencyKey: `item-code:${String(companyId)}:${current.id}:${hsnSac}`,
+    turnoverAbove5Crore: turnoverAnswerOn(turnoverAnswersOf(companyId), today),
+  });
+
+  const tax = itemTaxes.get(taxKey(companyId, current.id));
+  const taxKind = current.kind === 'service' ? 'SERVICES' : 'GOODS';
+  // A declaration for "39" already covers "3901"; one is only added when the new code is not covered.
+  if (tax?.ratePercentTimes100 != null && declaredRatesOf(companyId).find(String(companyId), hsnSac, taxKind, today) === undefined) {
+    const earlier = declaredRatesOf(companyId).find(String(companyId), current.hsnSac, taxKind, today);
+    declaredRatesOf(companyId).declare({
+      companyId: String(companyId),
+      code: hsnSac,
+      kind: taxKind,
+      ratePercentTimes100: tax.ratePercentTimes100,
+      effectiveFrom: earlier?.effectiveFrom ?? isoDate('2017-07-01'),
+      effectiveTo: null,
+      declaredBy: earlier?.declaredBy ?? declaredBy,
+      declaredOn: today,
+      basis: earlier?.basis ?? 'The rate this business charges on this item',
+    });
+  }
+
+  return {
+    state: 'recorded' as const,
+    title: 'Item code changed',
+    message: `${updated.record.name} now carries the code ${hsnSac}.${updated.warnings.map((warning) => ` ${warning.message}`).join('')}`,
+    warnings: updated.warnings.map((warning) => warning.message),
+    item: itemViewOf(companyId, updated.record),
   };
 };
 
@@ -412,7 +466,14 @@ const REGISTRATION_FOR_TAX: Readonly<Record<string, 'REGULAR' | 'COMPOSITION' | 
 export const catalogueTaxReader = (company: { readonly companyId: CompanyId | string; readonly gstin: string }): MasterDataReader => ({
   company(companyId: string): CompanyTaxProfile | undefined {
     if (companyId !== String(company.companyId)) return undefined;
-    return { companyId, gstin: company.gstin, stateCode: gstinStateCode(company.gstin), registration: 'REGULAR' };
+    return {
+      companyId,
+      gstin: company.gstin,
+      stateCode: gstinStateCode(company.gstin),
+      registration: 'REGULAR',
+      // Issue #187 — decides how many HSN digits each bill needs. Read live, like everything here.
+      turnoverAbove5Crore: turnoverAnswersOf(companyId),
+    };
   },
   party(companyId: string, partyId: string): PartyTaxProfile | undefined {
     const party = customers(companyId).find((candidate) => candidate.id === partyId);

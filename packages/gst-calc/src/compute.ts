@@ -41,6 +41,7 @@ import {
 // GPT 3's master data (#5). Imported by path because packages/masters declares no exports field,
 // which is the convention their lane and GPT 2's already use for cross-package imports.
 import { GST_STATE_CODES } from '../../masters/src/validation.ts';
+import { minimumHsnDigitsOnInvoice, turnoverAnswerOn, type TurnoverAbove5Crore } from '../../masters/src/hsn-digits.ts';
 import type { MasterDataReader, TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
 import type { DeclaredRateReader } from './declared-rates.ts';
@@ -164,6 +165,7 @@ export interface BlockedReason {
     | 'TAX_SPLIT_UNKNOWN'
     | 'ITEM_NOT_CLASSIFIED'
     | 'HSN_MISSING'
+    | 'HSN_TOO_SHORT'
     | 'RATE_NOT_FOUND'
     | 'RATE_NOT_REVIEWED'
     | 'INCLUSIVE_WITH_CESS_UNSUPPORTED'
@@ -375,9 +377,14 @@ export class GstCalculator {
     // 5. Goods lines carry nothing but their own arithmetic: quantity times rate, less their own
     //    discount. Issue #131 — folding freight in here made the printed bill fail the first check
     //    a customer makes, so charges are worked out separately in step 6.
+    // Issue #187 — how many HSN digits this bill needs, from the business's turnover answer and
+    // whether this customer is registered. Worked out once, because it is the same for every line.
+    const turnover = turnoverAnswerOn(company.turnoverAbove5Crore, input.documentDate);
+    const customerRegistered = party.gstin !== null || party.registration === 'REGULAR' || party.registration === 'COMPOSITION';
+    const hsnRule = { turnover, minimum: minimumHsnDigitsOnInvoice(turnover, customerRegistered) };
     const goodsLines: ComputedTaxLine[] = [];
     for (const r of ready) {
-      const line = this.#computeLine(input, r, split, mayChargeGst, reasons);
+      const line = this.#computeLine(input, r, split, mayChargeGst, reasons, hsnRule);
       if (line !== null) goodsLines.push(line);
     }
     if (reasons.length > 0) return this.#refuse(input, reasons, decisions);
@@ -461,6 +468,7 @@ export class GstCalculator {
     split: TaxSplit,
     mayChargeGst: boolean,
     reasons: BlockedReason[],
+    hsnRule: { readonly turnover: TurnoverAbove5Crore; readonly minimum: 4 | 6 | null },
   ): ComputedTaxLine | null {
     const { line, item } = prepared;
     const base = prepared.net;
@@ -474,6 +482,39 @@ export class GstCalculator {
       reasons.push(
         blocked('HSN_MISSING', `"${item.name}" has no government code yet, so we cannot find its rate.`,
           `"${item.name}" ka sarkari code abhi nahin hai, isliye rate nahin mil raha.`, undefined, line.lineId),
+      );
+      return null;
+    }
+
+    // Issue #187 — Notification 78/2020-CT under Rule 46(g): at least 4 HSN digits on bills to
+    // registered customers, and at least 6 on every bill once turnover is above ₹5 crore. A short
+    // code is never padded with zeros: `39` and `390000` name different goods, so the person is sent
+    // to fix the item. Charge lines (freight) have no HSN of their own and never reach this method.
+    const digits = item.hsnOrSac.length;
+    if (item.kind === 'GOODS' && hsnRule.minimum !== null && digits < hsnRule.minimum) {
+      const why =
+        hsnRule.turnover === 'NO'
+          ? {
+              en: 'Bills to a GST-registered customer need at least 4 digits.',
+              hi: 'GST-registered customer ke bill par kam se kam 4 ank chahiye.',
+            }
+          : hsnRule.turnover === 'YES'
+            ? {
+                en: 'Your turnover last year was above ₹5 crore, so every bill needs at least 6 digits.',
+                hi: 'Pichhle saal aapka turnover ₹5 crore se zyada tha, isliye har bill par kam se kam 6 ank chahiye.',
+              }
+            : {
+                en: 'Every bill needs at least 6 digits until you tell us, in Business details, that your turnover last year was ₹5 crore or less.',
+                hi: 'Jab tak aap Business details mein nahin batate ki pichhle saal turnover ₹5 crore ya kam tha, har bill par kam se kam 6 ank chahiye.',
+              };
+      reasons.push(
+        blocked(
+          'HSN_TOO_SHORT',
+          `"${item.name}" has the code ${item.hsnOrSac} (${digits} digits). ${why.en} Update the item's HSN code.`,
+          `"${item.name}" ka code ${item.hsnOrSac} hai (${digits} ank). ${why.hi} Item ka HSN code badlein.`,
+          undefined,
+          line.lineId,
+        ),
       );
       return null;
     }

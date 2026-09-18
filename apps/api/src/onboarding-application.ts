@@ -31,7 +31,7 @@ import {
   type Registration,
   type StepId,
 } from '@invoice/onboarding';
-import { rememberBusinessPrefill } from './business-details-application.ts';
+import { recordTurnoverAnswer, rememberBusinessPrefill } from './business-details-application.ts';
 
 const ONBOARDING_PERMISSIONS = ['ledger.setup', 'ledger.post.opening_balance', 'onboarding.run', 'onboarding.finish'];
 
@@ -233,6 +233,9 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean, company
   if (!finish) return { ok: true, problems: [], summary };
 
   const finished = await service.finish(actor, session.id, { idempotencyKey: `web-setup-finish-${session.id}` });
+  // Issue #187 — the turnover question is asked here, in the tax step, and kept for this year once
+  // the setup is actually finished. A preview saves nothing.
+  if (companyId !== undefined) recordTurnoverAnswer(companyId, input.turnoverAbove5Crore);
   const tb = await ledgerTrialBalance(company.store.read(), company.companyId);
   const rows = tb.rows.map((row) => ({
     name: row.account.name,

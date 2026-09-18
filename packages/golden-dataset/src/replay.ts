@@ -47,6 +47,7 @@ import {
 import { createDefaultUnitRegistry, type UnitRegistry } from '../../masters/src/units.ts';
 import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import type { GoldenFixture } from './schema.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 /** Everything the replay observed, in the same shape the fixture states its expectations in. */
 export interface ReplayResult {
@@ -148,7 +149,7 @@ export const replay = async (fixture: GoldenFixture): Promise<ReplayResult> => {
 
   // Master data: the company, its customers, and what it sells.
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId, gstin: fixture.company.gstin, stateCode: fixture.company.stateCode, registration: 'REGULAR' });
+  masterData.putCompany({ companyId, gstin: fixture.company.gstin, stateCode: fixture.company.stateCode, registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   for (const party of fixture.parties) {
     masterData.putParty(companyId, {
       partyId: asId<'Party'>(party.partyId),

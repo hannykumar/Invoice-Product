@@ -87,9 +87,9 @@ const copy = {
     customerAddress1: "Address line 1", customerAddress2: "Address line 2 (optional)", customerCity: "Town or city", customerPincode: "PIN code", customerState: "Which state?",
     customerStateHelp: "For a registered customer the state comes from the first two digits of their GST number, and cannot be changed.",
     customerPhone: "Phone (optional)", saveCustomer: "Save customer",
-    addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
+    changeItemCode: "Change HSN code", itemCodeTitle: "Change the item's HSN code", itemCodeCurrent: "{item} carries the code {code} ({digits} digits).", itemCodeNew: "New HSN or SAC code", itemCodeHelp: "Type every digit you have. More digits are always accepted; a shorter code is never padded with zeros.", itemCodeSave: "Save code", itemCodePick: "Choose an item first.", turnoverLegend: "Turnover last year", turnoverQuestion: "Was your business's total turnover (all sales under your PAN across every GST registration in India, including exempt sales and exports, before GST) more than ₹5 crore last financial year?", turnoverYes: "Yes", turnoverNo: "No", turnoverUnsure: "Not sure", turnoverWhy: "Until you tell us, we ask for 6 digits, because 6 is always accepted.", turnoverFor: "This answer is for bills in {year}. It decides how many HSN digits each bill needs.", addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
     itemName: "What it is called on the bill", itemKind: "Goods or a service?", itemGoods: "Goods", itemService: "A service",
-    itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits. A service carries a 6-digit SAC starting 99.",
+    itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits; bills to GST-registered customers need at least 4, and at least 6 above ₹5 crore turnover. A service carries a 6-digit SAC starting 99.",
     itemUnit: "How is it counted?", itemTax: "The GST you charge on it", itemTaxHelp: "This is the rate your business charges. We record it as yours and the bill says so; we never pick one for you.",
     itemExempt: "Exempt or nil-rated", itemOtherRateChoice: "Another rate", itemOtherRate: "What rate, in per cent?",
     itemBasis: "Where does the rate come from?", itemBasisHelp: "For example: our accountant, or the rate printed on our supplier's bills.", saveItem: "Save item",
@@ -394,9 +394,9 @@ const copy = {
     customerAddress1: "Pate ki pehli line", customerAddress2: "Pate ki doosri line (marzi se)", customerCity: "Shehar ya kasba", customerPincode: "PIN code", customerState: "Kaunsa rajya?",
     customerStateHelp: "Registered customer ka rajya unke GST number ke pehle do ank se aata hai, aur badla nahin ja sakta.",
     customerPhone: "Phone (marzi se)", saveCustomer: "Customer save karen",
-    addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
+    changeItemCode: "HSN code badlein", itemCodeTitle: "Item ka HSN code badlein", itemCodeCurrent: "{item} ka code {code} hai ({digits} ank).", itemCodeNew: "Naya HSN ya SAC code", itemCodeHelp: "Jitne ank aapke paas hain, sab bharein. Zyada ank hamesha chalte hain; chhote code mein zero nahin joda jata.", itemCodeSave: "Code save karen", itemCodePick: "Pehle item chunen.", turnoverLegend: "Pichhle saal ka turnover", turnoverQuestion: "Pichhle financial year mein aapke business ka kul turnover (aapke PAN par Bharat ke har GST registration ki saari bikri, exempt aur export milakar, GST se pehle) ₹5 crore se zyada tha?", turnoverYes: "Haan", turnoverNo: "Nahin", turnoverUnsure: "Pakka nahin", turnoverWhy: "Jab tak aap nahin batate, hum 6 ank maangte hain, kyonki 6 hamesha maane jaate hain.", turnoverFor: "Yeh jawab {year} ke bills ke liye hai. Isse tay hota hai ki har bill par HSN ke kitne ank chahiye.", addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
     itemName: "Bill par iska naam", itemKind: "Maal hai ya seva?", itemGoods: "Maal", itemService: "Seva",
-    itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai. Seva ka SAC 6 ank ka, 99 se shuru.",
+    itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai; GST-registered customer ke bill par kam se kam 4, aur ₹5 crore se zyada turnover par kam se kam 6. Seva ka SAC 6 ank ka, 99 se shuru.",
     itemUnit: "Kaise gina jata hai?", itemTax: "Aap ispar kitna GST lete hain", itemTaxHelp: "Yeh aapke vyapar ka rate hai. Hum ise aapka rate likhte hain aur bill par bhi yahi likha jata hai; hum khud koi rate nahin chunte.",
     itemExempt: "Chhoot ya shunya rate", itemOtherRateChoice: "Koi aur rate", itemOtherRate: "Kitne pratishat?",
     itemBasis: "Yeh rate kahan se aaya?", itemBasisHelp: "Jaise: hamare accountant se, ya supplier ke bill par chhape rate se.", saveItem: "Saman save karen",
@@ -1998,7 +1998,18 @@ async function openBusinessDetails() {
   document.querySelector("#business-gstin-note").textContent =
     text.businessGstinNote.replace("{gstin}", read.gstin).replace("{state}", `${read.gstinStateName} (${read.gstinStateCode})`);
   document.querySelector("#business-pan-note").textContent = text.businessPanNote.replace("{pan}", read.gstinPan);
+  showTurnoverAnswer(read.turnover);
   renderBusinessSignature();
+}
+
+/** Issue #187 — the turnover answer for this financial year, or none ticked when it was never given. */
+function showTurnoverAnswer(turnover) {
+  const form = document.querySelector("#business-form");
+  if (!form || !turnover) return;
+  form.querySelectorAll('[name="turnoverAbove5Crore"]').forEach((radio) => { radio.checked = radio.value === turnover.answer; });
+  const text = copy[state.locale];
+  document.querySelector("#business-turnover-note").textContent =
+    `${text.turnoverFor.replace("{year}", turnover.financialYear)}${turnover.answer === null || turnover.answer === "UNKNOWN" ? ` ${text.turnoverWhy}` : ""}`;
 }
 
 async function saveBusinessDetails(clear = []) {
@@ -2013,6 +2024,7 @@ async function saveBusinessDetails(clear = []) {
     businessState.unsavedSignature = null;
     status.textContent = copy[state.locale].businessSaved;
     document.querySelector("#business-bank-remove").hidden = result.bank === null;
+    if (result.turnover) showTurnoverAnswer(result.turnover);
     if (result.bank === null) {
       for (const name of ["bankName", "accountNumber", "branch", "ifsc"]) {
         const field = form.elements.namedItem(name);
@@ -4827,6 +4839,37 @@ document.querySelector("#item-tax")?.addEventListener("change", (event) => {
   document.querySelector("#item-other-rate").hidden = event.target.value !== "other";
 });
 
+// Issue #187 — a bill held up because an item's HSN code is too short asks the person to update
+// the code. This is where they do it, next to the item on the sale line.
+document.addEventListener("click", (event) => {
+  const button = event.target instanceof Element ? event.target.closest("[data-change-code]") : null;
+  if (!button) return;
+  const text = copy[state.locale];
+  const select = button.closest(".sale-line")?.querySelector("[data-item-picker]");
+  const item = catalogue.items.find((row) => row.id === select?.value);
+  const form = document.querySelector("#item-code-form");
+  document.querySelector("#item-code-error").textContent = item ? "" : text.itemCodePick;
+  if (!item) return;
+  form.elements.namedItem("itemId").value = item.id;
+  form.elements.namedItem("hsnSac").value = item.hsnSac;
+  document.querySelector("#item-code-current").textContent = text.itemCodeCurrent
+    .replace("{item}", item.name).replace("{code}", item.hsnSac).replace("{digits}", String(item.hsnSac.length));
+  document.querySelector("#item-code-dialog").showModal();
+});
+
+document.querySelector("#item-code-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#item-code-error");
+  error.textContent = "";
+  try {
+    const changed = await api("/api/items/code", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    await loadCatalogue();
+    document.querySelector("#item-code-dialog").close();
+    if (changed.warnings?.length) showDialog({ title: changed.title, message: changed.message, effects: [] }, "recorded");
+  } catch (requestError) { error.textContent = requestError.message; }
+});
+
 document.querySelector("#item-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -4856,6 +4899,8 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
     }
     form.reset();
     document.querySelector("#item-dialog").close();
+    // Issue #187 — a code too short for some bills is saved, and the person is told so at once.
+    if (created.warnings?.length) showDialog({ title: created.title, message: created.message, effects: [] }, "recorded");
   } catch (requestError) { error.textContent = requestError.message; }
 });
 

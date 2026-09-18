@@ -19,6 +19,7 @@ import { UnitRegistry, createDefaultUnitRegistry } from "./units.ts";
 import type { Quantity } from "./units.ts";
 import * as validate from "./validation.ts";
 import type { ValidationProblem } from "./validation.ts";
+import { hsnLengthWarning, type TurnoverAbove5Crore } from "./hsn-digits.ts";
 import type {
   BankAccount, Batch, Id, IsoDate, Item, MasterKind, OpeningStock, Paise, Party, PartyAddress,
   PriceList, PriceListEntry, SerialNumber, TaxDefault, Transporter, Vehicle, Warehouse,
@@ -36,6 +37,15 @@ export class MasterDataError extends Error {
   }
 }
 
+/**
+ * Issue #187 — a code too short for some bills is saved, with a warning. It is never refused: a
+ * small shop selling only to unregistered customers may use a 2-digit code.
+ */
+const hsnWarnings = (item: Pick<Item, "hsnSac" | "kind">, options: WriteOptions): ValidationProblem[] => {
+  const message = hsnLengthWarning(item.hsnSac, item.kind, options.turnoverAbove5Crore ?? "NO");
+  return message === null ? [] : [{ field: "hsnSac", code: "HSN_TOO_SHORT_FOR_SOME_BILLS", message }];
+};
+
 export interface WriteOptions {
   /** Required. Retrying a write with the same key returns the first result. */
   readonly idempotencyKey: string;
@@ -44,6 +54,11 @@ export interface WriteOptions {
   readonly reason?: string;
   /** Set after the user has seen and accepted a "this looks similar" warning. */
   readonly acknowledgeSimilar?: boolean;
+  /**
+   * Issue #187 — the business's turnover answer for this year, used only to word the HSN-length
+   * warning on an item. Left out, only the warning every business needs (under 4 digits) is given.
+   */
+  readonly turnoverAbove5Crore?: TurnoverAbove5Crore;
 }
 
 export interface WriteResult<T> {
@@ -333,7 +348,7 @@ export class MasterDataService {
     if (verdict.decision === "block") throw new MasterDataError("DUPLICATE_BLOCKED", `This item already exists: ${verdict.candidates.map((candidate) => candidate.record.name).join(", ")}`, [], verdict.candidates);
     if (verdict.decision === "warn" && !options.acknowledgeSimilar) throw new MasterDataError("DUPLICATE_BLOCKED", `A similar item already exists. Confirm it is different to continue: ${verdict.candidates.map((candidate) => candidate.record.name).join(", ")}`, [], verdict.candidates);
     const { version, command } = this.#commit(context, this.#stores.items, started, item, options);
-    return { record: version.data, version, command, warnings: [], similar: verdict.decision === "clear" ? [] : verdict.candidates };
+    return { record: version.data, version, command, warnings: hsnWarnings(item, options), similar: verdict.decision === "clear" ? [] : verdict.candidates };
   }
 
   updateItem(context: RequestContext, id: Id, changes: Partial<Omit<Item, "id" | "companyId">>, options: WriteOptions): WriteResult<Item> {
@@ -343,7 +358,7 @@ export class MasterDataService {
     if (changes.hsnSac) this.#require(validate.validateHsnOrSac(changes.hsnSac, changes.kind ?? current.kind));
     const updated: Item = { ...current, ...changes, id: current.id, companyId: current.companyId };
     const { version, command } = this.#commit(context, this.#stores.items, started, updated, options);
-    return { record: version.data, version, command, warnings: [], similar: [] };
+    return { record: version.data, version, command, warnings: hsnWarnings(updated, options), similar: [] };
   }
 
   resolveItem(context: RequestContext, spokenName: string, asOf: IsoDate = today()): ResolveOutcome<Item> {

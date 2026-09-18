@@ -69,3 +69,21 @@ answer is the failure mode this product exists to avoid.
 
 Create, edit or store parties, items or units. Every one of those is #5's. This module reads the
 three shapes above and nothing else.
+
+## HSN digits and the turnover answer (issue #187)
+
+`CompanyTaxProfile.turnoverAbove5Crore` holds the business's answer to "was last financial year's
+turnover above ₹5 crore?", one entry per financial year (`{ answer: 'YES' | 'NO' | 'UNKNOWN',
+forFinancialYear: '2026-27' }`). A year with no entry counts as `UNKNOWN`, so the question is asked
+again on 1 April. The rule lives in `packages/masters/src/hsn-digits.ts` and follows Notification
+78/2020-Central Tax (Rule 46(g)):
+
+- `NO`: at least 4 HSN digits on goods lines of bills to registered customers; none required on
+  bills to unregistered customers.
+- `YES` or `UNKNOWN`: at least 6 digits on every goods line. Six is always lawful; four may not be.
+- The e-way bill: at least 6 digits unless the answer is `NO`, then 4, whoever the customer is.
+
+The calculator refuses a goods line below the minimum with `HSN_TOO_SHORT` (the bill goes to
+`NEEDS_INFO`). Charge lines (freight) have no HSN and are not checked. Codes are never padded with
+zeros. `createItem` / `updateItem` return a warning, never an error, for a code shorter than some
+bills need.

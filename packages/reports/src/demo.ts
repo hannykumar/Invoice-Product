@@ -54,6 +54,7 @@ import { duesFrom, namesFrom, purchasesNotBuiltYet } from './ports.ts';
 import { ReportService } from './service.ts';
 import { renderPack } from './render.ts';
 import { exportReport, registerTable, trialBalanceTable } from './export.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 const COMPANY: CompanyId = asId<'Company'>('demo-sharma');
 const KAROL_BAGH: BranchId = asId<'Branch'>('kb');
@@ -175,7 +176,7 @@ const main = async (): Promise<void> => {
   });
 
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   masterData
     .putParty(COMPANY, { partyId: ABC, gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' })
     .putParty(COMPANY, { partyId: GURUGRAM, gstin: '06BBBBB1111B1ZR', stateCode: '06', registration: 'REGULAR' });

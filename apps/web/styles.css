@@ -166,6 +166,8 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 .setup-form fieldset { border: 1px solid var(--line); border-radius: 11px; padding: 1rem 1.1rem; display: grid; gap: .8rem; margin: 0; }
 .setup-form legend { font-weight: 700; color: var(--brand-2); padding: 0 .4rem; font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; }
 .setup-form label { display: grid; gap: .3rem; font-size: .86rem; color: var(--muted); }
+.setup-form label.choice { display: flex; align-items: center; gap: .5rem; color: var(--ink); font-size: .95rem; }
+.setup-form label.choice input { width: auto; padding: 0; margin: 0; }
 .setup-form input, .setup-form select { border: 1px solid var(--line); border-radius: 9px; padding: .55rem .65rem; font-size: .95rem; color: var(--ink); background: white; }
 .setup-hint { color: var(--muted); font-size: .8rem; margin: 0; }
 .setup-actions[hidden] { display: none; }.setup-actions { display: flex; gap: .7rem; flex-wrap: wrap; }

@@ -4,6 +4,7 @@
  * See docs/contracts/master-data-ports.v1.md. Only these three read-only shapes are consumed, so
  * when #5 lands the change is an import, not a rewrite.
  */
+import type { TurnoverAnswer } from '../../masters/src/hsn-digits.ts';
 export type Registration = 'REGULAR' | 'COMPOSITION' | 'UNREGISTERED';
 export type PartyRegistration = Registration | 'UNKNOWN';
 
@@ -12,6 +13,12 @@ export interface CompanyTaxProfile {
   readonly gstin: string | null;
   readonly stateCode: string;
   readonly registration: Registration;
+  /**
+   * Issue #187 — whether last financial year's turnover was above ₹5 crore, as the business told
+   * us, one answer per financial year. It decides how many HSN digits a bill needs. A year with no
+   * answer counts as "not sure" and asks for 6 digits.
+   */
+  readonly turnoverAbove5Crore?: readonly TurnoverAnswer[] | null;
 }
 
 export interface PartyTaxProfile {

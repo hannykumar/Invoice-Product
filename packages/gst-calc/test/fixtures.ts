@@ -4,6 +4,7 @@ import { RulesEngine, shippedRegistry, type EngineMode } from '@invoice/rules-en
 import { GstCalculator } from '../src/compute.ts';
 import { FIXTURE_RATE_TABLE, RateTable } from '../src/rate-table.ts';
 import { InMemoryMasterData, type ItemTaxClassification, type Registration } from '../src/master-data-port.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 export const SHARMA = 'company-sharma';
 
@@ -18,6 +19,7 @@ export const makeCalculator = (
     gstin: `${options.companyState ?? '07'}AAAAA0000A1Z4`,
     stateCode: options.companyState ?? '07',
     registration: options.registration ?? 'REGULAR',
+    turnoverAbove5Crore: turnoverAnsweredEveryYear('NO'),
   });
 
   masterData

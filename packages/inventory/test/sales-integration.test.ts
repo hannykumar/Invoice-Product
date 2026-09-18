@@ -38,6 +38,7 @@ import { InMemoryInventoryStore } from '../src/repository.ts';
 import { InventoryService } from '../src/service.ts';
 import { salesInventoryAdapter } from '../src/sales-adapter.ts';
 import type { StockItem, StockMasterData, Warehouse } from '../src/ports.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 const COMPANY: CompanyId = asId<'Company'>('till-co');
 const OWNER = asId<'User'>('till-owner');
@@ -102,7 +103,7 @@ const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE
   });
 
   const taxMasters = new InMemoryMasterData();
-  taxMasters.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  taxMasters.putCompany({ companyId: COMPANY, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   taxMasters.putParty(COMPANY, { partyId: ABC, gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' });
   taxMasters.putItem(COMPANY, {
     itemId: 'APL-BOX-10', name: 'Apple box, 10 kg', kind: 'GOODS', hsnOrSac: '0808',

@@ -47,6 +47,7 @@ import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort,
 import { createDefaultUnitRegistry, type UnitRegistry } from '../../masters/src/units.ts';
 import { duesFrom, namesFrom, purchasesFrom, type PurchaseDocument } from '../src/ports.ts';
 import { ReportService } from '../src/service.ts';
+import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 export const SHARMA: CompanyId = asId<'Company'>('reports-sharma');
 export const OTHER: CompanyId = asId<'Company'>('reports-other');
@@ -238,7 +239,7 @@ export const makeBusiness = async (
   });
 
   const masterData = new InMemoryMasterData();
-  masterData.putCompany({ companyId, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR' });
+  masterData.putCompany({ companyId, gstin: '07AAAAA0000A1Z4', stateCode: '07', registration: 'REGULAR', turnoverAbove5Crore: turnoverAnsweredEveryYear('NO') });
   masterData
     .putParty(companyId, { partyId: ABC, gstin: '07DDDDD3333D1ZV', stateCode: '07', registration: 'REGULAR' })
     .putParty(companyId, { partyId: GURUGRAM, gstin: '06BBBBB1111B1ZR', stateCode: '06', registration: 'REGULAR' });

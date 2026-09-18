@@ -42,6 +42,7 @@ import {
   customers,
   createCustomer,
   createItem,
+  changeItemCode,
   readCatalogue,
   customerPrint,
   customerView,
@@ -1142,6 +1143,11 @@ export class DemoApplication {
 
   addItem(actor: ActorContext, input: Record<string, unknown>) {
     return createItem(this.companyOf(actor), input, String(actor.userId));
+  }
+
+  /** Issue #187 — correct an item's HSN code, e.g. when a bill is held up because it is too short. */
+  changeItemCode(actor: ActorContext, input: Record<string, unknown>) {
+    return changeItemCode(this.companyOf(actor), input, String(actor.userId));
   }
 
   /**
