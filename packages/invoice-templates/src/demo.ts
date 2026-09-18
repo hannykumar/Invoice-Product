@@ -22,7 +22,7 @@ import {
   type ActorContext,
 } from '@invoice/ledger';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { DEFAULT_TCS_POLICY, GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
+import { GstCalculator, InMemoryDeclaredRates, InMemoryMasterData, RateTable } from '@invoice/gst-calc';
 import { InMemorySalesRepository, SalesService, noComplianceHooks, permissiveInventory } from '@invoice/sales';
 import { captureSnapshot } from './snapshot.ts';
 import { renderInvoice, renderInvoiceCopies, renderInvoiceCopySet } from './render.ts';
@@ -111,7 +111,6 @@ const main = async (): Promise<void> => {
       cancellationWindowDays: 7,
       allowCancelAfterGovernmentRegistration: false,
       defaultDueDays: 30,
-      tcs: DEFAULT_TCS_POLICY,
       roundToWholeRupee: true,
     },
     idFactory,
