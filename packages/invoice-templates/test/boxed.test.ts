@@ -348,9 +348,12 @@ test('#138 — none of them reach the till roll, where there is no room', () => 
 
 test('#138 — the signature is an uploaded image, with a reserved box until one exists', () => {
   const waiting = renderIndia(doc());
-  assert.ok(waiting.includes('data-reserved="signature"'), 'the space is held at its final size');
-  assert.ok(waiting.includes('Signature not uploaded yet'), 'and says why it is empty');
+  assert.ok(waiting.includes('data-reserved="signature" style="width:48mm;height:16mm"'), 'the space is held at its final size');
+  // Issue #189 — on an issued bill that space is blank, because the owner signs there by hand.
+  assert.ok(!waiting.includes('Signature not uploaded yet'), 'an issued bill does not say it is unsigned');
   assert.ok(!waiting.includes('<img class="sign-image"'));
+  const preview = renderInvoice(doc(), snapshotOf(india), { format: 'A4', locale: 'en-IN', purpose: 'DESIGN_PREVIEW' });
+  assert.ok(preview.includes('Signature not uploaded yet'), 'the design preview says why it is empty');
 
   const signed = renderIndia(doc({ signatureDataUri: 'data:image/png;base64,iVBORw0KGgo=' }));
   assert.ok(signed.includes('<img class="sign-image"'), 'the real signature is printed once uploaded');

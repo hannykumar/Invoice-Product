@@ -24,11 +24,39 @@
  *  3. Reserved slots are **dropped entirely on 58 mm and 80 mm till-roll paper**. There is no room
  *     for a placeholder on a counter slip, and a customer holding one does not need to be told
  *     what is not there yet.
- *  4. The screen preview and the print show the slot identically. There is no "preview only"
- *     version, because then the thing that was approved is not the thing that prints.
+ *  4. ~~The screen preview and the print show the slot identically.~~ Replaced by issue #189, below.
+ *
+ * Issue #189 — the labels belong on the design preview, not on a bill a customer receives.
+ *
+ * Every issued bill used to print "Government QR, not received yet", "UPI id not saved yet" and
+ * "Signature not uploaded yet". Most small businesses never register their bills with the government
+ * at all (that is only required above ₹5 crore of turnover), so a buyer's accountant read those words
+ * as "this bill is waiting for something" and could hold the payment. "Signature not uploaded yet"
+ * printed exactly where the owner signs by hand.
+ *
+ * Samay was asked on 2026-09-18 and left the choice to us: "take action accordingly which you think
+ * is better because it is just for small till we are done with everything". Option A was chosen:
+ *
+ *  - `DESIGN_PREVIEW` (the Bill design screen and the demo pages): the labelled boxes, exactly as
+ *    #148 built them, so the finished layout can still be seen and approved.
+ *  - `ISSUED` (the default — every bill, PDF, challan, credit note and quotation a customer gets):
+ *    only real things. The signing space is blank, at the same size, above "Authorised Signatory".
+ *    The e-invoice block prints only for a bill that is meant to be registered, as a blank area of
+ *    the same size until the government's reply arrives. The UPI square prints only once a UPI id
+ *    is saved. Nothing on an issued bill says "not yet".
+ *
+ * Rules 1 to 3 still hold for the preview, and the sizes are unchanged, so nothing moves when a real
+ * value lands.
  */
 import type { Locale } from './document.ts';
 import type { PageFormat } from './template.ts';
+
+/**
+ * Issue #189 — who the page is for. `ISSUED` is a bill a customer receives; `DESIGN_PREVIEW` is the
+ * layout a business looks at before approving it. A caller that says nothing gets `ISSUED`, so a
+ * forgotten option can only ever produce the customer-safe page.
+ */
+export type RenderPurpose = 'ISSUED' | 'DESIGN_PREVIEW';
 
 export type ReservedSlotId =
   | 'einvoice.qr'
@@ -93,6 +121,10 @@ export const printsReservedSlots = (format: PageFormat): boolean =>
 /**
  * The empty box.
  *
+ * On the design preview it is the labelled box. On an issued bill the signing space and a pending
+ * e-invoice area stay at their full size with no border and no words, and the UPI square is left
+ * out altogether — a bill with no UPI id simply has no way to pay by scan.
+ *
  * `escape` is passed in rather than imported so this file has no opinion about how the renderer
  * escapes; there is exactly one escaping function in the module and it stays there.
  */
@@ -101,10 +133,16 @@ export const renderReservedSlot = (
   format: PageFormat,
   locale: Locale,
   escape: (value: string) => string,
+  purpose: RenderPurpose = 'ISSUED',
 ): string => {
   if (!printsReservedSlots(format)) return '';
   const spec = reservedSlot(id);
-  return `<div class="reserved" data-reserved="${escape(spec.id)}" style="width:${spec.widthMm}mm;height:${spec.heightMm}mm"><span>${escape(spec.label[locale])}</span></div>`;
+  const size = `width:${spec.widthMm}mm;height:${spec.heightMm}mm`;
+  if (purpose === 'DESIGN_PREVIEW') {
+    return `<div class="reserved" data-reserved="${escape(spec.id)}" style="${size}"><span>${escape(spec.label[locale])}</span></div>`;
+  }
+  if (id === 'upi.qr') return '';
+  return `<div class="reserved-blank" data-reserved="${escape(spec.id)}" style="${size}"></div>`;
 };
 
 /** The one style block for reserved slots, so they cannot drift apart between callers. */
@@ -116,6 +154,6 @@ export const reservedSlotStyles = (border: string, muted: string, labelSizePt: n
       /* Fixed, because the whole purpose is that the page does not move when the value lands. */
       flex: none;
     }
-    /* The same on paper as on screen. A slot that only shows in the preview would mean the layout
-       that was approved is not the layout that prints. */
-    @media print { .reserved { border: 1px dashed ${border}; background: #fff; } }`;
+    @media print { .reserved { border: 1px dashed ${border}; background: #fff; } }
+    /* Issue #189 — the same space on an issued bill, with nothing drawn in it. */
+    .reserved-blank { flex: none; }`;

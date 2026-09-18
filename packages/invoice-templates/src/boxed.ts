@@ -20,7 +20,7 @@ import type { PageFormat } from './template.ts';
 import { hsnSummary, hsnSummaryColumns, type HsnSummaryRow } from './hsn-summary.ts';
 import { escapeHtml, isZero, money, percent, splitQuantity, t, totalQuantityText } from './parts.ts';
 import type { Locale } from './document.ts';
-import { renderReservedSlot } from './reserved.ts';
+import { renderReservedSlot, type RenderPurpose } from './reserved.ts';
 import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
 
 /** A cell in the header grid: a small grey caption with the value under it. */
@@ -224,10 +224,12 @@ export const renderBoxed = (
   locale: Locale,
   /** Issue #137 — "ORIGINAL FOR RECIPIENT" and the rest. `null` prints an unmarked bill. */
   copyMark: string | null = null,
+  /** Issue #189 — labelled reserved boxes on the design preview only; blank space on an issued bill. */
+  purpose: RenderPurpose = 'ISSUED',
 ): string => {
   const shows = (fieldId: string): boolean => snapshot.optionalFields.includes(fieldId);
   const reserved = (id: Parameters<typeof renderReservedSlot>[0]): string =>
-    renderReservedSlot(id, format, locale, escapeHtml);
+    renderReservedSlot(id, format, locale, escapeHtml, purpose);
 
   const goods = doc.lines.filter((l) => l.kind !== 'CHARGE');
   const charges = doc.lines.filter((l) => l.kind === 'CHARGE');
@@ -248,8 +250,9 @@ export const renderBoxed = (
    *
    * The one exemption is real: an invoice registered with the government carries an IRN and is
    * digitally signed, and needs no handwritten one. The page says so rather than leaving a rule
-   * nobody will sign. Until a business uploads its signature image, issue #148's reserved box holds
-   * the space at the size the image will take (#138).
+   * nobody will sign. Until a business uploads its signature image, the space is held at the size
+   * the image will take (#138): labelled on the design preview (#148), blank on an issued bill so
+   * the owner can sign there by hand (#189).
    */
   const signedByGovernment = doc.eInvoice !== null && doc.eInvoice.irn !== '';
   const signature = `<td class="sign-cell">
@@ -299,8 +302,9 @@ export const renderBoxed = (
   // the space, and the caption and the line under it are kept blank so the footer is the same height
   // either way.
   const upiId = doc.upiId ?? null;
+  // Issue #189 — on an issued bill with no UPI id there is no square, and so no cell for one.
   const upi =
-    !shows('qr.upi') || !billHasSomethingToPay(doc) || !paperFitsUpiSquare(format)
+    !shows('qr.upi') || !billHasSomethingToPay(doc) || !paperFitsUpiSquare(format) || (upiId === null && purpose === 'ISSUED')
       ? ''
       : `<td class="upi-cell">
           <span class="cap">${upiId === null ? '&nbsp;' : escapeHtml(t('scanToPay', locale))}</span>
@@ -373,7 +377,11 @@ export const renderBoxed = (
   // The government block belongs at the top of the page, which is where a registered e-invoice
   // carries it and where anyone checking the bill looks first. Putting it here also means the QR
   // square shares the header's height instead of leaving a band of white paper at the foot.
-  const showEInvoice = shows('qr.eInvoice') && renderReservedSlot('einvoice.qr', format, locale, escapeHtml) !== '';
+  // Issue #189 — on an issued bill, only for a bill that is registered or meant to be.
+  const showEInvoice =
+    shows('qr.eInvoice') &&
+    renderReservedSlot('einvoice.qr', format, locale, escapeHtml, purpose) !== '' &&
+    (purpose === 'DESIGN_PREVIEW' || doc.eInvoice !== null || doc.eInvoiceExpected === true);
   // The QR sits beside the seller block rather than spanning down into the buyer block. Spanning
   // made the buyer row as tall as the QR square and left a band of blank paper across the page,
   // which is exactly the dead space this design exists to remove.

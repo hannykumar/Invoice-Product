@@ -241,7 +241,7 @@ export const previewBranding = (
 
   const snapshot = brandedSnapshot(template, locale, new Date().toISOString().slice(0, 10), branding);
   return {
-    html: renderInvoice(sampleDocument(companyName, branding, upiId), snapshot, { format, locale }),
+    html: renderInvoice(sampleDocument(companyName, branding, upiId), snapshot, { format, locale, purpose: 'DESIGN_PREVIEW' }),
     templateId: template.id,
     format,
   };

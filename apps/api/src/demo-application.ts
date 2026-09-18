@@ -58,7 +58,8 @@ import {
   resolveItem,
   seedCatalogue,
 } from './catalogue-application.ts';
-import { dispatchFrom, requireIssuable, sellerPrint } from './business-details-application.ts';
+import { dispatchFrom, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
+import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
@@ -1453,8 +1454,15 @@ export class DemoApplication {
     if (facts === undefined) throw notFound('API_INVOICE_PRINT_FACTS', 'The issued bill has no stored print snapshot.');
     const locale: Locale = options.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
     const format: PageFormat = options.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : options.format === 'MOBILE' ? 'MOBILE' : 'A4';
-    const acknowledgement = (await this.shop.eInvoice.list(actor))
-      .find((record) => record.documentId === invoice.id && record.status === 'REGISTERED')?.acknowledgement ?? null;
+    const eInvoiceRecords = (await this.shop.eInvoice.list(actor)).filter((record) => record.documentId === invoice.id);
+    const acknowledgement = eInvoiceRecords.find((record) => record.status === 'REGISTERED')?.acknowledgement ?? null;
+    // Issue #189 — only a bill that is meant to be registered keeps a space for the government's
+    // QR. It is meant to be once the business has started registering it, or when the business
+    // told us its turnover is above ₹5 crore (the e-invoice threshold, the same question #187 asks)
+    // and the customer is a registered business. Every other bill prints no e-invoice block at all.
+    const eInvoiceExpected =
+      eInvoiceRecords.length > 0 ||
+      (invoice.customerType === 'B2B' && turnoverAnswerOn(turnoverAnswersOf(companyId), invoice.documentDate) === 'YES');
     const upiId = upiIdOf(companyId);
     // Issue #182 — the e-way bill number is raised against the issued invoice, so it only exists
     // after the bill is frozen. It is layered on here exactly as the government's IRN is: the
@@ -1463,6 +1471,7 @@ export class DemoApplication {
     const transport = facts.document.transport;
     const document: InvoiceDocument = {
       ...facts.document,
+      eInvoiceExpected,
       ...(upiId === null ? {} : { upiId }),
       ...(ewayBillNumber === null || transport?.eWayBillNumber != null
         ? {}

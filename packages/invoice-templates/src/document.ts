@@ -207,10 +207,20 @@ export interface InvoiceDocument {
    * Issue #144 — the business's UPI id, frozen onto the bill like its bank details.
    *
    * When it is present the bill prints a pay-by-scan square for the amount still due. When it is
-   * absent a design that carries the square keeps a reserved box at the square's size, so the page
-   * does not change shape on the day a business saves its id (issue #148's rule).
+   * absent, the design preview keeps a labelled box at the square's size (issue #148), and an issued
+   * bill has no square at all (issue #189).
    */
   readonly upiId?: string | null;
+  /**
+   * Issue #189 — whether this bill is meant to be registered with the government as an e-invoice.
+   *
+   * True when the business has started registering it, or when its turnover is above ₹5 crore and
+   * the customer is a registered business. Only then does an issued bill carry the e-invoice block:
+   * filled once the government's reply arrives, a blank area of the same size before that. A bill
+   * that will never be registered — most small businesses' bills — prints no e-invoice block at all.
+   * Absent means false. The design preview ignores it and always shows the labelled boxes.
+   */
+  readonly eInvoiceExpected?: boolean;
   readonly references: RenderableReferences | null;
   readonly terms: string | null;
   /**

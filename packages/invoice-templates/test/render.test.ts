@@ -290,8 +290,12 @@ test('the QR area is big enough to scan, and says so when the code has not arriv
   // Issue #148 — a code that has not arrived leaves a box the size of the one it will land in.
   const pending = doc({ eInvoice: { irn: 'irn-1', qrSvg: null } });
   const pendingHtml = renderInvoice(pending, snapshotOf(wholesale), { format: 'A4', locale: 'en-IN' });
-  assert.ok(pendingHtml.includes('Government QR, not received yet'), 'an empty slot must explain itself');
+  // Issue #189 — on an issued bill the space is blank; the words are for the design preview.
+  assert.ok(pendingHtml.includes('data-reserved="einvoice.qr" style="width:26mm;height:26mm"'), 'the space is kept');
+  assert.ok(!pendingHtml.includes('not received yet'), 'an issued bill does not tell the customer what is missing');
   assert.ok(!pendingHtml.includes('<svg'), 'we never draw a placeholder that looks like a real code');
+  const preview = renderInvoice(pending, snapshotOf(wholesale), { format: 'A4', locale: 'en-IN', purpose: 'DESIGN_PREVIEW' });
+  assert.ok(preview.includes('Government QR, not received yet'), 'on the design preview an empty slot explains itself');
 });
 
 test('a styled bill is never presented as a registered e-invoice', () => {
