@@ -91,6 +91,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/catalogue') return json(200, app.catalogue(actor));
     if (method === 'POST' && pathname === '/api/customers') return json(200, await app.addCustomer(actor, body));
     if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
+    // Issue #182 — where the goods go and who carries them: the customer's other addresses, and
+    // the transporters this business uses.
+    if (method === 'POST' && pathname === '/api/delivery/choices') return json(200, app.deliveryChoices(actor, String(body.customerId ?? '')));
+    if (method === 'POST' && pathname === '/api/transporters') return json(200, app.addTransporter(actor, body));
+    if (method === 'POST' && pathname === '/api/shipping-addresses') return json(200, app.addShippingAddress(actor, body));
     // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
     if (method === 'POST' && pathname === '/api/branding/upi') return json(200, saveUpiId(context.companyId, body));
     if (method === 'POST' && pathname === '/api/branding/preview')

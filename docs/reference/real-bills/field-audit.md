@@ -18,6 +18,14 @@ bill printed one fixed demo customer and one fixed demo product whatever was typ
 "Buyer (Bill to)", "Description of goods", "HSN / SAC", "Quantity" and "Place of supply" below
 therefore describe the app's own bill.
 
+Re-checked 2026-09-17 after issue #182, on the app again: a sale to Delhi Polymers delivered to
+their own Pune godown, carried by Sharma Roadlines on vehicle `KA01AB1234` under LR
+`SRL/2026/44120`, printed as `INV/26-27/000004`. Dispatched through, Vehicle No., LR/RR No.,
+Transport Doc No. & Date, Destination, Buyer's Order No. and Mode / Terms of Payment all carry what
+was typed, the consignee block shows the Pune address rather than repeating the buyer, and the place
+of supply reads `Maharashtra (27)` with IGST. Before #182 the Sale screen could fill none of those
+boxes, so every bill printed them empty.
+
 Re-checked 2026-09-17 after issue #183, on the app again, on all three papers. The A4 bill carries
 `ORIGINAL FOR RECIPIENT`, and one press of Print produces three marked sheets. The phone and
 till-roll bills now carry the HSN code under each item, `Reverse Charge: No`, the HSN summary and
@@ -38,11 +46,11 @@ very layout a shopkeeper billing from a phone is served by default.
 | Invoice No., Date | yes | yes | |
 | Place of supply | yes | no | BE carries state codes on the party blocks instead; ours is the state of the customer's own billing address (#181), never the seller's |
 | Buyer (Bill to) with GSTIN and state | yes | yes | the customer chosen on the sale, with the name, address and GSTIN saved on their record (#181) |
-| Consignee (Ship to) | yes | yes | **always printed, never "same as above"** |
-| Vehicle number | yes | yes | KK: "Vehicle Number". BE: "Motor Vehicle No." |
-| Transporter name | yes | yes | KK: "Transport Name". BE: "Dispatched through" |
-| Delivery destination | yes | yes | KK: "Delivery Location". BE: "Destination" |
-| e-Way Bill No. | on the e-way bill | yes | |
+| Consignee (Ship to) | yes | yes | **always printed, never "same as above"**; the delivery address when the goods went elsewhere (#182) |
+| Vehicle number | yes | yes | KK: "Vehicle Number". BE: "Motor Vehicle No."; typed on the sale and normalised to `KA01AB1234` (#182) |
+| Transporter name | yes | yes | KK: "Transport Name". BE: "Dispatched through"; picked from the business's own transporter list (#182) |
+| Delivery destination | yes | yes | KK: "Delivery Location". BE: "Destination"; suggested from the delivery address and editable (#182) |
+| e-Way Bill No. | on the e-way bill | yes | typed when raised elsewhere, or layered on at print time once one is raised here (#182) |
 | IRN, Ack No., Ack Date, QR | no | yes | BE is a registered e-invoice; ours reserves the space (#136) |
 | Serial number column | yes | yes | |
 | Description of goods | yes | yes | the item chosen on each line, one line or many (#181) |
@@ -80,6 +88,11 @@ Nothing outstanding. The seven fields #156 listed all print now:
 
 ## Deliberate differences
 
+- **The place of supply follows the goods, and the two cases differ.** Goods sent to the customer's
+  own address in another state move the supply to that state (IGST Act, section 10(1)(a)); goods
+  handed to a third person on the customer's instructions stay where the billed customer is
+  (section 10(1)(b)). Neither sample shows a bill-to-ship-to sale, so neither settles it; the law
+  does (#182).
 - **Freight.** Neither bill has freight, so neither settles how to print it. We give it its own line
   below a goods sub-total (#131) rather than spreading it across the goods, because a goods line
   that fails quantity x rate is the first thing a customer queries.

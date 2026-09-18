@@ -28,6 +28,15 @@ import {
 import { brandingOf, upiIdOf } from './branding-application.ts';
 import { masterData as masterDataService, mastersContext } from './master-data.ts';
 import {
+  addShippingAddress,
+  createTransporter,
+  deliveryDetails,
+  printableEwayNumber,
+  shippingChoices,
+  transporters,
+  type DeliveryDetails,
+} from './delivery-application.ts';
+import {
   billingAddressOf,
   catalogueTaxReader,
   customers,
@@ -131,6 +140,7 @@ import type {
   ConsignmentDocument, ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
 } from '../../../packages/transport/src/types.ts';
 import { describeExpiry, describeTimeLeft } from '../../../packages/transport/src/validity.ts';
+import { decideEwayApplicability } from '../../../packages/transport/src/applicability.ts';
 import { outstandingOf } from '../../../packages/transport/src/suitability-service.ts';
 import { platePhoto } from '../../../packages/transport/src/suitability-adapters.ts';
 import { SYNTHETIC_VAHAN_ROWS } from '../../../packages/transport/src/vehicle-record-adapters.ts';
@@ -267,6 +277,11 @@ export class DemoApplication {
   private readonly sales: SalesService;
   private readonly salesRepository: InMemorySalesRepository;
   private readonly invoicePrints = new Map<string, { document: InvoiceDocument; snapshot: TemplateSnapshot }>();
+  /**
+   * Issue #182 — the delivery and reference answers, kept against the draft they were checked with
+   * until the bill is issued and they are frozen onto it.
+   */
+  private readonly deliveries = new Map<string, DeliveryDetails>();
   private readonly payments: ReceivablesService;
   private readonly paymentRepository: InMemoryPaymentRepository;
   private readonly documents: DocumentLedgerPort;
@@ -1129,10 +1144,106 @@ export class DemoApplication {
     return createItem(this.companyOf(actor), input, String(actor.userId));
   }
 
+  /**
+   * Issue #182 — the delivery side of the catalogue: the transporters the business uses, and the
+   * other addresses a customer takes goods at.
+   */
+  deliveryChoices(actor: ActorContext, partyId: string) {
+    const companyId = this.companyOf(actor);
+    return {
+      transporters: transporters(companyId).map((carrier) => ({ id: carrier.id, name: carrier.name, transporterId: carrier.transporterId })),
+      addresses: partyId === '' ? [] : shippingChoices(companyId, resolveCustomer(companyId, partyId).id),
+    };
+  }
+
+  addTransporter(actor: ActorContext, input: Record<string, unknown>) {
+    return createTransporter(this.companyOf(actor), input);
+  }
+
+  addShippingAddress(actor: ActorContext, input: Record<string, unknown>) {
+    return addShippingAddress(this.companyOf(actor), input);
+  }
+
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: this.saleInput(input) });
-    return this.checkSale(actor, draft);
+    const checked = await this.checkSale(actor, draft);
+    // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
+    // frozen with exactly what the screen showed rather than with a second reading of the form.
+    const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+    const delivery = deliveryDetails(this.config.companyId, customer, input);
+    this.deliveries.set(draft.id, delivery);
+    return {
+      ...checked,
+      placeOfSupply: delivery.placeOfSupplyReason,
+      // Whether this consignment may not leave without an e-way bill. It never blocks the bill:
+      // an e-way bill is raised against an issued invoice number, so the bill comes first.
+      ewayBill: await this.ewayReminder(actor, draft, delivery),
+    };
+  }
+
+  /**
+   * Issue #182 — does this load need an e-way bill before the lorry leaves?
+   *
+   * The answer comes from the same applicability rules the e-way bill screen decides with, over the
+   * consignment's value including tax and the two states, so the reminder and the decision cannot
+   * disagree.
+   */
+  private async ewayReminder(actor: ActorContext, draft: SalesInvoice, delivery: DeliveryDetails) {
+    const pricing = draft.pricing;
+    if (pricing === null) return null;
+    try {
+      const consignor = dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
+      const billTo = this.movementParty(draft.partyId);
+      const decision = decideEwayApplicability({
+        movementId: draft.id,
+        reason: 'SUPPLY',
+        consignor,
+        billTo,
+        // Where the goods actually finish, which is what the limit is judged on.
+        ...(delivery.shipTo === null ? {} : {
+          shipTo: {
+            legalName: delivery.shipTo.name,
+            gstin: delivery.shipTo.gstin ?? 'URP',
+            address1: delivery.shipTo.addressLines[0] ?? '',
+            place: delivery.transport?.destination ?? '',
+            pincode: '',
+            stateCode: delivery.shipTo.stateCode,
+          },
+        }),
+        documents: [{
+          documentId: draft.id,
+          documentType: 'TAX_INVOICE',
+          documentNumber: draft.number ?? draft.id,
+          documentDate: draft.documentDate,
+          lines: pricing.lines.map((line) => ({
+            description: line.itemName,
+            hsnCode: line.hsnOrSac ?? '',
+            quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
+            unit: line.quantity.unit,
+            taxableValuePaise: line.taxableValue.minor,
+            cgstPaise: line.cgst.minor,
+            sgstPaise: line.sgst.minor,
+            igstPaise: line.igst.minor,
+            cessPaise: line.cess.minor,
+          })),
+        }],
+        transportMode: 'ROAD',
+        vehicleType: 'REGULAR',
+        conveyance: 'HIRED_VEHICLE',
+      }, { on: draft.documentDate });
+      if (decision.outcome !== 'REQUIRED') return null;
+      return {
+        outcome: decision.outcome,
+        message: 'This consignment needs an e-way bill before the vehicle leaves.',
+        reason: decision.reason,
+        ruleId: decision.ruleId,
+      };
+    } catch {
+      // The reminder is a courtesy. If the rules cannot answer, the e-way bill screen still can,
+      // and a bill is never held back over it.
+      return null;
+    }
   }
 
   /**
@@ -1214,7 +1325,7 @@ export class DemoApplication {
   private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
     requireIssuable(this.config.companyId);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
-    this.freezeBillPrint(final.invoice);
+    this.freezeBillPrint(final.invoice, this.deliveries.get(token) ?? null);
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1262,7 +1373,7 @@ export class DemoApplication {
    * parties and the priced lines as they were that day — so a bill reprinted in three years is the
    * page the customer was given, whatever has changed since.
    */
-  private freezeBillPrint(invoice: SalesInvoice): void {
+  private freezeBillPrint(invoice: SalesInvoice, delivery: DeliveryDetails | null = null): void {
     if (this.invoicePrints.has(invoice.id)) return;
     const template = templateById('india-standard');
     if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
@@ -1286,6 +1397,14 @@ export class DemoApplication {
         // a bill issued today.
         buyer: customerPrint(this.config.companyId, invoice.partyId),
         placeOfSupplyStateName: STATE_NAMES[place] ?? place,
+        // Issue #182 — where the goods went, who carried them, and what the bill refers back to.
+        // The consignee block prints in full on every bill (#134); it repeats the buyer when the
+        // goods went to the buyer's own billing address, and carries the delivery address when
+        // they did not, which is what Rule 46(o) asks for.
+        ...(delivery?.shipTo == null ? {} : { shipTo: delivery.shipTo }),
+        ...(delivery?.transport == null ? {} : { transport: delivery.transport }),
+        ...(delivery?.references == null ? {} : { references: delivery.references }),
+        ...(delivery?.poReference == null ? {} : { poReference: delivery.poReference }),
         logoDataUri: branding.logoDataUri,
         tradeMark: branding.tradeMark,
       }),
@@ -1322,9 +1441,17 @@ export class DemoApplication {
     const acknowledgement = (await this.shop.eInvoice.list(actor))
       .find((record) => record.documentId === invoice.id && record.status === 'REGISTERED')?.acknowledgement ?? null;
     const upiId = upiIdOf(companyId);
+    // Issue #182 — the e-way bill number is raised against the issued invoice, so it only exists
+    // after the bill is frozen. It is layered on here exactly as the government's IRN is: the
+    // stored document is untouched, and every later reprint carries the number.
+    const ewayBillNumber = printableEwayNumber(await this.shop.ewayBill.list(actor), invoice.id);
+    const transport = facts.document.transport;
     const document: InvoiceDocument = {
       ...facts.document,
       ...(upiId === null ? {} : { upiId }),
+      ...(ewayBillNumber === null || transport?.eWayBillNumber != null
+        ? {}
+        : { transport: { ...(transport ?? {}), eWayBillNumber: ewayBillNumber } }),
       eInvoice: acknowledgement === null ? facts.document.eInvoice : {
         irn: acknowledgement.irn,
         // Drawn from the government's own signed string, never from anything we made up.
@@ -3198,13 +3325,18 @@ export class DemoApplication {
     if (address === null) {
       throw invalid('CUSTOMER_ADDRESS_MISSING', `${customer.legalName} has no address saved. A bill must carry the customer's address, so add it before billing them.`);
     }
+    // Issue #182 — where the goods go decides which state this sale counts in, and the two cases
+    // differ in law: a customer's own godown moves the supply to that state, while goods handed to
+    // a third party on the customer's instructions stay where the customer is.
+    const delivery = deliveryDetails(this.config.companyId, customer, input);
     return {
       partyId: customer.id as PartyId,
       customerType: customer.gstRegistrationType === 'unregistered' ? 'B2C' as const : 'B2B' as const,
       supplyKind: 'GOODS' as const,
       documentDate: date,
       dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)),
-      deliveryStateCode: address.stateCode,
+      deliveryStateCode: delivery.placeOfSupplyStateCode,
+      placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
       lines: this.saleLines(input),
       narration: String(input.notes || '') || null,
     };

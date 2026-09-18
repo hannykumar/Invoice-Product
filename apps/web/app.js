@@ -58,6 +58,26 @@ const copy = {
     signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Your session chooses the company and the work you are allowed to do.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Synthetic local credentials are filled in for this development workspace.",
     salesFromModule: "Issued from the sales module", openSalesInvoices: "From open sales invoices", postedSupplierBills: "From posted supplier bills", calculatedLive: "Calculated from live company state", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Reading the inventory module", loadingSupplier: "Loading supplier balance…", readingReceivables: "Reading the receivables module",
     // Issue #132 — the bill itself: shown after a sale is recorded, and printed from the browser.
+    // Issue #182 — where the goods go, who carries them, and what the bill refers back to.
+    deliveryAndReferences: "Delivery, transport and references", shipToWhere: "Where are the goods going?",
+    shipToSame: "To the customer's billing address", shipToAddress: "To another address of this customer", shipToParty: "To somebody else, on this customer's instructions",
+    shipToWhichAddress: "Which address?", shipToWhichParty: "Who receives the goods?", addDeliveryAddress: "＋ Add a delivery address",
+    placeOfSupplyPending: "Choose the customer to see which state this sale counts in.", placeOfSupplyIs: "This sale counts in",
+    placeOfSupplyBilling: "the goods go to the customer's billing address.", placeOfSupplyMovementEnds: "the goods finish their journey there.",
+    placeOfSupplyThirdParty: "the goods go to somebody else on this customer's instructions, so the sale counts where the customer is.",
+    transporterLabel: "Transporter", noTransporter: "No transporter", addTransporter: "＋ Add a transporter",
+    vehicleNumberLabel: "Vehicle number", vehicleNumberHelp: "The lorry the goods leave on. It prints on the bill the driver carries.",
+    lrNumberLabel: "LR / RR number", lrNumberHelp: "The transporter's own receipt number, which a lost consignment is traced by.", lrDateLabel: "LR / RR date",
+    destinationLabel: "Destination", destinationHelp: "Where the goods are going. Taken from the delivery address; change it if it is wrong.",
+    ewayBillNumberLabel: "e-Way bill number", ewayBillNumberHelp: "12 digits. Leave it empty if you will raise the e-way bill here — the number then prints on every later copy.",
+    buyerOrderLabel: "Customer's order number", modeOfPaymentLabel: "Mode / terms of payment", modeOfPaymentHelp: "Taken from when they will pay. Change it if the bill should say something else.",
+    termsOfDeliveryLabel: "Terms of delivery", otherReferencesLabel: "Other references",
+    addTransporterTitle: "Add a transporter", addTransporterHelp: "The bill prints their name as \u201cDispatched through\u201d.",
+    transporterName: "Transporter's name", transporterId: "GST number, or transporter ID", transporterIdHelp: "15 characters. A transporter who is not registered for GST is given a transporter ID instead; both go here.",
+    transporterPhone: "Phone (optional)", saveTransporter: "Save transporter",
+    addAddressTitle: "Add a delivery address", addAddressHelp: "Another place this customer takes goods at. It is saved on the customer, so it is not retyped next time.",
+    addressLabelName: "What to call it", deliveryStateHelp: "Goods sent to another state make this sale count in that state.",
+    deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address",
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
     saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item",
     noCustomersYet: "No customers saved yet", noItemsYet: "No items saved yet", cancel: "Cancel",
@@ -347,6 +367,25 @@ const copy = {
     reportsLoading: "Live company se report aa rahi hai…",
     signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Aapka session company aur aapke kaam ki permission chunta hai.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Is development workspace ke synthetic local credentials pehle se bhare hain.",
     salesFromModule: "Sales module se jaari", openSalesInvoices: "Khule sales invoices se", postedSupplierBills: "Darj supplier bills se", calculatedLive: "Live company state se hisaab", loadingActivity: "Darj kaam load ho raha hai…", loadingStock: "Stock load ho raha hai…", readingInventory: "Inventory module padh rahe hain", loadingSupplier: "Supplier balance load ho raha hai…", readingReceivables: "Receivables module padh rahe hain",
+    deliveryAndReferences: "Delivery, transport aur references", shipToWhere: "Maal kahan ja raha hai?",
+    shipToSame: "Customer ke bill wale pate par", shipToAddress: "Isi customer ke doosre pate par", shipToParty: "Kisi aur ko, is customer ke kehne par",
+    shipToWhichAddress: "Kaunsa pata?", shipToWhichParty: "Maal kaun lega?", addDeliveryAddress: "＋ Delivery ka pata joden",
+    placeOfSupplyPending: "Customer chunein, phir pata chalega ki yeh bikri kis rajya ki hai.", placeOfSupplyIs: "Yeh bikri is rajya ki hai:",
+    placeOfSupplyBilling: "maal customer ke bill wale pate par ja raha hai.", placeOfSupplyMovementEnds: "maal ka safar wahin khatam hota hai.",
+    placeOfSupplyThirdParty: "maal customer ke kehne par kisi aur ko ja raha hai, isliye bikri wahan ki hai jahan customer hai.",
+    transporterLabel: "Transporter", noTransporter: "Koi transporter nahin", addTransporter: "＋ Transporter joden",
+    vehicleNumberLabel: "Gaadi number", vehicleNumberHelp: "Jis lorry se maal ja raha hai. Yeh us bill par chhapta hai jo driver ke paas rehta hai.",
+    lrNumberLabel: "LR / RR number", lrNumberHelp: "Transporter ki apni rasid ka number, jisse gum hua maal dhoondha jata hai.", lrDateLabel: "LR / RR ki taarikh",
+    destinationLabel: "Kahan pahunchega", destinationHelp: "Delivery ke pate se liya gaya hai. Galat ho to badal dein.",
+    ewayBillNumberLabel: "e-Way bill number", ewayBillNumberHelp: "12 ank. Agar e-way bill yahin banayenge to khali chhod dein — number baad ki har copy par chhap jayega.",
+    buyerOrderLabel: "Customer ka order number", modeOfPaymentLabel: "Payment ka tareeka", modeOfPaymentHelp: "Payment kab milega, usse liya gaya hai. Bill par kuch aur likhna ho to badal dein.",
+    termsOfDeliveryLabel: "Delivery ki shartein", otherReferencesLabel: "Anya references",
+    addTransporterTitle: "Transporter joden", addTransporterHelp: "Bill par inka naam \u201cDispatched through\u201d mein chhapta hai.",
+    transporterName: "Transporter ka naam", transporterId: "GST number, ya transporter ID", transporterIdHelp: "15 akshar. Jo transporter GST mein registered nahin hai use transporter ID milti hai; dono yahin aate hain.",
+    transporterPhone: "Phone (marzi se)", saveTransporter: "Transporter save karen",
+    addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.",
+    addressLabelName: "Ise kya kahen", deliveryStateHelp: "Doosre rajya bheja gaya maal is bikri ko us rajya ki bana deta hai.",
+    deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen",
     saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
     noCustomersYet: "Abhi koi customer save nahin hai", noItemsYet: "Abhi koi saman save nahin hai", cancel: "Rehne den",
     addCustomerTitle: "Customer joden", addCustomerHelp: "Bill par yahi naam, pata aur GST number chhapega, isliye sahi hona chahiye.",
@@ -1340,7 +1379,15 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     showDialog({ title: copy[state.locale].checking, message: copy[state.locale].checkingBody }, "loading");
     try {
       const result = await api(`/api/${form.dataset.draft}s/preview`, { method: "POST", body: JSON.stringify(input) });
-      showDialog(localizeResult(result, form.dataset.draft, "preview"), "preview");
+      const shown = localizeResult(result, form.dataset.draft, "preview");
+      // Issue #182 — which state this sale counts in, and the e-way bill reminder when the load
+      // may not leave without one. The reminder never holds the bill back: an e-way bill is raised
+      // against an invoice number, so the bill is issued first.
+      const notes = [
+        ...(result.placeOfSupply ? [result.placeOfSupply] : []),
+        ...(result.ewayBill ? [`${result.ewayBill.message} ${result.ewayBill.reason}`] : []),
+      ];
+      showDialog({ ...shown, effects: [...notes, ...(shown.effects || [])] }, "preview");
     } catch (error) {
       showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
     } finally { setFormBusy(form, false); }
@@ -4813,3 +4860,152 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
 });
 
 if (state.sessionId) loadCatalogue();
+
+// ------------------------------------------- issue #182: where the goods go and who carries them
+//
+// Every one of these boxes prints on the bill and was empty on every bill the app issued, because
+// the Sale screen had nowhere to put them. Two of them are not decoration: the delivery address is
+// required when it differs from the place of supply, and the vehicle number and e-way bill number
+// are what the person driving the lorry has to be able to show.
+
+const delivery = { transporters: [], addresses: [] };
+
+const saleForm = () => document.querySelector('[data-draft="sale"]');
+
+/** Shows only the ship-to question that was asked for, and reloads that customer's addresses. */
+function showShipToFields() {
+  const kind = document.querySelector("#sale-ship-to")?.value ?? "same";
+  const address = document.querySelector("#sale-ship-address-field");
+  const party = document.querySelector("#sale-ship-party-field");
+  if (address) address.hidden = kind !== "address";
+  if (party) party.hidden = kind !== "party";
+  showPlaceOfSupply();
+}
+
+/**
+ * The state this sale will count in, said before the bill is made rather than after.
+ *
+ * The two cases differ in law: goods sent to the customer's own other address end their journey
+ * there and the sale counts in that state, while goods handed to somebody else on the customer's
+ * instructions count where the customer is.
+ */
+function showPlaceOfSupply() {
+  const line = document.querySelector("#sale-place-of-supply span:last-child");
+  if (!line) return;
+  const form = saleForm();
+  const billed = catalogue.customers.find((row) => row.id === form?.elements.namedItem("party")?.value) ?? null;
+  if (billed === null) { line.textContent = copy[state.locale].placeOfSupplyPending; return; }
+  const kind = document.querySelector("#sale-ship-to")?.value ?? "same";
+  if (kind === "address") {
+    const chosen = delivery.addresses.find((row) => row.id === document.querySelector("#sale-ship-address")?.value);
+    line.textContent = chosen === undefined
+      ? copy[state.locale].placeOfSupplyPending
+      : `${copy[state.locale].placeOfSupplyIs} ${chosen.stateName} (${chosen.stateCode}) — ${copy[state.locale].placeOfSupplyMovementEnds}`;
+    return;
+  }
+  if (kind === "party") {
+    line.textContent = `${copy[state.locale].placeOfSupplyIs} ${billed.stateName ?? ""} (${billed.stateCode ?? ""}) — ${copy[state.locale].placeOfSupplyThirdParty}`;
+    return;
+  }
+  line.textContent = `${copy[state.locale].placeOfSupplyIs} ${billed.stateName ?? ""} (${billed.stateCode ?? ""}) — ${copy[state.locale].placeOfSupplyBilling}`;
+}
+
+async function loadDeliveryChoices() {
+  const form = saleForm();
+  const customerId = form?.elements.namedItem("party")?.value ?? "";
+  try {
+    const read = await api("/api/delivery/choices", { method: "POST", body: JSON.stringify({ customerId }) });
+    delivery.transporters = read.transporters;
+    delivery.addresses = read.addresses.filter((row) => row.use !== "billing");
+  } catch { return; }
+
+  const carriers = document.querySelector("#sale-transporters");
+  if (carriers) {
+    const chosen = carriers.value;
+    carriers.replaceChildren();
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = copy[state.locale].noTransporter;
+    carriers.append(none);
+    delivery.transporters.forEach((carrier) => {
+      const option = document.createElement("option");
+      option.value = carrier.id;
+      option.textContent = `${carrier.name} · ${carrier.transporterId}`;
+      carriers.append(option);
+    });
+    if (chosen !== "" && carriers.querySelector(`option[value="${CSS.escape(chosen)}"]`)) carriers.value = chosen;
+  }
+
+  const addresses = document.querySelector("#sale-ship-address");
+  if (addresses) {
+    const chosen = addresses.value;
+    addresses.replaceChildren(...delivery.addresses.map((row) => {
+      const option = document.createElement("option");
+      option.value = row.id;
+      option.textContent = `${row.label} · ${row.lines.join(", ")} · ${row.stateName}`;
+      return option;
+    }));
+    if (chosen !== "" && addresses.querySelector(`option[value="${CSS.escape(chosen)}"]`)) addresses.value = chosen;
+  }
+  showPlaceOfSupply();
+}
+
+document.querySelector("#sale-ship-to")?.addEventListener("change", showShipToFields);
+document.querySelector("#sale-ship-address")?.addEventListener("change", showPlaceOfSupply);
+document.querySelector('[data-draft="sale"] [data-customer-picker]')?.addEventListener("change", () => {
+  loadDeliveryChoices();
+});
+
+document.querySelector("#sale-add-transporter")?.addEventListener("click", () => {
+  document.querySelector("#transporter-dialog")?.showModal();
+});
+
+document.querySelector("#transporter-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#transporter-error");
+  error.textContent = "";
+  try {
+    const created = await api("/api/transporters", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    await loadDeliveryChoices();
+    const carriers = document.querySelector("#sale-transporters");
+    if (carriers) carriers.value = created.transporter.id;
+    form.reset();
+    document.querySelector("#transporter-dialog").close();
+  } catch (requestError) { error.textContent = requestError.message; }
+});
+
+document.querySelector("#sale-add-address")?.addEventListener("click", () => {
+  const states = document.querySelector("#address-states");
+  if (states && states.childElementCount === 0) {
+    states.replaceChildren(...catalogue.states.map((row) => {
+      const option = document.createElement("option");
+      option.value = row.code;
+      option.textContent = `${row.name} (${row.code})`;
+      return option;
+    }));
+  }
+  document.querySelector("#address-dialog")?.showModal();
+});
+
+document.querySelector("#address-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#address-error");
+  error.textContent = "";
+  const customerId = saleForm()?.elements.namedItem("party")?.value ?? "";
+  try {
+    const created = await api("/api/shipping-addresses", {
+      method: "POST",
+      body: JSON.stringify({ ...Object.fromEntries(new FormData(form)), customerId }),
+    });
+    await loadDeliveryChoices();
+    const addresses = document.querySelector("#sale-ship-address");
+    if (addresses) addresses.value = created.address.id;
+    form.reset();
+    document.querySelector("#address-dialog").close();
+    showPlaceOfSupply();
+  } catch (requestError) { error.textContent = requestError.message; }
+});
+
+if (state.sessionId) loadDeliveryChoices();
