@@ -21,7 +21,7 @@ import type {
   TemplateSnapshot,
 } from './document.ts';
 import type { PageFormat } from './template.ts';
-import { printsReservedSlots, renderReservedSlot, reservedSlotStyles } from './reserved.ts';
+import { printsReservedSlots, renderReservedSlot, reservedSlotStyles, type RenderPurpose } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
 import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
 import { hsnSummary } from './hsn-summary.ts';
@@ -45,7 +45,22 @@ export interface RenderOptions {
    * preview and a phone screen want.
    */
   readonly copy?: InvoiceCopy;
+  /**
+   * Issue #189 — `DESIGN_PREVIEW` for the Bill design screen and the demo pages, which show the
+   * labelled reserved boxes. Everything else is a bill someone receives and is `ISSUED`, which is
+   * also what a caller gets by leaving this out.
+   */
+  readonly purpose?: RenderPurpose;
 }
+
+/**
+ * Issue #189 — does this page carry the government e-invoice block?
+ *
+ * Always on the design preview, so the layout can be approved. On an issued bill only when the bill
+ * is registered, or is meant to be — never on the bill of a business that will never register one.
+ */
+export const showsEInvoiceBlock = (doc: InvoiceDocument, purpose: RenderPurpose): boolean =>
+  purpose === 'DESIGN_PREVIEW' || doc.eInvoice !== null || doc.eInvoiceExpected === true;
 
 const partyBlock = (party: RenderableParty, heading: string, locale: Locale): string => {
   const lines = [
@@ -313,6 +328,7 @@ export const renderInvoice = (
   options: RenderOptions,
 ): string => {
   const { locale, format } = options;
+  const purpose: RenderPurpose = options.purpose ?? 'ISSUED';
   const narrow = PAGE[format].narrow;
   const shows = (fieldId: string): boolean => snapshot.optionalFields.includes(fieldId);
 
@@ -329,7 +345,7 @@ export const renderInvoice = (
       format,
       locale,
       'boxed',
-      `${watermark(doc, format)}<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking)}</div>`,
+      `${watermark(doc, format)}<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking, purpose)}</div>`,
       options.copy,
     );
   }
@@ -424,13 +440,13 @@ export const renderInvoice = (
           ${doc.transport.eWayBillNumber == null ? '' : `<div><span class="k">${escapeHtml(t('eWayBill', locale))}:</span> ${escapeHtml(doc.transport.eWayBillNumber)}</div>`}
         </section>`;
 
-  // Issue #148 — the e-invoice block is drawn whenever the design carries it, whether or not the
-  // government reply has arrived. What has not arrived is a reserved box at its final size, so the
-  // page a business approves today is the page that prints once the provider is connected.
+  // Issue #148 — what has not arrived yet keeps its final size, so the page a business approves is
+  // the page that prints once the value lands. Issue #189 — on an issued bill that space is blank,
+  // and the e-invoice block is there only for a bill that is registered or meant to be.
   const reserved = (id: Parameters<typeof renderReservedSlot>[0]): string =>
-    renderReservedSlot(id, format, locale, escapeHtml);
+    renderReservedSlot(id, format, locale, escapeHtml, purpose);
 
-  const qr = !shows('qr.eInvoice')
+  const qr = !shows('qr.eInvoice') || !showsEInvoiceBlock(doc, purpose)
     ? ''
     : `<div class="qr qr-pair">
         ${doc.eInvoice?.qrSvg == null ? reserved('einvoice.qr') : `<div class="qr-slot">${doc.eInvoice.qrSvg}</div>`}
@@ -452,7 +468,7 @@ export const renderInvoice = (
     !shows('qr.upi') || !billHasSomethingToPay(doc) || !paperFitsUpiSquare(format)
       ? ''
       : upiId === null
-        ? printsReservedSlots(format)
+        ? printsReservedSlots(format) && purpose === 'DESIGN_PREVIEW'
           ? `<div class="qr qr-pair">${reserved('upi.qr')}</div>`
           : ''
         : `<div class="qr qr-pair"><div class="upi-square" data-upi="${escapeHtml(upiId)}">${upiSquareSvg(doc, upiId)}</div><div>${escapeHtml(t('scanToPay', locale))}<br>${escapeHtml(t('upiId', locale))}: ${escapeHtml(upiId)}</div></div>`;

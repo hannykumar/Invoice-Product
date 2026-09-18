@@ -140,7 +140,8 @@ test('#148 — every reserved slot prints as a bordered box at its final size, w
     '2026-08-29',
   );
   const { document } = await printedSaleWithFreight();
-  const html = renderInvoice({ ...document, eInvoice: null }, snapshot, { format: 'A4', locale: 'en-IN' });
+  // The design preview, where the boxes are labelled. An issued bill is covered by #189's tests.
+  const html = renderInvoice({ ...document, eInvoice: null }, snapshot, { format: 'A4', locale: 'en-IN', purpose: 'DESIGN_PREVIEW' });
 
   for (const spec of RESERVED_SLOTS) {
     const box = new RegExp(`<div class="reserved" data-reserved="${spec.id.replace('.', '\\.')}"[^>]*>(.*?)</div>`).exec(html);

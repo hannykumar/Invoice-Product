@@ -131,13 +131,24 @@ test('with a UPI id saved, the boxed bill prints the square beside the bank deta
   assert.ok(!html.includes('data-reserved="upi.qr"'), 'no empty box once the real square is there');
 });
 
-test('before a UPI id is saved, the bill keeps a labelled box at the square’s size', () => {
-  const html = render(doc({ upiId: null }));
+test('before a UPI id is saved, the design preview keeps a labelled box at the square’s size', () => {
+  const preview = (d: InvoiceDocument, format: PageFormat = 'A4') =>
+    renderInvoice(d, captureSnapshot(india, 'en-IN', '2026-09-13'), { format, locale: 'en-IN', purpose: 'DESIGN_PREVIEW' });
+  const html = preview(doc({ upiId: null }));
   assert.ok(html.includes('data-reserved="upi.qr"'));
   assert.ok(html.includes('Pay by scan, UPI id not saved yet'));
   assert.ok(html.includes('width:26mm;height:26mm'));
   assert.ok(!html.includes('Scan to pay by UPI'), 'the bill does not invite a scan it cannot take');
-  assert.ok(render(doc({ upiId: null }), 'MOBILE').includes('data-reserved="upi.qr"'));
+  assert.ok(preview(doc({ upiId: null }), 'MOBILE').includes('data-reserved="upi.qr"'));
+});
+
+test('#189 — an issued bill with no UPI id has no square and no box', () => {
+  for (const format of ['A4', 'MOBILE'] as const) {
+    const html = render(doc({ upiId: null }), format);
+    assert.ok(!html.includes('data-reserved="upi.qr"'), format);
+    assert.ok(!html.includes('not saved yet'), format);
+    assert.ok(!html.includes('Scan to pay by UPI'), format);
+  }
 });
 
 test('no square, and no empty box, on a bill with nothing left to pay or on a credit note', () => {

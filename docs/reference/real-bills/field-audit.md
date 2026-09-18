@@ -64,6 +64,7 @@ very layout a shopkeeper billing from a phone is served by default.
 | HSN-wise tax summary with a totals row | yes | yes | on narrow paper it is one compact line per code and rate, never dropped (#183); KK heads the columns CGST/SGST, BE heads them Central Tax/State Tax |
 | Sub total / total / received / balance | yes | Total only | |
 | Signature image above "Authorised Signature" | yes | line only | KK's is a scanned signature; ours supports the image (#138), and the signing line now prints on every paper size including till roll (#183) |
+| Nothing on the bill says something is missing | yes | yes | Neither real bill has a box saying "not received yet". Since #189 ours doesn't either: the signing space is blank until a signature is uploaded, the pay-by-scan square prints only once a UPI id is saved, and the government QR / IRN space appears only on a bill that is registered or meant to be. The labelled boxes stay on the Bill design preview |
 | "for <company>" above the signature | yes | yes | |
 | Tax amount in words | no | yes | |
 | Company's PAN | no | yes | BE puts it by the declaration, not under the GSTIN; ours is typed in Business details and must match the PAN inside the GSTIN |
