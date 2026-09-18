@@ -182,6 +182,12 @@ export async function handleApi(method: string, pathname: string, body: Record<s
         format: body.format, locale: body.locale, allCopies: body.copies === 'all',
       }));
     }
+    const notePdf = /^\/api\/returns\/([^/]+)\/pdf$/.exec(pathname);
+    if (method === 'GET' && notePdf?.[1]) {
+      const result = await app.notePrint(actor, decodeURIComponent(notePdf[1]), { pdf: true });
+      if (!('pdf' in result)) throw new Error('The note PDF was not produced.');
+      return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${result.number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
+    }
     const invoicePdf = /^\/api\/sales\/([^/]+)\/pdf$/.exec(pathname);
     if (method === 'GET' && invoicePdf?.[1]) {
       const result = await app.invoicePrint(actor, decodeURIComponent(invoicePdf[1]), { pdf: true });
@@ -228,6 +234,12 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
     if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
     if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));
+    // Issue #186 — the credit or debit note on paper: listed, printed, and downloaded as a PDF.
+    if (method === 'GET' && pathname === '/api/returns/notes') return json(200, await app.listReturnNotes(actor));
+    if (method === 'POST' && pathname === '/api/returns/print') {
+      const input = body as Record<string, unknown>;
+      return json(200, await app.notePrint(actor, String(input.note ?? ''), { format: input.format, locale: input.locale }));
+    }
     return json(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
   } catch (error) {
     return json(statusOf(error), {

@@ -27,6 +27,7 @@ import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts
 import { hsnSummary } from './hsn-summary.ts';
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
+import { renderCreditNoteBoxed, renderCreditNoteNarrow, type CreditNoteDocument } from './credit-note.ts';
 import { preSaleTitle, renderPreSaleBoxed, renderPreSaleNarrow, type PreSalePrint } from './presale.ts';
 import { MAX_TRADE_MARK_OPACITY_PERCENT } from './marks.ts';
 import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
@@ -595,6 +596,18 @@ export const renderChallanCopies = (
   snapshot: TemplateSnapshot,
   options: Omit<RenderOptions, 'copy'>,
 ): string => combineCopies(CHALLAN_COPIES.map((copy) => renderChallan(doc, snapshot, { ...options, copy })));
+
+/**
+ * Issue #186 — a credit or debit note, on the same engine and stylesheet as the invoice. One page,
+ * with no copy marking: Rule 48's copies are prescribed for tax invoices, not for notes.
+ */
+export const renderCreditNote = (doc: CreditNoteDocument, snapshot: TemplateSnapshot, options: Omit<RenderOptions, 'copy'>): string => {
+  const { locale, format } = options;
+  const heading = `${t(doc.title, locale)} ${doc.number}`;
+  return PAGE[format].narrow
+    ? page(heading, snapshot, format, locale, '', renderCreditNoteNarrow(doc, locale))
+    : page(heading, snapshot, format, locale, 'boxed', `<div class="sheet-inner">${renderCreditNoteBoxed(doc, snapshot, format, locale)}</div>`);
+};
 
 /**
  * Issue #142 — a quotation or a proforma invoice, on the same engine and stylesheet as the invoice.

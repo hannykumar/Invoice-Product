@@ -162,3 +162,25 @@ design can drop it — `validateTemplate` now refuses a design that claims `foot
 optional. Two exemptions are handled rather than ignored: a registered e-invoice carrying an IRN is
 digitally signed by the government and says so instead of printing a rule nobody will sign, and
 58 mm till roll prints none, because a counter slip is not the copy anyone signs.
+
+## The credit note (#186)
+
+None of the three real documents in this folder is a credit note, so the printed credit note is
+held to CGST Rule 53(1A) itself, particular by particular. Each line below is checked by
+`CREDIT_NOTE_MANDATORY_FIELDS` on A4, the phone page and the till roll.
+
+| Rule 53(1A) | Particular | On ours |
+| --- | --- | --- |
+| (a) | Supplier's name, address and GSTIN | the business's saved particulars, frozen when the note is issued |
+| (b) | Nature of the document | "Credit Note" (a purchase return prints "Debit Note") |
+| (c) | Consecutive number, at most 16 characters, unique for the financial year | `CN/26-27/0000001` (#185) |
+| (d) | Date of issue | printed |
+| (e), (f) | Recipient's name, address and GSTIN; delivery address for an unregistered recipient | copied from the original bill as it was printed |
+| (g) | Number and date of the invoice it is against | "Against Invoice No. INV/26-27/000004 dated 15 September 2026" |
+| (h) | Taxable value, rate of tax, tax credited | per line and in total, at the original bill's rates and split |
+| (i) | Signature | the signature box, as on the bill |
+
+Also printed, by convention: the HSN code, the quantity and unit returned, the reason, and the
+amount in words. Not printed: copy markings (Rule 48 prescribes copies for invoices, not notes).
+A credit note dated after 30 November following the end of the original bill's financial year is
+refused, because section 34(2) no longer lets it reduce GST.

@@ -11,6 +11,11 @@ import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, I
 import {
   brandedSnapshot,
   copiesFor,
+  creditNotePdf,
+  noteOriginalFromInvoice,
+  renderCreditNote,
+  toCreditNoteDocument,
+  type CreditNoteDocument,
   copyMarking,
   invoicePdf,
   invoicePdfCopies,
@@ -154,7 +159,7 @@ import type {
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
-  InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource,
+  InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
 } from '../../../packages/returns/src/index.ts';
 import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
@@ -278,6 +283,8 @@ export class DemoApplication {
   private readonly sales: SalesService;
   private readonly salesRepository: InMemorySalesRepository;
   private readonly invoicePrints = new Map<string, { document: InvoiceDocument; snapshot: TemplateSnapshot }>();
+  /** Issue #186 — each credit or debit note's printed page, frozen the moment it is recorded. */
+  private readonly notePrints = new Map<string, { document: CreditNoteDocument; snapshot: TemplateSnapshot }>();
   /**
    * Issue #182 — the delivery and reference answers, kept against the draft they were checked with
    * until the bill is issued and they are frozen onto it.
@@ -493,7 +500,9 @@ export class DemoApplication {
       store: shop.store, ledger: shop.ledger, repository: returnNotes,
       sales: salesReturnSource(salesRepository, async (companyId, documentId) =>
         (await shop.eInvoices.findByDocumentId(companyId, documentId))?.status === 'REGISTERED'),
-      purchases: purchaseReturnSource(shop.bills),
+      // Issue #186 — a supplier's bill line has no HSN of its own; the item list supplies it.
+      purchases: purchaseReturnSource(shop.bills, (companyId, itemId) =>
+        catalogueItems(companyId).find((item) => item.id === itemId)?.hsnSac ?? DemoApplication.CATALOGUE[itemId]?.hsnSac ?? null),
       inventory: returnInventoryAdapter(shop.inventoryService), permissions: permissionPortFromActor,
       audit: shop.audit, clock: { now: () => new Date() },
     });
@@ -2051,10 +2060,10 @@ export class DemoApplication {
     return {
       documents: [
         ...(await Promise.all(sales.map(async (invoice) => ({
-          kind: 'SALES_RETURN', id: invoice.id, number: invoice.number, party: this.config.customerName,
+          kind: 'SALES_RETURN', id: invoice.id, number: invoice.number, party: this.invoicePrints.get(invoice.id)?.document.buyer.name ?? this.config.customerName,
           date: invoice.documentDate,
           lines: await Promise.all(invoice.lines.map(async (line) => ({
-            id: line.lineId, item: line.note ?? line.itemId,
+            id: line.lineId, item: invoice.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? line.note ?? line.itemId,
             quantity: Number(line.quantity.scaled) / 1_000_000, unit: line.quantity.unit,
             returned: Number(await returned(invoice.id, 'SALES_RETURN', line.lineId)) / 1_000_000,
           }))),
@@ -2084,7 +2093,10 @@ export class DemoApplication {
         command.kind === 'SALES_RETURN' ? 'A credit note will reduce what the customer owes.' : 'A debit note will reduce what you owe the supplier.',
         command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
         preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'The registered document needs a compliance adjustment.' : 'No government-document adjustment is needed.',
+        ...preview.warnings,
       ],
+      // Issue #186 — e.g. the 30 November deadline is close. Kept apart so every language shows it.
+      warnings: preview.warnings,
     };
   }
 
@@ -2093,10 +2105,82 @@ export class DemoApplication {
     const result = command.kind === 'SALES_RETURN'
       ? await this.returns.postSales(actor, command.command)
       : await this.returns.postPurchase(actor, command.command);
+    await this.freezeNotePrint(result.note);
     return {
       state: 'recorded', deduplicated: result.deduplicated,
       title: result.deduplicated ? 'Return already recorded once' : 'Return recorded',
       message: result.note.summary, note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor) },
+    };
+  }
+
+  /**
+   * Issue #186 — the printed note, frozen when it is recorded, exactly as a bill is.
+   *
+   * The customer's name, address and GSTIN and the place of supply come from the original bill as it
+   * was printed, so the credit note names the buyer the bill named. The business's own particulars
+   * are the ones saved on the day the note is issued (#180).
+   */
+  private async freezeNotePrint(note: ReturnNote): Promise<void> {
+    if (this.notePrints.has(note.id)) return;
+    const template = templateById('india-standard');
+    if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
+    const branding = brandingOf(note.companyId);
+    const us = sellerPrint(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
+    const bill = note.kind === 'SALES_RETURN' ? this.invoicePrints.get(note.originalDocument.id) : undefined;
+    const original = bill !== undefined
+      ? noteOriginalFromInvoice(bill.document)
+      : { counterparty: await this.notePartyPrint(note), placeOfSupplyStateCode: null, placeOfSupplyStateName: null };
+    this.notePrints.set(note.id, {
+      document: toCreditNoteDocument(note, original, { seller: us.seller, logoDataUri: branding.logoDataUri, signatureDataUri: us.signatureDataUri }),
+      snapshot: brandedSnapshot(template, 'en-IN', String(note.documentDate), branding),
+    });
+  }
+
+  /** The other party when there is no frozen bill to copy it from: a supplier, or an old bill. */
+  private async notePartyPrint(note: ReturnNote): Promise<RenderableParty> {
+    try {
+      return customerPrint(this.config.companyId, String(note.partyId));
+    } catch {
+      // A supplier: the name as it stands on their bill. Their address and GSTIN are printed once the
+      // supplier record carries them; nothing is invented in the meantime.
+      const bill = note.kind === 'PURCHASE_RETURN' ? await this.shop.bills.findById(note.companyId, note.originalDocument.id) : null;
+      // The state is known only when the supplier's bill was inside our own state.
+      const state = bill?.tax.intraState === true ? this.config.gstin.slice(0, 2) : '';
+      return { name: bill?.supplierName ?? String(note.partyId), addressLines: [], gstin: null, stateCode: state, stateName: state === '' ? '' : STATE_NAMES[state] ?? state };
+    }
+  }
+
+  /** Issue #186 — every note this business has issued, newest first, for the Returns screen's list. */
+  async listReturnNotes(actor: ActorContext) {
+    permissionPortFromActor.require(actor, 'returns.create', 'view return notes');
+    const notes = await this.returnNotes.list(this.companyOf(actor));
+    return {
+      notes: notes
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((note) => ({
+          id: note.id, number: note.number, kind: note.kind, date: note.documentDate,
+          against: note.originalDocument.number, amount: jsonAmount(note.totals.total.minor),
+          printable: this.notePrints.has(note.id),
+        })),
+    };
+  }
+
+  /** Issue #186 — the printed credit or debit note: on screen, on the printer, and as a PDF. */
+  async notePrint(actor: ActorContext, noteId: string, options: { readonly pdf?: boolean; readonly format?: unknown; readonly locale?: unknown } = {}) {
+    const note = await this.returnNotes.findById(this.companyOf(actor), noteId);
+    if (note === null) throw notFound('API_NOTE_NOT_FOUND', 'No credit or debit note was found.');
+    const facts = this.notePrints.get(note.id);
+    if (facts === undefined) throw notFound('API_NOTE_PRINT_FACTS', 'This note was recorded before notes could be printed, so it has no stored page.');
+    const locale: Locale = options.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
+    const format: PageFormat = options.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : options.format === 'MOBILE' ? 'MOBILE' : 'A4';
+    return {
+      state: 'print' as const,
+      number: note.number,
+      kind: note.kind,
+      format,
+      ...(options.pdf === true
+        ? { pdf: await creditNotePdf(facts.document, facts.snapshot, { format, locale }) }
+        : { html: renderCreditNote(facts.document, facts.snapshot, { format, locale }) }),
     };
   }
 

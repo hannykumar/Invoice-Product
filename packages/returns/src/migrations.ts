@@ -74,4 +74,14 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
       WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
   `,
   down: `DROP TABLE IF EXISTS return_note_lines; DROP TABLE IF EXISTS return_notes;`,
+}, {
+  // Issue #186 — what the printed credit or debit note needs from the original line (Rule 53(1A)(h)),
+  // kept on the note so a reprint never depends on the original bill still being readable.
+  id: '20260918T092432769Z_returns_a3e6e719e4dd_note_line_hsn_rate_and_unit_price',
+  up: `
+    ALTER TABLE return_note_lines ADD COLUMN hsn_or_sac text;
+    ALTER TABLE return_note_lines ADD COLUMN rate_percent_times100 bigint CHECK (rate_percent_times100 IS NULL OR rate_percent_times100 BETWEEN 0 AND 10000);
+    ALTER TABLE return_note_lines ADD COLUMN unit_price_paise bigint;
+  `,
+  down: `ALTER TABLE return_note_lines DROP COLUMN IF EXISTS unit_price_paise, DROP COLUMN IF EXISTS rate_percent_times100, DROP COLUMN IF EXISTS hsn_or_sac;`,
 }]);

@@ -9,7 +9,7 @@ const copy = {
     stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", supplierState: "Where the supplier is", stateOther: "Another state", stateSame: "Same state as your godown", supplierStateHelp: "This decides whether the bill carries IGST, or CGST and SGST.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "If you choose later, the payment remains clearly marked as not matched to a bill.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
-    returnsTitle: "Record a return", returnsHelp: "Choose the original bill and what came back. The original stays unchanged; a linked credit or debit note records the correction.", originalBill: "Original customer or supplier bill", returnItem: "Item being returned", returnQuantity: "Quantity returned", disposition: "What happens to the goods", dispAccepted: "Accepted back into usable stock", dispDamaged: "Move to damaged stock", dispScrapped: "Scrap after receiving", dispReplacement: "Replacement is being arranged", returnDate: "Return date", returnReference: "Return reference", returnReason: "Why is it being returned?", returnReasonHelp: "This explanation stays in the audit trail.", returnRemaining: "Choose a bill to see the quantity still eligible.", returnEligible: "{quantity} {unit} still eligible on the original bill.", returnLineChoice: "{item} · {quantity} {unit} left", customerSale: "Customer sale", supplierPurchase: "Supplier purchase", returnCheckQuantity: "Returned quantity cannot exceed the original eligible quantity", returnCheckBooks: "Stock, GST and the customer or supplier balance change together", returnCheckCompliance: "Registered documents are marked for a compliance adjustment", returnSafety: "Checking changes nothing. Recording creates a linked note; it never edits or hides the original bill.", checkReturn: "Review return", noReturnDocuments: "No issued bills are available for return yet.", returnActivity: "Linked return note posted without changing the original", customerReturnChecked: "Customer return checked", supplierReturnChecked: "Supplier return checked", returnCheckedBody: "The checked return comes to {amount}.", returnCustomerEffect: "A credit note will reduce what the customer owes.", returnSupplierEffect: "A debit note will reduce what you owe the supplier.", returnSalesStockEffect: "Accepted goods will go back into stock.", returnPurchaseStockEffect: "Returned goods will leave stock.", returnComplianceEffect: "The registered document needs a compliance adjustment.", returnNoComplianceEffect: "No government-document adjustment is needed.", returnRecorded: "Return recorded", returnAlreadyRecorded: "Return already recorded once", returnRecordedBody: "Linked note {number} was recorded without changing the original bill.",
+    noteHelp: "Give the customer this page. It carries the bill it is against, so they can reverse the GST credit they claimed.", notePrint: "Print the note", noteFrame: "The printed note", notesTitle: "Credit and debit notes issued", noteAgainst: "against {number}", notePrintAction: "Print", noteNotPrintable: "Recorded before notes could be printed", returnsTitle: "Record a return", returnsHelp: "Choose the original bill and what came back. The original stays unchanged; a linked credit or debit note records the correction.", originalBill: "Original customer or supplier bill", returnItem: "Item being returned", returnQuantity: "Quantity returned", disposition: "What happens to the goods", dispAccepted: "Accepted back into usable stock", dispDamaged: "Move to damaged stock", dispScrapped: "Scrap after receiving", dispReplacement: "Replacement is being arranged", returnDate: "Return date", returnReference: "Return reference", returnReason: "Why is it being returned?", returnReasonHelp: "This explanation stays in the audit trail.", returnRemaining: "Choose a bill to see the quantity still eligible.", returnEligible: "{quantity} {unit} still eligible on the original bill.", returnLineChoice: "{item} · {quantity} {unit} left", customerSale: "Customer sale", supplierPurchase: "Supplier purchase", returnCheckQuantity: "Returned quantity cannot exceed the original eligible quantity", returnCheckBooks: "Stock, GST and the customer or supplier balance change together", returnCheckCompliance: "Registered documents are marked for a compliance adjustment", returnSafety: "Checking changes nothing. Recording creates a linked note; it never edits or hides the original bill.", checkReturn: "Review return", noReturnDocuments: "No issued bills are available for return yet.", returnActivity: "Linked return note posted without changing the original", customerReturnChecked: "Customer return checked", supplierReturnChecked: "Supplier return checked", returnCheckedBody: "The checked return comes to {amount}.", returnCustomerEffect: "A credit note will reduce what the customer owes.", returnSupplierEffect: "A debit note will reduce what you owe the supplier.", returnSalesStockEffect: "Accepted goods will go back into stock.", returnPurchaseStockEffect: "Returned goods will leave stock.", returnComplianceEffect: "The registered document needs a compliance adjustment.", returnNoComplianceEffect: "No government-document adjustment is needed.", returnRecorded: "Return recorded", returnAlreadyRecorded: "Return already recorded once", returnRecordedBody: "Linked note {number} was recorded without changing the original bill.",
     workspace: "Workspace", activityTitle: "All activity", activityHelp: "Every completed action will appear here with its status and time.", demoHistory: "This preview has sample activity", demoHistoryBody: "Connect the application services to show the company's full history. You can still test the draft flows now.", createFirstSale: "Create a sale",
     setupTitle: "Set up a business",
     setupHelp: "Answer a few questions and we open a real set of books for it. Your GST number and opening figures are checked, not assumed.",
@@ -319,7 +319,7 @@ const copy = {
     stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", supplierState: "Supplier kahan hai", stateOther: "Doosre rajya mein", stateSame: "Aapke godown wale rajya mein", supplierStateHelp: "Isse tay hota hai ki bill par IGST lagega ya CGST aur SGST.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Baad mein chunne par payment saaf taur par bina bill ke dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
-    returnsTitle: "Wapsi darj karen", returnsHelp: "Asli bill aur wapas aaya saman chunen. Asli bill nahi badlega; juda hua credit ya debit note sudhar darj karega.", originalBill: "Asli customer ya supplier bill", returnItem: "Wapas ho raha saman", returnQuantity: "Wapas matra", disposition: "Saman ka kya hoga", dispAccepted: "Sahi stock mein wapas rakhen", dispDamaged: "Kharab stock mein rakhen", dispScrapped: "Wapas lekar scrap karen", dispReplacement: "Badla hua saman aayega", returnDate: "Wapsi ki tareekh", returnReference: "Wapsi reference", returnReason: "Wapas kyon ho raha hai?", returnReasonHelp: "Yeh wajah audit record mein rahegi.", returnRemaining: "Bachi hui eligible matra dekhne ke liye bill chunen.", returnEligible: "Asli bill par abhi {quantity} {unit} wapas ho sakta hai.", returnLineChoice: "{item} · {quantity} {unit} bacha", customerSale: "Customer ki bikri", supplierPurchase: "Supplier ki kharid", returnCheckQuantity: "Wapas matra asli eligible matra se zyada nahi ho sakti", returnCheckBooks: "Stock, GST aur customer ya supplier balance ek saath badlenge", returnCheckCompliance: "Registered document ko compliance adjustment ke liye mark kiya jayega", returnSafety: "Jaanchne se kuch nahi badalta. Darj karne par juda hua note banta hai; asli bill kabhi badalta ya chhupta nahi.", checkReturn: "Wapsi dekhen", noReturnDocuments: "Wapsi ke liye abhi koi jaari bill nahi hai.", returnActivity: "Asli bill badle bina juda hua return note darj hua", customerReturnChecked: "Customer wapsi jaanch li", supplierReturnChecked: "Supplier wapsi jaanch li", returnCheckedBody: "Jaanchi hui wapsi {amount} ki hai.", returnCustomerEffect: "Credit note customer se lene wali rakam ghataega.", returnSupplierEffect: "Debit note supplier ko dene wali rakam ghataega.", returnSalesStockEffect: "Sahi saman stock mein wapas jayega.", returnPurchaseStockEffect: "Wapas saman stock se bahar jayega.", returnComplianceEffect: "Registered document ke liye compliance adjustment karna hoga.", returnNoComplianceEffect: "Kisi government-document adjustment ki zaroorat nahi hai.", returnRecorded: "Wapsi darj hui", returnAlreadyRecorded: "Wapsi pehle hi ek baar darj hai", returnRecordedBody: "Asli bill badle bina juda note {number} darj hua.",
+    noteHelp: "Yeh panna customer ko dein. Is par woh bill likha hai jiske against yeh hai, taaki woh apna GST credit wapas kar sake.", notePrint: "Note print karein", noteFrame: "Chhapa hua note", notesTitle: "Jaari kiye gaye credit aur debit note", noteAgainst: "{number} ke against", notePrintAction: "Print", noteNotPrintable: "Print ki suvidha se pehle darj hua", returnsTitle: "Wapsi darj karen", returnsHelp: "Asli bill aur wapas aaya saman chunen. Asli bill nahi badlega; juda hua credit ya debit note sudhar darj karega.", originalBill: "Asli customer ya supplier bill", returnItem: "Wapas ho raha saman", returnQuantity: "Wapas matra", disposition: "Saman ka kya hoga", dispAccepted: "Sahi stock mein wapas rakhen", dispDamaged: "Kharab stock mein rakhen", dispScrapped: "Wapas lekar scrap karen", dispReplacement: "Badla hua saman aayega", returnDate: "Wapsi ki tareekh", returnReference: "Wapsi reference", returnReason: "Wapas kyon ho raha hai?", returnReasonHelp: "Yeh wajah audit record mein rahegi.", returnRemaining: "Bachi hui eligible matra dekhne ke liye bill chunen.", returnEligible: "Asli bill par abhi {quantity} {unit} wapas ho sakta hai.", returnLineChoice: "{item} · {quantity} {unit} bacha", customerSale: "Customer ki bikri", supplierPurchase: "Supplier ki kharid", returnCheckQuantity: "Wapas matra asli eligible matra se zyada nahi ho sakti", returnCheckBooks: "Stock, GST aur customer ya supplier balance ek saath badlenge", returnCheckCompliance: "Registered document ko compliance adjustment ke liye mark kiya jayega", returnSafety: "Jaanchne se kuch nahi badalta. Darj karne par juda hua note banta hai; asli bill kabhi badalta ya chhupta nahi.", checkReturn: "Wapsi dekhen", noReturnDocuments: "Wapsi ke liye abhi koi jaari bill nahi hai.", returnActivity: "Asli bill badle bina juda hua return note darj hua", customerReturnChecked: "Customer wapsi jaanch li", supplierReturnChecked: "Supplier wapsi jaanch li", returnCheckedBody: "Jaanchi hui wapsi {amount} ki hai.", returnCustomerEffect: "Credit note customer se lene wali rakam ghataega.", returnSupplierEffect: "Debit note supplier ko dene wali rakam ghataega.", returnSalesStockEffect: "Sahi saman stock mein wapas jayega.", returnPurchaseStockEffect: "Wapas saman stock se bahar jayega.", returnComplianceEffect: "Registered document ke liye compliance adjustment karna hoga.", returnNoComplianceEffect: "Kisi government-document adjustment ki zaroorat nahi hai.", returnRecorded: "Wapsi darj hui", returnAlreadyRecorded: "Wapsi pehle hi ek baar darj hai", returnRecordedBody: "Asli bill badle bina juda note {number} darj hua.",
     workspace: "Kaam ki jagah", activityTitle: "Saara kaam", activityHelp: "Har poora kaam uske samay aur sthiti ke saath yahan dikhega.", demoHistory: "Is preview mein sample kaam hai", demoHistoryBody: "Company ka poora itihaas dikhane ke liye services jodni hongi. Abhi draft flows check kar sakte hain.", createFirstSale: "Bikri banayen",
     setupTitle: "Business set up karein",
     setupHelp: "Kuch sawaalon ke jawab dein, hum uske liye asli books khol denge. Aapka GST number aur shuruaati aankde jaanche jaate hain, maane nahin jaate.",
@@ -782,7 +782,7 @@ function openView(view) {
   document.querySelector(`#view-${target} h1`)?.focus?.();
   if (target === "reports") loadReports();
   if (target === "migration") startMigration();
-  if (target === "returns") loadReturnDocuments();
+  if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
@@ -1282,6 +1282,7 @@ function localizeReturnResult(result, mode, kind) {
       copy[state.locale][kind === "SALES_RETURN" ? "returnCustomerEffect" : "returnSupplierEffect"],
       copy[state.locale][kind === "SALES_RETURN" ? "returnSalesStockEffect" : "returnPurchaseStockEffect"],
       copy[state.locale][result.effects?.[2]?.startsWith("The registered") ? "returnComplianceEffect" : "returnNoComplianceEffect"],
+      ...(result.warnings ?? []),
     ],
   };
   return { ...result, title: copy[state.locale][result.deduplicated ? "returnAlreadyRecorded" : "returnRecorded"], message: text("returnRecordedBody", { number: result.note?.number ?? "—" }) };
@@ -2429,7 +2430,9 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
       state.pendingReturnInput = null;
       const localized = localizeReturnResult(result, "recorded", result.note.kind);
       showDialog({ ...localized, effects: [`${result.note.number} · ${money(result.note.amount)}`] }, "recorded");
-      await Promise.all([loadDashboard(), loadReturnDocuments()]);
+      // Issue #186 — the note is waiting on the screen behind the dialog, ready to print or send.
+      await showReturnNote(result.note.id);
+      await Promise.all([loadDashboard(), loadReturnDocuments(), loadReturnNotes()]);
     } catch (error) {
       showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
     }
@@ -2552,6 +2555,79 @@ function updateReturnRemaining() {
     ? text("returnEligible", { quantity: option.dataset.remaining, unit: option.dataset.unit })
     : copy[state.locale].returnRemaining;
 }
+
+// ------------------------------------------------ issue #186: the credit or debit note on paper
+
+const noteOnScreen = { noteId: null, number: "note", paperChosen: false };
+
+async function showReturnNote(noteId) {
+  if (!noteId) return;
+  noteOnScreen.noteId = noteId;
+  const panel = document.querySelector("#note-panel");
+  const paper = document.querySelector("#note-format");
+  if (!noteOnScreen.paperChosen && window.innerWidth <= 760) paper.value = "MOBILE";
+  panel.hidden = false;
+  try {
+    const printed = await api("/api/returns/print", { method: "POST", body: JSON.stringify({ note: noteId, locale: state.locale, format: paper.value }) });
+    noteOnScreen.number = printed.number;
+    document.querySelector("#note-title").textContent = printed.number;
+    document.querySelector("#note-frame").srcdoc = printed.html;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    document.querySelector("#note-title").textContent = localizedError(error);
+  }
+}
+
+async function loadReturnNotes() {
+  const list = document.querySelector("#note-list");
+  if (!list || !state.sessionId) return;
+  try {
+    const { notes } = await api("/api/returns/notes");
+    document.querySelector("#note-list-panel").hidden = notes.length === 0;
+    list.replaceChildren(...notes.map((note) => {
+      const row = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = `${note.number} · ${text("noteAgainst", { number: note.against })} · ${money(note.amount)}`;
+      row.append(label);
+      if (note.printable) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "text-button";
+        button.dataset.printNote = note.id;
+        button.textContent = copy[state.locale].notePrintAction;
+        row.append(" ", button);
+      } else {
+        const small = document.createElement("small");
+        small.textContent = ` ${copy[state.locale].noteNotPrintable}`;
+        row.append(small);
+      }
+      return row;
+    }));
+  } catch { /* the list is a convenience; the note itself is shown after recording */ }
+}
+
+document.querySelector("#note-list")?.addEventListener("click", (event) => {
+  const button = event.target instanceof Element ? event.target.closest("[data-print-note]") : null;
+  if (button) showReturnNote(button.dataset.printNote);
+});
+document.querySelector("#note-print")?.addEventListener("click", () => document.querySelector("#note-frame").contentWindow?.print());
+document.querySelector("#note-format")?.addEventListener("change", () => { noteOnScreen.paperChosen = true; showReturnNote(noteOnScreen.noteId); });
+document.querySelector("#note-download")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/returns/${encodeURIComponent(noteOnScreen.noteId)}/pdf`, { headers: { authorization: `Bearer ${state.sessionId}` } });
+    if (!response.ok) throw new Error((await response.json()).message || copy[state.locale].requestFailed);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${noteOnScreen.number.replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (error) {
+    document.querySelector("#note-help").textContent = localizedError(error);
+  } finally { button.disabled = false; }
+});
 
 async function loadReturnDocuments() {
   const select = document.querySelector("#return-document");

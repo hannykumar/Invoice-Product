@@ -37,6 +37,9 @@ export const salesReturnSource = (
           igst: reverseCharge ? { ...priced.igst, minor: 0n } : priced.igst,
           cess: reverseCharge ? { ...priced.cess, minor: 0n } : priced.cess,
           total: priced.lineTotal,
+          hsnOrSac: priced.hsnOrSac,
+          ratePercentTimes100: priced.ratePercentTimes100,
+          unitPrice: priced.unitPrice,
         };
       }),
     };

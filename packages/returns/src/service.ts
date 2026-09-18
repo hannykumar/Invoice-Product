@@ -4,6 +4,7 @@ import {
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort } from '@invoice/ledger';
 import { buildPurchaseReturnPosting, buildSalesReturnPosting } from './posting.ts';
+import { checkCreditNoteDeadline } from './credit-note-deadline.ts';
 import { formatDocumentNumber, documentSeriesScope } from '@invoice/sales';
 import {
   CREDIT_NOTE_SERIES_KIND,
@@ -41,6 +42,8 @@ export interface SalesReturnPreview {
   readonly totals: ReturnTaxAmounts;
   readonly complianceStatus: ReturnNote['complianceStatus'];
   readonly summary: string;
+  /** Issue #186 — e.g. the credit-note deadline is less than 30 days away. Empty when nothing to say. */
+  readonly warnings: readonly string[];
 }
 
 export type PurchaseReturnLineInput = SalesReturnLineInput;
@@ -118,6 +121,10 @@ export class ReturnService {
     const original = await this.#sales.findSalesDocument(actor.companyId, command.originalInvoiceId);
     if (original === null) throw notFound('RETURN_ORIGINAL_NOT_FOUND', 'We could not find that issued bill in this business.');
     if (original.state !== 'FINAL') throw conflict('RETURN_ORIGINAL_NOT_FINAL', 'A cancelled bill cannot have a new return note.');
+    // Issue #186 — section 34(2): past 30 November after the bill's financial year, a credit note
+    // can no longer reduce GST, so this module refuses to post one that claims to.
+    const deadline = checkCreditNoteDeadline(original.date, command.documentDate);
+    if (deadline.late) throw invalid('RETURN_CREDIT_NOTE_TOO_LATE', deadline.refusal as string);
 
     const previous = await this.#repo.listForOriginal(actor.companyId, original.id);
     const already = new Map<string, bigint>();
@@ -147,11 +154,12 @@ export class ReturnService {
         supplyKind: source.supplyKind, quantity: input.quantity, disposition: input.disposition,
         warehouseId, batchId: input.batchId ?? null, serialNumbers: input.serialNumbers ?? [],
         replacementSerialNumbers: input.replacementSerialNumbers ?? [], amounts,
+        hsnOrSac: source.hsnOrSac ?? null, ratePercentTimes100: source.ratePercentTimes100 ?? null, unitPrice: source.unitPrice ?? null,
       });
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
     const summary = `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`;
-    return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary };
+    return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: deadline.warning === null ? [] : [deadline.warning] };
   }
 
   async postSales(actor: ActorContext, command: SalesReturnCommand): Promise<{ note: ReturnNote; deduplicated: boolean }> {
@@ -254,11 +262,12 @@ export class ReturnService {
         supplyKind: source.supplyKind, quantity: input.quantity, disposition: input.disposition,
         warehouseId, batchId: input.batchId ?? null, serialNumbers: input.serialNumbers ?? [],
         replacementSerialNumbers: [], amounts,
+        hsnOrSac: source.hsnOrSac ?? null, ratePercentTimes100: source.ratePercentTimes100 ?? null, unitPrice: source.unitPrice ?? null,
       });
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
     const summary = `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will reduce the supplier balance by ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`;
-    return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary };
+    return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: [] };
   }
 
   async postPurchase(actor: ActorContext, command: PurchaseReturnCommand): Promise<{ note: ReturnNote; deduplicated: boolean }> {
