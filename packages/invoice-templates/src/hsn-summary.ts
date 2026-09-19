@@ -10,10 +10,15 @@
  * to the invoice totals, so the summary can never quietly disagree with the amount charged.
  */
 import { add, zero, type Money } from '@invoice/kernel';
+import { apportionChargesToHsn, type HsnPart } from '@invoice/gst-calc';
 import type { InvoiceDocument, RenderableLine, TaxSplit } from './document.ts';
 
 export interface HsnSummaryRow {
-  /** The government code. `null` where a line carries none, which is shown as a dash, not hidden. */
+  /**
+   * The government code. `null` only where a goods line itself carries none, which is shown as a
+   * dash, not hidden. Freight and other charges never make a row of their own: since #188 each is
+   * shared into the codes of the goods it travelled with.
+   */
   readonly code: string | null;
   readonly ratePercentTimes100: bigint | null;
   readonly taxableValue: Money;
@@ -45,25 +50,30 @@ const nil = (): Money => zero('INR');
  * Reverse-charge lines contribute their taxable value but no tax, because no tax was charged on
  * them — the customer pays it to the government directly, and the totals block says so on its own
  * line. Adding it here would make the summary disagree with the amount the customer owes.
+ *
+ * Freight and other charge lines are shared into the goods codes by `apportionChargesToHsn` (#188),
+ * the same function the GSTR-1 HSN table uses, so the bill and the return agree to the paisa.
  */
 export const hsnSummary = (doc: Pick<InvoiceDocument, 'lines' | 'split'>): HsnSummary => {
+  type Part = HsnPart<RenderableLine>;
   const order: string[] = [];
-  const groups = new Map<string, { lines: RenderableLine[]; code: string | null; rate: bigint | null }>();
+  const groups = new Map<string, { parts: Part[]; code: string | null; rate: bigint | null }>();
 
-  for (const line of doc.lines) {
-    const key = `${line.hsnOrSac ?? ''}|${line.ratePercentTimes100 ?? 'none'}`;
+  const parts = apportionChargesToHsn(doc.lines);
+  for (const part of parts) {
+    const key = `${part.hsnOrSac ?? ''}|${part.ratePercentTimes100 ?? 'none'}`;
     const existing = groups.get(key);
     if (existing === undefined) {
       order.push(key);
-      groups.set(key, { lines: [line], code: line.hsnOrSac, rate: line.ratePercentTimes100 });
+      groups.set(key, { parts: [part], code: part.hsnOrSac, rate: part.ratePercentTimes100 });
     } else {
-      existing.lines.push(line);
+      existing.parts.push(part);
     }
   }
 
-  const rowOf = (lines: readonly RenderableLine[], code: string | null, rate: bigint | null): HsnSummaryRow => {
-    const billed = lines.filter((l) => !l.reverseCharge);
-    const total = (pick: (l: RenderableLine) => Money, from: readonly RenderableLine[]): Money =>
+  const rowOf = (parts: readonly Part[], code: string | null, rate: bigint | null): HsnSummaryRow => {
+    const billed = parts.filter((l) => !l.reverseCharge);
+    const total = (pick: (l: Part) => Money, from: readonly Part[]): Money =>
       from.reduce<Money>((acc, l) => add(acc, pick(l)), nil());
     const cgst = total((l) => l.cgst, billed);
     const sgst = total((l) => l.sgst, billed);
@@ -73,23 +83,24 @@ export const hsnSummary = (doc: Pick<InvoiceDocument, 'lines' | 'split'>): HsnSu
     return {
       code,
       ratePercentTimes100: rate,
-      taxableValue: total((l) => l.taxableValue, lines),
+      taxableValue: total((l) => l.taxableValue, parts),
       cgst,
       sgst,
       utgst,
       igst,
       cess,
       totalTax: [cgst, sgst, utgst, igst, cess].reduce(add, nil()),
-      reverseCharge: lines.length > 0 && lines.every((l) => l.reverseCharge),
+      reverseCharge: parts.length > 0 && parts.every((l) => l.reverseCharge),
     };
   };
 
   const rows = order.map((key) => {
-    const group = groups.get(key) as { lines: RenderableLine[]; code: string | null; rate: bigint | null };
-    return rowOf(group.lines, group.code, group.rate);
+    const group = groups.get(key) as { parts: Part[]; code: string | null; rate: bigint | null };
+    return rowOf(group.parts, group.code, group.rate);
   });
 
-  return { rows, totals: rowOf(doc.lines, null, null), split: doc.split };
+  // The shares add back exactly to each charge line, so these totals are the bill's totals.
+  return { rows, totals: rowOf(parts, null, null), split: doc.split };
 };
 
 /** Which tax columns this bill needs. A column of zeroes is noise on a page that is already dense. */

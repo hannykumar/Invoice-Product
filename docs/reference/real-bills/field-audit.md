@@ -95,7 +95,10 @@ Nothing outstanding. The seven fields #156 listed all print now:
   does (#182).
 - **Freight.** Neither bill has freight, so neither settles how to print it. We give it its own line
   below a goods sub-total (#131) rather than spreading it across the goods, because a goods line
-  that fails quantity x rate is the first thing a customer queries.
+  that fails quantity x rate is the first thing a customer queries. In the **HSN summary** it is
+  the other way round (#188): freight is part of the value of the goods it travelled with, so it is
+  shared into those goods' codes by value and never prints as a row with a dash for its code. The
+  GSTR-1 HSN table uses the same share-out, so the bill and the return agree to the paisa.
 - **"Amount" is the taxable value on ours**, following BE and Tally, not KK's tax-inclusive column.
 - **Copy markings.** Neither sample is marked Original/Duplicate/Triplicate — both are single copies
   kept by the business. GST asks for the markings, and Tally prints them, so we do (#137). Since

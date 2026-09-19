@@ -16,7 +16,8 @@
  * criterion of the issue, and the reconciliation in `reconcile.ts` reads those same references to
  * prove the return and the books agree.
  */
-import { formatINR } from '@invoice/kernel';
+import { formatINR, zero } from '@invoice/kernel';
+import { apportionChargesToHsn } from '@invoice/gst-calc';
 import { classifyDocument, isNote, sourceRefOf, stateNameOf, type ClassifyContext } from './classify.ts';
 import {
   GSTR1_SECTION_NAMES,
@@ -188,26 +189,53 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
 
   for (const document of documents) {
     const source = sourceRefOf(document);
-    for (const line of document.lines) {
-      if (line.hsnOrSac === null || line.hsnOrSac.trim() === '') {
+    // Issue #188 — freight and other charges have no code of their own. They are shared into the
+    // goods codes they travelled with, by the same function the printed bill's summary uses, so the
+    // table carries every rupee of the bill and the two agree to the paisa.
+    const parts = apportionChargesToHsn(
+      document.lines.map((line) => ({
+        line,
+        kind: line.lineKind ?? 'GOODS',
+        hsnOrSac: line.hsnOrSac,
+        ratePercentTimes100: line.ratePercentTimes100,
+        reverseCharge: line.reverseCharge,
+        taxableValue: line.amounts.taxableValue,
+        cgst: line.amounts.cgst,
+        sgst: line.amounts.sgst,
+        utgst: zero('INR'),
+        igst: line.amounts.igst,
+        cess: line.amounts.cess,
+      })),
+    );
+    for (const part of parts) {
+      if (part.hsnOrSac === null || part.hsnOrSac.trim() === '') {
         withoutCode.add(document.number);
         continue;
       }
-      const rateKey = line.ratePercentTimes100 === null ? 'none' : line.ratePercentTimes100.toString();
-      const key = `${line.hsnOrSac}|${rateKey}|${line.unit ?? ''}`;
-      const amounts = signedAmounts(document, line.amounts);
+      // A share of a charge is reported under the goods line it rides on: its code, unit and
+      // description. It adds value and tax, never quantity.
+      const line = (part.goods ?? part.source).line;
+      const rateKey = part.ratePercentTimes100 === null ? 'none' : part.ratePercentTimes100.toString();
+      const key = `${part.hsnOrSac}|${rateKey}|${line.unit ?? ''}`;
+      const amounts = signedAmounts(document, {
+        taxableValue: part.taxableValue,
+        cgst: part.cgst,
+        sgst: part.sgst,
+        igst: part.igst,
+        cess: part.cess,
+      });
       const existing = rows.get(key);
-      const quantity = parseQuantity(line.quantity);
+      const quantity = part.isChargeShare ? { value: 0n, scale: 0 } : parseQuantity(line.quantity);
       if (existing === undefined) {
         rows.set(key, {
           quantity: quantity.value * (document.kind === 'CREDIT_NOTE' ? -1n : 1n),
           scale: quantity.scale,
           row: {
-            hsnOrSac: line.hsnOrSac,
+            hsnOrSac: part.hsnOrSac,
             description: line.description,
             unit: line.unit,
             quantity: line.quantity,
-            ratePercentTimes100: line.ratePercentTimes100,
+            ratePercentTimes100: part.ratePercentTimes100,
             amounts,
             sources: [source],
           },
@@ -223,7 +251,7 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
             ...existing.row,
             amounts: addAmounts(existing.row.amounts, amounts),
             quantity: formatQuantity(total, scale),
-            sources: [...existing.row.sources, source],
+            sources: part.isChargeShare && existing.row.sources.includes(source) ? existing.row.sources : [...existing.row.sources, source],
           },
         });
       }
