@@ -1230,3 +1230,33 @@ test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper i
   const other = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   assert.equal((await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, other)).status, 404);
 });
+
+test('sale freight is reviewed, issued and printed under the goods HSN codes', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const catalogue = await request('GET', '/api/catalogue', {}, owner);
+  assert.ok(catalogue.body.items.every((item: { name: string }) => item.name !== 'Inward freight'));
+
+  const sale = {
+    party: 'ABC Traders', date: '2026-08-29', terms: '7', reference: 'FREIGHT-SALE-205', freight: '500.00', otherCharges: '',
+    lines: JSON.stringify([
+      { itemId: 'sampoorna:item:SOAP', quantity: '10', unit: 'PCS', rate: '100' },
+      { itemId: 'sampoorna:item:TMT12', quantity: '50', unit: 'KGS', rate: '100' },
+    ]),
+  };
+  const preview = await request('POST', '/api/sales/preview', sale, owner);
+  assert.equal(preview.status, 200);
+  assert.deepEqual(preview.body.chargeLines.map((line: { kind: string }) => line.kind), ['FREIGHT', 'FREIGHT']);
+  assert.equal(preview.body.chargeLines.reduce((sum: number, line: { taxableValue: number }) => sum + line.taxableValue, 0), 500);
+  assert.equal(preview.body.chargeLines.reduce((sum: number, line: { gst: number }) => sum + line.gst, 0), 79.16);
+
+  const recorded = await request('POST', '/api/sales/record', sale, owner);
+  assert.equal(recorded.status, 200);
+  const printed = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id, format: 'A4', locale: 'en-IN' }, owner);
+  assert.equal(printed.status, 200);
+  assert.match(printed.body.html, /Freight/);
+  assert.match(printed.body.html, /34011190/);
+  assert.match(printed.body.html, /72142090/);
+  const summary = printed.body.html.match(/<table class="grid summary">[\s\S]*?<\/table>/)?.[0] ?? '';
+  assert.doesNotMatch(summary, />—</, 'freight must not create a dash-code row in the HSN summary');
+  assert.equal((summary.match(/6,500\.00/g) ?? []).length, 1, 'the HSN total must include the ₹500 freight');
+});

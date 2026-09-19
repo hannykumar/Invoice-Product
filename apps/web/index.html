@@ -114,6 +114,10 @@
               </div>
               <div class="sale-lines" id="sale-lines" aria-label="Items on this bill" data-i18n-aria="saleLinesLabel"></div>
               <button type="button" class="secondary-button" id="sale-add-line" data-i18n="addLine"></button>
+              <div class="field-grid sale-charges">
+                <label><span data-i18n="freight"></span><span class="input-with-prefix"><span>₹</span><input name="freight" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+                <label><span data-i18n="otherCharges"></span><span class="input-with-prefix"><span>₹</span><input name="otherCharges" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+              </div>
               <!-- Issue #182 — where the goods go, who carries them, and what the bill refers back
                    to. Closed by default, so a counter sale stays as short as it was. -->
               <details id="sale-delivery">

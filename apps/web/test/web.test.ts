@@ -147,6 +147,11 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /<select name="party" data-customer-picker required>/);
   assert.match(html, /id="sale-lines"/);
   assert.match(html, /data-line-field="item" data-item-picker/);
+  assert.match(html, /name="freight" type="number" min="0" step="0\.01"/);
+  assert.match(html, /name="otherCharges" type="number" min="0" step="0\.01"/);
+  assert.match(html, /<option value="FRT" data-i18n="itemFreight"><\/option>/, 'inward freight remains available on Purchase');
+  assert.match(script, /result\.chargeLines/);
+  assert.doesNotMatch(script, /line\.gst\s*[*/+-]/, 'the browser must display the calculator tax, not recompute it');
   assert.match(script, /\/api\/sales\/print/);
   // Issue #183 — printing is still the browser's own print box; on A4 it prints the whole marked
   // set, and on till roll or a phone the one slip on screen.

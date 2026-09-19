@@ -182,6 +182,15 @@ const paise = (value: unknown): bigint => {
   return result;
 };
 
+/** An optional amount on a sale: blank and zero both mean no charge. */
+const optionalMoney = (value: unknown) => {
+  const normalized = String(value ?? '').replace(/,/g, '').trim();
+  if (normalized === '') return undefined;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw invalid('API_AMOUNT_INVALID', 'Enter a valid amount, or leave it blank.');
+  const [whole = '0', fraction = ''] = normalized.split('.');
+  return money(BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2)));
+};
+
 const daysAfter = (date: string, days: number): string => {
   const result = new Date(`${date}T00:00:00Z`);
   result.setUTCDate(result.getUTCDate() + days);
@@ -1301,6 +1310,13 @@ export class DemoApplication {
       amount: jsonAmount(draft.pricing.totals.invoiceValue.minor),
       token: draft.id,
       effects,
+      // Issue #205 — the review repeats the calculator's own charge lines and tax. The browser
+      // formats these figures; it never works the tax out for itself.
+      chargeLines: draft.pricing.lines.filter((line) => line.kind === 'CHARGE').map((line) => ({
+        kind: line.chargeKind,
+        taxableValue: jsonAmount(line.taxableValue.minor),
+        gst: jsonAmount(line.totalTax.minor),
+      })),
       terms: {
         outcome: quote.outcome,
         credit: {
@@ -3416,6 +3432,8 @@ export class DemoApplication {
   private saleInput(input: Record<string, unknown>) {
     const date = isoDate(String(input.date));
     const terms = Number(input.terms ?? 0);
+    const freight = optionalMoney(input.freight);
+    const otherCharges = optionalMoney(input.otherCharges);
     const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
     // The place of supply is where the customer is, never where we are. Billing our own state to
     // an out-of-state customer charges CGST and SGST where the law asks for IGST, and the buyer
@@ -3437,6 +3455,8 @@ export class DemoApplication {
       deliveryStateCode: delivery.placeOfSupplyStateCode,
       placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
       lines: this.saleLines(input),
+      ...(freight === undefined ? {} : { freight }),
+      ...(otherCharges === undefined ? {} : { otherCharges }),
       narration: String(input.notes || '') || null,
     };
   }

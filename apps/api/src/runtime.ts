@@ -45,7 +45,6 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
       items: [
       { id: 'sampoorna:item:SOAP', name: 'Herbal Bath Soap 100g', kind: 'goods', hsnSac: '34011190', unit: 'PCS', ratePercentTimes100: 500n, effectiveFrom: '2025-09-22', basis: 'Toilet soap has been 5% since 22 September 2025' },
       { id: 'sampoorna:item:TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate this business has always charged on steel bar' },
-      { id: 'sampoorna:item:FRT', name: 'Inward freight', kind: 'service', hsnSac: '996511', unit: 'NOS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate our transporter bills us at' },
       ],
     } satisfies CatalogueSeed,
   },
@@ -64,7 +63,6 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
       items: [
       { id: 'konkan:item:SOAP', name: 'Herbal Bath Soap 100g', kind: 'goods', hsnSac: '34011190', unit: 'PCS', ratePercentTimes100: 500n, effectiveFrom: '2025-09-22', basis: 'Toilet soap has been 5% since 22 September 2025' },
       { id: 'konkan:item:TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate this business has always charged on steel bar' },
-      { id: 'konkan:item:FRT', name: 'Inward freight', kind: 'service', hsnSac: '996511', unit: 'NOS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate our transporter bills us at' },
       ],
     } satisfies CatalogueSeed,
   },
