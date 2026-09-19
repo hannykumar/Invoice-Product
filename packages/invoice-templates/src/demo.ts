@@ -240,7 +240,8 @@ const main = async (): Promise<void> => {
           ? 'Is bill ke GST rate aapke business ne tay kiye hain. Humne inhe sarkari notification se nahin jaancha.'
           : 'The GST rates on this bill are the ones your business set. We have not checked them against a government notification.',
     };
-    const html = renderInvoice(localised, snapshot, { format: job.format, locale: job.locale });
+    // The template gallery shows designs to choose between, so it carries the labelled boxes (#189).
+    const html = renderInvoice(localised, snapshot, { format: job.format, locale: job.locale, purpose: 'DESIGN_PREVIEW' });
     const file = join(outDir, `${job.templateId}-${job.format.toLowerCase()}-${job.locale}.html`);
     writeFileSync(file, html, 'utf8');
     written.push(file);
@@ -286,7 +287,7 @@ const main = async (): Promise<void> => {
     const file = join(outDir, 'reserved-slots.html');
     writeFileSync(
       file,
-      renderInvoice({ ...document, eInvoice: null }, everySlot, { format: 'A4', locale: 'en-IN' }),
+      renderInvoice({ ...document, eInvoice: null }, everySlot, { format: 'A4', locale: 'en-IN', purpose: 'DESIGN_PREVIEW' }),
       'utf8',
     );
     written.push(file);
