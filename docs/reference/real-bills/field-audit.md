@@ -32,6 +32,10 @@ till-roll bills now carry the HSN code under each item, `Reverse Charge: No`, th
 `for <seller> / Authorised Signatory` — all four of which the narrow layouts used to drop, on the
 very layout a shopkeeper billing from a phone is served by default.
 
+Re-checked 2026-09-20 after issue #190. In the A4 bill's boxed totals, `Total` is now the grand
+amount before `Amount Paid` and `Balance Due`; reverse-charge tax, when present, also follows the
+grand total. The narrow layouts and every calculated value remain unchanged.
+
 `KK` = KK Polyplast invoice 285. `BE` = Blessing Export BE/DL/25-26/0139 (Tally).
 
 ## Present on a real bill and on ours

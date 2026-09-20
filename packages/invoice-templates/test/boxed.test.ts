@@ -134,6 +134,40 @@ test('the item table reads like a bill: a serial column, the unit beside the rat
   assert.ok(html.includes('>1</td>'), 'lines are numbered from one');
 });
 
+test('#190 — the boxed bill prints paid and due only after the grand total', () => {
+  const html = renderIndia(doc({
+    totals: {
+      ...doc().totals,
+      roundOff: rupees(1),
+      invoiceValue: rupees(9913),
+      amountPaid: rupees(5000),
+      outstanding: rupees(4913),
+    },
+  }));
+  const totals = html.slice(html.indexOf('<table class="grid totals">'), html.indexOf('</table>', html.indexOf('<table class="grid totals">')));
+  const labels = ['Total Taxable Value', 'CGST', 'SGST', 'Round Off', '>Total<', 'Amount Paid', 'Balance Due'];
+  const positions = labels.map((label) => totals.indexOf(label));
+
+  assert.ok(positions.every((position) => position >= 0), 'the demo bill prints every expected totals row');
+  assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'the totals rows print in accounting order');
+});
+
+test('#190 — reverse-charge tax prints after Total and before Amount Paid', () => {
+  const html = renderIndia(doc({
+    totals: {
+      ...doc().totals,
+      reverseChargeTax: rupees(1512),
+      amountPaid: rupees(5000),
+      outstanding: rupees(4912),
+    },
+  }));
+  const totals = html.slice(html.indexOf('<table class="grid totals">'), html.indexOf('</table>', html.indexOf('<table class="grid totals">')));
+  const rcmTax = t('rcmTax', 'en-IN');
+
+  assert.ok(totals.indexOf('>Total<') < totals.indexOf(rcmTax));
+  assert.ok(totals.indexOf(rcmTax) < totals.indexOf('Amount Paid'));
+});
+
 test('there is one correct bill: every shipped design is boxed, and none is the weaker option', () => {
   assert.equal(recommendTemplates('WHOLESALE')[0]?.id, 'india-standard');
   assert.equal(recommendTemplates('MANUFACTURING')[0]?.id, 'india-standard');
