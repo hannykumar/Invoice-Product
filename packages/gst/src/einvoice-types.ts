@@ -71,6 +71,19 @@ export interface EInvoiceSupplierFacts {
   readonly aggregateTurnoverPaise?: Paise;
   /** Which year that turnover figure is for, e.g. "2024-2025". */
   readonly turnoverFinancialYear?: string;
+  /**
+   * What the business itself answered to "was last year's turnover above this figure?".
+   *
+   * A band, not a figure: the product asks the question that decides the answer, not the accounts.
+   * It settles the question only when the band and the threshold in force line up — a business that
+   * said it was under ₹5 crore has said nothing about a ₹10 crore limit, and the answer is then a
+   * question rather than a guess in either direction.
+   */
+  readonly declaredTurnoverBand?: {
+    readonly thresholdPaise: Paise;
+    readonly above: boolean;
+    readonly forFinancialYear?: string;
+  };
   readonly exemptCategories?: readonly ExemptCategory[];
   /** Set when the business has been told by the department that it must report, regardless. */
   readonly mandatedByDepartment?: boolean;

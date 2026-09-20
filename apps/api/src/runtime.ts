@@ -209,6 +209,8 @@ export class ApiRuntime {
         sessionId: `recurring-service:${context.companyId}`,
         permissions: new Set<Permission>([
           'operations.read', 'queue.replay', 'notification.send', 'eway.view', 'collections.reminders.send',
+          // Issue #210 part 3 — so a bill whose e-invoice number never came back is sent again.
+          'einvoice.generate', 'einvoice.view',
         ]),
       };
       for (const job of resolved.recurringJobs()) this.#operations.recurring.register(serviceContext, job);
