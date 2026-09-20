@@ -235,13 +235,16 @@ export type ItcOutcome =
   /** Not on the return this month, and the line says which question is holding it. */
   | 'HELD_BACK'
   /** The books already treated the tax as a cost. There was never a credit here to claim. */
-  | 'BLOCKED_IN_BOOKS';
+  | 'BLOCKED_IN_BOOKS'
+  /** Section 16(4): the last date for claiming credit on this bill has gone by. */
+  | 'TIME_BARRED';
 
 export const OUTCOME_PLAIN: Readonly<Record<ItcOutcome, Bilingual>> = Object.freeze({
   CLAIM_NOW: { 'en-IN': 'Safe to claim this month', 'hi-IN': 'Is mahine lena theek hai' },
   CLAIM_AT_RISK: { 'en-IN': 'Claimed on your say-so, with a risk', 'hi-IN': 'Aapke kehne par liya, risk ke saath' },
   HELD_BACK: { 'en-IN': 'Held back until this is answered', 'hi-IN': 'Jawab milne tak roka gaya' },
   BLOCKED_IN_BOOKS: { 'en-IN': 'No credit here — the tax was part of the cost', 'hi-IN': 'Yahan credit nahin — tax laagat mein gaya' },
+  TIME_BARRED: { 'en-IN': 'Too late to claim — the last date has gone', 'hi-IN': 'Ab lena mumkin nahin — aakhri tareekh nikal gayi' },
 });
 
 export type FindingSeverity = 'BLOCKING' | 'WARNING' | 'INFORMATION';
@@ -274,7 +277,11 @@ export type ItcFindingCode =
   | 'ITC_BILL_REVERSED_IN_BOOKS'
   | 'ITC_SUPPLIER_GSTIN_MISSING'
   | 'ITC_DECISION_STALE'
-  | 'ITC_CLAIMED_AT_RISK';
+  | 'ITC_CLAIMED_AT_RISK'
+  /** Section 16(4) — the last date for claiming credit on this bill has gone by. */
+  | 'ITC_TIME_BARRED'
+  /** The last date is close and these bills have not been claimed yet. */
+  | 'ITC_CLAIM_DEADLINE_NEAR';
 
 /** One row of the reconciliation: two pieces of paper, or one and a hole where the other should be. */
 export interface ReconciliationLine {
@@ -288,6 +295,11 @@ export interface ReconciliationLine {
   readonly key: string;
   readonly status: MatchStatus;
   readonly statusLabel: Bilingual;
+  /**
+   * Section 16(4) — the last date credit on this bill can be claimed, shown beside it from the day
+   * it arrives rather than on the day it is too late. Null when the line has no bill in our books.
+   */
+  readonly lastClaimDate: IsoDate | null;
   readonly book: BookPurchaseDocument | null;
   readonly portal: PortalDocument | null;
   /** Every field that was compared, agreeing or not. The whole of "match decisions show evidence". */

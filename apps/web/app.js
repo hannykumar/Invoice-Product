@@ -4642,6 +4642,17 @@ function renderItc(workspace) {
     });
     if (agreed.length > 0) lines.append(detailRow(t({ "en-IN": "Agrees on", "hi-IN": "Yeh milta hai" }), agreed.join(", ")));
     if (line.portalSource === "TYPED") lines.append(detailRow(words.itcTheirs, words.itcTypedFlag));
+    // Issue #192 — section 16(4)'s last date, shown on every bill from the day it arrives, not only
+    // once it is too late. A barred line says so in the same place.
+    if (line.lastClaimDateLabel) {
+      lines.append(detailRow(
+        t({ "en-IN": "Last date to claim this credit", "hi-IN": "Yeh credit lene ki aakhri tareekh" }),
+        line.lastClaimDateLabel,
+        line.outcome === "TIME_BARRED"
+          ? t({ "en-IN": "That date has gone. The bill stays in your books; only the credit is refused.", "hi-IN": "Woh tareekh nikal gayi. Bill books mein rahega; sirf credit nahin milega." })
+          : undefined,
+      ));
+    }
     if (line.decision !== null) {
       lines.append(detailRow(
         t({ "en-IN": "Your answer", "hi-IN": "Aapka jawab" }),
