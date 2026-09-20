@@ -2,6 +2,7 @@
 export * from './types.ts';
 export * from './import.ts';
 export * from './match.ts';
+export * from './deadline.ts';
 export * from './itc.ts';
 export * from './ports.ts';
 export * from './service.ts';

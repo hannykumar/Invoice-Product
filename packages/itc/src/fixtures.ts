@@ -29,7 +29,7 @@ const rupees = (whole: number, paise = 0): { currency: 'INR'; minor: bigint } =>
   minor: BigInt(whole) * 100n + BigInt(paise),
 });
 
-const bill = (input: {
+export const bill = (input: {
   id: string;
   supplierName: string;
   gstin: string | null;

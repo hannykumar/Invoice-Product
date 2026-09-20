@@ -62,6 +62,7 @@ import {
   type TaxPeriod,
 } from './types.ts';
 import { formatINR } from '@invoice/kernel';
+import { formatClaimDate, isInWarningWindow } from './deadline.ts';
 
 export interface ItcServiceDeps {
   readonly books: PurchaseBookPort;
@@ -143,9 +144,10 @@ export class ItcReconciliationService {
     }
 
     const pairs = matchDocuments({ books, portal, policy });
+    const today = this.#clock.now().toISOString().slice(0, 10) as IsoDate;
     const lines = pairs.map((pair) => {
-      const provisional = assessLine({ pair, decision: null, policy });
-      return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy });
+      const provisional = assessLine({ pair, decision: null, policy, period, today });
+      return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy, period, today });
     });
 
     return this.#assemble(period, lines, books, portal, lastImport);
@@ -503,7 +505,7 @@ export class ItcReconciliationService {
     const counts: Record<MatchStatus, number> = {
       EXACT: 0, CLOSE: 0, ONLY_IN_BOOKS: 0, ONLY_ON_PORTAL: 0, DUPLICATE_IN_BOOKS: 0, DUPLICATE_ON_PORTAL: 0,
     };
-    const outcomeCounts: Record<ItcOutcome, number> = { CLAIM_NOW: 0, CLAIM_AT_RISK: 0, HELD_BACK: 0, BLOCKED_IN_BOOKS: 0 };
+    const outcomeCounts: Record<ItcOutcome, number> = { CLAIM_NOW: 0, CLAIM_AT_RISK: 0, HELD_BACK: 0, BLOCKED_IN_BOOKS: 0, TIME_BARRED: 0 };
     for (const line of lines) {
       counts[line.status] += 1;
       outcomeCounts[line.outcome] += 1;
@@ -536,6 +538,29 @@ export class ItcReconciliationService {
       });
     }
     for (const line of lines) findings.push(...line.findings);
+
+    // Issue #192 — section 16(4) gives no extension, so the only useful warning is one that arrives
+    // before the date, listing what is still unclaimed with the largest amount first.
+    const today = this.#clock.now().toISOString().slice(0, 10) as IsoDate;
+    const expiring = lines
+      .filter((line) => line.lastClaimDate !== null && line.outcome === 'HELD_BACK' && isInWarningWindow(today, line.lastClaimDate))
+      .sort((left, right) => Number(totalTaxOf(right.heldBack).minor - totalTaxOf(left.heldBack).minor));
+    if (expiring.length > 0) {
+      const deadline = expiring[0]?.lastClaimDate as IsoDate;
+      findings.push({
+        code: 'ITC_CLAIM_DEADLINE_NEAR',
+        severity: 'WARNING',
+        lineKey: null,
+        message: {
+          'en-IN': `${formatINR(totalTaxOf(sumAmounts(expiring.map((line) => line.heldBack))))} of GST on ${expiring.length} ${expiring.length === 1 ? 'bill is' : 'bills is'} still unclaimed, and the last date for ${expiring.length === 1 ? 'it' : 'them'} is ${formatClaimDate(deadline)}: ${expiring.slice(0, 5).map((line) => `${line.book?.number ?? ''} ${formatINR(totalTaxOf(line.heldBack))}`).join(', ')}.`,
+          'hi-IN': `${expiring.length} bill ka ${formatINR(totalTaxOf(sumAmounts(expiring.map((line) => line.heldBack))))} GST abhi tak nahin liya gaya, aur aakhri tareekh ${formatClaimDate(deadline)} hai: ${expiring.slice(0, 5).map((line) => `${line.book?.number ?? ''} ${formatINR(totalTaxOf(line.heldBack))}`).join(', ')}.`,
+        },
+        whatToDo: {
+          'en-IN': `Settle these before ${formatClaimDate(deadline)}. After that date the credit is gone for good — section 16(4) allows no extension, and the largest amounts are listed first.`,
+          'hi-IN': `Inhe ${formatClaimDate(deadline)} se pehle nipta lijiye. Us tareekh ke baad credit hamesha ke liye chala jayega — section 16(4) mein koi chhoot nahin. Badi rakam pehle di gayi hai.`,
+        },
+      });
+    }
 
     const withoutGstin = books.filter((book) => book.supplierGstin === null);
     if (withoutGstin.length > 0) {

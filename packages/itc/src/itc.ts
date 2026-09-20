@@ -27,9 +27,10 @@
  *     blocked list). There was never a credit here; the tax was part of what the goods cost. The
  *     line says so rather than showing a hole.
  */
-import { allocateByWeight, formatINR, type Money } from '@invoice/kernel';
+import { allocateByWeight, formatINR, type IsoDate, type Money } from '@invoice/kernel';
 import { createHash } from 'node:crypto';
 import { disagreements, lineKeyOf } from './match.ts';
+import { formatClaimDate, isTimeBarred, lastClaimDateFor } from './deadline.ts';
 import type { MatchPair } from './match.ts';
 import {
   DECISION_PLAIN,
@@ -144,6 +145,14 @@ export interface LineInput {
   readonly pair: MatchPair;
   readonly decision: ItcDecision | null;
   readonly policy?: ItcMatchPolicy;
+  /**
+   * The return being prepared. Section 16(4) is about the return a credit is claimed in, not about
+   * the month the bill sits in, so the same bill is claimable in one period and barred in a later
+   * one. Absent, the deadline is shown beside the bill and nothing is barred.
+   */
+  readonly period?: TaxPeriod;
+  /** Today, for the case where an old period is only being prepared now. */
+  readonly today?: IsoDate;
 }
 
 /**
@@ -174,6 +183,10 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
 
   const creditable = book === null ? emptyAmounts() : creditableFromBooks(book);
   const blockedInBooks = book !== null && totalTaxOf(book.amounts).minor > 0n && totalTaxOf(creditable).minor === 0n;
+  // Section 16(4) — the 30 November after the end of the financial year the bill belongs to. Shown
+  // on every line that has a bill of ours, whether or not the date has passed.
+  const lastClaimDate: IsoDate | null = book === null ? null : lastClaimDateFor(book.documentDate);
+  const timeBarred = book !== null && input.period !== undefined && isTimeBarred(book.documentDate, input.period, input.today);
 
   // An accepted line only counts as accepted while it is answering the question it was asked.
   const accepted = decision?.kind === 'ACCEPT' && !decisionStale;
@@ -252,6 +265,21 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     sentence = {
       'en-IN': `The GST on bill ${number} was added to what the goods cost, because the law does not allow credit on this purchase. There is nothing to claim and nothing to chase.`,
       'hi-IN': `Bill ${number} ka GST saaman ki laagat mein joda gaya tha, kyunki is kharid par credit nahin milta. Na kuch lena hai, na kuch poochhna hai.`,
+    };
+  } else if (timeBarred) {
+    // The credit is refused and the purchase is untouched: the bill stays in the books, and the GST
+    // on it is part of what the goods cost. Section 16(4) bars the claim, not the purchase.
+    outcome = 'TIME_BARRED';
+    findings.push(finding('ITC_TIME_BARRED', 'BLOCKING', key, {
+      'en-IN': `Credit on bill ${number} from ${supplier} had to be claimed by ${formatClaimDate(lastClaimDate as IsoDate)}. That date has gone, so the ${formatINR(totalTaxOf(creditable))} of GST on it cannot go on this return.`,
+      'hi-IN': `${supplier} ke bill ${number} ka credit ${formatClaimDate(lastClaimDate as IsoDate)} tak lena zaroori tha. Woh tareekh nikal gayi, isliye is par ka ${formatINR(totalTaxOf(creditable))} GST ab is return par nahin ja sakta.`,
+    }, {
+      'en-IN': 'Nothing can be done about the credit now. Leave the bill where it is — the GST on it is part of what the goods cost. Section 16(4) allows no extension.',
+      'hi-IN': 'Ab is credit ka kuch nahin ho sakta. Bill wahin rehne dijiye — us par ka GST saaman ki laagat ka hissa hai. Section 16(4) mein koi chhoot nahin hai.',
+    }));
+    sentence = {
+      'en-IN': `Credit on this bill had to be claimed by ${formatClaimDate(lastClaimDate as IsoDate)}.`,
+      'hi-IN': `Is bill ka credit ${formatClaimDate(lastClaimDate as IsoDate)} tak lena tha.`,
     };
   } else if (book !== null && book.imported) {
     // Imports are paid at customs and never appear in GSTR-2B. Holding them back for want of a 2B
@@ -399,6 +427,7 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     key,
     status,
     statusLabel: MATCH_STATUS_PLAIN[status],
+    lastClaimDate,
     book,
     portal,
     evidence,

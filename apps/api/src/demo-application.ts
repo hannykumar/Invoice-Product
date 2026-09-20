@@ -171,6 +171,7 @@ import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, ty
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
 import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
 import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
+import { formatClaimDate } from '../../../packages/itc/src/deadline.ts';
 import {
   GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInwardTaxPort,
   returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
@@ -1905,6 +1906,10 @@ export class DemoApplication {
       statusLabel: line.statusLabel['en-IN'],
       outcome: line.outcome,
       outcomeLabel: line.outcomeLabel['en-IN'],
+      // Issue #192 — section 16(4)'s last date, beside the bill from the day it arrives rather than
+      // on the day it is too late to do anything about it.
+      lastClaimDate: line.lastClaimDate,
+      lastClaimDateLabel: line.lastClaimDate === null ? null : formatClaimDate(line.lastClaimDate),
       sentence: line.sentence['en-IN'],
       matchNote: line.matchNote['en-IN'],
       claimable: jsonAmount(totalItcTaxOf(line.claimable).minor),
