@@ -11,6 +11,7 @@ export const RECURRING_JOB_KEYS = Object.freeze({
   notificationDelivery: "notification-delivery",
   ewayExpiry: "eway-bill-expiry-watch",
   collectionReminders: "collection-reminders",
+  eInvoiceRetry: "einvoice-retry",
 });
 
 interface ServiceActor {
@@ -26,6 +27,8 @@ interface StandardRecurringDeps {
   readonly notifications?: { deliverDue(context: RequestContext): Promise<readonly unknown[]> };
   readonly ewayBills?: { expiringWithin(actor: ServiceActor, hours: number): Promise<readonly unknown[]> };
   readonly collections?: { sendPlanned(actor: ServiceActor, today: string): Promise<readonly unknown[]> };
+  /** Issue #210 part 3 — bills whose e-invoice number has not come back yet. */
+  readonly eInvoices?: { retryWaiting(actor: ServiceActor): Promise<number> };
 }
 
 const actorOf = (context: RequestContext): ServiceActor => ({
@@ -62,6 +65,11 @@ export const standardRecurringJobs = (deps: StandardRecurringDeps): readonly Rec
   }));
   if (deps.collections !== undefined) jobs.push(job(RECURRING_JOB_KEYS.collectionReminders, "Daily collection reminders", DAY, "collections.reminders.send", async (context, scheduledFor) => {
     return count("collection reminders handled", (await deps.collections!.sendPlanned(actorOf(context), scheduledFor.toISOString().slice(0, 10))).length);
+  }));
+  // Issue #210 part 3 — a bill that could not be reported is a task, not a failure, so it is picked
+  // up again on its own rather than waiting for somebody to notice and press a button.
+  if (deps.eInvoices !== undefined) jobs.push(job(RECURRING_JOB_KEYS.eInvoiceRetry, "E-invoice retry for bills still waiting", 15 * MINUTE, "einvoice.generate", async (context) => {
+    return count("bills sent again for their e-invoice number", await deps.eInvoices!.retryWaiting(actorOf(context)));
   }));
   return Object.freeze(jobs);
 };

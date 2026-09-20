@@ -1269,7 +1269,14 @@ function localizeResult(result, flow, mode) {
     if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseChecked, message: text("purchaseCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].purchaseEffectStock, copy[state.locale].purchaseEffectBooks] };
     return { ...result, title: copy[state.locale].paymentChecked, message: text("paymentCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].paymentEffectBalance] };
   }
-  if (flow === "sale") return { ...result, title: copy[state.locale].saleRecorded, message: text("saleRecordedBody", { number: result.invoice?.number ?? "—" }) };
+  // Issue #210 part 3 — the bill is already issued. If it also has to carry a government e-invoice
+  // number, say so here rather than leaving the person to go looking on another screen.
+  if (flow === "sale") return {
+    ...result,
+    title: copy[state.locale].saleRecorded,
+    message: text("saleRecordedBody", { number: result.invoice?.number ?? "—" }),
+    ...(result.eInvoice?.expected ? { effects: [result.eInvoice.message] } : {}),
+  };
   if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseRecorded, message: copy[state.locale].purchaseRecordedBody };
   return { ...result, title: copy[state.locale].paymentRecorded, message: copy[state.locale].paymentRecordedBody };
 }

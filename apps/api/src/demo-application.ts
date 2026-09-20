@@ -147,6 +147,7 @@ import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
 import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
+import { decideApplicability } from '../../../packages/gst/src/applicability.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
 import type {
   ConsignmentDocument, ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
@@ -807,6 +808,9 @@ export class DemoApplication {
       collections: {
         sendPlanned: (serviceActor, today) => this.collections.sendPlanned(serviceActor as ActorContext, isoDate(today)),
       },
+      eInvoices: {
+        retryWaiting: (serviceActor) => this.retryWaitingEInvoices(serviceActor as ActorContext),
+      },
     });
   }
 
@@ -1360,6 +1364,56 @@ export class DemoApplication {
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
+  /**
+   * Issue #210 part 3 — send the bill for its e-invoice number without the customer waiting.
+   *
+   * Three rules decide the shape of this:
+   *
+   *   - **Issuing a bill never waits on the government.** The send is started and not awaited, so a
+   *     slow or dead portal delays nobody. A bill that could not be reported is a task, not a
+   *     failure: it is a valid GST bill, it is in the books, and the number catches up.
+   *   - **A bill that does not have to be registered is never sent.** The applicability rules decide,
+   *     on the same facts and the same notifications the printed bill is judged by.
+   *   - **Sending twice produces no second IRN.** The service is keyed on the document, and the
+   *     portal's own duplicate answer is treated as success.
+   */
+  private startAutomaticEInvoice(actor: ActorContext, invoiceId: string): void {
+    void (async () => {
+      const document = await this.eInvoiceDocumentFor(actor, invoiceId);
+      const applicability = this.applicabilityFor(document, {});
+      // Decided here rather than inside the service, because the service refuses a bill that does
+      // not need one — and for a bill issued to a shopkeeper who never asked, that refusal is the
+      // right answer, not an error worth showing them.
+      if (decideApplicability(applicability).outcome !== 'APPLICABLE') return;
+      await this.shop.eInvoice.register(actor, { document, applicability });
+    })().catch((error: unknown) => {
+      // Nothing here may reach the bill. The record itself carries the failure and the retry.
+      console.error('The e-invoice for a bill could not be sent; it stays on the E-invoice screen.', error instanceof Error ? error.message : error);
+    });
+  }
+
+  /**
+   * Issue #210 part 3 — the bills whose e-invoice number has not come back yet, and one more try.
+   *
+   * Only a failure the portal said was worth retrying is retried. A bill the government refused
+   * needs correcting, and sending it again unchanged would get the same answer.
+   */
+  async retryWaitingEInvoices(actor: ActorContext): Promise<number> {
+    const waiting = (await this.shop.eInvoice.list(actor))
+      .filter((record) => record.status === 'FAILED' && record.failure?.retryable === true);
+    let sent = 0;
+    for (const record of waiting) {
+      try {
+        const document = await this.eInvoiceDocumentFor(actor, record.documentId);
+        await this.shop.eInvoice.register(actor, { document, applicability: this.applicabilityFor(document, {}) });
+        sent += 1;
+      } catch {
+        // Still down, or the bill has changed. It stays on the list and is tried again next time.
+      }
+    }
+    return sent;
+  }
+
   private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
     requireIssuable(this.config.companyId);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
@@ -1371,7 +1425,23 @@ export class DemoApplication {
       note: 'a bill was issued',
       on: usageDate,
     });
-    return { state: 'recorded', deduplicated: final.deduplicated, title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded', message: `${final.invoice.number} was issued.`, invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) } };
+    // Issue #210 part 3 — started, never awaited. The bill is issued whatever the portal does.
+    if (!final.deduplicated) this.startAutomaticEInvoice(actor, final.invoice.id);
+    // The same cheap answer #189 prints by: a registered buyer, and a business that told us its
+    // turnover is above the limit. Deliberately not the full applicability call — that one builds a
+    // payload and can fail, and nothing on the e-invoice path may decide whether a bill is issued.
+    const eInvoiceExpected = final.invoice.customerType === 'B2B'
+      && this.declaredTurnoverBand(final.invoice.documentDate)?.above === true;
+    return {
+      state: 'recorded', deduplicated: final.deduplicated,
+      title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded',
+      message: `${final.invoice.number} was issued.`,
+      // Said on the screen the moment the bill is issued, so nobody has to go looking for it.
+      eInvoice: eInvoiceExpected
+        ? { expected: true, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' }
+        : { expected: false, message: null },
+      invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
+    };
   }
 
 
@@ -2546,8 +2616,22 @@ export class DemoApplication {
   }
 
   /** The turnover and category facts the applicability rules need, as the form supplies them. */
+  /**
+   * The turnover fact this product actually holds: the business's own yes/no against ₹5 crore.
+   *
+   * Issue #210 part 3 — the automatic path has no form to read a figure from, and inventing one
+   * would be inventing a threshold. The band is what was asked and what was answered.
+   */
+  private declaredTurnoverBand(on: string) {
+    const answer = turnoverAnswerOn(turnoverAnswersOf(this.config.companyId), isoDate(on));
+    if (answer !== 'YES' && answer !== 'NO') return undefined;
+    // The question the business was asked is the e-invoice threshold itself (#187 asks the same one).
+    return { thresholdPaise: 5_00_00_000_00n, above: answer === 'YES' };
+  }
+
   private applicabilityFor(document: EInvoiceDocument, input: Record<string, unknown>) {
     const turnover = String(input.turnover ?? '').trim();
+    const band = this.declaredTurnoverBand(document.documentDate);
     return {
       documentType: document.documentType,
       documentDate: document.documentDate,
@@ -2557,6 +2641,7 @@ export class DemoApplication {
         gstin: document.supplier.gstin,
         // Blank means "we have not been told", which is a question, not a zero.
         ...(turnover === '' ? {} : { aggregateTurnoverPaise: paise(turnover) }),
+        ...(band === undefined ? {} : { declaredTurnoverBand: band }),
         ...(input.exempt ? { exemptCategories: [String(input.exempt)] as never } : {}),
       },
     };

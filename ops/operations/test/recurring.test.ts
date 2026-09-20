@@ -10,7 +10,7 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const allPermissions = new Set<Permission>([
   "operations.read", "queue.replay", "compliance.calendar.refresh", "gsp.calls.reconcile",
-  "notification.send", "eway.view", "collections.reminders.send",
+  "notification.send", "eway.view", "collections.reminders.send", "einvoice.generate",
 ]);
 const actor = (companyId: string): RequestContext => ({
   companyId,
@@ -112,7 +112,7 @@ test("a hung job times out without blocking another job and remains overlap-prot
   await hanging;
 });
 
-test("the standard catalogue calls all five existing periodic entry points with a service actor", async () => {
+test("the standard catalogue calls every supplied periodic entry point with a service actor", async () => {
   const calls: string[] = [];
   const jobs = standardRecurringJobs({
     complianceCalendar: { async run(serviceActor) { calls.push(`calendar:${serviceActor.userId}`); return { raised: [] }; } },
@@ -120,13 +120,15 @@ test("the standard catalogue calls all five existing periodic entry points with 
     notifications: { async deliverDue(context) { calls.push(`notifications:${context.actorId}`); return []; } },
     ewayBills: { async expiringWithin(serviceActor, hours) { calls.push(`eway:${serviceActor.userId}:${hours}`); return []; } },
     collections: { async sendPlanned(serviceActor, today) { calls.push(`collections:${serviceActor.userId}:${today}`); return []; } },
+    // Issue #210 part 3 — a bill whose e-invoice number never came back is sent again on its own.
+    eInvoices: { async retryWaiting(serviceActor) { calls.push(`einvoice:${serviceActor.userId}`); return 0; } },
   });
   assert.deepEqual(jobs.map((job) => job.key).sort(), Object.values(RECURRING_JOB_KEYS).sort());
   const now = new Date("2026-09-01T00:00:00.000Z");
   const runner = new RecurringWorkRunner(new OperationalQueue(new AuditLog(), () => now), () => now);
   for (const recurringJob of jobs) runner.register(actor("company-a"), recurringJob);
-  assert.equal((await runner.runDue()).length, 5);
-  assert.equal(calls.length, 5);
+  assert.equal((await runner.runDue()).length, 6);
+  assert.equal(calls.length, 6);
   assert.equal(calls.every((entry) => entry.includes("company-a-recurring-service")), true);
 });
 

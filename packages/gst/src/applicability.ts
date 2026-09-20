@@ -160,6 +160,28 @@ export const decideApplicability = (input: EInvoiceApplicabilityInput): Applicab
   // Turnover is the deciding fact, and we will not guess it. A business that has not told us its
   // turnover gets a question rather than a wrong answer in either direction.
   const turnover = input.supplier.aggregateTurnoverPaise;
+
+  // The business answered the threshold question itself. A "yes" against a figure at or above the
+  // limit in force settles it; so does a "no" against a figure at or below it. Anything else is a
+  // band that does not reach the limit being applied, and that is a question, not a decision.
+  const band = input.supplier.declaredTurnoverBand;
+  if (turnover === undefined && band !== undefined) {
+    if (band.above && band.thresholdPaise >= threshold.thresholdPaise) {
+      return {
+        ...base, outcome: "APPLICABLE", ruleId: threshold.ruleId, sourceRef: threshold.sourceRef,
+        reason: `You told us your yearly turnover is above ${formatPaise(band.thresholdPaise)}, which is at or above the ${formatPaise(threshold.thresholdPaise)} limit that applies from ${threshold.effectiveFrom}, so this bill needs an e-invoice number before it goes to the customer.`,
+        thresholdApplied: threshold,
+      };
+    }
+    if (!band.above && band.thresholdPaise <= threshold.thresholdPaise) {
+      return {
+        ...base, outcome: "NOT_APPLICABLE", ruleId: threshold.ruleId, sourceRef: threshold.sourceRef,
+        reason: `You told us your yearly turnover is below ${formatPaise(band.thresholdPaise)}, which is under the ${formatPaise(threshold.thresholdPaise)} limit, so this bill does not need an e-invoice number. It is an ordinary GST bill.`,
+        thresholdApplied: threshold,
+      };
+    }
+  }
+
   if (turnover === undefined) {
     return {
       ...base, outcome: "CANNOT_DECIDE", ruleId: "EINV.TURNOVER.UNKNOWN",
