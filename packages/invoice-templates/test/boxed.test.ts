@@ -134,6 +134,55 @@ test('the item table reads like a bill: a serial column, the unit beside the rat
   assert.ok(html.includes('>1</td>'), 'lines are numbered from one');
 });
 
+test('#200 — the HSN summary gives rate columns less room than money columns', () => {
+  const large = doc({
+    lines: [line({
+      quantityText: '3,000 KGS',
+      unitPrice: rupees(1000),
+      taxableValue: rupees(3000000),
+      taxAmount: rupees(540000),
+      cgst: rupees(270000),
+      sgst: rupees(270000),
+    })],
+    totals: {
+      taxableValue: rupees(3000000), cgst: rupees(270000), sgst: rupees(270000),
+      utgst: nil, igst: nil, cess: nil, roundOff: nil, invoiceValue: rupees(3540000),
+      reverseChargeTax: nil, amountPaid: null, outstanding: null,
+    },
+  });
+  const html = renderIndia(large);
+  const summary = html.slice(html.indexOf('<table class="grid summary">'), html.indexOf('</table>', html.indexOf('<table class="grid summary">')));
+  const rateWidth = Number(/<col class="rate" style="width:([\d.]+)%">/.exec(summary)?.[1]);
+  const amountWidth = Number(/<col class="amount" style="width:([\d.]+)%">/.exec(summary)?.[1]);
+
+  assert.ok(summary.includes('<colgroup>'), 'the summary owns its column widths');
+  assert.ok(rateWidth < amountWidth, 'percentage columns are narrower than money columns');
+});
+
+test('#200 — the HSN summary keeps the largest supported IGST and cess amounts', () => {
+  const taxableValue = rupees(999999999, 99);
+  const igst = rupees(180000000);
+  const cess = rupees(9999999, 99);
+  const totalTax = rupees(189999999, 99);
+  const html = renderIndia(doc({
+    split: 'IGST',
+    lines: [line({
+      taxableValue, taxAmount: totalTax, cgst: nil, sgst: nil, igst, cess,
+    })],
+    totals: {
+      taxableValue, cgst: nil, sgst: nil, utgst: nil, igst, cess, roundOff: nil,
+      invoiceValue: rupees(1189999999, 98), reverseChargeTax: nil,
+      amountPaid: null, outstanding: null,
+    },
+  }));
+  const summary = html.slice(html.indexOf('<table class="grid summary">'), html.indexOf('</table>', html.indexOf('<table class="grid summary">')));
+
+  assert.ok(summary.includes('<colgroup>'));
+  for (const amount of ['₹99,99,99,999.99', '₹18,00,00,000.00', '₹99,99,999.99', '₹18,99,99,999.99']) {
+    assert.ok(summary.includes(amount), `${amount} remains present in the summary`);
+  }
+});
+
 test('#190 — the boxed bill prints paid and due only after the grand total', () => {
   const html = renderIndia(doc({
     totals: {
