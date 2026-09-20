@@ -281,6 +281,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .boxed table.items tr.subtotal td { font-weight: 700; }
     .boxed table.totals td:first-child { text-align: right; }
     .boxed table.totals tr.grand td { font-weight: 700; font-size: ${typography.baseSizePt + 1}pt; }
+    .boxed table.summary td, .boxed table.summary th { padding-top: .5mm; padding-bottom: .5mm; }
     .boxed table.summary tr.grand td { font-weight: 700; }
     .boxed table.section td { background: #f0f0f0; font-weight: 700; text-align: center; letter-spacing: .06em; }
     .boxed table.notice td { background: #fffbe6; }

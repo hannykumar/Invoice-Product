@@ -36,6 +36,11 @@ Re-checked 2026-09-20 after issue #190. In the A4 bill's boxed totals, `Total` i
 amount before `Amount Paid` and `Balance Due`; reverse-charge tax, when present, also follows the
 grand total. The narrow layouts and every calculated value remain unchanged.
 
+Re-checked 2026-09-20 after issue #200 with the app's ₹30,00,000 sale. The A4 HSN summary now gives
+its percentage columns less room and its money columns more, so the headings and large taxable and
+tax amounts stay inside their ruled cells. The columns, figures, font size and narrow layouts are
+unchanged.
+
 `KK` = KK Polyplast invoice 285. `BE` = Blessing Export BE/DL/25-26/0139 (Tally).
 
 ## Present on a real bill and on ours

@@ -174,6 +174,7 @@ export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale
 export const summaryTable = (doc: Pick<InvoiceDocument, 'lines' | 'split'>, locale: Locale): string => {
   const summary = hsnSummary(doc);
   const columns = hsnSummaryColumns(summary);
+  const amountWidth = (90 - columns.length * 5) / (columns.length + 2);
   const amountOf = (row: HsnSummaryRow, column: (typeof columns)[number]): Money =>
     column === 'CGST' ? row.cgst : column === 'SGST' ? row.sgst : column === 'UTGST' ? row.utgst : column === 'IGST' ? row.igst : row.cess;
 
@@ -200,6 +201,12 @@ export const summaryTable = (doc: Pick<InvoiceDocument, 'lines' | 'split'>, loca
     </tr>`;
 
   return `<table class="grid summary">
+    <colgroup>
+      <col class="hsn" style="width:10%">
+      <col class="amount" style="width:${amountWidth}%">
+      ${columns.map(() => `<col class="rate" style="width:5%"><col class="amount" style="width:${amountWidth}%">`).join('')}
+      <col class="amount" style="width:${amountWidth}%">
+    </colgroup>
     <thead>
       <tr>
         <th rowspan="2">${escapeHtml(t('hsn', locale))}</th>
