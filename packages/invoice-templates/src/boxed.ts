@@ -149,8 +149,7 @@ export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale
     ['IGST', doc.totals.igst],
     ['Cess', doc.totals.cess],
   ];
-  const optional: [string, Money | null | undefined][] = [
-    [t('roundOff', locale), isZero(doc.totals.roundOff) ? null : doc.totals.roundOff],
+  const afterTotal: [string, Money | null | undefined][] = [
     [t('rcmTax', locale), isZero(doc.totals.reverseChargeTax) ? null : doc.totals.reverseChargeTax],
     [t('paid', locale), shows('totals.amountPaid') ? doc.totals.amountPaid : null],
     [t('outstanding', locale), shows('totals.outstanding') ? doc.totals.outstanding : null],
@@ -160,8 +159,9 @@ export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale
 
   return `<table class="grid totals">
     ${rows.filter(([label, a]) => label === t('totalBeforeGst', locale) || !isZero(a)).map(([l, a]) => line(l, a)).join('')}
-    ${optional.filter(([, a]) => a != null).map(([l, a]) => line(l, a as Money)).join('')}
+    ${isZero(doc.totals.roundOff) ? '' : line(t('roundOff', locale), doc.totals.roundOff)}
     ${line(t('total', locale), doc.totals.invoiceValue, ' class="grand"')}
+    ${afterTotal.filter(([, a]) => a != null).map(([l, a]) => line(l, a as Money)).join('')}
   </table>`;
 };
 
