@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { formatDate, invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
@@ -1900,6 +1900,11 @@ export class DemoApplication {
       statusLabel: line.statusLabel['en-IN'],
       outcome: line.outcome,
       outcomeLabel: line.outcomeLabel['en-IN'],
+      // Issue #192 — the last day the credit on this bill may be taken (section 16(4)), shown on
+      // every line, not only the ones that have run out of time.
+      lastClaimDate: line.lastClaimDate,
+      // Written the way a person reads it (#46): "30 November 2026", never 30/11/26.
+      lastClaimDateLabel: line.lastClaimDate === null ? null : formatDate(line.lastClaimDate),
       sentence: line.sentence['en-IN'],
       matchNote: line.matchNote['en-IN'],
       claimable: jsonAmount(totalItcTaxOf(line.claimable).minor),
@@ -1945,6 +1950,8 @@ export class DemoApplication {
       outcomeCounts: workspace.outcomeCounts,
       claimable: jsonAmount(totalItcTaxOf(workspace.claimable).minor),
       heldBack: jsonAmount(totalItcTaxOf(workspace.heldBack).minor),
+      // Issue #192 — separate from held back, because this part does not come back later.
+      timeBarred: jsonAmount(totalItcTaxOf(workspace.timeBarred).minor),
       atRisk: jsonAmount(totalItcTaxOf(workspace.atRisk).minor),
       lines: workspace.lines.map((line) => this.itcLineJson(line)),
       findings: workspace.findings

@@ -154,6 +154,7 @@ const copy = {
     itcLinesTitle: "Bill by bill",
     itcLinesHelp: "Every line shows what your books say, what the portal says, and what is holding the credit. Accepting a bill the portal does not carry needs a reason, and your name stays on it.",
     itcClaimable: "Safe to claim this month", itcHeldBack: "Held back", itcAtRisk: "Claimed on your say-so",
+    itcTimeBarred: "Too late to claim", itcLastClaimDate: "Last date to claim this credit",
     itcAccept: "Accept", itcReject: "Reject", itcPending: "Keep pending",
     itcReasonPlaceholder: "Why? (goes on the record)",
     itcOurs: "yours", itcTheirs: "portal",
@@ -461,6 +462,7 @@ const copy = {
     itcLinesTitle: "Ek-ek bill",
     itcLinesHelp: "Har line dikhati hai ki aapki books kya kehti hain, portal kya kehta hai, aur credit kis wajah se ruka hai. Jo bill portal par nahin hai use accept karne ke liye wajah likhni hoti hai, aur aapka naam us par rehta hai.",
     itcClaimable: "Is mahine lena theek hai", itcHeldBack: "Roka gaya", itcAtRisk: "Aapke kehne par liya",
+    itcTimeBarred: "Lene ka samay nikal gaya", itcLastClaimDate: "Yeh credit lene ki aakhri taarikh",
     itcAccept: "Accept", itcReject: "Reject", itcPending: "Pending rakhein",
     itcReasonPlaceholder: "Kyun? (record par jayega)",
     itcOurs: "aapka", itcTheirs: "portal",
@@ -4583,7 +4585,9 @@ function itcDecisionControls(line) {
     button.className = decision === "ACCEPT" ? "primary-button" : "secondary-button";
     button.textContent = label;
     // A duplicate can never carry credit, so the buttons that would decide it are not offered.
-    button.disabled = line.status === "DUPLICATE_IN_BOOKS" || line.status === "DUPLICATE_ON_PORTAL";
+    // Issue #192 — nor can a bill whose claim date has gone by: no answer a person gives brings it
+    // back, and a button that looks as though it might is worse than no button.
+    button.disabled = line.status === "DUPLICATE_IN_BOOKS" || line.status === "DUPLICATE_ON_PORTAL" || line.outcome === "TIME_BARRED";
     button.addEventListener("click", async () => {
       try {
         renderItc(await api("/api/itc/decide", {
@@ -4624,6 +4628,9 @@ function renderItc(workspace) {
   totals.append(detailRow(words.itcClaimable, money(workspace.claimable)));
   totals.append(detailRow(words.itcHeldBack, money(workspace.heldBack)));
   if (workspace.atRisk > 0) totals.append(detailRow(words.itcAtRisk, money(workspace.atRisk)));
+  // Issue #192 — shown on its own line and never added to "held back", because held-back credit
+  // comes back on the month it is settled and this does not come back at all.
+  if (workspace.timeBarred > 0) totals.append(detailRow(words.itcTimeBarred, money(workspace.timeBarred)));
 
   const linesPanel = document.querySelector("#itc-lines-panel");
   linesPanel.hidden = workspace.lines.length === 0;
@@ -4636,6 +4643,10 @@ function renderItc(workspace) {
 
     // The evidence, on the row. Only the fields that disagree are spelled out in full; the ones
     // that agree are named so it is clear what was actually compared.
+    // Issue #192 — the last date this credit can be taken, beside the bill, whether or not it has
+    // run out. A date somebody can read in September is worth more than a refusal in December.
+    if (line.lastClaimDateLabel) lines.append(detailRow(words.itcLastClaimDate, line.lastClaimDateLabel));
+
     const agreed = line.evidence.filter((row) => row.verdict === "AGREES").map((row) => row.label);
     line.evidence.filter((row) => row.verdict === "DIFFERS").forEach((row) => {
       lines.append(detailRow(row.label, `${words.itcOurs} ${row.ours ?? "—"} · ${words.itcTheirs} ${row.theirs ?? "—"}`));

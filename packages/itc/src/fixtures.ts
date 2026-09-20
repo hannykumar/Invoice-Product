@@ -44,6 +44,14 @@ const bill = (input: {
   reverseCharge?: boolean;
   imported?: boolean;
   reversed?: boolean;
+  /**
+   * The return period this bill is being reconciled in, when that is not the month of the bill.
+   *
+   * These are two different things and issue #192 turns on the difference: a bill from March may
+   * be taken into credit in October's return, and it is October's return the claim deadline is
+   * judged against.
+   */
+  period?: string;
 }): BookPurchaseDocument => ({
   sourceKind: 'purchase_bill',
   sourceId: input.id,
@@ -54,7 +62,7 @@ const bill = (input: {
   kind: input.kind ?? 'INVOICE',
   number: input.number,
   documentDate: input.date as IsoDate,
-  period: taxPeriod(input.date.slice(0, 7)),
+  period: taxPeriod(input.period ?? input.date.slice(0, 7)),
   amounts: {
     taxableValue: rupees(input.taxable),
     cgst: rupees(input.cgst ?? 0),
@@ -104,6 +112,26 @@ export const CAR_BILL = bill({
 export const STEEL_CREDIT_NOTE = bill({
   id: 'note-steel', supplierName: 'Shree Ram Steels', gstin: SHREE_RAM_GSTIN,
   number: 'SRS/CN/14', date: '2026-07-27', taxable: 10_000, igst: 1_800, kind: 'CREDIT_NOTE',
+});
+
+export const BLESSING_GSTIN = syntheticGstin('07', 'AABCB5566R');
+
+/**
+ * Issue #192 — the Blessing Export bill from `docs/reference/real-bills/`, dated 13 March 2026.
+ *
+ * Its own month is long past; what it is here for is being taken into credit in a much later
+ * return, which is the case section 16(4) decides. The `period` is therefore set to the return it
+ * is being claimed in, not to March.
+ */
+export const BLESSING_BILL = (claimedIn: string): BookPurchaseDocument => bill({
+  id: 'bill-blessing', supplierName: 'Blessing Export', gstin: BLESSING_GSTIN,
+  number: 'BE/DL/25-26/0139', date: '2026-03-13', taxable: 60_000, igst: 10_800, period: claimedIn,
+});
+
+/** A bill dated the first day of a financial year, which belongs to the *next* 30 November. */
+export const NEW_YEAR_BILL = (claimedIn: string): BookPurchaseDocument => bill({
+  id: 'bill-new-year', supplierName: 'Blessing Export', gstin: BLESSING_GSTIN,
+  number: 'BE/DL/26-27/0001', date: '2026-04-01', taxable: 20_000, igst: 3_600, period: claimedIn,
 });
 
 export const SUNRISE_BOOKS: readonly BookPurchaseDocument[] = Object.freeze([

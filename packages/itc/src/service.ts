@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { checksumOf, parsePortalFile, parseTypedRecord, type ParsedPortalRecord, type TypedPortalRecord } from './import.ts';
-import { assessLine, linkageFor } from './itc.ts';
+import { CLAIM_DEADLINE_WARNING_DAYS, assessLine, daysBetween, linkageFor } from './itc.ts';
 import { matchDocuments } from './match.ts';
 import type {
   ImportBatchRepository,
@@ -61,7 +61,7 @@ import {
   type TaxAmounts,
   type TaxPeriod,
 } from './types.ts';
-import { formatINR } from '@invoice/kernel';
+import { formatDate, formatINR } from '@invoice/kernel';
 
 export interface ItcServiceDeps {
   readonly books: PurchaseBookPort;
@@ -144,11 +144,11 @@ export class ItcReconciliationService {
 
     const pairs = matchDocuments({ books, portal, policy });
     const lines = pairs.map((pair) => {
-      const provisional = assessLine({ pair, decision: null, policy });
-      return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy });
+      const provisional = assessLine({ pair, decision: null, policy, period });
+      return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy, period });
     });
 
-    return this.#assemble(period, lines, books, portal, lastImport);
+    return this.#assemble(period, lines, books, portal, lastImport, this.#clock.now());
   }
 
   /** Every answer ever given on one line, for the "who decided this" panel. */
@@ -499,11 +499,13 @@ export class ItcReconciliationService {
     books: readonly BookPurchaseDocument[],
     portal: readonly PortalDocument[],
     lastImport: ImportBatch | null,
+    /** Issue #192 — today, for the warning before a claim deadline. Never for the deadline itself. */
+    now: Date,
   ): ItcWorkspace {
     const counts: Record<MatchStatus, number> = {
       EXACT: 0, CLOSE: 0, ONLY_IN_BOOKS: 0, ONLY_ON_PORTAL: 0, DUPLICATE_IN_BOOKS: 0, DUPLICATE_ON_PORTAL: 0,
     };
-    const outcomeCounts: Record<ItcOutcome, number> = { CLAIM_NOW: 0, CLAIM_AT_RISK: 0, HELD_BACK: 0, BLOCKED_IN_BOOKS: 0 };
+    const outcomeCounts: Record<ItcOutcome, number> = { CLAIM_NOW: 0, CLAIM_AT_RISK: 0, HELD_BACK: 0, BLOCKED_IN_BOOKS: 0, TIME_BARRED: 0 };
     for (const line of lines) {
       counts[line.status] += 1;
       outcomeCounts[line.outcome] += 1;
@@ -516,7 +518,9 @@ export class ItcReconciliationService {
       sumAmounts([linkage.allOtherItc, linkage.reverseChargeItc, linkage.importItc]),
       linkage.reversedItc,
     );
-    const heldBack = sumAmounts(lines.map((line) => line.heldBack));
+    // Issue #192 — the two are separate figures, because one comes back and the other does not.
+    const heldBack = sumAmounts(lines.filter((line) => line.outcome !== 'TIME_BARRED').map((line) => line.heldBack));
+    const timeBarred = sumAmounts(lines.filter((line) => line.outcome === 'TIME_BARRED').map((line) => line.heldBack));
     const atRisk = sumAmounts(lines.filter((line) => line.outcome === 'CLAIM_AT_RISK').map((line) => line.claimable));
 
     const findings: ItcFinding[] = [];
@@ -554,6 +558,34 @@ export class ItcReconciliationService {
       });
     }
 
+    // Issue #192 — the warning before the door closes. Bills whose credit is still unclaimed and
+    // whose last claim date falls in the next 45 days, largest first, so a business chasing
+    // suppliers knows which telephone call is worth the most.
+    const today = now.toISOString().slice(0, 10) as IsoDate;
+    const closing = lines
+      .filter((line) => line.outcome === 'HELD_BACK' && line.lastClaimDate !== null)
+      .map((line) => ({ line, days: daysBetween(today, line.lastClaimDate as IsoDate) }))
+      .filter((row) => row.days >= 0 && row.days <= CLAIM_DEADLINE_WARNING_DAYS)
+      .sort((a, b) => Number(totalTaxOf(b.line.heldBack).minor - totalTaxOf(a.line.heldBack).minor));
+    if (closing.length > 0) {
+      const listed = closing
+        .map((row) => `${row.line.book?.number ?? row.line.portal?.number ?? ''} (${formatINR(totalTaxOf(row.line.heldBack))}, by ${formatDate(row.line.lastClaimDate as IsoDate)})`)
+        .join('; ');
+      findings.push({
+        code: 'ITC_CLAIM_DEADLINE_NEAR',
+        severity: 'WARNING',
+        lineKey: null,
+        message: {
+          'en-IN': `${closing.length} ${closing.length === 1 ? 'bill has' : 'bills have'} credit that has to be claimed within the next ${CLAIM_DEADLINE_WARNING_DAYS} days or it is lost: ${listed}.`,
+          'hi-IN': `${closing.length} bill ka credit agle ${CLAIM_DEADLINE_WARNING_DAYS} din ke andar lena hoga, warna woh chala jayega: ${listed}.`,
+        },
+        whatToDo: {
+          'en-IN': 'Ring the suppliers at the top of this list first — that is where the most money is. Once a bill appears on the portal the credit follows by itself, and after the date on it nothing can bring it back.',
+          'hi-IN': 'Sabse upar wale supplier ko pehle phone kijiye — paisa wahin sabse zyada hai. Bill portal par aate hi credit apne aap mil jata hai, aur us taarikh ke baad use koi wapas nahin la sakta.',
+        },
+      });
+    }
+
     const claimedTax = totalTaxOf(claimable);
     const heldTax = totalTaxOf(heldBack);
 
@@ -567,6 +599,7 @@ export class ItcReconciliationService {
       outcomeCounts,
       claimable,
       heldBack,
+      timeBarred,
       atRisk,
       findings,
       sentence: {

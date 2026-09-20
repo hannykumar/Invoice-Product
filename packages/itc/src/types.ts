@@ -235,13 +235,21 @@ export type ItcOutcome =
   /** Not on the return this month, and the line says which question is holding it. */
   | 'HELD_BACK'
   /** The books already treated the tax as a cost. There was never a credit here to claim. */
-  | 'BLOCKED_IN_BOOKS';
+  | 'BLOCKED_IN_BOOKS'
+  /**
+   * Issue #192 — the last date for claiming this credit has gone by (section 16(4)).
+   *
+   * Unlike everything else here, nobody can release it. A held-back credit is waiting for an
+   * answer; this one has run out of time, and no decision a person makes brings it back.
+   */
+  | 'TIME_BARRED';
 
 export const OUTCOME_PLAIN: Readonly<Record<ItcOutcome, Bilingual>> = Object.freeze({
   CLAIM_NOW: { 'en-IN': 'Safe to claim this month', 'hi-IN': 'Is mahine lena theek hai' },
   CLAIM_AT_RISK: { 'en-IN': 'Claimed on your say-so, with a risk', 'hi-IN': 'Aapke kehne par liya, risk ke saath' },
   HELD_BACK: { 'en-IN': 'Held back until this is answered', 'hi-IN': 'Jawab milne tak roka gaya' },
   BLOCKED_IN_BOOKS: { 'en-IN': 'No credit here — the tax was part of the cost', 'hi-IN': 'Yahan credit nahin — tax laagat mein gaya' },
+  TIME_BARRED: { 'en-IN': 'Too late to claim this credit', 'hi-IN': 'Ab is credit ko lene ka samay nikal gaya' },
 });
 
 export type FindingSeverity = 'BLOCKING' | 'WARNING' | 'INFORMATION';
@@ -274,7 +282,10 @@ export type ItcFindingCode =
   | 'ITC_BILL_REVERSED_IN_BOOKS'
   | 'ITC_SUPPLIER_GSTIN_MISSING'
   | 'ITC_DECISION_STALE'
-  | 'ITC_CLAIMED_AT_RISK';
+  | 'ITC_CLAIMED_AT_RISK'
+  // Issue #192 — the last date for taking credit on a supplier's bill, and the warning before it.
+  | 'ITC_TIME_BARRED'
+  | 'ITC_CLAIM_DEADLINE_NEAR';
 
 /** One row of the reconciliation: two pieces of paper, or one and a hole where the other should be. */
 export interface ReconciliationLine {
@@ -296,6 +307,13 @@ export interface ReconciliationLine {
   readonly matchNote: Bilingual;
   readonly outcome: ItcOutcome;
   readonly outcomeLabel: Bilingual;
+  /**
+   * Issue #192 — the last date the credit on this bill may be taken (section 16(4)).
+   *
+   * Null only on a supplier's credit note, which lowers credit rather than claiming it, and so has
+   * no claim deadline of its own.
+   */
+  readonly lastClaimDate: IsoDate | null;
   /** The credit this line contributes to GSTR-3B. Zero on everything that is held back. */
   readonly claimable: TaxAmounts;
   /** The credit this line is keeping off the return, so a total can be shown for it. */
@@ -343,8 +361,16 @@ export interface ItcWorkspace {
   readonly outcomeCounts: Readonly<Record<ItcOutcome, number>>;
   /** Credit that goes on this month's GSTR-3B. */
   readonly claimable: TaxAmounts;
-  /** Credit that does not, and the reason is on every line that makes it up. */
+  /**
+   * Credit that does not, and the reason is on every line that makes it up.
+   *
+   * Issue #192 — time-barred credit is **not** in here. Held-back credit is waiting for an answer
+   * and comes back on the month it is settled; time-barred credit never comes back, and adding the
+   * two together would promise money that is gone.
+   */
   readonly heldBack: TaxAmounts;
+  /** Issue #192 — credit whose last claim date under section 16(4) has gone by. */
+  readonly timeBarred: TaxAmounts;
   /** Of the claimable, the part somebody accepted despite a question. */
   readonly atRisk: TaxAmounts;
   readonly findings: readonly ItcFinding[];

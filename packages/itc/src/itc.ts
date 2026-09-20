@@ -27,7 +27,7 @@
  *     blocked list). There was never a credit here; the tax was part of what the goods cost. The
  *     line says so rather than showing a hole.
  */
-import { allocateByWeight, formatINR, type Money } from '@invoice/kernel';
+import { allocateByWeight, financialYearOf, formatDate, formatINR, isoDate, type IsoDate, type Money } from '@invoice/kernel';
 import { createHash } from 'node:crypto';
 import { disagreements, lineKeyOf } from './match.ts';
 import type { MatchPair } from './match.ts';
@@ -54,6 +54,70 @@ import {
   type TaxAmounts,
   type TaxPeriod,
 } from './types.ts';
+import { taxPeriodRange } from './types.ts';
+
+// ------------------------------------------------------------------------ the claim deadline
+
+/**
+ * Issue #192 — the last day the credit on one supplier's bill may be taken.
+ *
+ * **CGST Act, section 16(4):** a registered person may not take input tax credit on a supplier's
+ * invoice or debit note after the 30th of November following the end of the financial year the
+ * document belongs to, or after furnishing the annual return, whichever is earlier.
+ *
+ * Only the 30 November limb is modelled. The annual-return limb depends on a date nobody in this
+ * product knows — when the business actually filed its GSTR-9 — and guessing it would either bar a
+ * credit that is still perfectly claimable or allow one that is not.
+ *
+ * Worked through for a bill dated 13 March 2026:
+ *   - 13 March 2026 falls in the financial year 2025-26, which runs 1 April 2025 to 31 March 2026.
+ *   - That year ends on 31 March 2026.
+ *   - The next 30 November after it is 30 November 2026.
+ *
+ * The relief in section 16(5) is deliberately not modelled: it reopens the deadline only for the
+ * financial years 2017-18 to 2020-21, and applying it to a current bill would allow a claim the law
+ * does not.
+ */
+export const lastClaimDateFor = (documentDate: IsoDate): IsoDate => {
+  const financialYear = financialYearOf(documentDate);
+  // "2025-26" starts in 2025 and ends on 31 March 2026, so the deadline is 30 November of 2026.
+  const yearItEnds = Number(financialYear.slice(0, 4)) + 1;
+  return isoDate(`${yearItEnds}-11-30`);
+};
+
+/**
+ * The day the return for a period is due, which is the day a claim made in it would reach the
+ * government at the latest.
+ *
+ * GSTR-3B for a month is due on the 20th of the month after it. The filing date itself is treated
+ * as unknown — a business may file early or late — so the due date stands in for it. Judging by the
+ * due date is the conservative reading: a return filed after its due date is later still, and a
+ * credit barred on the due date cannot be rescued by filing sooner than the law allows.
+ */
+export const returnDueDateFor = (period: TaxPeriod): IsoDate => {
+  const { to } = taxPeriodRange(period);
+  const month = Number(to.slice(5, 7));
+  const year = Number(to.slice(0, 4));
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return isoDate(`${nextYear}-${String(nextMonth).padStart(2, '0')}-20`);
+};
+
+/**
+ * Whether section 16(4) applies to a document at all.
+ *
+ * It names an invoice and a debit note, and both add to credit. A supplier's credit note takes
+ * credit away, and nothing in the law asks a business to hurry to give money back, so a credit note
+ * has no claim deadline and is never time-barred.
+ */
+const hasClaimDeadline = (kind: BookPurchaseDocument['kind']): boolean => kind !== 'CREDIT_NOTE';
+
+/** How many whole days lie between two calendar dates. */
+export const daysBetween = (from: IsoDate, to: IsoDate): number =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
+/** Issue #192 — how many days before the deadline the warning starts. */
+export const CLAIM_DEADLINE_WARNING_DAYS = 45;
 
 // ---------------------------------------------------------------------------- the creditable part
 
@@ -144,6 +208,12 @@ export interface LineInput {
   readonly pair: MatchPair;
   readonly decision: ItcDecision | null;
   readonly policy?: ItcMatchPolicy;
+  /**
+   * Issue #192 — the return period being prepared, which decides whether the claim is still in
+   * time under section 16(4). The period, not today's date: a business working through last
+   * October's return in December is claiming in October's return, and that is what the law reads.
+   */
+  readonly period: TaxPeriod;
 }
 
 /**
@@ -171,6 +241,15 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
   const decision = input.decision;
   const decisionStale = decision !== null && decision.fingerprint !== fingerprint;
   const findings: ItcFinding[] = [];
+
+  // Issue #192 — the last day this credit could be taken, and whether the return being prepared
+  // would be filed after it. Computed for every line so the date can be shown beside the bill even
+  // while the credit is perfectly claimable.
+  const documentDate = book?.documentDate ?? portal?.documentDate ?? null;
+  const documentKind = book?.kind ?? portal?.kind ?? 'INVOICE';
+  const lastClaimDate =
+    documentDate === null || !hasClaimDeadline(documentKind) ? null : lastClaimDateFor(documentDate);
+  const timeBarred = lastClaimDate !== null && returnDueDateFor(input.period) > lastClaimDate;
 
   const creditable = book === null ? emptyAmounts() : creditableFromBooks(book);
   const blockedInBooks = book !== null && totalTaxOf(book.amounts).minor > 0n && totalTaxOf(creditable).minor === 0n;
@@ -252,6 +331,23 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     sentence = {
       'en-IN': `The GST on bill ${number} was added to what the goods cost, because the law does not allow credit on this purchase. There is nothing to claim and nothing to chase.`,
       'hi-IN': `Bill ${number} ka GST saaman ki laagat mein joda gaya tha, kyunki is kharid par credit nahin milta. Na kuch lena hai, na kuch poochhna hai.`,
+    };
+  } else if (book !== null && timeBarred) {
+    // Section 16(4). Placed after the two branches where there is no credit to begin with — a bill
+    // reversed in our own books, and one the law blocked at 17(5) — because saying "too late" about
+    // a credit that never existed would send somebody looking for money that was never there.
+    outcome = 'TIME_BARRED';
+    const by = formatDate(lastClaimDate as IsoDate);
+    findings.push(finding('ITC_TIME_BARRED', 'BLOCKING', key, {
+      'en-IN': `Credit on this bill had to be claimed by ${by}.`,
+      'hi-IN': `Is bill ka credit ${by} tak lena zaroori tha.`,
+    }, {
+      'en-IN': 'Nothing here can release it, and the bill stays in your purchase books either way. Show it to whoever does your GST before you claim it anywhere else — claiming it late is what brings a notice and interest.',
+      'hi-IN': 'Ab ise koi bhi khol nahin sakta, aur bill aapki kharid ki books mein jaise ka taisa rahega. Kahin aur lene se pehle apne GST wale ko dikha lijiye — der se liya credit hi notice aur byaj laata hai.',
+    }));
+    sentence = {
+      'en-IN': `${formatINR(totalTaxOf(creditable))} of GST on bill ${number} is not being claimed: the last date for it was ${by}.`,
+      'hi-IN': `Bill ${number} ka ${formatINR(totalTaxOf(creditable))} GST nahin liya ja raha: iski aakhri taarikh ${by} thi.`,
     };
   } else if (book !== null && book.imported) {
     // Imports are paid at customs and never appear in GSTR-2B. Holding them back for want of a 2B
@@ -405,6 +501,7 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     matchNote,
     outcome,
     outcomeLabel: OUTCOME_PLAIN[outcome],
+    lastClaimDate,
     claimable,
     heldBack: { ...heldBack, taxableValue: outcome === 'CLAIM_NOW' || outcome === 'CLAIM_AT_RISK' ? zeroMoney : creditable.taxableValue },
     decision,
@@ -420,6 +517,41 @@ const atRiskFinding = (key: string, decision: ItcDecision, message: Bilingual): 
     'en-IN': `${decision.reason === '' ? 'A reason was recorded with this decision.' : `Your reason: ${decision.reason}.`} If the portal never carries this bill, this credit has to be given back with interest, so keep the paperwork.`,
     'hi-IN': `${decision.reason === '' ? 'Is faisle ke saath ek wajah likhi gayi thi.' : `Aapki wajah: ${decision.reason}.`} Agar portal par yeh bill kabhi nahin aata, to yeh credit byaj ke saath wapas karna padega — kagaz sambhal kar rakhiye.`,
   });
+
+/**
+ * What the 3B screen is told about the credit that is not in the figure.
+ *
+ * The two kinds are kept apart on purpose. Credit held back is waiting on somebody and comes back;
+ * credit that is time-barred is gone, and running them into one sentence would leave a business
+ * expecting money that no later month will bring.
+ */
+const cautionFor = (held: TaxAmounts, barred: TaxAmounts): Bilingual => {
+  const waiting = totalTaxOf(held);
+  const gone = totalTaxOf(barred);
+  if (waiting.minor === 0n && gone.minor === 0n) {
+    return {
+      'en-IN': 'Every purchase this month is accounted for, so the credit here is the whole of it.',
+      'hi-IN': 'Is mahine ki har kharid ka hisaab hai, isliye yahan poora credit dikh raha hai.',
+    };
+  }
+  const parts: Bilingual[] = [];
+  if (waiting.minor > 0n) {
+    parts.push({
+      'en-IN': `${formatINR(waiting)} of GST on your purchases is deliberately not in this figure, because those bills are still waiting on the supplier or on you. They are not lost — they come back on the month they are settled.`,
+      'hi-IN': `Aapki kharid ka ${formatINR(waiting)} GST jaan-boojh kar is figure mein nahin hai, kyunki woh bill abhi supplier ya aap par ruke hain. Woh khoye nahin hain — jis mahine tay honge us mahine aa jayenge.`,
+    });
+  }
+  if (gone.minor > 0n) {
+    parts.push({
+      'en-IN': `A further ${formatINR(gone)} is not in it either, and that part does not come back: the last date for claiming it has gone by.`,
+      'hi-IN': `Iske alawa ${formatINR(gone)} bhi ismein nahin hai, aur woh wapas nahin aayega: use lene ki aakhri taarikh nikal chuki hai.`,
+    });
+  }
+  return {
+    'en-IN': parts.map((part) => part['en-IN']).join(' '),
+    'hi-IN': parts.map((part) => part['hi-IN']).join(' '),
+  };
+};
 
 // ---------------------------------------------------------------------------- the month
 
@@ -470,7 +602,11 @@ export const linkageFor = (
       };
     });
 
-  const held = sumAmounts(lines.map((line) => line.heldBack));
+  // Issue #192 — only credit that can still come back. A time-barred line is not waiting on
+  // anybody, and saying it "comes back on the month it is settled" would be a promise about money
+  // that no month will ever bring.
+  const held = sumAmounts(lines.filter((line) => line.outcome !== 'TIME_BARRED').map((line) => line.heldBack));
+  const barred = sumAmounts(lines.filter((line) => line.outcome === 'TIME_BARRED').map((line) => line.heldBack));
 
   return {
     period,
@@ -481,15 +617,7 @@ export const linkageFor = (
     reverseChargeLiability,
     exemptInwardValue,
     contributions,
-    caution: totalTaxOf(held).minor === 0n
-      ? {
-        'en-IN': 'Every purchase this month is accounted for, so the credit here is the whole of it.',
-        'hi-IN': 'Is mahine ki har kharid ka hisaab hai, isliye yahan poora credit dikh raha hai.',
-      }
-      : {
-        'en-IN': `${formatINR(totalTaxOf(held))} of GST on your purchases is deliberately not in this figure, because those bills are still waiting on the supplier or on you. They are not lost — they come back on the month they are settled.`,
-        'hi-IN': `Aapki kharid ka ${formatINR(totalTaxOf(held))} GST jaan-boojh kar is figure mein nahin hai, kyunki woh bill abhi supplier ya aap par ruke hain. Woh khoye nahin hain — jis mahine tay honge us mahine aa jayenge.`,
-      },
+    caution: cautionFor(held, barred),
   };
 };
 
