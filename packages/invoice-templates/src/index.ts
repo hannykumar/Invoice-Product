@@ -14,6 +14,8 @@ export * from './pdf.ts';
 export * from './from-sales.ts';
 // Issue #141 — the delivery challan, printed on the same engine.
 export * from './challan.ts';
+// Issue #191 — the e-way bill page the driver carries.
+export * from './eway.ts';
 // Issue #142 — the quotation and the proforma invoice, printed on the same engine.
 export * from './presale.ts';
 // Issue #186 — the credit note and the debit note, printed on the same engine.

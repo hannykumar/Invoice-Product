@@ -234,6 +234,7 @@ const copy = {
     noChallans: "No challan has been issued yet.", openChallan: "Open", printChallan: "Print all three copies",
     linkInvoiceTitle: "The tax invoice raised after delivery", linkInvoiceHelp: "Only for goods that were sold. Pick the invoice; we check it is for the same customer, dated after the challan, and bills the same goods.", linkInvoice: "Link this invoice",
     challanEwayTitle: "E-way bill number", challanEwayHelp: "Type it in if it was raised somewhere else. One raised on the e-way bill screen lands here by itself.", ewayBillNumberLabel: "E-way bill number (12 digits)", transporterName: "Transporter", recordEwayNumber: "Put it on the challan",
+    printEway: "Print for the driver", printEwaySend: "Send to printer", printEwayPdf: "Download PDF",
     cancelChallanTitle: "Cancel this challan", cancelChallanHelp: "Only if the goods never moved on it. The number stays used, so the series has no gap.", cancelChallanReason: "Why is it being cancelled?", ewayCancelledOnPortal: "Its e-way bill has been cancelled on the portal", cancelChallan: "Cancel the challan",
     ewayChallanReasonHelp: "For a delivery challan, the reason written on the challan is used, not this one.",
     navEway: "E-way bill",
@@ -541,6 +542,7 @@ const copy = {
     noChallans: "Abhi koi challan nahin bana.", openChallan: "Kholen", printChallan: "Teeno copy print karein",
     linkInvoiceTitle: "Delivery ke baad bana tax invoice", linkInvoiceHelp: "Sirf beche gaye maal ke liye. Invoice chunein; hum dekhenge ki woh usi customer ka hai, challan ke baad ka hai, aur wahi maal bill karta hai.", linkInvoice: "Yeh invoice joden",
     challanEwayTitle: "E-way bill number", challanEwayHelp: "Agar kahin aur bana hai to yahan likhein. E-way bill wali screen se bana number yahan apne aap aa jata hai.", ewayBillNumberLabel: "E-way bill number (12 ank)", transporterName: "Transporter", recordEwayNumber: "Challan par joden",
+    printEway: "Driver ke liye print karein", printEwaySend: "Printer par bhejein", printEwayPdf: "PDF download karein",
     cancelChallanTitle: "Yeh challan radd karein", cancelChallanHelp: "Sirf tab jab maal is par gaya hi nahin. Number istemal hua hi maana jayega, taaki ginti mein khali jagah na rahe.", cancelChallanReason: "Radd kyon kar rahe hain?", ewayCancelledOnPortal: "Iska e-way bill portal par radd ho chuka hai", cancelChallan: "Challan radd karein",
     ewayChallanReasonHelp: "Delivery challan ke liye challan par likhi wajah hi li jaati hai, yeh wali nahin.",
     navEway: "E-way bill",
@@ -3954,6 +3956,10 @@ function renderEway(result, mode) {
   document.querySelector("#eway-raise").hidden = !(required && (mode === "preview" ? result.ready : result.status === "FAILED"));
   document.querySelector("#eway-offline").hidden = !required;
   document.querySelector("#eway-reconcile").hidden = !(mode !== "preview" && (result.status === "FAILED" || result.status === "PENDING"));
+  // Printable the moment the portal has answered with a number — including a cancelled or expired
+  // one, because that paper exists and a person may still have to produce it.
+  document.querySelector("#eway-print").hidden = !(mode !== "preview" && Boolean(result.ewayBillNumber));
+  if (mode === "preview" || !result.ewayBillNumber) document.querySelector("#eway-print-panel").hidden = true;
   // A vehicle can go on while the bill is live, and only then.
   document.querySelector("#eway-vehicle-form").hidden = !(raised && result.status !== "EXPIRED");
   document.querySelector("#eway-extend-form").hidden = !(mode !== "preview" && (result.status === "ACTIVE" || result.status === "EXPIRED"));
@@ -4000,6 +4006,27 @@ const ewayForm = (selector, path, failureTitle) => submitStep(selector, async (f
 ewayForm("#eway-vehicle-form", "/api/eway/vehicle", "The vehicle was not added");
 ewayForm("#eway-extend-form", "/api/eway/extend", "Nothing was extended");
 ewayForm("#eway-cancel-form", "/api/eway/cancel", "Nothing was cancelled");
+
+// Issue #191 — the driver's page. It is the portal's own sheet, so it is fetched and shown as it
+// will be printed, rather than assembled again on the screen.
+document.querySelector("#eway-print")?.addEventListener("click", async () => {
+  try {
+    const printed = await api("/api/eway/print", { method: "POST", body: JSON.stringify(ewayInput()) });
+    const panel = document.querySelector("#eway-print-panel");
+    document.querySelector("#eway-print-note").textContent = printed.notice
+      ?? `E-way bill ${printed.ewayBillNumber}. Hand this to the driver with the bill.`;
+    document.querySelector("#eway-print-frame").srcdoc = printed.html;
+    document.querySelector("#eway-print-pdf").href = `/api/eway/${encodeURIComponent(ewayInput().invoice ?? "")}/pdf`;
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    showDialog({ title: "Nothing to print", message: error.message }, "failed");
+  }
+});
+
+document.querySelector("#eway-print-send")?.addEventListener("click", () => {
+  document.querySelector("#eway-print-frame").contentWindow?.print();
+});
 
 // The offline file matters most when the portal is down and the lorry still has to leave.
 document.querySelector("#eway-offline")?.addEventListener("click", async () => {

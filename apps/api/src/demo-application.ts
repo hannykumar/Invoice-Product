@@ -16,13 +16,18 @@ import {
   renderCreditNote,
   toCreditNoteDocument,
   type CreditNoteDocument,
+  captureSnapshot,
   copyMarking,
+  ewayBillPdf,
+  ewayPrintBanner,
   invoicePdf,
   invoicePdfCopies,
   renderInvoiceCopies,
   qrSvg,
+  renderEwayBill,
   renderInvoice,
   templateById,
+  type TemplateDefinition,
   toInvoiceDocument,
   type InvoiceDocument,
   type Locale,
@@ -2901,6 +2906,35 @@ export class DemoApplication {
   async reconcileEwayBill(actor: ActorContext, input: Record<string, unknown>) {
     const record = await this.shop.ewayBill.reconcile(actor, String(input.invoice ?? ''));
     return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /**
+   * Issue #191 — the page the driver is handed at a checkpoint.
+   *
+   * Rule 138A(1) accepts the number carried electronically, so nothing is blocked for want of this
+   * page. It is printed because officers expect the portal's own sheet, and it is refused before the
+   * portal has given a number: a page with no number on it is not an e-way bill.
+   */
+  async ewayPrint(actor: ActorContext, input: Record<string, unknown>, options: { readonly pdf?: boolean } = {}) {
+    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const record = await this.shop.ewayBill.forMovement(actor, movement.movementId);
+    if (record === null) throw notFound('API_EWAY_NOT_RAISED', 'No e-way bill has been raised for this movement yet.');
+    const banner = ewayPrintBanner(record);
+    if (banner?.kind === 'REFUSED') throw invalid('API_EWAY_NO_NUMBER', banner.message);
+    const snapshot = this.invoicePrints.get(String(input.invoice ?? ''))?.snapshot
+      ?? captureSnapshot(templateById('india-standard') as TemplateDefinition, 'en-IN', this.shop.clock.now().toISOString().slice(0, 10));
+    const rendered = { snapshot, format: 'A4' as const, locale: 'en-IN' as const };
+    return {
+      state: 'print' as const,
+      ewayBillNumber: record.acknowledgement?.ewayBillNumber ?? '',
+      status: record.status,
+      // The screen says which of these the page carries, so the person pressing Print knows before
+      // the paper comes out that it is a cancelled or an unvehicled one.
+      notice: banner === null ? null : banner.message,
+      ...(options.pdf === true
+        ? { pdf: await ewayBillPdf(record, movement, rendered) }
+        : { html: renderEwayBill(record, movement, rendered) }),
+    };
   }
 
   /** Part A as a file, for the day the portal is down and the lorry still has to leave. */
