@@ -2,6 +2,7 @@ import { AccessControl, AuditLog, ExceptionQueue, PlatformCommandService } from 
 export { AccessControl, AuditLog, ExceptionQueue, PlatformCommandService } from "./platform.ts";
 export * from "./types.ts";
 export * from "./connectors.ts";
+export * from "./credentials.ts";
 export * from "./auth.ts";
 export * from "./banking.ts";
 export * from "./notifications.ts";

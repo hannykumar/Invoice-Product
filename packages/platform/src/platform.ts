@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PlatformError } from "./types.ts";
 import type { AuditEvent, ApprovalPolicy, CommandRecord, CommandStatus, ExceptionItem, Id, Permission, RequestContext } from "./types.ts";
+import { redactSecrets } from "./credentials.ts";
 
 const riskRank = { low: 0, medium: 1, high: 2 } as const;
 const transitions: Readonly<Record<CommandStatus, readonly CommandStatus[]>> = {
@@ -26,7 +27,7 @@ const freeze = <T>(value: T): T => {
 export class AuditLog {
   #events: AuditEvent[] = [];
   append(event: Omit<AuditEvent, "id" | "occurredAt">): AuditEvent {
-    const stored = freeze({ ...event, id: randomUUID(), occurredAt: new Date().toISOString(), before: event.before && redact(clone(event.before)), after: event.after && redact(clone(event.after)) });
+    const stored = freeze(redactSecrets({ ...event, id: randomUUID(), occurredAt: new Date().toISOString(), before: event.before && redact(clone(event.before)), after: event.after && redact(clone(event.after)) }));
     this.#events.push(stored);
     return stored;
   }

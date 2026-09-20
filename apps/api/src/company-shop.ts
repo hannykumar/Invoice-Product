@@ -36,6 +36,7 @@ import { EInvoiceService } from '../../../packages/gst/src/einvoice-service.ts';
 import {
   InMemoryEInvoicePolicies, InMemoryEInvoiceStore, SyntheticIrp, irpAdapter,
 } from '../../../packages/gst/src/einvoice-adapters.ts';
+import { openWhitebooksCredentialVault, whitebooksIrpConnectorFromVault } from '../../../packages/gst/src/whitebooks-connector.ts';
 import { EwayBillService } from '../../../packages/transport/src/service.ts';
 import {
   InMemoryConsolidatedTripStore, InMemoryEwayBillPolicies, InMemoryEwayBillStore,
@@ -56,7 +57,10 @@ import {
 } from '../../../packages/transport/src/suitability-adapters.ts';
 import type { Vehicle } from '../../../packages/masters/src/types.ts';
 import { items as catalogueItems, type CatalogueSeed } from './catalogue-application.ts';
-import { turnoverAnswerForYear } from './business-details-application.ts';
+import { businessDetailsOf, turnoverAnswerForYear } from './business-details-application.ts';
+
+// Read once when the application starts. An absent file keeps local development synthetic.
+const whitebooksVault = openWhitebooksCredentialVault();
 
 export interface CompanySeed {
   readonly companyId: CompanyId;
@@ -327,13 +331,16 @@ export async function createCompanyShop(seed: CompanySeed) {
   });
   // Issue #26. The Invoice Registration Portal behind #8's gateway; development runs against a
   // synthetic one that computes real IRNs, so the verification in `irn.ts` is genuinely exercised.
-  const irpPortal = new SyntheticIrp(() => clock.now());
+  const irpPortal = whitebooksVault === null
+    ? new SyntheticIrp(() => clock.now())
+    : whitebooksIrpConnectorFromVault(whitebooksVault, businessDetailsOf(seed.companyId)?.email ?? '');
+  const irpVault = whitebooksVault ?? new SyntheticCredentialVault();
   const eInvoices = new InMemoryEInvoiceStore();
   const eInvoicePolicies = new InMemoryEInvoicePolicies();
   store.join(eInvoices);
   const eInvoice = new EInvoiceService({
     irp: irpAdapter({
-      gateway: new ConnectorGateway([irpPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([irpPortal], irpVault, new StaticWebhookVerifier()),
       clock: () => clock.now(),
     }),
     records: eInvoices,

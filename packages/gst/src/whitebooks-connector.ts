@@ -10,7 +10,9 @@
  * reference inside their Developer Hub. The envelope handling is shared with the e-way bill lane in
  * `whitebooks-http.ts`.
  */
+import { resolve } from "node:path";
 import { ConnectorError, type ConnectorRequest, type ConnectorResponse, type ExternalConnector } from "../../platform/src/connectors.ts";
+import { FileCredentialVault } from "../../platform/src/credentials.ts";
 import { makeCaller, unwrap, type Caller, type WhitebooksCredentials } from "./whitebooks-http.ts";
 import { computeIrn } from "./irn.ts";
 import type { EInvoiceDocumentType } from "./einvoice-types.ts";
@@ -23,6 +25,56 @@ export interface WhitebooksDeps {
   readonly fetch?: typeof globalThis.fetch;
   readonly clock?: () => Date;
 }
+
+export const WHITEBOOKS_ENV_KEYS = Object.freeze([
+  "WHITEBOOKS_BASE_URL",
+  "WHITEBOOKS_EINVOICE_CLIENT_ID",
+  "WHITEBOOKS_EINVOICE_CLIENT_SECRET",
+  "WHITEBOOKS_EWAYBILL_CLIENT_ID",
+  "WHITEBOOKS_EWAYBILL_CLIENT_SECRET",
+  "WHITEBOOKS_GSTIN",
+  "WHITEBOOKS_USERNAME",
+  "WHITEBOOKS_PASSWORD",
+  "WHITEBOOKS_IP_ADDRESS",
+] as const);
+
+const WHITEBOOKS_SECRET_KEYS = Object.freeze([
+  "WHITEBOOKS_EINVOICE_CLIENT_ID",
+  "WHITEBOOKS_EINVOICE_CLIENT_SECRET",
+  "WHITEBOOKS_EWAYBILL_CLIENT_ID",
+  "WHITEBOOKS_EWAYBILL_CLIENT_SECRET",
+  "WHITEBOOKS_USERNAME",
+  "WHITEBOOKS_PASSWORD",
+] as const);
+
+export const openWhitebooksCredentialVault = (
+  path = resolve(process.cwd(), ".env"),
+  warn?: (message: string) => void,
+): FileCredentialVault | null =>
+  FileCredentialVault.open(path, WHITEBOOKS_ENV_KEYS, WHITEBOOKS_SECRET_KEYS, ["irp", "eway_bill"], warn);
+
+export interface WhitebooksConnection {
+  readonly gstin: string;
+  readonly tokenValidUntil: string;
+}
+
+export interface WhitebooksIrpConnector extends ExternalConnector {
+  connection(): Promise<WhitebooksConnection>;
+}
+
+export const whitebooksIrpConnectorFromVault = (vault: FileCredentialVault, email = ""): WhitebooksIrpConnector =>
+  vault.use("irp", (env) => whitebooksIrpConnector({
+    credentials: {
+      baseUrl: env.WHITEBOOKS_BASE_URL!,
+      clientId: env.WHITEBOOKS_EINVOICE_CLIENT_ID!,
+      clientSecret: env.WHITEBOOKS_EINVOICE_CLIENT_SECRET!,
+      gstin: env.WHITEBOOKS_GSTIN!,
+      username: env.WHITEBOOKS_USERNAME!,
+      password: env.WHITEBOOKS_PASSWORD!,
+      ipAddress: env.WHITEBOOKS_IP_ADDRESS!,
+    },
+    email: email || env.WHITEBOOKS_USERNAME!,
+  }));
 
 const ROUTES: Readonly<Record<string, { readonly method: "GET" | "POST"; readonly path: string }>> = Object.freeze({
   "einvoice.generate": { method: "POST", path: "/einvoice/type/GENERATE/version/V1_03" },
@@ -42,14 +94,14 @@ const DEFAULT_TOKEN_LIFE_MS = 6 * 60 * 60_000;
 /** The government's "already registered" code. */
 const DUPLICATE_CODE = "2150";
 
-export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector => {
+export const whitebooksIrpConnector = (deps: WhitebooksDeps): WhitebooksIrpConnector => {
   const call: Caller = makeCaller({ credentials: deps.credentials, email: deps.email, ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }) });
   const now = deps.clock ?? (() => new Date());
   let token: { readonly value: string; readonly expiresAt: number } | undefined;
 
-  const authenticate = async (): Promise<string> => {
+  const authenticate = async (): Promise<{ readonly value: string; readonly expiresAt: number }> => {
     const current = token;
-    if (current && current.expiresAt - TOKEN_SAFETY_MARGIN_MS > now().getTime()) return current.value;
+    if (current && current.expiresAt - TOKEN_SAFETY_MARGIN_MS > now().getTime()) return current;
 
     const data = unwrap(await call("GET", "/einvoice/authenticate", { password: deps.credentials.password }));
     const value = typeof data.AuthToken === "string" ? data.AuthToken : "";
@@ -58,7 +110,7 @@ export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector 
     if (value === "") throw new ConnectorError("UNAUTHORIZED", false);
     const life = typeof data.TokenExpiry === "string" ? Date.parse(data.TokenExpiry) - now().getTime() : Number.NaN;
     token = { value, expiresAt: now().getTime() + (Number.isFinite(life) && life > 0 ? life : DEFAULT_TOKEN_LIFE_MS) };
-    return value;
+    return token;
   };
 
   /** Recover the acknowledgement for a bill the portal says it already has. */
@@ -88,7 +140,7 @@ export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector 
     async execute(request: ConnectorRequest): Promise<ConnectorResponse> {
       const route = ROUTES[request.operation];
       if (route === undefined) throw new ConnectorError("INVALID_REQUEST", false);
-      const authToken = await authenticate();
+      const authToken = (await authenticate()).value;
 
       const query = route.method === "GET" && typeof request.payload.Irn === "string" ? `?irn=${encodeURIComponent(request.payload.Irn)}` : "";
       const body = await call(route.method, `${route.path}${query}`, { "auth-token": authToken }, route.method === "POST" ? request.payload : undefined);
@@ -117,6 +169,11 @@ export const whitebooksIrpConnector = (deps: WhitebooksDeps): ExternalConnector 
       } catch (error) {
         return error instanceof ConnectorError && error.code === "UNAUTHORIZED" ? "degraded" : "unavailable";
       }
+    },
+
+    async connection(): Promise<WhitebooksConnection> {
+      const session = await authenticate();
+      return { gstin: deps.credentials.gstin, tokenValidUntil: new Date(session.expiresAt).toISOString() };
     },
   };
 };

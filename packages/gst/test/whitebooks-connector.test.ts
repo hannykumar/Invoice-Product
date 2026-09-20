@@ -68,6 +68,17 @@ test("a second call reuses the token instead of logging in again", async () => {
   assert.equal(calls.filter((call) => call.url.includes("/authenticate")).length, 1);
 });
 
+test("the connection check reports identity and expiry without exposing the token", async () => {
+  const { fetch } = stub([AUTH_OK]);
+  const connector = whitebooksIrpConnector({ credentials: CREDENTIALS, email: "dev@example.com", fetch });
+
+  const connection = await connector.connection();
+
+  assert.equal(connection.gstin, CREDENTIALS.gstin);
+  assert.match(connection.tokenValidUntil, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(JSON.stringify(connection).includes("tok-1"), false);
+});
+
 test("the duplicate error travels back as payload, because a retry must still end holding the IRN", async () => {
   const { fetch } = stub([AUTH_OK, { status_cd: "0", error: [{ error_cd: "2150", message: "Duplicate IRN" }] }]);
   const connector = whitebooksIrpConnector({ credentials: CREDENTIALS, email: "dev@example.com", fetch });

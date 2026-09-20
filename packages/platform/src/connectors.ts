@@ -1,4 +1,5 @@
 import type { Id } from "./types.ts";
+import { redactSecretText } from "./credentials.ts";
 
 // "payments" is our own subscription provider (issue #42 [E42], GPT 1) — the money customers pay
 // us, which is a different thing from "banking", the customer's own bank feed.
@@ -7,7 +8,7 @@ export class ConnectorError extends Error {
   public readonly code: "OUTAGE" | "TIMEOUT" | "UNAUTHORIZED" | "INVALID_REQUEST";
   public readonly retryable: boolean;
   public readonly providerRequestId: string | undefined;
-  constructor(code: "OUTAGE" | "TIMEOUT" | "UNAUTHORIZED" | "INVALID_REQUEST", retryable: boolean, providerRequestId?: string) { super(code); this.code = code; this.retryable = retryable; this.providerRequestId = providerRequestId; }
+  constructor(code: "OUTAGE" | "TIMEOUT" | "UNAUTHORIZED" | "INVALID_REQUEST", retryable: boolean, providerRequestId?: string) { super(code); this.code = code; this.retryable = retryable; this.providerRequestId = providerRequestId === undefined ? undefined : redactSecretText(providerRequestId); }
 }
 export interface ConnectorRequest { tenantId: Id; operation: string; payload: Readonly<Record<string, unknown>>; idempotencyKey: string; correlationId: string; }
 export interface ConnectorResponse { providerRequestId: string; status: "accepted" | "completed"; payload: Readonly<Record<string, unknown>>; }
