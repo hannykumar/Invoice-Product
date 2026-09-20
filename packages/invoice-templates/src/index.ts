@@ -16,6 +16,8 @@ export * from './from-sales.ts';
 export * from './challan.ts';
 // Issue #142 — the quotation and the proforma invoice, printed on the same engine.
 export * from './presale.ts';
+// Issue #191 — the e-way bill page a driver is handed, as the portal's own page.
+export * from './eway.ts';
 // Issue #186 — the credit note and the debit note, printed on the same engine.
 export * from './credit-note.ts';
 // Issue #147 — the mark of the trade a business may print behind its bill.

@@ -1,5 +1,7 @@
 import puppeteer from 'puppeteer';
 import { renderCreditNote, renderInvoice, renderInvoiceCopies, type RenderOptions } from './render.ts';
+import { renderEwayBill, type EwayPrintOptions } from './eway.ts';
+import type { EwayBillRecord, Movement } from '../../transport/src/types.ts';
 import type { CreditNoteDocument } from './credit-note.ts';
 import type { InvoiceDocument, TemplateSnapshot } from './document.ts';
 
@@ -68,6 +70,28 @@ export async function creditNotePdf(
       else void request.abort();
     });
     await page.setContent(renderCreditNote(document, snapshot, options), { waitUntil: 'load' });
+    return Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true }));
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * Issue #191 — the e-way bill page as a PDF, off the same page the screen shows.
+ *
+ * One copy. The portal's page carries no copy marking, and marking ours would put words on a
+ * government document that the government does not put there.
+ */
+export async function ewayBillPdf(record: EwayBillRecord, movement: Movement, options: EwayPrintOptions = {}): Promise<Buffer> {
+  const browser = await puppeteer.launch({ headless: true, args: process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : [] });
+  try {
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      if (request.url().startsWith('data:')) void request.continue();
+      else void request.abort();
+    });
+    await page.setContent(renderEwayBill(record, movement, options), { waitUntil: 'load' });
     return Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true }));
   } finally {
     await browser.close();

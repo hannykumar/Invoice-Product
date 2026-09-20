@@ -148,6 +148,15 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/eway/reject') return json(200, await app.rejectEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/reconcile') return json(200, await app.reconcileEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/offline') return json(200, await app.ewayOfflineJson(actor, body));
+    // Issue #191 — the page the driver carries. The law takes the number alone (CGST Rule 138A(1)),
+    // so nothing is blocked on this; it exists because every check post expects the printed page.
+    if (method === 'POST' && pathname === '/api/eway/print') return json(200, await app.ewayPrint(actor, body));
+    const ewayPdf = /^\/api\/eway\/([^/]+)\/pdf$/.exec(pathname);
+    if (method === 'GET' && ewayPdf?.[1]) {
+      const result = await app.ewayPrint(actor, { invoice: decodeURIComponent(ewayPdf[1]) }, { pdf: true });
+      if (!('pdf' in result)) throw new Error('The e-way bill PDF was not produced.');
+      return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="ewaybill-${result.ewayBillNumber.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
+    }
     // Issue #28 — can this lorry carry this load, and who said to send it anyway.
     if (method === 'GET' && pathname === '/api/vehicles/choices') return json(200, DemoApplication.vehicleChoices());
     if (method === 'GET' && pathname === '/api/vehicles/held') return json(200, await app.blockedVehicleChecks(actor));

@@ -22,6 +22,9 @@ import {
   renderInvoiceCopies,
   qrSvg,
   renderInvoice,
+  ewayBillPdf,
+  ewayPrintRefusal,
+  renderEwayBill,
   templateById,
   toInvoiceDocument,
   type InvoiceDocument,
@@ -295,6 +298,11 @@ export class DemoApplication {
   private readonly invoicePrints = new Map<string, { document: InvoiceDocument; snapshot: TemplateSnapshot }>();
   /** Issue #186 — each credit or debit note's printed page, frozen the moment it is recorded. */
   private readonly notePrints = new Map<string, { document: CreditNoteDocument; snapshot: TemplateSnapshot }>();
+  /**
+   * Issue #191 — the movement each e-way bill was raised on, kept so the driver's page can be
+   * printed again later without the dispatch form still being on the screen.
+   */
+  private readonly ewayMovements = new Map<string, Movement>();
   /**
    * Issue #182 — the delivery and reference answers, kept against the draft they were checked with
    * until the bill is issued and they are frozen onto it.
@@ -1513,6 +1521,9 @@ export class DemoApplication {
       // The bill prints without the customer's address until somebody types one, and the screen
       // says so rather than inventing a line of it.
       hasBuyerAddress: facts.document.buyer.addressLines.length > 0,
+      // Issue #191 — the e-way bill this consignment travels on, so the bill screen can offer the
+      // driver's page beside the bill itself. Null when no e-way bill was ever raised.
+      ewayBillNumber,
       ...(options.pdf === true
         ? {
           pdf: allCopies
@@ -2847,6 +2858,9 @@ export class DemoApplication {
   async generateEwayBill(actor: ActorContext, input: Record<string, unknown>) {
     const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
     const record = await this.shop.ewayBill.generate(actor, movement);
+    // Issue #191 — what was on the lorry, kept against the movement so the driver's page can be
+    // printed tomorrow as well as today.
+    this.ewayMovements.set(movement.movementId, movement);
     // Issue #141 — the number the portal gave goes straight onto the challan, so it prints there.
     const number = record.acknowledgement?.ewayBillNumber;
     if (movement.documents[0]?.documentType === 'DELIVERY_CHALLAN' && number !== undefined) {
@@ -2901,6 +2915,39 @@ export class DemoApplication {
   async reconcileEwayBill(actor: ActorContext, input: Record<string, unknown>) {
     const record = await this.shop.ewayBill.reconcile(actor, String(input.invoice ?? ''));
     return DemoApplication.ewayJson(record, this.shop.clock.now());
+  }
+
+  /**
+   * Issue #191 — the e-way bill page a driver is handed, on screen and as a PDF.
+   *
+   * Nothing is blocked on it. CGST Rule 138A(1) accepts the number in electronic form, so a lorry
+   * whose page was never printed is a lorry carrying a valid e-way bill. This exists because every
+   * driver carries the page anyway and officers at check posts expect it.
+   *
+   * What it will not do is print before the portal has answered. A page with no government number
+   * behind it is worse than no page, because it looks exactly like the real thing.
+   */
+  async ewayPrint(actor: ActorContext, input: Record<string, unknown>, options: { readonly pdf?: boolean } = {}) {
+    const movementId = String(input.invoice ?? '').trim();
+    const record = await this.shop.ewayBill.forMovement(actor, movementId);
+    if (record === null) throw notFound('API_EWAY_NOT_FOUND', 'No e-way bill has been raised for this document.');
+    const refusal = ewayPrintRefusal(record);
+    if (refusal !== null) throw invalid('API_EWAY_NOT_PRINTABLE', refusal);
+    // What was on the lorry when the bill was raised. The dispatch form is used only when the
+    // movement was not kept — a reprint must not quietly change what the page says.
+    const movement = this.ewayMovements.get(movementId) ?? (await this.movementFor(actor, movementId, input));
+    const rendered = { now: this.shop.clock.now() };
+    return {
+      state: 'print' as const,
+      ewayBillNumber: record.acknowledgement?.ewayBillNumber ?? '',
+      status: record.status,
+      documentNumber: record.documentNumber,
+      // Issue #191 — the portal's page carries no copy marking, so ours carries none either.
+      copies: 1,
+      ...(options.pdf === true
+        ? { pdf: await ewayBillPdf(record, movement, rendered) }
+        : { html: renderEwayBill(record, movement, rendered) }),
+    };
   }
 
   /** Part A as a file, for the day the portal is down and the lorry still has to leave. */

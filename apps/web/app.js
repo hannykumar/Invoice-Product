@@ -246,6 +246,9 @@ const copy = {
     oversized: "Is it an oversized load?", answerYes: "Yes", answerNo: "No", answerNotSaid: "Not said",
     sameCity: "Does it stay inside one city?", sameCityHelp: "Some states, such as Gujarat, ask for no e-way bill at all inside one city. Leave it as 'not said' if you are unsure — we will ask rather than guess.",
     checkMovement: "Check this movement", ewaySafety: "Checking sends nothing. Nothing reaches the portal until you press the raise button.",
+    openEwayPrint: "See the driver's copy", printEway: "Print the e-way bill", printEwayCancelled: "Print (cancelled)",
+    ewayPrintHelp: "The page drivers are handed at a check post. The law accepts the number on its own, so goods may move whether or not this is printed.",
+    ewayNotPrintable: "There is nothing to print yet",
     raiseEway: "Raise the e-way bill", askPortal: "Ask the portal what it has",
     vehicleChangeReason: "Why this vehicle?", changeFirst: "It is the first one", changeBreakdown: "The last one broke down", changeTransshipment: "Goods moved to another lorry", changeNote: "Say what happened", fromPlace: "Picking up from",
     addVehicle: "Put this vehicle on the bill",
@@ -553,6 +556,9 @@ const copy = {
     oversized: "Kya load bahut bada hai?", answerYes: "Haan", answerNo: "Nahin", answerNotSaid: "Bataya nahin",
     sameCity: "Kya maal ek hi shehar mein reh raha hai?", sameCityHelp: "Kuch rajya, jaise Gujarat, ek hi shehar ke andar koi e-way bill nahin maangte. Pakka nahin to 'bataya nahin' rehne den — hum poochenge, andaza nahin lagayenge.",
     checkMovement: "Yeh movement jaanchen", ewaySafety: "Jaanchne se kuch nahin jata. Banane ka button dabane tak portal tak kuch nahin pahunchta.",
+    openEwayPrint: "Driver wali copy dekhein", printEway: "E-way bill print karein", printEwayCancelled: "Print karein (radd)",
+    ewayPrintHelp: "Yahi kagaz driver ko check post par dikhana hota hai. Kanoon number akela bhi maanta hai, isliye print ho ya na ho, maal ja sakta hai.",
+    ewayNotPrintable: "Abhi print karne ko kuch nahin hai",
     raiseEway: "E-way bill banayein", askPortal: "Portal se poochen unke paas kya hai",
     vehicleChangeReason: "Yeh gaadi kyon?", changeFirst: "Yeh pehli hai", changeBreakdown: "Pichhli kharab ho gayi", changeTransshipment: "Maal doosri gaadi par gaya", changeNote: "Kya hua, batayein", fromPlace: "Kahan se utha raha hai",
     addVehicle: "Yeh gaadi bill par lagayein",
@@ -2496,6 +2502,10 @@ async function showSaleBill(invoiceId) {
         ? text("printBillCopies", { copies: String(billOnScreen.copies) })
         : copy[state.locale].printBill;
     }
+    // Issue #191 — the driver is handed the bill and the e-way bill together, so the page that
+    // shows the bill offers the other one too, and only when there is one to offer.
+    const ewayPrint = document.querySelector("#sale-bill-eway-print");
+    if (ewayPrint) ewayPrint.hidden = !printed.ewayBillNumber;
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     document.querySelector("#sale-bill-title").textContent = copy[state.locale].billLoadFailed;
@@ -2523,6 +2533,7 @@ document.querySelector("#sale-bill-print")?.addEventListener("click", async () =
     sheets.addEventListener("load", () => sheets.contentWindow?.print(), { once: true });
   } catch { frame.contentWindow?.print(); }
 });
+document.querySelector("#sale-bill-eway-print")?.addEventListener("click", () => showEwayPage(billOnScreen.invoiceId));
 document.querySelector("#sale-bill-format")?.addEventListener("change", () => { billOnScreen.paperChosen = true; showSaleBill(billOnScreen.invoiceId); });
 
 // ----------------------------------------------------------- issue #45: linked return notes
@@ -3868,6 +3879,9 @@ async function openChallan(id) {
   document.querySelector("#challan-print-title").textContent = `${challan.number} · ${t(challan.reason)}`;
   document.querySelector("#challan-frame").srcdoc = printed.html;
   const open = challan.state === "ISSUED";
+  // Issue #191 — the challan and its e-way bill are handed over together, so they print together.
+  const ewayPrint = document.querySelector("#challan-eway-print");
+  if (ewayPrint) ewayPrint.hidden = !challan.ewayBill;
   document.querySelector("#challan-link-form").hidden = !(open && challan.invoiceFollows);
   document.querySelector("#challan-eway-form").hidden = !open;
   document.querySelector("#challan-cancel-form").hidden = !open;
@@ -3885,6 +3899,9 @@ async function openChallan(id) {
 
 document.querySelector("#challan-print")?.addEventListener("click", () => {
   document.querySelector("#challan-frame").contentWindow?.print();
+});
+document.querySelector("#challan-eway-print")?.addEventListener("click", () => {
+  if (challanState.open) showEwayPage(challanState.open.id);
 });
 
 const challanAction = (selector, path, failureTitle) => submitStep(selector, async (form) => {
@@ -3958,7 +3975,50 @@ function renderEway(result, mode) {
   document.querySelector("#eway-vehicle-form").hidden = !(raised && result.status !== "EXPIRED");
   document.querySelector("#eway-extend-form").hidden = !(mode !== "preview" && (result.status === "ACTIVE" || result.status === "EXPIRED"));
   document.querySelector("#eway-cancel-form").hidden = !(raised && result.status !== "EXPIRED");
+
+  // Issue #191 — the driver's page, offered only once the portal has given a number. A cancelled
+  // e-way bill still prints, and the button says so, because somebody asking for it is usually
+  // proving to a check post that the consignment was called off.
+  const printable = mode !== "preview" && Boolean(result.ewayBillNumber);
+  const printButton = document.querySelector("#eway-open-print");
+  if (printButton) {
+    printButton.hidden = !printable;
+    printButton.textContent = result.status === "CANCELLED"
+      ? copy[state.locale].printEwayCancelled
+      : copy[state.locale].openEwayPrint;
+  }
+  if (!printable) document.querySelector("#eway-print-panel").hidden = true;
 }
+
+/**
+ * Issue #191 — the e-way bill page, on screen and ready for the printer.
+ *
+ * `movementId` is the document the bill was raised against: the invoice or the delivery challan.
+ * Nothing here is allowed to block anything — a page that will not load is a page the driver does
+ * without, and the number in the app is what the law asks the vehicle to carry.
+ */
+async function showEwayPage(movementId) {
+  if (!movementId) return;
+  const panel = document.querySelector("#eway-print-panel");
+  if (!panel) return;
+  try {
+    const printed = await api("/api/eway/print", { method: "POST", body: JSON.stringify({ invoice: movementId }) });
+    // The page lives on the e-way bill screen, so asking for it from the bill or the challan takes
+    // you there rather than filling a panel nobody is looking at.
+    if (state.view !== "eway") openView("eway");
+    panel.hidden = false;
+    document.querySelector("#eway-print-title").textContent = `${printed.documentNumber} · ${printed.ewayBillNumber}`;
+    document.querySelector("#eway-frame").srcdoc = printed.html;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    showDialog({ title: copy[state.locale].ewayNotPrintable, message: localizedError(error) }, "failed");
+  }
+}
+
+document.querySelector("#eway-open-print")?.addEventListener("click", () => showEwayPage(ewayInput().invoice));
+document.querySelector("#eway-print")?.addEventListener("click", () => {
+  document.querySelector("#eway-frame").contentWindow?.print();
+});
 
 const ewayInput = () => formValues(document.querySelector("#eway-form"));
 
@@ -4093,11 +4153,21 @@ async function loadEwayRoad() {
       return;
     }
     consignments.forEach((row) => {
-      list.append(detailRow(
+      const entry = detailRow(
         `${row.documentNumber} · ${row.ewayBillNumber ?? "no number yet"}`,
         row.vehicle ?? "no vehicle yet — the goods may not move",
         row.timeLeft,
-      ));
+      );
+      // Issue #191 — the driver's page, beside the consignment it belongs to.
+      if (row.ewayBillNumber) {
+        const print = document.createElement("button");
+        print.type = "button";
+        print.className = "secondary-button";
+        print.textContent = copy[state.locale].printEway;
+        print.addEventListener("click", () => showEwayPage(row.movementId));
+        entry.append(print);
+      }
+      list.append(entry);
     });
   } catch { /* the picker and the list are conveniences; the rest of the page still works */ }
 }

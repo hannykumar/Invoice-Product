@@ -149,6 +149,9 @@
               <div class="bill-actions">
                 <label><span data-i18n="billPaper"></span><select id="sale-bill-format"><option value="A4" data-i18n="billPaperA4"></option><option value="THERMAL_80MM" data-i18n="billPaperThermal"></option><option value="MOBILE" data-i18n="billPaperMobile"></option></select></label>
                 <button type="button" class="primary-button" id="sale-bill-print" data-i18n="printBill"></button>
+                <!-- Issue #191 — the e-way bill this consignment is travelling on, if one was raised.
+                     It is offered here because the driver is handed both papers together. -->
+                <button type="button" class="secondary-button" id="sale-bill-eway-print" hidden data-i18n="printEway"></button>
               </div>
             </div>
             <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
@@ -402,6 +405,8 @@
             <div class="panel-heading">
               <div><h2 id="challan-print-title">—</h2></div>
               <button type="button" class="primary-button" id="challan-print" data-i18n="printChallan"></button>
+              <!-- Issue #191 — the challan and the e-way bill travel together, so they print together. -->
+              <button type="button" class="secondary-button" id="challan-eway-print" hidden data-i18n="printEway"></button>
             </div>
             <form id="challan-link-form" class="form-panel" hidden>
               <h2 data-i18n="linkInvoiceTitle"></h2><p data-i18n="linkInvoiceHelp"></p>
@@ -465,6 +470,9 @@
               <button type="button" class="primary-button" id="eway-raise" hidden data-i18n="raiseEway"></button>
               <button type="button" class="secondary-button" id="eway-offline" hidden data-i18n="downloadOffline"></button>
               <button type="button" class="secondary-button" id="eway-reconcile" hidden data-i18n="askPortal"></button>
+              <!-- Issue #191 — the page the driver carries. The law takes the number alone, so this
+                   button is a convenience, never a gate on the goods leaving. -->
+              <button type="button" class="secondary-button" id="eway-open-print" hidden data-i18n="openEwayPrint"></button>
             </div>
             <form id="eway-vehicle-form" hidden>
               <div class="field-grid">
@@ -491,6 +499,14 @@
               </div>
               <button type="submit" class="secondary-button wide" data-i18n="cancelEway"></button>
             </form>
+          </article>
+
+          <article class="panel" id="eway-print-panel" hidden>
+            <div class="panel-heading">
+              <div><h2 id="eway-print-title">—</h2><p data-i18n="ewayPrintHelp"></p></div>
+              <button type="button" class="primary-button" id="eway-print" data-i18n="printEway"></button>
+            </div>
+            <iframe id="eway-frame" title="Printed e-way bill" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
           </article>
 
           <article class="panel">
