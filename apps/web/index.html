@@ -465,7 +465,18 @@
               <button type="button" class="primary-button" id="eway-raise" hidden data-i18n="raiseEway"></button>
               <button type="button" class="secondary-button" id="eway-offline" hidden data-i18n="downloadOffline"></button>
               <button type="button" class="secondary-button" id="eway-reconcile" hidden data-i18n="askPortal"></button>
+              <!-- Issue #191 — the portal's own page for the driver. Rule 138A accepts the number
+                   carried electronically, so this is a convenience, never a condition of moving. -->
+              <button type="button" class="secondary-button" id="eway-print" hidden data-i18n="printEway"></button>
             </div>
+            <section id="eway-print-panel" hidden>
+              <p id="eway-print-note"></p>
+              <iframe id="eway-print-frame" title="e-Way bill" class="bill-frame"></iframe>
+              <div class="dialog-actions">
+                <button type="button" class="primary-button" id="eway-print-send" data-i18n="printEwaySend"></button>
+                <a class="secondary-button" id="eway-print-pdf" download data-i18n="printEwayPdf"></a>
+              </div>
+            </section>
             <form id="eway-vehicle-form" hidden>
               <div class="field-grid">
                 <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA25CD5678" required /></label>

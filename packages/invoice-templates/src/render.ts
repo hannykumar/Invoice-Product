@@ -28,6 +28,8 @@ import { hsnSummary } from './hsn-summary.ts';
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
 import { renderCreditNoteBoxed, renderCreditNoteNarrow, type CreditNoteDocument } from './credit-note.ts';
+import { renderEwayBillBody } from './eway.ts';
+import type { EwayBillRecord, Movement } from '@invoice/transport';
 import { preSaleTitle, renderPreSaleBoxed, renderPreSaleNarrow, type PreSalePrint } from './presale.ts';
 import { MAX_TRADE_MARK_OPACITY_PERCENT } from './marks.ts';
 import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
@@ -613,6 +615,25 @@ export const renderChallanCopies = (
   snapshot: TemplateSnapshot,
   options: Omit<RenderOptions, 'copy'>,
 ): string => combineCopies(CHALLAN_COPIES.map((copy) => renderChallan(doc, snapshot, { ...options, copy })));
+
+/**
+ * Issue #191 — the e-way bill page for the driver, on the same shell as every other document.
+ *
+ * One copy and no copy marking: the portal's page carries none, and marking it for a recipient would
+ * be our invention on a government document. A4 only, because that is the paper it is handed over on.
+ */
+export const renderEwayBill = (
+  record: EwayBillRecord,
+  movement: Movement,
+  options: { readonly snapshot: TemplateSnapshot; readonly format?: PageFormat; readonly locale?: Locale },
+): string => page(
+  `e-Way Bill ${record.acknowledgement?.ewayBillNumber ?? ''}`.trim(),
+  options.snapshot,
+  options.format ?? 'A4',
+  options.locale ?? 'en-IN',
+  'eway',
+  `<div class="sheet-inner">${renderEwayBillBody(record, movement)}</div>`,
+);
 
 /**
  * Issue #186 — a credit or debit note, on the same engine and stylesheet as the invoice. One page,
