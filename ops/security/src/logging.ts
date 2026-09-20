@@ -8,7 +8,7 @@ export interface SafeLogEvent { readonly level: "debug" | "info" | "warn" | "err
 export function redactForLog(value: unknown, key = ""): SafeLogValue {
   if (sensitiveKey.test(key)) return "[REDACTED]";
   if (value === null || typeof value === "boolean" || typeof value === "number") return value;
-  if (typeof value === "string") return value.replace(bearerToken, "Bearer [REDACTED]").replace(connectionPassword, "$1[REDACTED]@");
+  if (typeof value === "string") return redactSecretText(value).replace(bearerToken, "Bearer [REDACTED]").replace(connectionPassword, "$1[REDACTED]@");
   if (typeof value === "bigint") return value.toString();
   if (Array.isArray(value)) return value.map((item) => redactForLog(item));
   if (value instanceof Error) return { name: value.name, message: redactForLog(value.message) };
@@ -24,6 +24,7 @@ export class SecureLogger {
   }
 
   write(level: SafeLogEvent["level"], message: string, fields: Readonly<Record<string, unknown>> = {}): void {
-    this.#sink(Object.freeze({ level, message, fields: redactForLog(fields) as Readonly<Record<string, SafeLogValue>> }));
+    this.#sink(Object.freeze({ level, message: redactSecretText(message), fields: redactForLog(fields) as Readonly<Record<string, SafeLogValue>> }));
   }
 }
+import { redactSecretText } from "../../../packages/platform/src/credentials.ts";
