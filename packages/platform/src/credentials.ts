@@ -59,16 +59,31 @@ export class FileCredentialVault implements CredentialVault {
     registerSecretValues(secretKeys.map((key) => this.#values[key] ?? ""));
   }
 
+  /** Which of the required values the file is missing. Empty means the file is complete. */
+  static missingKeys(path: string, requiredKeys: readonly string[]): readonly string[] {
+    const env = readEnv(path);
+    return requiredKeys.filter((key) => (env[key] ?? "") === "");
+  }
+
+  /**
+   * A half-filled file is not a reason to stop the business billing. The government lane is one
+   * part of the app, so an incomplete file leaves the connector unconfigured — the setup commands
+   * say which values are missing — and everything else carries on against the synthetic portal.
+   */
   static open(
     path: string,
     requiredKeys: readonly string[],
     secretKeys: readonly string[],
     connectors: readonly ConnectorKind[],
+    warn: ((message: string) => void) | undefined = (message) => console.warn(message),
   ): FileCredentialVault | null {
     const env = readEnv(path);
     if (!requiredKeys.some((key) => (env[key] ?? "") !== "")) return null;
-    const missing = requiredKeys.filter((key) => (env[key] ?? "") === "");
-    if (missing.length > 0) throw new Error(`WhiteBooks credentials are incomplete. Run npm run gsp:credentials; missing: ${missing.join(", ")}.`);
+    const missing = FileCredentialVault.missingKeys(path, requiredKeys);
+    if (missing.length > 0) {
+      warn(`WhiteBooks credentials are incomplete, so the synthetic portal is still in use. Run npm run gsp:credentials; missing: ${missing.join(", ")}.`);
+      return null;
+    }
     return new FileCredentialVault(Object.fromEntries(requiredKeys.map((key) => [key, env[key]!])), connectors, secretKeys);
   }
 

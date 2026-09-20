@@ -33,3 +33,15 @@ test("a registered secret cannot reach connector errors, audits, logs or HTTP JS
 
   assert.equal(jsonResponse(400, { message: `provider repeated ${secret}` }).body.includes(secret), false);
 });
+
+test("a secret reaches no response body, whatever shape carries it", () => {
+  const secret = randomUUID();
+  registerSecretValues([secret]);
+  class Reply { readonly note = `provider repeated ${secret}`; }
+
+  // Not every reply is a plain object: application modules hand back class instances and maps, and
+  // a redaction that only recognises plain objects would let those through untouched.
+  assert.equal(jsonResponse(200, new Reply()).body.includes(secret), false);
+  assert.equal(jsonResponse(200, { rows: [Object.assign(Object.create(null), { note: secret })] }).body.includes(secret), false);
+  assert.equal(jsonResponse(200, { when: new Date("2026-03-13T00:00:00Z") }).body.includes("2026-03-13"), true);
+});

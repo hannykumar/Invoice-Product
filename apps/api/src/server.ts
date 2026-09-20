@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DomainError } from '@invoice/kernel';
-import { PlatformError, redactSecrets } from '../../../packages/platform/src/index.ts';
+import { PlatformError, redactSecretText } from '../../../packages/platform/src/index.ts';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { chooseMark, searchMarks } from './trade-mark-application.ts';
@@ -14,7 +14,9 @@ import { ChallanDesk } from './challan-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from './government-webhooks.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 
-export const jsonResponse = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: JSON.stringify(redactSecrets(body), (_key, value) => typeof value === 'bigint' ? value.toString() : value) });
+// Redaction happens on the finished text, not on the object: walking the object can only reach the
+// shapes the walker recognises, and a secret carried by a class instance or a Map would walk past it.
+export const jsonResponse = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: redactSecretText(JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) ?? '') });
 const json = jsonResponse;
 
 export interface ApiResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: string | Buffer; }

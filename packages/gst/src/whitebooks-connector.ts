@@ -47,8 +47,11 @@ const WHITEBOOKS_SECRET_KEYS = Object.freeze([
   "WHITEBOOKS_PASSWORD",
 ] as const);
 
-export const openWhitebooksCredentialVault = (path = resolve(process.cwd(), ".env")): FileCredentialVault | null =>
-  FileCredentialVault.open(path, WHITEBOOKS_ENV_KEYS, WHITEBOOKS_SECRET_KEYS, ["irp", "eway_bill"]);
+export const openWhitebooksCredentialVault = (
+  path = resolve(process.cwd(), ".env"),
+  warn?: (message: string) => void,
+): FileCredentialVault | null =>
+  FileCredentialVault.open(path, WHITEBOOKS_ENV_KEYS, WHITEBOOKS_SECRET_KEYS, ["irp", "eway_bill"], warn);
 
 export interface WhitebooksConnection {
   readonly gstin: string;
