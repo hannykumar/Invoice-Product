@@ -95,6 +95,8 @@ const T = {
   vehicle: w('Vehicle No.', 'Gaadi'),
   eWayBill: w('e-Way Bill No.', 'E-way bill'),
   irn: w('IRN', 'Sarkari reference (IRN)'),
+  ackNumber: w('Ack No.', 'Ack number'),
+  ackDate: w('Ack Date', 'Ack ki taarikh'),
   bank: w('Bank Details', 'Yahan bhejein'),
   po: w("Buyer's Order No.", 'Aapka order reference'),
   serial: w('Sl No.', 'Sl'),

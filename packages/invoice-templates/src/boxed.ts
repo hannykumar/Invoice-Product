@@ -392,11 +392,16 @@ export const renderBoxed = (
   // The QR sits beside the seller block rather than spanning down into the buyer block. Spanning
   // made the buyer row as tall as the QR square and left a band of blank paper across the page,
   // which is exactly the dead space this design exists to remove.
+  // Issue #136 — the acknowledgement prints as the government sent it, or holds its reserved box.
+  const ack = (id: 'einvoice.ackNumber' | 'einvoice.ackDate', label: 'ackNumber' | 'ackDate', value: string | null | undefined): string =>
+    value == null || value === ''
+      ? reserved(id)
+      : `<div><span class="cap">${escapeHtml(t(label, locale))}</span> ${escapeHtml(value)}</div>`;
   const qrCell = !showEInvoice
     ? ''
     : `<td class="qr-cell">
         ${doc.eInvoice?.qrSvg == null ? reserved('einvoice.qr') : `<div class="qr-slot">${doc.eInvoice.qrSvg}</div>`}
-        <div class="qr-acks">${reserved('einvoice.ackNumber')}${reserved('einvoice.ackDate')}</div>
+        <div class="qr-acks">${ack('einvoice.ackNumber', 'ackNumber', doc.eInvoice?.ackNumber)}${ack('einvoice.ackDate', 'ackDate', doc.eInvoice?.ackDate)}</div>
       </td>`;
   const irnRow = !showEInvoice
     ? ''

@@ -449,6 +449,11 @@ export const renderInvoice = (
   const reserved = (id: Parameters<typeof renderReservedSlot>[0]): string =>
     renderReservedSlot(id, format, locale, escapeHtml, purpose);
 
+  // Issue #136 — the acknowledgement prints as the government sent it, or holds its reserved box.
+  const ack = (id: 'einvoice.ackNumber' | 'einvoice.ackDate', label: 'ackNumber' | 'ackDate', value: string | null | undefined): string =>
+    value == null || value === ''
+      ? reserved(id)
+      : `<div><span class="k">${escapeHtml(t(label, locale))}:</span> ${escapeHtml(value)}</div>`;
   const qr = !shows('qr.eInvoice') || !showsEInvoiceBlock(doc, purpose)
     ? ''
     : `<div class="qr qr-pair">
@@ -459,7 +464,7 @@ export const renderInvoice = (
               ? reserved('einvoice.irn')
               : `<div><span class="k">${escapeHtml(t('irn', locale))}:</span><br><code>${escapeHtml(doc.eInvoice.irn)}</code></div>`
           }
-          <div class="qr-pair">${reserved('einvoice.ackNumber')}${reserved('einvoice.ackDate')}</div>
+          <div class="qr-pair">${ack('einvoice.ackNumber', 'ackNumber', doc.eInvoice?.ackNumber)}${ack('einvoice.ackDate', 'ackDate', doc.eInvoice?.ackDate)}</div>
         </div>
       </div>`;
 

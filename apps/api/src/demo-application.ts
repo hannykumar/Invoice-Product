@@ -1572,6 +1572,8 @@ export class DemoApplication {
         irn: acknowledgement.irn,
         // Drawn from the government's own signed string, never from anything we made up.
         qrSvg: qrSvg(acknowledgement.signedQrCode, `IRN ${acknowledgement.irn}`),
+        ackNumber: acknowledgement.ackNumber,
+        ackDate: acknowledgement.ackDate,
       },
     };
     // Issue #183 — CGST Rule 48 prepares a goods invoice in triplicate and a services invoice in
