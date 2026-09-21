@@ -59,6 +59,10 @@ const copy = {
     salesFromModule: "Issued from the sales module", openSalesInvoices: "From open sales invoices", postedSupplierBills: "From posted supplier bills", calculatedLive: "Calculated from live company state", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Reading the inventory module", loadingSupplier: "Loading supplier balance…", readingReceivables: "Reading the receivables module",
     // Issue #132 — the bill itself: shown after a sale is recorded, and printed from the browser.
     // Issue #182 — where the goods go, who carries them, and what the bill refers back to.
+    exportSection: "Export or SEZ supply", exportKindOverseas: "This customer is outside India, so this bill is an export.", exportKindSez: "This customer is in an SEZ. The bill will say so and carry the SEZ endorsement.", exportKindDeemed: "This customer buys as a deemed export. GST is charged as usual and the bill says so.",
+    underLutLabel: "How is this export made?", underLutYes: "Under LUT or bond — no GST charged", underLutNo: "On payment of IGST", exportCountryLabel: "Country the goods go to", exportCountryHelp: "Two letters: AE for the UAE, US for the United States.", exportCurrencyLabel: "Currency of the sale", exportCurrencyHelp: "Leave empty if the customer pays in rupees.", exchangeRateLabel: "Rupees for one unit of that currency",
+    shippingBillNumberLabel: "Shipping bill number", shippingBillHelp: "Usually filed after the bill. Leave it empty until you have it.", shippingBillDateLabel: "Shipping bill date", portCodeLabel: "Port code", portCodeHelp: "The six characters customs uses, such as INNSA1 for Nhava Sheva.",
+    customerOverseas: "Outside India (export)", customerSezWithoutPayment: "SEZ unit — supplied under LUT", customerSezWithPayment: "SEZ unit — supplied with IGST", customerDeemedExport: "Deemed export buyer",
     deliveryAndReferences: "Delivery, transport and references", shipToWhere: "Where are the goods going?",
     shipToSame: "To the customer's billing address", shipToAddress: "To another address of this customer", shipToParty: "To somebody else, on this customer's instructions",
     shipToWhichAddress: "Which address?", shipToWhichParty: "Who receives the goods?", addDeliveryAddress: "＋ Add a delivery address",
@@ -368,6 +372,10 @@ const copy = {
     reportsLoading: "Live company se report aa rahi hai…",
     signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Aapka session company aur aapke kaam ki permission chunta hai.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Is development workspace ke synthetic local credentials pehle se bhare hain.",
     salesFromModule: "Sales module se jaari", openSalesInvoices: "Khule sales invoices se", postedSupplierBills: "Darj supplier bills se", calculatedLive: "Live company state se hisaab", loadingActivity: "Darj kaam load ho raha hai…", loadingStock: "Stock load ho raha hai…", readingInventory: "Inventory module padh rahe hain", loadingSupplier: "Supplier balance load ho raha hai…", readingReceivables: "Receivables module padh rahe hain",
+    exportSection: "Export ya SEZ supply", exportKindOverseas: "Yeh customer Bharat ke bahar hai, isliye yeh bill export hai.", exportKindSez: "Yeh customer SEZ mein hai. Bill par yahi likha jayega, SEZ wali ghoshna ke saath.", exportKindDeemed: "Yeh customer deemed export mein khareedta hai. GST hamesha ki tarah lagega aur bill par yeh likha hoga.",
+    underLutLabel: "Yeh export kaise ho raha hai?", underLutYes: "LUT ya bond par — GST nahin lagega", underLutNo: "IGST bharkar", exportCountryLabel: "Maal kis desh ja raha hai", exportCountryHelp: "Do akshar: UAE ke liye AE, America ke liye US.", exportCurrencyLabel: "Bikri kis currency mein", exportCurrencyHelp: "Customer rupaye mein de raha ho to khali chhodein.", exchangeRateLabel: "Us currency ki ek unit kitne rupaye",
+    shippingBillNumberLabel: "Shipping bill number", shippingBillHelp: "Aksar bill ke baad banta hai. Jab tak na mile, khali chhodein.", shippingBillDateLabel: "Shipping bill ki taarikh", portCodeLabel: "Port code", portCodeHelp: "Customs ke chhe akshar, jaise Nhava Sheva ke liye INNSA1.",
+    customerOverseas: "Bharat ke bahar (export)", customerSezWithoutPayment: "SEZ unit — LUT par supply", customerSezWithPayment: "SEZ unit — IGST ke saath supply", customerDeemedExport: "Deemed export khareedar",
     deliveryAndReferences: "Delivery, transport aur references", shipToWhere: "Maal kahan ja raha hai?",
     shipToSame: "Customer ke bill wale pate par", shipToAddress: "Isi customer ke doosre pate par", shipToParty: "Kisi aur ko, is customer ke kehne par",
     shipToWhichAddress: "Kaunsa pata?", shipToWhichParty: "Maal kaun lega?", addDeliveryAddress: "＋ Delivery ka pata joden",
@@ -1395,6 +1403,8 @@ document.querySelectorAll(".draft-form").forEach((form) => {
       // against an invoice number, so the bill is issued first.
       const notes = [
         ...(result.placeOfSupply ? [result.placeOfSupply] : []),
+        // Issue #143 — the endorsement the bill will carry, so an export is never issued as a local sale.
+        ...(result.exportSupply ? [result.exportSupply.endorsement] : []),
         ...(result.ewayBill ? [`${result.ewayBill.message} ${result.ewayBill.reason}`] : []),
         ...(result.chargeLines || []).map((line) => text("chargeReview", {
           charge: copy[state.locale][line.kind === "FREIGHT" ? "freight" : "otherCharges"],
@@ -4816,7 +4826,27 @@ function showChosenCustomer() {
   const customer = catalogue.customers.find((row) => row.id === picker.value) ?? null;
   detail.textContent = customer === null
     ? ""
-    : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin === null ? ` · ${copy[state.locale].customerUnregistered}` : ` · ${customer.gstin}`}`;
+    : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin !== null ? ` · ${customer.gstin}` : customer.registration === "overseas" ? "" : ` · ${copy[state.locale].customerUnregistered}`}`;
+  showExportFields(customer);
+}
+
+/**
+ * Issue #143 — the export or SEZ box, for the customers it applies to. Which kind of supply it is
+ * comes from the customer's record; the fields that only an export abroad has are switched off for
+ * an SEZ or deemed-export customer, so they are not sent at all.
+ */
+function showExportFields(customer) {
+  const box = document.querySelector("#sale-export");
+  if (!box) return;
+  const kind = { overseas: "exportKindOverseas", sez_with_payment: "exportKindSez", sez_without_payment: "exportKindSez", deemed_export: "exportKindDeemed" }[customer?.registration ?? ""];
+  box.hidden = kind === undefined;
+  box.querySelectorAll("input, select").forEach((field) => { field.disabled = kind === undefined; });
+  if (kind === undefined) return;
+  document.querySelector("#sale-export-kind").textContent = copy[state.locale][kind];
+  box.querySelectorAll("[data-export-abroad]").forEach((label) => {
+    label.hidden = customer.registration !== "overseas";
+    label.querySelectorAll("input, select").forEach((field) => { field.disabled = label.hidden; });
+  });
 }
 
 /** The unit beside a quantity is the chosen item's own unit, never a hard-coded word. */
@@ -4936,9 +4966,15 @@ document.querySelectorAll("[data-close-dialog]").forEach((button) => {
  * offer a second answer that could disagree with it.
  */
 function showCustomerRegistrationFields() {
-  const unregistered = document.querySelector('#customer-form [name="registration"]')?.value === "unregistered";
-  document.querySelector("#customer-gstin-field").hidden = unregistered;
+  const registration = document.querySelector('#customer-form [name="registration"]')?.value;
+  const unregistered = registration === "unregistered";
+  // Issue #143 — a customer abroad has no GST number, no Indian state and no PIN code.
+  const overseas = registration === "overseas";
+  document.querySelector("#customer-gstin-field").hidden = unregistered || overseas;
   document.querySelector("#customer-state-field").hidden = !unregistered;
+  const pincode = document.querySelector("#customer-pincode-field");
+  pincode.hidden = overseas;
+  pincode.querySelector("input").required = !overseas;
 }
 document.querySelector('#customer-form [name="registration"]')?.addEventListener("change", showCustomerRegistrationFields);
 
@@ -4949,6 +4985,7 @@ document.querySelector("#customer-form")?.addEventListener("submit", async (even
   error.textContent = "";
   const values = Object.fromEntries(new FormData(form));
   if (values.registration !== "unregistered") delete values.stateCode;
+  if (values.registration === "overseas") { delete values.pincode; delete values.gstin; }
   try {
     const created = await api("/api/customers", { method: "POST", body: JSON.stringify(values) });
     await loadCatalogue();
@@ -4957,6 +4994,7 @@ document.querySelector("#customer-form")?.addEventListener("submit", async (even
       showChosenCustomer();
     }
     form.reset();
+    showCustomerRegistrationFields();
     document.querySelector("#customer-dialog").close();
   } catch (requestError) { error.textContent = requestError.message; }
 });

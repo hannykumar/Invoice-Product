@@ -57,6 +57,7 @@ import {
   customerPrint,
   customerView,
   declaredRatesOf,
+  OUTSIDE_INDIA,
   itemView,
   items as catalogueItems,
   resolveCustomer,
@@ -149,6 +150,7 @@ import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
 import { decideApplicability } from '../../../packages/gst/src/applicability.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
+import { EXPORT_SUPPLIES, checkExportParticulars, exportSupplyKindFor, type ExportParticulars } from '../../../packages/gst/src/export-supply.ts';
 import type {
   ConsignmentDocument, ConsignmentLine, EwayBillRecord, Movement, MovementParty, MovementReason, VehicleAssignment,
 } from '../../../packages/transport/src/types.ts';
@@ -307,6 +309,11 @@ export class DemoApplication {
    * until the bill is issued and they are frozen onto it.
    */
   private readonly deliveries = new Map<string, DeliveryDetails>();
+  /**
+   * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
+   * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
+   */
+  private readonly exportSales: Map<string, ExportParticulars>;
   private readonly payments: ReceivablesService;
   private readonly paymentRepository: InMemoryPaymentRepository;
   private readonly documents: DocumentLedgerPort;
@@ -351,8 +358,10 @@ export class DemoApplication {
     gstReturns: GstReturnService,
     challans: ChallanDesk,
     presale: PreSaleDesk,
+    exportSales: Map<string, ExportParticulars>,
   ) {
     this.config = config;
+    this.exportSales = exportSales;
     this.challans = challans;
     this.presale = presale;
     this.shop = shop;
@@ -710,6 +719,7 @@ export class DemoApplication {
     // that the return agrees with the books is a real comparison of two sources and not a number
     // compared with itself. There is no `government` port, which is the point: this shop has no
     // licensed intermediary, and everything except the last button still works.
+    const exportSales = new Map<string, ExportParticulars>();
     const outwardSupplies: OutwardSupplyPort = {
       async documentsFor(companyId, period): Promise<readonly OutwardDocument[]> {
         const supplier = { gstin: config.gstin, stateCode: config.gstin.slice(0, 2) };
@@ -742,6 +752,8 @@ export class DemoApplication {
               })),
               totals: { invoiceValue: invoice.pricing.totals.invoiceValue },
             },
+            // Issue #143 — the return's treatment comes from the same row the bill printed.
+            ...(exportSales.has(invoice.id) ? { supplyTreatment: EXPORT_SUPPLIES[exportSales.get(invoice.id)!.kind].returnTreatment } : {}),
           },
           customerOn(String(invoice.partyId)),
           supplier,
@@ -793,7 +805,7 @@ export class DemoApplication {
       permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, takenPrefixes: ['INV', 'DC'],
     }));
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale);
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale, exportSales);
     await app.seed();
     return app;
   }
@@ -1201,7 +1213,12 @@ export class DemoApplication {
 
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: this.saleInput(input) });
+    const exportSale = this.exportParticulars(input);
+    const zeroRated = exportSale === null || !EXPORT_SUPPLIES[exportSale.kind].zeroRated
+      ? {}
+      : { zeroRated: EXPORT_SUPPLIES[exportSale.kind].taxPaid ? 'WITH_TAX' as const : 'WITHOUT_TAX' as const };
+    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
+    if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
     const checked = await this.checkSale(actor, draft);
     // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
     // frozen with exactly what the screen showed rather than with a second reading of the form.
@@ -1211,6 +1228,11 @@ export class DemoApplication {
     return {
       ...checked,
       placeOfSupply: delivery.placeOfSupplyReason,
+      // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
+      exportSupply: exportSale === null ? null : {
+        kind: exportSale.kind,
+        endorsement: EXPORT_SUPPLIES[exportSale.kind].endorsement,
+      },
       // Whether this consignment may not leave without an e-way bill. It never blocks the bill:
       // an e-way bill is raised against an issued invoice number, so the bill comes first.
       ewayBill: await this.ewayReminder(actor, draft, delivery),
@@ -1417,7 +1439,7 @@ export class DemoApplication {
   private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
     requireIssuable(this.config.companyId);
     const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
-    this.freezeBillPrint(final.invoice, this.deliveries.get(token) ?? null);
+    this.freezeBillPrint(final.invoice, this.deliveries.get(token) ?? null, this.exportSales.get(token) ?? null);
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
       // The invoice's own id, so a retried request counts the same bill once.
@@ -1481,7 +1503,7 @@ export class DemoApplication {
    * parties and the priced lines as they were that day — so a bill reprinted in three years is the
    * page the customer was given, whatever has changed since.
    */
-  private freezeBillPrint(invoice: SalesInvoice, delivery: DeliveryDetails | null = null): void {
+  private freezeBillPrint(invoice: SalesInvoice, delivery: DeliveryDetails | null = null, exportSupply: ExportParticulars | null = null): void {
     if (this.invoicePrints.has(invoice.id)) return;
     const template = templateById('india-standard');
     if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
@@ -1504,7 +1526,9 @@ export class DemoApplication {
         // their own record. Frozen here with everything else, so moving them tomorrow never alters
         // a bill issued today.
         buyer: customerPrint(this.config.companyId, invoice.partyId),
-        placeOfSupplyStateName: STATE_NAMES[place] ?? place,
+        placeOfSupplyStateName: place === '96' ? OUTSIDE_INDIA : STATE_NAMES[place] ?? place,
+        // Issue #143 — the export or SEZ title, endorsement, shipping bill and currency.
+        exportSupply,
         // Issue #182 — where the goods went, who carried them, and what the bill refers back to.
         // The consignee block prints in full on every bill (#134); it repeats the buyer when the
         // goods went to the buyer's own billing address, and carries the delivery address when
@@ -2566,6 +2590,7 @@ export class DemoApplication {
     };
     // Issue #181 — the buyer this bill names, read from their own record.
     const buyerView = customerView(this.config.companyId, invoice.partyId);
+    const exportSale = this.exportSales.get(invoice.id);
     const buyer: PartyDetails = {
       // "URP" — unregistered person — is what the portal expects when a buyer has no GST number.
       gstin: buyerView.gstin ?? 'URP',
@@ -2601,7 +2626,11 @@ export class DemoApplication {
       documentType: 'INVOICE',
       documentNumber: invoice.number,
       documentDate: invoice.documentDate,
-      recipientKind: invoice.customerType === 'B2B' ? 'B2B' : 'B2C',
+      // Issue #143 — an export or SEZ sale reports the kind its bill printed, with the same particulars.
+      recipientKind: exportSale?.kind ?? (invoice.customerType === 'B2B' ? 'B2B' : 'B2C'),
+      ...(exportSale?.countryCode === undefined ? {} : { countryCode: exportSale.countryCode }),
+      ...(exportSale?.currency === undefined ? {} : { currency: exportSale.currency }),
+      ...(exportSale?.shippingBill === undefined ? {} : { shippingBill: exportSale.shippingBill }),
       supplier: seller,
       recipient: buyer,
       placeOfSupplyStateCode: pricing.placeOfSupplyStateCode,
@@ -3553,6 +3582,32 @@ export class DemoApplication {
         priceBasis: 'EXCLUSIVE' as const,
       };
     });
+  }
+
+  /**
+   * Issue #143 — the export or SEZ particulars of a sale, or `null` for an ordinary one.
+   *
+   * Which kind of supply it is comes from the customer's own record (#5): an SEZ unit, a deemed-export
+   * buyer, or a buyer abroad. Only for a buyer abroad does the sale itself say whether it goes under
+   * LUT, because that is the seller's choice each time. Everything is checked before anything is
+   * drafted, and every problem is said at once.
+   */
+  private exportParticulars(input: Record<string, unknown>): ExportParticulars | null {
+    const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+    const text = (value: unknown): string => String(value ?? '').trim();
+    const kind = exportSupplyKindFor(customer.gstRegistrationType, text(input.underLut) !== 'no');
+    if (kind === null) return null;
+    const currency = text(input.exportCurrency).toUpperCase();
+    const bill = { number: text(input.shippingBillNumber), date: text(input.shippingBillDate), portCode: text(input.portCode).toUpperCase() };
+    const particulars: ExportParticulars = {
+      kind,
+      ...(text(input.exportCountry) === '' ? {} : { countryCode: text(input.exportCountry).toUpperCase() }),
+      ...(currency === '' || currency === 'INR' ? {} : { currency, exchangeRate: text(input.exchangeRate) }),
+      ...(bill.number === '' && bill.date === '' && bill.portCode === '' ? {} : { shippingBill: bill }),
+    };
+    const problems = checkExportParticulars(particulars);
+    if (problems.length > 0) throw invalid('EXPORT_PARTICULARS', problems.map((problem) => problem.message).join(' '));
+    return particulars;
   }
 
   private saleInput(input: Record<string, unknown>) {

@@ -100,9 +100,14 @@ test("exports and SEZ supplies are reportable, and carry their own supply type",
   for (const kind of ["EXPORT_WITH_PAYMENT", "SEZ_WITHOUT_PAYMENT", "DEEMED_EXPORT"] as const) {
     assert.equal(decideApplicability(aboveThreshold({ recipientKind: kind })).outcome, "APPLICABLE", kind);
   }
-  const built = buildEInvoicePayload(invoiceDocument({ recipientKind: "SEZ_WITHOUT_PAYMENT" }));
+  // Issue #143 — under LUT the bill carries no tax, and the portal refuses one that does.
+  const underLut = { recipientKind: "SEZ_WITHOUT_PAYMENT" as const, totalIgstPaise: 0n, invoiceValuePaise: 82_000_00n };
+  const built = buildEInvoicePayload(invoiceDocument(underLut));
   assert.ok(built.ok);
   assert.equal((built.payload.TranDtls as Record<string, unknown>).SupTyp, "SEZWOP");
+  const taxed = buildEInvoicePayload(invoiceDocument({ recipientKind: "SEZ_WITHOUT_PAYMENT" }));
+  assert.ok(!taxed.ok);
+  assert.match(taxed.problems[0]!.message, /under bond or LUT/);
 });
 
 test("every threshold names the notification it came from", () => {

@@ -158,6 +158,7 @@ export class SalesService {
       otherCharges: input.otherCharges ?? nil(),
       roundToWholeRupee: input.roundToWholeRupee ?? this.#policy.roundToWholeRupee,
       narration: input.narration ?? null,
+      ...(input.zeroRated === undefined ? {} : { zeroRated: input.zeroRated }),
       pricing: null,
       problems: [],
       voucherId: null,
@@ -290,6 +291,7 @@ export class SalesService {
       freight: invoice.freight,
       otherCharges: invoice.otherCharges,
       roundToWholeRupee: invoice.roundToWholeRupee,
+      ...(invoice.zeroRated === undefined ? {} : { zeroRated: invoice.zeroRated }),
       source: { kind: 'sales_invoice', id: invoice.id },
     });
   }

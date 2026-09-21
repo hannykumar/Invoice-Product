@@ -9,3 +9,4 @@ export * from "./sandbox-gstins.ts";
 export * from "./environments.ts";
 export * from "./whitebooks-connector.ts";
 export * from "./einvoice-migrations.ts";
+export * from "./export-supply.ts";

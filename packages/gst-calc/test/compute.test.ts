@@ -456,3 +456,30 @@ test('the decisions behind the numbers are returned with the answer', () => {
   assert.equal(byTopic.get('gst.composition.charging')?.ruleReviewState, 'APPROVED');
   assert.equal(byTopic.get('gst.composition.charging')?.sourceRef, 'cgst-act-2017-s10-4');
 });
+
+test('issue #143 — a zero-rated supply is integrated tax even inside one state', () => {
+  const { calculator } = makeCalculator();
+  const result = computed(calculator.compute(crateSale({ zeroRated: 'WITH_TAX', freight: inr(100) })));
+  assert.equal(result.split, 'IGST');
+  assert.deepEqual(result.lines.map((l) => [toDecimalString(l.cgst), toDecimalString(l.igst)]), [['0.00', '180.00'], ['0.00', '18.00']]);
+});
+
+test('issue #143 — under bond or LUT the rate stays on every line and no tax is charged', () => {
+  const { calculator } = makeCalculator();
+  const result = computed(calculator.compute(crateSale({ zeroRated: 'WITHOUT_TAX', freight: inr(100) })));
+  assert.equal(result.split, 'IGST');
+  for (const line of result.lines) {
+    assert.equal(line.ratePercentTimes100, 1800n, line.itemName);
+    assert.equal(toDecimalString(line.totalTax), '0.00', line.itemName);
+    assert.equal(toDecimalString(line.lineTotal), toDecimalString(line.taxableValue));
+  }
+  assert.equal(toDecimalString(result.totals.totalTax), '0.00');
+  assert.equal(toDecimalString(result.totals.invoiceValue), '1100.00');
+  assert.match(result.explanation['en-IN'], /under bond or LUT, so no GST is charged/);
+  // A price typed as tax-inclusive has no tax inside it under LUT, so it is the taxable value.
+  const inclusive = computed(calculator.compute(crateSale({
+    zeroRated: 'WITHOUT_TAX',
+    lines: [{ lineId: 'l1', itemId: 'CRATE-P', quantity: qty('1', 'PCS'), unitPrice: inr(1180), priceBasis: 'INCLUSIVE' }],
+  })));
+  assert.equal(toDecimalString(inclusive.totals.taxableValue), '1180.00');
+});

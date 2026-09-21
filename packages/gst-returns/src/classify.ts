@@ -25,7 +25,7 @@
  * expressed as code rather than as a comment.
  */
 import { formatINR } from '@invoice/kernel';
-import { GST_STATE_CODES } from '../../masters/src/validation.ts';
+import { GST_STATE_CODES, OVERSEAS_STATE_CODE } from '../../masters/src/validation.ts';
 import type { B2clThresholdTable, ThresholdLookup } from './thresholds.ts';
 import {
   type Bilingual,
@@ -137,7 +137,11 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       },
       document,
     ));
-  } else if (GST_STATE_CODES[document.placeOfSupplyStateCode] === undefined) {
+  } else if (
+    GST_STATE_CODES[document.placeOfSupplyStateCode] === undefined
+    // Issue #143 — an export's place of supply is outside India, which the return writes as 96.
+    && !(isExport(document.treatment) && document.placeOfSupplyStateCode === OVERSEAS_STATE_CODE)
+  ) {
     found.push(finding(
       'GSTR1_UNKNOWN_STATE',
       'BLOCKING',

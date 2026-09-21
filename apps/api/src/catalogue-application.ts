@@ -34,6 +34,8 @@ import {
 import {
   DEFAULT_UNITS,
   GST_STATE_CODES,
+  OVERSEAS_PINCODE,
+  OVERSEAS_STATE_CODE,
   gstinStateCode,
   normaliseIdentifier,
   validateGstin,
@@ -51,6 +53,9 @@ import { turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
+
+/** Issue #143 — what the bill prints where a state would be, for a customer outside India. */
+export const OUTSIDE_INDIA = 'Outside India';
 
 const require_ = (result: ValidationResult, code: string, fallback: string): void => {
   if (result.ok) return;
@@ -135,6 +140,8 @@ export interface CustomerView {
 const viewOf = (companyId: CompanyId | string, party: Party): CustomerView => {
   const address = billingAddressOf(companyId, party.id);
   const stateCode = address?.stateCode ?? (party.gstRegistrationType === 'unregistered' ? null : null);
+  // Issue #143 — PIN 999999 is the government's placeholder for "abroad", not something to print.
+  const overseas = stateCode === OVERSEAS_STATE_CODE;
   return {
     id: party.id,
     name: party.legalName,
@@ -142,13 +149,13 @@ const viewOf = (companyId: CompanyId | string, party: Party): CustomerView => {
     registration: party.gstRegistrationType,
     addressLines: address === null || address === undefined
       ? []
-      : [address.line1, ...(address.line2 === undefined || address.line2 === '' ? [] : [address.line2]), `${address.city} ${address.pincode}`],
+      : [address.line1, ...(address.line2 === undefined || address.line2 === '' ? [] : [address.line2]), overseas ? address.city : `${address.city} ${address.pincode}`],
     line1: address?.line1 ?? null,
     line2: address?.line2 ?? null,
     city: address?.city ?? null,
     pincode: address?.pincode ?? null,
     stateCode,
-    stateName: stateCode === null ? null : STATE_NAMES[stateCode] ?? stateCode,
+    stateName: stateCode === null ? null : overseas ? OUTSIDE_INDIA : STATE_NAMES[stateCode] ?? stateCode,
     phone: party.phones[0] ?? null,
   };
 };
@@ -236,7 +243,10 @@ export const resolveItem = (companyId: CompanyId | string, idOrName: string): It
 
 // -------------------------------------------------------------------------------- creating them
 
-const REGISTRATIONS: readonly GstRegistrationType[] = ['regular', 'composition', 'unregistered'];
+// Issue #143 — a buyer abroad, an SEZ unit, and a buyer whose purchases are deemed exports. The last
+// three are registered in India and carry a GST number; the first has none.
+const REGISTRATIONS: readonly GstRegistrationType[] = ['regular', 'composition', 'unregistered', 'overseas', 'sez_with_payment', 'sez_without_payment', 'deemed_export'];
+const WITHOUT_GSTIN: readonly GstRegistrationType[] = ['unregistered', 'overseas'];
 
 /**
  * Adds a customer, with the billing address the bill prints.
@@ -252,22 +262,26 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
 
   const registration = str(input.registration).toLowerCase() as GstRegistrationType;
   if (!REGISTRATIONS.includes(registration)) {
-    throw invalid('CUSTOMER_REGISTRATION', 'Say whether this customer is registered for GST — regular, composition, or not registered.');
+    throw invalid('CUSTOMER_REGISTRATION', 'Say whether this customer is registered for GST — regular, composition, not registered, outside India, in an SEZ, or buying as a deemed export.');
   }
+  const overseas = registration === 'overseas';
 
   const gstin = normaliseIdentifier(str(input.gstin));
-  if (registration !== 'unregistered') {
+  if (!WITHOUT_GSTIN.includes(registration)) {
     if (gstin === '') throw invalid('CUSTOMER_GSTIN_REQUIRED', 'A registered customer has a GST number, and the bill must carry it.');
     require_(validateGstin(gstin), 'CUSTOMER_GSTIN', 'That is not a GST number.');
   } else if (gstin !== '') {
-    throw invalid('CUSTOMER_GSTIN_UNEXPECTED', 'This customer is marked as not registered, so remove the GST number or change the registration.');
+    throw invalid('CUSTOMER_GSTIN_UNEXPECTED', overseas
+      ? 'A customer outside India has no Indian GST number, so remove it or change the registration.'
+      : 'This customer is marked as not registered, so remove the GST number or change the registration.');
   }
 
   const line1 = str(input.line1 || input.address1);
   if (line1 === '') throw invalid('CUSTOMER_ADDRESS1', 'Type the first line of the customer’s address — the law asks for the street, not only the town.');
   const city = str(input.city);
-  if (city === '') throw invalid('CUSTOMER_CITY', 'Type the town or city the customer is in.');
-  const pincode = str(input.pincode);
+  if (city === '') throw invalid('CUSTOMER_CITY', overseas ? 'Type the city and country the customer is in, such as "Dubai, United Arab Emirates".' : 'Type the town or city the customer is in.');
+  // Issue #143 — abroad has no PIN code; it is saved the way the e-invoice writes it.
+  const pincode = overseas ? OVERSEAS_PINCODE : str(input.pincode);
   require_(validatePincode(pincode), 'CUSTOMER_PINCODE', 'A PIN code has 6 digits.');
 
   const typedState = str(input.stateCode);
@@ -278,8 +292,8 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
       `This GST number is registered in ${STATE_NAMES[registeredState] ?? registeredState} (${registeredState}), but the address says ${STATE_NAMES[typedState] ?? typedState} (${typedState}). A bill cannot carry both.`,
     );
   }
-  const stateCode = registeredState !== '' ? registeredState : typedState;
-  if (stateCode === '' || GST_STATE_CODES[stateCode] === undefined) {
+  const stateCode = overseas ? OVERSEAS_STATE_CODE : registeredState !== '' ? registeredState : typedState;
+  if (!overseas && (stateCode === '' || GST_STATE_CODES[stateCode] === undefined)) {
     throw invalid('CUSTOMER_STATE', 'Choose the state the customer is in. It decides whether the bill carries IGST, or CGST and SGST.');
   }
 
@@ -456,6 +470,12 @@ const REGISTRATION_FOR_TAX: Readonly<Record<string, 'REGULAR' | 'COMPOSITION' | 
   regular: 'REGULAR',
   composition: 'COMPOSITION',
   unregistered: 'UNREGISTERED',
+  // Issue #143 — an SEZ unit and a deemed-export buyer hold ordinary GST registrations; a buyer
+  // abroad holds none. Which export treatment applies is decided by `packages/gst`, not here.
+  overseas: 'UNREGISTERED',
+  sez_with_payment: 'REGULAR',
+  sez_without_payment: 'REGULAR',
+  deemed_export: 'REGULAR',
 };
 
 /**

@@ -9,6 +9,7 @@
 import type { IsoDate, Money } from '@invoice/kernel';
 import type { PageLayout } from './template.ts';
 import type { TradeMarkChoice } from './marks.ts';
+import type { PrintedExportSupply } from '@invoice/gst';
 
 export type DocumentTitle = 'TAX_INVOICE' | 'BILL_OF_SUPPLY' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
 export type TaxSplit = 'CGST_SGST' | 'CGST_UTGST' | 'IGST';
@@ -242,6 +243,12 @@ export interface InvoiceDocument {
    */
   readonly signatureDataUri: string | null;
   readonly poReference: string | null;
+  /**
+   * Issue #143 — an export or a supply to an SEZ: its title, the Rule 46 endorsement, the country,
+   * the shipping bill and the currency. Built by `packages/gst` from the same table the e-invoice
+   * and GSTR-1 classify the sale with. Absent on every ordinary bill.
+   */
+  readonly exportSupply?: PrintedExportSupply | null;
 }
 
 /**

@@ -302,7 +302,11 @@ export class MasterDataService {
     if (started.existingRecordId) return this.#retried(context, this.#stores.addresses, started);
     const warnings: ValidationProblem[] = [];
     this.#require(validate.validatePincode(input.pincode));
-    if (!validate.GST_STATE_CODES[input.stateCode]) throw new MasterDataError("VALIDATION_FAILED", `${input.stateCode} is not a valid GST state code.`, [{ field: "stateCode", code: "GSTIN_STATE_CODE", message: `${input.stateCode} is not a valid GST state code.` }]);
+    const overseas = input.stateCode === validate.OVERSEAS_STATE_CODE && this.party(context, input.partyId).gstRegistrationType === "overseas";
+    if (overseas && (input.gstin || input.pincode !== validate.OVERSEAS_PINCODE)) {
+      throw new MasterDataError("VALIDATION_FAILED", `A customer outside India has no GST number, and their address is saved with PIN ${validate.OVERSEAS_PINCODE}.`, [{ field: "pincode", code: "OVERSEAS_ADDRESS", message: "An address outside India has no GST number and uses PIN 999999." }]);
+    }
+    if (!overseas && !validate.GST_STATE_CODES[input.stateCode]) throw new MasterDataError("VALIDATION_FAILED", `${input.stateCode} is not a valid GST state code.`, [{ field: "stateCode", code: "GSTIN_STATE_CODE", message: `${input.stateCode} is not a valid GST state code.` }]);
     if (input.gstin) {
       this.#require(validate.validateGstin(input.gstin));
       const gstinState = validate.gstinStateCode(input.gstin);

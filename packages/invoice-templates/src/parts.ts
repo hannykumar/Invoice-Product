@@ -5,8 +5,8 @@
  * must never differ between them: **what a word says** and **how a value is escaped**. There is one
  * wording table and one escaping function in this module, and both layouts import them from here.
  */
-import { formatINR, type Money } from '@invoice/kernel';
-import type { Locale, RenderableLine } from './document.ts';
+import { formatDate, formatINR, isoDate, type Money } from '@invoice/kernel';
+import type { InvoiceDocument, Locale, RenderableLine } from './document.ts';
 import type { PageFormat } from './template.ts';
 
 /** Printable width and the character budget that follows from it. */
@@ -179,6 +179,13 @@ const T = {
   termsAndConditions: w('Terms & Conditions', 'Sharten'),
   // The invoice's own line says "invoice", which these papers are not.
   computerGeneratedDocument: w('This is a computer generated document.', 'Yeh document computer se bana hai.'),
+  // Issue #143 — the particulars of an export or a supply to an SEZ.
+  countryOfDestination: w('Country of Destination', 'Maal kis desh ja raha hai'),
+  shippingBill: w('Shipping Bill No. & Date', 'Shipping bill number aur taarikh'),
+  portCode: w('Port Code', 'Port code'),
+  exchangeRate: w('Exchange Rate', 'Exchange rate'),
+  invoiceValueIn: w('Invoice Value in', 'Bill ki rakam'),
+  igstUnderLut: w('IGST (not charged: under bond or LUT)', 'IGST (nahin laga: bond ya LUT par)'),
 } as const;
 
 export type WordingKey = keyof typeof T;
@@ -247,3 +254,48 @@ export const narrowLine = (line: RenderableLine, locale: Locale): string => `
     <div class="tline-detail"><span>${line.kind === 'CHARGE' ? '' : `${escapeHtml(line.quantityText)} × ${money(line.unitPrice)}`}</span><span class="num">${money(line.taxableValue)}</span></div>
     ${line.ratePercentTimes100 === null ? '' : `<div class="tline-tax"><span>${escapeHtml(t('gstAmount', locale))} ${escapeHtml(percent(line.ratePercentTimes100))}</span><span class="num">${money(line.taxAmount)}</span></div>`}
   </div>`;
+
+/** Issue #143 — an export or SEZ bill carries its own title; every other bill its document type's. */
+export const invoiceTitle = (doc: Pick<InvoiceDocument, 'title' | 'exportSupply'>, locale: Locale): string =>
+  doc.exportSupply == null ? t(doc.title, locale) : doc.exportSupply.title[locale];
+
+/**
+ * Issue #143 — the endorsement and the export particulars, as label and value pairs.
+ *
+ * The endorsement is first and has no label: it is the sentence Rule 46 asks the bill to carry.
+ * Shipping bill and currency print only where they exist, never as empty labels.
+ */
+export const exportParticulars = (doc: Pick<InvoiceDocument, 'exportSupply'>, locale: Locale): readonly [string, string][] => {
+  const supply = doc.exportSupply;
+  if (supply == null) return [];
+  const rows: [string, string][] = [['', supply.endorsement]];
+  if (supply.country !== null) rows.push([t('countryOfDestination', locale), supply.country]);
+  if (supply.shippingBill !== null) {
+    rows.push([t('shippingBill', locale), `${supply.shippingBill.number}, ${formatDate(isoDate(supply.shippingBill.date))}`]);
+    rows.push([t('portCode', locale), supply.shippingBill.portCode]);
+  }
+  if (supply.currency !== null) {
+    rows.push([t('exchangeRate', locale), `1 ${supply.currency.code} = ₹${supply.currency.exchangeRate}`]);
+    rows.push([`${t('invoiceValueIn', locale)} ${supply.currency.code}`, `${supply.currency.code} ${supply.currency.invoiceValue}`]);
+  }
+  return rows;
+};
+
+/**
+ * Issue #143 — the tax rows of a bill. Each tax on its own line, never lumped together.
+ *
+ * A zero-rated supply under bond or LUT still says so where the IGST would be, because "no tax"
+ * with nothing printed reads as a tax somebody forgot.
+ */
+export const taxTotalRows = (doc: Pick<InvoiceDocument, 'totals' | 'exportSupply'>, locale: Locale): readonly [string, Money][] => {
+  const underLut = doc.exportSupply != null && doc.exportSupply.zeroRated && !doc.exportSupply.taxPaid;
+  const rows: [string, Money][] = [
+    ['CGST', doc.totals.cgst],
+    ['SGST', doc.totals.sgst],
+    ['UTGST', doc.totals.utgst],
+    ['IGST', doc.totals.igst],
+    ['Cess', doc.totals.cess],
+  ];
+  const shown = rows.filter(([, amount]) => !isZero(amount));
+  return underLut ? [[t('igstUnderLut', locale), doc.totals.igst], ...shown] : shown;
+};
