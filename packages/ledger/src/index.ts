@@ -9,3 +9,5 @@ export * from './service.ts';
 export * from './balances.ts';
 export { InMemoryLedgerStore, InMemoryAuditPort, permissionPortFromActor } from './adapters/memory.ts';
 export type { TransactionParticipant } from './adapters/memory.ts';
+export { PostgresLedgerStore } from './adapters/postgres.ts';
+export type { Sql, SqlDatabase } from './adapters/postgres.ts';

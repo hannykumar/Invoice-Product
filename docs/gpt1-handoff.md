@@ -168,8 +168,8 @@ by #54; `gst.tax_split` now answers in production. Two things raised with them:
   The same gap makes the profit figure flattering, and the profit and loss says so in words
   (`costOfGoodsInBooks`). All of it disappears when #17 posts purchases.
 - **Period locks are not enforced on a stock movement date**, only on the ledger entry.
-- Everything runs against in-memory stores. `packages/ledger/migrations/0001_ledger.sql` is the
-  real schema; no Postgres adapter is written yet.
+- The web app runs against in-memory stores. `PostgresLedgerStore` (#201) runs the ledger on
+  `0001_ledger.sql`, and return notes have a Postgres repository; nothing else has one yet.
 - The usability sessions in `docs/ux/02-usability-test-protocol.md` have not been run.
 - The voice assistant handles **one item per instruction** and sales only.
 

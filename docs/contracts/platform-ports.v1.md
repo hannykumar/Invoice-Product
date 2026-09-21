@@ -101,7 +101,7 @@ owning module (#9 for sales, #17 for purchases). Recorded here so no one adds it
 | 2 | Real `AuditPort` from #6, and a decision on transactional vs post-commit writing | #4 definition of done |
 | 3 | Real `IdempotencyPort` from #6 with the rollback semantics in section 4 | #4 definition of done |
 | 4 | Row-level security policies on the ledger tables from #3 | #4 security review |
-| 5 | Migration runner and CI from #2 | Running `0001_ledger.sql` anywhere but by hand |
+| 5 | ~~Migration runner and CI from #2~~ — done: #201 registers `0001_ledger.sql` with the runner and CI runs PostgreSQL | — |
 
 ## 7. Reconciliation with GPT 2's published platform (read 28 August 2026)
 

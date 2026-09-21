@@ -30,8 +30,18 @@ deliberately does not define them, so that the two do not conflict.
 
 ## Running them
 
-Migration tooling belongs to issue #2 (GPT 2). Until it lands, apply in order with `psql`:
+Since #201 the migration runner applies `0001_ledger.sql` with every other module's schema
+(`packages/ledger/src/migrations.ts`, which drops the file's own `BEGIN`/`COMMIT`):
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/ledger/migrations/0001_ledger.sql
+npm run db:migrate
 ```
+
+A database where this file was applied by hand with `psql` already has the tables. Record that
+instead of re-running it:
+
+```sql
+INSERT INTO schema_migrations (id) VALUES ('20260921T220435615Z_ledger_668ff62a3b9a_ledger_schema');
+```
+
+`PostgresLedgerStore` (`src/adapters/postgres.ts`) is the store that runs on this schema.
