@@ -59,6 +59,14 @@ export interface SaleDraftPort {
   createDraft(actor: ActorContext, command: CreateDraftCommand): Promise<SalesInvoice>;
 }
 
+/**
+ * Issue #165 — money already received against a proforma. When its invoice is linked, the advance
+ * is applied to that invoice and the tax already paid on it set off. Must be safe to call twice.
+ */
+export interface ProformaAdvancePort {
+  applyToInvoice(actor: ActorContext, proforma: PreSaleDocument): Promise<void>;
+}
+
 export interface PreSaleServiceDeps {
   readonly store: LedgerStore;
   readonly calculator: GstCalculator;
@@ -72,6 +80,7 @@ export interface PreSaleServiceDeps {
   /** Prefixes other documents already use — the invoice's, the challan's — so neither is copied. */
   readonly takenPrefixes?: readonly string[];
   readonly idFactory?: () => string;
+  readonly advances?: ProformaAdvancePort;
 }
 
 type Unsaved = Omit<PreSaleDocument, 'id' | 'number' | 'financialYear' | 'createdAt' | 'idempotencyKey' | 'version'>;
@@ -135,6 +144,7 @@ export class PreSaleService {
   readonly #clock: Clock;
   readonly #series: Readonly<Record<PreSaleKind, PreSaleSeries>>;
   readonly #newId: () => string;
+  readonly #advances: ProformaAdvancePort | null;
 
   constructor(deps: PreSaleServiceDeps) {
     this.#series = {
@@ -153,6 +163,7 @@ export class PreSaleService {
     this.#audit = deps.audit;
     this.#clock = deps.clock;
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
+    this.#advances = deps.advances ?? null;
   }
 
   series(kind: PreSaleKind): PreSaleSeries {
@@ -333,7 +344,11 @@ export class PreSaleService {
       throw notAllowed('PRESALE_NOT_A_PROFORMA', `${proforma.number} is a quotation. Turn it into a sale instead.`);
     }
     if (proforma.state === 'INVOICED') {
-      if (proforma.invoice?.invoiceId === command.invoiceId) return proforma;
+      if (proforma.invoice?.invoiceId === command.invoiceId) {
+        // A retry finishes applying any advance the first attempt did not get to.
+        await this.#advances?.applyToInvoice(actor, proforma);
+        return proforma;
+      }
       throw conflict('PRESALE_ALREADY_INVOICED', `Proforma ${proforma.number} is already billed on invoice ${proforma.invoice?.invoiceNumber}.`);
     }
     if (proforma.state === 'CANCELLED') {
@@ -381,6 +396,7 @@ export class PreSaleService {
       summary: `Proforma ${proforma.number} billed on invoice ${invoice.number}.${differences.length === 0 ? '' : ` ${plural(differences.length, 'difference')} noted.`}`,
       details: { number: proforma.number, invoiceNumber: invoice.number, invoiceId: invoice.id, differences: differences.join(' | ') },
     });
+    await this.#advances?.applyToInvoice(actor, next);
     return next;
   }
 

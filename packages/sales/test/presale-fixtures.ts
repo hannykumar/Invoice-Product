@@ -4,7 +4,7 @@ import { InMemoryAuditPort, permissionPortFromActor, type ActorContext } from '@
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { fixedClock } from '@invoice/kernel';
 import { InMemoryPreSaleRepository } from '../src/presale-repository.ts';
-import { PreSaleService } from '../src/presale-service.ts';
+import { PreSaleService, type ProformaAdvancePort } from '../src/presale-service.ts';
 import type { PreSaleSeries } from '../src/presale-numbering.ts';
 import type { PreSaleInput, PreSaleKind } from '../src/presale-model.ts';
 import type { InventoryPort } from '../src/ports.ts';
@@ -45,7 +45,7 @@ export interface SalesCounter {
 let counter = 0;
 
 export const makeSalesCounter = async (
-  options: { series?: Partial<Record<PreSaleKind, PreSaleSeries>>; permissions?: readonly string[]; now?: string } = {},
+  options: { series?: Partial<Record<PreSaleKind, PreSaleSeries>>; permissions?: readonly string[]; now?: string; advances?: ProformaAdvancePort } = {},
 ): Promise<SalesCounter> => {
   const inventory = recordingInventory();
   const till = await makeTill({ inventory });
@@ -70,6 +70,7 @@ export const makeSalesCounter = async (
     clock: fixedClock(options.now ?? '2026-05-12T11:04:00.000Z'),
     takenPrefixes: [till.service.policy.series.prefix, 'DC'],
     ...(options.series === undefined ? {} : { series: options.series }),
+    ...(options.advances === undefined ? {} : { advances: options.advances }),
     idFactory: () => `p${counter}-${String((n += 1)).padStart(6, '0')}`,
   });
   return { till, presale, repository, audit, inventory, actor: actorWith(options.permissions ?? PRESALE_PERMISSIONS_FOR_TESTS) };

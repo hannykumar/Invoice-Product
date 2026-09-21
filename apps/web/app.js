@@ -223,6 +223,9 @@ const copy = {
     presaleConvertTitle: "Did the customer accept?", presaleConvertHelp: "Turn this quotation into a bill without typing it again. You see the bill and its checks before anything is issued.", presaleConvert: "Turn into a sale", presaleOpenBill: "Open the bill made from it",
     presaleIssueBill: "Issue the bill",
     presaleLinkTitle: "The tax invoice raised later", presaleLinkHelp: "Pick the bill that followed this proforma. We check it is for the same customer and not dated before it, and note anything that differs.",
+    advanceTitle: "Money received against this proforma", advanceHelp: "Each payment gets a receipt voucher in its own series. For a service, the GST inside it is due now and is set off when you link the tax invoice, so it is never charged twice. For goods, no GST is due until the invoice.",
+    advanceAmount: "Amount received", advanceMode: "How was it paid?", advanceCash: "Cash", advanceUpi: "UPI (into your current account)", advanceBank: "Bank transfer (into your current account)", advanceUtr: "Reference (optional)", advanceRecord: "Record it and issue the receipt voucher",
+    refundHelp: "Pays back what no bill used, with a refund voucher. Any GST paid on it is taken back.", refundReason: "Why is it being paid back?", refundRecord: "Pay it back and issue the refund voucher",
     presaleCancelTitle: "Cancel this", presaleCancelHelp: "If the customer did not take it up. The number stays used, so the series has no gap.", presaleCancelReason: "Why is it being cancelled?", presaleCancel: "Cancel it",
     // Issue #141 — delivery challans.
     navChallan: "Delivery challan",
@@ -531,6 +534,9 @@ const copy = {
     presaleConvertTitle: "Customer ne maan liya?", presaleConvertHelp: "Is quotation ko bina dobara likhe bill banayen. Kuch jaari hone se pehle aap bill aur uski jaanch dekhenge.", presaleConvert: "Bikri banayen", presaleOpenBill: "Isse bana bill kholen",
     presaleIssueBill: "Bill jaari karein",
     presaleLinkTitle: "Baad mein bana tax invoice", presaleLinkHelp: "Is proforma ke baad bana bill chunein. Hum dekhenge ki woh usi customer ka hai aur isse pehle ki taarikh ka nahin, aur jo alag hai woh likh denge.",
+    advanceTitle: "Is proforma par mila paisa", advanceHelp: "Har payment ka apni series mein receipt voucher banta hai. Service par iske andar ka GST abhi dena hota hai, aur tax invoice jodne par adjust ho jata hai, taaki do baar na lage. Saaman par invoice tak koi GST nahin.",
+    advanceAmount: "Mili rakam", advanceMode: "Payment kaise hua?", advanceCash: "Nakad", advanceUpi: "UPI (aapke current account mein)", advanceBank: "Bank transfer (aapke current account mein)", advanceUtr: "Reference (zaroori nahin)", advanceRecord: "Darj karein aur receipt voucher banayen",
+    refundHelp: "Jo paisa kisi bill mein nahin laga, woh refund voucher ke saath lautayen. Us par diya GST wapas hota hai.", refundReason: "Kyon lauta rahe hain?", refundRecord: "Lautayen aur refund voucher banayen",
     presaleCancelTitle: "Ise radd karein", presaleCancelHelp: "Agar customer ne nahin liya. Number istemal hua hi maana jayega, taaki ginti mein khali jagah na rahe.", presaleCancelReason: "Radd kyon kar rahe hain?", presaleCancel: "Radd karein",
     // Issue #141 — delivery challans.
     navChallan: "Delivery challan",
@@ -3686,6 +3692,16 @@ async function openPresaleDocument(id) {
   document.querySelector("#presale-sale").hidden = true;
   document.querySelector("#presale-link-form").hidden = !(open && !quotation);
   document.querySelector("#presale-cancel-form").hidden = !open;
+  document.querySelector("#presale-advances").hidden = quotation;
+  document.querySelector("#presale-advance-form").hidden = !(open && !quotation);
+  document.querySelector("#presale-refund-form").hidden = true;
+  // A fresh key each time the forms are shown, so a double press records the money once.
+  ["#presale-advance-form", "#presale-refund-form"].forEach((selector) => {
+    const form = document.querySelector(selector);
+    form.elements.namedItem("reference").value = crypto.randomUUID();
+    if (!form.elements.namedItem("date").value) form.elements.namedItem("date").value = dateInput();
+  });
+  if (!quotation) await loadAdvances(entry);
   if (open && !quotation) {
     const { invoices } = await api("/api/einvoices/invoices");
     document.querySelector("#presale-invoices").replaceChildren(...invoices.map((invoice) => Object.assign(document.createElement("option"), {
@@ -3744,6 +3760,51 @@ const presaleAction = (selector, path, failureTitle) => submitStep(selector, asy
 });
 
 presaleAction("#presale-link-form", "/api/presale/link-invoice", "The invoice was not linked");
+presaleAction("#presale-advance-form", "/api/presale/advance", "The money was not recorded");
+presaleAction("#presale-refund-form", "/api/presale/refund-advance", "Nothing was paid back");
+
+// Issue #165 — every advance on the open proforma, with the particulars its voucher carries.
+async function loadAdvances(entry) {
+  const { advances } = await api("/api/presale/advances", { method: "POST", body: JSON.stringify({ document: entry.id }) });
+  const list = document.querySelector("#presale-advance-list");
+  list.replaceChildren(...advances.flatMap((advance) => {
+    const tax = advance.tax
+      ? advance.tax.lines.map((line) => `GST ${line.rate}${line.reverseCharge ? " (reverse charge)" : ""}: ${money(line.taxableValue)} + CGST ${money(line.cgst)} + SGST ${money(line.sgst)} + IGST ${money(line.igst)}`).join(" · ")
+      : t(advance.noTax);
+    const rows = [detailRow(`${advance.number} · ${advance.date}`, money(advance.amount), `${advance.description} · Place of supply ${advance.placeOfSupply} · ${tax}`)];
+    if (advance.application) rows.push(simpleRow(`Applied to invoice ${advance.application.invoiceNumber}: ${money(advance.application.amount)}`, advance.tax ? `GST of ${money(advance.application.taxSetOff)} already paid on it was set off, so the invoice's GST is not paid twice.` : ""));
+    if (advance.refund) rows.push(simpleRow(`Refund voucher ${advance.refund.number} · ${advance.refund.date}: ${money(advance.refund.amount)}`, `${advance.refund.reason}${advance.tax ? ` · GST taken back ${money(advance.refund.taxRefunded)}` : ""}`));
+    const actions = document.createElement("div");
+    actions.className = "dialog-actions";
+    const printButton = (label, which) => Object.assign(document.createElement("button"), { type: "button", className: "secondary-button", textContent: label, onclick: () => printVoucher(entry, advance, which) });
+    actions.append(printButton("Print receipt voucher", "RECEIPT"));
+    if (advance.refund) actions.append(printButton("Print refund voucher", "REFUND"));
+    if (!advance.refund && advance.unused > 0) {
+      actions.append(Object.assign(document.createElement("button"), {
+        type: "button", className: "secondary-button", textContent: `Pay back ${money(advance.unused)}`,
+        onclick: () => {
+          const form = document.querySelector("#presale-refund-form");
+          form.hidden = false;
+          form.elements.namedItem("advance").value = advance.id;
+          document.querySelector("#presale-refund-title").textContent = `Pay back ${money(advance.unused)} of ${advance.number}`;
+        },
+      }));
+    }
+    rows.push(actions);
+    return rows;
+  }));
+}
+
+async function printVoucher(entry, advance, which) {
+  try {
+    const printed = await api("/api/presale/voucher", { method: "POST", body: JSON.stringify({ document: entry.id, advance: advance.id, which }) });
+    document.querySelector("#presale-frame").srcdoc = printed.html;
+    document.querySelector("#presale-print-title").textContent = `${which === "REFUND" ? advance.refund.number : advance.number} · ${which === "REFUND" ? "Refund voucher" : "Receipt voucher"}`;
+    document.querySelector("#presale-frame").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    showDialog({ title: "The voucher could not be shown", message: error.message }, "failed");
+  }
+}
 presaleAction("#presale-cancel-form", "/api/presale/cancel", "It was not cancelled");
 
 

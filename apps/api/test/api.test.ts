@@ -1186,6 +1186,67 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.equal((await request('POST', '/api/presale/issue', { ...quote, reference: 'viewer' }, viewer)).status, 403);
 });
 
+test('#165 — money against a proforma gets a receipt voucher, GST on a services advance, set-off on the bill, and a refund voucher', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const item = await request('POST', '/api/items', { name: 'Soap-press servicing', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', reference: 'api-165-item' }, owner);
+  assert.equal(item.status, 200, JSON.stringify(item.body));
+
+  // A service: ₹10,000 + 18% GST asked for up front.
+  const service = { kind: 'PROFORMA', date: '2026-08-28', customerId: 'ABC Traders', item: 'Soap-press servicing', quantity: '1', rate: '10000', purpose: 'Advance for the annual servicing', reference: 'api-165-p1' };
+  const pi = await request('POST', '/api/presale/issue', service, owner);
+  assert.equal(pi.status, 200, JSON.stringify(pi.body));
+  assert.equal(pi.body.document.total, 11800);
+
+  const taken = await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '11800', date: '2026-08-28', mode: 'UPI', utr: 'UTR165', reference: 'api-165-a1' }, owner);
+  assert.equal(taken.status, 200, JSON.stringify(taken.body));
+  assert.match(taken.body.title, /^Receipt voucher RV\/26-27\/\d{5} issued$/);
+  assert.equal(taken.body.advance.tax.taxableValue, 10000, 'the advance includes its tax');
+  assert.equal(taken.body.advance.tax.total, 1800);
+  assert.equal(taken.body.advance.noTax, null);
+  const again = await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '11800', date: '2026-08-28', mode: 'UPI', reference: 'api-165-a1' }, owner);
+  assert.equal(again.body.advance.number, taken.body.advance.number, 'a double press records the money once');
+
+  const receipt = await request('POST', '/api/presale/voucher', { document: pi.body.document.id, advance: taken.body.advance.id, which: 'RECEIPT' }, owner);
+  assert.equal(receipt.status, 200, JSON.stringify(receipt.body));
+  assert.match(receipt.body.html, /<h1>Receipt Voucher<\/h1>/);
+  assert.match(receipt.body.html, /CGST Rule 50/);
+  assert.match(receipt.body.html, /SAC 998719/);
+  assert.match(receipt.body.html, /Tax payable on reverse charge<\/th><td>No/);
+  assert.match(receipt.body.html, /No. 3, Avenue Road/, 'the recipient’s own address');
+
+  // The bill follows and is linked: the advance settles it and its GST is set off, not charged twice.
+  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Soap-press servicing', quantity: '1', rate: '10000', date: '2026-08-29', terms: '0', reference: 'api-165-bill' }, owner);
+  assert.equal(bill.status, 200, JSON.stringify(bill.body));
+  const linked = await request('POST', '/api/presale/link-invoice', { document: pi.body.document.id, invoice: bill.body.invoice.id }, owner);
+  assert.equal(linked.status, 200, JSON.stringify(linked.body));
+  assert.match(linked.body.effects[0], /^₹11,800\.00 of advance RV\/26-27\/\d{5} applied to the invoice\. GST of ₹1,800\.00 already paid on it was set off/);
+  const [applied] = (await request('POST', '/api/presale/advances', { document: pi.body.document.id }, owner)).body.advances;
+  assert.equal(applied.application.invoiceNumber, bill.body.invoice.number);
+  assert.equal(applied.application.amount, 11800);
+  assert.equal(applied.application.taxSetOff, 1800);
+  assert.equal(applied.unused, 0);
+
+  // Goods: no GST on the advance. The customer calls it off, and the money is paid back.
+  const goods = await request('POST', '/api/presale/issue', { ...service, item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', purpose: 'Advance for 100 soap', reference: 'api-165-p2' }, owner);
+  const goodsAdvance = await request('POST', '/api/presale/advance', { document: goods.body.document.id, amount: '1000', date: '2026-08-28', mode: 'CASH', reference: 'api-165-a2' }, owner);
+  assert.equal(goodsAdvance.status, 200, JSON.stringify(goodsAdvance.body));
+  assert.equal(goodsAdvance.body.advance.tax, null);
+  assert.match(goodsAdvance.body.advance.noTax['en-IN'], /Notification 66\/2017-Central Tax/);
+  const tooMuch = await request('POST', '/api/presale/advance', { document: goods.body.document.id, amount: '5000', date: '2026-08-28', mode: 'CASH', reference: 'api-165-a3' }, owner);
+  assert.equal(tooMuch.status, 422, 'no more than the proforma asked for');
+  await request('POST', '/api/presale/cancel', { document: goods.body.document.id, reason: 'Customer called it off' }, owner);
+  const refunded = await request('POST', '/api/presale/refund-advance', { advance: goodsAdvance.body.advance.id, date: '2026-08-30', mode: 'CASH', reason: 'Order called off', reference: 'api-165-r1' }, owner);
+  assert.equal(refunded.status, 200, JSON.stringify(refunded.body));
+  assert.match(refunded.body.title, /^Refund voucher RFV\/26-27\/\d{5} issued$/);
+  const printed = await request('POST', '/api/presale/voucher', { document: goods.body.document.id, advance: goodsAdvance.body.advance.id, which: 'REFUND' }, owner);
+  assert.match(printed.body.html, /<h1>Refund Voucher<\/h1>/);
+  assert.match(printed.body.html, /CGST Rule 51/);
+  assert.match(printed.body.html, new RegExp(`Receipt voucher refunded</th><td>${goodsAdvance.body.advance.number.replace(/\//g, '\\/')}`));
+
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  assert.equal((await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '1', date: '2026-08-28', mode: 'CASH' }, viewer)).status, 403);
+});
+
 // Issue #132 — the bill itself, which the web app could not show or print until now.
 test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper it will be printed on', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');

@@ -348,6 +348,30 @@
               <div class="field-grid"><label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="presale-invoices" required></select></label></div>
               <button type="submit" class="secondary-button wide" data-i18n="linkInvoice"></button>
             </form>
+            <div id="presale-advances" class="form-panel" hidden>
+              <h2 data-i18n="advanceTitle"></h2><p data-i18n="advanceHelp"></p>
+              <div class="activity-list" id="presale-advance-list"></div>
+              <form id="presale-advance-form" hidden>
+                <input type="hidden" name="reference" />
+                <div class="field-grid">
+                  <label><span data-i18n="advanceAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label>
+                  <label><span data-i18n="presaleDate"></span><input name="date" type="date" required /></label>
+                  <label><span data-i18n="advanceMode"></span><select name="mode"><option value="CASH" data-i18n="advanceCash"></option><option value="UPI" data-i18n="advanceUpi"></option><option value="BANK_TRANSFER" data-i18n="advanceBank"></option></select></label>
+                  <label><span data-i18n="advanceUtr"></span><input name="utr" placeholder="UTR or UPI reference" /></label>
+                </div>
+                <button type="submit" class="primary-button wide" data-i18n="advanceRecord"></button>
+              </form>
+              <form id="presale-refund-form" hidden>
+                <h2 id="presale-refund-title">—</h2><p data-i18n="refundHelp"></p>
+                <input type="hidden" name="advance" /><input type="hidden" name="reference" />
+                <div class="field-grid">
+                  <label><span data-i18n="presaleDate"></span><input name="date" type="date" required /></label>
+                  <label><span data-i18n="advanceMode"></span><select name="mode"><option value="CASH" data-i18n="advanceCash"></option><option value="UPI" data-i18n="advanceUpi"></option><option value="BANK_TRANSFER" data-i18n="advanceBank"></option></select></label>
+                  <label class="full-field"><span data-i18n="refundReason"></span><input name="reason" placeholder="The customer called the order off" required /></label>
+                </div>
+                <button type="submit" class="secondary-button wide" data-i18n="refundRecord"></button>
+              </form>
+            </div>
             <form id="presale-cancel-form" class="form-panel" hidden>
               <h2 data-i18n="presaleCancelTitle"></h2><p data-i18n="presaleCancelHelp"></p>
               <div class="field-grid"><label class="full-field"><span data-i18n="presaleCancelReason"></span><input name="reason" placeholder="The customer bought elsewhere" required /></label></div>

@@ -31,6 +31,9 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
   { code: '1420', name: 'Input SGST or UTGST', type: 'ASSET', parentCode: '1400', isGroup: false, systemRole: 'INPUT_SGST' },
   { code: '1430', name: 'Input IGST', type: 'ASSET', parentCode: '1400', isGroup: false, systemRole: 'INPUT_IGST' },
   { code: '1440', name: 'Input cess', type: 'ASSET', parentCode: '1400', isGroup: false, systemRole: 'INPUT_CESS' },
+  // Issue #165 — not input credit, so outside the heading above: GST the business paid on a
+  // customer's advance for services, waiting to be set off against the bill that follows it.
+  { code: '1450', name: 'GST paid on advances, to set off against the bill', type: 'ASSET', parentCode: '1000', isGroup: false, systemRole: 'GST_ON_ADVANCES' },
 
   { code: '2000', name: 'What the business owes', type: 'LIABILITY', parentCode: null, isGroup: true, systemRole: null },
   { code: '2100', name: 'Money you owe suppliers', type: 'LIABILITY', parentCode: '2000', isGroup: true, systemRole: 'TRADE_PAYABLES' },
