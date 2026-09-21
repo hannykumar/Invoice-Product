@@ -14,6 +14,7 @@ import type {
   DocumentTitle,
   InvoiceDocument,
   RenderableBank,
+  RenderableEInvoice,
   RenderableLine,
   RenderableParty,
   RenderableReferences,
@@ -28,7 +29,7 @@ export interface PrintingContext {
   readonly shipTo?: RenderableParty | null;
   readonly placeOfSupplyStateName: string;
   readonly transport?: RenderableTransport | null;
-  readonly eInvoice?: { irn: string; qrSvg: string | null } | null;
+  readonly eInvoice?: RenderableEInvoice | null;
   readonly logoDataUri?: string | null;
   readonly bankDetails?: readonly string[] | null;
   readonly bank?: RenderableBank | null;

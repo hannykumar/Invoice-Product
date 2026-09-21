@@ -178,3 +178,30 @@ test('every shipped design carries the square, and a bill saved before this chan
   const html = renderInvoice(doc(), oldSnapshot, { format: 'A4', locale: 'en-IN' });
   assert.ok(!html.includes('class="upi-cell"'), 'the snapshot decides, so an old bill does not grow a square');
 });
+
+/**
+ * Issue #136 — the government's signed e-invoice QR is a signed token of about a thousand
+ * characters. The squares used to stop at 412 bytes, so a real one would have stopped the bill
+ * printing. This synthetic token has the real one's shape and length; the pinned square below was
+ * read back by an independent reader (zxing-cpp) as exactly this text.
+ */
+const b64 = (s: string | Buffer): string => Buffer.from(s).toString('base64url');
+const SYNTHETIC_SIGNED_QR = [
+  b64('{"alg":"RS256","kid":"B8BE5B1A2C4D6E8F0A1B2C3D4E5F6A7B8C9D0E1F","typ":"JWT","x5t":"uL5bGixNbo8KGyw9Tl9qe4ydDh8"}'),
+  b64(JSON.stringify({
+    data: JSON.stringify({
+      SellerGstin: '27AAPFU0939F1ZV', BuyerGstin: '29AAGCB7383J1Z4', DocNo: 'INV/26-27/000042', DocTyp: 'INV',
+      DocDt: '21/09/2026', TotInvVal: 99120, ItemCnt: 3, MainHsnCode: '39021000',
+      Irn: 'a3f5c9e1b7d2408e6f1c3a5b7d9e0f2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d', IrnDt: '2026-09-21 10:15:00',
+    }),
+    iss: 'NIC Sandbox',
+  })),
+  b64(Buffer.from(Array.from({ length: 256 }, (_, i) => (i * 37 + 11) % 256))),
+].join('.');
+
+test('the government signed QR, a thousand-character token, draws as one readable square', () => {
+  assert.ok(SYNTHETIC_SIGNED_QR.length > 900, `${SYNTHETIC_SIGNED_QR.length} characters, as long as a real one`);
+  const m = encodeQr(SYNTHETIC_SIGNED_QR);
+  assert.ok(m.length > 77, 'larger than the old version-15 limit');
+  assert.equal(matrixHash(SYNTHETIC_SIGNED_QR), '772b75748a8bc789e006a150be473170f48c6c37de8681c43aa34df57c832e1c');
+});

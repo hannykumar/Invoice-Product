@@ -136,6 +136,9 @@ export interface RenderableEInvoice {
   readonly irn: string;
   /** Produced by issue #26. This module never generates one; it prints what it is given. */
   readonly qrSvg: string | null;
+  /** Issue #136 — the government's acknowledgement, printed beside the QR exactly as received. */
+  readonly ackNumber?: string | null;
+  readonly ackDate?: string | null;
 }
 
 export interface InvoiceDocument {

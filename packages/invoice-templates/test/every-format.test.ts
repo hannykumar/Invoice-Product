@@ -17,6 +17,7 @@ import { captureSnapshot } from '../src/snapshot.ts';
 import { renderInvoice, renderInvoiceCopies } from '../src/render.ts';
 import { copiesFor, copyMarking } from '../src/copies.ts';
 import { amountInWords } from '../src/words.ts';
+import { qrSvg } from '../src/qr.ts';
 import type { InvoiceDocument, Locale, RenderableLine } from '../src/document.ts';
 
 const nil = rupees(0);
@@ -219,4 +220,25 @@ test('the marked copies come out in order, each once, each on its own sheet', ()
     'in that order',
   );
   assert.ok(/page-break|break-before|break-after/.test(html), 'each copy starts on a fresh sheet');
+});
+
+test('#136 — a registered bill prints the QR square, IRN, Ack number and Ack date; before that, labelled slots', () => {
+  const irn = 'a3f5c9e1b7d2408e6f1c3a5b7d9e0f2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d';
+  const registered = doc({
+    eInvoice: { irn, qrSvg: qrSvg('eyJhbGciOiJSUzI1NiJ9.e30.c2ln', `IRN ${irn}`), ackNumber: '112610027961228', ackDate: '2026-09-21 10:15:00' },
+  });
+  for (const format of ['A4', 'MOBILE'] as const) {
+    const html = render(registered, format);
+    const visible = text(html);
+    assert.ok(html.includes(`aria-label="IRN ${irn}"`), `the QR square is drawn on ${format}`);
+    assert.ok(visible.includes(irn), `the IRN prints on ${format}`);
+    assert.match(visible, /Ack No\.?:? 112610027961228/, `the Ack number prints on ${format}`);
+    assert.match(visible, /Ack Date:? 2026-09-21 10:15:00/, `the Ack date prints on ${format}`);
+    assert.ok(!html.includes('data-reserved="einvoice.'), `no empty box is left once the values exist, on ${format}`);
+
+    const preview = renderInvoice(doc(), captureSnapshot(india, 'en-IN', '2026-09-17'), { format, locale: 'en-IN', purpose: 'DESIGN_PREVIEW' });
+    for (const id of ['qr', 'irn', 'ackNumber', 'ackDate']) {
+      assert.ok(preview.includes(`data-reserved="einvoice.${id}"`), `the ${id} slot is held on the ${format} preview`);
+    }
+  }
 });

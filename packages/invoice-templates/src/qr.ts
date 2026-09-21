@@ -5,17 +5,24 @@
  * library would be a dependency whose output could change under a reprint, and an image service is
  * a network call. The standard is small and fixed, so it is written out once, following ISO/IEC
  * 18004: byte mode, error correction level M (a quarter of the square may be smudged or folded and
- * it still scans), versions 1 to 15.
+ * it still scans), versions 1 to 40. Issue #136 — the government's signed e-invoice QR runs to
+ * around a thousand characters, far past the 412 bytes a version-15 square holds.
  *
  * Every mask gives a square any phone reads; the penalty score only picks the one that reads most
  * easily, which is what the standard asks for.
  */
 
 /** Error-correction codewords per block at level M, by version (index 0 unused). */
-const ECC_PER_BLOCK_M = [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24];
+const ECC_PER_BLOCK_M = [
+  -1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26,
+  26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28,
+];
 /** Number of error-correction blocks at level M, by version. */
-const BLOCKS_M = [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10];
-export const MAX_QR_VERSION = 15;
+const BLOCKS_M = [
+  -1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16,
+  17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49,
+];
+export const MAX_QR_VERSION = 40;
 
 const rawDataModules = (version: number): number => {
   let result = (16 * version + 128) * version + 64;
@@ -30,7 +37,7 @@ const rawDataModules = (version: number): number => {
 const dataCodewords = (version: number): number =>
   Math.floor(rawDataModules(version) / 8) - (ECC_PER_BLOCK_M[version] as number) * (BLOCKS_M[version] as number);
 
-/** The most bytes a version-15 square at level M can hold. */
+/** The most bytes a version-40 square at level M can hold. */
 export const MAX_QR_BYTES = dataCodewords(MAX_QR_VERSION) - 3;
 
 const gfMultiply = (x: number, y: number): number => {
@@ -72,7 +79,8 @@ const alignmentPositions = (version: number): number[] => {
   if (version === 1) return [];
   const count = Math.floor(version / 7) + 2;
   const size = version * 4 + 17;
-  const step = Math.ceil((version * 4 + 4) / (count * 2 - 2)) * 2;
+  // The standard's table, as a formula; it also gives version 32 its odd step of 26.
+  const step = Math.floor((version * 8 + count * 3 + 5) / (count * 4 - 4)) * 2;
   const result = [6];
   for (let pos = size - 7; result.length < count; pos -= step) result.splice(1, 0, pos);
   return result;
@@ -162,7 +170,7 @@ const penalty = (m: boolean[][]): number => {
 /**
  * Encodes text as a QR square, choosing the smallest version that holds it.
  *
- * Throws when the text is longer than a version-15 square can hold, rather than silently cutting
+ * Throws when the text is longer than a version-40 square can hold, rather than silently cutting
  * it: a payment square that carries half an instruction is worse than none.
  */
 export const encodeQr = (text: string): QrMatrix => {
