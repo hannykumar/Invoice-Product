@@ -17,6 +17,7 @@ import type { ParsedPortalRecord } from './import.ts';
 import type {
   BookPurchaseDocument,
   ImportBatch,
+  ItcClaim,
   ItcDecision,
   ItcMatchPolicy,
   PortalDocument,
@@ -24,11 +25,12 @@ import type {
 } from './types.ts';
 
 /**
- * The purchases our own books hold for a period, from the postings of #17.
+ * The purchases our own books hold up to a period, from the postings of #17.
  *
  * The adapter converts; it never invents. A bill whose supplier registration is unknown comes
  * through with `supplierGstin: null` and is reported as a question, because a bill matched on its
- * number alone could be matched to another supplier's bill entirely.
+ * number alone could be matched to another supplier's bill entirely. The ITC service removes bills
+ * already claimed in an earlier period; the books port must not hide an older unclaimed bill.
  */
 export interface PurchaseBookPort {
   documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]>;
@@ -57,6 +59,8 @@ export type PortalFetchOutcome =
 /** The portal rows we hold, one row per company, period, supplier, document and kind. */
 export interface PortalRecordRepository {
   listForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]>;
+  /** Prior portal evidence remains relevant while its purchase bill is still unclaimed. */
+  listThroughPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]>;
   /** Used by #19's supplier check, which asks about one bill and not a month. */
   findByDocument(
     companyId: CompanyId,
@@ -96,6 +100,12 @@ export interface ItcDecisionRepository {
   latestForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly ItcDecision[]>;
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ItcDecision | null>;
   history(companyId: CompanyId, lineKey: string): Promise<readonly ItcDecision[]>;
+}
+
+/** One immutable claim per purchase document, regardless of how many later workspaces are opened. */
+export interface ItcClaimRepository {
+  insert(claim: ItcClaim): Promise<{ readonly claim: ItcClaim; readonly inserted: boolean }>;
+  listForCompany(companyId: CompanyId): Promise<readonly ItcClaim[]>;
 }
 
 /** Per-company and effective-dated, exactly as #18's tolerances are. */

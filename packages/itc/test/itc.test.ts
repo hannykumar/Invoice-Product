@@ -14,7 +14,7 @@ import { DomainError, asId, fixedClock, formatINR, type IsoDate } from '@invoice
 import { InMemoryAuditPort, type ActorContext } from '@invoice/ledger';
 import { buildGstr3b } from '../../gst-returns/src/gstr3b.ts';
 import {
-  InMemoryImportBatches, InMemoryItcDecisions, InMemoryPortalRecords, InMemoryPurchaseBooks,
+  InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, InMemoryPurchaseBooks,
   SyntheticPortalSource, gstr2bSignalPort, itcInwardTaxPort, purchaseBillToBookDocument,
 } from '../src/adapters.ts';
 import { parseCsv, parseGstr2bJson, parseTypedRecord } from '../src/import.ts';
@@ -60,6 +60,7 @@ const makeDesk = (options: { books?: readonly BookPurchaseDocument[]; portalCont
     records,
     batches: new InMemoryImportBatches(),
     decisions: new InMemoryItcDecisions(),
+    claims: new InMemoryItcClaims(),
     audit,
     clock: CLOCK,
     idFactory: () => `id-${++counter}`,
@@ -214,6 +215,7 @@ test('the portal being unreachable changes nothing and never reads as "no purcha
     records: new InMemoryPortalRecords(),
     batches: new InMemoryImportBatches(),
     decisions: new InMemoryItcDecisions(),
+    claims: new InMemoryItcClaims(),
     audit: new InMemoryAuditPort(),
     clock: CLOCK,
     portal: new SyntheticPortalSource({ outcome: { kind: 'UNAVAILABLE', retryable: true, at: '2026-08-14T10:00:00.000Z', detail: 'The gateway timed out.' } }),

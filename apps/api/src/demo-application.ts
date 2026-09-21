@@ -2150,10 +2150,12 @@ export class DemoApplication {
 
   async prepareGstReturn(actor: ActorContext, input: Record<string, unknown>) {
     const request = this.gstInput(input);
-    return this.gstWorkspaceJson(await this.gstReturns.prepare(actor, {
+    const workspace = await this.gstReturns.prepare(actor, {
       ...request,
       idempotencyKey: `web-gstr:${request.period}:${String(input.reference ?? request.period)}`,
-    }));
+    });
+    await this.shop.itc.claimPeriod(actor, request.period);
+    return this.gstWorkspaceJson(workspace);
   }
 
   async approveGstReturn(actor: ActorContext, input: Record<string, unknown>) {

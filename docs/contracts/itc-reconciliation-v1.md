@@ -44,6 +44,7 @@ reported and what is missing.
 | `PortalDocument` | One document as the supplier reported it, including the portal's own `itcAvailableOnPortal` flag and reason, kept verbatim as evidence. |
 | `ReconciliationLine` | One pairing: status, evidence, outcome, the claimable and held-back amounts, the decision and its staleness, and one plain sentence. |
 | `ItcDecision` | `ACCEPT` / `REJECT` / `PENDING`, with reason, actor, moment, fingerprint and idempotency key. Append-only. |
+| `ItcClaim` | The one GSTR-3B period in which a source bill's `CLAIM_NOW` or `CLAIM_AT_RISK` credit was taken. Unique per source bill and unchanged by reopening an ITC workspace. |
 | `ImportBatch` | One import: source, file name, sha256 checksum, who, when, what changed, and the rows that could not be read. |
 | `Gstr3bLinkage` | The credit side of GSTR-3B — boxes 4A(3), 4A(4), 4A(5) and 4B — plus the caution sentence naming the held-back total. |
 
@@ -92,9 +93,10 @@ it is wrong.
 
 | Port | Owner | Purpose |
 | --- | --- | --- |
-| `PurchaseBookPort` | #17 | The purchases our books hold for a period |
+| `PurchaseBookPort` | #17 | The purchases our books hold up to a period; ITC removes earlier claims |
 | `PortalRecordSource` | #8 / a GSP | Optional. Downloads the statement; absent everywhere by default |
 | `PortalRecordRepository`, `ImportBatchRepository`, `ItcDecisionRepository` | this module | Its own storage; migration `…_itc_reconciliation` |
+| `ItcClaimRepository` | this module | The by-construction guard against putting one bill's credit into two periods |
 | `ItcPolicyPort` | company setting | Amount tolerance, date window, whether an at-risk claim is allowed at all |
 
 ## What other modules read
@@ -105,6 +107,14 @@ it is wrong.
 - **#19 (supplier risk)** consumes `gstr2bSignalPort`, the optional `Gstr2bPort` that module
   defined for this issue. It answers `null` when no statement has been imported for the month, so
   the supplier check says "not checked" rather than turning our own silence into "not reported".
+
+## Carrying an unclaimed bill forward
+
+The purchase-books port supplies every posted bill dated on or before the selected period. The
+workspace removes only bills with an `ItcClaim` in an earlier period. An unclaimed bill therefore
+stays visible month after month together with the latest portal evidence held for it, becomes
+`TIME_BARRED` after section 16(4)'s deadline, and can never feed two returns because `(company,
+source kind, source id)` is unique in `itc_claims`.
 
 ## Known limitations
 

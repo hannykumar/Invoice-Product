@@ -14,7 +14,7 @@
 import { formatINR, asId, fixedClock } from '@invoice/kernel';
 import { InMemoryAuditPort, type ActorContext } from '@invoice/ledger';
 import {
-  InMemoryImportBatches, InMemoryItcDecisions, InMemoryPortalRecords, InMemoryPurchaseBooks,
+  InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, InMemoryPurchaseBooks,
 } from './adapters.ts';
 import { ItcReconciliationService } from './service.ts';
 import { DECCAN_LATE_FILING, SUNRISE_BOOKS, SUNRISE_COMPANY, SUNRISE_GSTR2B_FILE, SUNRISE_PERIOD } from './fixtures.ts';
@@ -28,9 +28,10 @@ books.add(...SUNRISE_BOOKS);
 const records = new InMemoryPortalRecords();
 const batches = new InMemoryImportBatches();
 const decisions = new InMemoryItcDecisions();
+const claims = new InMemoryItcClaims();
 const audit = new InMemoryAuditPort();
 
-const service = new ItcReconciliationService({ books, records, batches, decisions, audit, clock });
+const service = new ItcReconciliationService({ books, records, batches, decisions, claims, audit, clock });
 
 const owner: ActorContext = {
   companyId: SUNRISE_COMPANY,
