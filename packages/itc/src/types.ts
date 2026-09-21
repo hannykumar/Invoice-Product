@@ -217,6 +217,26 @@ export interface ItcDecision {
   readonly idempotencyKey: string;
 }
 
+/**
+ * The one return period in which a purchase bill's credit was taken.
+ *
+ * This is separate from a decision: an accepted line may be revisited, but a credit already put
+ * into GSTR-3B must not quietly become available in another month. There is at most one live row
+ * per source document; changing an old workspace never deletes or moves it.
+ */
+export interface ItcClaim {
+  readonly id: string;
+  readonly companyId: CompanyId;
+  readonly sourceKind: string;
+  readonly sourceId: string;
+  readonly period: TaxPeriod;
+  readonly outcome: 'CLAIM_NOW' | 'CLAIM_AT_RISK';
+  readonly lineKey: string;
+  readonly fingerprint: string;
+  readonly claimedBy: UserId;
+  readonly claimedAt: string;
+}
+
 // ---------------------------------------------------------------------------- what may be claimed
 
 /**

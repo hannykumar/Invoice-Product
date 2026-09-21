@@ -108,4 +108,24 @@ export const itcMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS itc_portal_documents;
     DROP TABLE IF EXISTS itc_import_batches;
   `,
+}, {
+  id: "20260921T220829983Z_itc_8eca6bf0440b_claimed_credit_periods",
+  up: `
+    -- One source bill can feed one GSTR-3B period. The unique key is the double-claim guard.
+    CREATE TABLE itc_claims (
+      id uuid PRIMARY KEY,
+      company_id uuid NOT NULL REFERENCES companies(id),
+      source_kind text NOT NULL,
+      source_id text NOT NULL,
+      period text NOT NULL CHECK (period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+      outcome text NOT NULL CHECK (outcome IN ('CLAIM_NOW','CLAIM_AT_RISK')),
+      line_key text NOT NULL,
+      fingerprint text NOT NULL,
+      claimed_by uuid NOT NULL REFERENCES users(id),
+      claimed_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (company_id, source_kind, source_id)
+    );
+    CREATE INDEX itc_claims_company_period_idx ON itc_claims(company_id, period);
+  `,
+  down: `DROP TABLE IF EXISTS itc_claims;`,
 }]);

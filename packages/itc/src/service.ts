@@ -12,10 +12,9 @@
  *      a key built only from facts that do not move. A decision whose figures have changed is kept
  *      and shown as out of date; it is never applied to numbers it did not cover, and it is never
  *      thrown away.
- *   2. **Nothing here files or claims by itself.** Preparing the comparison is free and writes
- *      nothing. Importing writes portal rows and an audit entry. Deciding writes one row and an
- *      audit entry. The credit reaches a return only through the linkage the return module reads,
- *      and only for lines that either match cleanly or carry somebody's name.
+ *   2. **Nothing here files by itself.** Preparing the comparison is free and writes nothing.
+ *      Importing writes portal rows. An accepted line and a prepared GSTR-3B record the source bill
+ *      once, so opening a later month cannot claim the same credit again.
  *   3. **Tenancy comes from the actor.** Every method takes the company from the authenticated
  *      context and never from the caller's input, so one company can never read or decide another
  *      company's purchases.
@@ -25,9 +24,10 @@ import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, typ
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { checksumOf, parsePortalFile, parseTypedRecord, type ParsedPortalRecord, type TypedPortalRecord } from './import.ts';
 import { assessLine, linkageFor } from './itc.ts';
-import { matchDocuments } from './match.ts';
+import { lineKeyOf, matchDocuments } from './match.ts';
 import type {
   ImportBatchRepository,
+  ItcClaimRepository,
   ItcDecisionRepository,
   ItcPolicyPort,
   PortalRecordRepository,
@@ -49,6 +49,7 @@ import {
   type DecisionKind,
   type Gstr3bLinkage,
   type ImportBatch,
+  type ItcClaim,
   type ItcDecision,
   type ItcFinding,
   type ItcMatchPolicy,
@@ -69,6 +70,7 @@ export interface ItcServiceDeps {
   readonly records: PortalRecordRepository;
   readonly batches: ImportBatchRepository;
   readonly decisions: ItcDecisionRepository;
+  readonly claims: ItcClaimRepository;
   readonly audit: AuditPort;
   readonly clock: Clock;
   /** Absent for a business with no licensed intermediary. Everything except one button still works. */
@@ -99,6 +101,7 @@ export class ItcReconciliationService {
   readonly #records: PortalRecordRepository;
   readonly #batches: ImportBatchRepository;
   readonly #decisions: ItcDecisionRepository;
+  readonly #claims: ItcClaimRepository;
   readonly #audit: AuditPort;
   readonly #clock: Clock;
   readonly #portal: PortalRecordSource | undefined;
@@ -110,6 +113,7 @@ export class ItcReconciliationService {
     this.#records = deps.records;
     this.#batches = deps.batches;
     this.#decisions = deps.decisions;
+    this.#claims = deps.claims;
     this.#audit = deps.audit;
     this.#clock = deps.clock;
     this.#portal = deps.portal;
@@ -129,13 +133,37 @@ export class ItcReconciliationService {
   async workspace(actor: ActorContext, period: TaxPeriod): Promise<ItcWorkspace> {
     this.#require(actor, ITC_PERMISSIONS.view);
     const companyId = actor.companyId;
-    const [books, portal, decisions, lastImport] = await Promise.all([
+    const [availableBooks, claims, portalHistory, decisions, lastImport] = await Promise.all([
       this.#books.documentsFor(companyId, period),
-      this.#records.listForPeriod(companyId, period),
+      this.#claims.listForCompany(companyId),
+      this.#records.listThroughPeriod(companyId, period),
       this.#decisions.latestForPeriod(companyId, period),
       this.#batches.latestFor(companyId, period),
     ]);
     const policy = await this.#policyFor(companyId, period);
+    const claimedBefore = new Set(
+      claims.filter((claim) => claim.period < period).map((claim) => `${claim.sourceKind}|${claim.sourceId}`),
+    );
+    const books = availableBooks.filter((book) => !claimedBefore.has(`${book.sourceKind}|${book.sourceId}`));
+    const bookKeys = new Set(books.map((book) => lineKeyOf(book.supplierGstin, book.number, book.kind)));
+    const carriedPortal = new Map<string, PortalDocument>();
+    for (const document of portalHistory) {
+      const key = lineKeyOf(document.supplierGstin, document.number, document.kind);
+      if (!bookKeys.has(key)) continue;
+      const held = carriedPortal.get(key);
+      if (
+        held === undefined
+        || held.period < document.period
+        || (held.period === document.period && held.observedAt < document.observedAt)
+      ) carriedPortal.set(key, document);
+    }
+    const portal = [
+      ...carriedPortal.values(),
+      ...portalHistory.filter((document) => {
+        const key = lineKeyOf(document.supplierGstin, document.number, document.kind);
+        return document.period === period && !bookKeys.has(key);
+      }),
+    ];
 
     const latest = new Map<string, ItcDecision>();
     for (const decision of decisions) {
@@ -294,7 +322,19 @@ export class ItcReconciliationService {
   async decide(actor: ActorContext, input: DecisionInput): Promise<ItcWorkspace> {
     this.#require(actor, ITC_PERMISSIONS.decide);
     const existing = await this.#decisions.findByIdempotencyKey(actor.companyId, input.idempotencyKey);
-    if (existing !== null) return this.workspace(actor, input.period);
+    if (existing !== null) {
+      const repeated = await this.workspace(actor, input.period);
+      const accepted = repeated.lines.find((candidate) => candidate.key === existing.lineKey);
+      if (
+        existing.kind === 'ACCEPT'
+        && accepted !== undefined
+        && accepted.book !== null
+        && (accepted.outcome === 'CLAIM_NOW' || accepted.outcome === 'CLAIM_AT_RISK')
+      ) {
+        await this.#recordClaim(actor, input.period, accepted);
+      }
+      return repeated;
+    }
 
     const before = await this.workspace(actor, input.period);
     const line = before.lines.find((candidate) => candidate.key === input.lineKey);
@@ -357,7 +397,17 @@ export class ItcReconciliationService {
       },
     });
 
-    return this.workspace(actor, input.period);
+    const after = await this.workspace(actor, input.period);
+    const accepted = after.lines.find((candidate) => candidate.key === input.lineKey);
+    if (
+      input.kind === 'ACCEPT'
+      && accepted !== undefined
+      && accepted.book !== null
+      && (accepted.outcome === 'CLAIM_NOW' || accepted.outcome === 'CLAIM_AT_RISK')
+    ) {
+      await this.#recordClaim(actor, input.period, accepted);
+    }
+    return after;
   }
 
   // ------------------------------------------------------------------ what the return reads
@@ -370,6 +420,22 @@ export class ItcReconciliationService {
    */
   async linkage(actor: ActorContext, period: TaxPeriod): Promise<Gstr3bLinkage> {
     return (await this.workspace(actor, period)).returnLinkage;
+  }
+
+  /**
+   * Freeze every credit currently feeding this period's GSTR-3B to its source bill.
+   *
+   * The return application calls this only after preparation succeeds. Reopening an ITC workspace
+   * cannot remove the row; a future return-reversal workflow is the only place that may do that.
+   */
+  async claimPeriod(actor: ActorContext, period: TaxPeriod): Promise<readonly ItcClaim[]> {
+    const workspace = await this.workspace(actor, period);
+    const claims: ItcClaim[] = [];
+    for (const line of workspace.lines) {
+      if (line.book === null || (line.outcome !== 'CLAIM_NOW' && line.outcome !== 'CLAIM_AT_RISK')) continue;
+      claims.push(await this.#recordClaim(actor, period, line));
+    }
+    return claims;
   }
 
   /**
@@ -416,6 +482,39 @@ export class ItcReconciliationService {
   }
 
   // ------------------------------------------------------------------ internals
+
+  async #recordClaim(actor: ActorContext, period: TaxPeriod, line: ReconciliationLine): Promise<ItcClaim> {
+    const book = line.book;
+    if (book === null || (line.outcome !== 'CLAIM_NOW' && line.outcome !== 'CLAIM_AT_RISK')) {
+      throw invalid('ITC_LINE_NOT_CLAIMABLE', 'This line is not part of the credit being taken in this return.');
+    }
+    const claim: ItcClaim = {
+      id: this.#newId(),
+      companyId: actor.companyId,
+      sourceKind: book.sourceKind,
+      sourceId: book.sourceId,
+      period,
+      outcome: line.outcome,
+      lineKey: line.key,
+      fingerprint: line.fingerprint,
+      claimedBy: actor.userId,
+      claimedAt: this.#clock.now().toISOString(),
+    };
+    const stored = await this.#claims.insert(claim);
+    if (stored.inserted) {
+      await this.#audit.record({
+        companyId: actor.companyId,
+        actorId: actor.userId,
+        at: claim.claimedAt,
+        action: 'itc.claim_recorded',
+        subjectType: book.sourceKind,
+        subjectId: book.sourceId,
+        summary: `Claimed credit on ${book.number} in ${formatTaxPeriod(period)}.`,
+        details: { period, outcome: line.outcome, lineKey: line.key, fingerprint: line.fingerprint },
+      });
+    }
+    return stored.claim;
+  }
 
   async #storeBatch(
     actor: ActorContext,

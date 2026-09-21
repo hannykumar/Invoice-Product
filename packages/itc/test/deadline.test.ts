@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { asId, fixedClock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import { InMemoryAuditPort, type ActorContext } from '@invoice/ledger';
 import {
-  InMemoryImportBatches, InMemoryItcDecisions, InMemoryPortalRecords, InMemoryPurchaseBooks,
+  InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, InMemoryPurchaseBooks,
 } from '../src/adapters.ts';
 import { CLAIM_WARNING_DAYS, isInWarningWindow, isTimeBarred, lastClaimDateFor, returnDueDate } from '../src/deadline.ts';
 import { assessLine } from '../src/itc.ts';
@@ -123,6 +123,7 @@ test('inside the 45 days before the deadline the unclaimed bills are listed, lar
     records: new InMemoryPortalRecords(),
     batches: new InMemoryImportBatches(),
     decisions: new InMemoryItcDecisions(),
+    claims: new InMemoryItcClaims(),
     audit: new InMemoryAuditPort(),
     clock: fixedClock('2026-10-20T06:00:00.000Z'),
     idFactory: () => 'id-1',

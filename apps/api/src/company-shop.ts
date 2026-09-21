@@ -28,7 +28,7 @@ import {
 import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platform/src/connectors.ts';
 import { ItcReconciliationService } from '../../../packages/itc/src/service.ts';
 import {
-  InMemoryImportBatches, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
+  InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
   purchaseBillToBookDocument,
 } from '../../../packages/itc/src/adapters.ts';
 import type { BookPurchaseDocument, TaxPeriod } from '../../../packages/itc/src/types.ts';
@@ -282,6 +282,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   const itcRecords = new InMemoryPortalRecords();
   const itcBatches = new InMemoryImportBatches();
   const itcDecisions = new InMemoryItcDecisions();
+  const itcClaims = new InMemoryItcClaims();
   const gstinOfParty = (partyId: string): string | null =>
     partyId === seed.supplierId && seed.supplierGstin !== undefined ? seed.supplierGstin : null;
   const itc = new ItcReconciliationService({
@@ -289,7 +290,7 @@ export async function createCompanyShop(seed: CompanySeed) {
       async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
         const posted = await bills.list(companyId);
         return posted
-          .filter((bill) => bill.invoiceDate.slice(0, 7) === period)
+          .filter((bill) => bill.invoiceDate.slice(0, 7) <= period)
           .map((bill) => purchaseBillToBookDocument(
             {
               id: bill.id, companyId: bill.companyId, supplierPartyId: bill.supplierPartyId,
@@ -309,6 +310,7 @@ export async function createCompanyShop(seed: CompanySeed) {
     records: itcRecords,
     batches: itcBatches,
     decisions: itcDecisions,
+    claims: itcClaims,
     audit,
     clock,
     idFactory: () => `${seed.companyId}:itc:${sequence += 1}`,
@@ -437,7 +439,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   return {
     store, inventory, inventoryService, bills, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
-    itc, itcRecords, itcBatches, itcDecisions,
+    itc, itcRecords, itcBatches, itcDecisions, itcClaims,
     eInvoice, eInvoices, eInvoicePolicies, irpPortal,
     ewayBill, ewayBills, ewayTrips, ewayPolicies, ewayPortal,
     vehicleSuitability, vehicleChecks, vehiclePolicies, vehicleRecords, vehicleRecordCache,

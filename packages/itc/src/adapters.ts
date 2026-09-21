@@ -24,6 +24,7 @@ import type { Gstr2bPort } from '../../purchasing/src/supplier-risk-ports.ts';
 import type { Gstr2bSignal } from '../../purchasing/src/supplier-risk-types.ts';
 import type {
   ImportBatchRepository,
+  ItcClaimRepository,
   ItcDecisionRepository,
   ItcPolicyPort,
   PortalRecordRepository,
@@ -37,6 +38,7 @@ import {
   DEFAULT_MATCH_POLICY,
   type BookPurchaseDocument,
   type ImportBatch,
+  type ItcClaim,
   type ItcDecision,
   type ItcMatchPolicy,
   type PortalDocument,
@@ -57,6 +59,10 @@ export class InMemoryPortalRecords implements PortalRecordRepository {
 
   async listForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]> {
     return [...this.#rows.values()].filter((row) => row.companyId === companyId && row.period === period);
+  }
+
+  async listThroughPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]> {
+    return [...this.#rows.values()].filter((row) => row.companyId === companyId && row.period <= period);
   }
 
   async findByDocument(
@@ -143,6 +149,22 @@ export class InMemoryItcDecisions implements ItcDecisionRepository {
   }
 }
 
+export class InMemoryItcClaims implements ItcClaimRepository {
+  readonly #claims = new Map<string, ItcClaim>();
+
+  async insert(claim: ItcClaim): Promise<{ claim: ItcClaim; inserted: boolean }> {
+    const key = `${claim.companyId}|${claim.sourceKind}|${claim.sourceId}`;
+    const existing = this.#claims.get(key);
+    if (existing !== undefined) return { claim: existing, inserted: false };
+    this.#claims.set(key, claim);
+    return { claim, inserted: true };
+  }
+
+  async listForCompany(companyId: CompanyId): Promise<readonly ItcClaim[]> {
+    return [...this.#claims.values()].filter((claim) => claim.companyId === companyId);
+  }
+}
+
 /** One policy for everybody, which is what a company that has never changed the defaults has. */
 export class StaticItcPolicy implements ItcPolicyPort {
   readonly #policy: ItcMatchPolicy;
@@ -168,7 +190,7 @@ export class InMemoryPurchaseBooks implements PurchaseBookPort {
   }
 
   async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
-    return this.#documents.filter((document) => document.companyId === companyId && document.period === period);
+    return this.#documents.filter((document) => document.companyId === companyId && document.period <= period);
   }
 }
 
