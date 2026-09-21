@@ -19,7 +19,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tests/e2e/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
-    "test:integration": "node --experimental-strip-types --test packages/platform/test/*.integration.test.ts",
+    "test:integration": "node --experimental-strip-types --test \"packages/*/test/*.integration.test.ts\"",
     "security:drill": "node --test --experimental-strip-types ops/security/test/security.test.ts",
     "vendor:readiness": "node --experimental-strip-types ops/vendor-onboarding/src/cli.ts",
     "bank:route": "node --experimental-strip-types ops/bank-feed-selection/src/cli.ts",
