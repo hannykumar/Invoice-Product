@@ -141,6 +141,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/presale/issue-sale') return json(200, await app.issueConvertedSale(actor, body));
     if (method === 'POST' && pathname === '/api/presale/link-invoice') return json(200, await app.presale.linkInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/presale/cancel') return json(200, await app.presale.cancel(actor, body));
+    // Issue #165 — money received against a proforma: the receipt voucher, and the refund voucher.
+    if (method === 'POST' && pathname === '/api/presale/advances') return json(200, await app.presale.advances(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/advance') return json(200, await app.presale.recordAdvance(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/refund-advance') return json(200, await app.presale.refundAdvance(actor, body));
+    if (method === 'POST' && pathname === '/api/presale/voucher') return json(200, await app.presale.printVoucher(actor, body));
     if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
     if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
     if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));

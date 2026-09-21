@@ -64,6 +64,12 @@ export interface Payment {
   readonly bankAccountCode: string | null;
   readonly cheque: ChequeDetails | null;
   readonly allocations: readonly Allocation[];
+  /**
+   * Issue #165 — set on money paid back to a customer out of an earlier receipt that no bill used,
+   * such as a refunded advance. It returns money held on account, so it lowers that figure rather
+   * than counting as a second amount on account.
+   */
+  readonly refundOf: string | null;
   readonly state: PaymentState;
   readonly voucherId: VoucherId | null;
   /** Set when a cheque bounced or the payment was undone: the entry that reversed it. */

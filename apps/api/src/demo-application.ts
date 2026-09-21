@@ -68,7 +68,7 @@ import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
-import { InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
+import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
 import {
   TradeTermsService,
   noPriceList,
@@ -788,10 +788,19 @@ export class DemoApplication {
     // quotation becomes a sale through the invoice's own service, as a draft.
     const presaleRepository = new InMemoryPreSaleRepository();
     shop.store.join(presaleRepository);
+    // Issue #165. Money taken against a proforma is recorded by the same receivables service as any
+    // other receipt, and linking the proforma's invoice applies it and sets off its tax.
+    const advanceRepository = new InMemoryAdvanceRepository();
+    shop.store.join(advanceRepository);
+    const advances = new AdvanceService({
+      store: shop.store, ledger: shop.ledger, receivables: payments, proformas: presaleRepository, repository: advanceRepository,
+      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() },
+    });
     const presale = new PreSaleDesk(config, new PreSaleService({
       store: shop.store, calculator, repository: presaleRepository, invoices: salesRepository, sales,
-      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, takenPrefixes: ['INV', 'DC'],
-    }));
+      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, takenPrefixes: ['INV', 'DC', 'RV', 'RFV'],
+      advances,
+    }), advances);
 
     const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale);
     await app.seed();

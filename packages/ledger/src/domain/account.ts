@@ -57,6 +57,12 @@ export type SystemAccountRole =
    * GST collected would both overstate its GST and understate what it still owes.
    */
   | 'TCS_PAYABLE'
+  /**
+   * GST paid on an advance for services, before the bill (CGST section 13, issue #165). The bill
+   * charges the whole tax again, so this is held here and set off against it when the bill is
+   * linked — or when the advance is refunded — so the tax is never counted twice.
+   */
+  | 'GST_ON_ADVANCES'
   | 'INPUT_CGST'
   | 'INPUT_SGST'
   | 'INPUT_IGST'

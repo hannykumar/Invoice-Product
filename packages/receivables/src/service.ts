@@ -73,6 +73,11 @@ export interface RecordPaymentCommand {
   /** Omit to leave the money on account. Nothing is applied without being asked for. */
   readonly allocations?: readonly Allocation[];
   readonly narration?: string | null;
+  /**
+   * Issue #165 — the receipt this pays back, when money held on account is returned to the
+   * customer. Refused if it is more than that receipt still has unused.
+   */
+  readonly refundOf?: string | null;
 }
 
 export class ReceivablesService {
@@ -143,6 +148,23 @@ export class ReceivablesService {
     const existing = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
     if (existing !== null) return existing;
 
+    const refundOf = command.refundOf ?? null;
+    if (refundOf !== null) {
+      const original = await this.#require(actor, refundOf);
+      const refunded = sum(
+        (await this.#repo.listForParty(actor.companyId, original.partyId))
+          .filter((p) => p.state === 'RECORDED' && p.refundOf === original.id)
+          .map((p) => p.amount),
+      );
+      const left = subtract(unallocated(original), refunded);
+      if (command.direction !== 'PAYMENT' || original.direction !== 'RECEIPT' || original.state !== 'RECORDED' || original.partyId !== command.partyId) {
+        throw invalid('PAYMENT_REFUND_MISMATCH', 'Only money received from this same customer, and not undone, can be paid back to them.');
+      }
+      if (command.amount.minor > left.minor) {
+        throw invalid('PAYMENT_REFUND_EXCEEDS', `Only ${toDecimalString(left)} of that receipt is unused, so ${toDecimalString(command.amount)} cannot be paid back from it.`);
+      }
+    }
+
     const today = command.date;
     const position = await this.position(actor, command.partyId, today);
     const allocations = command.allocations ?? [];
@@ -203,6 +225,7 @@ export class ReceivablesService {
                 history: [{ state: 'PENDING', on: command.date, by: actor.userId, at, note: null }],
               },
         allocations,
+        refundOf,
         state: 'RECORDED',
         voucherId: posted.voucher.id,
         reversalVoucherId: null,
@@ -259,7 +282,9 @@ export class ReceivablesService {
     const documents = await this.#documents.openDocuments(actor.companyId, payment.partyId);
     const others = (await this.#repo.listForParty(actor.companyId, payment.partyId)).filter((p) => p.id !== payment.id);
     const positions = documents.map((d) => positionOf(d, others, payment.date));
-    validateAllocation(payment.amount, allocations, positions);
+    // Money already paid back out of this receipt (#165) cannot also settle a bill.
+    const refunded = sum(others.filter((p) => p.state === 'RECORDED' && p.refundOf === payment.id).map((p) => p.amount));
+    validateAllocation(subtract(payment.amount, refunded), allocations, positions);
 
     const at = this.#clock.now().toISOString();
     const next: Payment = { ...payment, allocations, version: payment.version + 1 };

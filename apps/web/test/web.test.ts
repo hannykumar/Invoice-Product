@@ -134,7 +134,10 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // How long a price holds is the business's promise, so that date box is never filled in for it.
   assert.match(html, /name="validUntil" type="date" data-no-default/);
   assert.match(script, /input\[type=date\]:not\(\[data-no-default\]\)/);
-  for (const route of ['preview', 'issue', 'print', 'convert', 'issue-sale', 'link-invoice', 'cancel']) {
+  // Issue #165 — money against a proforma, its receipt voucher and its refund voucher.
+  assert.match(html, /id="presale-advance-form"/);
+  assert.match(html, /id="presale-refund-form"/);
+  for (const route of ['preview', 'issue', 'print', 'convert', 'issue-sale', 'link-invoice', 'cancel', 'advance', 'advances', 'refund-advance', 'voucher']) {
     assert.match(script, new RegExp(`/api/presale/${route}"`));
   }
   // Issue #132 — the bill after a sale: the server's own printer in a frame, the browser's print

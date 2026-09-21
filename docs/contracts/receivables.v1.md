@@ -1,4 +1,4 @@
-# Contract: `receivables` v1.0.0
+# Contract: `receivables` v1.1.0
 
 | | |
 | --- | --- |
@@ -67,6 +67,26 @@ reason that travels to the ledger narration and the audit trail, a visible accou
 (`BAD_DEBTS`, seeded as *"Money we could not collect"*), and a refusal to write off more than is
 owed.
 
+## Advances against a proforma (v1.1, issue #165)
+
+Additive; nothing existing changed meaning.
+
+- **`Payment.refundOf`** (`string | null`, required on the record, optional on `RecordPaymentCommand`):
+  set on money paid back to a customer out of an earlier receipt no bill used. A refund lowers
+  `onAccount` instead of adding to it, cannot exceed what that receipt still has unused, and money
+  refunded out of a receipt can no longer be allocated to a bill. Refused as `PAYMENT_REFUND_MISMATCH`
+  or `PAYMENT_REFUND_EXCEEDS`.
+- **`AdvanceService`** (`advance.ts`) records money against a proforma through `recordPayment` and
+  issues a **receipt voucher** (CGST Rule 50) in its own series, `RV/26-27/00001`. For services the
+  GST inside the advance (CGST s.13) is worked out at the proforma's rates, advance treated as
+  tax-inclusive, and posted: Dr `GST_ON_ADVANCES` (new ledger role, account 1450), Cr output GST.
+  For goods nothing is posted (Notification 66/2017-Central Tax).
+- **`applyToInvoice`** runs when #142's `linkInvoice` links the tax invoice (`ProformaAdvancePort`):
+  it allocates the advance to the invoice, up to what the invoice owes, and posts the reverse of the
+  tax on the part used, so the invoice's own GST is the only GST left owed. Idempotent.
+- **`refund`** pays back what is unused with a **refund voucher** (Rule 51), `RFV/26-27/00001`, and
+  reverses the tax still held on it.
+
 ## Errors
 
 | Code | Meaning |
@@ -84,8 +104,10 @@ owed.
 
 - **`DocumentLedgerPort` is implemented by the caller.** Sales invoices come from #9 and purchase
   bills from GPT 3's #17; this module reads neither module's storage.
-- Advances are held on account but are not yet linked to a GST advance-receipt treatment. That is
-  #25 and #30 territory.
+- Advances against a proforma get their GST treatment (#165, above). Money received on account
+  with no proforma behind it still has none, and the vouchers are not yet fed to GSTR-1's advances
+  tables (11A/11B) — #30's `OutwardDocument` has no adjustment kind for 11B yet.
+- A bounced cheque taken as an advance reverses the money but not the GST posted on it.
 - Reminders and collection tracking are GPT 2's #23; this exposes the positions they need.
 - Bank reconciliation is GPT 2's #22. A cleared cheque posts to the named bank account here, and
   matching that against a statement line is theirs.

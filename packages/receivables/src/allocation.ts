@@ -132,12 +132,13 @@ export const validateAllocation = (
 };
 
 /** Money received that no bill has claimed. Visible, and never quietly attached to something. */
-export const onAccountOf = (payments: readonly Payment[]): Money =>
-  sum(
-    payments
-      .filter((p) => p.state === 'RECORDED')
-      .map((p) => subtract(p.amount, sum(p.allocations.map((a) => a.amount)))),
+export const onAccountOf = (payments: readonly Payment[]): Money => {
+  const recorded = payments.filter((p) => p.state === 'RECORDED');
+  return subtract(
+    sum(recorded.filter((p) => p.refundOf === null).map((p) => subtract(p.amount, sum(p.allocations.map((a) => a.amount))))),
+    sum(recorded.filter((p) => p.refundOf !== null).map((p) => p.amount)),
   );
+};
 
 export const totalOutstanding = (positions: readonly DocumentPosition[]): Money =>
   sum(positions.map((p) => p.outstanding));
