@@ -9,3 +9,4 @@ export * from './note-series.ts';
 export * from './credit-note-deadline.ts';
 export * from './service.ts';
 export * from './migrations.ts';
+export * from './postgres-repository.ts';

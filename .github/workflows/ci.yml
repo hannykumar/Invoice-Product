@@ -11,6 +11,23 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # A real PostgreSQL for the database tests (issue #201). Synthetic data only.
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: invoice
+          POSTGRES_PASSWORD: invoice
+          POSTGRES_DB: invoice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U invoice -d invoice"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://invoice:invoice@localhost:5432/invoice
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
