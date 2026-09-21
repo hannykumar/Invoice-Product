@@ -617,7 +617,9 @@ export class ItcReconciliationService {
       sumAmounts([linkage.allOtherItc, linkage.reverseChargeItc, linkage.importItc]),
       linkage.reversedItc,
     );
-    const heldBack = sumAmounts(lines.map((line) => line.heldBack));
+    // Two separate figures on purpose: one comes back on the month it is settled, the other never.
+    const heldBack = sumAmounts(lines.filter((line) => line.outcome !== 'TIME_BARRED').map((line) => line.heldBack));
+    const timeBarred = sumAmounts(lines.filter((line) => line.outcome === 'TIME_BARRED').map((line) => line.heldBack));
     const atRisk = sumAmounts(lines.filter((line) => line.outcome === 'CLAIM_AT_RISK').map((line) => line.claimable));
 
     const findings: ItcFinding[] = [];
@@ -691,6 +693,7 @@ export class ItcReconciliationService {
       outcomeCounts,
       claimable,
       heldBack,
+      timeBarred,
       atRisk,
       findings,
       sentence: {

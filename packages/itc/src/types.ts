@@ -375,8 +375,16 @@ export interface ItcWorkspace {
   readonly outcomeCounts: Readonly<Record<ItcOutcome, number>>;
   /** Credit that goes on this month's GSTR-3B. */
   readonly claimable: TaxAmounts;
-  /** Credit that does not, and the reason is on every line that makes it up. */
+  /**
+   * Credit that does not, and the reason is on every line that makes it up.
+   *
+   * Credit barred by section 16(4) is **not** counted here. Held-back credit is waiting on somebody
+   * and comes back on the month it is settled; barred credit comes back on no month, and one total
+   * covering both would tell a business that money it has lost is on its way.
+   */
   readonly heldBack: TaxAmounts;
+  /** Credit whose last claim date under section 16(4) has gone by. It returns on no month. */
+  readonly timeBarred: TaxAmounts;
   /** Of the claimable, the part somebody accepted despite a question. */
   readonly atRisk: TaxAmounts;
   readonly findings: readonly ItcFinding[];
