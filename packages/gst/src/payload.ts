@@ -14,6 +14,7 @@ import type { Id, IsoDate, Paise } from "../../masters/src/types.ts";
 import { INVOICE_NUMBER_MAX_LENGTH } from "@invoice/sales";
 import { DOCUMENT_TYPE_CODES, financialYearOf } from "./irn.ts";
 import type { EInvoiceDocumentType, EInvoiceRecipientKind } from "./einvoice-types.ts";
+import { EXPORT_SUPPLIES, checkExportParticulars, isExportSupplyKind } from "./export-supply.ts";
 
 /** One party as the schema needs it. */
 export interface PartyDetails {
@@ -72,6 +73,8 @@ export interface EInvoiceDocument {
   /** Only for exports. */
   readonly currency?: string;
   readonly countryCode?: string;
+  /** Issue #143 — the same shipping bill the printed bill carries, when it is known. */
+  readonly shippingBill?: { readonly number: string; readonly date: IsoDate; readonly portCode: string };
 }
 
 /** Paise to the rupee string the schema expects. Exact: no float ever touches this. */
@@ -167,6 +170,23 @@ export const buildEInvoicePayload = (document: EInvoiceDocument, options: Payloa
     problems.push({ field: "ValDtls.PosStateCd", message: "We could not work out which state this sale counts as being made in, and the government needs it." });
   }
 
+  // Issue #143 — an export or SEZ sale is checked by the same rules the printed bill is.
+  if (isExportSupplyKind(document.recipientKind)) {
+    const kind = document.recipientKind;
+    for (const problem of checkExportParticulars({
+      kind,
+      ...(document.countryCode === undefined ? {} : { countryCode: document.countryCode }),
+      ...(document.currency === undefined ? {} : { currency: document.currency }),
+      ...(document.shippingBill === undefined ? {} : { shippingBill: document.shippingBill }),
+    }).filter((p) => p.field !== "exchangeRate")) {
+      problems.push({ field: `ExpDtls.${problem.field}`, message: problem.message });
+    }
+    const tax = document.totalCgstPaise + document.totalSgstPaise + document.totalIgstPaise + document.totalCessPaise;
+    if (!EXPORT_SUPPLIES[kind].taxPaid && tax !== 0n) {
+      problems.push({ field: "ValDtls.IgstVal", message: "This sale is made under bond or LUT, so it cannot carry any GST. Remove the tax or mark the sale as made on payment of tax." });
+    }
+  }
+
   checkParty(document.supplier, "your business", "SellerDtls", problems, true, options);
   const buyerNeedsGstin = document.recipientKind === "B2B" || document.recipientKind === "SEZ_WITH_PAYMENT"
     || document.recipientKind === "SEZ_WITHOUT_PAYMENT" || document.recipientKind === "DEEMED_EXPORT";
@@ -245,24 +265,24 @@ export const buildEInvoicePayload = (document: EInvoiceDocument, options: Payloa
         RndOffAmt: toRupees(document.roundOffPaise),
         TotInvVal: toRupees(document.invoiceValuePaise),
       },
-      ...(document.currency === undefined ? {} : {
-        ExpDtls: { CntCode: document.countryCode ?? "", ForCur: document.currency },
+      ...(document.currency === undefined && document.countryCode === undefined && document.shippingBill === undefined ? {} : {
+        ExpDtls: {
+          ...(document.shippingBill === undefined ? {} : {
+            ShipBNo: document.shippingBill.number,
+            ShipBDt: document.shippingBill.date.split("-").reverse().join("/"),
+            Port: document.shippingBill.portCode,
+          }),
+          ...(document.countryCode === undefined ? {} : { CntCode: document.countryCode }),
+          ...(document.currency === undefined ? {} : { ForCur: document.currency }),
+        },
       }),
     },
   };
 };
 
-/** How the government classifies the sale. Exports and SEZ are their own supply types. */
-const supplyType = (kind: EInvoiceRecipientKind): string => {
-  switch (kind) {
-    case "SEZ_WITH_PAYMENT": return "SEZWP";
-    case "SEZ_WITHOUT_PAYMENT": return "SEZWOP";
-    case "EXPORT_WITH_PAYMENT": return "EXPWP";
-    case "EXPORT_WITHOUT_PAYMENT": return "EXPWOP";
-    case "DEEMED_EXPORT": return "DEXP";
-    default: return "B2B";
-  }
-};
+/** How the government classifies the sale. Exports and SEZ are their own supply types (#143's table). */
+const supplyType = (kind: EInvoiceRecipientKind): string =>
+  isExportSupplyKind(kind) ? EXPORT_SUPPLIES[kind].eInvoiceSupplyType : "B2B";
 
 /**
  * The same payload as a file a person can keep or upload by hand.

@@ -23,7 +23,7 @@ import type {
 import type { PageFormat } from './template.ts';
 import { printsReservedSlots, renderReservedSlot, reservedSlotStyles, type RenderPurpose } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
-import { PAGE, escapeHtml, isZero, money, narrowLine, percent, t } from './parts.ts';
+import { PAGE, escapeHtml, exportParticulars, invoiceTitle, isZero, money, narrowLine, percent, t, taxTotalRows } from './parts.ts';
 import { hsnSummary } from './hsn-summary.ts';
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
@@ -76,21 +76,10 @@ const partyBlock = (party: RenderableParty, heading: string, locale: Locale): st
   return `<section class="party"><h2>${escapeHtml(heading)}</h2>${lines.join('')}</section>`;
 };
 
-const taxRows = (doc: InvoiceDocument, locale: Locale): string => {
-  // Each tax is shown on its own line. Lumping them together is exactly what a GST officer,
-  // and a customer claiming credit, cannot work with.
-  const rows: [string, Money][] = [
-    ['CGST', doc.totals.cgst],
-    ['SGST', doc.totals.sgst],
-    ['UTGST', doc.totals.utgst],
-    ['IGST', doc.totals.igst],
-    ['Cess', doc.totals.cess],
-  ];
-  return rows
-    .filter(([, amount]) => !isZero(amount))
+const taxRows = (doc: InvoiceDocument, locale: Locale): string =>
+  taxTotalRows(doc, locale)
     .map(([label, amount]) => `<tr><td>${escapeHtml(label)}</td><td class="num">${money(amount)}</td></tr>`)
     .join('');
-};
 
 const complianceLineColumns = (locale: Locale, snapshot: TemplateSnapshot): string[] => {
   const columns = [t('item', locale), t('hsn', locale), t('qty', locale), t('rate', locale)];
@@ -343,7 +332,7 @@ export const renderInvoice = (
   const marking = options.copy === undefined ? null : copyMarking(doc, options.copy, locale);
   if (boxed) {
     return page(
-      `${t(doc.title, locale)} ${doc.number}`,
+      `${invoiceTitle(doc, locale)} ${doc.number}`,
       snapshot,
       format,
       locale,
@@ -353,7 +342,7 @@ export const renderInvoice = (
     );
   }
 
-  const title = t(doc.title, locale);
+  const title = invoiceTitle(doc, locale);
   const logo =
     snapshot.logo.show && shows('seller.logo') && doc.logoDataUri !== null
       ? `<img class="logo" src="${escapeHtml(doc.logoDataUri)}" alt="${escapeHtml(doc.seller.name)}">`
@@ -423,6 +412,14 @@ export const renderInvoice = (
         )}</div>`;
 
   const words = `<div class="words"><span class="k">${escapeHtml(t('inWords', locale))}:</span> ${escapeHtml(doc.amountInWordsText)}</div>`;
+
+  // Issue #143 — the Rule 46 endorsement and the export particulars, under the parties.
+  const exportRows = exportParticulars(doc, locale);
+  const exportBlock = exportRows.length === 0
+    ? ''
+    : `<div class="words export">${exportRows
+      .map(([label, value]) => label === '' ? `<div><strong>${escapeHtml(value)}</strong></div>` : `<div><span class="k">${escapeHtml(label)}:</span> ${escapeHtml(value)}</div>`)
+      .join('')}</div>`;
 
   // Issue #183 — the HSN-wise summary on narrow paper too. It is what a buyer's accountant matches
   // against the GST portal, and dropping it for want of width simply moves the work onto them. One
@@ -520,6 +517,7 @@ export const renderInvoice = (
     <div class="meta">${meta}</div>
   </div>
   <div class="parties">${partyBlock(doc.buyer, t('billedTo', locale), locale)}${shipToLine}${transport}${bank}</div>
+  ${exportBlock}
   ${itemsBlock}
   ${totals}
   ${narrowSummary}
@@ -529,7 +527,7 @@ export const renderInvoice = (
   ${upi}
   <footer>${footerBits}</footer>`;
 
-  return page(`${t(doc.title, locale)} ${doc.number}`, snapshot, format, locale, '', body, options.copy);
+  return page(`${title} ${doc.number}`, snapshot, format, locale, '', body, options.copy);
 };
 
 /**

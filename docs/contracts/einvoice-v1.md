@@ -119,6 +119,21 @@ still has to invoice. The file **says inside itself** that it is not an e-invoic
 government returns an IRN — a JSON file on a desktop that looked like a registered invoice would
 be precisely the confusion the first acceptance criterion forbids.
 
+## Exports and supplies to SEZ (#143)
+
+`packages/gst/src/export-supply.ts` holds one row per kind — `EXPORT_WITH_PAYMENT`,
+`EXPORT_WITHOUT_PAYMENT`, `SEZ_WITH_PAYMENT`, `SEZ_WITHOUT_PAYMENT`, `DEEMED_EXPORT` — naming its
+e-invoice `SupTyp`, its GSTR-1 treatment, the printed title and the Rule 46 endorsement. The payload,
+the printed bill (`invoice-templates`) and the return all read that row, so they cannot disagree.
+
+- `ExpDtls` carries `ShipBNo`, `ShipBDt` and `Port` when a shipping bill is known, and `CntCode` and
+  `ForCur` when the sale is abroad. An export with no valid country is refused before sending.
+- A kind made under bond or LUT (`EXPWOP`, `SEZWOP`) that still carries tax is refused before
+  sending, because the portal refuses it.
+- The kind comes from the customer's master registration (#5): `overseas`, `sez_with_payment`,
+  `sez_without_payment` or `deemed_export`. Only an overseas sale asks, per sale, whether it goes
+  under LUT. A customer abroad is stored as the schema writes one: state `96`, PIN `999999`.
+
 ## Permissions
 
 | Permission | Guards |

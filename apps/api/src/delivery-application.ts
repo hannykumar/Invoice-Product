@@ -36,12 +36,13 @@ import {
   validateGstin,
   validatePincode,
   validateVehicleNumber,
+  OVERSEAS_STATE_CODE,
   type PartyAddress,
   type Transporter,
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
 import { masterData, mastersContext } from './master-data.ts';
-import { addressesOf, billingAddressOf, customerPrint, customerView, resolveCustomer } from './catalogue-application.ts';
+import { OUTSIDE_INDIA, addressesOf, billingAddressOf, customerPrint, customerView, resolveCustomer } from './catalogue-application.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
 
@@ -50,7 +51,7 @@ const require_ = (result: ValidationResult, code: string, fallback: string): voi
   throw invalid(code, result.problems[0]?.message ?? fallback);
 };
 
-const stateName = (code: string): string => STATE_NAMES[code] ?? GST_STATE_CODES[code]?.name ?? code;
+const stateName = (code: string): string => code === OVERSEAS_STATE_CODE ? OUTSIDE_INDIA : STATE_NAMES[code] ?? GST_STATE_CODES[code]?.name ?? code;
 
 // ------------------------------------------------------------------------------ the transporters
 

@@ -18,7 +18,7 @@ import { formatDate, sum, type IsoDate, type Money } from '@invoice/kernel';
 import type { InvoiceDocument, RenderableLine, RenderableParty, TemplateSnapshot } from './document.ts';
 import type { PageFormat } from './template.ts';
 import { hsnSummary, hsnSummaryColumns, type HsnSummaryRow } from './hsn-summary.ts';
-import { escapeHtml, isZero, money, percent, splitQuantity, t, totalQuantityText } from './parts.ts';
+import { escapeHtml, exportParticulars, invoiceTitle, isZero, money, percent, splitQuantity, t, taxTotalRows, totalQuantityText } from './parts.ts';
 import type { Locale } from './document.ts';
 import { renderReservedSlot, type RenderPurpose } from './reserved.ts';
 import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
@@ -140,15 +140,8 @@ export const itemTable = (
   </table>`;
 };
 
-export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale, shows: (f: string) => boolean): string => {
-  const rows: [string, Money][] = [
-    [t('totalBeforeGst', locale), doc.totals.taxableValue],
-    ['CGST', doc.totals.cgst],
-    ['SGST', doc.totals.sgst],
-    ['UTGST', doc.totals.utgst],
-    ['IGST', doc.totals.igst],
-    ['Cess', doc.totals.cess],
-  ];
+export const totalsTable = (doc: Pick<InvoiceDocument, 'totals' | 'exportSupply'>, locale: Locale, shows: (f: string) => boolean): string => {
+  const rows: [string, Money][] = [[t('totalBeforeGst', locale), doc.totals.taxableValue], ...taxTotalRows(doc, locale)];
   const afterTotal: [string, Money | null | undefined][] = [
     [t('rcmTax', locale), isZero(doc.totals.reverseChargeTax) ? null : doc.totals.reverseChargeTax],
     [t('paid', locale), shows('totals.amountPaid') ? doc.totals.amountPaid : null],
@@ -158,7 +151,7 @@ export const totalsTable = (doc: Pick<InvoiceDocument, 'totals'>, locale: Locale
     `<tr${cls}><td>${escapeHtml(label)}</td><td class="num">${money(amount)}</td></tr>`;
 
   return `<table class="grid totals">
-    ${rows.filter(([label, a]) => label === t('totalBeforeGst', locale) || !isZero(a)).map(([l, a]) => line(l, a)).join('')}
+    ${rows.map(([l, a]) => line(l, a)).join('')}
     ${isZero(doc.totals.roundOff) ? '' : line(t('roundOff', locale), doc.totals.roundOff)}
     ${line(t('total', locale), doc.totals.invoiceValue, ' class="grand"')}
     ${afterTotal.filter(([, a]) => a != null).map(([l, a]) => line(l, a as Money)).join('')}
@@ -416,7 +409,7 @@ export const renderBoxed = (
   // whole width — so without them the seller's name is squeezed into a one-character column.
   return `
   <table class="grid head${showEInvoice ? ' with-qr' : ''}">
-    <tr><td class="title-cell" colspan="${showEInvoice ? 3 : 2}"><h1>${escapeHtml(t(doc.title, locale))}</h1>${
+    <tr><td class="title-cell" colspan="${showEInvoice ? 3 : 2}"><h1>${escapeHtml(invoiceTitle(doc, locale))}</h1>${
       copyMark === null ? '' : `<span class="copy-mark-inline">${escapeHtml(copyMark)}</span>`
     }</td></tr>
     <tr>
@@ -482,6 +475,14 @@ export const renderBoxed = (
       }
     </tr>
   </table>
+  ${
+    // Issue #143 — the Rule 46 endorsement and the export particulars, between the parties and the items.
+    exportParticulars(doc, locale).length === 0
+      ? ''
+      : `<table class="grid words export">${exportParticulars(doc, locale)
+        .map(([label, value]) => `<tr><td>${label === '' ? `<strong>${escapeHtml(value)}</strong>` : `<span class="cap">${escapeHtml(label)}</span>${escapeHtml(value)}`}</td></tr>`)
+        .join('')}</table>`
+  }
   ${itemTable(goods, charges, snapshot, locale)}
   <table class="grid words">
     <tr><td><span class="cap">${escapeHtml(t('inWords', locale))}</span><strong>${escapeHtml(doc.amountInWordsText)}</strong></td></tr>

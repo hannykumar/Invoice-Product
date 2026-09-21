@@ -139,6 +139,21 @@
                   <label><span data-i18n="otherReferencesLabel"></span><input name="otherReferences" /></label>
                 </div>
               </details>
+              <!-- Issue #143 — shown only for a customer abroad, in an SEZ, or buying as a deemed export.
+                   The kind of supply comes from the customer's record; only an export asks about LUT. -->
+              <details id="sale-export" hidden open>
+                <summary data-i18n="exportSection"></summary>
+                <div class="field-grid extra-fields">
+                  <p class="safety-note full-field"><span aria-hidden="true">i</span><span id="sale-export-kind"></span></p>
+                  <label data-export-abroad><span data-i18n="underLutLabel"></span><select name="underLut"><option value="yes" data-i18n="underLutYes"></option><option value="no" data-i18n="underLutNo"></option></select></label>
+                  <label data-export-abroad><span data-i18n="exportCountryLabel"></span><input name="exportCountry" autocapitalize="characters" maxlength="2" placeholder="AE" /><small data-i18n="exportCountryHelp"></small></label>
+                  <label data-export-abroad><span data-i18n="exportCurrencyLabel"></span><input name="exportCurrency" autocapitalize="characters" maxlength="3" placeholder="USD" /><small data-i18n="exportCurrencyHelp"></small></label>
+                  <label data-export-abroad><span data-i18n="exchangeRateLabel"></span><input name="exchangeRate" inputmode="decimal" placeholder="83.25" /></label>
+                  <label><span data-i18n="shippingBillNumberLabel"></span><input name="shippingBillNumber" /><small data-i18n="shippingBillHelp"></small></label>
+                  <label><span data-i18n="shippingBillDateLabel"></span><input name="shippingBillDate" type="date" data-no-default /></label>
+                  <label><span data-i18n="portCodeLabel"></span><input name="portCode" autocapitalize="characters" maxlength="6" placeholder="INNSA1" /><small data-i18n="portCodeHelp"></small></label>
+                </div>
+              </details>
               <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
             </article>
             <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">—</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
@@ -1302,12 +1317,12 @@
       <p data-i18n="addCustomerHelp"></p>
       <form id="customer-form" class="login-form">
         <label><span data-i18n="customerLegalName"></span><input name="legalName" required /></label>
-        <label><span data-i18n="customerRegistration"></span><select name="registration"><option value="regular" data-i18n="customerRegular"></option><option value="composition" data-i18n="customerComposition"></option><option value="unregistered" data-i18n="customerUnregistered"></option></select></label>
+        <label><span data-i18n="customerRegistration"></span><select name="registration"><option value="regular" data-i18n="customerRegular"></option><option value="composition" data-i18n="customerComposition"></option><option value="unregistered" data-i18n="customerUnregistered"></option><option value="overseas" data-i18n="customerOverseas"></option><option value="sez_without_payment" data-i18n="customerSezWithoutPayment"></option><option value="sez_with_payment" data-i18n="customerSezWithPayment"></option><option value="deemed_export" data-i18n="customerDeemedExport"></option></select></label>
         <label id="customer-gstin-field"><span data-i18n="customerGstin"></span><input name="gstin" autocapitalize="characters" placeholder="07EEEEE4444E1ZG" /><small data-i18n="customerGstinHelp"></small></label>
         <label><span data-i18n="customerAddress1"></span><input name="line1" required /></label>
         <label><span data-i18n="customerAddress2"></span><input name="line2" /></label>
         <label><span data-i18n="customerCity"></span><input name="city" required /></label>
-        <label><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" required /></label>
+        <label id="customer-pincode-field"><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" required /></label>
         <label id="customer-state-field"><span data-i18n="customerState"></span><select name="stateCode" id="customer-states"></select><small data-i18n="customerStateHelp"></small></label>
         <label><span data-i18n="customerPhone"></span><input name="phone" inputmode="tel" /></label>
         <p class="login-error" id="customer-error" role="alert"></p>

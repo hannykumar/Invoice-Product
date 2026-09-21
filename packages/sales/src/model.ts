@@ -38,6 +38,8 @@ export interface DraftInvoiceInput {
   readonly otherCharges?: Money;
   readonly roundToWholeRupee?: boolean;
   readonly narration?: string | null;
+  /** Issue #143 — an export or SEZ supply, zero-rated with or without tax. See `ComputeInput`. */
+  readonly zeroRated?: 'WITH_TAX' | 'WITHOUT_TAX';
 }
 
 /** What the calculator worked out, kept on the invoice so a final bill never recomputes. */
@@ -80,6 +82,8 @@ export interface SalesInvoice {
   readonly otherCharges: Money;
   readonly roundToWholeRupee: boolean;
   readonly narration: string | null;
+  /** Issue #143 — absent on an ordinary sale and on every bill from before it. */
+  readonly zeroRated?: 'WITH_TAX' | 'WITHOUT_TAX';
   readonly pricing: InvoicePricing | null;
   readonly problems: readonly InvoiceProblem[];
   readonly voucherId: VoucherId | null;

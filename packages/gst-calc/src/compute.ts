@@ -94,6 +94,15 @@ export interface ComputeInput {
   readonly freight?: Money;
   readonly otherCharges?: Money;
   readonly roundToWholeRupee?: boolean;
+  /**
+   * Issue #143 — an export or a supply to an SEZ, which section 16 of the IGST Act zero-rates.
+   *
+   * Such a supply is inter-State by section 7(5), so it is always integrated tax whatever the two
+   * states are. `WITHOUT_TAX` is the same supply made under bond or a letter of undertaking: the
+   * rate still prints, and no tax is charged on any line. The classification itself belongs to
+   * `packages/gst`; this only does the arithmetic it implies.
+   */
+  readonly zeroRated?: 'WITH_TAX' | 'WITHOUT_TAX';
   /** Identifies the document, so an exception queued twice is one item. */
   readonly source: { readonly kind: string; readonly id: string };
 }
@@ -317,33 +326,10 @@ export class GstCalculator {
     // 3. Which taxes apply?
     // The name comes from GPT 3's master data (#5). The Union Territory GST Act names territories
     // rather than codes, so the rule needs the name, not the number.
-    const placeOfSupplyName = GST_STATE_CODES[placeOfSupply]?.name;
-    const splitDecision = this.#engine.evaluate({
-      topic: 'gst.tax_split',
-      facts: FactSet.of(
-        {
-          'supply.supplierStateCode': company.stateCode,
-          'supply.placeOfSupplyStateCode': placeOfSupply,
-          ...(placeOfSupplyName === undefined ? {} : { 'supply.placeOfSupplyStateName': placeOfSupplyName }),
-        },
-        'MASTER_DATA',
-      ),
-      documentDate: input.documentDate,
-      stateCode: company.stateCode,
-    }).decision;
-    decisions.push(splitDecision);
-    if (splitDecision.outcome === 'CANNOT_DECIDE') {
-      reasons.push(
-        blocked(
-          'TAX_SPLIT_UNKNOWN',
-          'We cannot work out which GST applies to this sale yet.',
-          'Abhi tay nahin ho pa raha ki is bikri par kaunsa GST lagega.',
-          'tax.scenario_not_supported',
-        ),
-      );
-      return this.#refuse(input, reasons, decisions);
-    }
-    const split = splitDecision.computed.split as TaxSplit;
+    // Issue #143 — a zero-rated supply is inter-State by IGST Act section 7(5) whichever states are
+    // involved, and an export's place of supply is outside India, which no state rule covers.
+    const split = input.zeroRated !== undefined ? 'IGST' : this.#decideSplit(input, company.stateCode, placeOfSupply, decisions, reasons);
+    if (split === null) return this.#refuse(input, reasons, decisions);
 
     // 4. Line arithmetic.
     const prepared = input.lines.map((line) => {
@@ -391,13 +377,14 @@ export class GstCalculator {
 
     // 6. Freight and other charges are still part of the same supply and are still taxed — they
     //    are simply given lines of their own rather than hidden inside the goods.
-    const computedLines = [
+    const chargedLines = [
       ...goodsLines,
       ...this.#chargeLines(goodsLines, [
         { kind: 'FREIGHT', amount: input.freight ?? nil() },
         { kind: 'OTHER', amount: input.otherCharges ?? nil() },
       ], split),
     ];
+    const computedLines = input.zeroRated === 'WITHOUT_TAX' ? chargedLines.map(withoutTax) : chargedLines;
 
     const totals = this.#totals(computedLines, input.roundToWholeRupee ?? true);
     const declaredLines = computedLines.filter((l) => l.rateBasis === 'BUSINESS_DECLARED');
@@ -417,8 +404,43 @@ export class GstCalculator {
       lines: computedLines,
       totals,
       decisions,
-      explanation: this.#explainDocument(split, placeOfSupply, totals, mayChargeGst),
+      explanation: input.zeroRated === 'WITHOUT_TAX'
+        ? {
+            'en-IN': `This is an export or a supply to an SEZ made under bond or LUT, so no GST is charged. The bill comes to ${toDecimalString(totals.invoiceValue)}.`,
+            'hi-IN': `Yeh bond ya LUT par niryat ya SEZ ko supply hai, isliye GST nahin lagta. Bill ${toDecimalString(totals.invoiceValue)} ka hai.`,
+          }
+        : this.#explainDocument(split, placeOfSupply, totals, mayChargeGst),
     };
+  }
+
+  #decideSplit(input: ComputeInput, supplierStateCode: string, placeOfSupply: string, decisions: Decision[], reasons: BlockedReason[]): TaxSplit | null {
+    const placeOfSupplyName = GST_STATE_CODES[placeOfSupply]?.name;
+    const splitDecision = this.#engine.evaluate({
+      topic: 'gst.tax_split',
+      facts: FactSet.of(
+        {
+          'supply.supplierStateCode': supplierStateCode,
+          'supply.placeOfSupplyStateCode': placeOfSupply,
+          ...(placeOfSupplyName === undefined ? {} : { 'supply.placeOfSupplyStateName': placeOfSupplyName }),
+        },
+        'MASTER_DATA',
+      ),
+      documentDate: input.documentDate,
+      stateCode: supplierStateCode,
+    }).decision;
+    decisions.push(splitDecision);
+    if (splitDecision.outcome === 'CANNOT_DECIDE') {
+      reasons.push(
+        blocked(
+          'TAX_SPLIT_UNKNOWN',
+          'We cannot work out which GST applies to this sale yet.',
+          'Abhi tay nahin ho pa raha ki is bikri par kaunsa GST lagega.',
+          'tax.scenario_not_supported',
+        ),
+      );
+      return null;
+    }
+    return splitDecision.computed.split as TaxSplit;
   }
 
   #resolvePlaceOfSupply(
@@ -565,7 +587,7 @@ export class GstCalculator {
     let utgst = nil();
     let igst = nil();
 
-    if (line.priceBasis === 'INCLUSIVE') {
+    if (line.priceBasis === 'INCLUSIVE' && input.zeroRated !== 'WITHOUT_TAX') {
       // Work the tax back out of the price, then set the taxable value to whatever is left, so the
       // parts always add back to exactly the price the shopkeeper quoted.
       const candidate = mulDiv(base, 10000n, 10000n + rate);
@@ -900,6 +922,22 @@ export class GstCalculator {
     };
   }
 }
+
+/** Issue #143 — a line of a supply under bond or LUT: the rate stays, the tax does not. */
+const withoutTax = (line: ComputedTaxLine): ComputedTaxLine => ({
+  ...line,
+  cgst: nil(),
+  sgst: nil(),
+  utgst: nil(),
+  igst: nil(),
+  cess: nil(),
+  totalTax: nil(),
+  lineTotal: line.taxableValue,
+  explanation: {
+    'en-IN': `${line.itemName}: ${toDecimalString(line.taxableValue)}. Supplied under bond or LUT, so no GST is charged.`,
+    'hi-IN': `${line.itemName}: ${toDecimalString(line.taxableValue)}. Bond ya LUT par supply, isliye GST nahin.`,
+  },
+});
 
 const blocked = (
   code: BlockedReason['code'],

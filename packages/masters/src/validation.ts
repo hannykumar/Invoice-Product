@@ -146,6 +146,13 @@ export function validateIfsc(raw: string, field = "ifsc"): ValidationResult {
   return ok;
 }
 
+/**
+ * Issue #143 — a customer outside India, written the way the government's e-invoice schema writes
+ * one: state code 96 and PIN 999999. Accepted only for a party whose registration is `overseas`.
+ */
+export const OVERSEAS_STATE_CODE = "96";
+export const OVERSEAS_PINCODE = "999999";
+
 export function validatePincode(raw: string, field = "pincode"): ValidationResult {
   if (!PINCODE_SHAPE.test(raw.trim())) return fail(field, "PINCODE_SHAPE", "A PIN code has 6 digits and cannot start with 0.");
   return ok;

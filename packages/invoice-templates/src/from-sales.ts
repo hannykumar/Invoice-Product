@@ -10,6 +10,7 @@ import type { SalesInvoice } from '@invoice/sales';
 import type { ComputedTaxLine } from '@invoice/gst-calc';
 import { amountInWords } from './words.ts';
 import type { TradeMarkChoice } from './marks.ts';
+import { EXPORT_SUPPLIES, printedExportSupply, type ExportParticulars } from '@invoice/gst';
 import type {
   DocumentTitle,
   InvoiceDocument,
@@ -52,6 +53,11 @@ export interface PrintingContext {
    * which is what every bill does until somebody picks a picture.
    */
   readonly tradeMark?: TradeMarkChoice | null;
+  /**
+   * Issue #143 — set on an export or a supply to an SEZ. The same particulars go to the e-invoice,
+   * so the paper and the filing are built from one object.
+   */
+  readonly exportSupply?: ExportParticulars | null;
 }
 
 const nil = (): Money => zero('INR');
@@ -92,6 +98,19 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
   const pricing = invoice.pricing;
   const totals = pricing.totals;
   const paid = context.amountPaid ?? null;
+  const exportSupply = context.exportSupply ?? null;
+  // Issue #143 — the paper may not say one thing while the tax on it says another. The sale was
+  // priced as zero-rated (or not) by the calculator; the classification printed must be the same.
+  const expected = exportSupply === null || !EXPORT_SUPPLIES[exportSupply.kind].zeroRated
+    ? undefined
+    : EXPORT_SUPPLIES[exportSupply.kind].taxPaid ? 'WITH_TAX' : 'WITHOUT_TAX';
+  if (invoice.zeroRated !== expected) {
+    throw new Error(
+      expected === undefined
+        ? 'This bill was priced as an export or SEZ supply, but is being printed as an ordinary one.'
+        : 'The tax on this bill was worked out for a different kind of sale from the export or SEZ supply being printed. Price it again as this kind of sale.',
+    );
+  }
 
   return {
     title: context.title,
@@ -134,6 +153,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     declaration: context.declaration ?? null,
     signatureDataUri: context.signatureDataUri ?? null,
     poReference: context.poReference ?? null,
+    exportSupply: exportSupply === null ? null : printedExportSupply(exportSupply, totals.invoiceValue.minor),
   };
 };
 
