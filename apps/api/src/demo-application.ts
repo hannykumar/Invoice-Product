@@ -66,6 +66,7 @@ import {
 } from './catalogue-application.ts';
 import { dispatchFrom, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
+import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
@@ -1276,16 +1277,7 @@ export class DemoApplication {
         consignor,
         billTo,
         // Where the goods actually finish, which is what the limit is judged on.
-        ...(delivery.shipTo === null ? {} : {
-          shipTo: {
-            legalName: delivery.shipTo.name,
-            gstin: delivery.shipTo.gstin ?? 'URP',
-            address1: delivery.shipTo.addressLines[0] ?? '',
-            place: delivery.transport?.destination ?? '',
-            pincode: '',
-            stateCode: delivery.shipTo.stateCode,
-          },
-        }),
+        ...(delivery.deliverTo === null ? {} : { shipTo: delivery.deliverTo }),
         documents: [{
           documentId: draft.id,
           documentType: 'TAX_INVOICE',
@@ -2848,7 +2840,10 @@ export class DemoApplication {
       documentDate: invoice.documentDate,
       lines,
     };
-    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input, String(invoice.partyId));
+    // Issue #224 — where the bill itself says the goods went, when it says somewhere other than the
+    // buyer's billing address. The e-way bill carries that address rather than asking for it again.
+    const recorded = this.deliveries.get(invoice.id)?.deliverTo ?? null;
+    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input, String(invoice.partyId), recorded);
   }
 
   /** One movement of goods: the document on the lorry, why it is moving, and what the form said. */
@@ -2866,7 +2861,7 @@ export class DemoApplication {
     };
   }
 
-  private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>, partyId: string): Movement {
+  private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>, partyId: string, recorded: MovementParty | null = null): Movement {
     // Issue #180 — where the goods actually leave from, taken from the business's own address. An
     // e-way bill that disagrees with the invoice about the dispatch place is exactly the
     // discrepancy an officer stops a lorry over.
@@ -2875,17 +2870,7 @@ export class DemoApplication {
     // address. An e-way bill naming a different buyer is a discrepancy against its own invoice.
     const billTo: MovementParty = this.movementParty(partyId);
 
-    // Where the goods really go. Left off entirely when the form did not say, so the rules read the
-    // buyer's own address rather than a made-up delivery address.
-    const shipToState = String(input.shipToState ?? '').trim();
-    const shipToPlace = String(input.shipToPlace ?? '').trim();
-    const shipTo: MovementParty | undefined = shipToState === '' ? undefined : {
-      ...billTo,
-      legalName: `${billTo.legalName} — delivery address`,
-      address1: 'Delivery address given on the movement',
-      place: shipToPlace === '' ? 'Delivery address' : shipToPlace,
-      stateCode: shipToState,
-    };
+    const shipTo = DemoApplication.deliveryPlace(billTo, recorded, input);
 
     const distance = String(input.distanceKm ?? '').trim();
     const vehicleNumber = String(input.vehicle ?? '').trim();
@@ -2912,6 +2897,47 @@ export class DemoApplication {
       ...(withinSameCity === '' ? {} : { withinSameCity: withinSameCity === 'yes' }),
       ...(vehicle === undefined ? {} : { vehicle }),
     };
+  }
+
+  /**
+   * Issue #224 — where the goods really go, as the e-way bill names it. Undefined when they go to the
+   * buyer's own billing address, so the rules read that address and the portal is told "Regular".
+   *
+   * Nothing here is copied from the buyer. The delivery place used to be the buyer's own record with
+   * the town and state swapped in, so a Hyderabad delivery went out under the buyer's Delhi PIN code
+   * and an address line nobody had typed. The PIN is what the portal works the route out from and
+   * what an officer checks against the lorry.
+   *
+   * 1. The bill already says where the goods went: that address, in full. A dispatch form naming a
+   *    different state is refused, because one bill cannot describe two journeys.
+   * 2. The bill does not, and the form names a delivery state: the form must also give the address
+   *    line, the town and a PIN code that belongs to that state.
+   */
+  private static deliveryPlace(billTo: MovementParty, recorded: MovementParty | null, input: Record<string, unknown>): MovementParty | undefined {
+    const typed = (key: string) => String(input[key] ?? '').trim();
+    const shipToState = typed('shipToState');
+
+    if (recorded !== null) {
+      if (shipToState !== '' && shipToState !== recorded.stateCode) {
+        const recordedState = STATE_NAMES[recorded.stateCode] ?? recorded.stateCode;
+        const typedState = STATE_NAMES[shipToState] ?? shipToState;
+        throw invalid('EWAY_SHIP_TO_DIFFERS_FROM_BILL', `The bill says these goods go to ${recorded.place}, ${recordedState}, but the form says ${typedState}. One bill cannot describe two journeys. Leave the delivery state on "Wherever the buyer is" to use the bill's address, or correct the bill.`);
+      }
+      return recorded;
+    }
+    if (shipToState === '' || (shipToState === billTo.stateCode && typed('shipToAddress') === '' && typed('shipToPincode') === '')) return undefined;
+
+    const address1 = typed('shipToAddress');
+    if (address1 === '') throw invalid('EWAY_SHIP_TO_ADDRESS', 'Type the delivery address — the building, street or area the goods are going to.');
+    const place = typed('shipToPlace');
+    if (place === '') throw invalid('EWAY_SHIP_TO_PLACE', 'Type the town or city the goods are going to.');
+    const pincode = typed('shipToPincode');
+    const pinCheck = validatePincodeForState(pincode, shipToState, 'shipToPincode');
+    if (!pinCheck.ok) {
+      throw invalid('EWAY_SHIP_TO_PINCODE', pincode === '' ? 'Type the PIN code of the delivery address. The portal works the route out from it.' : pinCheck.problems[0]?.message ?? 'That PIN code is not right for the delivery address.');
+    }
+    // The goods go to another place of the same buyer, so the name and GST number stay theirs.
+    return { legalName: billTo.legalName, gstin: billTo.gstin, address1, place, pincode, stateCode: shipToState };
   }
 
   private static ewayJson(record: EwayBillRecord, now: Date) {

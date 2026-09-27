@@ -158,6 +158,67 @@ export function validatePincode(raw: string, field = "pincode"): ValidationResul
   return ok;
 }
 
+/**
+ * Issue #224 — the first two digits of the PIN codes each state's post offices use.
+ *
+ * India Post gives every region a block of PIN codes, so the first two digits say which part of the
+ * country an address is in: 11 is Delhi, 50 is Telangana. This is used to catch a PIN copied from
+ * the wrong address, such as the buyer's Delhi PIN under a Hyderabad delivery. It is deliberately
+ * generous: where a postal region spans two states (Andhra Pradesh and Telangana, the north-east,
+ * Uttar Pradesh and Uttarakhand), both are allowed, because refusing a genuine address is worse
+ * than letting a near-miss through. A state not listed here is not checked.
+ */
+const PIN_PREFIXES_BY_STATE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  "01": ["18", "19"],
+  "02": ["17"],
+  "03": ["14", "15", "16"],
+  "04": ["16"],
+  "05": ["24", "26"],
+  "06": ["12", "13"],
+  "07": ["11"],
+  "08": ["30", "31", "32", "33", "34"],
+  "09": ["20", "21", "22", "23", "24", "25", "26", "27", "28"],
+  "10": ["80", "81", "82", "83", "84", "85"],
+  "11": ["73"],
+  "12": ["78", "79"],
+  "13": ["78", "79"],
+  "14": ["78", "79"],
+  "15": ["78", "79"],
+  "16": ["78", "79"],
+  "17": ["78", "79"],
+  "18": ["78", "79"],
+  "19": ["70", "71", "72", "73", "74"],
+  "20": ["80", "81", "82", "83", "84", "85"],
+  "21": ["75", "76", "77"],
+  "22": ["49"],
+  "23": ["45", "46", "47", "48", "49"],
+  "24": ["36", "37", "38", "39"],
+  "25": ["39"],
+  "26": ["39"],
+  "27": ["40", "41", "42", "43", "44"],
+  "28": ["50", "51", "52", "53"],
+  "29": ["56", "57", "58", "59"],
+  "30": ["40"],
+  "31": ["68"],
+  "32": ["67", "68", "69"],
+  "33": ["60", "61", "62", "63", "64"],
+  "34": ["53", "60", "67"],
+  "35": ["74"],
+  "36": ["50"],
+  "37": ["50", "51", "52", "53"],
+  "38": ["19"],
+});
+
+/** Whether a six-digit PIN code can be in the given state. A state with no postal range listed passes. */
+export function validatePincodeForState(pincode: string, stateCode: string, field = "pincode"): ValidationResult {
+  const shape = validatePincode(pincode, field);
+  if (!shape.ok) return shape;
+  const prefixes = PIN_PREFIXES_BY_STATE[stateCode];
+  if (prefixes === undefined || prefixes.includes(pincode.trim().slice(0, 2))) return ok;
+  const state = GST_STATE_CODES[stateCode]?.name ?? stateCode;
+  return fail(field, "PINCODE_STATE_MISMATCH", `PIN code ${pincode.trim()} is not in ${state}. PIN codes in ${state} start with ${prefixes.join(" or ")}.`);
+}
+
 export function validateVehicleNumber(raw: string, field = "vehicleNumber"): ValidationResult {
   const value = normaliseIdentifier(raw);
   if (VEHICLE_STATE_SERIES.test(value) || VEHICLE_BH_SERIES.test(value)) return ok;
