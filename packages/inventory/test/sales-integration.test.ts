@@ -37,6 +37,7 @@ import { createDefaultUnitRegistry, formatQuantity, quantity, type UnitRegistry 
 import { InMemoryInventoryStore } from '../src/repository.ts';
 import { InventoryService } from '../src/service.ts';
 import { salesInventoryAdapter } from '../src/sales-adapter.ts';
+import { ledgerStockBooks } from '../src/ledger-adapter.ts';
 import type { StockItem, StockMasterData, Warehouse } from '../src/ports.ts';
 import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
@@ -45,7 +46,7 @@ const OWNER = asId<'User'>('till-owner');
 const ABC = asId<'Party'>('abc');
 
 const PERMISSIONS = [
-  'ledger.setup', 'ledger.post.sale', 'ledger.reverse',
+  'ledger.setup', 'ledger.post.sale', 'ledger.post.journal', 'ledger.reverse',
   'sales.draft.write', 'sales.finalise', 'sales.cancel',
   'inventory.move', 'inventory.adjust', 'inventory.transfer', 'inventory.override_negative',
   'sales.approve',
@@ -73,7 +74,7 @@ class StockMasters implements StockMasterData {
 
 let counter = 0;
 
-const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE' } = {}) => {
+const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE'; books?: boolean; failIssue?: boolean } = {}) => {
   const store = new InMemoryLedgerStore();
   const salesRepo = new InMemorySalesRepository();
   const inventoryStore = new InMemoryInventoryStore();
@@ -100,6 +101,7 @@ const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE
     permissions: permissionPortFromActor, audit, clock,
     policy: { negativeStock: options.negativeStock ?? 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory,
+    ...(options.books === true ? { books: ledgerStockBooks(store, ledger) } : {}),
   });
 
   const taxMasters = new InMemoryMasterData();
@@ -120,7 +122,12 @@ const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE
 
   const sales = new SalesService({
     store, ledger, calculator, repository: salesRepo,
-    inventory: salesInventoryAdapter(inventory, { defaultWarehouseId: 'narela' }),
+    inventory: options.failIssue === true
+      ? {
+          ...salesInventoryAdapter(inventory, { defaultWarehouseId: 'narela' }),
+          async issue() { throw new Error('the godown could not be written to'); },
+        }
+      : salesInventoryAdapter(inventory, { defaultWarehouseId: 'narela' }),
     compliance: noComplianceHooks,
     permissions: permissionPortFromActor, audit, clock,
     policy: {
@@ -177,7 +184,7 @@ test('buy 100, sell 70, and the second sale of 70 is blocked — the user exampl
   assert.equal(blocked.problems[0]?.messageId, 'stock.not_enough');
   assert.match(
     blocked.problems[0]?.message['en-IN'] ?? '',
-    /You have 30\.000 BOX of Apple box, 10 kg at Narela godown\. This bill needs 70\.000 BOX, so 40\.000 BOX are missing\./,
+    /You have 30 BOX of Apple box, 10 kg in Narela godown\. This bill asks for 70 BOX\./,
   );
 
   assert.ok((await trialBalance(till.store.read(), COMPANY)).balanced);
@@ -199,7 +206,7 @@ test('an unfinished bill holds the stock, so a second till cannot promise the sa
   const second = await sellBoxes(till, 'sale-2', '30');
   const blocked = await till.sales.submitForApproval(actor, second.id);
   assert.equal(blocked.state, 'NEEDS_INFO', 'the first bill is holding all thirty');
-  assert.match(blocked.problems[0]?.message['en-IN'] ?? '', /You have 0\.000 BOX/);
+  assert.match(blocked.problems[0]?.message['en-IN'] ?? '', /You have 0 BOX/);
 });
 
 test('cancelling an issued bill puts the goods back on the shelf', async () => {
@@ -267,4 +274,82 @@ test('a services bill never touches stock', async () => {
   });
   await till.sales.submitForApproval(actor, draft.id);
   assert.equal((await till.inventory.movementsFor(actor, {})).length, 0);
+});
+
+// Issue #229 — the goods leave in the same unit of work as the bill.
+
+test('if the goods cannot be taken out, the bill is not issued and no number is used up', async () => {
+  const till = await makeTill({ failIssue: true });
+  await till.inventory.recordMovement(actor, {
+    idempotencyKey: 'buy-100', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'PURCHASE_IN',
+    quantity: quantity('100', 'BOX'), unitCost: rupees(500), documentDate: isoDate('2026-04-04'),
+    source: { kind: 'purchase_invoice', id: 'p', number: null },
+  });
+  const draft = await sellBoxes(till, 'sale-1', '70');
+  await assert.rejects(till.sales.finalise(actor, { idempotencyKey: 'f1', invoiceId: draft.id }), /godown could not be written/);
+  const after = await till.sales.get(actor, draft.id);
+  assert.notEqual(after?.state, 'FINAL');
+  assert.equal(after?.number, null);
+  const owed = await partyBalance(till.store.read(), COMPANY, ABC);
+  assert.equal(toDecimalString(owed.balance), '0.00', 'no sale entry was left behind');
+  assert.equal(formatQuantity((await till.inventory.balance(actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' })).physical), '100.000 BOX');
+});
+
+test('issuing a bill of 70 from 100 leaves 30, and a retried issue takes nothing twice', async () => {
+  const till = await makeTill();
+  await till.inventory.recordMovement(actor, {
+    idempotencyKey: 'buy-100', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'PURCHASE_IN',
+    quantity: quantity('100', 'BOX'), unitCost: rupees(500), documentDate: isoDate('2026-04-04'),
+    source: { kind: 'purchase_invoice', id: 'p', number: null },
+  });
+  const draft = await sellBoxes(till, 'sale-1', '70');
+  const first = await till.sales.finalise(actor, { idempotencyKey: 'f1', invoiceId: draft.id });
+  const again = await till.sales.finalise(actor, { idempotencyKey: 'f1', invoiceId: draft.id });
+  assert.equal(again.deduplicated, true);
+  assert.equal(again.invoice.number, first.invoice.number);
+  assert.equal(formatQuantity((await till.inventory.balance(actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' })).physical), '30.000 BOX');
+  const outs = (await till.inventory.movementsFor(actor, { itemId: 'APL-BOX-10' })).filter((m) => m.kind === 'SALE_OUT');
+  assert.equal(outs.length, 1);
+});
+
+test('the review check refuses 70 against 30 in plain words, and holds nothing afterwards', async () => {
+  const till = await makeTill();
+  await till.inventory.recordMovement(actor, {
+    idempotencyKey: 'buy-30', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'PURCHASE_IN',
+    quantity: quantity('30', 'BOX'), unitCost: rupees(500), documentDate: isoDate('2026-04-04'),
+    source: { kind: 'purchase_invoice', id: 'p', number: null },
+  });
+  const short = await till.sales.checkStock(actor, (await sellBoxes(till, 'sale-1', '70')).id);
+  assert.equal(short.state, 'NEEDS_INFO');
+  assert.equal(short.problems[0]?.message['en-IN'], 'You have 30 BOX of Apple box, 10 kg in Narela godown. This bill asks for 70 BOX.');
+  const fits = await till.sales.checkStock(actor, (await sellBoxes(till, 'sale-2', '20')).id);
+  assert.equal(fits.state, 'DRAFT');
+  const balance = await till.inventory.balance(actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' });
+  assert.equal(formatQuantity(balance.available), '30.000 BOX', 'a review holds nothing once it has answered');
+});
+
+test('the value of the goods moves in the books with them: bought, sold, cancelled', async () => {
+  const till = await makeTill({ books: true });
+  await till.inventory.recordMovement(actor, {
+    idempotencyKey: 'buy-100', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'PURCHASE_IN',
+    quantity: quantity('100', 'BOX'), unitCost: rupees(500), documentDate: isoDate('2026-04-04'),
+    source: { kind: 'purchase_invoice', id: 'p', number: null },
+  });
+  const stockInHand = async () => {
+    const tb = await trialBalance(till.store.read(), COMPANY);
+    assert.ok(tb.balanced);
+    const row = tb.rows.find((r) => r.account.code === '1300');
+    return toDecimalString(row?.balance ?? rupees(0));
+  };
+  // 100 × ₹500 = ₹50,000.
+  assert.equal(await stockInHand(), '50000.00');
+  const draft = await sellBoxes(till, 'sale-1', '70');
+  await till.sales.finalise(actor, { idempotencyKey: 'f1', invoiceId: draft.id });
+  // 30 × ₹500 = ₹15,000.
+  assert.equal(await stockInHand(), '15000.00');
+  await till.sales.cancel(actor, { idempotencyKey: 'c1', invoiceId: draft.id, reason: 'Wrong customer', today: isoDate('2026-04-14') });
+  // The 70 come back at the ₹500 they went out at: 100 × ₹500 = ₹50,000 again.
+  assert.equal(await stockInHand(), '50000.00');
+  const value = await till.inventory.value(actor, { itemId: 'APL-BOX-10' });
+  assert.equal(toDecimalString(value.value), '50000.00');
 });

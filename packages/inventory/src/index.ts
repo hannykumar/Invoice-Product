@@ -6,3 +6,4 @@ export * from './repository.ts';
 export * from './balances.ts';
 export * from './service.ts';
 export * from './sales-adapter.ts';
+export * from './ledger-adapter.ts';

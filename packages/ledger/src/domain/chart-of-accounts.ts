@@ -61,6 +61,11 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
 
   { code: '5000', name: 'Money going out', type: 'EXPENSE', parentCode: null, isGroup: true, systemRole: null },
   { code: '5100', name: 'Purchases of goods', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'PURCHASES_GOODS' },
+  // Issue #229 — the other side of "Stock in hand" as goods come in and go out. Purchases stay in
+  // full above; this line takes back the part still lying in the godown, so purchases plus this
+  // line is what the goods sold actually cost. The same line as "Changes in inventories of
+  // stock-in-trade" in the profit and loss statement Schedule III of the Companies Act lays down.
+  { code: '5110', name: 'Change in stock of goods', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'STOCK_CHANGE' },
   { code: '5120', name: 'Services and expenses bought', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'PURCHASES_SERVICES' },
   { code: '5150', name: 'Goods returned to suppliers', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'PURCHASE_RETURNS' },
   { code: '5200', name: 'Goods returned by customers', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'SALES_RETURNS' },

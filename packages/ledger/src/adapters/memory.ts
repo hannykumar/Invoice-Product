@@ -8,6 +8,7 @@
  * `transaction` serialises work per company and rolls back on failure, which is what makes the
  * concurrency and duplicate-posting tests meaningful rather than decorative.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { conflict, forbidden, type CompanyId, type UserId, type VoucherId, type AccountId } from '@invoice/kernel';
 import type { Account } from '../domain/account.ts';
 import type { FiscalPeriod, PeriodState } from '../domain/period.ts';
@@ -209,9 +210,21 @@ export class InMemoryLedgerStore implements LedgerStore {
     return this;
   }
 
+  /**
+   * The transaction this call chain is already inside, if any (issue #229).
+   *
+   * A sale must take the goods out of stock and write their value into the books in the same unit
+   * of work as the bill itself. Those steps belong to other modules, and each of them opens a
+   * transaction of its own. Without this, the inner call would wait for the lock the outer call is
+   * holding, for ever. With it, the inner call joins the outer one: it commits with it, and if the
+   * inner work fails, its own writes are undone and the failure reaches the outer call, which then
+   * undoes everything.
+   */
+  readonly #open = new AsyncLocalStorage<{ companyId: string; active: boolean }>();
+
   async transaction<T>(companyId: CompanyId, work: (uow: UnitOfWork) => Promise<T>): Promise<T> {
-    const previous = this.#locks.get(companyId) ?? Promise.resolve();
-    const run = previous.then(async () => {
+    const open = this.#open.getStore();
+    if (open !== undefined && open.active && open.companyId === companyId) {
       const before = snapshot(this.#state);
       const joined = this.#participants.map((p) => ({ participant: p, taken: p.snapshot() }));
       try {
@@ -220,6 +233,23 @@ export class InMemoryLedgerStore implements LedgerStore {
         restore(this.#state, before);
         for (const { participant, taken } of joined) participant.restore(taken);
         throw error;
+      }
+    }
+
+    const previous = this.#locks.get(companyId) ?? Promise.resolve();
+    const run = previous.then(async () => {
+      const before = snapshot(this.#state);
+      const joined = this.#participants.map((p) => ({ participant: p, taken: p.snapshot() }));
+      const context = { companyId: companyId as string, active: true };
+      try {
+        return await this.#open.run(context, () => work(makeUnitOfWork(this.#state)));
+      } catch (error) {
+        restore(this.#state, before);
+        for (const { participant, taken } of joined) participant.restore(taken);
+        throw error;
+      } finally {
+        // Anything started inside and still running afterwards is not part of this transaction.
+        context.active = false;
       }
     });
     this.#locks.set(

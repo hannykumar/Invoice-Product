@@ -203,3 +203,42 @@ test('every posting is written to the audit trail with actor, time and source, a
     assert.ok(!serialised.includes(forbiddenWord), `the audit trail must not carry ${forbiddenWord}`);
   }
 });
+
+// Issue #229 — a sale issues stock and books its value inside the bill's own transaction, and
+// those steps open transactions of their own. They must join the open one, not wait for it.
+
+test('a transaction opened inside an open one for the same business joins it instead of waiting for ever', async () => {
+  const l = await makeLedger();
+  const result = await l.store.transaction(l.actor.companyId, async (uow) => {
+    await l.service.postVoucherIn(uow, l.actor, saleCommand(l, key('outer')));
+    // postVoucher opens its own transaction: before #229 this line never returned.
+    await l.service.postVoucher(l.actor, saleCommand(l, key('inner')));
+    return 'done';
+  });
+  assert.equal(result, 'done');
+  const all = await l.store.read().vouchers.list(l.actor.companyId, {});
+  assert.equal(all.length, 2);
+});
+
+test('when the outer transaction fails, what the inner one wrote is undone with it', async () => {
+  const l = await makeLedger();
+  await assert.rejects(l.store.transaction(l.actor.companyId, async () => {
+    await l.service.postVoucher(l.actor, saleCommand(l, key('inner')));
+    throw new Error('the bill could not be saved');
+  }), /could not be saved/);
+  const all = await l.store.read().vouchers.list(l.actor.companyId, {});
+  assert.equal(all.length, 0, 'no entry survives a bill that was never saved');
+});
+
+test('an inner failure undoes only the inner work when the outer one carries on', async () => {
+  const l = await makeLedger();
+  await l.store.transaction(l.actor.companyId, async (uow) => {
+    await l.service.postVoucherIn(uow, l.actor, saleCommand(l, key('outer')));
+    await assert.rejects(l.store.transaction(l.actor.companyId, async (inner) => {
+      await l.service.postVoucherIn(inner, l.actor, saleCommand(l, key('inner')));
+      throw new Error('inner step refused');
+    }));
+  });
+  const all = await l.store.read().vouchers.list(l.actor.companyId, {});
+  assert.equal(all.length, 1);
+});

@@ -12,6 +12,7 @@ import {
 } from '@invoice/ledger';
 import { InMemoryInventoryStore } from '../../../packages/inventory/src/repository.ts';
 import { InventoryService } from '../../../packages/inventory/src/service.ts';
+import { ledgerStockBooks } from '../../../packages/inventory/src/ledger-adapter.ts';
 import type { StockItem, StockMasterData, Warehouse } from '../../../packages/inventory/src/ports.ts';
 import { UnitRegistry, createDefaultUnitRegistry } from '../../../packages/masters/src/units.ts';
 import { InMemoryPurchaseBillStore, purchaseInventoryPort } from '../../../packages/purchasing/src/posting-adapters.ts';
@@ -201,6 +202,8 @@ export async function createCompanyShop(seed: CompanySeed) {
     clock,
     policy: { negativeStock: 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory: () => `${seed.companyId}:movement:${sequence += 1}`,
+    // Issue #229 — every movement writes its value into the books, in the same transaction.
+    books: ledgerStockBooks(store, ledger),
   });
   const posting = new PurchasePostingService({
     store,
