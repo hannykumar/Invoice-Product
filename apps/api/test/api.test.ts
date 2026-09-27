@@ -387,20 +387,31 @@ test('a sale preview carries the agreed price and the credit warning from the re
   assert.equal(small.status, 200);
   assert.equal(small.body.terms.lines[0].priceSource, 'LAST_AGREED', 'what they last paid, not a guess');
   assert.match(small.body.terms.lines[0].priceSentence['en-IN'], /Last time you charged them/);
+  // Issue #235 — nobody set a limit for this customer, so none is made up and none is warned about.
   assert.equal(small.body.terms.credit.outcome, 'ALLOW');
+  assert.equal(small.body.terms.credit.limit, null);
 
-  // A bill far beyond the limit is warned about, with the excess worked out from real positions.
+  // Once the business sets one, a bill far beyond it is warned about, with the excess worked out
+  // from real positions and the whole bill.
+  const abc = (await request('GET', '/api/catalogue', {}, owner)).body.customers.find((c: { name: string }) => c.name === 'ABC Traders');
+  const address = (await request('POST', '/api/customer-address', { customerId: abc.id }, owner)).body.address;
+  const limited = await request('POST', '/api/customer-address/correct', {
+    customerId: abc.id, line1: address.lines[0], city: address.city, pincode: address.pincode, creditLimit: '5000',
+  }, owner);
+  assert.equal(limited.status, 200, JSON.stringify(limited.body));
   const big = await request('POST', '/api/sales/preview', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '40', rate: '250',
     date: '2026-08-29', terms: '30', reference: 'TERMS-11-BIG',
   }, owner);
   assert.equal(big.body.terms.credit.outcome, 'WARN');
-  assert.ok(big.body.terms.credit.excess > 0, 'the amount over the limit is stated');
-  assert.match(big.body.terms.credit.sentence['en-IN'], /more than you allow/);
+  assert.equal(big.body.terms.credit.limit, 5000);
+  assert.equal(big.body.terms.credit.exposure, big.body.terms.credit.outstanding + big.body.amount, 'the whole bill, tax included');
+  assert.equal(big.body.terms.credit.excess, big.body.terms.credit.exposure - 5000);
+  assert.match(big.body.terms.credit.sentence['en-IN'], /over their ₹5,000\.00 limit/);
   assert.equal(typeof big.body.terms.credit.sentence['hi-IN'], 'string', 'both languages, like every other page');
 
-  // Unissued drafts count towards the limit: that is what stops two tills spending it twice.
-  assert.ok(big.body.terms.credit.pending > 0, "an earlier unfinished bill is counted");
+  // The earlier review was not issued and was not held back, so it is not counted as owed.
+  assert.equal(big.body.terms.credit.pending, 0, 'an abandoned review is not money owed');
 });
 
 /**

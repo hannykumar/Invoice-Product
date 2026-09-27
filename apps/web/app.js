@@ -81,9 +81,9 @@ const copy = {
     addTransporterTitle: "Add a transporter", addTransporterHelp: "The bill prints their name as \u201cDispatched through\u201d.",
     transporterName: "Transporter's name", transporterId: "GST number, or transporter ID", transporterIdHelp: "15 characters. A transporter who is not registered for GST is given a transporter ID instead; both go here.",
     transporterPhone: "Phone (optional)", saveTransporter: "Save transporter",
-    addAddressTitle: "Add a delivery address", addAddressHelp: "Another place this customer takes goods at. It is saved on the customer, so it is not retyped next time.", correctAddress: "Correct address", correctAddressTitle: "Correct this customer's address", correctAddressHelp: "Fix a wrong street, town or PIN code. Bills already issued keep the address they were issued with. The state stays as it is, because it decides the tax.", addressCorrected: "Address corrected", addressStateFixed: "State:",
+    addAddressTitle: "Add a delivery address", addAddressHelp: "Another place this customer takes goods at. It is saved on the customer, so it is not retyped next time.", correctAddress: "Correct address", correctAddressTitle: "Correct this customer's address or credit limit", correctAddressHelp: "Fix a wrong street, town or PIN code, or set their credit limit. Bills already issued keep the address they were issued with. The state stays as it is, because it decides the tax.", addressCorrected: "Address corrected", addressStateFixed: "State:",
     addressLabelName: "What to call it", deliveryStateHelp: "Goods sent to another state make this sale count in that state.",
-    deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address",
+    deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address", saveCorrection: "Save changes",
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
     saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item",
     noCustomersYet: "No customers saved yet", noItemsYet: "No items saved yet", cancel: "Cancel",
@@ -93,6 +93,7 @@ const copy = {
     customerAddress1: "Address line 1", customerAddress2: "Address line 2 (optional)", customerCity: "Town or city", customerPincode: "PIN code", customerState: "Which state?",
     customerStateHelp: "For a registered customer the state comes from the first two digits of their GST number, and cannot be changed.",
     customerPhone: "Phone (optional)", saveCustomer: "Save customer",
+    customerCreditLimit: "Credit limit in ₹ (optional)", customerCreditLimitHelp: "The most this customer may owe you. Leave it empty for no limit: then no bill to them is checked against one.", customerCreditLimitShown: "credit limit {amount}",
     changeItemCode: "Change HSN code", itemCodeTitle: "Change the item's HSN code", itemCodeCurrent: "{item} carries the code {code} ({digits} digits).", itemCodeNew: "New HSN or SAC code", itemCodeHelp: "Type every digit you have. More digits are always accepted; a shorter code is never padded with zeros.", itemCodeSave: "Save code", itemCodePick: "Choose an item first.", turnoverLegend: "Turnover last year", turnoverQuestion: "Was your business's total turnover (all sales under your PAN across every GST registration in India, including exempt sales and exports, before GST) more than ₹5 crore last financial year?", turnoverYes: "Yes", turnoverNo: "No", turnoverUnsure: "Not sure", turnoverWhy: "Until you tell us, we ask for 6 digits, because 6 is always accepted.", turnoverFor: "This answer is for bills in {year}. It decides how many HSN digits each bill needs.", addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
     itemName: "What it is called on the bill", itemKind: "Goods or a service?", itemGoods: "Goods", itemService: "A service",
     itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits; bills to GST-registered customers need at least 4, and at least 6 above ₹5 crore turnover. A service carries a 6-digit SAC starting 99.",
@@ -401,9 +402,9 @@ const copy = {
     addTransporterTitle: "Transporter joden", addTransporterHelp: "Bill par inka naam \u201cDispatched through\u201d mein chhapta hai.",
     transporterName: "Transporter ka naam", transporterId: "GST number, ya transporter ID", transporterIdHelp: "15 akshar. Jo transporter GST mein registered nahin hai use transporter ID milti hai; dono yahin aate hain.",
     transporterPhone: "Phone (marzi se)", saveTransporter: "Transporter save karen",
-    addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.", correctAddress: "Pata sahi karen", correctAddressTitle: "Is customer ka pata sahi karen", correctAddressHelp: "Galat gali, shehar ya PIN code theek karen. Pehle jaari hue bill par wahi pata rahega jo tab tha. Rajya waisa hi rahega, kyonki tax usi se tay hota hai.", addressCorrected: "Pata sahi ho gaya", addressStateFixed: "Rajya:",
+    addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.", correctAddress: "Pata sahi karen", correctAddressTitle: "Is customer ka pata ya udhaar seema sahi karen", correctAddressHelp: "Galat gali, shehar ya PIN code theek karen, ya unki udhaar seema tay karen. Pehle jaari hue bill par wahi pata rahega jo tab tha. Rajya waisa hi rahega, kyonki tax usi se tay hota hai.", addressCorrected: "Pata sahi ho gaya", addressStateFixed: "Rajya:",
     addressLabelName: "Ise kya kahen", deliveryStateHelp: "Doosre rajya bheja gaya maal is bikri ko us rajya ki bana deta hai.",
-    deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen",
+    deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen", saveCorrection: "Badlav save karen",
     saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
     noCustomersYet: "Abhi koi customer save nahin hai", noItemsYet: "Abhi koi saman save nahin hai", cancel: "Rehne den",
     addSupplier: "＋ Naya supplier joden", noSuppliersYet: "Abhi koi supplier nahin", addSupplierTitle: "Supplier joden", addSupplierHelp: "Unke bill par jaisa chhapa hai waisa hi bharen. Unka rajya unke GST number se padha jata hai.", supplierLegalName: "Unke bill par naam", supplierGstinHelp: "Pehle do ank unka rajya hain. Isse tay hota hai ki unke bill par IGST lagega ya CGST aur SGST.", saveSupplier: "Supplier save karen", addCustomerTitle: "Customer joden", addCustomerHelp: "Bill par yahi naam, pata aur GST number chhapega, isliye sahi hona chahiye.",
@@ -412,6 +413,7 @@ const copy = {
     customerAddress1: "Pate ki pehli line", customerAddress2: "Pate ki doosri line (marzi se)", customerCity: "Shehar ya kasba", customerPincode: "PIN code", customerState: "Kaunsa rajya?",
     customerStateHelp: "Registered customer ka rajya unke GST number ke pehle do ank se aata hai, aur badla nahin ja sakta.",
     customerPhone: "Phone (marzi se)", saveCustomer: "Customer save karen",
+    customerCreditLimit: "Udhaar seema ₹ mein (marzi se)", customerCreditLimitHelp: "Yeh customer aapka zyada se zyada kitna baaki rakh sakta hai. Khali chhodein to koi seema nahin, aur unka koi bill seema se nahin jaancha jayega.", customerCreditLimitShown: "udhaar seema {amount}",
     changeItemCode: "HSN code badlein", itemCodeTitle: "Item ka HSN code badlein", itemCodeCurrent: "{item} ka code {code} hai ({digits} ank).", itemCodeNew: "Naya HSN ya SAC code", itemCodeHelp: "Jitne ank aapke paas hain, sab bharein. Zyada ank hamesha chalte hain; chhote code mein zero nahin joda jata.", itemCodeSave: "Code save karen", itemCodePick: "Pehle item chunen.", turnoverLegend: "Pichhle saal ka turnover", turnoverQuestion: "Pichhle financial year mein aapke business ka kul turnover (aapke PAN par Bharat ke har GST registration ki saari bikri, exempt aur export milakar, GST se pehle) ₹5 crore se zyada tha?", turnoverYes: "Haan", turnoverNo: "Nahin", turnoverUnsure: "Pakka nahin", turnoverWhy: "Jab tak aap nahin batate, hum 6 ank maangte hain, kyonki 6 hamesha maane jaate hain.", turnoverFor: "Yeh jawab {year} ke bills ke liye hai. Isse tay hota hai ki har bill par HSN ke kitne ank chahiye.", addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
     itemName: "Bill par iska naam", itemKind: "Maal hai ya seva?", itemGoods: "Maal", itemService: "Seva",
     itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai; GST-registered customer ke bill par kam se kam 4, aur ₹5 crore se zyada turnover par kam se kam 6. Seva ka SAC 6 ank ka, 99 se shuru.",
@@ -5211,7 +5213,7 @@ function showChosenCustomer() {
   const customer = catalogue.customers.find((row) => row.id === picker.value) ?? null;
   detail.textContent = customer === null
     ? ""
-    : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin !== null ? ` · ${customer.gstin}` : customer.registration === "overseas" ? "" : ` · ${copy[state.locale].customerUnregistered}`}`;
+    : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin !== null ? ` · ${customer.gstin}` : customer.registration === "overseas" ? "" : ` · ${copy[state.locale].customerUnregistered}`}${customer.creditLimit === null || customer.creditLimit === undefined ? "" : ` · ${text("customerCreditLimitShown", { amount: money(customer.creditLimit) })}`}`;
   showExportFields(customer);
 }
 
@@ -5677,6 +5679,8 @@ document.querySelector("#sale-correct-address")?.addEventListener("click", async
     form.elements.namedItem("line2").value = found.address.lines.length > 2 ? found.address.lines[1] : "";
     form.elements.namedItem("city").value = found.address.city;
     form.elements.namedItem("pincode").value = found.address.pincode;
+    // Issue #235 — the credit limit is corrected here too; empty means none.
+    form.elements.namedItem("creditLimit").value = found.creditLimit === null || found.creditLimit === undefined ? "" : String(found.creditLimit);
     form.dataset.customerId = found.customerId;
     document.querySelector("#correct-address-state").textContent = `${found.address.stateName} (${found.address.stateCode})`;
     document.querySelector("#correct-address-dialog")?.showModal();
