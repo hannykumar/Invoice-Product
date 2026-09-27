@@ -280,3 +280,10 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
 
 /* Issue #183 — the marked copies are fetched for the printer only; nothing of them is on screen. */
 #sale-bill-copies { position: absolute; width: 0; height: 0; border: 0; visibility: hidden; }
+/* Issue #230 — the chosen customer's or supplier's open bills, ticked one by one. */
+.payment-bills { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .8rem; margin: 0; min-width: 0; }
+.payment-bills legend { font-size: .78rem; font-weight: 700; padding: 0 .3rem; }
+.payment-bills [data-payment-bills] { display: grid; gap: .45rem; margin: .3rem 0 .5rem; }
+.payment-bills .bill-choice { display: flex; align-items: flex-start; gap: .55rem; font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.payment-bills .bill-choice input[type="checkbox"] { width: auto; min-height: 0; margin-top: .2rem; flex: none; }
+.bill-choice-empty { color: var(--muted); font-size: .78rem; margin: 0; }

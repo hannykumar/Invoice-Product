@@ -51,7 +51,7 @@ test("critical runtime states have distinct English and Hindi wording", async ()
 
 test("transaction screens are semantic, labelled and safe to review", async () => {
   const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
-  for (const flow of ["sale", "purchase", "payment"]) {
+  for (const flow of ["sale", "purchase", "payment", "paid"]) {
     assert.match(html, new RegExp(`<form[^>]+data-draft="${flow}"`));
     assert.match(html, new RegExp(`id="view-${flow}"[^>]+aria-labelledby=`));
     assert.match(script, new RegExp(`karobar\\.draft\\.\\$\\{form\\.dataset\\.draft\\}`));
@@ -60,8 +60,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /<dialog[^>]+aria-labelledby=/);
   assert.match(script, /Intl\.NumberFormat\(state\.locale/);
   assert.match(script, /Intl\.DateTimeFormat\(state\.locale/);
-  assert.match(script, /\/api\/\$\{form\.dataset\.draft\}s\/preview/);
-  assert.match(script, /\/api\/\$\{state\.pendingForm\.dataset\.draft\}s\/record/);
+  // Issue #230 — a form may name its endpoint (both payment screens use /api/payments); the rest use their draft name.
+  assert.match(script, /\/api\/\$\{form\.dataset\.endpoint \?\? `\$\{form\.dataset\.draft\}s`\}\/preview/);
+  assert.match(script, /\/api\/\$\{form\.dataset\.endpoint \?\? `\$\{form\.dataset\.draft\}s`\}\/record/);
   assert.match(script, /Nothing was saved/);
   assert.match(script, /Record once/);
   assert.match(html, /id="login-form"/);
@@ -87,7 +88,7 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /form\.setAttribute\("aria-busy", String\(busy\)\)/);
   assert.match(script, /cancel\.disabled = mode === "loading"/);
   assert.match(script, /dialog\.setAttribute\("aria-busy", String\(mode === "loading"\)\)/);
-  assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.draft}s/preview`"));
+  assert.ok(script.indexOf("setFormBusy(form, true)") < script.indexOf("await api(`/api/${form.dataset.endpoint ?? `${form.dataset.draft}s`}/preview`"));
   assert.match(html, /aria-describedby="login-help"/);
   assert.match(html, /aria-describedby="review-body"/);
   assert.match(html, /id="view-bank-feeds"[^>]+aria-labelledby=/);
@@ -175,8 +176,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /copy\[state\.locale\]\.openBill/);
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
-  // proformas, #146/#147's bill design and #180's business details make twenty-five.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 25);
+  // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 26);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -198,4 +199,26 @@ test("the local web preview serves the application shell", async () => {
   assert.match(asset.contentType, /text\/html/);
   assert.match(asset.body.toString("utf8"), /id="view-dashboard"/);
   assert.equal((await loadWebAsset("/../../private-file")).status, 403);
+});
+
+test("#230: money received picks a customer and money paid picks a supplier, never a typed name", async () => {
+  const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
+  const received = html.slice(html.indexOf('data-draft="payment"'), html.indexOf('id="view-paid"'));
+  const paid = html.slice(html.indexOf('data-draft="paid"'), html.indexOf('id="view-bank-feeds"'));
+  assert.match(received, /<select name="partyId" data-customer-picker data-picker-blank="choosePaymentCustomer"[^>]*required/);
+  assert.doesNotMatch(received, /<input name="party"/);
+  assert.match(paid, /<select name="partyId" data-supplier-picker data-picker-blank="choosePaymentSupplier"[^>]*required/);
+  // Every mode is sent by its own name, whatever language the screen is in.
+  for (const form of [received, paid]) {
+    for (const mode of ["UPI", "CASH", "BANK_TRANSFER", "CHEQUE"]) assert.match(form, new RegExp(`<option value="${mode}"`));
+    assert.match(form, /name="chequeNumber"/);
+    assert.match(form, /name="chequeDate"/);
+    assert.match(form, /data-payment-bills/);
+  }
+  assert.match(html, /data-view="paid"/);
+  assert.match(script, /\/api\/payments\/open-bills/);
+  assert.match(script, /\/api\/payments\/voucher/);
+  assert.match(script, /input\.requestId = form\.dataset\.requestId/);
+  // The old list of the demo customer's bills is gone.
+  assert.doesNotMatch(script, /#payment-invoice/);
 });

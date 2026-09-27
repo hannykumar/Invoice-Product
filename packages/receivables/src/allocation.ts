@@ -109,7 +109,7 @@ export const validateAllocation = (
     if (position === undefined) {
       throw invalid(
         'ALLOCATION_UNKNOWN_DOCUMENT',
-        `${allocation.documentNumber} is not an open bill for this customer.`,
+        `${allocation.documentNumber} is not one of their open bills, so this money cannot be put against it.`,
       );
     }
     if (allocation.amount.minor > position.outstanding.minor) {

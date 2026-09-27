@@ -170,7 +170,7 @@ export class ReceivablesService {
     const allocations = command.allocations ?? [];
     if (allocations.length > 0) {
       this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.allocate, 'choose which bills this settles');
-      validateAllocation(command.amount, allocations, position.documents);
+      validateAllocation(command.amount, allocations, position.documents.filter((d) => d.document.side === sideOf(command.direction)));
     }
 
     const at = this.#clock.now().toISOString();
@@ -186,6 +186,7 @@ export class ReceivablesService {
         command.partyId,
         command.mode,
         command.bankAccountCode ?? null,
+        command.direction,
       );
       const lines = buildPaymentPosting(
         command.direction,
@@ -281,7 +282,7 @@ export class ReceivablesService {
     // the same money to the same bill would look like an over-payment.
     const documents = await this.#documents.openDocuments(actor.companyId, payment.partyId);
     const others = (await this.#repo.listForParty(actor.companyId, payment.partyId)).filter((p) => p.id !== payment.id);
-    const positions = documents.map((d) => positionOf(d, others, payment.date));
+    const positions = documents.filter((d) => d.side === sideOf(payment.direction)).map((d) => positionOf(d, others, payment.date));
     // Money already paid back out of this receipt (#165) cannot also settle a bill.
     const refunded = sum(others.filter((p) => p.state === 'RECORDED' && p.refundOf === payment.id).map((p) => p.amount));
     validateAllocation(subtract(payment.amount, refunded), allocations, positions);
@@ -315,6 +316,11 @@ export class ReceivablesService {
     this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.record, 'update a cheque');
     const payment = await this.#require(actor, paymentId);
     if (payment.cheque === null) throw invalid('PAYMENT_NOT_A_CHEQUE', 'This payment was not made by cheque.');
+    // Issue #230 — a cheque we gave a supplier left our bank account when it was written. It is not
+    // ours to deposit, and "clearing" it would move money into the bank a second time.
+    if (payment.direction === 'PAYMENT' && (to === 'DEPOSITED' || to === 'CLEARED')) {
+      throw notAllowed('CHEQUE_GIVEN_NOT_DEPOSITED', 'This is a cheque you gave to a supplier. They deposit it, not you, and it was taken out of your bank account when you wrote it.');
+    }
     const from = currentChequeState(payment.cheque);
 
     const allowed: Record<ChequeState, ChequeState[]> = {
@@ -522,5 +528,12 @@ export class ReceivablesService {
 }
 
 /** What of a payment no bill has claimed. Shown to the person, never quietly attached. */
+/**
+ * Issue #230 — money in settles what a customer owes us; money out settles what we owe a supplier.
+ * A receipt put against a purchase bill, or a payment against a sales bill, is refused as "not one
+ * of their open bills" rather than quietly settling the wrong side of the books.
+ */
+const sideOf = (direction: Payment['direction']): 'RECEIVABLE' | 'PAYABLE' => (direction === 'RECEIPT' ? 'RECEIVABLE' : 'PAYABLE');
+
 export const unallocated = (payment: Payment): Money =>
   subtract(payment.amount, sum(payment.allocations.map((a) => a.amount)));

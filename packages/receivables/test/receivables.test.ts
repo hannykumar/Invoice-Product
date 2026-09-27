@@ -454,3 +454,39 @@ test('recording and allocating are separate permissions', async () => {
     (e: unknown) => e instanceof DomainError && e.kind === 'FORBIDDEN',
   );
 });
+
+test('#230: money in settles only what a customer owes, money out only what we owe a supplier', async () => {
+  const desk = await makeDesk();
+  desk.documents.set([bill('INV/44', inr(100000), '2026-04-20', '2026-05-20'), bill('NF/9', inr(5000), '2026-04-20', '2026-05-20', NASHIK)]);
+  // Money paid out to ABC cannot "settle" ABC's own sales bill: that bill is money owed to us.
+  await assert.rejects(desk.service.recordPayment(desk.actor, {
+    idempotencyKey: 'side-1', direction: 'PAYMENT', partyId: ABC, mode: 'CASH', amount: inr(100), date: on('2026-04-25'),
+    allocations: [{ documentId: 'INV/44', documentNumber: 'INV/44', amount: inr(100) }],
+  }), (error: unknown) => error instanceof DomainError && error.code === 'ALLOCATION_UNKNOWN_DOCUMENT');
+  // Nor can money received from Nashik settle a bill we owe Nashik.
+  await assert.rejects(desk.service.recordPayment(desk.actor, {
+    idempotencyKey: 'side-2', direction: 'RECEIPT', partyId: NASHIK, mode: 'CASH', amount: inr(100), date: on('2026-04-25'),
+    allocations: [{ documentId: 'NF/9', documentNumber: 'NF/9', amount: inr(100) }],
+  }), (error: unknown) => error instanceof DomainError && error.code === 'ALLOCATION_UNKNOWN_DOCUMENT');
+  const abc = await desk.service.position(desk.actor, ABC, on('2026-04-25'));
+  assert.equal(toDecimalString(abc.totalOutstanding), '100000.00');
+});
+
+test('#230: a cheque given to a supplier comes out of the bank, and is not ours to deposit', async () => {
+  const desk = await makeDesk();
+  desk.documents.set([bill('NF/9', inr(5000), '2026-04-20', '2026-05-20', NASHIK)]);
+  const paid = await desk.service.recordPayment(desk.actor, {
+    idempotencyKey: 'give-chq', direction: 'PAYMENT', partyId: NASHIK, mode: 'CHEQUE', amount: inr(5000), date: on('2026-04-25'),
+    bankAccountCode: '1121', cheque: { number: '000777', chequeDate: on('2026-04-25') },
+    allocations: [{ documentId: 'NF/9', documentNumber: 'NF/9', amount: inr(5000) }],
+  });
+  const voucher = await desk.ledger.getVoucher(desk.actor, paid.voucherId ?? ('' as never));
+  const credited = voucher?.lines.find((l) => l.credit.minor > 0n);
+  assert.equal(String(credited?.accountId), `${COMPANY}:acc:1121`, 'the cheque is drawn on our bank, not on cheques in hand');
+  assert.equal(toDecimalString((await desk.service.position(desk.actor, NASHIK, on('2026-04-25'))).totalOutstanding), '0.00');
+  await assert.rejects(
+    desk.service.recordChequeEvent(desk.actor, paid.id, 'DEPOSITED', { on: on('2026-04-26') }, paid.version),
+    (error: unknown) => error instanceof DomainError && error.code === 'CHEQUE_GIVEN_NOT_DEPOSITED',
+  );
+  assert.ok((await trialBalance(desk.store.read(), COMPANY)).balanced);
+});

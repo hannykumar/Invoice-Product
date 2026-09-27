@@ -20,14 +20,20 @@ export interface PostingLineOut {
 
 const nil = (): Money => zero('INR');
 
-/** Where the money physically sits, by how it arrived. */
-export const settlementAccountRole = (mode: PaymentMode): string | null => {
+/**
+ * Where the money physically sits, by how it arrived or left.
+ *
+ * Issue #230 — a cheque we are given waits in "cheques in hand" until it clears. A cheque we give a
+ * supplier is drawn on our own bank account, so it comes out of that account: posting it against
+ * cheques in hand would take money out of a drawer that never held it.
+ */
+export const settlementAccountRole = (mode: PaymentMode, direction: Direction = 'RECEIPT'): string | null => {
   switch (mode) {
     case 'CASH':
       return 'CASH_IN_HAND';
     case 'CHEQUE':
       // Deliberately not the bank. It is not there yet.
-      return 'CHEQUES_IN_HAND';
+      return direction === 'RECEIPT' ? 'CHEQUES_IN_HAND' : null;
     case 'BANK_TRANSFER':
     case 'UPI':
     case 'CARD':
@@ -42,8 +48,9 @@ export const resolveAccounts = async (
   partyId: PartyId,
   mode: PaymentMode,
   bankAccountCode: string | null,
+  direction: Direction = 'RECEIPT',
 ): Promise<{ settlement: AccountId; party: AccountId }> => {
-  const role = settlementAccountRole(mode);
+  const role = settlementAccountRole(mode, direction);
   let settlement: AccountId;
   if (role === null) {
     if (bankAccountCode === null) {
