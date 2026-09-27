@@ -307,6 +307,8 @@ export class MasterDataService {
       throw new MasterDataError("VALIDATION_FAILED", `A customer outside India has no GST number, and their address is saved with PIN ${validate.OVERSEAS_PINCODE}.`, [{ field: "pincode", code: "OVERSEAS_ADDRESS", message: "An address outside India has no GST number and uses PIN 999999." }]);
     }
     if (!overseas && !validate.GST_STATE_CODES[input.stateCode]) throw new MasterDataError("VALIDATION_FAILED", `${input.stateCode} is not a valid GST state code.`, [{ field: "stateCode", code: "GSTIN_STATE_CODE", message: `${input.stateCode} is not a valid GST state code.` }]);
+    // Issue #224 — a PIN from another state is one copied from the wrong address.
+    if (!overseas) this.#require(validate.validatePincodeForState(input.pincode, input.stateCode));
     if (input.gstin) {
       this.#require(validate.validateGstin(input.gstin));
       const gstinState = validate.gstinStateCode(input.gstin);
@@ -328,6 +330,36 @@ export class MasterDataService {
     const address: PartyAddress = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
     const { version, command } = this.#commit(context, this.#stores.addresses, started, address, options);
     return { record: version.data, version, command, warnings, similar: [] };
+  }
+
+  /**
+   * Issue #224 — corrects a saved address: its lines, town or PIN code.
+   *
+   * The state is not changed here. It decides the tax on every bill, and for a registered party it
+   * is fixed by their GST number; a party that has really moved state gets a new address. Bills
+   * already issued keep the address they were issued with, because they were frozen at the time.
+   */
+  correctAddress(context: RequestContext, addressId: Id, changes: { readonly line1?: string; readonly line2?: string; readonly city?: string; readonly pincode?: string }, options: WriteOptions): WriteResult<PartyAddress> {
+    const started = this.#begin(context, "masters.address.correct", options, { addressId, changes });
+    if (started.existingRecordId) return this.#retried(context, this.#stores.addresses, started);
+    const current = this.#stores.addresses.current(context.companyId, addressId, options.effectiveFrom ?? today());
+    if (!current || !current.active) throw new MasterDataError("NOT_FOUND", "That address was not found.");
+    const line1 = (changes.line1 ?? current.line1).trim();
+    const city = (changes.city ?? current.city).trim();
+    const pincode = (changes.pincode ?? current.pincode).trim();
+    if (line1 === "") throw new MasterDataError("VALIDATION_FAILED", "The first line of the address cannot be empty.", [{ field: "line1", code: "ADDRESS_LINE1", message: "The first line of the address cannot be empty." }]);
+    if (city === "") throw new MasterDataError("VALIDATION_FAILED", "The town or city cannot be empty.", [{ field: "city", code: "ADDRESS_CITY", message: "The town or city cannot be empty." }]);
+    if (current.stateCode === validate.OVERSEAS_STATE_CODE) {
+      if (pincode !== validate.OVERSEAS_PINCODE) throw new MasterDataError("VALIDATION_FAILED", `An address outside India keeps PIN ${validate.OVERSEAS_PINCODE}.`, [{ field: "pincode", code: "OVERSEAS_ADDRESS", message: `An address outside India keeps PIN ${validate.OVERSEAS_PINCODE}.` }]);
+    } else {
+      this.#require(validate.validatePincodeForState(pincode, current.stateCode));
+    }
+    const line2 = changes.line2 === undefined ? current.line2 : changes.line2.trim();
+    const { line2: _dropped, ...rest } = current;
+    const corrected: PartyAddress = { ...rest, line1, city, pincode, ...(line2 === undefined || line2 === "" ? {} : { line2 }) };
+    const { version, command } = this.#commit(context, this.#stores.addresses, started, corrected, options);
+    this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "masters.address.corrected", correlationId: command.id, before: { line1: current.line1, city: current.city, pincode: current.pincode }, after: { line1, city, pincode } });
+    return { record: version.data, version, command, warnings: [], similar: [] };
   }
 
   // -------------------------------------------------------------------- items
@@ -384,7 +416,7 @@ export class MasterDataService {
   createWarehouse(context: RequestContext, input: Omit<Warehouse, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<Warehouse> {
     const started = this.#begin(context, "masters.warehouse.create", options, input);
     if (started.existingRecordId) return this.#retried(context, this.#stores.warehouses, started);
-    this.#require(validate.validatePincode(input.pincode));
+    this.#require(validate.validatePincodeForState(input.pincode, input.stateCode));
     if (input.gstin) this.#require(validate.validateGstin(input.gstin));
     const warehouse: Warehouse = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
     const { version, command } = this.#commit(context, this.#stores.warehouses, started, warehouse, options);

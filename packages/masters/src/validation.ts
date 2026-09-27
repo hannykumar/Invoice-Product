@@ -216,7 +216,7 @@ export function validatePincodeForState(pincode: string, stateCode: string, fiel
   const prefixes = PIN_PREFIXES_BY_STATE[stateCode];
   if (prefixes === undefined || prefixes.includes(pincode.trim().slice(0, 2))) return ok;
   const state = GST_STATE_CODES[stateCode]?.name ?? stateCode;
-  return fail(field, "PINCODE_STATE_MISMATCH", `PIN code ${pincode.trim()} is not in ${state}. PIN codes in ${state} start with ${prefixes.join(" or ")}.`);
+  return fail(field, "PINCODE_STATE_MISMATCH", `PIN code ${pincode.trim()} is not in ${state}. PIN codes in ${state} start with ${prefixes.length === 1 ? prefixes[0] : `${prefixes.slice(0, -1).join(", ")} or ${prefixes[prefixes.length - 1]}`}.`);
 }
 
 export function validateVehicleNumber(raw: string, field = "vehicleNumber"): ValidationResult {

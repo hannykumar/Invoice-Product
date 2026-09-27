@@ -221,6 +221,21 @@ describe('turning rows into records', () => {
     assert.match(missingHsn?.problems[0]?.message['en-IN'] ?? '', /add it to the file/);
   });
 
+  it('holds back a customer whose PIN code is in another state, rather than printing it (#224)', () => {
+    const sheet = readDelimited([
+      'Party Name,Phone No,GSTIN,Address,City,State,Pincode,Opening Balance,Dr/Cr',
+      'Uppal Castings,9000000001,,"Plot 12, IDA Uppal",Hyderabad,Telangana,110039,"₹100",Dr',
+      'Kukatpally Moulders,9000000002,,"Plot 9, IDA Kukatpally",Hyderabad,Telangana,500072,"₹100",Dr',
+    ].join('\r\n'));
+    const mapping = proposeMapping(sheet.headers, 'customers').columns;
+    const outcomes = readRows('customers', sheet, mapping, { ...options, partyKind: 'CUSTOMER' });
+
+    assert.equal(outcomes[0]?.decision, 'REJECT', 'a Delhi PIN under a Telangana address waits to be corrected');
+    assert.equal(outcomes[0]?.problems.find((problem) => problem.code === 'PINCODE_STATE_MISMATCH')?.severity, 'BLOCKING');
+    assert.match(outcomes[0]?.problems.find((problem) => problem.code === 'PINCODE_STATE_MISMATCH')?.message['en-IN'] ?? '', /110039 is not in Telangana.*Correct the PIN code or the state in the file/);
+    assert.equal(outcomes[1]?.decision, 'ACCEPT', 'a Telangana PIN is fine');
+  });
+
   it('multiplies a rate by a quantity, and refuses stock that is below zero', () => {
     const sheet = readDelimited(TALLY_STOCK);
     const mapping = proposeMapping(sheet.headers, 'opening_stock').columns;

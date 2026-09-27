@@ -39,7 +39,10 @@ import { brandingOf, upiIdOf } from './branding-application.ts';
 import { masterData as masterDataService, mastersContext } from './master-data.ts';
 import {
   addShippingAddress,
+  correctCustomerAddress,
   createTransporter,
+  customerBillingAddress,
+  requireAddressInState,
   deliveryDetails,
   printableEwayNumber,
   shippingChoices,
@@ -1228,6 +1231,16 @@ export class DemoApplication {
 
   addShippingAddress(actor: ActorContext, input: Record<string, unknown>) {
     return addShippingAddress(this.companyOf(actor), input);
+  }
+
+  /** Issue #224 — a customer's saved address, for the correction form. */
+  customerAddress(actor: ActorContext, customerId: string) {
+    return customerBillingAddress(this.companyOf(actor), customerId);
+  }
+
+  /** Issue #224 — corrects a customer's saved address: its lines, town or PIN code. */
+  correctCustomerAddress(actor: ActorContext, input: Record<string, unknown>) {
+    return correctCustomerAddress(this.companyOf(actor), input);
   }
 
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
@@ -2850,6 +2863,8 @@ export class DemoApplication {
   /** One customer, as an e-way bill names a party: their own record, never a stand-in. */
   private movementParty(partyId: string): MovementParty {
     const view = customerView(this.config.companyId, partyId);
+    // Issue #224 — an address saved with a PIN from another state never goes onto an e-way bill.
+    if (view.stateCode !== null && view.pincode !== null) requireAddressInState({ stateCode: view.stateCode, pincode: view.pincode }, `${view.name}'s`);
     return {
       legalName: view.name,
       gstin: view.gstin ?? 'URP',

@@ -79,7 +79,7 @@ const copy = {
     addTransporterTitle: "Add a transporter", addTransporterHelp: "The bill prints their name as \u201cDispatched through\u201d.",
     transporterName: "Transporter's name", transporterId: "GST number, or transporter ID", transporterIdHelp: "15 characters. A transporter who is not registered for GST is given a transporter ID instead; both go here.",
     transporterPhone: "Phone (optional)", saveTransporter: "Save transporter",
-    addAddressTitle: "Add a delivery address", addAddressHelp: "Another place this customer takes goods at. It is saved on the customer, so it is not retyped next time.",
+    addAddressTitle: "Add a delivery address", addAddressHelp: "Another place this customer takes goods at. It is saved on the customer, so it is not retyped next time.", correctAddress: "Correct address", correctAddressTitle: "Correct this customer's address", correctAddressHelp: "Fix a wrong street, town or PIN code. Bills already issued keep the address they were issued with. The state stays as it is, because it decides the tax.", addressCorrected: "Address corrected", addressStateFixed: "State:",
     addressLabelName: "What to call it", deliveryStateHelp: "Goods sent to another state make this sale count in that state.",
     deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address",
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
@@ -397,7 +397,7 @@ const copy = {
     addTransporterTitle: "Transporter joden", addTransporterHelp: "Bill par inka naam \u201cDispatched through\u201d mein chhapta hai.",
     transporterName: "Transporter ka naam", transporterId: "GST number, ya transporter ID", transporterIdHelp: "15 akshar. Jo transporter GST mein registered nahin hai use transporter ID milti hai; dono yahin aate hain.",
     transporterPhone: "Phone (marzi se)", saveTransporter: "Transporter save karen",
-    addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.",
+    addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.", correctAddress: "Pata sahi karen", correctAddressTitle: "Is customer ka pata sahi karen", correctAddressHelp: "Galat gali, shehar ya PIN code theek karen. Pehle jaari hue bill par wahi pata rahega jo tab tha. Rajya waisa hi rahega, kyonki tax usi se tay hota hai.", addressCorrected: "Pata sahi ho gaya", addressStateFixed: "Rajya:",
     addressLabelName: "Ise kya kahen", deliveryStateHelp: "Doosre rajya bheja gaya maal is bikri ko us rajya ki bana deta hai.",
     deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen",
     saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
@@ -5263,6 +5263,44 @@ document.querySelector("#sale-add-address")?.addEventListener("click", () => {
     }));
   }
   document.querySelector("#address-dialog")?.showModal();
+});
+
+// Issue #224 — a customer's saved address can be corrected where it is used, without retyping them.
+document.querySelector("#sale-correct-address")?.addEventListener("click", async () => {
+  const customerId = saleForm()?.elements.namedItem("party")?.value ?? "";
+  if (!customerId) return;
+  const form = document.querySelector("#correct-address-form");
+  const error = document.querySelector("#correct-address-error");
+  error.textContent = "";
+  try {
+    const found = await api("/api/customer-address", { method: "POST", body: JSON.stringify({ customerId }) });
+    form.elements.namedItem("line1").value = found.address.lines[0] ?? "";
+    form.elements.namedItem("line2").value = found.address.lines.length > 2 ? found.address.lines[1] : "";
+    form.elements.namedItem("city").value = found.address.city;
+    form.elements.namedItem("pincode").value = found.address.pincode;
+    form.dataset.customerId = found.customerId;
+    document.querySelector("#correct-address-state").textContent = `${found.address.stateName} (${found.address.stateCode})`;
+    document.querySelector("#correct-address-dialog")?.showModal();
+  } catch (requestError) {
+    showDialog({ title: copy[state.locale].correctAddress, message: requestError.message }, "failed");
+  }
+});
+
+document.querySelector("#correct-address-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#correct-address-error");
+  error.textContent = "";
+  try {
+    const corrected = await api("/api/customer-address/correct", {
+      method: "POST",
+      body: JSON.stringify({ ...Object.fromEntries(new FormData(form)), customerId: form.dataset.customerId }),
+    });
+    await loadCatalogue();
+    showChosenCustomer();
+    document.querySelector("#correct-address-dialog").close();
+    showDialog({ title: corrected.title, message: corrected.message }, "recorded");
+  } catch (requestError) { error.textContent = requestError.message; }
 });
 
 document.querySelector("#address-form")?.addEventListener("submit", async (event) => {

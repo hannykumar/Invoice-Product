@@ -10,7 +10,7 @@
  * of the same rule living here.
  */
 import { mulDiv, zero, type IsoDate, type Money } from '@invoice/kernel';
-import { GST_STATE_CODES, normalisePhone, validateGstin, validateHsnOrSac, validatePan, validatePincode } from '../../masters/src/validation.ts';
+import { GST_STATE_CODES, normalisePhone, validateGstin, validateHsnOrSac, validatePan, validatePincode, validatePincodeForState } from '../../masters/src/validation.ts';
 import type { Quantity } from '../../masters/src/units.ts';
 import { isBlank, readDate, readInteger, readMoney, readPercent, readQuantity, readSide, type Read } from './coerce.ts';
 import type {
@@ -153,6 +153,15 @@ const buildParty = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Cu
   const pincode = pincodeCell === '' || !validatePincode(pincodeCell).ok ? null : pincodeCell.trim();
   if (pincodeCell !== '' && pincode === null) {
     notes.warn('PINCODE_UNUSABLE', cells.headerOf('pincode'), pincodeCell, `"${pincodeCell}" is not a PIN code, so it will be left blank.`, `"${pincodeCell}" PIN code nahin hai, ise khaali chhoda jaayega.`);
+  }
+  // Issue #224 — a PIN from another state is a wrong address, not a missing one. Leaving it blank
+  // would quietly drop the address; importing it would print it. The row waits to be corrected.
+  if (pincode !== null && stateCode !== null) {
+    const inState = validatePincodeForState(pincode, stateCode);
+    if (!inState.ok) {
+      const stateName = GST_STATE_CODES[stateCode]?.name ?? stateCode;
+      notes.blocking('PINCODE_STATE_MISMATCH', cells.headerOf('pincode'), pincodeCell, `${inState.problems[0]?.message ?? `PIN code ${pincode} is not in ${stateName}.`} Correct the PIN code or the state in the file.`, `PIN code ${pincode} ${stateName} ka nahin hai. File mein PIN code ya rajya sahi karen.`);
+    }
   }
 
   const creditDaysCell = cells.one('credit_days');

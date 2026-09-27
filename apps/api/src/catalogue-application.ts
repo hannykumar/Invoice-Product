@@ -41,6 +41,7 @@ import {
   validateGstin,
   validateHsnOrSac,
   validatePincode,
+  validatePincodeForState,
   type GstRegistrationType,
   type Item,
   type Party,
@@ -296,6 +297,8 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
   if (!overseas && (stateCode === '' || GST_STATE_CODES[stateCode] === undefined)) {
     throw invalid('CUSTOMER_STATE', 'Choose the state the customer is in. It decides whether the bill carries IGST, or CGST and SGST.');
   }
+  // Issue #224 — a PIN from another state prints a wrong address on every bill to this customer.
+  if (!overseas) require_(validatePincodeForState(pincode, stateCode), 'CUSTOMER_PINCODE_STATE', 'That PIN code is not in the customer’s state.');
 
   const phone = str(input.phone);
   const service = masterData();

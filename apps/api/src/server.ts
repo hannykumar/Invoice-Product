@@ -100,6 +100,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/delivery/choices') return json(200, app.deliveryChoices(actor, String(body.customerId ?? '')));
     if (method === 'POST' && pathname === '/api/transporters') return json(200, app.addTransporter(actor, body));
     if (method === 'POST' && pathname === '/api/shipping-addresses') return json(200, app.addShippingAddress(actor, body));
+    if (method === 'POST' && pathname === '/api/customer-address') return json(200, app.customerAddress(actor, String(body.customerId ?? '')));
+    if (method === 'POST' && pathname === '/api/customer-address/correct') return json(200, app.correctCustomerAddress(actor, body));
     // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
     if (method === 'POST' && pathname === '/api/branding/upi') return json(200, saveUpiId(context.companyId, body));
     if (method === 'POST' && pathname === '/api/branding/preview')
