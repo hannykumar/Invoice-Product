@@ -56,7 +56,7 @@ import {
   mastersVehicleAdapter,
 } from '../../../packages/transport/src/suitability-adapters.ts';
 import type { Vehicle } from '../../../packages/masters/src/types.ts';
-import { items as catalogueItems, type CatalogueSeed } from './catalogue-application.ts';
+import { billingAddressOf, items as catalogueItems, type CatalogueSeed } from './catalogue-application.ts';
 import { businessDetailsOf, turnoverAnswerForYear } from './business-details-application.ts';
 
 // Read once when the application starts. An absent file keeps local development synthetic.
@@ -275,7 +275,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   /**
    * Issue #31. The purchase comparison, over the bills this company has actually posted.
    *
-   * The supplier's registration comes from the seed rather than being guessed from the bill: a
+   * The supplier's registration comes from their master record rather than being guessed from the bill: a
    * purchase whose supplier we have no GST number for is reported as uncomparable, which is the
    * honest answer and the one the screen shows.
    */
@@ -283,8 +283,11 @@ export async function createCompanyShop(seed: CompanySeed) {
   const itcBatches = new InMemoryImportBatches();
   const itcDecisions = new InMemoryItcDecisions();
   const itcClaims = new InMemoryItcClaims();
+  // Issue #228 — whichever supplier the bill was posted to, read from their master record. Only the
+  // seed supplier used to be known here, so a bill from anyone else could never be compared.
   const gstinOfParty = (partyId: string): string | null =>
-    partyId === seed.supplierId && seed.supplierGstin !== undefined ? seed.supplierGstin : null;
+    billingAddressOf(seed.companyId, partyId)?.gstin
+      ?? (partyId === seed.supplierId && seed.supplierGstin !== undefined ? seed.supplierGstin : null);
   const itc = new ItcReconciliationService({
     books: {
       async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {

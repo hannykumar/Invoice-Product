@@ -267,7 +267,7 @@ test('every line carries the field-by-field evidence behind its decision', async
   for (const line of workspace.lines) {
     assert.deepEqual(
       line.evidence.map((row) => row.field),
-      ['SUPPLIER_GSTIN', 'INVOICE_NUMBER', 'INVOICE_DATE', 'DOCUMENT_KIND', 'TAXABLE_VALUE', 'TOTAL_TAX'],
+      ['SUPPLIER_GSTIN', 'INVOICE_NUMBER', 'INVOICE_DATE', 'DOCUMENT_KIND', 'TAXABLE_VALUE', 'TOTAL_TAX', 'TAX_TYPE'],
       `${line.key} is missing evidence`,
     );
   }

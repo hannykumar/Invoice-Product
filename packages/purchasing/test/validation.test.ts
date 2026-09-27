@@ -304,6 +304,22 @@ test("in development the engine answers, and an inter-state purchase is recognis
   assert.equal(verdict.status, "POSTABLE");
 });
 
+test("issue #228: over the reviewed rules a production engine decides the split from the two states", async () => {
+  const { shippedRegistry } = await import("../../rules-engine/src/index.ts");
+  const port = rulesEngineTaxSplit({ mode: "production", registry: shippedRegistry() });
+  const across = validate(draftOf(), { taxSplit: port, buyerStateCode: "29" });
+  assert.equal(across.taxCheck.basis, "RULES_ENGINE");
+  assert.equal(across.taxCheck.intraState, false); // supplier 27, godown 29: IGST
+  assert.equal(across.status, "POSTABLE");
+  assert.equal(port.splitFor({ supplierStateCode: "29", placeOfSupplyStateCode: "29", documentDate: "2026-09-27" }).kind, "SPLIT");
+  const same = port.splitFor({ supplierStateCode: "29", placeOfSupplyStateCode: "29", documentDate: "2026-09-27" });
+  assert.equal(same.kind === "SPLIT" && same.intraState, true);
+  // A union territory under the UTGST Act is still inside one state for this purpose: CGST with
+  // UTGST, never IGST.
+  const territory = port.splitFor({ supplierStateCode: "04", placeOfSupplyStateCode: "04", documentDate: "2026-09-27" });
+  assert.equal(territory.kind === "SPLIT" && territory.intraState, true);
+});
+
 test("no tax rate is ever invented when the engine cannot decide", () => {
   const verdict = validate(draftOf(), { taxSplit: rulesEngineTaxSplit({ mode: "production" }), buyerStateCode: "29" });
   assert.equal(verdict.taxCheck.intraState, undefined);

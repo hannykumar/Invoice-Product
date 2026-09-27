@@ -42,6 +42,7 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
       customerAddress1: 'No. 3, Avenue Road',
       customerCity: 'Bengaluru',
       customerPincode: '560002',
+      supplier: { id: 'sampoorna:party:supplier', name: 'Shree Ram Steels Private Limited', gstin: '27AAECS5678D1Z4', address1: 'Plot 7, MIDC Taloja', city: 'Navi Mumbai', pincode: '410208' },
       items: [
       { id: 'sampoorna:item:SOAP', name: 'Herbal Bath Soap 100g', kind: 'goods', hsnSac: '34011190', unit: 'PCS', ratePercentTimes100: 500n, effectiveFrom: '2025-09-22', basis: 'Toilet soap has been 5% since 22 September 2025' },
       { id: 'sampoorna:item:TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate this business has always charged on steel bar' },
@@ -60,6 +61,7 @@ const COMPANY_DETAILS: Readonly<Record<string, Omit<CompanySeed, 'companyId' | '
       customerAddress1: 'Shop 12, Municipal Market',
       customerCity: 'Mapusa',
       customerPincode: '403507',
+      supplier: { id: 'konkan:party:supplier', name: 'Western Coast Supplies', gstin: '30AAFCW7788Q1ZE', address1: 'Plot 11, Verna Industrial Estate', city: 'Verna', pincode: '403722' },
       items: [
       { id: 'konkan:item:SOAP', name: 'Herbal Bath Soap 100g', kind: 'goods', hsnSac: '34011190', unit: 'PCS', ratePercentTimes100: 500n, effectiveFrom: '2025-09-22', basis: 'Toilet soap has been 5% since 22 September 2025' },
       { id: 'konkan:item:TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS', ratePercentTimes100: 1800n, effectiveFrom: '2017-07-01', basis: 'The rate this business has always charged on steel bar' },

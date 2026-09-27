@@ -113,6 +113,10 @@ export const customers = (companyId: CompanyId | string): readonly Party[] =>
 
 export const items = (companyId: CompanyId | string): readonly Item[] => masterData().items(context(companyId));
 
+/** Issue #228 — the businesses this company buys from, as master-data records. */
+export const suppliers = (companyId: CompanyId | string): readonly Party[] =>
+  masterData().parties(context(companyId)).filter((party) => party.role === 'supplier' || party.role === 'both');
+
 export const addressesOf = (companyId: CompanyId | string, partyId: string): readonly PartyAddress[] =>
   masterData().addressesOfParty(String(companyId), partyId);
 
@@ -204,6 +208,8 @@ export const itemView = (companyId: CompanyId | string, itemId: string): ItemVie
 /** Everything the Sale, challan and quotation screens need when they open. */
 export const readCatalogue = (companyId: CompanyId | string) => ({
   customers: customers(companyId).map((party) => viewOf(companyId, party)),
+  // Issue #228 — the Purchase screen picks its supplier from here, never from a typed name.
+  suppliers: suppliers(companyId).map((party) => viewOf(companyId, party)),
   items: items(companyId).map((item) => itemViewOf(companyId, item)),
   units: DEFAULT_UNITS.map((unit) => ({ code: unit.code, name: unit.name })),
   rates: GST_RATE_CHOICES,
@@ -240,6 +246,29 @@ export const resolveItem = (companyId: CompanyId | string, idOrName: string): It
     throw invalid('ITEM_AMBIGUOUS', `More than one item is called something like "${wanted}": ${outcome.candidates.map((candidate) => candidate.record.name).join(', ')}. Pick one from the list.`);
   }
   throw invalid('ITEM_NOT_FOUND', `"${wanted}" is not in your item list yet. Add it first, so the bill can carry its description, code and unit.`);
+};
+
+/**
+ * Issue #228 — the supplier a purchase is from. Only a supplier on the list can be named: a bill
+ * posted to a name that matches no record is posted to nobody the books know, and the state its
+ * GST was charged from would be a guess.
+ */
+export const resolveSupplier = (companyId: CompanyId | string, idOrName: string): Party => {
+  const wanted = idOrName.trim();
+  if (wanted === '') throw invalid('SUPPLIER_REQUIRED', 'Choose the supplier this bill is from.');
+  const list = suppliers(companyId);
+  const byId = list.find((party) => party.id === wanted);
+  if (byId !== undefined) return byId;
+  const outcome = masterData().resolveParty(context(companyId), wanted);
+  if (outcome.status === 'resolved' && list.some((party) => party.id === outcome.record.id)) return outcome.record;
+  if (outcome.status === 'ambiguous') {
+    const candidates = outcome.candidates.filter((candidate) => list.some((party) => party.id === candidate.record.id));
+    if (candidates.length === 1) return candidates[0]!.record;
+    if (candidates.length > 1) {
+      throw invalid('SUPPLIER_AMBIGUOUS', `More than one supplier is called something like "${wanted}": ${candidates.map((candidate) => candidate.record.legalName).join(', ')}. Pick one from the list.`);
+    }
+  }
+  throw invalid('SUPPLIER_NOT_FOUND', `"${wanted}" is not in your supplier list yet. Add them first, with their GST number, so the bill is recorded against the right business and the right state.`);
 };
 
 // -------------------------------------------------------------------------------- creating them
@@ -339,6 +368,86 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
     message: `${created.record.legalName} is in your customer list. Bills to them will carry this name, address${gstin === '' ? '' : ' and GST number'}.`,
     customer: viewOf(companyId, created.record),
     addressId: address.record.id,
+  };
+};
+
+/**
+ * Issue #228 — adds a supplier, with the address on their bills.
+ *
+ * The same checks as a customer's (#181, #224): the GST number must pass its own check digit, the
+ * state is the first two digits of that number and is never asked for separately, and the PIN code
+ * must belong to that state. Whether a purchase carries IGST or CGST and SGST is decided from this
+ * state and ours, so there is no second answer anywhere that could disagree with it.
+ *
+ * A business we already sell to can also be a supplier: its record is marked as both rather than a
+ * second record being made for the same GST number.
+ */
+export const createSupplier = (companyId: CompanyId | string, body: unknown) => {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const legalName = str(input.legalName || input.name);
+  if (legalName.length < 2) throw invalid('SUPPLIER_NAME', 'Type the name the supplier bills you under.');
+
+  const gstin = normaliseIdentifier(str(input.gstin));
+  if (gstin === '') throw invalid('SUPPLIER_GSTIN_REQUIRED', 'Type the supplier’s GST number. It is on every bill they give you, and it decides which GST you can claim back.');
+  require_(validateGstin(gstin), 'SUPPLIER_GSTIN', 'That is not a GST number.');
+  const stateCode = gstinStateCode(gstin);
+  if (GST_STATE_CODES[stateCode] === undefined) throw invalid('SUPPLIER_GSTIN', 'The first two digits of this GST number are not a state.');
+
+  const line1 = str(input.line1 || input.address1);
+  if (line1 === '') throw invalid('SUPPLIER_ADDRESS1', 'Type the first line of the supplier’s address, as it is on their bill.');
+  const city = str(input.city);
+  if (city === '') throw invalid('SUPPLIER_CITY', 'Type the town or city the supplier is in.');
+  const pincode = str(input.pincode);
+  require_(validatePincode(pincode), 'SUPPLIER_PINCODE', 'A PIN code has 6 digits.');
+  require_(validatePincodeForState(pincode, stateCode), 'SUPPLIER_PINCODE_STATE', 'That PIN code is not in the supplier’s state.');
+
+  const service = masterData();
+  const ctx = context(companyId);
+  const phone = str(input.phone);
+
+  // The same GST number already on a customer is the same business.
+  const holder = service.parties(ctx).find((party) =>
+    addressesOf(companyId, party.id).some((address) => address.gstin !== undefined && normaliseIdentifier(address.gstin) === gstin));
+  if (holder !== undefined) {
+    if (holder.role === 'supplier' || holder.role === 'both') {
+      throw invalid('SUPPLIER_EXISTS', `${holder.legalName} is already in your supplier list with GST number ${gstin}. Pick them from the list.`);
+    }
+    const updated = service.updateParty(ctx, holder.id, { role: 'both' }, { idempotencyKey: `supplier-role:${String(companyId)}:${holder.id}` });
+    return {
+      state: 'recorded' as const,
+      title: 'Supplier added',
+      message: `${updated.record.legalName} is already your customer with GST number ${gstin}, and is now in your supplier list as well.`,
+      supplier: viewOf(companyId, updated.record),
+    };
+  }
+
+  const reference = str(input.reference) || `${legalName.toLowerCase()}:${gstin}`;
+  const created = service.createParty(
+    ctx,
+    { legalName, role: 'supplier', gstRegistrationType: 'regular', ...(phone === '' ? {} : { phones: [phone] }) },
+    { idempotencyKey: `supplier:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
+  );
+  service.addAddress(
+    ctx,
+    {
+      partyId: created.record.id,
+      label: 'Billing',
+      line1,
+      ...(str(input.line2 || input.address2) === '' ? {} : { line2: str(input.line2 || input.address2) }),
+      city,
+      stateCode,
+      pincode,
+      gstin,
+      use: 'both',
+      isPrimary: true,
+    },
+    { idempotencyKey: `supplier-address:${String(companyId)}:${created.record.id}` },
+  );
+  return {
+    state: 'recorded' as const,
+    title: 'Supplier added',
+    message: `${created.record.legalName} is in your supplier list, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) as their GST number says.`,
+    supplier: viewOf(companyId, created.record),
   };
 };
 
@@ -548,6 +657,15 @@ export interface CatalogueSeed {
   readonly customerAddress1: string;
   readonly customerCity: string;
   readonly customerPincode: string;
+  /** Issue #228 — the supplier the company opens with, as a master-data record like the customer. */
+  readonly supplier?: {
+    readonly id: string;
+    readonly name: string;
+    readonly gstin: string;
+    readonly address1: string;
+    readonly city: string;
+    readonly pincode: string;
+  };
   readonly items: readonly {
     readonly id: string;
     readonly name: string;
@@ -589,6 +707,29 @@ export const seedCatalogue = (companyId: CompanyId | string, seed: CatalogueSeed
         isPrimary: true,
       },
       { idempotencyKey: `seed-customer-address:${String(companyId)}:${seed.customerId}` },
+    );
+  }
+  const supplier = seed.supplier;
+  if (supplier !== undefined && suppliers(companyId).find((party) => party.id === supplier.id) === undefined) {
+    service.createParty(
+      ctx,
+      { id: supplier.id, legalName: supplier.name, role: 'supplier', gstRegistrationType: 'regular' },
+      { idempotencyKey: `seed-supplier:${String(companyId)}:${supplier.id}` },
+    );
+    service.addAddress(
+      ctx,
+      {
+        partyId: supplier.id,
+        label: 'Billing',
+        line1: supplier.address1,
+        city: supplier.city,
+        stateCode: gstinStateCode(supplier.gstin),
+        pincode: supplier.pincode,
+        gstin: normaliseIdentifier(supplier.gstin),
+        use: 'both',
+        isPrimary: true,
+      },
+      { idempotencyKey: `seed-supplier-address:${String(companyId)}:${supplier.id}` },
     );
   }
   const known = items(companyId);

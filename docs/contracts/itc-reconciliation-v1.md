@@ -32,7 +32,7 @@ reported and what is missing.
 
 | Guarantee | How it is enforced |
 | --- | --- |
-| Match decisions show evidence | Every line carries six `MatchEvidence` rows — GST number, bill number, date, kind, value before GST, tax — with both sides and the difference. A one-sided line still carries them. |
+| Match decisions show evidence | Every line carries seven `MatchEvidence` rows — GST number, bill number, date, kind, value before GST, tax, and (#228) the kind of GST — with both sides and the difference. A one-sided line still carries them. |
 | A missing portal document is never silently eligible | `claimable` is zero for every status but `EXACT` unless a decision exists; the workspace total and `Gstr3bLinkage` are computed from the same lines, so no second path can add it back. |
 | Recomputation preserves user actions and audit | Decisions are keyed on `lineKeyOf(gstin, normalisedNumber, kind)` — only facts that do not move — and re-attached on every read. When the figures change under a decision the fingerprint stops matching: the decision is kept, marked `decisionStale`, and not applied. |
 
@@ -58,7 +58,10 @@ Two passes, kept apart deliberately.
    the taxable value agreeing. **Never across registrations.**
 
 A pair whose figures are out of tolerance is reported as `CLOSE` — the same bill, different money —
-not as a match. Duplicates are found before matching, because a bill recorded twice is wrong
+not as a match. So is a pair whose totals agree but whose **kind of GST** does not (#228): IGST on
+one side and CGST with SGST on the other. Credit of IGST cannot be taken as CGST and SGST, or the
+reverse, so such a line is `HELD_BACK` with `ITC_TAX_TYPE_DIFFERS` and no decision on this screen
+can claim it; the bill or the supplier's filing has to be corrected first. Duplicates are found before matching, because a bill recorded twice is wrong
 whatever the portal says; the second copy becomes its own line, keyed with a `COPY:` discriminator
 so a decision on the real line cannot attach to it.
 

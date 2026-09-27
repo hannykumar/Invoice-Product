@@ -155,13 +155,18 @@ export const MATCH_STATUS_PLAIN: Readonly<Record<MatchStatus, Bilingual>> = Obje
   DUPLICATE_ON_PORTAL: { 'en-IN': 'Reported twice on the portal', 'hi-IN': 'Portal par do baar' },
 });
 
-/** Which fact is being compared. Exactly the five the issue names, plus the kind of document. */
+/**
+ * Which fact is being compared. Exactly the five the issue names, plus the kind of document, plus
+ * (issue #228) the kind of GST: IGST on one side and CGST with SGST on the other is not the same
+ * tax, even when the two add up to the same rupees.
+ */
 export type EvidenceField =
   | 'SUPPLIER_GSTIN'
   | 'INVOICE_NUMBER'
   | 'INVOICE_DATE'
   | 'TAXABLE_VALUE'
   | 'TOTAL_TAX'
+  | 'TAX_TYPE'
   | 'DOCUMENT_KIND';
 
 export type EvidenceVerdict = 'AGREES' | 'DIFFERS' | 'ONLY_OURS' | 'ONLY_THEIRS';
@@ -288,6 +293,8 @@ export type ItcFindingCode =
   | 'ITC_NO_PORTAL_DATA'
   | 'ITC_MISSING_FROM_PORTAL'
   | 'ITC_FIGURES_DIFFER'
+  /** Issue #228 — our books and the supplier's filing carry different kinds of GST. */
+  | 'ITC_TAX_TYPE_DIFFERS'
   | 'ITC_ONLY_ON_PORTAL'
   | 'ITC_DUPLICATE_IN_BOOKS'
   | 'ITC_DUPLICATE_ON_PORTAL'

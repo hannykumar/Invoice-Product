@@ -182,10 +182,33 @@
           </div>
         </template>
 
+        <template id="purchase-line-template">
+          <div class="sale-line">
+            <label><span data-i18n="item"></span><select data-line-field="item" data-item-picker required></select></label>
+            <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
+            <label><span data-i18n="ratePerUnit"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" required /></span></label>
+            <label><span data-i18n="gstRate"></span><select data-line-field="gst" data-gst-picker required></select></label>
+            <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
+          </div>
+        </template>
+
         <section class="view" id="view-purchase" aria-labelledby="purchase-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" tabindex="-1" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
           <form class="transaction-layout draft-form" data-draft="purchase">
-            <article class="panel form-panel"><div class="field-grid"><label><span data-i18n="supplier"></span><input name="party" data-i18n-placeholder="supplierPlaceholder" required /></label><label><span data-i18n="supplierBill"></span><input name="reference" data-i18n-placeholder="supplierBillPlaceholder" required /></label><label><span data-i18n="billDate"></span><input name="date" type="date" required /></label><label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label><label><span data-i18n="whatYouBought"></span><select name="item"><option value="TMT12" data-i18n="itemSteel"></option><option value="SOAP" data-i18n="itemSoap"></option><option value="FRT" data-i18n="itemFreight"></option></select></label><label><span data-i18n="howMany"></span><input name="quantity" type="number" min="0" step="0.001" value="500" required /></label><label><span data-i18n="ratePerUnit"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="64" required /></span></label><label><span data-i18n="gstRate"></span><select name="gst"><option value="0">0%</option><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option><option value="2800">28%</option></select></label><label><span data-i18n="supplierState"></span><select name="supplierState"><option value="other" data-i18n="stateOther"></option><option value="same" data-i18n="stateSame"></option></select><small data-i18n="supplierStateHelp"></small></label><label class="full-field"><span data-i18n="uploadBill"></span><input name="attachment" type="file" accept="image/*,.pdf" /><small data-i18n="uploadHelp"></small></label></div></article>
+            <article class="panel form-panel">
+              <!-- Issue #228 — the supplier is a record from the supplier list, and nothing here asks
+                   which state they are in: their GST number says it, and it decides IGST or CGST and SGST. -->
+              <div class="field-grid">
+                <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select><small id="purchase-supplier-detail"></small></label>
+                <label><span data-i18n="supplierBill"></span><input name="reference" data-i18n-placeholder="supplierBillPlaceholder" required /></label>
+                <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label>
+              </div>
+              <div class="sale-lines" id="purchase-lines" aria-label="Items on this supplier bill" data-i18n-aria="purchaseLinesLabel"></div>
+              <button type="button" class="secondary-button" id="purchase-add-line" data-i18n="addLine"></button>
+              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseTaxFromGstin"></span></p>
+              <div class="field-grid"><label class="full-field"><span data-i18n="uploadBill"></span><input name="attachment" type="file" accept="image/*,.pdf" /><small data-i18n="uploadHelp"></small></label></div>
+            </article>
             <aside class="panel summary-card"><h2 data-i18n="beforeSaving"></h2><ol class="check-list"><li data-i18n="checkSupplier"></li><li data-i18n="checkDuplicate"></li><li data-i18n="checkTax"></li></ol><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseSafety"></span></p><h2 data-i18n="postingTitle"></h2><ol class="check-list"><li data-i18n="postingStock"></li><li data-i18n="postingBooks"></li><li data-i18n="postingOwed"></li></ol><p class="safety-note"><span aria-hidden="true">◎</span><span data-i18n="postingTogether"></span></p><p class="safety-note"><span aria-hidden="true">↻</span><span data-i18n="postingRetrySafe"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPurchase"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
         </section>
@@ -1331,6 +1354,24 @@
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
           <button class="primary-button" type="submit" data-i18n="saveCustomer"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="new-supplier-dialog" aria-labelledby="new-supplier-dialog-title">
+      <h2 id="new-supplier-dialog-title" data-i18n="addSupplierTitle"></h2>
+      <p data-i18n="addSupplierHelp"></p>
+      <form id="new-supplier-form" class="login-form">
+        <label><span data-i18n="supplierLegalName"></span><input name="legalName" required /></label>
+        <label><span data-i18n="customerGstin"></span><input name="gstin" autocapitalize="characters" placeholder="27AAECS5678D1Z4" required /><small data-i18n="supplierGstinHelp"></small></label>
+        <label><span data-i18n="customerAddress1"></span><input name="line1" required /></label>
+        <label><span data-i18n="customerAddress2"></span><input name="line2" /></label>
+        <label><span data-i18n="customerCity"></span><input name="city" required /></label>
+        <label><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" required /></label>
+        <label><span data-i18n="customerPhone"></span><input name="phone" inputmode="tel" /></label>
+        <p class="login-error" id="new-supplier-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="saveSupplier"></button>
         </div>
       </form>
     </dialog>

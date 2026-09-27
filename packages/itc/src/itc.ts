@@ -371,8 +371,22 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
         'hi-IN': 'Ise apne GST wale ko dikhaiye. Portal ke apne note ke khilaf credit lena baad mein notice ban kar aata hai.',
       }));
     }
-    if (status === 'CLOSE') {
-      const fields = disagreements(evidence);
+    // Issue #228 — the books and the filing carry different kinds of GST. One of the two is wrong,
+    // and credit of IGST cannot be taken as CGST and SGST (or the reverse), so no answer on this
+    // screen can release it: the bill or the filing has to be corrected first.
+    const taxTypeRow = evidence.find((row) => row.field === 'TAX_TYPE' && row.verdict === 'DIFFERS');
+    if (taxTypeRow !== undefined) {
+      findings.push(finding('ITC_TAX_TYPE_DIFFERS', 'BLOCKING', key, {
+        'en-IN': `Your books say ${taxTypeRow.ours ?? '—'}; ${supplier} filed ${taxTypeRow.theirs ?? '—'}. One of the two is wrong.`,
+        'hi-IN': `Aapki books mein ${taxTypeRow.ours ?? '—'} hai; ${supplier} ne ${taxTypeRow.theirs ?? '—'} file kiya. Dono mein se ek galat hai.`,
+      }, {
+        'en-IN': 'Look at the paper bill. If it shows the other kind of GST, correct the bill in your books; if your books are right, ask the supplier to correct their filing. The credit comes back on the month it is corrected.',
+        'hi-IN': 'Kagaz wala bill dekhiye. Agar us par doosri kism ka GST hai to apni books mein bill theek kijiye; agar books sahi hain to supplier se filing theek karwaiye. Credit usi mahine wapas aayega jab yeh theek hoga.',
+      }));
+    }
+    const otherDifferences = disagreements(evidence).filter((row) => row.field !== 'TAX_TYPE');
+    if (status === 'CLOSE' && otherDifferences.length > 0) {
+      const fields = otherDifferences;
       findings.push(finding('ITC_FIGURES_DIFFER', 'WARNING', key, {
         'en-IN': `Bill ${number}: ${fields.map((row) => `${row.label['en-IN'].toLowerCase()} — yours ${row.ours ?? '—'}, theirs ${row.theirs ?? '—'}`).join('; ')}.`,
         'hi-IN': `Bill ${number}: ${fields.map((row) => `${row.label['hi-IN']} — aapka ${row.ours ?? '—'}, unka ${row.theirs ?? '—'}`).join('; ')}.`,
@@ -384,7 +398,12 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
 
     const clean = status === 'EXACT' && !portal.reversed && portal.itcAvailableOnPortal !== false && portal.amends === null;
 
-    if (refused) {
+    if (taxTypeRow !== undefined) {
+      sentence = {
+        'en-IN': `Your books say ${taxTypeRow.ours ?? '—'}; the supplier filed ${taxTypeRow.theirs ?? '—'}. One of the two is wrong. ${formatINR(totalTaxOf(creditable))} is held back until the bill or the filing is corrected.`,
+        'hi-IN': `Aapki books mein ${taxTypeRow.ours ?? '—'} hai; supplier ne ${taxTypeRow.theirs ?? '—'} file kiya. Dono mein se ek galat hai. ${formatINR(totalTaxOf(creditable))} tab tak roka gaya hai jab tak bill ya filing theek na ho.`,
+      };
+    } else if (refused) {
       sentence = {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}${because}. It is not on this month's return.`,
         'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha${because}. Yeh is mahine ke return par nahin hai.`,

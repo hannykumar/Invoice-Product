@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
@@ -55,6 +55,8 @@ import {
   customers,
   createCustomer,
   createItem,
+  createSupplier,
+  resolveSupplier,
   changeItemCode,
   readCatalogue,
   customerPrint,
@@ -99,8 +101,12 @@ import type { InventoryStore, StockItem, StockMasterData, Warehouse } from '@inv
 import { DEFAULT_SALES_POLICY } from '../../../packages/sales/src/policy.ts';
 import { lineTaxableValue, taxOn } from '../../../packages/purchasing/src/recompute.ts';
 import { formatQuantity } from '../../../packages/masters/src/units.ts';
-import type { ApprovedPurchase, ApprovedPurchaseLine, PurchasePostingPreview } from '../../../packages/purchasing/src/posting-types.ts';
-import type { PurchaseVerdict } from '../../../packages/purchasing/src/validation-types.ts';
+import type { ApprovedPurchase, ApprovedPurchaseLine, PurchaseBill, PurchasePostingPreview } from '../../../packages/purchasing/src/posting-types.ts';
+import { validatePurchase } from '../../../packages/purchasing/src/validate.ts';
+import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adapter.ts';
+import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
+import { formatPaise } from '../../../packages/purchasing/src/money.ts';
+import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/src/validation.ts';
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
@@ -211,6 +217,22 @@ const daysAfter = (date: string, days: number): string => {
 };
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
+
+/** Today's date in India, which is what "a bill dated in the future" is measured against. */
+const indiaToday = (): string => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+
+/** Micro-units as the plain decimal a person typed: 500000000n is "500". */
+const plainQuantity = (scaled: bigint): string => {
+  const whole = scaled / 1_000_000n;
+  const fraction = (scaled % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return fraction === '' ? whole.toString() : `${whole}.${fraction}`;
+};
+
+/** The Indian financial year a date falls in, by the year it starts: 27 Sep 2026 is in 2026. */
+const financialYearOf = (date: string): number => {
+  const year = Number(date.slice(0, 4));
+  return Number(date.slice(5, 7)) >= 4 ? year : year - 1;
+};
 
 /** An address as typed: one line per row, blank rows dropped. Nothing is invented for it. */
 const addressLines = (value: unknown): readonly string[] =>
@@ -864,7 +886,11 @@ export class DemoApplication {
     const returnNotes = await this.returnNotes.list(companyId);
     const supplier = await this.payments.position(actor, this.config.supplierId, isoDate('2026-08-29'));
     const customer = await this.payments.position(actor, this.config.customerId, isoDate('2026-08-29'));
-    const stock = await this.shop.inventoryService.balance(actor, { itemId: 'TMT12', warehouseId: 'wh-main' });
+    // Issue #228 — purchases now receive the item from the item list, so the tile reads that item's
+    // balance; the old short id belonged to the purchase screen's retired three-item list.
+    const tileItem = catalogueItems(companyId).find((item) => item.id.endsWith(':item:TMT12'))
+      ?? catalogueItems(companyId).find((item) => item.kind === 'goods');
+    const stock = await this.shop.inventoryService.balance(actor, { itemId: tileItem?.id ?? 'TMT12', warehouseId: 'wh-main' });
     return {
       company: { id: companyId, name: this.config.name, location: this.config.location },
       metrics: {
@@ -873,7 +899,7 @@ export class DemoApplication {
         purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED').reduce((sum, bill) => sum + bill.totalPaise, 0n)),
         needsAttention: (stock.physical.scaled <= 0n ? 1 : 0) + supplier.documents.filter((position) => position.daysOverdue > 0).length,
       },
-      stock: { itemId: 'TMT12', name: 'TMT Steel Bar 12mm', quantity: Number(stock.physical.scaled) / 1_000_000, unit: stock.physical.unit },
+      stock: { itemId: tileItem?.id ?? 'TMT12', name: tileItem?.name ?? 'TMT Steel Bar 12mm', quantity: Number(stock.physical.scaled) / 1_000_000, unit: stock.physical.unit },
       supplier: { id: this.config.supplierId, name: this.config.supplierName, outstanding: jsonAmount(supplier.totalOutstanding.minor), documents: supplier.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
       customer: { id: this.config.customerId, name: this.config.customerName, outstanding: jsonAmount(customer.totalOutstanding.minor), documents: customer.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
       activity: [
@@ -1020,17 +1046,79 @@ export class DemoApplication {
     };
   }
 
-  previewPurchase(actor: ActorContext, input: Record<string, unknown>) {
-    const approved = this.purchaseInput(actor, input);
+  /**
+   * Issue #228 — the review of a supplier bill.
+   *
+   * Nothing on the screen chooses the kind of GST: the supplier's GST number says which state they
+   * are in, our own says which state the goods arrived in, and the reviewed rule decides. The
+   * review shows each line's tax and how the total is made up, so the figure that will be claimed
+   * is visible before anything is recorded.
+   */
+  async previewPurchase(actor: ActorContext, input: Record<string, unknown>) {
+    const draft = await this.purchaseInput(actor, input);
+    if ('alreadyRecorded' in draft) {
+      throw conflict('PURCHASE_ALREADY_RECORDED', `${draft.message} Nothing more needs doing.`);
+    }
+    const { approved, supplierState, godownState } = draft;
     const preview = this.shop.posting.preview(actor, approved);
-    return { state: 'preview', title: 'Ready to record', message: preview.summary, amount: jsonAmount(preview.totalPaise), effects: previewEffects(preview, this.config.location), token: approved.id };
+    const intra = preview.tax.intraState;
+    const head = intra ? 'CGST + SGST' : 'IGST';
+    const lineTaxes = approved.lines.map((line) => taxOn(line.taxableValuePaise, line.gstRateBasisPoints));
+    const lines = approved.lines.map((line, index) =>
+      `${line.description}: ${formatQuantity(line.quantity)} × ${formatPaise(line.ratePaise)} = ${formatPaise(line.taxableValuePaise)}, ${head} ${line.gstRateBasisPoints / 100}% = ${formatPaise(lineTaxes[index] ?? 0n)}`);
+    const claimable = preview.tax.cgstPaise + preview.tax.sgstPaise + preview.tax.igstPaise + preview.tax.cessPaise;
+    const why = intra
+      ? `The supplier is in ${STATE_NAMES[supplierState] ?? supplierState} (${supplierState}), the same state as your godown, so the bill carries CGST and SGST.`
+      : `The supplier is in ${STATE_NAMES[supplierState] ?? supplierState} (${supplierState}) and your godown is in ${STATE_NAMES[godownState] ?? godownState} (${godownState}), so the bill carries IGST.`;
+    const sumLine = lineTaxes.length > 1
+      ? [`${head}: ${lineTaxes.map(formatPaise).join(' + ')} = ${formatPaise(claimable)}`]
+      : [];
+    return {
+      state: 'preview',
+      title: 'Ready to record',
+      // Nothing has happened yet, so the review says what recording will do, not what it did.
+      message: `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`,
+      amount: jsonAmount(preview.totalPaise),
+      supplier: approved.supplierName,
+      taxType: intra ? 'CGST_SGST' : 'IGST',
+      tax: { cgst: jsonAmount(preview.tax.cgstPaise), sgst: jsonAmount(preview.tax.sgstPaise), igst: jsonAmount(preview.tax.igstPaise), total: jsonAmount(claimable) },
+      effects: [why, ...lines, ...sumLine, ...previewEffects(preview, this.config.location), ...preview.warnings],
+      token: approved.id,
+    };
   }
 
   async recordPurchase(actor: ActorContext, input: Record<string, unknown>) {
-    const approved = this.purchaseInput(actor, input);
+    permissionPortFromActor.require(actor, 'ledger.post.purchase', 'record a supplier bill');
+    const draft = await this.purchaseInput(actor, input);
+    const state = async () => this.dashboard(actor);
+    if ('alreadyRecorded' in draft) {
+      // Pressing Record twice, or typing the same bill in again, records it once.
+      const dashboard = await state();
+      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: dashboard.stock, supplier: dashboard.supplier };
+    }
+    const { approved } = draft;
+    // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: approved.supplierPartyId, name: approved.supplierName, kind: 'SUPPLIER' });
     const result = await this.shop.posting.post(actor, approved, `web:${approved.id}`);
-    const state = await this.dashboard(actor);
-    return { state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded', message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary, stock: state.stock, supplier: state.supplier };
+    const dashboard = await state();
+    return { state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded', message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary, bill: DemoApplication.purchaseBillJson(result.bill), stock: dashboard.stock, supplier: dashboard.supplier };
+  }
+
+  /** A posted supplier bill as the screen shows it: who, which number, and the tax under each head. */
+  private static purchaseBillJson(bill: PurchaseBill) {
+    return {
+      id: bill.id, number: bill.invoiceNumber, supplier: bill.supplierName, date: bill.invoiceDate, total: jsonAmount(bill.totalPaise),
+      taxable: jsonAmount(bill.tax.taxableValuePaise), cgst: jsonAmount(bill.tax.cgstPaise), sgst: jsonAmount(bill.tax.sgstPaise), igst: jsonAmount(bill.tax.igstPaise),
+      lines: bill.lines.map((line) => ({ item: line.description, quantity: formatQuantity(line.quantity), taxable: jsonAmount(line.taxableValuePaise), cgst: jsonAmount(line.cgstPaise), sgst: jsonAmount(line.sgstPaise), igst: jsonAmount(line.igstPaise) })),
+    };
+  }
+
+  /** Issue #228 — a supplier, with the GST number and address their bills carry, and their account in the books. */
+  async addSupplier(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const created = createSupplier(companyId, input);
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: created.supplier.id, name: created.supplier.name, kind: 'SUPPLIER' });
+    return created;
   }
 
   async purchase(actor: ActorContext, id: string) {
@@ -3535,94 +3623,170 @@ export class DemoApplication {
   }
 
   /**
-   * Builds a real purchase line from what the person actually typed.
+   * Issue #228 — a supplier bill as the purchasing module (#16, #17) needs it, from what was typed.
    *
-   * The GST rate, the item and the supplier's state all come from the form, so the tax split,
-   * the stock receipt and the "this total does not match its own lines" refusal are the real
-   * ones from #17 rather than a fixed line that always adds up.
+   * The supplier is a record from the supplier list, never a typed name. Every line names an item
+   * from the item list with its own quantity, price and GST rate. The kind of GST — IGST, or CGST
+   * and SGST — is not asked: the real validation (#16) puts the supplier's state, read from their
+   * GST number, and our godown's state to the reviewed rule, and runs the real duplicate check.
+   * Anything it does not clear is refused with its own words; nothing is marked "checked" here.
    */
-  private purchaseInput(actor: ActorContext, input: Record<string, unknown>): ApprovedPurchase {
+  private async purchaseInput(actor: ActorContext, input: Record<string, unknown>): Promise<
+    | { readonly approved: ApprovedPurchase; readonly supplierState: string; readonly godownState: string }
+    | { readonly alreadyRecorded: PurchaseBill; readonly message: string }
+  > {
     const companyId = this.companyOf(actor);
+    const supplier = resolveSupplier(companyId, String(input.supplierId ?? input.supplier ?? input.party ?? ''));
+    const supplierGstin = billingAddressOf(companyId, supplier.id)?.gstin;
+    if (supplierGstin === undefined) {
+      throw invalid('SUPPLIER_GSTIN_MISSING', `${supplier.legalName} has no GST number saved. It decides which GST is on their bill and whether you can claim it, so add it to their record first.`);
+    }
     const reference = String(input.reference ?? '').trim();
     if (!reference) throw invalid('API_REFERENCE_REQUIRED', 'Enter the supplier bill number.');
-    const date = String(input.date ?? '');
-    isoDate(date);
+    const date = isoDate(String(input.date ?? ''));
+    const lines = this.purchaseLines(companyId, input);
+    const typedTotal = String(input.amount ?? '').trim() === '' ? null : paise(input.amount);
+    const linesTotal = lines.reduce((total, line) => total + line.taxableValuePaise + taxOn(line.taxableValuePaise, line.gstRateBasisPoints), 0n);
+    const total = typedTotal ?? linesTotal;
+    const godownState = gstinStateCode(this.config.gstin);
+    const supplierState = gstinStateCode(supplierGstin);
 
-    const itemId = String(input.item ?? 'TMT12');
-    const catalogue: Record<string, { description: string; hsnSac: string; unit: string; kind: 'GOODS' | 'SERVICES'; batchId?: string }> = {
-      TMT12: { description: 'TMT Steel Bar 12mm', hsnSac: '72142090', unit: 'KGS', kind: 'GOODS' },
-      SOAP: { description: 'Herbal Bath Soap 100g', hsnSac: '34011190', unit: 'BOX', kind: 'GOODS', batchId: 'batch-web' },
-      FRT: { description: 'Inward freight', hsnSac: '996511', unit: 'NOS', kind: 'SERVICES' },
-    };
-    const item = catalogue[itemId] ?? catalogue.TMT12!;
+    // The same supplier's bill number twice in one financial year is the same bill: a supplier
+    // numbers each bill once a year. Typed again exactly, it is a retry and is recorded once; with
+    // anything different, it is refused rather than posted a second time.
+    const posted = (await this.shop.bills.list(companyId)).filter((bill) => bill.state === 'POSTED');
+    const gstinOf = (partyId: string) => billingAddressOf(companyId, partyId)?.gstin ?? (partyId === this.config.supplierId ? this.config.supplierGstin : undefined);
+    const year = financialYearOf(date);
+    const sameNumber = posted.find((bill) =>
+      normaliseIdentifier(gstinOf(bill.supplierPartyId) ?? '') === normaliseIdentifier(supplierGstin)
+      && normaliseInvoiceNumber(bill.invoiceNumber) === normaliseInvoiceNumber(reference)
+      && financialYearOf(bill.invoiceDate) === year);
+    if (sameNumber !== undefined) {
+      const identical = sameNumber.invoiceDate === date && sameNumber.totalPaise === total
+        && sameNumber.lines.length === lines.length
+        && sameNumber.lines.every((line, index) => line.itemId === lines[index]?.itemId
+          && line.quantity.scaled === lines[index]?.quantity.scaled && line.taxableValuePaise === lines[index]?.taxableValuePaise);
+      const message = `Bill ${sameNumber.invoiceNumber} from ${sameNumber.supplierName}, dated ${sameNumber.invoiceDate} for ${formatPaise(sameNumber.totalPaise)}, is already in your books.`;
+      if (identical) return { alreadyRecorded: sameNumber, message };
+      throw conflict('PURCHASE_DUPLICATE', `${message} A supplier gives each bill its own number for the year, so this is the same bill and it has not been recorded twice. If the supplier changed the bill, they send a credit or debit note against it.`);
+    }
 
-    const gstBasisPoints = Number(input.gst ?? 0);
-    const intraState = String(input.supplierState ?? 'other') === 'same';
-    // A blank bill total is allowed once a price per unit is given: the lines decide it.
-    const typedTotal = String(input.amount ?? '').trim() === '' ? 0n : paise(input.amount);
-
-    // A caller that sends only a bill amount — the older shape, and anything scripted against it —
-    // gets one line for that amount. A caller that sends a price and a quantity gets a real line.
-    const pricePerUnit = String(input.rate ?? '').trim() !== '';
-    const qty = pricePerUnit ? quantity(String(input.quantity ?? '1'), item.unit) : quantity('1', item.unit);
-    const rate = pricePerUnit ? paise(input.rate) : typedTotal;
-    if (rate <= 0n) throw invalid('API_RATE_REQUIRED', 'Enter either the bill amount, or the price of one and how many.');
-
-    // Exactly the arithmetic #16 and #17 both use, so the figure on screen is the posted one.
-    const taxable = lineTaxableValue(qty.scaled, rate);
-    const tax = taxOn(taxable, gstBasisPoints);
-    // A typed bill total is checked against what the lines come to; a blank one is taken from them.
-    const total = pricePerUnit && typedTotal > 0n ? typedTotal : taxable + tax;
-
-    const verdict: PurchaseVerdict = {
-      draftId: `web:${reference}`,
-      companyId,
-      status: 'POSTABLE',
-      findings: [],
-      duplicate: { verdict: 'NONE', matches: [], fingerprint: `web:${companyId}:${reference}`, message: 'Nothing like this has been entered before.' },
-      recomputed: { taxableValuePaise: taxable, totalTaxPaise: tax, invoiceTotalPaise: taxable + tax, linesTaxableValuePaise: [taxable], lineProblems: [], complete: true },
-      taxCheck: {
-        basis: 'RULES_ENGINE',
-        intraState,
-        ruleSetVersion: 'gst-2026.1',
-        ruleId: intraState ? 'POS.INTRASTATE' : 'POS.INTERSTATE',
-        explanation: intraState ? 'The supplier and the godown are in the same state.' : 'The supplier is in another state.',
+    // The draft #16 checks: every figure typed, with the evidence of having been typed.
+    const typed = <T,>(value: T) => ({ value, confidence: 1, evidence: { page: 0, text: String(value) } });
+    const draftId = `web:${supplier.id}:${normaliseInvoiceNumber(reference)}:${year}`;
+    const verdict = validatePurchase({
+      draft: {
+        id: draftId,
+        companyId,
+        documentId: `web-document:${draftId}`,
+        source: 'manual',
+        supplierGstin: typed(supplierGstin),
+        supplierName: typed(supplier.legalName),
+        buyerGstin: typed(this.config.gstin),
+        invoiceNumber: typed(reference),
+        invoiceDate: typed(String(date)),
+        ...(typedTotal === null ? {} : { invoiceTotalPaise: typed(typedTotal) }),
+        lines: lines.map((line) => ({
+          description: typed(line.description),
+          hsnSac: typed(line.hsnSac),
+          quantity: typed(plainQuantity(line.quantity.scaled)),
+          unit: typed(line.quantity.unit),
+          ratePaise: typed(line.ratePaise),
+          taxableValuePaise: typed(line.taxableValuePaise),
+          gstRateBasisPoints: typed(line.gstRateBasisPoints),
+        })),
+        fieldsNeedingReview: [],
+        arithmeticProblems: [],
+        createdAt: new Date().toISOString(),
       },
-      corrections: [],
-      policy: { roundingPaise: 100n, taxAbsolutePaise: 100n, totalAbsolutePaise: 100n, totalRelativeBasisPoints: 10, effectiveFrom: '2026-04-01' },
-      fingerprint: `web:${companyId}:${reference}`,
-      summary: 'Everything on this bill adds up.',
-    };
-    const line: ApprovedPurchaseLine = {
-      lineNumber: 1,
-      itemId,
-      description: item.description,
-      hsnSac: item.hsnSac,
-      supplyKind: item.kind,
-      ...(item.kind === 'GOODS' ? { warehouseId: 'wh-main' } : {}),
-      ...(item.batchId === undefined ? {} : { batchId: item.batchId }),
-      quantity: qty,
-      ratePaise: rate,
-      taxableValuePaise: taxable,
-      gstRateBasisPoints: gstBasisPoints,
-      itcEligibility: 'ELIGIBLE',
-    };
+      supplier,
+      ...(billingAddressOf(companyId, supplier.id) === null ? {} : { supplierAddress: billingAddressOf(companyId, supplier.id)! }),
+      buyerStateCode: godownState,
+      existing: posted.map((bill) => ({
+        id: bill.purchaseId,
+        companyId: bill.companyId,
+        supplierGstin: gstinOf(bill.supplierPartyId) ?? '',
+        invoiceNumber: bill.invoiceNumber,
+        invoiceDate: bill.invoiceDate,
+        invoiceTotalPaise: bill.totalPaise,
+        enteredOn: bill.postedAt.slice(0, 10),
+        contentFingerprint: `posted:${bill.id}`,
+      })),
+      taxSplit: DemoApplication.purchaseTaxSplit,
+      today: indiaToday(),
+    });
+    if (verdict.status !== 'POSTABLE') {
+      const shown = verdict.findings.filter((finding) => finding.severity !== 'MINOR');
+      throw invalid('PURCHASE_NEEDS_CHECKING', shown.length === 0 ? verdict.summary : shown.map((finding) => finding.message).join(' '), { details: { status: verdict.status } });
+    }
     return {
-      id: `web-purchase:${reference}`,
-      companyId,
-      sourceDocumentId: `web-document:${reference}`,
-      verdict,
-      supplierPartyId: this.config.supplierId,
-      supplierName: String(input.party || this.config.supplierName),
-      invoiceNumber: reference,
-      invoiceDate: isoDate(date),
-      lines: [line],
-      invoiceTotalPaise: total,
-      taxLiability: 'SUPPLIER',
-      creditDays: 30,
-      approvedBy: actor.userId,
-      approvedAt: '2026-08-29T10:00:00.000Z',
+      approved: {
+        id: `web-purchase:${draftId}`,
+        companyId,
+        sourceDocumentId: `web-document:${draftId}`,
+        verdict,
+        supplierPartyId: supplier.id,
+        supplierName: supplier.legalName,
+        invoiceNumber: reference,
+        invoiceDate: date,
+        lines,
+        invoiceTotalPaise: total,
+        taxLiability: 'SUPPLIER',
+        creditDays: 30,
+        approvedBy: actor.userId,
+        approvedAt: new Date().toISOString(),
+      },
+      supplierState,
+      godownState,
     };
+  }
+
+  /** The reviewed GST rules, which answer IGST against CGST and SGST from the two states (#228). */
+  private static readonly purchaseTaxSplit = rulesEngineTaxSplit({ registry: shippedRegistry() });
+
+  /**
+   * Issue #228 — the lines of a supplier bill, each an item from the item list with its own
+   * quantity, price and GST rate. One line is the old single-item shape; many come as `lines`.
+   */
+  private purchaseLines(companyId: CompanyId, input: Record<string, unknown>): ApprovedPurchaseLine[] {
+    const raw = input.lines;
+    const parsed: unknown = typeof raw === 'string' && raw.trim() !== '' ? JSON.parse(raw) : raw;
+    const rows: Record<string, unknown>[] = Array.isArray(parsed) && parsed.length > 0
+      ? parsed as Record<string, unknown>[]
+      : [{ item: input.itemId ?? input.item, quantity: input.quantity, unit: input.unit, rate: input.rate, gst: input.gst }];
+    return rows.map((row, index) => {
+      const item = resolveItem(companyId, String(row.itemId ?? row.item ?? ''));
+      const label = `Line ${index + 1} (${item.name})`;
+      const unit = String(row.unit ?? '').trim().toUpperCase() || item.baseUnit;
+      const typedQuantity = String(row.quantity ?? '').replace(/,/g, '').trim();
+      if (!/^\d+(\.\d{1,6})?$/.test(typedQuantity) || /^0+(\.0+)?$/.test(typedQuantity)) {
+        throw invalid('PURCHASE_QUANTITY', `${label}: type how many came, more than zero.`);
+      }
+      const qty = quantity(typedQuantity, unit);
+      const rate = paise(row.rate);
+      const typedGst = String(row.gst ?? row.gstRate ?? '').trim();
+      const declared = itemView(companyId, item.id);
+      const gstBasisPoints = typedGst === ''
+        ? declared.ratePercent === null ? 0 : Math.round(declared.ratePercent * 100)
+        : Number(typedGst);
+      if (!Number.isInteger(gstBasisPoints) || gstBasisPoints < 0 || gstBasisPoints > 10_000) {
+        throw invalid('PURCHASE_GST_RATE', `${label}: choose the GST rate printed on the supplier's bill.`);
+      }
+      const goods = item.kind === 'goods';
+      return {
+        lineNumber: index + 1,
+        itemId: item.id,
+        description: item.name,
+        hsnSac: item.hsnSac,
+        supplyKind: goods ? 'GOODS' as const : 'SERVICES' as const,
+        ...(goods ? { warehouseId: 'wh-main' } : {}),
+        quantity: qty,
+        ratePaise: rate,
+        taxableValuePaise: lineTaxableValue(qty.scaled, rate),
+        gstRateBasisPoints: gstBasisPoints,
+        itcEligibility: 'ELIGIBLE' as const,
+      };
+    });
   }
 
   /**

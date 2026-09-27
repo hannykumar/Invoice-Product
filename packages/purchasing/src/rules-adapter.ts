@@ -6,22 +6,29 @@
 
 import { RuleRegistry, RulesEngine, FactSet, GST_RULE_SET, type EngineMode } from "../../rules-engine/src/index.ts";
 import { isoDate } from "../../kernel/src/dates.ts";
+import { GST_STATE_CODES } from "../../masters/src/validation.ts";
 import type { TaxSplitAnswer, TaxSplitPort } from "./validation-types.ts";
 
 export interface RulesTaxSplitOptions {
   /** 'production' refuses any rule that is not APPROVED. That is the safe default. */
   readonly mode?: EngineMode;
+  /**
+   * The rules to consult. Defaults to the draft GST set alone, which a production engine will not
+   * answer from. The running app passes the shipped registry, whose reviewed tax-split rule
+   * (IGST Act sections 7 and 8) does answer — issue #228.
+   */
+  readonly registry?: RuleRegistry;
 }
 
 /**
  * Build the tax-split port over the shipped GST rule set.
  *
- * Note for callers: at the time of writing every rule in `in.gst` is still DRAFT pending #54,
- * so a production engine returns CANNOT_DECIDE. That is the correct, safe behaviour — it means
- * tax is checked only for internal consistency until reviewed sources are published.
+ * Note for callers: every rule in the draft `in.gst` set is DRAFT, so a production engine over
+ * that set alone returns CANNOT_DECIDE — tax is then only checked for internal consistency. Pass
+ * `registry: shippedRegistry()` to consult the reviewed set, as the purchase screen does (#228).
  */
 export function rulesEngineTaxSplit(options: RulesTaxSplitOptions = {}): TaxSplitPort {
-  const registry = new RuleRegistry().register(GST_RULE_SET);
+  const registry = options.registry ?? new RuleRegistry().register(GST_RULE_SET);
   const engine = new RulesEngine({ registry, ruleSetId: GST_RULE_SET.id, mode: options.mode ?? "production" });
 
   return {
@@ -32,6 +39,11 @@ export function rulesEngineTaxSplit(options: RulesTaxSplitOptions = {}): TaxSpli
           {
             "supply.supplierStateCode": input.supplierStateCode,
             "supply.placeOfSupplyStateCode": input.placeOfSupplyStateCode,
+            // The reviewed rule needs the state's name to tell a union territory under the UTGST
+            // Act from a state; the name is a fact about the code, not a guess.
+            ...(GST_STATE_CODES[input.placeOfSupplyStateCode]?.name === undefined
+              ? {}
+              : { "supply.placeOfSupplyStateName": GST_STATE_CODES[input.placeOfSupplyStateCode]!.name }),
           },
           "MASTER_DATA",
         ),
@@ -47,7 +59,8 @@ export function rulesEngineTaxSplit(options: RulesTaxSplitOptions = {}): TaxSpli
       }
       return {
         kind: "SPLIT",
-        intraState: decision.computed["split"] === "CGST_SGST",
+        // CGST with UTGST is as much an intra-state supply as CGST with SGST; only IGST is not.
+        intraState: decision.computed["split"] !== "IGST",
         ruleSetVersion: decision.ruleSetVersion,
         ruleId: decision.ruleId ?? "unknown",
         explanation: decision.explanation["en-IN"],
