@@ -109,7 +109,7 @@
           <form class="transaction-layout draft-form" data-draft="sale">
             <article class="panel form-panel">
               <div class="field-grid">
-                <label><span data-i18n="customer"></span><select name="party" data-customer-picker required></select><small id="sale-customer-detail"></small><button type="button" class="text-button" id="sale-correct-address" data-i18n="correctAddress"></button></label>
+                <label><span data-i18n="customer"></span><select name="party" data-customer-picker data-picker-blank="chooseSaleCustomer" required></select><small id="sale-customer-detail"></small><button type="button" class="text-button" id="sale-correct-address" data-i18n="correctAddress"></button></label>
                 <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="paymentTerms"></span><select name="terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
               </div>
@@ -165,6 +165,8 @@
               <div class="bill-actions">
                 <label><span data-i18n="billPaper"></span><select id="sale-bill-format"><option value="A4" data-i18n="billPaperA4"></option><option value="THERMAL_80MM" data-i18n="billPaperThermal"></option><option value="MOBILE" data-i18n="billPaperMobile"></option></select></label>
                 <button type="button" class="primary-button" id="sale-bill-print" data-i18n="printBill"></button>
+                <!-- Issue #233 — a wrong bill is cancelled, never deleted; its number stays used. -->
+                <button type="button" class="secondary-button" id="sale-bill-cancel" data-i18n="cancelBill"></button>
               </div>
             </div>
             <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
@@ -1354,6 +1356,21 @@
       <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
     <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <!-- Issue #233 — cancelling an issued bill: what it will do, why it cannot, and the reason kept with it. -->
+    <dialog id="cancel-bill-dialog" aria-labelledby="cancel-bill-title">
+      <h2 id="cancel-bill-title" data-i18n="cancelBill"></h2>
+      <p id="cancel-bill-message"></p>
+      <ul class="dialog-effects" id="cancel-bill-effects"></ul>
+      <form id="cancel-bill-form" class="login-form">
+        <label id="cancel-bill-reason-field"><span data-i18n="cancelBillReason"></span><textarea name="reason" rows="2" required></textarea><small data-i18n="cancelBillReasonHelp"></small></label>
+        <p class="login-error" id="cancel-bill-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="close"></button>
+          <button class="secondary-button" type="button" id="cancel-bill-credit-note" data-i18n="makeWholeBillNote" hidden></button>
+          <button class="primary-button" type="submit" id="cancel-bill-confirm" data-i18n="cancelBillConfirm"></button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="customer-dialog" aria-labelledby="customer-dialog-title">
       <h2 id="customer-dialog-title" data-i18n="addCustomerTitle"></h2>
       <p data-i18n="addCustomerHelp"></p>

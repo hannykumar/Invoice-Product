@@ -39,6 +39,13 @@ export interface ReturnNoteLine {
   readonly unitPrice: Money | null;
 }
 
+/**
+ * Issue #233 — freight or another charge from the original bill, rather than goods that came back.
+ * The calculator names every charge line `charge:<kind>` (gst-calc #205), and the note keeps the
+ * original's item id, so this is read from what is stored and needs no column of its own.
+ */
+export const isChargeLine = (line: { readonly itemId: string }): boolean => line.itemId.startsWith('charge:');
+
 export interface ReturnNote {
   readonly id: string;
   readonly companyId: CompanyId;

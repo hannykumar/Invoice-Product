@@ -12,7 +12,7 @@
  *     template has no way to remove a legally required field, because it has no field for it.
  *  2. **Everything is escaped.** An item called `<script>` is a thing a shopkeeper can type.
  */
-import { formatDate, sum, type Money } from '@invoice/kernel';
+import { formatDate, sum, type IsoDate, type Money } from '@invoice/kernel';
 import type {
   InvoiceDocument,
   Locale,
@@ -137,6 +137,17 @@ const watermark = (doc: InvoiceDocument, format: PageFormat): string => {
   return `<div class="watermark" aria-hidden="true"><img src="${escapeHtml(mark.imageDataUri)}" alt="" style="opacity:${(percent / 100).toFixed(3)}"></div>`;
 };
 
+/**
+ * Issue #233 — CANCELLED across a cancelled bill, on every paper size, with the date and the
+ * reason underneath. Not the trade-mark watermark: this one prints on till roll too, because a
+ * cancelled counter slip is exactly the paper somebody might try to use.
+ */
+const cancelStamp = (doc: InvoiceDocument, locale: Locale): string => {
+  if (doc.cancelled == null) return '';
+  return `<div class="cancel-stamp" aria-hidden="true"><span>${escapeHtml(t('cancelledMark', locale))}</span></div>`
+    + `<div class="cancel-note"><strong>${escapeHtml(t('cancelledMark', locale))}</strong> · ${escapeHtml(formatDate(doc.cancelled.on as IsoDate))} · ${escapeHtml(doc.cancelled.reason)}</div>`;
+};
+
 const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
   const page = PAGE[format];
   const { palette, typography } = snapshot;
@@ -169,6 +180,17 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     }
     .watermark img { width: 55%; max-width: 110mm; max-height: 45%; }
     .sheet > *:not(.watermark) { position: relative; z-index: 1; }
+    /* Issue #233 — CANCELLED sits over the page, where nobody can miss it. */
+    .sheet > .cancel-stamp {
+      position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cancel-stamp span {
+      transform: rotate(-30deg); border: 4px solid #b3261e; color: #b3261e; opacity: .55;
+      font-weight: 800; letter-spacing: .12em; font-size: ${PAGE[format].narrow ? '20pt' : '54pt'}; padding: 1mm 4mm;
+    }
+    .cancel-note { color: #b3261e; font-weight: 600; margin-bottom: 2mm; }
+    @media print { .cancel-stamp span, .cancel-note { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
     table.items { table-layout: fixed; }
     table.items td, table.items th { overflow-wrap: anywhere; }
     h1 { font-family: ${typography.headingStack}; font-size: ${typography.baseSizePt + 4}pt; margin: 0 0 2mm; color: ${palette.accent}; letter-spacing: .04em; }
@@ -337,7 +359,7 @@ export const renderInvoice = (
       format,
       locale,
       'boxed',
-      `${watermark(doc, format)}<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking, purpose)}</div>`,
+      `${watermark(doc, format)}${cancelStamp(doc, locale)}<div class="sheet-inner">${renderBoxed(doc, snapshot, format, locale, marking, purpose)}</div>`,
       options.copy,
     );
   }
@@ -502,6 +524,7 @@ export const renderInvoice = (
 
   const body = `
   ${watermark(doc, format)}
+  ${cancelStamp(doc, locale)}
   ${marking === null ? '' : `<div class="copy-mark">${escapeHtml(marking)}</div>`}
   <div class="head">
     <div>

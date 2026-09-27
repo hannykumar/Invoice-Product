@@ -7,7 +7,7 @@ import { conflict, invalid, notAllowed, isoDate, money, notFound, quantityFromSt
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SalesService, type InventoryPort, type SalesInvoice } from '@invoice/sales';
+import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
   copiesFor,
@@ -190,10 +190,15 @@ import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/
 import { formatClaimDate } from '../../../packages/itc/src/deadline.ts';
 import {
   GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInwardTaxPort,
-  returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
+  formatTaxPeriod, returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
   type OutwardDocument, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
+
+/** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
+/** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
+const WHOLE_BILL = '__whole__';
+const LOCKED_RETURN_STATES: ReadonlySet<string> = new Set(['APPROVED', 'EXPORTED', 'SUBMITTING', 'FILED', 'SUBMISSION_FAILED']);
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -478,6 +483,8 @@ export class DemoApplication {
    * until the bill is issued and they are frozen onto it.
    */
   private readonly deliveries = new Map<string, DeliveryDetails>();
+  /** Issue #233 — what stops a bill being cancelled; the same guard the sales service asks. */
+  private cancelGuard: CancellationGuardPort = { async blockers() { return []; } };
   /**
    * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
    * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
@@ -589,7 +596,84 @@ export class DemoApplication {
         return godown.reserve(actor, { ...request, lines });
       },
     };
-    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: goodsOnly, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } } });
+    // Issue #233 — what stops an issued bill being cancelled, read from the modules that hold it.
+    // The GST return's preparations are kept here so the guard reads the same record the GST returns
+    // screen approves.
+    const gstPreparations = new InMemoryReturnPreparations();
+    const cancellationGuard: CancellationGuardPort = {
+      async blockers(_actor, invoice) {
+        const found: CancelBlocker[] = [];
+        const number = invoice.number ?? invoice.id;
+        const period = taxPeriodOf(invoice.documentDate);
+        const month = formatTaxPeriod(period);
+        // A bill in an approved or filed month is already in the government's hands (or about to
+        // be). Its correction is a credit note (CGST s.34), which goes into the month it is made.
+        for (const returnType of ['GSTR1', 'GSTR3B'] as const) {
+          const prepared = await gstPreparations.find(invoice.companyId, period, returnType);
+          if (prepared === null || !LOCKED_RETURN_STATES.has(prepared.state)) continue;
+          found.push({
+            code: 'SALES_CANCEL_MONTH_APPROVED',
+            message: `${number} cannot be cancelled: it is in the GST return for ${month}, which is ${prepared.state === 'FILED' ? 'filed' : 'approved'}. Make a credit note for the whole bill instead (Returns, choose "Whole bill"). The bill and the note both stay on record.`,
+            clearable: null,
+          });
+          break;
+        }
+        // A credit note already points at this bill. Cancelling the bill would leave that note
+        // reducing tax on a sale that was never reported.
+        const notes = (await returnNotes.listForOriginal(invoice.companyId, invoice.id)).filter((note) => note.kind === 'SALES_RETURN');
+        if (notes.length > 0) {
+          found.push({
+            code: 'SALES_CANCEL_HAS_CREDIT_NOTE',
+            message: `${number} cannot be cancelled: credit note ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`,
+            clearable: null,
+          });
+        }
+        // The government's windows are judged on the same clock the e-invoice and e-way services
+        // cancel by, so this never promises a cancel the service would then refuse.
+        const now = shop.clock.now().toISOString();
+        // The government's copy must go first, inside its window, or it would show a sale we no
+        // longer report. After the window only a credit note can correct it.
+        const eInvoice = await shop.eInvoices.findByDocumentId(invoice.companyId, invoice.id);
+        if (eInvoice?.status === 'PENDING') {
+          found.push({
+            code: 'SALES_CANCEL_EINVOICE_WAITING',
+            message: `${number} has been sent for its e-invoice number and the government has not answered yet. Wait for the answer on the E-invoice screen, then cancel.`,
+            clearable: null,
+          });
+        } else if (eInvoice?.status === 'REGISTERED') {
+          const open = eInvoice.cancellableUntil === undefined || eInvoice.cancellableUntil > now;
+          found.push(open
+            ? {
+              code: 'SALES_CANCEL_EINVOICE_ACTIVE',
+              message: `${number} has a government e-invoice number (IRN). The e-invoice has to be cancelled with the government first, and that is allowed only within 24 hours of registering it. Cancel the e-invoice, then this bill.`,
+              clearable: 'EINVOICE',
+            }
+            : {
+              code: 'SALES_CANCEL_EINVOICE_WINDOW_CLOSED',
+              message: `${number} has a government e-invoice number, and the 24 hours in which the government allows it to be cancelled have passed. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`,
+              clearable: null,
+            });
+        }
+        const eway = await shop.ewayBills.findByMovementId(invoice.companyId, invoice.id);
+        if (eway?.acknowledgement !== undefined && eway.status !== 'CANCELLED' && eway.status !== 'REJECTED') {
+          const open = (eway.status === 'ACTIVE' || eway.status === 'PART_A_ONLY')
+            && (eway.cancellableUntil === undefined || eway.cancellableUntil > now);
+          found.push(open
+            ? {
+              code: 'SALES_CANCEL_EWAY_ACTIVE',
+              message: `${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}. It has to be cancelled on the portal first, which is allowed only within 24 hours of raising it. Cancel the e-way bill, then this bill.`,
+              clearable: 'EWAY_BILL',
+            }
+            : {
+              code: 'SALES_CANCEL_EWAY_WINDOW_CLOSED',
+              message: `${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}, and it can no longer be cancelled on the portal, so the government holds these goods as moved. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`,
+              clearable: null,
+            });
+        }
+        return found;
+      },
+    };
+    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: goodsOnly, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } }, cancellationGuard });
 
     // Issue #230 — each supplier by their own name. Every supplier used to be called the built-in
     // one, so money owed to a second supplier was listed under the first supplier's name.
@@ -964,6 +1048,13 @@ export class DemoApplication {
           }));
         return [...documents, ...notes];
       },
+      // Issue #233 — a bill issued in this month and then cancelled is not a sale, but its number
+      // was used, so the documents-issued table (GSTR-1 table 13) counts it as cancelled.
+      async cancelledNumbersFor(companyId, period) {
+        return (await salesRepository.list(companyId, { state: 'CANCELLED' }))
+          .filter((invoice) => invoice.number !== null && taxPeriodOf(invoice.documentDate) === period)
+          .map((invoice) => ({ kind: 'INVOICE' as const, number: invoice.number as string }));
+      },
     };
     const gstReturns = new GstReturnService({
       outward: outwardSupplies,
@@ -978,7 +1069,7 @@ export class DemoApplication {
         permissions: [ITC_PERMISSIONS.view],
       })),
       books: ledgerBookTaxPort(shop.store.read()),
-      repository: new InMemoryReturnPreparations(),
+      repository: gstPreparations,
       audit: shop.audit,
       clock: { now: () => new Date() },
     });
@@ -1013,6 +1104,7 @@ export class DemoApplication {
     }), advances);
 
     const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale, exportSales);
+    app.cancelGuard = cancellationGuard;
     await app.seed();
     return app;
   }
@@ -1544,7 +1636,11 @@ export class DemoApplication {
     const zeroRated = exportSale === null || !EXPORT_SUPPLIES[exportSale.kind].zeroRated
       ? {}
       : { zeroRated: EXPORT_SUPPLIES[exportSale.kind].taxPaid ? 'WITH_TAX' as const : 'WITHOUT_TAX' as const };
-    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
+    // Issue #233 — one key per review, sent by the screen with the review and again with Record, so
+    // pressing Record twice issues one bill. The screen never uses the customer's own reference as
+    // the key: two real sales can carry the same order number, and the second must not come back as
+    // the first. (Callers without a review key still fall back to it, as before.)
+    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.requestId || input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
     if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
     const checked = await this.checkSale(actor, draft);
     // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
@@ -1784,6 +1880,125 @@ export class DemoApplication {
   }
 
 
+  // ------------------------------------------------ issue #233: cancelling a wrong bill
+
+  /**
+   * Money already received against this bill. Cancelling the bill does not un-receive it: the
+   * customer paid, the bank has it, and the receipt stays in the books. It is taken off the
+   * cancelled bill and left on account for that customer — money held for them, to be refunded or
+   * set against their next bill. An advance for goods carries no GST of its own, so nothing on the
+   * return changes because of it.
+   */
+  private async receiptsAgainst(companyId: CompanyId, invoice: SalesInvoice): Promise<Payment[]> {
+    return (await this.paymentRepository.listForParty(companyId, invoice.partyId))
+      .filter((payment) => payment.state === 'RECORDED' && payment.allocations.some((allocation) => allocation.documentId === invoice.id));
+  }
+
+  /** Today in India, where the business keeps its books, not in UTC (which is still yesterday until 05:30). */
+  private static indiaDate(at: Date | string = new Date()): IsoDate {
+    return isoDate(new Date(at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+  }
+
+  private static cancelToday(): IsoDate {
+    return DemoApplication.indiaDate();
+  }
+
+  /** What cancelling this bill will do, or why it cannot be cancelled. Writes nothing. */
+  async previewCancelSale(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const invoiceId = String(input.invoice ?? '');
+    // The reason is asked for on the review; a placeholder lets the checks run before it is typed.
+    const reason = String(input.reason ?? '').trim() || 'reason to follow';
+    const invoice = await this.sales.checkCancel(actor, {
+      invoiceId, reason, today: DemoApplication.cancelToday(), ignoreClearable: ['EINVOICE', 'EWAY_BILL'],
+    });
+    if (invoice.state === 'CANCELLED') {
+      return { state: 'preview' as const, title: `${invoice.number} is already cancelled`, message: 'Nothing more will change.', token: invoice.id, amount: 0, effects: [], clearFirst: [] };
+    }
+    const clearFirst = (await this.cancelGuard.blockers(actor, invoice)).filter((blocker) => blocker.clearable !== null);
+    const customer = customerView(companyId, String(invoice.partyId)).name;
+    const value = invoice.pricing?.totals.invoiceValue.minor ?? 0n;
+    const received = sum((await this.receiptsAgainst(companyId, invoice)).map((payment) =>
+      sum(payment.allocations.filter((allocation) => allocation.documentId === invoice.id).map((allocation) => allocation.amount))));
+    const goods = invoice.supplyKind === 'GOODS'
+      ? invoice.lines.filter((line) => catalogueItems(companyId).find((item) => item.id === line.itemId)?.kind !== 'service')
+      : [];
+    const effects = [
+      ...clearFirst.map((blocker) => blocker.message),
+      `The number ${invoice.number} stays used and the bill stays on record, marked CANCELLED. No new bill will ever get this number.`,
+      `${customer} will owe ${formatPaise(value)} less.`,
+      ...goods.map((line) => `${showQuantity(line.quantity)} of ${invoice.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? line.itemId} go back into stock.`),
+      `The GST return for ${formatTaxPeriod(taxPeriodOf(invoice.documentDate))} will count ${invoice.number} as a cancelled bill, not as a sale.`,
+      ...(received.minor > 0n
+        ? [`${formatPaise(received.minor)} already received against this bill stays in your books as money held for ${customer} (on account). Refund it or use it on their next bill.`]
+        : []),
+    ];
+    return {
+      state: 'preview' as const,
+      title: `Cancel ${invoice.number}?`,
+      message: `${invoice.number} for ${formatPaise(value)} will be cancelled.`,
+      token: invoice.id,
+      amount: jsonAmount(value),
+      effects,
+      clearFirst: clearFirst.map((blocker) => ({ kind: blocker.clearable, message: blocker.message })),
+    };
+  }
+
+  /**
+   * Cancels an issued bill. Refused, with the credit-note route, once its month is approved or
+   * filed, once a credit note exists against it, or once its e-invoice or e-way bill can no longer
+   * be cancelled with the government. With `cancelGovernmentDocuments`, a live e-way bill and e-invoice
+   * are cancelled with the government first (the e-way bill before the e-invoice it came from).
+   */
+  async cancelSale(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const invoiceId = String(input.invoice ?? '');
+    const reason = String(input.reason ?? '').trim();
+    const today = DemoApplication.cancelToday();
+    const clearFirst = input.cancelGovernmentDocuments === true || input.cancelGovernmentDocuments === 'yes';
+    const checked = await this.sales.checkCancel(actor, {
+      invoiceId, reason, today, ...(clearFirst ? { ignoreClearable: ['EINVOICE', 'EWAY_BILL'] as const } : {}),
+    });
+    if (checked.state === 'CANCELLED') return this.cancelledJson(checked, 0n, true);
+
+    if (clearFirst) {
+      for (const blocker of await this.cancelGuard.blockers(actor, checked)) {
+        if (blocker.clearable === 'EWAY_BILL') await this.shop.ewayBill.cancel(actor, checked.id, { reasonCode: 'OTHERS', reason });
+      }
+      for (const blocker of await this.cancelGuard.blockers(actor, checked)) {
+        if (blocker.clearable === 'EINVOICE') await this.shop.eInvoice.cancel(actor, checked.id, { reasonCode: 'OTHER', reason });
+      }
+    }
+
+    // The bill, its entry, its goods and any money received against it change in one save.
+    let movedOnAccount = 0n;
+    const cancelled = await this.shop.store.transaction(companyId, async () => {
+      const receipts = await this.receiptsAgainst(companyId, checked);
+      const done = await this.sales.cancel(actor, { idempotencyKey: `web-sale-cancel:${checked.id}`, invoiceId: checked.id, reason, today });
+      for (const payment of receipts) {
+        movedOnAccount += sum(payment.allocations.filter((allocation) => allocation.documentId === checked.id).map((allocation) => allocation.amount)).minor;
+        await this.payments.allocate(actor, payment.id, payment.allocations.filter((allocation) => allocation.documentId !== checked.id), payment.version);
+      }
+      return done;
+    });
+    return this.cancelledJson(cancelled, movedOnAccount, false);
+  }
+
+  private cancelledJson(invoice: SalesInvoice, onAccount: bigint, deduplicated: boolean) {
+    const customer = customerView(this.config.companyId, String(invoice.partyId)).name;
+    return {
+      state: 'recorded' as const,
+      deduplicated,
+      title: deduplicated ? 'Bill already cancelled' : 'Bill cancelled',
+      message: `${invoice.number} is cancelled. The number stays used, the bill stays on record marked CANCELLED, ${customer}'s balance and the stock are back as they were, and the GST return counts it as cancelled.`,
+      onAccount: onAccount === 0n ? null : {
+        amount: jsonAmount(onAccount),
+        message: `${formatPaise(onAccount)} received against ${invoice.number} is now held on account for ${customer}.`,
+      },
+      invoice: { id: invoice.id, number: invoice.number, state: invoice.state, reason: invoice.cancelReason },
+    };
+  }
+
   /**
    * Issue #142 — turns an accepted quotation into a sale without retyping it.
    *
@@ -1882,7 +2097,8 @@ export class DemoApplication {
   ) {
     const companyId = this.companyOf(actor);
     const invoice = await this.salesRepository.findById(companyId, invoiceId);
-    if (invoice?.state !== 'FINAL') throw notFound('API_INVOICE_NOT_FOUND', 'No issued bill was found.');
+    // Issue #233 — a cancelled bill still reprints, with CANCELLED across it.
+    if (invoice === null || (invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED')) throw notFound('API_INVOICE_NOT_FOUND', 'No issued bill was found.');
     const facts = this.invoicePrints.get(invoiceId);
     if (facts === undefined) throw notFound('API_INVOICE_PRINT_FACTS', 'The issued bill has no stored print snapshot.');
     const locale: Locale = options.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
@@ -1905,6 +2121,9 @@ export class DemoApplication {
     const document: InvoiceDocument = {
       ...facts.document,
       eInvoiceExpected,
+      cancelled: invoice.state === 'CANCELLED'
+        ? { on: invoice.cancelledAt === null ? invoice.documentDate : DemoApplication.indiaDate(invoice.cancelledAt), reason: invoice.cancelReason ?? '' }
+        : null,
       ...(upiId === null ? {} : { upiId }),
       ...(ewayBillNumber === null || transport?.eWayBillNumber != null
         ? {}
@@ -1926,6 +2145,8 @@ export class DemoApplication {
     return {
       state: 'print' as const,
       number: invoice.number ?? '',
+      // Issue #233 — the screen offers "Cancel this bill" only on a bill that stands.
+      cancelled: invoice.state === 'CANCELLED',
       format,
       copies: copies.length,
       copyMarkings: copies.map((copy) => copyMarking(document, copy, locale)).filter((marking): marking is string => marking !== null),
@@ -2476,6 +2697,11 @@ export class DemoApplication {
         cess: jsonAmount(row.amounts.cess.minor),
         bills: row.sources.map((source) => source.number),
       })),
+      // Issue #233 — the documents-issued table (GSTR-1 table 13): every number used in the month,
+      // and how many of them were cancelled rather than counted as sales.
+      documentsIssued: workspace.gstr1.documents.map((row) => ({
+        kind: row.kind, from: row.from, to: row.to, total: row.total, cancelled: row.cancelled, issued: row.issued,
+      })),
       reasons: workspace.reasons.map((reason) => ({ sourceId: reason.sourceId, section: reason.section, reason: reason.reason['en-IN'] })),
       gstr3b: {
         summary: workspace.gstr3b.sentence['en-IN'],
@@ -2738,6 +2964,9 @@ export class DemoApplication {
         ...(await Promise.all(sales.map(async (invoice) => ({
           kind: 'SALES_RETURN', id: invoice.id, number: invoice.number, party: this.invoicePrints.get(invoice.id)?.document.buyer.name ?? this.config.customerName,
           date: invoice.documentDate,
+          // Issue #233 — what a credit note for the whole bill would still credit, charges included.
+          leftToCredit: jsonAmount((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - (await this.returnNotes.listForOriginal(companyId, invoice.id))
+            .filter((note) => note.kind === 'SALES_RETURN').reduce((total, note) => total + note.totals.total.minor, 0n)),
           lines: await Promise.all(invoice.lines.map(async (line) => ({
             id: line.lineId, item: invoice.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? line.note ?? line.itemId,
             quantity: Number(line.quantity.scaled) / 1_000_000, unit: line.quantity.unit,
@@ -4305,6 +4534,18 @@ export class DemoApplication {
     const documentId = String(input.documentId ?? '').trim();
     const lineId = String(input.lineId ?? '').trim();
     if (documentId === '' || lineId === '') throw invalid('RETURN_DOCUMENT_REQUIRED', 'Choose the original bill and item being returned.');
+    // Issue #233 — "Whole bill": every item still on it and every charge, freight included.
+    if (lineId === WHOLE_BILL && kind === 'SALES_RETURN') {
+      return {
+        kind,
+        command: {
+          idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:whole:${input.date}`)}`,
+          documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
+          originalInvoiceId: documentId, lines: [], wholeBill: true,
+          wholeBillDisposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT',
+        },
+      };
+    }
     const quantity = quantityFromString(String(input.quantity ?? ''), String(input.unit ?? 'PCS'));
     const shared = {
       idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,

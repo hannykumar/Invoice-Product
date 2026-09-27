@@ -324,6 +324,65 @@ test('cancelling after the window is refused, and points at a return note instea
   );
 });
 
+test('#233: a bill in an approved GST month is not cancelled, and the refusal points at a credit note', async () => {
+  const till = await makeTill({
+    cancellationGuard: {
+      async blockers(_actor, invoice) {
+        return [{ code: 'SALES_CANCEL_MONTH_APPROVED', message: `${invoice.number} is in an approved month.`, clearable: null }];
+      },
+    },
+  });
+  const draft = await till.service.createDraft(till.actor, { idempotencyKey: 'k233a', input: crateBill() });
+  await till.service.finalise(till.actor, { idempotencyKey: 'f233a', invoiceId: draft.id });
+  await assert.rejects(
+    () => till.service.cancel(till.actor, { idempotencyKey: 'c233a', invoiceId: draft.id, reason: 'made twice', today: on('2026-04-11') }),
+    (e: unknown) => e instanceof DomainError && e.code === 'SALES_CANCEL_MONTH_APPROVED' && e.details?.route === 'CREDIT_NOTE',
+  );
+  assert.equal((await till.service.get(till.actor, draft.id))?.state, 'FINAL');
+});
+
+test('#233: a live e-invoice must be cleared first, and is skipped only when the caller is clearing it', async () => {
+  let live = true;
+  const till = await makeTill({
+    cancellationGuard: {
+      async blockers() {
+        return live ? [{ code: 'SALES_CANCEL_EINVOICE_ACTIVE', message: 'Cancel the e-invoice first.', clearable: 'EINVOICE' as const }] : [];
+      },
+    },
+  });
+  const draft = await till.service.createDraft(till.actor, { idempotencyKey: 'k233b', input: crateBill() });
+  await till.service.finalise(till.actor, { idempotencyKey: 'f233b', invoiceId: draft.id });
+  const command = { invoiceId: draft.id, reason: 'made twice', today: on('2026-04-11') };
+  await assert.rejects(
+    () => till.service.cancel(till.actor, { ...command, idempotencyKey: 'c233b' }),
+    (e: unknown) => e instanceof DomainError && e.code === 'SALES_CANCEL_EINVOICE_ACTIVE' && e.details?.clearFirst === 'EINVOICE',
+  );
+  // The screen's review may look past it, because it will cancel the e-invoice first.
+  const checked = await till.service.checkCancel(till.actor, { ...command, ignoreClearable: ['EINVOICE'] });
+  assert.equal(checked.state, 'FINAL');
+  live = false;
+  const cancelled = await till.service.cancel(till.actor, { ...command, idempotencyKey: 'c233b' });
+  assert.equal(cancelled.state, 'CANCELLED');
+});
+
+test('#233: cancelling is one unit of work — if the goods cannot go back, the bill and its entry stay as they were', async () => {
+  const till = await makeTill({
+    inventory: {
+      async reserve() { return { ok: true, reservationId: 'r' }; },
+      async release() {},
+      async issue() {},
+      async returnToStock() { throw new Error('godown unavailable'); },
+    },
+  });
+  const draft = await till.service.createDraft(till.actor, { idempotencyKey: 'k233c', input: crateBill() });
+  const issued = await till.service.finalise(till.actor, { idempotencyKey: 'f233c', invoiceId: draft.id });
+  await assert.rejects(() => till.service.cancel(till.actor, { idempotencyKey: 'c233c', invoiceId: draft.id, reason: 'made twice', today: on('2026-04-11') }));
+  assert.equal((await till.service.get(till.actor, draft.id))?.state, 'FINAL', 'the bill stands');
+  assert.equal((await till.ledger.getVoucher(till.actor, issued.voucherId))?.state, 'FINAL', 'the entry is not undone');
+  const owed = await partyBalance(till.store.read(), till.actor.companyId, ABC);
+  assert.equal(toDecimalString(owed.balance), toDecimalString(issued.invoice.pricing!.totals.invoiceValue));
+});
+
 test('cancelling needs a written reason, and cancelling twice changes nothing', async () => {
   const till = await makeTill();
   const draft = await till.service.createDraft(till.actor, { idempotencyKey: 'k15', input: crateBill() });

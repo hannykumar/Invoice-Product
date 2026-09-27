@@ -343,6 +343,10 @@ export const returnNoteToDocument = (
     itemId: line.itemId,
     description: line.description,
     hsnOrSac: line.hsnOrSac ?? facts.hsnByItem?.[line.itemId] ?? null,
+    // Issue #233 — freight credited on a whole-bill note is shared into the goods codes it travelled
+    // with, exactly as it was on the bill, never reported as a line with no code. The calculator
+    // names every charge line `charge:<kind>`.
+    lineKind: line.itemId.startsWith('charge:') ? 'CHARGE' : 'GOODS',
     supplyKind: line.supplyKind,
     unit: line.quantity.unit,
     quantity: toQuantityString(line.quantity),
@@ -456,10 +460,23 @@ export const ledgerBookTaxPort = (uow: UnitOfWork): BookTaxPort => ({
     const vouchers = await uow.vouchers.list(companyId, {});
     const totals = { CGST: 0n, SGST: 0n, IGST: 0n, CESS: 0n };
     const contributions: SourceRef[] = [];
+    const inPeriod = (voucher: Voucher): boolean => voucher.date >= range.from && voucher.date <= range.to;
+    // Issue #233 — an entry undone inside the same month (a cancelled bill and its reversal) adds
+    // nothing to the month's tax, and the cancelled bill is rightly not on the return. The pair is
+    // left out of the voucher list, so it is not reported as tax "without a bill on the return".
+    const byId = new Map((vouchers as readonly Voucher[]).map((voucher) => [voucher.id as string, voucher]));
+    const undoneWithin = new Set<string>();
+    for (const voucher of vouchers as readonly Voucher[]) {
+      const reversal = voucher.reversedByVoucherId === null ? undefined : byId.get(voucher.reversedByVoucherId);
+      if (reversal !== undefined && inPeriod(voucher) && inPeriod(reversal)) {
+        undoneWithin.add(voucher.id);
+        undoneWithin.add(reversal.id);
+      }
+    }
 
     for (const voucher of vouchers as readonly Voucher[]) {
       if (voucher.state !== 'FINAL' && voucher.state !== 'REVERSED') continue;
-      if (voucher.date < range.from || voucher.date > range.to) continue;
+      if (!inPeriod(voucher)) continue;
       let touched = 0n;
       for (const line of voucher.lines as readonly JournalLine[]) {
         const role = roleOf.get(line.accountId);
@@ -471,7 +488,7 @@ export const ledgerBookTaxPort = (uow: UnitOfWork): BookTaxPort => ({
         else if (role === 'OUTPUT_IGST') { totals.IGST += net; touched += net; }
         else if (role === 'OUTPUT_CESS') { totals.CESS += net; touched += net; }
       }
-      if (touched !== 0n) {
+      if (touched !== 0n && !undoneWithin.has(voucher.id)) {
         contributions.push({
           sourceKind: voucher.source?.kind ?? 'voucher',
           sourceId: voucher.source?.id ?? voucher.id,

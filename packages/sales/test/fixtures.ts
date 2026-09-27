@@ -29,7 +29,7 @@ import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { InMemorySalesRepository } from '../src/repository.ts';
 import { SalesService } from '../src/service.ts';
 import { DEFAULT_SALES_POLICY, type SalesPolicy } from '../src/policy.ts';
-import { noComplianceHooks, permissiveInventory, type ComplianceHookPort, type InventoryPort } from '../src/ports.ts';
+import { noComplianceHooks, permissiveInventory, type CancellationGuardPort, type ComplianceHookPort, type InventoryPort } from '../src/ports.ts';
 import { turnoverAnsweredEveryYear } from '../../masters/src/fixtures.ts';
 
 export const SHARMA: CompanyId = asId<'Company'>('company-sharma');
@@ -104,6 +104,7 @@ export const makeTill = async (
     policy?: Partial<SalesPolicy>;
     inventory?: InventoryPort;
     compliance?: ComplianceHookPort;
+    cancellationGuard?: CancellationGuardPort;
     permissions?: readonly string[];
     companyId?: CompanyId;
     seedAccounts?: boolean;
@@ -160,6 +161,7 @@ export const makeTill = async (
     clock,
     policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' }, ...options.policy },
     idFactory,
+    ...(options.cancellationGuard === undefined ? {} : { cancellationGuard: options.cancellationGuard }),
   });
 
   const byRole = new Map<string, AccountId>(

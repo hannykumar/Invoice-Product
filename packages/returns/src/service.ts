@@ -14,7 +14,7 @@ import {
   validateNoteSeries,
   type NoteSeries,
 } from './note-series.ts';
-import { RETURN_PERMISSIONS, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts } from './model.ts';
+import { RETURN_PERMISSIONS, isChargeLine, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts } from './model.ts';
 import type { OriginalReturnLine, PurchaseReturnSourcePort, ReturnInventoryPort, ReturnNoteRepository, SalesReturnSourcePort } from './ports.ts';
 
 export interface SalesReturnLineInput {
@@ -34,6 +34,13 @@ export interface SalesReturnCommand {
   readonly reason: string;
   readonly lines: readonly SalesReturnLineInput[];
   readonly periodOverrideReason?: string;
+  /**
+   * Issue #233 — credit everything still left on the bill: every item's remaining quantity and every
+   * charge (freight, other charges) not yet credited. `lines` is ignored; `wholeBillDisposition`
+   * says what happens to the goods, and they go back to the godown they left from.
+   */
+  readonly wholeBill?: boolean;
+  readonly wholeBillDisposition?: ReturnDisposition;
 }
 
 export interface SalesReturnPreview {
@@ -117,7 +124,7 @@ export class ReturnService {
     this.#permissions.require(actor, RETURN_PERMISSIONS.create, 'make a return note');
     if (command.idempotencyKey.trim() === '') throw invalid('RETURN_IDEMPOTENCY_KEY_REQUIRED', 'Every return needs a key so a retry cannot record it twice.');
     if (command.reason.trim() === '') throw invalid('RETURN_REASON_REQUIRED', 'Please say why the goods or services are being returned.');
-    if (command.lines.length === 0) throw invalid('RETURN_NO_LINES', 'Choose at least one item to return.');
+    if (command.wholeBill !== true && command.lines.length === 0) throw invalid('RETURN_NO_LINES', 'Choose at least one item to return.');
     const original = await this.#sales.findSalesDocument(actor.companyId, command.originalInvoiceId);
     if (original === null) throw notFound('RETURN_ORIGINAL_NOT_FOUND', 'We could not find that issued bill in this business.');
     if (original.state !== 'FINAL') throw conflict('RETURN_ORIGINAL_NOT_FINAL', 'A cancelled bill cannot have a new return note.');
@@ -129,19 +136,34 @@ export class ReturnService {
     const previous = await this.#repo.listForOriginal(actor.companyId, original.id);
     const already = new Map<string, bigint>();
     for (const note of previous.filter((candidate) => candidate.kind === 'SALES_RETURN')) for (const line of note.lines) already.set(line.originalLineId, (already.get(line.originalLineId) ?? 0n) + line.quantity.scaled);
+    // Issue #233 — the whole bill: what is left of every line, charges included.
+    const inputs: readonly SalesReturnLineInput[] = command.wholeBill === true
+      ? original.lines
+        .filter((line) => line.quantity.scaled - (already.get(line.lineId) ?? 0n) > 0n)
+        .map((line) => ({
+          originalLineId: line.lineId,
+          quantity: { ...line.quantity, scaled: line.quantity.scaled - (already.get(line.lineId) ?? 0n) },
+          disposition: command.wholeBillDisposition ?? 'ACCEPTED',
+        }))
+      : command.lines;
+    if (inputs.length === 0) {
+      throw conflict('RETURN_NOTHING_LEFT', `Everything on ${original.number} has already been credited, so there is nothing left for a credit note.`);
+    }
     const requested = new Set<string>();
     const lines: ReturnNoteLine[] = [];
-    for (const input of command.lines) {
+    for (const input of inputs) {
       if (requested.has(input.originalLineId)) throw invalid('RETURN_LINE_REPEATED', 'Each original line can appear only once on a return note.');
       requested.add(input.originalLineId);
       const source = original.lines.find((line) => line.lineId === input.originalLineId);
       if (source === undefined) throw invalid('RETURN_LINE_NOT_FOUND', 'One selected item is not on the original bill.');
       this.#assertQuantity(source, input.quantity, already.get(source.lineId) ?? 0n);
-      const warehouseId = input.warehouseId ?? source.warehouseId;
-      if (source.supplyKind === 'GOODS' && warehouseId === null) {
+      // A charge is money, not goods: nothing comes back to a godown for freight.
+      const charge = isChargeLine(source);
+      const warehouseId = charge ? null : input.warehouseId ?? source.warehouseId;
+      if (source.supplyKind === 'GOODS' && !charge && warehouseId === null) {
         throw invalid('RETURN_WAREHOUSE_REQUIRED', 'Choose the godown where the returned goods will be checked.');
       }
-      if (input.disposition === 'DAMAGED' && input.warehouseId === undefined) {
+      if (!charge && input.disposition === 'DAMAGED' && input.warehouseId === undefined) {
         throw invalid('RETURN_DAMAGED_WAREHOUSE_REQUIRED', 'Choose the damaged or quarantine godown for these goods.');
       }
       if (input.disposition === 'REPLACEMENT' && (input.replacementSerialNumbers?.length ?? 0) > 0 &&
@@ -158,7 +180,9 @@ export class ReturnService {
       });
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
-    const summary = `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`;
+    const summary = command.wholeBill === true
+      ? `The whole of ${original.number} (${lines.length} line${lines.length === 1 ? '' : 's'}, charges included) will be credited for ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`
+      : `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`;
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: deadline.warning === null ? [] : [deadline.warning] };
   }
 
@@ -188,7 +212,7 @@ export class ReturnService {
         ...(command.periodOverrideReason === undefined ? {} : { periodOverride: { reason: command.periodOverrideReason } }),
       });
       for (const line of checked.lines) {
-        if (line.supplyKind !== 'GOODS') continue;
+        if (line.supplyKind !== 'GOODS' || isChargeLine(line)) continue;
         await this.#inventory.applySalesReturnIn(actor, {
           noteId: id, noteNumber: number, originalDocumentId: original.id,
           originalLineId: line.originalLineId, itemId: line.itemId,
