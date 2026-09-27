@@ -225,6 +225,12 @@ export interface InvoiceDocument {
    * Absent means false. The design preview ignores it and always shows the labelled boxes.
    */
   readonly eInvoiceExpected?: boolean;
+  /**
+   * Issue #233 — the bill was cancelled. It keeps its number and every figure, and every reprint
+   * says CANCELLED across it with the date and the reason, so a copy that is found later can never be
+   * taken for a bill that stands. Absent or null on a bill that stands.
+   */
+  readonly cancelled?: { readonly on: string; readonly reason: string } | null;
   readonly references: RenderableReferences | null;
   readonly terms: string | null;
   /**

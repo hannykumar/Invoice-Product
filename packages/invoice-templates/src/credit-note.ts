@@ -134,7 +134,9 @@ export const toCreditNoteDocument = (note: ReturnNote, original: NoteOriginal, i
     lines: note.lines.map((line) => ({
       lineId: line.originalLineId,
       description: line.description,
-      hsnOrSac: line.hsnOrSac,
+      // Issue #233 — freight on a whole-bill note prints as it did on the bill: a row with no code of
+      // its own. The code kept on the line is only for the return, where it rides with the goods.
+      hsnOrSac: line.itemId.startsWith('charge:') ? null : line.hsnOrSac,
       quantityText: formatQuantity(line.quantity),
       unitPrice: line.unitPrice,
       taxableValue: line.amounts.taxableValue,

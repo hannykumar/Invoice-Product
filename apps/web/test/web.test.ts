@@ -148,7 +148,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // Issue #181 — the customer is chosen from the business's own list, and the address the bill
   // carries is the one saved on that customer. The free-text address box is gone.
   assert.doesNotMatch(html, /name="customerAddress"/);
-  assert.match(html, /<select name="party" data-customer-picker required>/);
+  // Issue #233 — and it starts with nobody chosen, so a new sale never inherits the last customer.
+  assert.match(html, /<select name="party" data-customer-picker data-picker-blank="chooseSaleCustomer" required>/);
   assert.match(html, /id="sale-lines"/);
   assert.match(html, /data-line-field="item" data-item-picker/);
   assert.match(html, /name="freight" type="number" min="0" step="0\.01"/);
@@ -221,4 +222,67 @@ test("#230: money received picks a customer and money paid picks a supplier, nev
   assert.match(script, /input\.requestId = form\.dataset\.requestId/);
   // The old list of the demo customer's bills is gone.
   assert.doesNotMatch(script, /#payment-invoice/);
+});
+
+/** The source of one top-level function in app.js, so it can be run on its own. */
+async function functionSource(name: string): Promise<string> {
+  const source = await read("app.js");
+  const start = source.indexOf(`function ${name}(`);
+  assert.ok(start >= 0, `app.js has no function ${name}`);
+  const end = source.indexOf("\n}\n", start);
+  return source.slice(start, end + 2);
+}
+
+test("#233: after a recorded sale the form has no customer and one fresh line, and no draft brings the old one back", async () => {
+  const script = await read("app.js");
+  // The recorded-sale branch clears the form before it shows the bill.
+  const recorded = script.slice(script.indexOf('document.querySelector("#review-confirm").addEventListener'), script.indexOf("// ------------------------------------------------- issue #132"));
+  assert.match(recorded, /if \(form\.dataset\.draft === "sale" && result\.invoice\) resetSaleForm\(form\);\s*showDialog\([\s\S]*showSaleBill\(result\.invoice\.id\)/);
+  // Each review carries its own key, so Record twice is one bill and the next review a new sale.
+  assert.match(script, /input\.requestId = newPaymentRequestId\(\);/);
+
+  // Run the reset itself against a form left exactly as the Mehta sale leaves it.
+  const removed: string[] = [];
+  const oldLine = { id: "450 KGS at ₹90" };
+  const lines = { children: [oldLine] as unknown[], replaceChildren(...next: unknown[]) { this.children = next; } };
+  const picker = { value: "mehta" };
+  const date = { value: "2026-09-01" };
+  const delivery = { id: "sale-delivery", open: true };
+  const form = {
+    dataset: { draft: "sale" },
+    reset() { /* a browser puts typed values back to the page's own defaults */ },
+    querySelector: (selector: string) => (selector === "[data-customer-picker]" ? picker : null),
+    querySelectorAll: (selector: string) => (selector.startsWith("input[type=") ? [date] : selector === "details" ? [delivery] : []),
+  };
+  const calls: string[] = [];
+  const context = {
+    storage: { removeItem: (key: string) => removed.push(key) },
+    document: { querySelector: (selector: string) => (selector === "#sale-lines" ? lines : null) },
+    dateInput: () => "2026-09-28",
+    addSaleLine: () => { lines.children.push({ id: "fresh" }); calls.push("addSaleLine"); },
+    showChosenCustomer: () => calls.push("showChosenCustomer"),
+    showShipToFields: () => calls.push("showShipToFields"),
+    updateCalculations: () => calls.push("updateCalculations"),
+  };
+  vm.runInNewContext(`${await functionSource("resetSaleForm")}\nresetSaleForm(form);`, { ...context, form });
+
+  assert.equal(picker.value, "", "no customer is chosen");
+  assert.deepEqual(lines.children, [{ id: "fresh" }], "the old 450 KGS line is gone and one fresh line is left");
+  assert.equal(date.value, "2026-09-28", "today's date");
+  assert.equal(delivery.open, false, "the delivery box is closed again");
+  assert.deepEqual(removed, ["karobar.draft.sale"], "the saved draft is gone, so a reload cannot bring the old sale back");
+  assert.ok(calls.includes("showChosenCustomer") && calls.includes("updateCalculations"));
+});
+
+test("#233: an issued bill can be cancelled with a reason, and the returns screen can credit the whole bill", async () => {
+  const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
+  assert.match(html, /id="sale-bill-cancel" data-i18n="cancelBill"/);
+  assert.match(html, /id="cancel-bill-dialog"[\s\S]*<textarea name="reason" rows="2" required>/);
+  assert.match(script, /\/api\/sales\/cancel\/preview"/);
+  assert.match(script, /\/api\/sales\/cancel"/);
+  // Refused once the month is approved: the whole-bill credit note is offered in its place.
+  assert.match(html, /id="cancel-bill-credit-note" data-i18n="makeWholeBillNote"/);
+  assert.match(script, /const WHOLE_BILL = "__whole__";/);
+  // The GST returns screen shows the documents-issued table, cancelled numbers included.
+  assert.match(script, /workspace\.documentsIssued/);
 });

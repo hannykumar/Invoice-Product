@@ -46,7 +46,7 @@ import {
 } from './model.ts';
 import { formatNumber, seriesScope, validateSeries } from './numbering.ts';
 import { DEFAULT_SALES_POLICY, dueDateFor, needsApproval, withinCancellationWindow, type SalesPolicy } from './policy.ts';
-import type { ComplianceHookPort, InventoryPort, SalesRepository } from './ports.ts';
+import { noCancellationGuard, type CancellationGuardPort, type ComplianceHookPort, type InventoryPort, type SalesRepository } from './ports.ts';
 
 const nil = (): Money => zero('INR');
 
@@ -65,6 +65,8 @@ export interface SalesServiceDeps {
   readonly clock: Clock;
   readonly policy?: SalesPolicy;
   readonly idFactory?: () => string;
+  /** Issue #233 — what else stops an issued bill being cancelled. None by default. */
+  readonly cancellationGuard?: CancellationGuardPort;
 }
 
 export interface CreateDraftCommand {
@@ -104,6 +106,7 @@ export class SalesService {
   readonly #clock: Clock;
   readonly #policy: SalesPolicy;
   readonly #newId: () => string;
+  readonly #guard: CancellationGuardPort;
 
   constructor(deps: SalesServiceDeps) {
     this.#store = deps.store;
@@ -118,6 +121,7 @@ export class SalesService {
     this.#policy = deps.policy ?? DEFAULT_SALES_POLICY;
     validateSeries(this.#policy.series);
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
+    this.#guard = deps.cancellationGuard ?? noCancellationGuard;
   }
 
   get policy(): SalesPolicy {
@@ -540,13 +544,18 @@ export class SalesService {
   }
 
   /**
-   * Cancels a bill that has been issued, following the business's configured policy.
+   * Issue #233 — whether this bill may be cancelled today, without changing anything.
    *
-   * The bill is not deleted and not edited. A reversal is posted, the goods go back, and both the
-   * bill and its cancellation stay visible. Once the window has closed, the correction is a credit
-   * note instead (assumption A6 in the product specification).
+   * The screen asks this before it shows the Cancel button's review, and `cancel` asks it again
+   * inside the same checks, so what the person was told and what happens cannot differ. A stop the
+   * person can clear from the same screen (a live e-invoice or e-way bill still inside the
+   * government's window) is skipped only when `ignoreClearable` names it, because the caller is
+   * about to cancel that document with the portal first.
    */
-  async cancel(actor: ActorContext, command: CancelCommand): Promise<SalesInvoice> {
+  async checkCancel(
+    actor: ActorContext,
+    command: Omit<CancelCommand, 'idempotencyKey'> & { readonly ignoreClearable?: readonly ('EINVOICE' | 'EWAY_BILL')[] },
+  ): Promise<SalesInvoice> {
     this.#permissions.require(actor, SALES_PERMISSIONS.cancel, 'cancel this bill');
     if (command.reason.trim().length === 0) {
       throw invalid('SALES_REASON_REQUIRED', 'Please write why this bill is being cancelled.', {
@@ -554,7 +563,6 @@ export class SalesService {
       });
     }
     const invoice = await this.#require(actor, command.invoiceId);
-
     if (invoice.state === 'CANCELLED') return invoice;
     if (invoice.state !== 'FINAL') {
       throw notAllowed(
@@ -562,39 +570,75 @@ export class SalesService {
         'An unfinished bill is deleted, not cancelled.',
       );
     }
+    // The stops that send the person to a credit note come first: clearing an e-invoice with the
+    // government is pointless if the bill could not be cancelled afterwards anyway.
+    const blockers = await this.#guard.blockers(actor, invoice);
+    const final = blockers.find((blocker) => blocker.clearable === null);
+    if (final !== undefined) {
+      throw notAllowed(final.code, final.message, { details: { documentNumber: invoice.number ?? '', route: 'CREDIT_NOTE' } });
+    }
     if (!withinCancellationWindow(this.#policy, invoice.documentDate, command.today)) {
       throw notAllowed(
         'SALES_CANCEL_WINDOW_CLOSED',
         `${invoice.number} can no longer be cancelled. Make a return note instead, so both documents stay visible.`,
-        { messageId: 'final.cannot_edit', details: { documentNumber: invoice.number ?? '' } },
+        { messageId: 'final.cannot_edit', details: { documentNumber: invoice.number ?? '', route: 'CREDIT_NOTE' } },
       );
     }
+    const ignored = new Set(command.ignoreClearable ?? []);
+    const clearable = blockers.find((blocker) => blocker.clearable !== null && !ignored.has(blocker.clearable));
+    if (clearable !== undefined) {
+      throw notAllowed(clearable.code, clearable.message, {
+        details: { documentNumber: invoice.number ?? '', clearFirst: clearable.clearable ?? '' },
+      });
+    }
+    return invoice;
+  }
+
+  /**
+   * Cancels a bill that has been issued, following the business's configured policy.
+   *
+   * The bill is not deleted and not edited, and its number is never given out again. The entry is
+   * reversed, the goods go back at the cost they went out at, and the bill is marked cancelled —
+   * all in one unit of work, so a failure half way leaves the bill exactly as it was. Once the
+   * bill's month is in an approved or filed return, or the window has closed, the correction is a
+   * credit note instead (CGST s.34).
+   *
+   * The reversal and the goods coming back are dated on the bill's own date. A cancelled bill is
+   * reported as if it never happened (GSTR-1 counts it only as a cancelled number), so the books for
+   * that month must not keep its tax either, or the month's books and its return would disagree.
+   */
+  async cancel(actor: ActorContext, command: CancelCommand): Promise<SalesInvoice> {
+    const invoice = await this.checkCancel(actor, command);
+    if (invoice.state === 'CANCELLED') return invoice;
 
     const at = this.#clock.now().toISOString();
-    const reversal = await this.#ledger.reverseVoucher(actor, {
-      idempotencyKey: `sales:cancel:${invoice.id}`,
-      voucherId: invoice.voucherId as VoucherId,
-      date: command.today,
-      reason: command.reason,
-    });
-
-    const cancelled: SalesInvoice = {
-      ...invoice,
-      state: 'CANCELLED',
-      cancellationVoucherId: reversal.voucher.id,
-      cancelledBy: actor.userId,
-      cancelledAt: at,
-      cancelReason: command.reason,
-      version: invoice.version + 1,
-    };
-    await this.#store.transaction(actor.companyId, async () => {
+    const reason = command.reason.trim();
+    const outcome = await this.#store.transaction(actor.companyId, async (uow) => {
+      const reversal = await this.#ledger.reverseVoucherIn(uow, actor, {
+        idempotencyKey: `sales:cancel:${invoice.id}`,
+        voucherId: invoice.voucherId as VoucherId,
+        date: invoice.documentDate,
+        reason,
+      });
+      const cancelled: SalesInvoice = {
+        ...invoice,
+        state: 'CANCELLED',
+        cancellationVoucherId: reversal.voucher.id,
+        cancelledBy: actor.userId,
+        cancelledAt: at,
+        cancelReason: reason,
+        version: invoice.version + 1,
+      };
       await this.#repo.update(cancelled, invoice.version);
+      // Issue #229 — the goods come back at the cost each movement went out at, in this same save.
+      if (invoice.supplyKind === 'GOODS') {
+        await this.#inventory.returnToStock(actor, invoice.id, invoice.documentDate, reason);
+      }
+      return { cancelled, reversal };
     });
 
-    if (invoice.supplyKind === 'GOODS') {
-      await this.#inventory.returnToStock(actor, invoice.id, command.today, command.reason);
-    }
-    await this.#compliance.onInvoiceCancelled(cancelled);
+    if (!outcome.reversal.deduplicated) await this.#ledger.recordPosted(actor, outcome.reversal.voucher, reason);
+    await this.#compliance.onInvoiceCancelled(outcome.cancelled);
     await this.#audit.record({
       companyId: actor.companyId,
       actorId: actor.userId,
@@ -603,10 +647,10 @@ export class SalesService {
       subjectType: 'sales_invoice',
       subjectId: invoice.id,
       summary: `Bill ${invoice.number} cancelled.`,
-      details: { number: invoice.number ?? '', reversalVoucherId: reversal.voucher.id },
-      overrideReason: command.reason,
+      details: { number: invoice.number ?? '', reversalVoucherId: outcome.reversal.voucher.id },
+      overrideReason: reason,
     });
-    return cancelled;
+    return outcome.cancelled;
   }
 
   async #require(actor: ActorContext, id: string): Promise<SalesInvoice> {

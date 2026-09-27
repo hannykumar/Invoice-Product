@@ -193,6 +193,10 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
+    // Issue #233 — cancelling a wrong bill: what it will do, then doing it. Refused with the credit-note
+    // route once the bill's month is approved or filed.
+    if (method === 'POST' && pathname === '/api/sales/cancel/preview') return json(200, await app.previewCancelSale(actor, body));
+    if (method === 'POST' && pathname === '/api/sales/cancel') return json(200, await app.cancelSale(actor, body));
     // Issue #132 — the finished bill, on screen and ready for the printer, in the chosen language
     // and on the paper it will be printed on. Issue #133's PDF comes off the same page.
     if (method === 'POST' && pathname === '/api/sales/print') {

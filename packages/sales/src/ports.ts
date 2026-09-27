@@ -80,6 +80,33 @@ export interface ComplianceHookPort {
   onInvoiceCancelled(invoice: SalesInvoice): Promise<void>;
 }
 
+/**
+ * Issue #233 — something outside the sales module that stops an issued bill being cancelled.
+ *
+ * A bill may be cancelled only while it is not yet in an approved or filed GST return, has no
+ * credit note against it, and has no live e-invoice or e-way bill with the government. Those facts
+ * live in other modules, so they are asked here rather than copied in.
+ *
+ * `clearable` marks a stop the person can remove from this same screen: an e-invoice or e-way bill
+ * still inside the government's window can be cancelled with the portal first. Everything else
+ * (an approved month, a credit note, a closed window) sends them to a credit note instead.
+ */
+export interface CancelBlocker {
+  readonly code: string;
+  readonly message: string;
+  readonly clearable: 'EINVOICE' | 'EWAY_BILL' | null;
+}
+
+export interface CancellationGuardPort {
+  blockers(actor: ActorContext, invoice: SalesInvoice): Promise<readonly CancelBlocker[]>;
+}
+
+export const noCancellationGuard: CancellationGuardPort = {
+  async blockers() {
+    return [];
+  },
+};
+
 /** A no-op inventory adapter for tests and for lanes that do not track stock. */
 export const permissiveInventory: InventoryPort = {
   async reserve(_actor, request) {

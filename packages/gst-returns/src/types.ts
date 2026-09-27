@@ -469,6 +469,12 @@ export interface BookSnapshot {
   /** Every document in the snapshot, so the return can be rebuilt exactly as it was approved. */
   readonly documents: readonly OutwardDocument[];
   readonly inward: InwardTaxSummary;
+  /**
+   * Issue #233 — numbers issued in the month and then cancelled, for the documents-issued table.
+   * They are not sales, so they are not in `documents`; they are counted, never dropped, because a
+   * missing number in the series is what a hidden sale looks like. Absent on older snapshots.
+   */
+  readonly cancelledNumbers?: readonly { readonly kind: OutwardDocument['kind']; readonly number: string }[];
 }
 
 export interface ReturnApproval {
