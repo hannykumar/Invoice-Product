@@ -68,6 +68,12 @@ export type SystemAccountRole =
   | 'INPUT_IGST'
   | 'INPUT_CESS'
   | 'STOCK_IN_HAND'
+  /**
+   * The change in the value of goods held, set against purchases (issue #229). Every movement of
+   * stock posts its value to "Stock in hand" and the opposite amount here, so the books carry what
+   * the godown holds and the profit counts only the cost of what was sold.
+   */
+  | 'STOCK_CHANGE'
   | 'FREIGHT_OUTWARD'
   | 'DISCOUNT_ALLOWED';
 

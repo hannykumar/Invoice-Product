@@ -50,6 +50,9 @@ import type { ComplianceHookPort, InventoryPort, SalesRepository } from './ports
 
 const nil = (): Money => zero('INR');
 
+/** "50.000" reads as "50" and "12.500" as "12.5": a shopkeeper counts kilos, not decimal places. */
+const plain = (amount: string): string => (amount.includes('.') ? amount.replace(/0+$/, '').replace(/\.$/, '') : amount);
+
 export interface SalesServiceDeps {
   readonly store: LedgerStore;
   readonly ledger: LedgerService;
@@ -296,6 +299,31 @@ export class SalesService {
     });
   }
 
+  /**
+   * Issue #229 — can this bill be filled from the godown? Asked at the review, before anything is
+   * issued.
+   *
+   * The goods are held only for the moment of the check and let go again, so a review that is
+   * never recorded locks nothing. When a line asks for more than is free to sell, the bill is
+   * marked as needing attention with one plain sentence per line, and it can then not be issued.
+   * A bill already issued is not checked again: pressing Record twice is not a second sale.
+   */
+  async checkStock(actor: ActorContext, invoiceId: string): Promise<SalesInvoice> {
+    const invoice = await this.#require(actor, invoiceId);
+    if (invoice.supplyKind !== 'GOODS' || invoice.pricing === null) return invoice;
+    if (invoice.state !== 'DRAFT' && invoice.state !== 'NEEDS_INFO') return invoice;
+    const checked = await this.#reserve(actor, invoice);
+    if (checked.state === 'NEEDS_INFO' && checked !== invoice) return checked;
+    await this.#inventory.release(actor, invoice.id);
+    if (invoice.state === 'DRAFT') return invoice;
+    // It was short before and the goods have come in since: the bill may go forward again.
+    const cleared: SalesInvoice = { ...invoice, state: 'DRAFT', problems: [], version: invoice.version + 1 };
+    await this.#store.transaction(actor.companyId, async () => {
+      await this.#repo.update(cleared, invoice.version);
+    });
+    return cleared;
+  }
+
   /** Holds the stock and asks for approval when the business's policy requires one. */
   async submitForApproval(actor: ActorContext, invoiceId: string): Promise<SalesInvoice> {
     this.#permissions.require(actor, SALES_PERMISSIONS.draft, 'send this bill for approval');
@@ -348,8 +376,8 @@ export class SalesService {
           lineId: s.lineId,
           messageId: 'stock.not_enough',
           message: {
-            'en-IN': `Not enough stock. You have ${s.available} ${s.unit} of ${s.itemName} at ${s.warehouseName}. This bill needs ${s.required} ${s.unit}, so ${s.shortfall} ${s.unit} are missing.`,
-            'hi-IN': `Stock kam hai. ${s.warehouseName} mein ${s.itemName} ke ${s.available} ${s.unit} hain. Is bill ke liye ${s.required} ${s.unit} chahiye, yaani ${s.shortfall} ${s.unit} kam hain.`,
+            'en-IN': `You have ${plain(s.available)} ${s.unit} of ${s.itemName} in ${s.warehouseName}. This bill asks for ${plain(s.required)} ${s.unit}.`,
+            'hi-IN': `${s.warehouseName} mein ${s.itemName} ke ${plain(s.available)} ${s.unit} hain. Yeh bill ${plain(s.required)} ${s.unit} maangta hai.`,
           },
         }),
       ),
@@ -471,6 +499,12 @@ export class SalesService {
         approvedAt: priced.state === 'PENDING_APPROVAL' ? at : null,
         version: priced.version + 1,
       };
+      // Issue #229 — the goods leave the godown in this same unit of work. If they cannot (someone
+      // else took them in the meantime), the bill is not issued, no number is used up and no entry
+      // is posted. Issuing is keyed on the bill's lines, so a second press moves nothing twice.
+      if (final.supplyKind === 'GOODS') {
+        await this.#inventory.issue(actor, final.id, final.documentDate, number);
+      }
       await this.#repo.update(final, priced.version);
       return { final, voucher: posted.voucher, deduplicated: posted.deduplicated };
     });
@@ -493,11 +527,8 @@ export class SalesService {
       },
     });
 
-    // The books are already safe. Stock and the government come after, and a failure there never
-    // unmakes the bill — it shows as a retryable state (issue #46, `gov.service_unavailable`).
-    if (outcome.final.supplyKind === 'GOODS') {
-      await this.#inventory.issue(actor, outcome.final.id, outcome.final.documentDate, outcome.final.number);
-    }
+    // The books and the stock are already safe. The government comes after, and a failure there
+    // never unmakes the bill — it shows as a retryable state (issue #46, `gov.service_unavailable`).
     const registrations = await this.#compliance.onInvoiceFinalised(outcome.final);
 
     return {

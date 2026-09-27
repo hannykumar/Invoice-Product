@@ -1,5 +1,6 @@
 /** Issue #12 [E12] — storage and the slice of master data (#5) stock needs. */
-import type { CompanyId, IsoDate } from '@invoice/kernel';
+import type { CompanyId, IsoDate, Money } from '@invoice/kernel';
+import type { ActorContext } from '@invoice/ledger';
 import type { UnitRegistry } from '../../masters/src/units.ts';
 import type { Reservation, StockMovement } from './model.ts';
 
@@ -51,4 +52,17 @@ export interface ReservationRepository {
 export interface InventoryStore {
   readonly movements: MovementRepository;
   readonly reservations: ReservationRepository;
+}
+
+/**
+ * Issue #229 — the books' side of a movement.
+ *
+ * Goods are money: when 500 kg worth ₹32,000 come in, the business owns ₹32,000 more of stock, and
+ * when 450 kg of it go out on a bill, it owns ₹28,800 less. The inventory service works out how much
+ * each movement changed the value of the stock it touched, and hands that figure here, inside the
+ * movement's own transaction, so the movement and its entry are saved together or not at all.
+ */
+export interface StockBooksPort {
+  /** `change` is positive when the stock gained value and negative when it lost value. Never zero. */
+  valueChanged(actor: ActorContext, movement: StockMovement, change: Money): Promise<void>;
 }

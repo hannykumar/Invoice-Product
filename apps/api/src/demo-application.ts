@@ -3,11 +3,11 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, invalid, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, invalid, notAllowed, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, permissiveInventory, PreSaleService, SalesService, type SalesInvoice } from '@invoice/sales';
+import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SalesService, type InventoryPort, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
   copiesFor,
@@ -96,8 +96,8 @@ import { ComplianceRegister } from '@invoice/compliance-register';
 import { AssistantService, describeIntent } from '../../../packages/assistant/src/service.ts';
 import type { BlockedDocument, BlockedDocumentPort, BlockingReason } from '../../../packages/assistant/src/ports.ts';
 import { createDefaultUnitRegistry } from '../../../packages/masters/src/units.ts';
-import type { IsoDate } from '@invoice/kernel';
-import type { InventoryStore, StockItem, StockMasterData, Warehouse } from '@invoice/inventory';
+import type { IsoDate, Money, Quantity } from '@invoice/kernel';
+import { salesInventoryAdapter, type InventoryStore, type StockItem, type StockMasterData, type Warehouse } from '@invoice/inventory';
 import { DEFAULT_SALES_POLICY } from '../../../packages/sales/src/policy.ts';
 import { lineTaxableValue, taxOn } from '../../../packages/purchasing/src/recompute.ts';
 import { formatQuantity } from '../../../packages/masters/src/units.ts';
@@ -441,7 +441,21 @@ export class DemoApplication {
       mode: 'production',
       declaredRates: declaredRatesOf(config.companyId),
     });
-    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: permissiveInventory, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } } });
+    // Issue #229 — a bill takes its goods out of the same godown purchases put them into. Before
+    // this the sales service was given a stand-in that said yes to everything and moved nothing,
+    // so stock never went down and a business could sell steel it did not have.
+    const godown = salesInventoryAdapter(shop.inventoryService, { defaultWarehouseId: 'wh-main' });
+    const goodsOnly: InventoryPort = {
+      ...godown,
+      // A service is not kept in a godown, so its lines are never checked against stock or issued.
+      async reserve(actor, request) {
+        const lines = request.lines.filter((line) =>
+          catalogueItems(request.companyId).find((item) => item.id === line.itemId)?.kind !== 'service');
+        if (lines.length === 0) return { ok: true, reservationId: request.documentId };
+        return godown.reserve(actor, { ...request, lines });
+      },
+    };
+    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: goodsOnly, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } } });
 
     const purchases = purchaseDocumentLedger(shop.bills, async () => config.supplierName);
     const documents: DocumentLedgerPort = {
@@ -870,7 +884,39 @@ export class DemoApplication {
     });
   }
 
+  /**
+   * Goods the business already held on the day its books began, entered as a count with what they
+   * cost (#229). Their value goes into the books against the opening balance, not this year's
+   * costs. Used by the demo's own seed; there is no screen for it yet.
+   */
+  async recordOpeningStock(
+    actor: ActorContext,
+    input: { readonly idempotencyKey: string; readonly itemId: string; readonly quantity: Quantity; readonly unitCost: Money },
+  ) {
+    this.companyOf(actor);
+    return this.shop.inventoryService.recordMovement(actor, {
+      idempotencyKey: input.idempotencyKey,
+      itemId: input.itemId,
+      warehouseId: 'wh-main',
+      kind: 'OPENING',
+      quantity: input.quantity,
+      unitCost: input.unitCost,
+      documentDate: isoDate('2026-04-01'),
+      source: { kind: 'opening_stock', id: input.idempotencyKey, number: null },
+      reason: 'Opening count on the day the books began',
+    });
+  }
+
   private async seed(): Promise<void> {
+    // Issue #229 — a sale takes its goods out of stock, so the three old soap bills below need the
+    // soap they sold. It is entered as the count on the day the books begin: 4 + 2 + 1 = 7 pieces,
+    // at a made-up cost of ₹200 each, and all of it is sold by those bills, so no soap is left.
+    await this.recordOpeningStock(this.shop.setupActor, {
+      idempotencyKey: 'seed-opening-soap',
+      itemId: resolveItem(this.config.companyId, 'Herbal Bath Soap 100g').id,
+      quantity: quantityFromString('7', 'PCS'),
+      unitCost: money(200_00n),
+    });
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
     // Two older bills, so the Reminders screen has something to decide about on the demo's date.
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
@@ -1421,6 +1467,15 @@ export class DemoApplication {
    */
   private async checkSale(actor: ActorContext, draft: SalesInvoice) {
     if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
+    // Issue #229 — no selling more than is in the godown. Checked here, at the review, for every
+    // way a bill is made (typed, or from a quotation), and nothing is taken out until Record.
+    const stocked = await this.sales.checkStock(actor, draft.id);
+    const short = stocked.problems.filter((problem) => problem.code === 'STOCK_NOT_ENOUGH');
+    if (short.length > 0) {
+      throw notAllowed('SALES_STOCK_NOT_ENOUGH', short.map((problem) => problem.message['en-IN']).join(' '), {
+        messageId: 'stock.not_enough',
+      });
+    }
 
     // Issue #11: what was last agreed, what the discount is, and whether this customer should be
     // given more credit. The draft is excluded from its own pending value.

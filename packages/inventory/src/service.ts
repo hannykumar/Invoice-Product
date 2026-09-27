@@ -35,7 +35,7 @@ import {
   type StockBalance,
   type StockMovement,
 } from './model.ts';
-import type { InventoryStore, StockMasterData } from './ports.ts';
+import type { InventoryStore, StockBooksPort, StockMasterData } from './ports.ts';
 
 export interface InventoryServiceDeps {
   readonly store: LedgerStore;
@@ -46,6 +46,11 @@ export interface InventoryServiceDeps {
   readonly clock: Clock;
   readonly policy?: InventoryPolicy;
   readonly idFactory?: () => string;
+  /**
+   * Issue #229 — where the value of each movement is written into the books. Left out, stock is
+   * counted but not valued in the ledger, which is only acceptable for a test of counting.
+   */
+  readonly books?: StockBooksPort;
 }
 
 export interface RecordMovementCommand {
@@ -97,6 +102,7 @@ export class InventoryService {
   readonly #clock: Clock;
   readonly #policy: InventoryPolicy;
   readonly #newId: () => string;
+  readonly #books: StockBooksPort | null;
 
   constructor(deps: InventoryServiceDeps) {
     this.#store = deps.store;
@@ -107,6 +113,7 @@ export class InventoryService {
     this.#clock = deps.clock;
     this.#policy = deps.policy ?? DEFAULT_INVENTORY_POLICY;
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
+    this.#books = deps.books ?? null;
   }
 
   get policy(): InventoryPolicy {
@@ -258,8 +265,53 @@ export class InventoryService {
       reason: command.reason ?? null,
       negativeOverride: overridden,
     };
+    return this.#insert(actor, movement);
+  }
+
+  /**
+   * Saves a movement and writes what it did to the value of the stock into the books (#229).
+   *
+   * The value is worked out exactly as the stock report works it out — weighted average, per item
+   * and godown — as the value after the movement less the value before it. Added up, those entries
+   * are the report's figure, so the books and the godown cannot drift apart.
+   *
+   * A movement out carries the average cost it left at. Valuation does not need it, but a sales
+   * return or a cancelled bill brings the goods back at the cost they went out at, not at nothing.
+   */
+  async #insert(actor: ActorContext, draft: StockMovement): Promise<StockMovement> {
+    const history = await this.#inventory.movements.list(actor.companyId, { itemId: draft.itemId, warehouseId: draft.warehouseId });
+    const before = valueStock(history);
+    const movement: StockMovement =
+      draft.direction === 'OUT' && draft.unitCost === null && before.averageUnitCost !== null
+        ? { ...draft, unitCost: before.averageUnitCost }
+        : draft;
     await this.#inventory.movements.insert(movement);
+    const after = valueStock([...history, movement]);
+    const change = after.value.minor - before.value.minor;
+    if (this.#books !== null && change !== 0n) {
+      await this.#books.valueChanged(actor, movement, { currency: 'INR', minor: change } as Money);
+    }
     return movement;
+  }
+
+  /**
+   * What one unit of an item cost when a document took it out of stock (#229), so goods coming
+   * back against that document return at the same cost. `null` when the document moved none.
+   */
+  async issuedUnitCost(
+    actor: ActorContext,
+    source: { kind: string; id: string },
+    itemId: string,
+  ): Promise<Money | null> {
+    const out = (await this.#inventory.movements.listBySource(actor.companyId, source.kind, source.id))
+      .filter((m) => m.itemId === itemId && m.direction === 'OUT' && m.reversesMovementId === null);
+    return out.find((m) => m.unitCost !== null)?.unitCost ?? null;
+  }
+
+  /** The weighted average cost of an item in one godown today, or `null` when none is held. */
+  async averageUnitCost(actor: ActorContext, key: { itemId: string; warehouseId: string }): Promise<Money | null> {
+    const movements = await this.#inventory.movements.list(actor.companyId, key);
+    return valueStock(movements).averageUnitCost;
   }
 
   async #guardNegative(
@@ -414,6 +466,9 @@ export class InventoryService {
     command: { documentId: string; documentDate: IsoDate; source: SourceDocument },
   ): Promise<StockMovement[]> {
     this.#permissions.require(actor, INVENTORY_PERMISSIONS.move, 'issue stock');
+    // One unit of work for every line (#229): a bill of three items takes all three out, or none.
+    // Called from inside the sale's own transaction, this joins it.
+    return this.#store.transaction(actor.companyId, async () => {
     const held = (await this.#inventory.reservations.listForDocument(actor.companyId, command.documentId)).filter(
       (r) => r.state === 'HELD',
     );
@@ -421,15 +476,13 @@ export class InventoryService {
     const posted: StockMovement[] = [];
     for (const reservation of held) {
       // The hold is consumed before the movement, so availability never briefly double-counts.
-      await this.#store.transaction(actor.companyId, async () => {
-        await this.#inventory.reservations.update({
-          ...reservation,
-          state: 'CONSUMED',
-          settledAt: this.#clock.now().toISOString(),
-        });
+      await this.#inventory.reservations.update({
+        ...reservation,
+        state: 'CONSUMED',
+        settledAt: this.#clock.now().toISOString(),
       });
       posted.push(
-        await this.recordMovement(actor, {
+        await this.recordMovementIn(actor, {
           idempotencyKey: `issue:${command.documentId}:${reservation.lineId}`,
           itemId: reservation.itemId,
           warehouseId: reservation.warehouseId,
@@ -442,6 +495,7 @@ export class InventoryService {
       );
     }
     return posted;
+    });
   }
 
   /**
@@ -487,8 +541,7 @@ export class InventoryService {
           reason: command.reason,
           negativeOverride: null,
         };
-        await this.#inventory.movements.insert(created);
-        return created;
+        return this.#insert(actor, created);
       });
       reversed.push(mirror);
     }

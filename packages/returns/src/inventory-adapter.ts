@@ -6,6 +6,10 @@ export const returnInventoryAdapter = (inventory: InventoryService): ReturnInven
   async applySalesReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]> {
     const source = { kind: 'credit_note', id: line.noteId, number: line.noteNumber };
     const ids: string[] = [];
+    // Issue #229 — goods that come back are worth what they cost when they went out on the bill,
+    // not nothing. Coming back at no cost would lower the value of every kilo already in the godown.
+    const cost = await inventory.issuedUnitCost(actor, { kind: 'sales_invoice', id: line.originalDocumentId }, line.itemId)
+      ?? await inventory.averageUnitCost(actor, { itemId: line.itemId, warehouseId: line.warehouseId });
     const move = async (suffix: string, kind: MovementKind, serialNumbers: readonly string[]) => {
       const movement = await inventory.recordMovementIn(actor, {
         idempotencyKey: `sales-return:${line.noteId}:${line.originalLineId}:${suffix}`,
@@ -15,6 +19,7 @@ export const returnInventoryAdapter = (inventory: InventoryService): ReturnInven
         serialNumbers,
         kind,
         quantity: line.quantity,
+        ...(kind === 'SALES_RETURN_IN' ? { unitCost: cost } : {}),
         documentDate: line.documentDate,
         source,
         reason: line.reason,

@@ -13,6 +13,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
+import { sells, stockEverything } from './stock-helper.ts';
 import { masterData, mastersContext } from '../src/master-data.ts';
 import { CREDIT_NOTE_MANDATORY_FIELDS } from '@invoice/invoice-templates';
 import { checkCreditNoteDeadline, creditNoteDeadline } from '@invoice/returns';
@@ -21,6 +22,8 @@ import { isoDate } from '@invoice/kernel';
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 
 const request = async (method: string, path: string, body: Record<string, unknown> = {}, sessionId?: string) => {
+  // Issue #229 — these tests are about the bill, not the godown: stock the goods it sells.
+  if (sells(method, path)) await stockEverything(sessionId === undefined ? undefined : `Bearer ${sessionId}`);
   const response = await handleApi(method, path, body, sessionId === undefined ? undefined : `Bearer ${sessionId}`);
   const text = Buffer.isBuffer(response.body) ? '{}' : String(response.body);
   return { status: response.status, headers: response.headers, raw: response.body, body: JSON.parse(text) as Record<string, any> };

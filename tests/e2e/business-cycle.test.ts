@@ -66,7 +66,7 @@ test('purchase → stock → sale → receipt stays balanced through refusals an
   });
   await assert.rejects(
     () => sales.finalise(actor, { idempotencyKey: 'e2e:sale:too-large:final', invoiceId: tooLarge.id }),
-    (error: unknown) => error instanceof Error && /1\.000 KGS are missing/.test(error.message),
+    (error: unknown) => error instanceof Error && /You have 400 KGS of TMT Steel Bar 12mm in [^.]*\. This bill asks for 401 KGS\./.test(error.message),
   );
   assert.equal((await shop.store.read().vouchers.list(COMPANY, {})).length, vouchersBeforeRefusal);
   assert.equal((await shop.inventoryService.balance(actor, { itemId: 'TMT12', warehouseId: 'wh-main' })).physical.scaled, 400_000000n);

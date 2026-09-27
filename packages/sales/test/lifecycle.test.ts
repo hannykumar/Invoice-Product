@@ -234,7 +234,7 @@ test('not enough stock stops the bill, in the words a shopkeeper reads', async (
   const submitted = await till.service.submitForApproval(till.actor, draft.id);
   assert.equal(submitted.state, 'NEEDS_INFO');
   assert.equal(submitted.problems[0]?.messageId, 'stock.not_enough');
-  assert.match(submitted.problems[0]?.message['en-IN'] ?? '', /40 boxes are missing/);
+  assert.equal(submitted.problems[0]?.message['en-IN'], 'You have 30 boxes of Plastic crate in Narela godown. This bill asks for 70 boxes.');
 });
 
 test('a bill above the business’s limit needs approval, and its maker cannot approve it', async () => {
