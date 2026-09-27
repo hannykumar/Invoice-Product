@@ -1384,6 +1384,7 @@
         <label id="customer-pincode-field"><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" required /></label>
         <label id="customer-state-field"><span data-i18n="customerState"></span><select name="stateCode" id="customer-states"></select><small data-i18n="customerStateHelp"></small></label>
         <label><span data-i18n="customerPhone"></span><input name="phone" inputmode="tel" /></label>
+        <label><span data-i18n="customerCreditLimit"></span><input name="creditLimit" inputmode="decimal" /><small data-i18n="customerCreditLimitHelp"></small></label>
         <p class="login-error" id="customer-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
@@ -1463,10 +1464,11 @@
         <label><span data-i18n="customerCity"></span><input name="city" required /></label>
         <label><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" maxlength="6" required /></label>
         <p><span data-i18n="addressStateFixed"></span> <strong id="correct-address-state"></strong></p>
+        <label><span data-i18n="customerCreditLimit"></span><input name="creditLimit" inputmode="decimal" /><small data-i18n="customerCreditLimitHelp"></small></label>
         <p class="login-error" id="correct-address-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
-          <button class="primary-button" type="submit" data-i18n="saveAddress"></button>
+          <button class="primary-button" type="submit" data-i18n="saveCorrection"></button>
         </div>
       </form>
     </dialog>

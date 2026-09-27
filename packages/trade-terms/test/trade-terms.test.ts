@@ -141,7 +141,30 @@ test('going over the limit is warned about, with the excess and the rule that de
   assert.equal(quote.credit.outcome, 'WARN');
   assert.equal(quote.credit.ruleId, 'sales.credit_limit', 'the approved rule decided this, not us');
   assert.notEqual(quote.credit.ruleVersion, null);
-  assert.match(quote.credit.sentence['en-IN'], /takes them ₹1,000\.00 over/);
+  // Issue #235 — the sum is written out, so it can be checked on paper.
+  assert.equal(
+    quote.credit.sentence['en-IN'],
+    'ABC Traders owes ₹4,000.00. Bills held for them and not yet issued come to ₹3,000.00. This bill is ₹4,000.00. '
+      + 'Together ₹4,000.00 + ₹3,000.00 + ₹4,000.00 = ₹11,000.00. That is ₹11,000.00 − ₹10,000.00 = ₹1,000.00 over their ₹10,000.00 limit.',
+  );
+});
+
+test('#235: the limit is checked against the whole bill — GST and freight included — when the bill is priced', async () => {
+  const desk = makeDesk();
+  desk.parties.setLimit(inr(5000));
+  desk.positions.set(inr(0));
+
+  // 450 × ₹90 = ₹40,500 of goods; + ₹2,000 freight = ₹42,500; + 18% IGST ₹7,650 = ₹50,150.
+  const quote = await desk.service.quote(desk.actor, {
+    partyId: ABC, documentDate: on('2026-08-29'), documentId: 'this-till',
+    lines: [line({ quantity: '450', unitPrice: inr(90) })],
+    billValue: inr(50150),
+  });
+  assert.equal(quote.credit.saleValue.minor, inr(50150).minor, 'not the ₹40,500 of goods alone');
+  assert.equal(quote.credit.exposure.minor, inr(50150).minor);
+  assert.equal(quote.credit.excess.minor, inr(45150).minor);
+  assert.equal(quote.credit.outcome, 'WARN');
+  assert.match(quote.credit.sentence['en-IN'], /Together ₹0\.00 \+ ₹50,150\.00 = ₹50,150\.00\. That is ₹50,150\.00 − ₹5,000\.00 = ₹45,150\.00 over/);
 });
 
 test('two tills writing bills for one customer cannot spend the same limit twice', async () => {

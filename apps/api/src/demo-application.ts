@@ -72,6 +72,8 @@ import {
   resolveCustomer,
   resolveItem,
   seedCatalogue,
+  creditLimitPaiseOf,
+  setCustomerCreditLimit,
 } from './catalogue-application.ts';
 import { dispatchFrom, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
@@ -744,11 +746,13 @@ export class DemoApplication {
         return null;
       },
       async pendingValue(companyId, partyId, excludingDocumentId) {
-        // Bills started and not issued. Without these two tills spend one limit twice.
-        const drafts = (await salesRepository.list(companyId, { partyId })).filter(
-          (invoice) => invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED' && invoice.id !== excludingDocumentId,
-        );
-        return money(drafts.reduce((total, invoice) => total + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n));
+        // Issue #235 — only bills deliberately held back: sent for approval and waiting for it.
+        // Every press of Review makes a draft, and a review that was changed, reviewed again or
+        // walked away from is not a bill anybody meant to issue; counting those made a customer
+        // look as if they owed money three times over.
+        const held = (await salesRepository.list(companyId, { partyId, state: 'PENDING_APPROVAL' }))
+          .filter((invoice) => invoice.id !== excludingDocumentId);
+        return money(held.reduce((total, invoice) => total + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n));
       },
     };
     const positions: CreditPositionPort = {
@@ -757,14 +761,18 @@ export class DemoApplication {
         const oldest = position.documents
           .filter((d) => d.outstanding.minor > 0n)
           .reduce((worst, d) => Math.max(worst, d.daysOverdue), 0);
-        return { total: position.totalOutstanding, oldestDaysOverdue: oldest };
+        // Issue #235 — what they owe after receipts and credit notes. Money of theirs we already hold
+        // on account (paid ahead, or left over from a cancelled bill) is set against it.
+        const owed = position.totalOutstanding.minor - position.onAccount.minor;
+        return { total: money(owed > 0n ? owed : 0n), oldestDaysOverdue: oldest };
       },
     };
     const partyTerms: PartyTermsPort = {
-      // A synthetic limit for the demo company, so the control is visible. A real business sets
-      // this on the customer in master data (#5).
-      async creditLimit() {
-        return money(5_000_00n);
+      // Issue #235 — the limit the business set on this customer, and none when it set none. No
+      // limit is never made up: a customer nobody gave a limit is not warned about one.
+      async creditLimit(companyId, partyId) {
+        const limit = customers(companyId).find((party) => party.id === partyId)?.creditLimitPaise;
+        return limit === undefined || limit === null ? null : money(limit);
       },
       // Issue #181 — whoever this party actually is. Naming the supplier in a customer's credit
       // sentence told a shopkeeper the wrong business was over their limit.
@@ -1626,12 +1634,31 @@ export class DemoApplication {
 
   /** Issue #224 — a customer's saved address, for the correction form. */
   customerAddress(actor: ActorContext, customerId: string) {
-    return customerBillingAddress(this.companyOf(actor), customerId);
+    const companyId = this.companyOf(actor);
+    const found = customerBillingAddress(companyId, customerId);
+    // Issue #235 — the credit limit is corrected on the same form.
+    return { ...found, creditLimit: customerView(companyId, found.customerId).creditLimit };
   }
 
-  /** Issue #224 — corrects a customer's saved address: its lines, town or PIN code. */
+  /**
+   * Issue #224 — corrects a customer's saved address: its lines, town or PIN code. Issue #235 — and
+   * their credit limit, when the form sends one (an empty box removes it).
+   */
   correctCustomerAddress(actor: ActorContext, input: Record<string, unknown>) {
-    return correctCustomerAddress(this.companyOf(actor), input);
+    const companyId = this.companyOf(actor);
+    // The limit is checked first, so a mistyped limit does not leave the address half-saved.
+    if ('creditLimit' in input) creditLimitPaiseOf(input.creditLimit);
+    const corrected = correctCustomerAddress(companyId, input);
+    if (!('creditLimit' in input)) return corrected;
+    const customer = setCustomerCreditLimit(companyId, String(input.customerId ?? input.customer ?? ''), input.creditLimit);
+    const limit = customer.creditLimitPaise ?? null;
+    return {
+      ...corrected,
+      title: 'Customer corrected',
+      message: `${corrected.message} ${limit === null
+        ? `${customer.legalName} has no credit limit, so bills to them are not checked against one.`
+        : `${customer.legalName}'s credit limit is ${formatPaise(limit)}. Every bill to them is checked against it.`}`,
+    };
   }
 
   async previewSale(actor: ActorContext, input: Record<string, unknown>) {
@@ -1736,6 +1763,8 @@ export class DemoApplication {
       partyId: draft.partyId,
       documentDate: draft.documentDate,
       documentId: draft.id,
+      // Issue #235 — the whole bill, GST, freight and other charges included: what they will owe.
+      billValue: draft.pricing.totals.invoiceValue,
       lines: draft.lines.map((line) => ({
         lineId: line.lineId,
         itemId: line.itemId,

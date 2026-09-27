@@ -50,6 +50,13 @@ export interface QuoteRequest {
   readonly documentDate: IsoDate;
   readonly documentId?: string | null;
   readonly lines: readonly QuoteLineRequest[];
+  /**
+   * Issue #235 — the bill's full value as it will be issued: goods, freight and other charges, and
+   * the GST on all of them. This is what the customer will owe, so it is what the credit limit is
+   * checked against. Left out only when there is no priced bill yet (asking what to charge), and
+   * then the goods are all that is known.
+   */
+  readonly billValue?: Money;
   /** Supplied only when a person has decided to go ahead anyway, and says why. */
   readonly override?: { readonly reason: string };
 }
@@ -107,7 +114,7 @@ export class TradeTermsService {
       lines.push({ lineId: line.lineId, itemId: line.itemId, price, discount, margin });
     }
 
-    const saleValue = sum(
+    const saleValue = request.billValue ?? sum(
       request.lines.map((line, index) => {
         const quantity = requireQuantity(line.quantity);
         const unit = line.unitPrice ?? lines[index]?.price.amount ?? money(0n);

@@ -112,6 +112,19 @@ export const decideCredit = async (
         : 'WARN'
       : 'ALLOW';
 
+  // Issue #235 — the sum is written out, so the shopkeeper can check it on paper: what they owe
+  // now, any bill held back for them, this bill, and what that comes to.
+  const held = pending.minor > 0n;
+  const owedNow = {
+    'en-IN': `${name} owes ${formatINR(position.total)}.${held ? ` Bills held for them and not yet issued come to ${formatINR(pending)}.` : ''} This bill is ${formatINR(request.saleValue)}.`,
+    'hi-IN': `${name} par ${formatINR(position.total)} baaki hai.${held ? ` Unke roke gaye, abhi jaari na hue bill ${formatINR(pending)} ke hain.` : ''} Yeh bill ${formatINR(request.saleValue)} ka hai.`,
+  };
+  const parts = [position.total, ...(held ? [pending] : []), request.saleValue].map(formatINR).join(' + ');
+  const together = {
+    'en-IN': `Together ${parts} = ${formatINR(exposure)}`,
+    'hi-IN': `Kul ${parts} = ${formatINR(exposure)}`,
+  };
+
   const sentence = tooLate
     ? {
         'en-IN': `${name}'s oldest unpaid bill is ${overdueDays} days late, so this bill is on hold until something is collected.`,
@@ -119,12 +132,12 @@ export const decideCredit = async (
       }
     : overLimit
       ? {
-          'en-IN': `${name} would owe you more than you allow. Their limit is ${formatINR(limit)}, and this bill takes them ${formatINR(excess)} over.`,
-          'hi-IN': `${name} par aapki tay seema se zyada baaki ho jayega. Seema ${formatINR(limit)} hai, aur yeh bill unhe ${formatINR(excess)} zyada le jaata hai.`,
+          'en-IN': `${owedNow['en-IN']} ${together['en-IN']}. That is ${formatINR(exposure)} − ${formatINR(limit)} = ${formatINR(excess)} over their ${formatINR(limit)} limit.`,
+          'hi-IN': `${owedNow['hi-IN']} ${together['hi-IN']}. Yeh unki ${formatINR(limit)} ki seema se ${formatINR(exposure)} − ${formatINR(limit)} = ${formatINR(excess)} zyada hai.`,
         }
       : {
-          'en-IN': `${name} stays within their ${formatINR(limit)} limit; after this bill they would owe ${formatINR(exposure)}.`,
-          'hi-IN': `${name} apni ${formatINR(limit)} ki seema mein hain; is bill ke baad unpar ${formatINR(exposure)} baaki hoga.`,
+          'en-IN': `${owedNow['en-IN']} ${together['en-IN']}. That is within their ${formatINR(limit)} limit.`,
+          'hi-IN': `${owedNow['hi-IN']} ${together['hi-IN']}. Yeh unki ${formatINR(limit)} ki seema ke andar hai.`,
         };
 
   return {
@@ -141,8 +154,8 @@ export const decideCredit = async (
     ruleVersion: decision.ruleVersion,
     sentence,
     why: {
-      'en-IN': 'We add up unpaid bills and bills that are not finished yet, so the figure does not surprise you later.',
-      'hi-IN': 'Hum bina chukaye bill aur adhoore bill dono jodte hain, taaki baad mein hairaani na ho.',
+      'en-IN': 'We add what they owe after payments and credit notes, bills held back for them, and this whole bill with GST and charges.',
+      'hi-IN': 'Hum jodte hain: payment aur credit note ke baad ka baaki, unke roke gaye bill, aur GST aur kharchon samet yeh poora bill.',
     },
   };
 };

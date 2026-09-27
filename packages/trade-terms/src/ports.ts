@@ -29,8 +29,13 @@ export interface SalesHistoryPort {
   ): Promise<{ amount: Money; documentNumber: string; on: IsoDate } | null>;
 
   /**
-   * The value of bills started for this customer and not yet issued, excluding the one being
-   * written. This is what stops two tills spending the same credit limit twice.
+   * The value of bills for this customer that were deliberately held back and not yet issued
+   * (sent for approval, say), excluding the one being written. This is what stops two tills
+   * spending the same credit limit twice.
+   *
+   * Issue #235 — only held bills. A review that was looked at and then changed, reviewed again or
+   * walked away from is not a bill anybody meant to issue, and counting it made the customer look
+   * as if they owed money they never will.
    */
   pendingValue(companyId: CompanyId, partyId: PartyId, excludingDocumentId: string | null): Promise<Money>;
 }

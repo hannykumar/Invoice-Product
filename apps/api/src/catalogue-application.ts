@@ -141,7 +141,35 @@ export interface CustomerView {
   readonly stateCode: string | null;
   readonly stateName: string | null;
   readonly phone: string | null;
+  /** Issue #235 — the most this customer may owe, in rupees, or null when the business set none. */
+  readonly creditLimit: number | null;
 }
+
+/**
+ * Issue #235 — a credit limit as typed, in rupees ("5000", "5,000", "5000.50"), in paise. Blank is
+ * no limit, which is not the same as a limit of nothing and is never replaced by a made-up figure.
+ */
+export const creditLimitPaiseOf = (value: unknown): bigint | null => {
+  const typed = str(value).replace(/[₹,\s]/g, '');
+  if (typed === '') return null;
+  const match = /^(\d{1,13})(?:\.(\d{1,2}))?$/.exec(typed);
+  if (match === null) throw invalid('CUSTOMER_CREDIT_LIMIT', 'Type the credit limit in rupees, such as 50000, or leave it empty for no limit.');
+  return BigInt(match[1] ?? '0') * 100n + BigInt((match[2] ?? '').padEnd(2, '0'));
+};
+
+/** Issue #235 — sets or removes the credit limit on a customer. Bills already issued are not touched. */
+export const setCustomerCreditLimit = (companyId: CompanyId | string, customerId: string, value: unknown): Party => {
+  const customer = resolveCustomer(companyId, customerId);
+  const paise = creditLimitPaiseOf(value);
+  if ((customer.creditLimitPaise ?? null) === paise) return customer;
+  return masterData().updateParty(
+    context(companyId),
+    customer.id,
+    // Removing a limit clears the field; the record's other fields are kept as they are.
+    (paise === null ? { creditLimitPaise: undefined } : { creditLimitPaise: paise }) as Partial<Omit<Party, 'id' | 'companyId'>>,
+    { idempotencyKey: `customer-credit-limit:${String(companyId)}:${customer.id}:${crypto.randomUUID()}` },
+  ).record;
+};
 
 const viewOf = (companyId: CompanyId | string, party: Party): CustomerView => {
   const address = billingAddressOf(companyId, party.id);
@@ -163,6 +191,7 @@ const viewOf = (companyId: CompanyId | string, party: Party): CustomerView => {
     stateCode,
     stateName: stateCode === null ? null : overseas ? OUTSIDE_INDIA : STATE_NAMES[stateCode] ?? stateCode,
     phone: party.phones[0] ?? null,
+    creditLimit: party.creditLimitPaise === undefined || party.creditLimitPaise === null ? null : Number(party.creditLimitPaise) / 100,
   };
 };
 
@@ -331,6 +360,8 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
   if (!overseas) require_(validatePincodeForState(pincode, stateCode), 'CUSTOMER_PINCODE_STATE', 'That PIN code is not in the customer’s state.');
 
   const phone = str(input.phone);
+  // Issue #235 — optional. Left empty, the customer has no limit and is never warned about one.
+  const creditLimitPaise = creditLimitPaiseOf(input.creditLimit);
   const service = masterData();
   const ctx = context(companyId);
   const reference = str(input.reference) || `${legalName.toLowerCase()}:${gstin || pincode}`;
@@ -342,6 +373,7 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
       role: 'customer',
       gstRegistrationType: registration,
       ...(phone === '' ? {} : { phones: [phone] }),
+      ...(creditLimitPaise === null ? {} : { creditLimitPaise }),
     },
     { idempotencyKey: `customer:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
   );
