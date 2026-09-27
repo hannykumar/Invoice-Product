@@ -19,6 +19,7 @@ import {
   notAllowed,
   notFound,
   newId,
+  formatINR,
   toDecimalString,
   type Clock,
   type CompanyId,
@@ -376,7 +377,7 @@ export class LedgerService {
       action: 'ledger.voucher_posted',
       subjectType: 'voucher',
       subjectId: voucher.id,
-      summary: `${voucher.type} ${voucher.number} dated ${voucher.date} for ${toDecimalString({ currency: 'INR', minor: total })}.`,
+      summary: `${voucher.type} ${voucher.number} dated ${voucher.date} for ${formatINR({ currency: 'INR', minor: total })}.`,
       details: {
         type: voucher.type,
         number: voucher.number,

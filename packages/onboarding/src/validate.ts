@@ -31,6 +31,9 @@ const validateBusiness = (a: OnboardingAnswers): StepProblem[] => {
     problems.push(p('BUSINESS_STATE_MISSING', 'Which state is your business in?', 'Aapka business kis rajya mein hai?', 'stateCode'));
   } else if (GST_STATE_CODES[stateCode] === undefined) {
     problems.push(p('BUSINESS_STATE_UNKNOWN', 'We do not recognise that state.', 'Yeh rajya pehchaan mein nahin aaya.', 'stateCode'));
+  } else if (GST_STATE_CODES[stateCode]?.retired === true) {
+    // Issue #237 — 25 and 28 are kept for reading old bills; nobody registers under them today.
+    problems.push(p('BUSINESS_STATE_RETIRED', `State code ${stateCode} is no longer used. Choose the state as it is today.`, `Rajya code ${stateCode} ab istemaal nahin hota. Aaj ka rajya chunein.`, 'stateCode'));
   }
   return problems;
 };

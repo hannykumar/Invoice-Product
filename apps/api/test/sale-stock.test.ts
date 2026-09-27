@@ -69,7 +69,8 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
   const number = recorded.body.invoice.number as string;
   let rows = await steelRows(owner);
   assert.deepEqual(rows.map((row: any) => [row.warehouse, row.closing, row.value]), [['Bengaluru · Peenya godown', '50.000', 3200]]);
-  assert.equal((await request('GET', '/api/dashboard', {}, owner)).body.stock.quantity, 50);
+  // Issue #237 — Home lists every goods item, least left first; the steel is one of them.
+  assert.equal((await request('GET', '/api/dashboard', {}, owner)).body.stockItems.find((item: any) => item.name === 'TMT Steel Bar 12mm').quantity, 50);
 
   // Record pressed again for the same sale: the same bill, and the goods leave once.
   const again = await request('POST', '/api/sales/record', sale, owner);

@@ -9,6 +9,7 @@
  * when *not* to answer, and there are three of those: nothing matched, several things matched and
  * disagreed, and something matched but only because a model guessed what the goods were.
  */
+import { formatINR } from '@invoice/kernel';
 import type { Id, IsoDate, TaxDefault } from '../../masters/src/types.ts';
 import type {
   Bilingual, ProposedClassification, RateAdvice, RateSubject, RegisterRate,
@@ -78,7 +79,7 @@ const extras = (rate: RegisterRate): string => {
     parts.push(`plus cess at ${percent(rate.cessRateBasisPoints)}`);
   }
   if (rate.cessPerUnitPaise !== undefined && rate.cessPerUnitPaise > 0n) {
-    parts.push(`plus cess of ₹${(Number(rate.cessPerUnitPaise) / 100).toFixed(2)} a unit`);
+    parts.push(`plus cess of ${formatINR({ currency: 'INR', minor: rate.cessPerUnitPaise })} a unit`);
   }
   if (rate.reverseCharge) {
     parts.push('and the tax on this is paid by the buyer, not charged by the supplier');

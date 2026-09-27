@@ -23,6 +23,7 @@ import {
   roundToWholeUnits,
   subtract,
   sum,
+  formatINR,
   toDecimalString,
   zero,
   type IsoDate,
@@ -406,8 +407,8 @@ export class GstCalculator {
       decisions,
       explanation: input.zeroRated === 'WITHOUT_TAX'
         ? {
-            'en-IN': `This is an export or a supply to an SEZ made under bond or LUT, so no GST is charged. The bill comes to ${toDecimalString(totals.invoiceValue)}.`,
-            'hi-IN': `Yeh bond ya LUT par niryat ya SEZ ko supply hai, isliye GST nahin lagta. Bill ${toDecimalString(totals.invoiceValue)} ka hai.`,
+            'en-IN': `This is an export or a supply to an SEZ made under bond or LUT, so no GST is charged. The bill comes to ${formatINR(totals.invoiceValue)}.`,
+            'hi-IN': `Yeh bond ya LUT par niryat ya SEZ ko supply hai, isliye GST nahin lagta. Bill ${formatINR(totals.invoiceValue)} ka hai.`,
           }
         : this.#explainDocument(split, placeOfSupply, totals, mayChargeGst),
     };
@@ -796,12 +797,12 @@ export class GstCalculator {
       explanation: {
         'en-IN':
           bucket.rate === null
-            ? `${name} of ${toDecimalString(amount)} is added to the bill. No GST applies to it, because none applies to the goods it goes with.`
-            : `${name} of ${toDecimalString(amount)} is part of the same supply, so it carries the same ${Number(bucket.rate) / 100}% GST as those goods: ${toDecimalString(totalTax)}.`,
+            ? `${name} of ${formatINR(amount)} is added to the bill. No GST applies to it, because none applies to the goods it goes with.`
+            : `${name} of ${formatINR(amount)} is part of the same supply, so it carries the same ${Number(bucket.rate) / 100}% GST as those goods: ${formatINR(totalTax)}.`,
         'hi-IN':
           bucket.rate === null
-            ? `${name} ${toDecimalString(amount)} bill mein juda hai. Is par GST nahin lagta, kyunki jis maal ke saath yeh hai us par bhi nahin lagta.`
-            : `${name} ${toDecimalString(amount)} usi supply ka hissa hai, isliye us maal jaisa hi ${Number(bucket.rate) / 100}% GST lagta hai: ${toDecimalString(totalTax)}.`,
+            ? `${name} ${formatINR(amount)} bill mein juda hai. Is par GST nahin lagta, kyunki jis maal ke saath yeh hai us par bhi nahin lagta.`
+            : `${name} ${formatINR(amount)} usi supply ka hissa hai, isliye us maal jaisa hi ${Number(bucket.rate) / 100}% GST lagta hai: ${formatINR(totalTax)}.`,
       },
     };
   }
@@ -907,8 +908,8 @@ export class GstCalculator {
   #explainDocument(split: TaxSplit, placeOfSupply: string, totals: TaxTotals, mayChargeGst: boolean) {
     if (!mayChargeGst) {
       return {
-        'en-IN': `Your business does not charge GST on its bills, so no GST has been added. The bill comes to ${toDecimalString(totals.invoiceValue)}.`,
-        'hi-IN': `Aapka business bill par GST nahin leta, isliye GST nahin joda gaya. Bill ${toDecimalString(totals.invoiceValue)} ka hai.`,
+        'en-IN': `Your business does not charge GST on its bills, so no GST has been added. The bill comes to ${formatINR(totals.invoiceValue)}.`,
+        'hi-IN': `Aapka business bill par GST nahin leta, isliye GST nahin joda gaya. Bill ${formatINR(totals.invoiceValue)} ka hai.`,
       };
     }
     const words: Record<TaxSplit, { en: string; hi: string }> = {
@@ -916,9 +917,11 @@ export class GstCalculator {
       CGST_UTGST: { en: 'two separate GST amounts apply', hi: 'do alag GST lagte hain' },
       IGST: { en: 'one combined GST applies', hi: 'ek hi GST lagta hai' },
     };
+    // Issue #237 — the state by name as well as its code: "Maharashtra (27)", not "state 27".
+    const where = GST_STATE_CODES[placeOfSupply] === undefined ? `state ${placeOfSupply}` : `${GST_STATE_CODES[placeOfSupply]!.name} (${placeOfSupply})`;
     return {
-      'en-IN': `This sale counts in state ${placeOfSupply}, so ${words[split].en}. GST of ${toDecimalString(totals.totalTax)} has been added to ${toDecimalString(totals.taxableValue)}, and the bill comes to ${toDecimalString(totals.invoiceValue)}.`,
-      'hi-IN': `Yeh bikri rajya ${placeOfSupply} ki hai, isliye ${words[split].hi}. ${toDecimalString(totals.taxableValue)} par ${toDecimalString(totals.totalTax)} GST joda gaya, aur bill ${toDecimalString(totals.invoiceValue)} ka hai.`,
+      'en-IN': `This sale counts in ${where}, so ${words[split].en}. GST of ${formatINR(totals.totalTax)} has been added to ${formatINR(totals.taxableValue)}, and the bill comes to ${formatINR(totals.invoiceValue)}.`,
+      'hi-IN': `Yeh bikri ${where} ki hai, isliye ${words[split].hi}. ${formatINR(totals.taxableValue)} par ${formatINR(totals.totalTax)} GST joda gaya, aur bill ${formatINR(totals.invoiceValue)} ka hai.`,
     };
   }
 }
@@ -934,8 +937,8 @@ const withoutTax = (line: ComputedTaxLine): ComputedTaxLine => ({
   totalTax: nil(),
   lineTotal: line.taxableValue,
   explanation: {
-    'en-IN': `${line.itemName}: ${toDecimalString(line.taxableValue)}. Supplied under bond or LUT, so no GST is charged.`,
-    'hi-IN': `${line.itemName}: ${toDecimalString(line.taxableValue)}. Bond ya LUT par supply, isliye GST nahin.`,
+    'en-IN': `${line.itemName}: ${formatINR(line.taxableValue)}. Supplied under bond or LUT, so no GST is charged.`,
+    'hi-IN': `${line.itemName}: ${formatINR(line.taxableValue)}. Bond ya LUT par supply, isliye GST nahin.`,
   },
 });
 
@@ -972,14 +975,14 @@ const explainLine = (
 ) => {
   if (!mayChargeGst) {
     return {
-      'en-IN': `${item.name}: ${toDecimalString(taxableValue)}. Your business does not charge GST on its bills.`,
-      'hi-IN': `${item.name}: ${toDecimalString(taxableValue)}. Aapka business bill par GST nahin leta.`,
+      'en-IN': `${item.name}: ${formatINR(taxableValue)}. Your business does not charge GST on its bills.`,
+      'hi-IN': `${item.name}: ${formatINR(taxableValue)}. Aapka business bill par GST nahin leta.`,
     };
   }
   if (item.treatment !== 'TAXABLE' || rate === null) {
     return {
-      'en-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].en}, so nothing has been added to ${toDecimalString(taxableValue)}.`,
-      'hi-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].hi}, isliye ${toDecimalString(taxableValue)} par kuch nahin joda gaya.`,
+      'en-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].en}, so nothing has been added to ${formatINR(taxableValue)}.`,
+      'hi-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].hi}, isliye ${formatINR(taxableValue)} par kuch nahin joda gaya.`,
     };
   }
   const percent = `${Number(rate) / 100}%`;
@@ -992,7 +995,7 @@ const explainLine = (
       ? { en: ' This is the rate your business set.', hi: ' Yeh rate aapke business ne tay kiya hai.' }
       : { en: '', hi: '' };
   return {
-    'en-IN': `${item.name}: ${toDecimalString(taxableValue)} at ${percent} gives ${toDecimalString(totalTax)} as ${kind.en}.${who.en}${whose.en}`,
-    'hi-IN': `${item.name}: ${toDecimalString(taxableValue)} par ${percent} se ${toDecimalString(totalTax)} bana, ${kind.hi} ke roop mein.${who.hi}${whose.hi}`,
+    'en-IN': `${item.name}: ${formatINR(taxableValue)} at ${percent} gives ${formatINR(totalTax)} as ${kind.en}.${who.en}${whose.en}`,
+    'hi-IN': `${item.name}: ${formatINR(taxableValue)} par ${percent} se ${formatINR(totalTax)} bana, ${kind.hi} ke roop mein.${who.hi}${whose.hi}`,
   };
 };
