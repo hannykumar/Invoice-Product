@@ -158,6 +158,7 @@ const copy = {
     itcLinesTitle: "Bill by bill",
     itcLinesHelp: "Every line shows what your books say, what the portal says, and what is holding the credit. Accepting a bill the portal does not carry needs a reason, and your name stays on it.",
     itcClaimable: "Safe to claim this month", itcHeldBack: "Held back", itcAtRisk: "Claimed on your say-so",
+    itcTimeBarred: "Too late to claim — this does not come back",
     itcAccept: "Accept", itcReject: "Reject", itcPending: "Keep pending",
     itcReasonPlaceholder: "Why? (goes on the record)",
     itcOurs: "yours", itcTheirs: "portal",
@@ -473,6 +474,7 @@ const copy = {
     itcLinesTitle: "Ek-ek bill",
     itcLinesHelp: "Har line dikhati hai ki aapki books kya kehti hain, portal kya kehta hai, aur credit kis wajah se ruka hai. Jo bill portal par nahin hai use accept karne ke liye wajah likhni hoti hai, aur aapka naam us par rehta hai.",
     itcClaimable: "Is mahine lena theek hai", itcHeldBack: "Roka gaya", itcAtRisk: "Aapke kehne par liya",
+    itcTimeBarred: "Lene ka samay nikal gaya — yeh wapas nahin aayega",
     itcAccept: "Accept", itcReject: "Reject", itcPending: "Pending rakhein",
     itcReasonPlaceholder: "Kyun? (record par jayega)",
     itcOurs: "aapka", itcTheirs: "portal",
@@ -4728,6 +4730,9 @@ function renderItc(workspace) {
   totals.replaceChildren();
   totals.append(detailRow(words.itcClaimable, money(workspace.claimable)));
   totals.append(detailRow(words.itcHeldBack, money(workspace.heldBack)));
+  // Kept off the held-back line on purpose: held-back credit comes back on the month it is
+  // settled, and this does not come back at all. One figure for both would say otherwise.
+  if (workspace.timeBarred > 0) totals.append(detailRow(words.itcTimeBarred, money(workspace.timeBarred)));
   if (workspace.atRisk > 0) totals.append(detailRow(words.itcAtRisk, money(workspace.atRisk)));
 
   const linesPanel = document.querySelector("#itc-lines-panel");

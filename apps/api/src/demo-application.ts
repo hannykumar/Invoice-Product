@@ -305,6 +305,15 @@ export class DemoApplication {
   /** Issue #186 — each credit or debit note's printed page, frozen the moment it is recorded. */
   private readonly notePrints = new Map<string, { document: CreditNoteDocument; snapshot: TemplateSnapshot }>();
   /**
+   * The movement each e-way bill was actually raised on, kept against its document.
+   *
+   * The driver's page must say what the portal was told, not what happens to be on the dispatch
+   * form when somebody presses Print. Rebuilding it from the form means a reprint — and every PDF,
+   * which never has a form behind it — quietly loses the ship-to address and the transaction type,
+   * so the page in the driver's hand disagrees with the government's record for that number.
+   */
+  private readonly ewayMovements = new Map<string, Movement>();
+  /**
    * Issue #182 — the delivery and reference answers, kept against the draft they were checked with
    * until the bill is issued and they are frozen onto it.
    */
@@ -2060,6 +2069,8 @@ export class DemoApplication {
       outcomeCounts: workspace.outcomeCounts,
       claimable: jsonAmount(totalItcTaxOf(workspace.claimable).minor),
       heldBack: jsonAmount(totalItcTaxOf(workspace.heldBack).minor),
+      // Its own figure, never folded into held back: this part comes back on no month.
+      timeBarred: jsonAmount(totalItcTaxOf(workspace.timeBarred).minor),
       atRisk: jsonAmount(totalItcTaxOf(workspace.atRisk).minor),
       lines: workspace.lines.map((line) => this.itcLineJson(line)),
       findings: workspace.findings
@@ -2984,6 +2995,8 @@ export class DemoApplication {
   async generateEwayBill(actor: ActorContext, input: Record<string, unknown>) {
     const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
     const record = await this.shop.ewayBill.generate(actor, movement);
+    // What was sent to the portal, kept so every later printing of this number says the same thing.
+    this.ewayMovements.set(movement.movementId, movement);
     // Issue #141 — the number the portal gave goes straight onto the challan, so it prints there.
     const number = record.acknowledgement?.ewayBillNumber;
     if (movement.documents[0]?.documentType === 'DELIVERY_CHALLAN' && number !== undefined) {
@@ -3048,7 +3061,11 @@ export class DemoApplication {
    * portal has given a number: a page with no number on it is not an e-way bill.
    */
   async ewayPrint(actor: ActorContext, input: Record<string, unknown>, options: { readonly pdf?: boolean } = {}) {
-    const movement = await this.movementFor(actor, String(input.invoice ?? ''), input);
+    const movementId = String(input.invoice ?? '');
+    // The movement the portal was given wins over anything on the form now. Only a bill raised
+    // before this was kept falls back to rebuilding it, and then the page is at least consistent
+    // with the invoice rather than with a half-filled screen.
+    const movement = this.ewayMovements.get(movementId) ?? (await this.movementFor(actor, movementId, input));
     const record = await this.shop.ewayBill.forMovement(actor, movement.movementId);
     if (record === null) throw notFound('API_EWAY_NOT_RAISED', 'No e-way bill has been raised for this movement yet.');
     const banner = ewayPrintBanner(record);

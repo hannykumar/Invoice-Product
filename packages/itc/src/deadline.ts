@@ -15,6 +15,7 @@
  */
 import { financialYearOf, financialYearRange, type IsoDate } from '@invoice/kernel';
 import { taxPeriodRange, type TaxPeriod } from '../../gst-returns/src/types.ts';
+import type { DocumentKind } from './types.ts';
 
 /** How many days before the deadline the unclaimed bills start being listed. */
 export const CLAIM_WARNING_DAYS = 45;
@@ -59,6 +60,20 @@ export const isTimeBarred = (documentDate: IsoDate, period: TaxPeriod, today?: I
   const filedNoEarlierThan = today !== undefined && today > due ? today : due;
   return filedNoEarlierThan > lastClaimDateFor(documentDate);
 };
+
+/**
+ * Whether section 16(4) reaches this kind of document at all.
+ *
+ * It does not reach a supplier's credit note, and the difference is not a technicality. The section
+ * is about input tax credit taken "in respect of any invoice or debit note" — credit the business
+ * **takes**. A supplier's credit note does the opposite: the supplier has taken goods back, so the
+ * tax they charged comes off, and the business **gives that credit back** to the government.
+ *
+ * Nothing in the law asks a business to hurry to repay, and there is no date after which it may
+ * stop. Barring an old credit note would drop the repayment and leave the return claiming more than
+ * it should — the deadline applied backwards, in the one direction that brings a notice.
+ */
+export const hasClaimDeadline = (kind: DocumentKind): boolean => kind !== 'CREDIT_NOTE';
 
 /** "30 November 2026" — the deadline as a sentence names it. */
 export const formatClaimDate = (date: IsoDate): string => {

@@ -30,7 +30,7 @@
 import { allocateByWeight, formatINR, type IsoDate, type Money } from '@invoice/kernel';
 import { createHash } from 'node:crypto';
 import { disagreements, lineKeyOf } from './match.ts';
-import { formatClaimDate, isTimeBarred, lastClaimDateFor } from './deadline.ts';
+import { formatClaimDate, hasClaimDeadline, isTimeBarred, lastClaimDateFor } from './deadline.ts';
 import type { MatchPair } from './match.ts';
 import {
   DECISION_PLAIN,
@@ -185,8 +185,12 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
   const blockedInBooks = book !== null && totalTaxOf(book.amounts).minor > 0n && totalTaxOf(creditable).minor === 0n;
   // Section 16(4) — the 30 November after the end of the financial year the bill belongs to. Shown
   // on every line that has a bill of ours, whether or not the date has passed.
-  const lastClaimDate: IsoDate | null = book === null ? null : lastClaimDateFor(book.documentDate);
-  const timeBarred = book !== null && input.period !== undefined && isTimeBarred(book.documentDate, input.period, input.today);
+  // A supplier's credit note has no claim deadline: it gives credit back rather than taking it, so
+  // there is no date on which it stops. See `hasClaimDeadline`.
+  const lastClaimDate: IsoDate | null =
+    book === null || !hasClaimDeadline(book.kind) ? null : lastClaimDateFor(book.documentDate);
+  const timeBarred = lastClaimDate !== null && input.period !== undefined
+    && isTimeBarred((book as BookPurchaseDocument).documentDate, input.period, input.today);
 
   // An accepted line only counts as accepted while it is answering the question it was asked.
   const accepted = decision?.kind === 'ACCEPT' && !decisionStale;
@@ -450,6 +454,46 @@ const atRiskFinding = (key: string, decision: ItcDecision, message: Bilingual): 
     'hi-IN': `${decision.reason === '' ? 'Is faisle ke saath ek wajah likhi gayi thi.' : `Aapki wajah: ${decision.reason}.`} Agar portal par yeh bill kabhi nahin aata, to yeh credit byaj ke saath wapas karna padega — kagaz sambhal kar rakhiye.`,
   });
 
+/**
+ * What the 3B screen is told about the credit that is *not* in its figure.
+ *
+ * Two kinds of money, and running them into one sentence is how a business is told that money it
+ * has lost is coming back. Credit held back is waiting on a supplier or on an answer, and it
+ * returns on the month it is settled. Credit barred by section 16(4) does not return on any month,
+ * and saying otherwise sends somebody looking for it next quarter.
+ */
+const cautionFor = (held: TaxAmounts, barred: TaxAmounts): Bilingual => {
+  const waiting = totalTaxOf(held);
+  const gone = totalTaxOf(barred);
+  if (waiting.minor === 0n && gone.minor === 0n) {
+    return {
+      'en-IN': 'Every purchase this month is accounted for, so the credit here is the whole of it.',
+      'hi-IN': 'Is mahine ki har kharid ka hisaab hai, isliye yahan poora credit dikh raha hai.',
+    };
+  }
+  const parts: Bilingual[] = [];
+  if (waiting.minor > 0n) {
+    parts.push({
+      'en-IN': `${formatINR(waiting)} of GST on your purchases is deliberately not in this figure, because those bills are still waiting on the supplier or on you. They are not lost — they come back on the month they are settled.`,
+      'hi-IN': `Aapki kharid ka ${formatINR(waiting)} GST jaan-boojh kar is figure mein nahin hai, kyunki woh bill abhi supplier ya aap par ruke hain. Woh khoye nahin hain — jis mahine tay honge us mahine aa jayenge.`,
+    });
+  }
+  if (gone.minor > 0n) {
+    // "A further" only when something was named before it, so the sentence reads on its own when
+    // the whole of the missing credit is the barred kind.
+    const alsoEn = waiting.minor > 0n ? `A further ${formatINR(gone)} is not in it either, and that part` : `${formatINR(gone)} of GST on your purchases is not in this figure, and it`;
+    const alsoHi = waiting.minor > 0n ? `Iske alawa ${formatINR(gone)} bhi ismein nahin hai, aur woh` : `Aapki kharid ka ${formatINR(gone)} GST is figure mein nahin hai, aur woh`;
+    parts.push({
+      'en-IN': `${alsoEn} does not come back on any month: the last date for claiming it has gone by.`,
+      'hi-IN': `${alsoHi} kisi bhi mahine wapas nahin aayega: use lene ki aakhri tareekh nikal chuki hai.`,
+    });
+  }
+  return {
+    'en-IN': parts.map((part) => part['en-IN']).join(' '),
+    'hi-IN': parts.map((part) => part['hi-IN']).join(' '),
+  };
+};
+
 // ---------------------------------------------------------------------------- the month
 
 /**
@@ -499,7 +543,11 @@ export const linkageFor = (
       };
     });
 
-  const held = sumAmounts(lines.map((line) => line.heldBack));
+  // Credit that is waiting on somebody, kept apart from credit whose last claim date has gone by.
+  // The two are both "not in this figure", and that is the only thing they have in common: one
+  // comes back on the month it is settled, and the other never comes back at all.
+  const held = sumAmounts(lines.filter((line) => line.outcome !== 'TIME_BARRED').map((line) => line.heldBack));
+  const barred = sumAmounts(lines.filter((line) => line.outcome === 'TIME_BARRED').map((line) => line.heldBack));
 
   return {
     period,
@@ -510,15 +558,7 @@ export const linkageFor = (
     reverseChargeLiability,
     exemptInwardValue,
     contributions,
-    caution: totalTaxOf(held).minor === 0n
-      ? {
-        'en-IN': 'Every purchase this month is accounted for, so the credit here is the whole of it.',
-        'hi-IN': 'Is mahine ki har kharid ka hisaab hai, isliye yahan poora credit dikh raha hai.',
-      }
-      : {
-        'en-IN': `${formatINR(totalTaxOf(held))} of GST on your purchases is deliberately not in this figure, because those bills are still waiting on the supplier or on you. They are not lost — they come back on the month they are settled.`,
-        'hi-IN': `Aapki kharid ka ${formatINR(totalTaxOf(held))} GST jaan-boojh kar is figure mein nahin hai, kyunki woh bill abhi supplier ya aap par ruke hain. Woh khoye nahin hain — jis mahine tay honge us mahine aa jayenge.`,
-      },
+    caution: cautionFor(held, barred),
   };
 };
 
