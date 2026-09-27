@@ -144,7 +144,7 @@ test('a credit note reaches the return and the reconciliation still agrees', asy
 
   desk.outward.add(
     salesInvoiceToDocument(issued.invoice, counterparty, supplier),
-    returnNoteToDocument(posted.note, counterparty, supplier, { placeOfSupplyStateCode: COMPANY_STATE }),
+    returnNoteToDocument(posted.note, counterparty, supplier, { original: { placeOfSupplyStateCode: issued.invoice.placeOfSupplyStateCode } }),
   );
   const workspace = await desk.service.workspace(actor, { period: PERIOD });
 

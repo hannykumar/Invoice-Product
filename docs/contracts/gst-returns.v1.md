@@ -82,6 +82,7 @@ the return.
 | `GSTR1_GSTIN_NOT_CONFIRMED` | Has this customer no GST number, or did nobody type one in? |
 | `GSTR1_NO_PLACE_OF_SUPPLY` | Which state does this sale count as made in? |
 | `GSTR1_NOTE_WITHOUT_ORIGINAL` | Which bill does this credit note adjust? |
+| `GSTR1_NOTE_ORIGINAL_MISSING` | The bill this note corrects cannot be found — a note counts in its original bill's state, so which state is it? (#232) |
 | `GSTR1_THRESHOLD_NOT_REVIEWED` | Where does the listing limit sit this month? |
 | `GSTR1_SEZ_WITHOUT_GSTIN` | A special-economic-zone buyer with no GST number — which is wrong? |
 

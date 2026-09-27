@@ -186,6 +186,11 @@ export interface OutwardDocument {
     readonly date: IsoDate;
     /** Present when the original was itself reported on an earlier return. */
     readonly reportedInPeriod?: TaxPeriod;
+    /**
+     * Issue #232 — the bill the note corrects could not be found. The note takes its place of
+     * supply from that bill, so without it the state is unknown and the return asks.
+     */
+    readonly missing?: true;
   };
   /**
    * A correction to something already filed. The government calls this an amendment, and it goes in
