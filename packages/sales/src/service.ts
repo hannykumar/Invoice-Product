@@ -15,6 +15,7 @@
  *  - **A final bill is never edited.** Cancellation posts a reversal; after the window closes the
  *    correction is a credit note.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import {
   conflict,
   financialYearOf,
@@ -670,6 +671,6 @@ export class SalesService {
   }
 }
 
-export const todayIn = (clock: Clock): IsoDate => isoDate(clock.now().toISOString().slice(0, 10));
+export const todayIn = (clock: Clock): IsoDate => indiaDateOf(clock.now());
 
 export type { UserId };

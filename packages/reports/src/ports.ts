@@ -102,7 +102,7 @@ export const nameOr = (name: string | undefined, id: string): string => name ?? 
 export interface DuesReadPort {
   parties(companyId: CompanyId): Promise<readonly PartyId[]>;
   nameOf(companyId: CompanyId, partyId: PartyId): Promise<string>;
-  /** Lateness is counted from `asOn`, which is the report's closing date, never from today. */
+  /** Lateness is counted from `asOn`: today, or the report's closing date if that came first (#234). */
   position(actor: ActorContext, partyId: PartyId, asOn: IsoDate): Promise<PartyPosition>;
 }
 

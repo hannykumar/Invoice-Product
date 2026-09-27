@@ -9,6 +9,10 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { forgetBusinessDetails } from '../src/business-details-application.ts';
+import { useFixedAppClock } from '../src/app-clock.ts';
+
+// Issue #234 — the running app reads the real clock; this file pins it so its dates do not drift.
+useFixedAppClock('2026-08-29T10:00:00.000Z');
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 

@@ -22,6 +22,7 @@
  *    the printed bill says whose figure it is.
  */
 import { invalid, isoDate, type CompanyId } from '@invoice/kernel';
+import { appToday } from './app-clock.ts';
 import type { RenderableParty } from '@invoice/invoice-templates';
 import {
   InMemoryDeclaredRates,
@@ -498,7 +499,7 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
     {
       idempotencyKey: `item:${String(companyId)}:${str(input.reference) || `${name.toLowerCase()}:${hsnSac}`}`,
       acknowledgeSimilar: input.acknowledgeSimilar === true,
-      turnoverAbove5Crore: turnoverAnswerOn(turnoverAnswersOf(companyId), isoDate(new Date().toISOString().slice(0, 10))),
+      turnoverAbove5Crore: turnoverAnswerOn(turnoverAnswersOf(companyId), appToday()),
     },
   );
 
@@ -512,7 +513,7 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
       effectiveFrom: isoDate(str(input.effectiveFrom) || '2017-07-01'),
       effectiveTo: null,
       declaredBy: str(input.declaredBy) || declaredBy,
-      declaredOn: isoDate(str(input.declaredOn) || new Date().toISOString().slice(0, 10)),
+      declaredOn: isoDate(str(input.declaredOn) || appToday()),
       basis,
     });
   }
@@ -539,7 +540,7 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
   const hsnSac = normaliseIdentifier(str(input.hsnSac || input.hsn));
   if (hsnSac === '') throw invalid('ITEM_HSN_REQUIRED', 'Type the new code.');
   require_(validateHsnOrSac(hsnSac, current.kind), 'ITEM_HSN', 'That is not an HSN or SAC code.');
-  const today = isoDate(new Date().toISOString().slice(0, 10));
+  const today = appToday();
 
   const updated = masterData().updateItem(context(companyId), current.id, { hsnSac }, {
     idempotencyKey: `item-code:${String(companyId)}:${current.id}:${hsnSac}`,

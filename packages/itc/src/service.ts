@@ -19,6 +19,7 @@
  *      context and never from the caller's input, so one company can never read or decide another
  *      company's purchases.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import { createHash } from 'node:crypto';
 import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext, AuditPort } from '@invoice/ledger';
@@ -172,7 +173,7 @@ export class ItcReconciliationService {
     }
 
     const pairs = matchDocuments({ books, portal, policy });
-    const today = this.#clock.now().toISOString().slice(0, 10) as IsoDate;
+    const today = indiaDateOf(this.#clock.now());
     const lines = pairs.map((pair) => {
       const provisional = assessLine({ pair, decision: null, policy, period, today });
       return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy, period, today });
@@ -642,7 +643,7 @@ export class ItcReconciliationService {
 
     // Issue #192 — section 16(4) gives no extension, so the only useful warning is one that arrives
     // before the date, listing what is still unclaimed with the largest amount first.
-    const today = this.#clock.now().toISOString().slice(0, 10) as IsoDate;
+    const today = indiaDateOf(this.#clock.now());
     const expiring = lines
       .filter((line) => line.lastClaimDate !== null && line.outcome === 'HELD_BACK' && isInWarningWindow(today, line.lastClaimDate))
       .sort((left, right) => Number(totalTaxOf(right.heldBack).minor - totalTaxOf(left.heldBack).minor));

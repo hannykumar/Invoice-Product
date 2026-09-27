@@ -10,6 +10,7 @@
  * standing instruction is that the quotation and the proforma are kept working, not developed.
  */
 import { formatINR, invalid, isoDate, money, mulDiv, notFound, quantityFromString, type CompanyId, type IsoDate, type Money, type PartyId } from '@invoice/kernel';
+import { appToday } from './app-clock.ts';
 import { GOODS_ADVANCE_NO_TAX, unusedOf, type AdvanceReceipt, type AdvanceService, type PaymentMode, type TaxHeads } from '@invoice/receivables';
 import type { ActorContext } from '@invoice/ledger';
 import {
@@ -177,7 +178,7 @@ export class PreSaleDesk {
 
   /** The document as the screen shows it in a list. */
   describe(d: PreSaleDocument) {
-    const today = isoDate(new Date().toISOString().slice(0, 10));
+    const today = appToday();
     return {
       id: d.id,
       kind: d.kind,

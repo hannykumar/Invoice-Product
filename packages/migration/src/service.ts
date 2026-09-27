@@ -11,6 +11,7 @@
  * ledger — never copied from the file — because a reconciliation that repeats its own input proves
  * nothing.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import { createHash } from 'node:crypto';
 import {
   conflict,
@@ -207,7 +208,7 @@ export class MigrationService {
       state: earlier !== null && earlier.state === 'COMMITTED' ? 'REJECTED_DUPLICATE' : 'ANALYSED',
       proposal,
       readOptions: {
-        asOn: command.asOn ?? isoDate(this.#clock.now().toISOString().slice(0, 10)),
+        asOn: command.asOn ?? indiaDateOf(this.#clock.now()),
         defaultUnit: (command.defaultUnit ?? 'PCS').toUpperCase(),
         defaultWarehouseRef: command.defaultWarehouseRef ?? null,
         partyKind: command.partyKind ?? (entity === 'suppliers' ? 'SUPPLIER' : entity === 'customers' ? 'CUSTOMER' : null),
@@ -921,7 +922,7 @@ export class MigrationService {
   ): Promise<void> {
     if (written.movementIds.length > 0) {
       const writer = this.#requireStock();
-      const on = isoDate(this.#clock.now().toISOString().slice(0, 10));
+      const on = indiaDateOf(this.#clock.now());
       for (const movementId of written.movementIds) {
         await writer.reverse(actor.companyId, actor.userId, movementId, {
           idempotencyKey: `migration:undo:${movementId}`,
@@ -934,7 +935,7 @@ export class MigrationService {
       await this.#ledger.reverseVoucher(actor, {
         idempotencyKey: `migration:undo:${written.voucherId}`,
         voucherId: written.voucherId as never,
-        date: isoDate(this.#clock.now().toISOString().slice(0, 10)),
+        date: indiaDateOf(this.#clock.now()),
         reason,
       });
     }

@@ -10,6 +10,7 @@
  * never touch another's, exactly as tenancy requires.
  */
 import { asId, isoDate, type CompanyId } from '@invoice/kernel';
+import { appClock } from './app-clock.ts';
 import {
   InMemoryAuditPort,
   InMemoryLedgerStore,
@@ -71,7 +72,7 @@ const openWorkspace = async (owner: RequestContext): Promise<Workspace> => {
   const migrationStore = new InMemoryMigrationStore();
   store.join(inventoryStore).join(migrationStore);
   const audit = new InMemoryAuditPort();
-  const clock = { now: () => new Date() };
+  const clock = appClock;
 
   const actor: ActorContext = {
     companyId,

@@ -3,7 +3,8 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, invalid, notAllowed, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
@@ -357,8 +358,6 @@ const consignmentLinesOf = (lines: readonly ComputedTaxLine[]): ConsignmentLine[
     cessPaise: item.cess.minor,
   }));
 
-/** Today's date in India, which is what "a bill dated in the future" is measured against. */
-const indiaToday = (): string => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 
 /** Micro-units as the plain decimal a person typed: 500000000n is "500". */
 const plainQuantity = (scaled: bigint): string => {
@@ -673,7 +672,7 @@ export class DemoApplication {
         return found;
       },
     };
-    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: goodsOnly, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } }, cancellationGuard });
+    const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: goodsOnly, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: appClock, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } }, cancellationGuard });
 
     // Issue #230 — each supplier by their own name. Every supplier used to be called the built-in
     // one, so money owed to a second supplier was listed under the first supplier's name.
@@ -699,7 +698,7 @@ export class DemoApplication {
         return customers(companyId).find((party) => party.id === partyId)?.legalName ?? purchases.nameOf(companyId, partyId);
       },
     };
-    const payments = new ReceivablesService({ store: shop.store, ledger: shop.ledger, repository: paymentRepository, documents, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() } });
+    const payments = new ReceivablesService({ store: shop.store, ledger: shop.ledger, repository: paymentRepository, documents, permissions: permissionPortFromActor, audit: shop.audit, clock: appClock });
 
     // Reports read the same live company: the ledger every module posts to, the sales invoices
     // sales issues, the stock movements purchases receive, the positions receivables derives.
@@ -724,7 +723,7 @@ export class DemoApplication {
       },
       permissions: permissionPortFromActor,
       audit: shop.audit,
-      clock: { now: () => new Date() },
+      clock: appClock,
     });
 
     // Issue #11: the terms of a sale, over this same live company. Every port is the module that
@@ -789,7 +788,7 @@ export class DemoApplication {
       engine: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.policy', mode: 'development' }),
       permissions: permissionPortFromActor,
       audit: shop.audit,
-      clock: { now: () => new Date() },
+      clock: appClock,
     });
 
     const returns = new ReturnService({
@@ -800,7 +799,7 @@ export class DemoApplication {
       purchases: purchaseReturnSource(shop.bills, (companyId, itemId) =>
         catalogueItems(companyId).find((item) => item.id === itemId)?.hsnSac ?? DemoApplication.CATALOGUE[itemId]?.hsnSac ?? null),
       inventory: returnInventoryAdapter(shop.inventoryService), permissions: permissionPortFromActor,
-      audit: shop.audit, clock: { now: () => new Date() },
+      audit: shop.audit, clock: appClock,
     });
 
 
@@ -870,7 +869,7 @@ export class DemoApplication {
       reports: reportService,
       permissions: permissionPortFromActor,
       audit: shop.audit,
-      clock: { now: () => new Date() },
+      clock: appClock,
       // Production mode: a rule that has not been reviewed cannot answer anybody's question.
       rules: new RulesEngine({ registry: shippedRegistry(), ruleSetId: 'in.gst', mode: 'production' }),
       register: new ComplianceRegister(),
@@ -884,7 +883,7 @@ export class DemoApplication {
     const outbox = new DemoReminderOutbox(templates);
     const notifications = new NotificationService(
       new ChannelNotificationTransport({ in_app: new InAppNotificationAdapter(), email: outbox, whatsapp: outbox, sms: outbox }),
-      () => Date.now(),
+      () => appClock.now().getTime(),
       { maxPerWindow: 100, windowMs: 60_000 },
     );
     const reminderContext = (from: ActorContext): RequestContext => ({
@@ -908,15 +907,14 @@ export class DemoApplication {
       businessName: config.name,
       receivables: receivablesPositions(payments, documents),
       contacts: reminderContacts,
-      transport: notificationReminderTransport(notifications, reminderContext),
+      transport: notificationReminderTransport(notifications, reminderContext, () => appClock.now().getTime()),
       repository: new InMemoryReminderRepository(),
       permissions: permissionPortFromActor,
       audit: shop.audit,
-      // This demo company's whole world is 29 August 2026 — its bills, its payments, its due
-      // dates. The reminder clock is pinned to the same afternoon so the screen shows the same day
-      // the books are on. Quiet hours are a real rule evaluated against this clock; the package
-      // tests drive a night and a morning through it.
-      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+      // Issue #234 — the app's one real clock, so a reminder is judged on the day it is sent.
+      // Quiet hours are a real rule evaluated against this clock; the package tests drive a night
+      // and a morning through it.
+      clock: appClock,
     });
 
     const bankProvider = new SyntheticBankFeedProvider();
@@ -934,7 +932,7 @@ export class DemoApplication {
       payments: alwaysPays(),
       permissions: permissionPortFromActor,
       audit: shop.audit,
-      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+      clock: appClock,
     });
     // Issue #47 [E47]: the assistant doing authorised work. Every tool below is the real module
     // already composed above — #23 decides what a reminder should be and re-checks the bill at the
@@ -978,7 +976,7 @@ export class DemoApplication {
       parties: agentParties,
       store: new InMemoryAgentPlanStore(),
       permissions: permissionPortFromActor,
-      clock: { now: () => new Date('2026-08-29T10:00:00.000Z') },
+      clock: appClock,
     });
 
     // Issue #30 — the GST return workspace, over this same live company.
@@ -1071,7 +1069,7 @@ export class DemoApplication {
       books: ledgerBookTaxPort(shop.store.read()),
       repository: gstPreparations,
       audit: shop.audit,
-      clock: { now: () => new Date() },
+      clock: appClock,
     });
 
     // Issue #141. Challans share the store, so a number is allocated in the same transaction that
@@ -1081,7 +1079,7 @@ export class DemoApplication {
     shop.store.join(challanRepository);
     const challans = new ChallanDesk(config, new ChallanService({
       store: shop.store, calculator, masterData: masters, repository: challanRepository, invoices: salesRepository,
-      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, invoicePrefix: 'INV',
+      permissions: permissionPortFromActor, audit: shop.audit, clock: appClock, invoicePrefix: 'INV',
     }));
 
     // Issue #142. Quotations and proformas share the store only so a number and the document are
@@ -1095,11 +1093,11 @@ export class DemoApplication {
     shop.store.join(advanceRepository);
     const advances = new AdvanceService({
       store: shop.store, ledger: shop.ledger, receivables: payments, proformas: presaleRepository, repository: advanceRepository,
-      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() },
+      permissions: permissionPortFromActor, audit: shop.audit, clock: appClock,
     });
     const presale = new PreSaleDesk(config, new PreSaleService({
       store: shop.store, calculator, repository: presaleRepository, invoices: salesRepository, sales,
-      permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, takenPrefixes: ['INV', 'DC', 'RV', 'RFV'],
+      permissions: permissionPortFromActor, audit: shop.audit, clock: appClock, takenPrefixes: ['INV', 'DC', 'RV', 'RFV'],
       advances,
     }), advances);
 
@@ -1171,10 +1169,12 @@ export class DemoApplication {
     const purchases = await this.shop.bills.list(companyId);
     const payments = await this.paymentRepository.list(companyId);
     const returnNotes = await this.returnNotes.list(companyId);
+    // Issue #234 — every figure on Home is as on today (in India), not as on a fixed day.
+    const today = appToday();
     // Issue #230 (the supplier tile from #237) — every supplier this business owes, not only the
     // built-in one, so the tile and Reports' "You still owe suppliers" are the same figure.
     const supplierIds = [...new Set([String(this.config.supplierId), ...supplierParties(companyId).map((party) => party.id)])];
-    const supplierPositions = await Promise.all(supplierIds.map(async (id) => ({ id, position: await this.payments.position(actor, id as PartyId, isoDate('2026-08-29')) })));
+    const supplierPositions = await Promise.all(supplierIds.map(async (id) => ({ id, position: await this.payments.position(actor, id as PartyId, today) })));
     const supplierOpen = supplierPositions.flatMap(({ position }) => openBillsOf(position.documents, 'PAYMENT'));
     const suppliersOwed = supplierPositions.filter(({ position }) => openBillsOf(position.documents, 'PAYMENT').length > 0);
     const supplierTile = {
@@ -1183,18 +1183,19 @@ export class DemoApplication {
       outstanding: jsonAmount(sum(supplierOpen.map((d) => d.outstanding)).minor),
       documents: supplierOpen.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })),
     };
-    const customer = await this.payments.position(actor, this.config.customerId, isoDate('2026-08-29'));
+    const customer = await this.payments.position(actor, this.config.customerId, today);
     // Issue #228 — purchases now receive the item from the item list, so the tile reads that item's
     // balance; the old short id belonged to the purchase screen's retired three-item list.
     const tileItem = catalogueItems(companyId).find((item) => item.id.endsWith(':item:TMT12'))
       ?? catalogueItems(companyId).find((item) => item.kind === 'goods');
     const stock = await this.shop.inventoryService.balance(actor, { itemId: tileItem?.id ?? 'TMT12', warehouseId: 'wh-main' });
     return {
+      today,
       company: { id: companyId, name: this.config.name, location: this.config.location },
       metrics: {
-        salesToday: jsonAmount(sales.reduce((sum, invoice) => sum + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n)),
+        salesToday: jsonAmount(sales.filter((invoice) => invoice.documentDate === today).reduce((sum, invoice) => sum + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n)),
         customersOwe: jsonAmount(customer.totalOutstanding.minor),
-        purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED').reduce((sum, bill) => sum + bill.totalPaise, 0n)),
+        purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === today.slice(0, 7)).reduce((sum, bill) => sum + bill.totalPaise, 0n)),
         needsAttention: (stock.physical.scaled <= 0n ? 1 : 0) + supplierOpen.filter((position) => position.daysOverdue > 0).length,
       },
       stock: { itemId: tileItem?.id ?? 'TMT12', name: tileItem?.name ?? 'TMT Steel Bar 12mm', quantity: Number(stock.physical.scaled) / 1_000_000, unit: stock.physical.unit },
@@ -1267,13 +1268,16 @@ export class DemoApplication {
 
   async reports(actor: ActorContext) {
     this.companyOf(actor);
-    const filter: ReportFilter = { from: isoDate('2026-04-01'), to: isoDate('2027-03-31') };
+    // Issue #234 — the financial year today falls in (1 April to 31 March), worked out from today in
+    // India; days late are counted to today, or to the end of the period if that came first.
+    const filter: ReportFilter = currentFinancialYear();
+    const today = appToday();
     const pack = await this.reportService.pack(actor, filter);
     const drill = (figure: Figure) =>
       figure.contributors.map((c) => ({ date: c.date, number: c.sourceNumber, description: c.description, amount: jsonAmount(c.amount.minor) }));
 
     return {
-      period: { from: filter.from, to: filter.to },
+      period: { from: filter.from, to: filter.to, lateCountedTo: today < filter.to ? today : filter.to },
       trialBalance: {
         title: pack.trialBalance.header.title,
         balanced: pack.trialBalance.body.balanced,
@@ -1430,7 +1434,7 @@ export class DemoApplication {
   // ------------------------------------------------------- issue #23: chasing what is still owed
 
   private reminderDate(input: Record<string, unknown>): IsoDate {
-    return isoDate(String(input.today ?? '2026-08-29'));
+    return input.today === undefined || input.today === '' ? appToday() : isoDate(String(input.today));
   }
 
   private candidateJson(candidate: ReminderCandidate) {
@@ -1789,7 +1793,7 @@ export class DemoApplication {
     // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
     // In that order, because a bill that failed to post is not a bill, and charging somebody's
     // allowance for the product's own failure would be the wrong way round.
-    const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const usageDate = appToday();
     // Issue #180 — checked before anything is drafted or numbered, so a business without an address
     // is refused without burning an invoice number on the refusal.
     requireIssuable(this.config.companyId);
@@ -1895,8 +1899,8 @@ export class DemoApplication {
   }
 
   /** Today in India, where the business keeps its books, not in UTC (which is still yesterday until 05:30). */
-  private static indiaDate(at: Date | string = new Date()): IsoDate {
-    return isoDate(new Date(at).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+  private static indiaDate(at: Date | string = appClock.now()): IsoDate {
+    return indiaDateOf(at);
   }
 
   private static cancelToday(): IsoDate {
@@ -2020,7 +2024,7 @@ export class DemoApplication {
   /** Step two: the bill made from the quotation is issued like any other sale. */
   async issueConvertedSale(actor: ActorContext, input: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
-    const usageDate = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const usageDate = appToday();
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const token = String(input.token ?? '');
     if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
@@ -2223,7 +2227,7 @@ export class DemoApplication {
     this.companyOf(actor);
     const plan = await this.agent.plan(actor, {
       text: String(input.request ?? ''),
-      today: isoDate(String(input.today ?? '2026-08-29')),
+      today: input.today === undefined || input.today === '' ? appToday() : isoDate(String(input.today)),
     });
     // Planning looks at nothing; the preview is where the request meets the books, so both run
     // together for the screen. Neither of them writes anything.
@@ -2294,7 +2298,7 @@ export class DemoApplication {
 
   async subscriptionAccount(actor: ActorContext, input: Record<string, unknown> = {}) {
     this.companyOf(actor);
-    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const today = appToday();
     const account = await this.subscriptions.account(actor, today);
     // What the plan would say about a few things a person actually does, so the screen can show
     // the promise being kept rather than merely printed.
@@ -2325,7 +2329,7 @@ export class DemoApplication {
 
   async changeSubscriptionPlan(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const today = appToday();
     const planId = String(input.planId ?? '');
     const existing = await this.subscriptions.account(actor, today);
     const subscription = existing.subscription.id.startsWith('implied:')
@@ -2340,7 +2344,7 @@ export class DemoApplication {
 
   async issueSubscriptionInvoice(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const today = isoDate(this.shop.clock.now().toISOString().slice(0, 10));
+    const today = appToday();
     const invoice = await this.subscriptions.issueServiceInvoice(actor, { period: today.slice(0, 7), on: today });
     const paid = invoice.state === 'PAID' ? invoice : await this.subscriptions.chargeServiceInvoice(actor, invoice.id, today);
     return {
@@ -2363,7 +2367,7 @@ export class DemoApplication {
   async paymentOpenBills(actor: ActorContext, input: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
     const { direction, party } = this.paymentParty(companyId, input);
-    const date = isoDate(String(input.date || this.shop.clock.now().toISOString().slice(0, 10)));
+    const date = isoDate(String(input.date || appToday()));
     const position = await this.payments.position(actor, party.id as PartyId, date);
     const open = openBillsOf(position.documents, direction);
     return {
@@ -2602,7 +2606,7 @@ export class DemoApplication {
 
   async syncBankFeed(actor: ActorContext, input: Record<string, unknown>) {
     const connectionId = String(input.connectionId ?? '');
-    const result = await this.bankFeeds.sync(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-sync:${connectionId}:${new Date().toISOString().slice(0, 10)}`));
+    const result = await this.bankFeeds.sync(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-sync:${connectionId}:${appToday()}`));
     return { state: 'success', imported: result.imported, duplicates: result.duplicates, connection: this.bankConnectionJson(result.connection) };
   }
 
@@ -2625,9 +2629,8 @@ export class DemoApplication {
     const raw = String(input.period ?? '').trim();
     if (raw === '') {
       // Default to the month before today, which is the one a business is actually filing.
-      const now = new Date();
-      const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-      return taxPeriod(previous.toISOString().slice(0, 7));
+      // Issue #234 — worked out from today in India, not in UTC.
+      return taxPeriod(previousMonthOfToday());
     }
     return taxPeriod(raw);
   }
@@ -3213,7 +3216,7 @@ export class DemoApplication {
           ? {
               rejectionReason: (String(input.rejectionReason || 'DAMAGED') as 'DAMAGED'),
               rejectionNote: String(input.rejectionNote || 'Turned away at the gate'),
-              evidence: { checkedBy: actor.userId, checkedAt: new Date().toISOString(), note: String(input.rejectionNote || 'Checked at the gate') },
+              evidence: { checkedBy: actor.userId, checkedAt: appClock.now().toISOString(), note: String(input.rejectionNote || 'Checked at the gate') },
             }
           : {}),
       }],
@@ -3265,7 +3268,7 @@ export class DemoApplication {
       }],
     }, {
       ...(order === null ? { receiptIds: receipts.map((receipt) => receipt.id) } : { orderId: order.id }),
-      on: String(input.date ?? new Date().toISOString().slice(0, 10)),
+      on: String(input.date ?? appToday()),
     });
 
     const cleared = await this.shop.matching.isClearedToPost(actor, match);
@@ -3854,7 +3857,7 @@ export class DemoApplication {
     const banner = ewayPrintBanner(record);
     if (banner?.kind === 'REFUSED') throw invalid('API_EWAY_NO_NUMBER', banner.message);
     const snapshot = this.invoicePrints.get(String(input.invoice ?? ''))?.snapshot
-      ?? captureSnapshot(templateById('india-standard') as TemplateDefinition, 'en-IN', this.shop.clock.now().toISOString().slice(0, 10));
+      ?? captureSnapshot(templateById('india-standard') as TemplateDefinition, 'en-IN', appToday());
     const rendered = { snapshot, format: 'A4' as const, locale: 'en-IN' as const };
     return {
       state: 'print' as const,
@@ -4123,7 +4126,7 @@ export class DemoApplication {
     const transport: TransportDetails = {
       mode: 'ROAD',
       vehicleNumber: String(input.vehicle ?? '').trim(),
-      movementDate: this.shop.clock.now().toISOString().slice(0, 10),
+      movementDate: appToday(),
       interState: String(input.interState ?? 'no') === 'yes',
       ...(String(input.transporterId ?? '').trim() === '' ? {} : { transporterId: String(input.transporterId).trim() }),
       // Blank stays blank: an unentered distance is a missing fact, never a zero.
@@ -4351,7 +4354,7 @@ export class DemoApplication {
         })),
         fieldsNeedingReview: [],
         arithmeticProblems: [],
-        createdAt: new Date().toISOString(),
+        createdAt: appClock.now().toISOString(),
       },
       supplier,
       ...(billingAddressOf(companyId, supplier.id) === null ? {} : { supplierAddress: billingAddressOf(companyId, supplier.id)! }),
@@ -4363,11 +4366,11 @@ export class DemoApplication {
         invoiceNumber: bill.invoiceNumber,
         invoiceDate: bill.invoiceDate,
         invoiceTotalPaise: bill.totalPaise,
-        enteredOn: bill.postedAt.slice(0, 10),
+        enteredOn: indiaDateOf(bill.postedAt),
         contentFingerprint: `posted:${bill.id}`,
       })),
       taxSplit: DemoApplication.purchaseTaxSplit,
-      today: indiaToday(),
+      today: appToday(),
     });
     if (verdict.status !== 'POSTABLE') {
       const shown = verdict.findings.filter((finding) => finding.severity !== 'MINOR');
@@ -4388,7 +4391,7 @@ export class DemoApplication {
         taxLiability: 'SUPPLIER',
         creditDays: 30,
         approvedBy: actor.userId,
-        approvedAt: new Date().toISOString(),
+        approvedAt: appClock.now().toISOString(),
       },
       supplierState,
       godownState,

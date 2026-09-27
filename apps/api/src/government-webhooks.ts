@@ -24,7 +24,7 @@
  * about a call this process never made, and it is the same code path that will settle one when the
  * app does make it.
  */
-import { systemClock } from '@invoice/kernel';
+import { appClock } from './app-clock.ts';
 import { InMemoryAuditPort } from '@invoice/ledger';
 import { ConnectorGateway, MockConnector, StaticWebhookVerifier, type ConnectorKind } from '../../../packages/platform/src/connectors.ts';
 import {
@@ -57,7 +57,7 @@ const governmentWebhookReceiver = (): GovernmentWebhookReceiver => {
       authorisations: new InMemoryAuthorisations(),
       events: new InMemoryWebhookEvents(),
       audit: new InMemoryAuditPort(),
-      clock: systemClock,
+      clock: appClock,
       exceptions: new RecordingExceptionSink(),
     });
   }

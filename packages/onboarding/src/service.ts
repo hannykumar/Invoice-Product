@@ -4,6 +4,7 @@
  * Every save is a whole step, validated and stored immediately. Nothing waits for a "submit" at
  * the end, because there is no end for a person who has to serve a customer halfway through.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import {
   conflict,
   formatINR,
@@ -260,7 +261,7 @@ export class OnboardingService {
     }
 
     const answers = session.answers;
-    const booksStart = answers.taxProfile.booksStartDate ?? isoDate(this.#clock.now().toISOString().slice(0, 10));
+    const booksStart = answers.taxProfile.booksStartDate ?? indiaDateOf(this.#clock.now());
 
     let openingVoucherId: VoucherId | null = null;
     if (answers.openingBalances.length > 0) {
@@ -340,7 +341,7 @@ export class OnboardingService {
 
     let ratesDeclared = 0;
     if (this.#declaredRates !== undefined) {
-      const declaredOn = this.#clock.now().toISOString().slice(0, 10);
+      const declaredOn = indiaDateOf(this.#clock.now());
       for (const rate of answers.rates) {
         this.#declaredRates.declare({
           companyId: actor.companyId,

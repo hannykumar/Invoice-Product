@@ -18,6 +18,7 @@
 //   5. **A retry is the same call.** The idempotency key is built from the company, the vehicle and
 //      the day, so pressing "check" twice is one paid lookup at the provider.
 
+import { indiaDateOf } from "@invoice/kernel";
 import { forbidden, invalid, type Clock, type CompanyId } from "@invoice/kernel";
 import type { ActorContext, AuditPort } from "@invoice/ledger";
 import { normaliseVehicleNumber } from "./validity.ts";
@@ -187,7 +188,7 @@ export class VehicleRecordService {
     }
     const fields = consent?.fields ?? PERMITTED_VEHICLE_FIELDS;
 
-    const policy = await this.#policyFor(actor.companyId, at.slice(0, 10) as IsoDate);
+    const policy = await this.#policyFor(actor.companyId, indiaDateOf(at));
     const held = await this.#cache.find(actor.companyId, number);
 
     if (held !== null && reusable(held.provenance.retrievedAt, at, policy)) {
@@ -297,7 +298,7 @@ export class VehicleRecordService {
         fields,
         // The day is in the key so a retry within the day is one call, while tomorrow's check is a
         // genuinely new question about a lorry whose papers may have expired overnight.
-        idempotencyKey: `vehicle-record:${companyId}:${number}:${at.slice(0, 10)}`,
+        idempotencyKey: `vehicle-record:${companyId}:${number}:${indiaDateOf(at)}`,
       });
     } catch (error) {
       return {
@@ -390,7 +391,7 @@ export class VehicleRecordService {
 export const consentProblemOf = (consent: VehicleRecordConsent | null, at: string): VehicleRecordUnavailableCode | null => {
   if (consent === null) return "NOT_CONNECTED";
   if (consent.revokedAt !== undefined) return "CONSENT_EXPIRED";
-  if (consent.expiresOn !== undefined && consent.expiresOn < at.slice(0, 10)) return "CONSENT_EXPIRED";
+  if (consent.expiresOn !== undefined && consent.expiresOn < indiaDateOf(at)) return "CONSENT_EXPIRED";
   return null;
 };
 

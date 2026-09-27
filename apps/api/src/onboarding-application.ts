@@ -11,6 +11,7 @@
  * another's, exactly as tenancy requires.
  */
 import { asId, isoDate, rupees, type CompanyId } from '@invoice/kernel';
+import { appClock, currentFinancialYear } from './app-clock.ts';
 import {
   buildDefaultChart,
   defaultChartIdFactory,
@@ -72,7 +73,7 @@ const freshCompany = async (): Promise<SetupCompany> => {
   const repository = new InMemoryOnboardingRepository();
   store.join(repository);
   const audit = new InMemoryAuditPort();
-  const clock = { now: () => new Date() };
+  const clock = appClock;
   let n = 0;
   const idFactory = () => `setup-${counter}-${String((n += 1)).padStart(5, '0')}`;
 
@@ -92,7 +93,7 @@ const freshCompany = async (): Promise<SetupCompany> => {
 const answersFrom = (input: Record<string, unknown>): { patches: Partial<Record<StepId, Partial<OnboardingAnswers>>>; openingProvided: boolean; rateProvided: boolean } => {
   const businessType = oneOf(input.businessType, BUSINESS_TYPES);
   const registration = oneOf(input.registration, REGISTRATIONS);
-  const booksStartDate = str(input.booksStartDate) === '' ? isoDate('2026-04-01') : isoDate(str(input.booksStartDate));
+  const booksStartDate = str(input.booksStartDate) === '' ? currentFinancialYear().from : isoDate(str(input.booksStartDate));
 
   const filingFrequency = oneOf(input.filingFrequency, ['MONTHLY', 'QUARTERLY'] as const);
   // Issue #180 — the address is asked once, here, so the Business details screen opens with it

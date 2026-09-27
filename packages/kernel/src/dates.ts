@@ -62,3 +62,15 @@ export const fixedClock = (at: string): Clock => {
   const instant = new Date(at);
   return { now: () => new Date(instant.getTime()) };
 };
+
+/**
+ * Issue #234 — the calendar date in India at an instant. India is UTC+05:30 all year (no summer
+ * time), so the date is the UTC date of the instant moved forward five and a half hours. Never
+ * `toISOString().slice(0, 10)` on its own: until 05:30 in India that is still yesterday, and a bill
+ * made then would carry yesterday's date.
+ */
+export const indiaDateOf = (at: Date | string | number): IsoDate =>
+  isoDate(new Date(new Date(at).getTime() + 330 * 60_000).toISOString().slice(0, 10));
+
+/** Today's date in India by the given clock. */
+export const indiaToday = (clock: Clock): IsoDate => indiaDateOf(clock.now());

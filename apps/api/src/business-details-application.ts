@@ -20,6 +20,7 @@
  *    account that `MasterDataService` stores, and reads the account back for printing.
  */
 import { financialYearOf, invalid, isoDate, type CompanyId } from '@invoice/kernel';
+import { appToday } from './app-clock.ts';
 import type { RenderableBank, RenderableParty } from '@invoice/invoice-templates';
 import { validateLogo } from '@invoice/invoice-templates';
 import {
@@ -139,7 +140,7 @@ export const readBusinessDetails = (
 // ------------------------------------------------------------- the turnover question (#187)
 
 const TURNOVER_ANSWERS: readonly TurnoverAbove5Crore[] = ['YES', 'NO', 'UNKNOWN'];
-const todayIso = () => isoDate(new Date().toISOString().slice(0, 10));
+const todayIso = () => appToday();
 
 /** Every answer this business has given, one per financial year. The calculator reads these. */
 export const turnoverAnswersOf = (companyId: CompanyId | string): readonly TurnoverAnswer[] =>

@@ -13,6 +13,7 @@
 //   4. **Nothing is guessed.** A missing fact is a question with the movement held back, not a
 //      default that lets a lorry leave.
 
+import { indiaDateOf } from "@invoice/kernel";
 import { conflict, financialYearOf, forbidden, invalid, isoDate, notFound, type CompanyId, type Clock } from "@invoice/kernel";
 import type { ActorContext, AuditPort } from "@invoice/ledger";
 import { consignmentValueOf, decideEwayApplicability, movementRoute } from "./applicability.ts";
@@ -750,7 +751,7 @@ export class EwayBillService {
   }
 
   #dateOf(movement: Movement): IsoDate {
-    return movement.documents[0]?.documentDate ?? this.#clock.now().toISOString().slice(0, 10);
+    return movement.documents[0]?.documentDate ?? indiaDateOf(this.#clock.now());
   }
 
   /** The portal writes wall-clock Indian time, in either of two shapes. `validity.ts` reads both. */
