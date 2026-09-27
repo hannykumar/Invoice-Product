@@ -152,7 +152,18 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(html, /data-line-field="item" data-item-picker/);
   assert.match(html, /name="freight" type="number" min="0" step="0\.01"/);
   assert.match(html, /name="otherCharges" type="number" min="0" step="0\.01"/);
-  assert.match(html, /<option value="FRT" data-i18n="itemFreight"><\/option>/, 'inward freight remains available on Purchase');
+  // Issue #228 — a supplier bill's lines come from the item list (a service such as inward freight
+  // is added there like any other item), each with its own GST rate, and the supplier comes from the
+  // supplier list. Nothing asks which state the supplier is in: their GST number says it.
+  assert.match(html, /<select name="supplierId" data-supplier-picker required>/);
+  assert.match(html, /id="purchase-line-template"[\s\S]*data-line-field="item" data-item-picker[\s\S]*data-line-field="gst" data-gst-picker/);
+  assert.match(html, /id="new-supplier-dialog"/);
+  // One id, one element: the Supplier check screen already has a form called "supplier-form".
+  assert.equal([...html.matchAll(/id="supplier-form"/g)].length, 1);
+  assert.doesNotMatch(html, /name="supplierState"/);
+  assert.doesNotMatch(html, /<option value="FRT"/);
+  assert.match(script, /input\.lines = JSON\.stringify\(purchaseLineValues\(\)\)/);
+  assert.match(script, /\/api\/suppliers/);
   assert.match(script, /result\.chargeLines/);
   assert.doesNotMatch(script, /line\.gst\s*[*/+-]/, 'the browser must display the calculator tax, not recompute it');
   assert.match(script, /\/api\/sales\/print/);

@@ -7,7 +7,7 @@ const copy = {
     recentActivity: "Recent activity", recentBody: "The latest work in this demo company", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
     stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
-    purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", supplierState: "Where the supplier is", stateOther: "Another state", stateSame: "Same state as your godown", supplierStateHelp: "This decides whether the bill carries IGST, or CGST and SGST.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
+    purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", purchaseLinesLabel: "Items on this supplier bill", purchaseTaxFromGstin: "Whether this bill carries IGST, or CGST and SGST, is worked out from the supplier's GST number and yours. Nobody is asked which state they are in.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "If you choose later, the payment remains clearly marked as not matched to a bill.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     noteHelp: "Give the customer this page. It carries the bill it is against, so they can reverse the GST credit they claimed.", notePrint: "Print the note", noteFrame: "The printed note", notesTitle: "Credit and debit notes issued", noteAgainst: "against {number}", notePrintAction: "Print", noteNotPrintable: "Recorded before notes could be printed", returnsTitle: "Record a return", returnsHelp: "Choose the original bill and what came back. The original stays unchanged; a linked credit or debit note records the correction.", originalBill: "Original customer or supplier bill", returnItem: "Item being returned", returnQuantity: "Quantity returned", disposition: "What happens to the goods", dispAccepted: "Accepted back into usable stock", dispDamaged: "Move to damaged stock", dispScrapped: "Scrap after receiving", dispReplacement: "Replacement is being arranged", returnDate: "Return date", returnReference: "Return reference", returnReason: "Why is it being returned?", returnReasonHelp: "This explanation stays in the audit trail.", returnRemaining: "Choose a bill to see the quantity still eligible.", returnEligible: "{quantity} {unit} still eligible on the original bill.", returnLineChoice: "{item} · {quantity} {unit} left", customerSale: "Customer sale", supplierPurchase: "Supplier purchase", returnCheckQuantity: "Returned quantity cannot exceed the original eligible quantity", returnCheckBooks: "Stock, GST and the customer or supplier balance change together", returnCheckCompliance: "Registered documents are marked for a compliance adjustment", returnSafety: "Checking changes nothing. Recording creates a linked note; it never edits or hides the original bill.", checkReturn: "Review return", noReturnDocuments: "No issued bills are available for return yet.", returnActivity: "Linked return note posted without changing the original", customerReturnChecked: "Customer return checked", supplierReturnChecked: "Supplier return checked", returnCheckedBody: "The checked return comes to {amount}.", returnCustomerEffect: "A credit note will reduce what the customer owes.", returnSupplierEffect: "A debit note will reduce what you owe the supplier.", returnSalesStockEffect: "Accepted goods will go back into stock.", returnPurchaseStockEffect: "Returned goods will leave stock.", returnComplianceEffect: "The registered document needs a compliance adjustment.", returnNoComplianceEffect: "No government-document adjustment is needed.", returnRecorded: "Return recorded", returnAlreadyRecorded: "Return already recorded once", returnRecordedBody: "Linked note {number} was recorded without changing the original bill.",
     workspace: "Workspace", activityTitle: "All activity", activityHelp: "Every completed action will appear here with its status and time.", demoHistory: "This preview has sample activity", demoHistoryBody: "Connect the application services to show the company's full history. You can still test the draft flows now.", createFirstSale: "Create a sale",
@@ -85,7 +85,7 @@ const copy = {
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
     saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item",
     noCustomersYet: "No customers saved yet", noItemsYet: "No items saved yet", cancel: "Cancel",
-    addCustomerTitle: "Add a customer", addCustomerHelp: "The bill will carry this name, address and GST number, so they have to be right.",
+    addSupplier: "＋ Add a new supplier", noSuppliersYet: "No suppliers yet", addSupplierTitle: "Add a supplier", addSupplierHelp: "Type their details as they are printed on their bill. Their state is read from their GST number.", supplierLegalName: "Name on their bill", supplierGstinHelp: "The first two digits are their state. It decides whether their bill carries IGST, or CGST and SGST.", saveSupplier: "Save supplier", addCustomerTitle: "Add a customer", addCustomerHelp: "The bill will carry this name, address and GST number, so they have to be right.",
     customerLegalName: "Name the customer is billed under", customerRegistration: "Registered for GST?", customerRegular: "Yes, regular", customerComposition: "Yes, composition", customerUnregistered: "Not registered",
     customerGstin: "GST number", customerGstinHelp: "We check the last character against the rest, so a mistyped digit is caught here and not by their accountant.",
     customerAddress1: "Address line 1", customerAddress2: "Address line 2 (optional)", customerCity: "Town or city", customerPincode: "PIN code", customerState: "Which state?",
@@ -327,7 +327,7 @@ const copy = {
     recentActivity: "Abhi ka kaam", recentBody: "Demo company mein hua naya kaam", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
     stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
-    purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", supplierState: "Supplier kahan hai", stateOther: "Doosre rajya mein", stateSame: "Aapke godown wale rajya mein", supplierStateHelp: "Isse tay hota hai ki bill par IGST lagega ya CGST aur SGST.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
+    purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", purchaseLinesLabel: "Is supplier bill ki cheezein", purchaseTaxFromGstin: "Is bill par IGST lagega ya CGST aur SGST, yeh supplier ke GST number aur aapke GST number se tay hota hai. Kisi se unka rajya nahin poochha jata.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Baad mein chunne par payment saaf taur par bina bill ke dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     noteHelp: "Yeh panna customer ko dein. Is par woh bill likha hai jiske against yeh hai, taaki woh apna GST credit wapas kar sake.", notePrint: "Note print karein", noteFrame: "Chhapa hua note", notesTitle: "Jaari kiye gaye credit aur debit note", noteAgainst: "{number} ke against", notePrintAction: "Print", noteNotPrintable: "Print ki suvidha se pehle darj hua", returnsTitle: "Wapsi darj karen", returnsHelp: "Asli bill aur wapas aaya saman chunen. Asli bill nahi badlega; juda hua credit ya debit note sudhar darj karega.", originalBill: "Asli customer ya supplier bill", returnItem: "Wapas ho raha saman", returnQuantity: "Wapas matra", disposition: "Saman ka kya hoga", dispAccepted: "Sahi stock mein wapas rakhen", dispDamaged: "Kharab stock mein rakhen", dispScrapped: "Wapas lekar scrap karen", dispReplacement: "Badla hua saman aayega", returnDate: "Wapsi ki tareekh", returnReference: "Wapsi reference", returnReason: "Wapas kyon ho raha hai?", returnReasonHelp: "Yeh wajah audit record mein rahegi.", returnRemaining: "Bachi hui eligible matra dekhne ke liye bill chunen.", returnEligible: "Asli bill par abhi {quantity} {unit} wapas ho sakta hai.", returnLineChoice: "{item} · {quantity} {unit} bacha", customerSale: "Customer ki bikri", supplierPurchase: "Supplier ki kharid", returnCheckQuantity: "Wapas matra asli eligible matra se zyada nahi ho sakti", returnCheckBooks: "Stock, GST aur customer ya supplier balance ek saath badlenge", returnCheckCompliance: "Registered document ko compliance adjustment ke liye mark kiya jayega", returnSafety: "Jaanchne se kuch nahi badalta. Darj karne par juda hua note banta hai; asli bill kabhi badalta ya chhupta nahi.", checkReturn: "Wapsi dekhen", noReturnDocuments: "Wapsi ke liye abhi koi jaari bill nahi hai.", returnActivity: "Asli bill badle bina juda hua return note darj hua", customerReturnChecked: "Customer wapsi jaanch li", supplierReturnChecked: "Supplier wapsi jaanch li", returnCheckedBody: "Jaanchi hui wapsi {amount} ki hai.", returnCustomerEffect: "Credit note customer se lene wali rakam ghataega.", returnSupplierEffect: "Debit note supplier ko dene wali rakam ghataega.", returnSalesStockEffect: "Sahi saman stock mein wapas jayega.", returnPurchaseStockEffect: "Wapas saman stock se bahar jayega.", returnComplianceEffect: "Registered document ke liye compliance adjustment karna hoga.", returnNoComplianceEffect: "Kisi government-document adjustment ki zaroorat nahi hai.", returnRecorded: "Wapsi darj hui", returnAlreadyRecorded: "Wapsi pehle hi ek baar darj hai", returnRecordedBody: "Asli bill badle bina juda note {number} darj hua.",
     workspace: "Kaam ki jagah", activityTitle: "Saara kaam", activityHelp: "Har poora kaam uske samay aur sthiti ke saath yahan dikhega.", demoHistory: "Is preview mein sample kaam hai", demoHistoryBody: "Company ka poora itihaas dikhane ke liye services jodni hongi. Abhi draft flows check kar sakte hain.", createFirstSale: "Bikri banayen",
@@ -402,7 +402,7 @@ const copy = {
     deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen",
     saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
     noCustomersYet: "Abhi koi customer save nahin hai", noItemsYet: "Abhi koi saman save nahin hai", cancel: "Rehne den",
-    addCustomerTitle: "Customer joden", addCustomerHelp: "Bill par yahi naam, pata aur GST number chhapega, isliye sahi hona chahiye.",
+    addSupplier: "＋ Naya supplier joden", noSuppliersYet: "Abhi koi supplier nahin", addSupplierTitle: "Supplier joden", addSupplierHelp: "Unke bill par jaisa chhapa hai waisa hi bharen. Unka rajya unke GST number se padha jata hai.", supplierLegalName: "Unke bill par naam", supplierGstinHelp: "Pehle do ank unka rajya hain. Isse tay hota hai ki unke bill par IGST lagega ya CGST aur SGST.", saveSupplier: "Supplier save karen", addCustomerTitle: "Customer joden", addCustomerHelp: "Bill par yahi naam, pata aur GST number chhapega, isliye sahi hona chahiye.",
     customerLegalName: "Customer ka bill wala naam", customerRegistration: "GST mein registered hain?", customerRegular: "Haan, regular", customerComposition: "Haan, composition", customerUnregistered: "Registered nahin",
     customerGstin: "GST number", customerGstinHelp: "Aakhri akshar ko baaki number se milakar dekhte hain, taaki galat digit yahin pakdi jaye.",
     customerAddress1: "Pate ki pehli line", customerAddress2: "Pate ki doosri line (marzi se)", customerCity: "Shehar ya kasba", customerPincode: "PIN code", customerState: "Kaunsa rajya?",
@@ -1400,6 +1400,8 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     // Issue #181 — the lines as they are on the screen go with the request, so what was typed is
     // what is priced, what is stored and what prints.
     if (form.dataset.draft === "sale") input.lines = JSON.stringify(saleLineValues());
+    // Issue #228 — and a supplier bill's lines, each with the GST rate printed on it.
+    if (form.dataset.draft === "purchase") input.lines = JSON.stringify(purchaseLineValues());
     state.pendingForm = form;
     state.pendingInput = input;
     state.pendingReturnInput = null;
@@ -4830,7 +4832,7 @@ submitStep("#itc-typed-form", async (form) => {
 // the business's own two lists, and a sale carries the customer and the goods that were chosen,
 // on as many lines as it takes.
 
-const catalogue = { customers: [], items: [], units: [], rates: [], states: [] };
+const catalogue = { customers: [], suppliers: [], items: [], units: [], rates: [], states: [] };
 
 const itemById = (id) => catalogue.items.find((item) => item.id === id) ?? null;
 
@@ -4882,8 +4884,65 @@ function renderPickers() {
     if (chosen !== "" && select.querySelector(`option[value="${CSS.escape(chosen)}"]`)) select.value = chosen;
   });
 
+  // Issue #228 — the supplier picker on the Purchase screen, from the supplier list.
+  document.querySelectorAll("[data-supplier-picker]").forEach((select) => {
+    const chosen = select.value;
+    select.replaceChildren();
+    if (catalogue.suppliers.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = copy[state.locale].noSuppliersYet;
+      select.append(empty);
+    }
+    catalogue.suppliers.forEach((supplier) => {
+      const option = document.createElement("option");
+      option.value = supplier.id;
+      option.textContent = `${supplier.name} · ${supplier.gstin ?? ""}`;
+      select.append(option);
+    });
+    const add = document.createElement("option");
+    add.value = "__add__";
+    add.textContent = copy[state.locale].addSupplier;
+    select.append(add);
+    if (chosen !== "" && select.querySelector(`option[value="${CSS.escape(chosen)}"]`)) select.value = chosen;
+  });
+
+  // The GST rate on a supplier's bill line, from the same slabs an item is declared at.
+  document.querySelectorAll("[data-gst-picker]").forEach((select) => {
+    const chosen = select.value;
+    select.replaceChildren(...catalogue.rates.map((rate) => {
+      const option = document.createElement("option");
+      option.value = String(rate.ratePercentTimes100);
+      option.textContent = rate.label;
+      return option;
+    }));
+    if (chosen !== "" && select.querySelector(`option[value="${CSS.escape(chosen)}"]`)) select.value = chosen;
+    else setLineGstFromItem(select.closest(".sale-line"));
+  });
+
   showChosenCustomer();
-  document.querySelectorAll("#sale-lines .sale-line").forEach(showLineUnit);
+  showChosenSupplier();
+  document.querySelectorAll("#sale-lines .sale-line, #purchase-lines .sale-line").forEach(showLineUnit);
+}
+
+/** Issue #228 — the supplier's address, state and GST number, shown before the bill is recorded. */
+function showChosenSupplier() {
+  const detail = document.querySelector("#purchase-supplier-detail");
+  const picker = document.querySelector('[data-draft="purchase"] [data-supplier-picker]');
+  if (!detail || !picker) return;
+  const supplier = catalogue.suppliers.find((row) => row.id === picker.value) ?? null;
+  detail.textContent = supplier === null
+    ? ""
+    : `${[...supplier.addressLines, supplier.stateName ? `${supplier.stateName} (${supplier.stateCode})` : ""].filter(Boolean).join(", ")} · ${supplier.gstin ?? ""}`;
+}
+
+/** A purchase line starts at the rate the business declared for the item; the bill may say otherwise. */
+function setLineGstFromItem(line) {
+  const select = line?.querySelector("[data-gst-picker]");
+  const item = itemById(line?.querySelector("[data-line-field=item]")?.value ?? "");
+  if (!select || item === null || item.ratePercent === null) return;
+  const value = String(Math.round(item.ratePercent * 100));
+  if (select.querySelector(`option[value="${CSS.escape(value)}"]`)) select.value = value;
 }
 
 /** The address a bill to this customer will carry, shown before it is issued rather than after. */
@@ -4936,6 +4995,30 @@ function addSaleLine() {
   return line;
 }
 
+/** Issue #228 — a supplier bill carries as many lines as it has, like a sale. */
+function addPurchaseLine() {
+  const template = document.querySelector("#purchase-line-template");
+  const lines = document.querySelector("#purchase-lines");
+  if (!template || !lines) return null;
+  const line = template.content.firstElementChild.cloneNode(true);
+  lines.append(line);
+  translate();
+  renderPickers();
+  setLineGstFromItem(line);
+  return line;
+}
+
+/** The supplier bill's lines as typed: item, how many, price of one, and the GST rate on the bill. */
+function purchaseLineValues() {
+  return [...document.querySelectorAll("#purchase-lines .sale-line")].map((line) => ({
+    itemId: line.querySelector("[data-line-field=item]")?.value ?? "",
+    quantity: line.querySelector("[data-line-field=quantity]")?.value ?? "",
+    unit: itemById(line.querySelector("[data-line-field=item]")?.value ?? "")?.unit ?? "",
+    rate: line.querySelector("[data-line-field=rate]")?.value ?? "",
+    gst: line.querySelector("[data-line-field=gst]")?.value ?? "",
+  }));
+}
+
 /** What the person typed, line by line: the same lines that are priced, stored and printed. */
 function saleLineValues() {
   return [...document.querySelectorAll("#sale-lines .sale-line")].map((line) => ({
@@ -4950,6 +5033,7 @@ async function loadCatalogue() {
   try {
     const read = await api("/api/catalogue");
     catalogue.customers = read.customers;
+    catalogue.suppliers = read.suppliers ?? [];
     catalogue.items = read.items;
     catalogue.units = read.units;
     catalogue.rates = read.rates;
@@ -4988,6 +5072,7 @@ async function loadCatalogue() {
     }));
   }
   if (document.querySelectorAll("#sale-lines .sale-line").length === 0) addSaleLine();
+  if (document.querySelectorAll("#purchase-lines .sale-line").length === 0) addPurchaseLine();
   renderPickers();
 }
 
@@ -5004,6 +5089,12 @@ document.addEventListener("change", (event) => {
     document.querySelector("#customer-dialog")?.showModal();
     return;
   }
+  if (select.matches("[data-supplier-picker]") && select.value === "__add__") {
+    pickerAwaitingNewRecord = select;
+    select.value = catalogue.suppliers[0]?.id ?? "";
+    document.querySelector("#new-supplier-dialog")?.showModal();
+    return;
+  }
   if (select.matches("[data-item-picker]") && select.value === "__add__") {
     pickerAwaitingNewRecord = select;
     select.value = catalogue.items[0]?.id ?? "";
@@ -5012,7 +5103,11 @@ document.addEventListener("change", (event) => {
     return;
   }
   if (select.matches("[data-customer-picker]")) showChosenCustomer();
-  if (select.matches("[data-line-field=item]")) showLineUnit(select.closest(".sale-line"));
+  if (select.matches("[data-supplier-picker]")) showChosenSupplier();
+  if (select.matches("[data-line-field=item]")) {
+    showLineUnit(select.closest(".sale-line"));
+    if (select.closest("#purchase-lines")) setLineGstFromItem(select.closest(".sale-line"));
+  }
 });
 
 document.querySelector("#sale-add-line")?.addEventListener("click", () => addSaleLine());
@@ -5022,6 +5117,13 @@ document.querySelector("#sale-lines")?.addEventListener("click", (event) => {
   if (document.querySelectorAll("#sale-lines .sale-line").length <= 1) return;
   event.target.closest(".sale-line").remove();
   updateCalculations();
+});
+
+document.querySelector("#purchase-add-line")?.addEventListener("click", () => addPurchaseLine());
+document.querySelector("#purchase-lines")?.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-remove-line]")) return;
+  if (document.querySelectorAll("#purchase-lines .sale-line").length <= 1) return;
+  event.target.closest(".sale-line").remove();
 });
 
 document.querySelectorAll("[data-close-dialog]").forEach((button) => {
@@ -5064,6 +5166,24 @@ document.querySelector("#customer-form")?.addEventListener("submit", async (even
     form.reset();
     showCustomerRegistrationFields();
     document.querySelector("#customer-dialog").close();
+  } catch (requestError) { error.textContent = requestError.message; }
+});
+
+// Issue #228 — a new supplier, with the GST number that decides the kind of GST on their bills.
+document.querySelector("#new-supplier-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.querySelector("#new-supplier-error");
+  error.textContent = "";
+  try {
+    const created = await api("/api/suppliers", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    await loadCatalogue();
+    if (pickerAwaitingNewRecord?.matches("[data-supplier-picker]")) {
+      pickerAwaitingNewRecord.value = created.supplier.id;
+      showChosenSupplier();
+    }
+    form.reset();
+    document.querySelector("#new-supplier-dialog").close();
   } catch (requestError) { error.textContent = requestError.message; }
 });
 
@@ -5127,7 +5247,7 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
     if (pickerAwaitingNewRecord) {
       pickerAwaitingNewRecord.value = created.item.id;
       const line = pickerAwaitingNewRecord.closest(".sale-line");
-      if (line) showLineUnit(line);
+      if (line) { showLineUnit(line); setLineGstFromItem(line); }
     }
     form.reset();
     document.querySelector("#item-dialog").close();

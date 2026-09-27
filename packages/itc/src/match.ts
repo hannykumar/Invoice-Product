@@ -91,6 +91,7 @@ const FIELD_LABELS: Readonly<Record<EvidenceField, Bilingual>> = Object.freeze({
   INVOICE_DATE: { 'en-IN': 'Bill date', 'hi-IN': 'Bill ki tareekh' },
   TAXABLE_VALUE: { 'en-IN': 'Value before GST', 'hi-IN': 'GST se pehle rakam' },
   TOTAL_TAX: { 'en-IN': 'GST on the bill', 'hi-IN': 'Bill par GST' },
+  TAX_TYPE: { 'en-IN': 'Kind of GST', 'hi-IN': 'GST ki kism' },
   DOCUMENT_KIND: { 'en-IN': 'Kind of document', 'hi-IN': 'Kis tarah ka document' },
 });
 
@@ -175,8 +176,39 @@ export const evidenceFor = (
     ourTax === null || theirTax === null ? null : { currency: 'INR', minor: ourTax.minor - theirTax.minor },
   ));
 
+  // Issue #228 — which kind of GST each side carries. Credit is claimed head by head, and IGST
+  // cannot be taken as CGST and SGST or the other way round, so two sides whose totals agree but
+  // whose heads do not are not the same tax. A side with no tax on it has no kind to disagree with.
+  const ourKind = book === null ? null : taxKindOf(book.amounts);
+  const theirKind = portal === null ? null : taxKindOf(portal.amounts);
+  rows.push(evidenceRow(
+    'TAX_TYPE',
+    ourKind === null ? null : TAX_KIND_PLAIN[ourKind],
+    theirKind === null ? null : TAX_KIND_PLAIN[theirKind],
+    ourKind !== null && theirKind !== null && (ourKind === theirKind || ourKind === 'NONE' || theirKind === 'NONE'),
+  ));
+
   return rows;
 };
+
+/** Which heads carry the tax on one side of the comparison. */
+export type TaxKind = 'IGST' | 'CGST_SGST' | 'MIXED' | 'NONE';
+
+export const taxKindOf = (amounts: TaxAmounts): TaxKind => {
+  const local = amounts.cgst.minor + amounts.sgst.minor;
+  const central = amounts.igst.minor;
+  if (local === 0n && central === 0n) return 'NONE';
+  if (local === 0n) return 'IGST';
+  if (central === 0n) return 'CGST_SGST';
+  return 'MIXED';
+};
+
+export const TAX_KIND_PLAIN: Readonly<Record<TaxKind, string>> = Object.freeze({
+  IGST: 'IGST',
+  CGST_SGST: 'CGST and SGST',
+  MIXED: 'IGST with CGST and SGST',
+  NONE: 'No GST',
+});
 
 /** The fields that do not agree, which is what a screen leads with. */
 export const disagreements = (evidence: readonly MatchEvidence[]): readonly MatchEvidence[] =>
@@ -367,7 +399,9 @@ const statusOf = (
   );
   const dateDisagrees = evidence.some((row) => row.field === 'INVOICE_DATE' && row.verdict === 'DIFFERS');
   const numberDisagrees = evidence.some((row) => row.field === 'INVOICE_NUMBER' && row.verdict === 'DIFFERS');
-  return moneyDisagrees || dateDisagrees || numberDisagrees ? 'CLOSE' : 'EXACT';
+  // Issue #228 — equal totals under different heads are not an agreement.
+  const kindDisagrees = evidence.some((row) => row.field === 'TAX_TYPE' && row.verdict === 'DIFFERS');
+  return moneyDisagrees || dateDisagrees || numberDisagrees || kindDisagrees ? 'CLOSE' : 'EXACT';
 };
 
 const noteFor = (status: MatchStatus, evidence: readonly MatchEvidence[], fuzzy: boolean): Bilingual => {

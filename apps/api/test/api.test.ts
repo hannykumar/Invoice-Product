@@ -31,14 +31,16 @@ test('the HTTP edge derives company and permissions from an authenticated sessio
 
   const input = {
     companyId: COMPANY_B,
-    party: 'Shree Ram Steels Private Limited', reference: 'TENANT-80', date: '2026-08-29', amount: '1750.50',
+    // Issue #228 — a supplier from the supplier list and an item from the item list.
+    supplierId: 'sampoorna:party:supplier', reference: 'TENANT-80', date: '2026-08-29',
+    lines: [{ item: 'TMT Steel Bar 12mm', quantity: '1', rate: '1000', gst: '1800' }],
   };
   const recorded = await request('POST', '/api/purchases/record', input, sessionA);
   assert.equal(recorded.status, 200);
   assert.equal(recorded.body.stock.quantity, 1);
   const afterA = await request('GET', '/api/dashboard', {}, sessionA);
   const afterB = await request('GET', '/api/dashboard', {}, sessionB);
-  assert.equal(afterA.body.metrics.purchasesMonth, 1750.5, 'the session company receives the posting');
+  assert.equal(afterA.body.metrics.purchasesMonth, 1180, 'the session company receives the posting');
   assert.equal(afterB.body.metrics.purchasesMonth, 0, 'a caller-supplied company cannot redirect the posting');
   assert.equal(afterB.body.stock.quantity, 0, 'stock remains isolated through HTTP');
 });
@@ -72,7 +74,7 @@ test('migration workspaces belong to the exact signed-in session that opened the
 test('a real membership controls permissions at the domain boundary', async () => {
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
   assert.equal((await request('GET', '/api/dashboard', {}, viewer)).status, 200);
-  const denied = await request('POST', '/api/purchases/record', { reference: 'DENIED-80', date: '2026-08-29', amount: '100' }, viewer);
+  const denied = await request('POST', '/api/purchases/record', { supplierId: 'sampoorna:party:supplier', reference: 'DENIED-80', date: '2026-08-29', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '1', rate: '100', gst: '1800' }] }, viewer);
   assert.equal(denied.status, 403);
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
 });
@@ -130,7 +132,7 @@ test('live bank feed API requires consent, syncs once and preserves history on d
 
 test('domain failures map to useful HTTP status codes', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const invalid = await request('POST', '/api/purchases/record', { reference: 'INVALID-80', date: '2026-08-29', amount: '0' }, owner);
+  const invalid = await request('POST', '/api/purchases/record', { supplierId: 'sampoorna:party:supplier', reference: 'INVALID-80', date: '2026-08-29', amount: '0', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '1', rate: '100', gst: '1800' }] }, owner);
   assert.equal(invalid.status, 422);
   assert.equal(invalid.body.code, 'API_AMOUNT_INVALID');
   assert.equal(invalid.body.title, 'Nothing was saved');
@@ -145,7 +147,7 @@ test('domain failures map to useful HTTP status codes', async () => {
 
 test('preview remains read-only and posting remains duplicate-safe', async () => {
   const owner = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
-  const input = { reference: 'RETRY-80', date: '2026-08-29', amount: '900' };
+  const input = { supplierId: 'konkan:party:supplier', reference: 'RETRY-80', date: '2026-08-29', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '1', rate: '900', gst: '1800' }] };
   const before = await request('GET', '/api/dashboard', {}, owner);
   const preview = await request('POST', '/api/purchases/preview', input, owner);
   assert.equal(preview.body.state, 'preview');
@@ -201,7 +203,7 @@ test('authenticated customer and supplier returns preview and post through real 
   assert.match(postedSaleReturn.body.note.number, /^CN\//);
   assert.equal((await request('POST', '/api/returns/record', saleReturn, owner)).body.deduplicated, true);
 
-  const purchaseInput = { party: 'Shree Ram Steels Private Limited', reference: 'RETURN-PURCHASE-45', date: '2026-08-29', item: 'TMT12', quantity: '10', rate: '100', gst: '1800', supplierState: 'other' };
+  const purchaseInput = { supplierId: 'sampoorna:party:supplier', reference: 'RETURN-PURCHASE-45', date: '2026-08-29', item: 'TMT Steel Bar 12mm', quantity: '10', rate: '100', gst: '1800' };
   const purchase = await request('POST', '/api/purchases/record', purchaseInput, owner);
   assert.equal(purchase.status, 200);
   const choices = await request('GET', '/api/returns/documents', {}, owner);
@@ -236,7 +238,7 @@ test('reports require a session and are computed from that company alone', async
 
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   // Record a real purchase and a real sale into this company, then read the reports.
-  await request('POST', '/api/purchases/record', { party: 'Shree Ram Steels Private Limited', reference: 'REPORTS-35-BUY', date: '2026-08-29', amount: '1750.50' }, owner);
+  await request('POST', '/api/purchases/record', { supplierId: 'sampoorna:party:supplier', reference: 'REPORTS-35-BUY', date: '2026-08-29', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '25', rate: '60', gst: '1800' }] }, owner);
   const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '3', rate: '400', date: '2026-08-29', terms: '15', reference: 'WEB-REPORTS-35' };
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.body.state, 'recorded');

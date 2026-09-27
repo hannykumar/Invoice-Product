@@ -93,6 +93,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // that were actually chosen.
     if (method === 'GET' && pathname === '/api/catalogue') return json(200, app.catalogue(actor));
     if (method === 'POST' && pathname === '/api/customers') return json(200, await app.addCustomer(actor, body));
+    // Issue #228 — the businesses this company buys from, with the GST number that decides the tax.
+    if (method === 'POST' && pathname === '/api/suppliers') return json(200, await app.addSupplier(actor, body));
     if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
     if (method === 'POST' && pathname === '/api/items/code') return json(200, app.changeItemCode(actor, body));
     // Issue #182 — where the goods go and who carries them: the customer's other addresses, and
@@ -183,7 +185,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/purchases/match/approve') return json(200, await app.approvePurchaseMatch(actor, body));
     const purchaseMatch = /^\/api\/purchases\/([^/]+)$/.exec(pathname);
     if (method === 'GET' && purchaseMatch?.[1] !== undefined) return json(200, await app.purchase(actor, decodeURIComponent(purchaseMatch[1])));
-    if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, app.previewPurchase(actor, body));
+    if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, await app.previewPurchase(actor, body));
     if (method === 'POST' && pathname === '/api/purchases/record') return json(200, await app.recordPurchase(actor, body));
     // Issue #42 — what this business's plan covers, what it has used, and paying for it.
     if (method === 'GET' && pathname === '/api/subscription') return json(200, await app.subscriptionAccount(actor, body));
