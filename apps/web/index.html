@@ -108,7 +108,7 @@
           <form class="transaction-layout draft-form" data-draft="sale">
             <article class="panel form-panel">
               <div class="field-grid">
-                <label><span data-i18n="customer"></span><select name="party" data-customer-picker required></select><small id="sale-customer-detail"></small></label>
+                <label><span data-i18n="customer"></span><select name="party" data-customer-picker required></select><small id="sale-customer-detail"></small><button type="button" class="text-button" id="sale-correct-address" data-i18n="correctAddress"></button></label>
                 <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="paymentTerms"></span><select name="terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
               </div>
@@ -1376,6 +1376,22 @@
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
           <button class="primary-button" type="submit" data-i18n="saveTransporter"></button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="correct-address-dialog" aria-labelledby="correct-address-title">
+      <h2 id="correct-address-title" data-i18n="correctAddressTitle"></h2>
+      <p id="correct-address-help" data-i18n="correctAddressHelp"></p>
+      <form id="correct-address-form" class="login-form">
+        <label><span data-i18n="customerAddress1"></span><input name="line1" required /></label>
+        <label><span data-i18n="customerAddress2"></span><input name="line2" /></label>
+        <label><span data-i18n="customerCity"></span><input name="city" required /></label>
+        <label><span data-i18n="customerPincode"></span><input name="pincode" inputmode="numeric" maxlength="6" required /></label>
+        <p><span data-i18n="addressStateFixed"></span> <strong id="correct-address-state"></strong></p>
+        <p class="login-error" id="correct-address-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
+          <button class="primary-button" type="submit" data-i18n="saveAddress"></button>
         </div>
       </form>
     </dialog>

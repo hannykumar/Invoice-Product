@@ -154,6 +154,73 @@ export const describeAddress = (address: PartyAddress) => ({
 export const shippingChoices = (companyId: CompanyId | string, partyId: string) =>
   addressesOf(companyId, partyId).map(describeAddress);
 
+// ------------------------------------------------------------ an address that is already wrong
+
+/**
+ * Issue #224 — a saved address whose PIN code is not in its own state never reaches a document.
+ *
+ * Every screen that saves an address now refuses such a PIN, so this only fires on an address saved
+ * before that check existed, or brought in some other way. It is refused rather than printed,
+ * because the bill, the e-way bill and the portal would all carry it, and it is refused with the
+ * name of the screen that corrects it, so the refusal is one step from the fix.
+ */
+export const requireAddressInState = (
+  address: { readonly stateCode: string; readonly pincode: string; readonly city?: string },
+  whose: string,
+): void => {
+  if (address.stateCode === OVERSEAS_STATE_CODE) return;
+  const checked = validatePincodeForState(address.pincode, address.stateCode);
+  if (checked.ok) return;
+  throw invalid(
+    'ADDRESS_PINCODE_STATE',
+    `${whose} address is saved with PIN code ${address.pincode}, which is not in ${stateName(address.stateCode)}. Correct the address first — press "Correct address" beside the customer on the Sale screen — and then issue.`,
+  );
+};
+
+/**
+ * Corrects a customer's saved address — its lines, town or PIN code — without retyping the customer.
+ * The billing address unless another of their addresses is named. Bills already issued keep the
+ * address they were issued with.
+ */
+export const correctCustomerAddress = (companyId: CompanyId | string, body: unknown) => {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const customer = resolveCustomer(companyId, str(input.customerId ?? input.customer));
+  const addressId = str(input.addressId);
+  const address = addressId === ''
+    ? billingAddressOf(companyId, customer.id)
+    : addressesOf(companyId, customer.id).find((candidate) => candidate.id === addressId) ?? null;
+  if (address === null) throw invalid('ADDRESS_NOT_FOUND', `That address is not saved against ${customer.legalName}.`);
+  const pincode = str(input.pincode);
+  if (pincode !== '' && address.stateCode !== OVERSEAS_STATE_CODE) {
+    require_(validatePincodeForState(pincode, address.stateCode), 'ADDRESS_PINCODE_STATE', 'That PIN code is not in the state of this address.');
+  }
+  const corrected = masterData().correctAddress(
+    mastersContext(companyId),
+    address.id,
+    {
+      ...(str(input.line1) === '' ? {} : { line1: str(input.line1) }),
+      ...(input.line2 === undefined ? {} : { line2: str(input.line2) }),
+      ...(str(input.city) === '' ? {} : { city: str(input.city) }),
+      ...(pincode === '' ? {} : { pincode }),
+    },
+    { idempotencyKey: `address-correct:${String(companyId)}:${address.id}:${str(input.line1)}:${str(input.city)}:${pincode}` },
+  );
+  return {
+    state: 'recorded' as const,
+    title: 'Address corrected',
+    message: `${customer.legalName}'s address now reads ${corrected.record.line1}, ${corrected.record.city} ${corrected.record.pincode}. Bills already issued keep the address they were issued with.`,
+    address: describeAddress(corrected.record),
+  };
+};
+
+/** The customer's billing address as the correction form shows it. */
+export const customerBillingAddress = (companyId: CompanyId | string, customerId: string) => {
+  const customer = resolveCustomer(companyId, customerId);
+  const address = billingAddressOf(companyId, customer.id);
+  if (address === null) throw invalid('ADDRESS_NOT_FOUND', `${customer.legalName} has no address saved.`);
+  return { customerId: customer.id, name: customer.legalName, address: describeAddress(address) };
+};
+
 // ------------------------------------------------------------------- where the goods actually go
 
 export type ShipToKind = 'same' | 'address' | 'party';
@@ -225,6 +292,7 @@ export const deliveryDetails = (
   if (billing === null) {
     throw invalid('CUSTOMER_ADDRESS_MISSING', `${billedTo.legalName} has no address saved, so there is nowhere to bill or deliver.`);
   }
+  requireAddressInState(billing, `${billedTo.legalName}'s`);
 
   const kind = ((): ShipToKind => {
     const asked = str(body.shipTo).toLowerCase();
@@ -242,6 +310,7 @@ export const deliveryDetails = (
     if (address === undefined) {
       throw invalid('SHIP_TO_ADDRESS_NOT_FOUND', `That delivery address is not saved against ${billedTo.legalName}. Add it first.`);
     }
+    requireAddressInState(address, `${billedTo.legalName}'s ${address.city}`);
     shipTo = partyFromAddress(billedTo.legalName, address);
     deliverTo = movementPartyOf(billedTo.legalName, address.gstin ?? '', address);
     // Section 10(1)(a) — the movement ends here, so the supply counts in this state.
@@ -257,6 +326,7 @@ export const deliveryDetails = (
     }
     shipTo = block;
     const consigneeAddress = billingAddressOf(companyId, consignee.id);
+    if (consigneeAddress !== null) requireAddressInState(consigneeAddress, `${block.name}'s`);
     if (consigneeAddress !== null) deliverTo = movementPartyOf(block.name, block.gstin ?? '', consigneeAddress);
     // Section 10(1)(b) — goods handed to somebody else on the buyer's instructions are supplied
     // where the buyer is, not where the goods land. Taking the third party's state here would put

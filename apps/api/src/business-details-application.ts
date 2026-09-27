@@ -30,6 +30,7 @@ import {
   validateBankAccountNumber,
   validatePan,
   validatePincode,
+  validatePincodeForState,
   turnoverAnswerOn,
   withTurnoverAnswer,
   type BankAccount,
@@ -199,6 +200,8 @@ export const saveBusinessDetails = (
       `Your GST number is registered in ${STATE_NAMES[registeredState] ?? registeredState}. The address on the bill must be in the same state.`,
     );
   }
+  // Issue #224 — the seller's PIN is on every bill and is where every e-way bill starts from.
+  require_(validatePincodeForState(pincode, stateCode), 'BUSINESS_PINCODE_STATE', 'That PIN code is not in your state.');
 
   const phone = str(input.phone);
   const email = str(input.email);
@@ -361,6 +364,13 @@ export const requireIssuable = (companyId: CompanyId | string): BusinessDetails 
     throw invalid(
       'BUSINESS_ADDRESS_MISSING',
       'Add your business address in Business details before issuing — the law requires it on every bill.',
+    );
+  }
+  // Issue #224 — the seller's PIN prints on every bill and starts every e-way bill.
+  if (!validatePincodeForState(saved.pincode, saved.stateCode).ok) {
+    throw invalid(
+      'BUSINESS_PINCODE_STATE',
+      `Your business address is saved with PIN code ${saved.pincode}, which is not in ${STATE_NAMES[saved.stateCode] ?? saved.stateCode}. Correct it in Business details before issuing.`,
     );
   }
   return saved;
