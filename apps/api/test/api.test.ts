@@ -1091,7 +1091,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   for (const marking of ['ORIGINAL FOR CONSIGNEE', 'DUPLICATE FOR TRANSPORTER', 'TRIPLICATE FOR CONSIGNER']) assert.match(printed.body.html, new RegExp(marking));
 
   // Job work into another state needs an e-way bill at any value; the challan is the document on it.
-  const movement = { invoice: issued.body.challan.id, shipToState: '33', shipToPlace: 'Hosur', distanceKm: '40', vehicle: 'KA01AB1234' };
+  const movement = { invoice: issued.body.challan.id, shipToState: '33', shipToAddress: 'SIPCOT Phase 1', shipToPlace: 'Hosur', shipToPincode: '635126', distanceKm: '40', vehicle: 'KA01AB1234' };
   const decision = await request('POST', '/api/eway/preview', movement, owner);
   assert.equal(decision.status, 200, JSON.stringify(decision.body));
   assert.equal(decision.body.outcome, 'REQUIRED');

@@ -77,7 +77,7 @@ test('an e-way bill printed again says exactly what it said the first time', asy
   // Billed to Delhi, delivered to Hyderabad: the two part company, which is the whole point.
   const dispatch = {
     invoice, distanceKm: '1800', vehicle: 'KA01AB1234', reason: 'SUPPLY',
-    shipToState: '36', shipToPlace: 'Hyderabad',
+    shipToState: '36', shipToAddress: 'Plot 12, IDA Uppal', shipToPlace: 'Hyderabad', shipToPincode: '500039',
   };
   const raised = await request('POST', '/api/eway/generate', dispatch, session);
   assert.equal(raised.status, 200, JSON.stringify(raised.body));

@@ -29,12 +29,13 @@
 import { invalid, isoDate, type CompanyId } from '@invoice/kernel';
 import type { RenderableParty, RenderableReferences, RenderableTransport } from '@invoice/invoice-templates';
 import { shipToFromDelivery } from '@invoice/invoice-templates';
-import { STATE_NAMES, normaliseVehicleNumber } from '@invoice/transport';
+import { STATE_NAMES, normaliseVehicleNumber, type MovementParty } from '@invoice/transport';
 import {
   GST_STATE_CODES,
   normaliseIdentifier,
   validateGstin,
   validatePincode,
+  validatePincodeForState,
   validateVehicleNumber,
   OVERSEAS_STATE_CODE,
   type PartyAddress,
@@ -106,6 +107,8 @@ export const addShippingAddress = (companyId: CompanyId | string, body: unknown)
   if (GST_STATE_CODES[stateCode] === undefined) {
     throw invalid('SHIPPING_STATE', 'Choose the state the goods are going to. It decides which state the sale counts in.');
   }
+  // Issue #224 — a PIN from another state is almost always one copied from the wrong address.
+  require_(validatePincodeForState(pincode, stateCode), 'SHIPPING_PINCODE_STATE', 'That PIN code is not in the state chosen.');
   // A customer's second address may hold its own GST number — one registration per state — but it
   // is not required, and a wrong one is worse than none.
   const gstin = normaliseIdentifier(str(input.gstin));
@@ -158,6 +161,13 @@ export type ShipToKind = 'same' | 'address' | 'party';
 /** What the Sale screen said about delivery, once it has been checked. */
 export interface DeliveryDetails {
   readonly shipTo: RenderableParty | null;
+  /**
+   * Issue #224 — the same delivery address, field by field, as an e-way bill names a place: its own
+   * address lines, town, PIN code and state. The printed block above is only lines of text, and an
+   * e-way bill rebuilt from those, or from the buyer's own record, ends up with the wrong PIN.
+   * Null when the goods go to the buyer's billing address.
+   */
+  readonly deliverTo: MovementParty | null;
   readonly placeOfSupplyStateCode: string;
   /** One line for the screen: which state the sale counts in, and why that one. */
   readonly placeOfSupplyReason: string;
@@ -189,6 +199,17 @@ const partyFromAddress = (name: string, address: PartyAddress): RenderableParty 
     stateName(address.stateCode),
   );
 
+/** A saved address as an e-way bill names a place. */
+const movementPartyOf = (name: string, gstin: string, address: PartyAddress): MovementParty => ({
+  legalName: name,
+  gstin: gstin === '' ? 'URP' : gstin,
+  address1: address.line1,
+  ...(address.line2 === undefined || address.line2 === '' ? {} : { address2: address.line2 }),
+  place: address.city,
+  pincode: address.pincode,
+  stateCode: address.stateCode,
+});
+
 /**
  * Reads the delivery and reference boxes, and decides the place of supply from where the goods go.
  *
@@ -211,6 +232,7 @@ export const deliveryDetails = (
   })();
 
   let shipTo: RenderableParty | null = null;
+  let deliverTo: MovementParty | null = null;
   let placeOfSupplyStateCode = billing.stateCode;
   let placeOfSupplyReason = `Place of supply: ${stateName(billing.stateCode)} (${billing.stateCode}) — the goods go to ${billedTo.legalName}'s billing address.`;
 
@@ -221,6 +243,7 @@ export const deliveryDetails = (
       throw invalid('SHIP_TO_ADDRESS_NOT_FOUND', `That delivery address is not saved against ${billedTo.legalName}. Add it first.`);
     }
     shipTo = partyFromAddress(billedTo.legalName, address);
+    deliverTo = movementPartyOf(billedTo.legalName, address.gstin ?? '', address);
     // Section 10(1)(a) — the movement ends here, so the supply counts in this state.
     placeOfSupplyStateCode = address.stateCode;
     placeOfSupplyReason = `Place of supply: ${stateName(address.stateCode)} (${address.stateCode}) — the goods finish their journey at ${billedTo.legalName}'s ${address.city} address.`;
@@ -233,6 +256,8 @@ export const deliveryDetails = (
       throw invalid('SHIP_TO_PARTY_ADDRESS', `${block.name} has no address saved, so the bill cannot say where the goods went.`);
     }
     shipTo = block;
+    const consigneeAddress = billingAddressOf(companyId, consignee.id);
+    if (consigneeAddress !== null) deliverTo = movementPartyOf(block.name, block.gstin ?? '', consigneeAddress);
     // Section 10(1)(b) — goods handed to somebody else on the buyer's instructions are supplied
     // where the buyer is, not where the goods land. Taking the third party's state here would put
     // the wrong tax on the bill and the credit in the wrong state's hands.
@@ -299,7 +324,7 @@ export const deliveryDetails = (
         paymentTerms,
       };
 
-  return { shipTo, placeOfSupplyStateCode, placeOfSupplyReason, transport, references, poReference };
+  return { shipTo, deliverTo, placeOfSupplyStateCode, placeOfSupplyReason, transport, references, poReference };
 };
 
 /**
