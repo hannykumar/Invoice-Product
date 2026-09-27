@@ -136,3 +136,112 @@ export const apportionChargesToHsn = <L extends ChargeShareableLine>(lines: read
 
   return parts;
 };
+
+/** A line that also knows what it adds to the bill, which is what a government item's total needs. */
+export interface FoldableLine extends ChargeShareableLine {
+  readonly lineTotal: Money;
+}
+
+/**
+ * One item as a government document reports it: a goods line with its share of every charge on the
+ * bill already inside its taxable value and tax, or — only on a bill with no goods at all — a charge
+ * that had nothing to ride on and is kept as it is.
+ */
+export interface FoldedItem<L extends FoldableLine> {
+  /** The goods line this item is, or the charge kept on its own. */
+  readonly line: L;
+  /** How much of the taxable value below came from freight and other charges. Zero when none. */
+  readonly chargeValue: Money;
+  readonly taxableValue: Money;
+  readonly cgst: Money;
+  readonly sgst: Money;
+  readonly utgst: Money;
+  readonly igst: Money;
+  readonly cess: Money;
+  readonly lineTotal: Money;
+}
+
+const plus = (a: Money, b: Money): Money => ({ currency: a.currency, minor: a.minor + b.minor });
+
+/**
+ * Issue #231 — freight folded into the goods items, for the e-way bill and the e-invoice.
+ *
+ * The government documents list goods and nothing else: every item needs a goods code, and freight
+ * the seller charges on its own goods is part of their value (CGST Act s.15(2)(c)), taxed with them
+ * as one supply (s.8(a)). So a charge line never becomes an item of its own there. It is shared out
+ * exactly as the printed HSN summary and GSTR-1 share it — by `apportionChargesToHsn`, per goods
+ * code within its rate — and each code's share is then split between that code's goods lines by
+ * their taxable value, leftover paise to the largest line first. So the items add up, code by code,
+ * to the same figures the printed bill and the return show, and in total to the bill itself.
+ *
+ * Every tax head is split from the tax already on the charge line; nothing is worked out again.
+ * Goods lines come back in their own order.
+ */
+export const foldChargesIntoGoods = <L extends FoldableLine>(lines: readonly L[]): FoldedItem<L>[] => {
+  const goods = lines.filter((l) => l.kind === 'GOODS');
+  const items = new Map<L, FoldedItem<L>>();
+  for (const line of goods) {
+    items.set(line, {
+      line,
+      chargeValue: zero(line.taxableValue.currency),
+      taxableValue: line.taxableValue,
+      cgst: line.cgst,
+      sgst: line.sgst,
+      utgst: line.utgst,
+      igst: line.igst,
+      cess: line.cess,
+      lineTotal: line.lineTotal,
+    });
+  }
+  const loose: FoldedItem<L>[] = [];
+
+  for (const part of apportionChargesToHsn(lines)) {
+    if (!part.isChargeShare) {
+      if (part.source.kind !== 'GOODS') {
+        // A charge with no goods to ride on stays visible, so the document refuses it honestly.
+        const charge = part.source;
+        loose.push({
+          line: charge, chargeValue: charge.taxableValue, taxableValue: charge.taxableValue,
+          cgst: charge.cgst, sgst: charge.sgst, utgst: charge.utgst, igst: charge.igst, cess: charge.cess,
+          lineTotal: charge.lineTotal,
+        });
+      }
+      continue;
+    }
+    // The goods lines this code's share rides on: same code, same rate, same reverse-charge flag.
+    const targets = goods.filter((g) =>
+      g.hsnOrSac === part.hsnOrSac
+      && g.ratePercentTimes100 === part.ratePercentTimes100
+      && g.reverseCharge === part.reverseCharge);
+    const weights = targets.map((g) => (g.taxableValue.minor < 0n ? 0n : g.taxableValue.minor));
+    const split = (amount: Money): Money[] =>
+      amount.minor === 0n ? weights.map(() => zero(amount.currency)) : allocateByWeight(amount, weights);
+    const taxable = split(part.taxableValue);
+    const cgst = split(part.cgst);
+    const sgst = split(part.sgst);
+    const utgst = split(part.utgst);
+    const igst = split(part.igst);
+    const cess = split(part.cess);
+    targets.forEach((target, i) => {
+      const current = items.get(target) as FoldedItem<L>;
+      const t = taxable[i] as Money;
+      const tax = [cgst[i], sgst[i], utgst[i], igst[i], cess[i]] as Money[];
+      // A charge line's total is its value plus its tax, or its value alone under reverse charge,
+      // where the buyer pays the tax (see `#chargeLine` in compute.ts). The share follows the same rule.
+      const shareTotal = part.reverseCharge ? t : tax.reduce(plus, t);
+      items.set(target, {
+        line: target,
+        chargeValue: plus(current.chargeValue, t),
+        taxableValue: plus(current.taxableValue, t),
+        cgst: plus(current.cgst, tax[0] as Money),
+        sgst: plus(current.sgst, tax[1] as Money),
+        utgst: plus(current.utgst, tax[2] as Money),
+        igst: plus(current.igst, tax[3] as Money),
+        cess: plus(current.cess, tax[4] as Money),
+        lineTotal: plus(current.lineTotal, shareTotal),
+      });
+    });
+  }
+
+  return [...goods.map((g) => items.get(g) as FoldedItem<L>), ...loose];
+};
