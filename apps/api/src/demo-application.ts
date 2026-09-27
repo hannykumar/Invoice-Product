@@ -16,8 +16,10 @@ import {
   renderCreditNote,
   toCreditNoteDocument,
   type CreditNoteDocument,
+  amountInWords,
   captureSnapshot,
   copyMarking,
+  escapeHtml,
   ewayBillPdf,
   ewayPrintBanner,
   invoicePdf,
@@ -57,6 +59,7 @@ import {
   createItem,
   createSupplier,
   resolveSupplier,
+  suppliers as supplierParties,
   changeItemCode,
   readCatalogue,
   customerPrint,
@@ -75,7 +78,7 @@ import { validatePincodeForState } from '../../../packages/masters/src/validatio
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
-import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type OpenDocument } from '@invoice/receivables';
+import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode } from '@invoice/receivables';
 import {
   TradeTermsService,
   noPriceList,
@@ -199,6 +202,118 @@ const paise = (value: unknown): bigint => {
   const result = BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
   if (result <= 0n) throw invalid('API_AMOUNT_INVALID', 'Enter a valid amount greater than zero.');
   return result;
+};
+
+
+// ------------------------------------------------------ issue #230: money received and money paid
+
+/** A party's bills that still have something due, on the side this money settles. */
+const openBillsOf = (documents: readonly DocumentPosition[], direction: 'RECEIPT' | 'PAYMENT'): DocumentPosition[] =>
+  documents
+    .filter((d) => d.document.side === (direction === 'RECEIPT' ? 'RECEIVABLE' : 'PAYABLE') && d.outstanding.minor > 0n)
+    .sort((a, b) => a.document.date.localeCompare(b.document.date) || a.document.number.localeCompare(b.document.number));
+
+/** The bills picked on the screen: a list, a JSON list, or the single bill older callers send. */
+const billIdsOf = (input: Record<string, unknown>): string[] => {
+  const raw = input.bills ?? input.invoices ?? input.invoice;
+  if (raw === undefined || raw === null || raw === '') return [];
+  if (Array.isArray(raw)) return raw.map(String).filter((id) => id !== '');
+  const text = String(raw).trim();
+  if (text.startsWith('[')) {
+    const parsed: unknown = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed.map(String).filter((id) => id !== '') : [];
+  }
+  return [text];
+};
+
+/**
+ * One entry on the screen is one payment, however many times Record is pressed. The screen sends a
+ * fresh entry number for each new payment; a caller without one uses the bank's reference.
+ */
+const paymentKeyOf = (input: Record<string, unknown>): string => {
+  const direction = String(input.direction ?? 'RECEIPT').trim().toUpperCase();
+  const request = String(input.requestId ?? '').trim() || String(input.reference ?? '').trim();
+  if (request === '') {
+    throw invalid('PAYMENT_REQUEST_ID_REQUIRED', 'This payment has no entry number, so a second press could record it twice. Reload the page and enter it again.');
+  }
+  return `web-payment:${direction}:${request}`;
+};
+
+// Money by UPI or bank transfer goes into, or comes out of, the business's current account.
+const CURRENT_ACCOUNT = '1121';
+
+/**
+ * How the money moved, exactly as it was chosen. Nothing defaults to cash: a payment recorded as
+ * cash that came by bank puts money in the drawer that is really in the bank.
+ */
+const paymentHow = (direction: 'RECEIPT' | 'PAYMENT', input: Record<string, unknown>): {
+  mode: PaymentMode; bankAccountCode: string | null; words: string;
+  cheque?: { number: string; chequeDate: IsoDate };
+} => {
+  const chosen = String(input.method ?? input.mode ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  if (chosen === '') throw invalid('PAYMENT_MODE_REQUIRED', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
+  if (chosen === 'CASH') return { mode: 'CASH', bankAccountCode: null, words: 'cash' };
+  if (chosen === 'UPI') return { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: 'UPI' };
+  if (chosen === 'BANK_TRANSFER') return { mode: 'BANK_TRANSFER', bankAccountCode: CURRENT_ACCOUNT, words: 'bank transfer' };
+  if (chosen === 'CHEQUE') {
+    const number = String(input.chequeNumber ?? '').trim();
+    const dated = String(input.chequeDate ?? '').trim();
+    if (number === '' || dated === '') throw invalid('PAYMENT_CHEQUE_DETAILS_REQUIRED', 'Enter the cheque number and the date written on the cheque.');
+    const chequeDate = isoDate(dated);
+    // A cheque received waits in "cheques in hand" until it clears; a cheque given is drawn on our bank.
+    return { mode: 'CHEQUE', bankAccountCode: direction === 'PAYMENT' ? CURRENT_ACCOUNT : null, words: `cheque No. ${number} dated ${chequeDate}`, cheque: { number, chequeDate } };
+  }
+  throw invalid('PAYMENT_MODE_INVALID', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
+};
+
+const modeWords = (payment: Payment): string => {
+  switch (payment.mode) {
+    case 'CASH': return 'Cash';
+    case 'UPI': return 'UPI';
+    case 'BANK_TRANSFER': return 'Bank transfer';
+    case 'CHEQUE': return `Cheque No. ${payment.cheque?.number ?? ''} dated ${payment.cheque?.chequeDate ?? ''}`;
+    case 'CARD': return 'Card';
+    default: return 'Other';
+  }
+};
+
+/**
+ * A receipt for money received, or a payment voucher for money paid: who, how much in figures and
+ * in words, how it was paid, and which bills it settled. Only facts from the books are printed.
+ */
+const paymentVoucherHtml = (input: {
+  readonly payment: Payment;
+  readonly number: string;
+  readonly seller: RenderableParty;
+  readonly party: RenderableParty;
+  readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint }[];
+}): string => {
+  const { payment, number, seller, party, bills } = input;
+  const receipt = payment.direction === 'RECEIPT';
+  const settled = bills.reduce((total, bill) => total + bill.settled, 0n);
+  const onAccount = payment.amount.minor - settled;
+  const block = (title: string, who: RenderableParty) =>
+    `<td><strong>${escapeHtml(title)}</strong><br>${escapeHtml(who.name)}${who.addressLines.map((line) => `<br>${escapeHtml(line)}`).join('')}${who.gstin === null ? '' : `<br>GSTIN: ${escapeHtml(who.gstin)}`}${who.stateCode === '' ? '' : `<br>State: ${escapeHtml(who.stateName)} (${escapeHtml(who.stateCode)})`}</td>`;
+  const facts: [string, string][] = [
+    [receipt ? 'Receipt number' : 'Voucher number', number],
+    ['Date', payment.date],
+    [receipt ? 'Received from' : 'Paid to', party.name],
+    ['Amount', formatPaise(payment.amount.minor)],
+    ['Amount in words', amountInWords(payment.amount)],
+    ['How it was paid', modeWords(payment)],
+    ...(payment.reference === null ? [] : [['Reference', payment.reference] as [string, string]]),
+  ];
+  const billRows = bills.length === 0
+    ? '<tr><td colspan="4">Not put against any bill.</td></tr>'
+    : bills.map((bill) => `<tr><td>${escapeHtml(bill.number)}</td><td>${escapeHtml(bill.date ?? '')}</td><td>${bill.total === null ? '' : formatPaise(bill.total)}</td><td>${formatPaise(bill.settled)}</td></tr>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(number)}</title>
+<style>body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px;text-align:left;vertical-align:top}h1{font-size:20px;margin:0}</style></head><body>
+<h1>${receipt ? 'Receipt' : 'Payment Voucher'}</h1>
+<table><tr>${block(receipt ? 'Received by' : 'Paid by', seller)}${block(receipt ? 'Received from' : 'Paid to', party)}</tr></table>
+<table>${facts.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('')}</table>
+<table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${billRows}</table>
+${onAccount > 0n ? `<p>On account, not yet put against a bill: ${formatPaise(onAccount)}</p>` : ''}
+<p style="margin-top:48px;text-align:right">For ${escapeHtml(seller.name)}<br><br>Authorised signatory</p></body></html>`;
 };
 
 /** An optional amount on a sale: blank and zero both mean no charge. */
@@ -457,7 +572,10 @@ export class DemoApplication {
     };
     const sales = new SalesService({ store: shop.store, ledger: shop.ledger, calculator, repository: salesRepository, inventory: goodsOnly, compliance: noComplianceHooks, permissions: permissionPortFromActor, audit: shop.audit, clock: { now: () => new Date() }, policy: { ...DEFAULT_SALES_POLICY, series: { prefix: 'INV', branchCode: '' } } });
 
-    const purchases = purchaseDocumentLedger(shop.bills, async () => config.supplierName);
+    // Issue #230 — each supplier by their own name. Every supplier used to be called the built-in
+    // one, so money owed to a second supplier was listed under the first supplier's name.
+    const purchases = purchaseDocumentLedger(shop.bills, async (companyId, partyId) =>
+      supplierParties(companyId).find((party) => party.id === partyId)?.legalName ?? config.supplierName);
     const documents: DocumentLedgerPort = {
       async openDocuments(companyId, partyId) {
         const notes = await returnNotes.list(companyId);
@@ -930,7 +1048,18 @@ export class DemoApplication {
     const purchases = await this.shop.bills.list(companyId);
     const payments = await this.paymentRepository.list(companyId);
     const returnNotes = await this.returnNotes.list(companyId);
-    const supplier = await this.payments.position(actor, this.config.supplierId, isoDate('2026-08-29'));
+    // Issue #230 (the supplier tile from #237) — every supplier this business owes, not only the
+    // built-in one, so the tile and Reports' "You still owe suppliers" are the same figure.
+    const supplierIds = [...new Set([String(this.config.supplierId), ...supplierParties(companyId).map((party) => party.id)])];
+    const supplierPositions = await Promise.all(supplierIds.map(async (id) => ({ id, position: await this.payments.position(actor, id as PartyId, isoDate('2026-08-29')) })));
+    const supplierOpen = supplierPositions.flatMap(({ position }) => openBillsOf(position.documents, 'PAYMENT'));
+    const suppliersOwed = supplierPositions.filter(({ position }) => openBillsOf(position.documents, 'PAYMENT').length > 0);
+    const supplierTile = {
+      id: suppliersOwed.length === 1 ? suppliersOwed[0]!.id : null,
+      name: suppliersOwed.length === 1 ? this.partyName(companyId, suppliersOwed[0]!.id) : suppliersOwed.length === 0 ? 'Suppliers' : `${suppliersOwed.length} suppliers`,
+      outstanding: jsonAmount(sum(supplierOpen.map((d) => d.outstanding)).minor),
+      documents: supplierOpen.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })),
+    };
     const customer = await this.payments.position(actor, this.config.customerId, isoDate('2026-08-29'));
     // Issue #228 — purchases now receive the item from the item list, so the tile reads that item's
     // balance; the old short id belonged to the purchase screen's retired three-item list.
@@ -943,15 +1072,16 @@ export class DemoApplication {
         salesToday: jsonAmount(sales.reduce((sum, invoice) => sum + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n)),
         customersOwe: jsonAmount(customer.totalOutstanding.minor),
         purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED').reduce((sum, bill) => sum + bill.totalPaise, 0n)),
-        needsAttention: (stock.physical.scaled <= 0n ? 1 : 0) + supplier.documents.filter((position) => position.daysOverdue > 0).length,
+        needsAttention: (stock.physical.scaled <= 0n ? 1 : 0) + supplierOpen.filter((position) => position.daysOverdue > 0).length,
       },
       stock: { itemId: tileItem?.id ?? 'TMT12', name: tileItem?.name ?? 'TMT Steel Bar 12mm', quantity: Number(stock.physical.scaled) / 1_000_000, unit: stock.physical.unit },
-      supplier: { id: this.config.supplierId, name: this.config.supplierName, outstanding: jsonAmount(supplier.totalOutstanding.minor), documents: supplier.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
+      supplier: supplierTile,
       customer: { id: this.config.customerId, name: this.config.customerName, outstanding: jsonAmount(customer.totalOutstanding.minor), documents: customer.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
       activity: [
         ...sales.map((invoice) => ({ id: invoice.id, kind: 'sale', title: `${invoice.number} · ${this.config.customerName}`, amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n), status: 'Recorded' })),
         ...purchases.map((bill) => ({ id: bill.id, kind: 'purchase', title: `${bill.invoiceNumber} · ${bill.supplierName}`, amount: jsonAmount(bill.totalPaise), status: bill.state === 'POSTED' ? 'Recorded' : bill.state })),
-        ...payments.map((payment) => ({ id: payment.id, kind: 'payment', title: `${payment.mode.replace('_', ' ')} · ${this.config.customerName}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
+        // Issue #230 — who actually paid, or was paid; not the demo customer for every payment.
+        ...payments.map((payment) => ({ id: payment.id, kind: 'payment', title: `${payment.direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${this.partyName(companyId, payment.partyId)} · ${payment.mode.replace('_', ' ')}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
         ...returnNotes.map((note) => ({ id: note.id, kind: 'return', title: `${note.number} · ${note.originalDocument.number}`, amount: jsonAmount(note.totals.total.minor), status: 'Recorded' })),
       ].reverse(),
     };
@@ -1980,23 +2110,228 @@ export class DemoApplication {
     };
   }
 
+  // ------------------------------------------------------ issue #230: money received and money paid
+  //
+  // Money in comes from a customer the person picked, and money out goes to a supplier the person
+  // picked. There is no default: a payment with nobody chosen is refused, because the old default
+  // posted every customer's money to the demo customer. The bills offered, and the only bills the
+  // money may be put against, are the chosen party's own open bills.
+
+  /** The open bills of one customer (money received) or one supplier (money paid), with what is still due on each. */
+  async paymentOpenBills(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const { direction, party } = this.paymentParty(companyId, input);
+    const date = isoDate(String(input.date || this.shop.clock.now().toISOString().slice(0, 10)));
+    const position = await this.payments.position(actor, party.id as PartyId, date);
+    const open = openBillsOf(position.documents, direction);
+    return {
+      direction,
+      party,
+      owed: jsonAmount(sum(open.map((d) => d.outstanding)).minor),
+      onAccount: direction === 'RECEIPT' ? jsonAmount(position.onAccount.minor) : 0,
+      bills: open.map((d) => ({
+        id: d.document.documentId,
+        number: d.document.number,
+        date: d.document.date,
+        dueDate: d.document.dueDate,
+        total: jsonAmount(d.document.value.minor),
+        paid: jsonAmount(d.allocated.minor),
+        outstanding: jsonAmount(d.outstanding.minor),
+      })),
+    };
+  }
+
   async previewPayment(actor: ActorContext, input: Record<string, unknown>) {
-    this.companyOf(actor);
-    permissionPortFromActor.require(actor, 'payments.record', 'record money received');
-    const amount = paise(input.amount);
-    const customer = await this.payments.position(actor, this.config.customerId, isoDate(String(input.date)));
-    return { state: 'preview', title: 'Payment checked', message: `₹${jsonAmount(amount).toFixed(2)} will reduce what ${this.config.customerName} owes.`, amount: jsonAmount(amount), token: String(input.reference || crypto.randomUUID()), effects: [`Outstanding now: ₹${jsonAmount(customer.totalOutstanding.minor).toFixed(2)}`, input.invoice ? 'The selected invoice will be settled by this amount.' : 'The money will remain visibly on account.'] };
+    const plan = await this.paymentPlan(actor, input);
+    const { direction, party, amount, how, applied, leftOver, owedBefore } = plan;
+    const owedAfter = owedBefore - (amount - leftOver);
+    const whose = direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`;
+    return {
+      state: 'preview',
+      title: direction === 'RECEIPT' ? 'Money received — check it' : 'Money paid — check it',
+      message: `${formatPaise(amount)} will reduce ${whose}.`,
+      amount: jsonAmount(amount),
+      party,
+      direction,
+      token: plan.key,
+      effects: [
+        `${direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${party.name} by ${how.words}.`,
+        ...applied.map(({ position, amount: put }) =>
+          `${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} still due on this bill`),
+        ...(leftOver > 0n
+          ? [applied.length === 0
+            ? `${formatPaise(leftOver)} is not put against any bill yet, so it stays on account for ${party.name}.`
+            : `${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} is more than the bills chosen, so it stays on account for ${party.name}.`]
+          : []),
+        `${direction === 'RECEIPT' ? `${party.name} owes` : `You owe ${party.name}`} ${formatPaise(owedBefore)} on open bills now, and ${formatPaise(owedAfter < 0n ? 0n : owedAfter)} after this.`,
+      ],
+    };
   }
 
   async recordPayment(actor: ActorContext, input: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
-    const amountMinor = paise(input.amount);
-    const invoice = String(input.invoice ?? '');
-    const open = invoice ? (await this.documents.openDocuments(companyId, this.config.customerId)).find((document) => document.documentId === invoice) : undefined;
-    const amountToAllocate = open === undefined ? 0n : (amountMinor < open.value.minor ? amountMinor : open.value.minor);
-    const payment = await this.payments.recordPayment(actor, { idempotencyKey: `web-payment:${String(input.reference || `${input.date}:${amountMinor}`)}`, direction: 'RECEIPT', partyId: this.config.customerId, mode: 'CASH', amount: money(amountMinor), date: isoDate(String(input.date)), reference: String(input.reference || '') || null, ...(open === undefined ? {} : { allocations: [{ documentId: open.documentId, documentNumber: open.number, amount: money(amountToAllocate) }] }) });
-    const position = await this.payments.position(actor, this.config.customerId, isoDate(String(input.date)));
-    return { state: 'recorded', title: 'Payment recorded', message: `₹${jsonAmount(payment.amount.minor).toFixed(2)} was recorded once.`, paymentId: payment.id, customerOutstanding: jsonAmount(position.totalOutstanding.minor) };
+    permissionPortFromActor.require(actor, 'payments.record', 'record money received or paid');
+    // Pressed twice: the first press already settled the bill, so the second is answered from the
+    // payment it made rather than being checked again as if it were new money.
+    const earlier = await this.paymentRepository.findByIdempotencyKey(companyId, paymentKeyOf(input));
+    if (earlier !== null) {
+      const { direction, party } = this.paymentParty(companyId, input);
+      if (earlier.partyId !== party.id || earlier.amount.minor !== paise(input.amount) || earlier.direction !== direction) {
+        throw conflict('PAYMENT_KEY_REUSED', 'This entry was already used for a different payment. Nothing new was recorded; start a fresh entry.');
+      }
+      return this.paymentRecordedJson(actor, earlier, party, true);
+    }
+    const plan = await this.paymentPlan(actor, input);
+    const { direction, party, amount, date, how, applied } = plan;
+    // A party added a moment ago gets their own account in the books before money is posted to it.
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id as PartyId, name: party.name, kind: direction === 'RECEIPT' ? 'CUSTOMER' : 'SUPPLIER' });
+    const payment = await this.payments.recordPayment(actor, {
+      idempotencyKey: plan.key,
+      direction,
+      partyId: party.id as PartyId,
+      mode: how.mode,
+      amount: money(amount),
+      date,
+      reference: plan.reference,
+      bankAccountCode: how.bankAccountCode,
+      ...(how.cheque === undefined ? {} : { cheque: how.cheque }),
+      ...(applied.length === 0 ? {} : { allocations: applied.map(({ position, amount: put }) => ({ documentId: position.document.documentId, documentNumber: position.document.number, amount: money(put) })) }),
+    });
+    // The same request twice is one payment. The same key for a different payment is a mistake, not a retry.
+    if (payment.partyId !== party.id || payment.amount.minor !== amount || payment.direction !== direction) {
+      throw conflict('PAYMENT_KEY_REUSED', 'This entry was already used for a different payment. Nothing new was recorded; start a fresh entry.');
+    }
+    return this.paymentRecordedJson(actor, payment, party, false);
+  }
+
+  private async paymentRecordedJson(actor: ActorContext, payment: Payment, party: { id: string; name: string }, deduplicated: boolean) {
+    const direction = payment.direction;
+    const earlier = deduplicated ? payment : null;
+    const position = await this.payments.position(actor, party.id as PartyId, payment.date);
+    const owed = sum(openBillsOf(position.documents, direction).map((d) => d.outstanding));
+    const voucher = payment.voucherId === null ? null : await this.shop.ledger.getVoucher(actor, payment.voucherId);
+    return {
+      state: 'recorded',
+      deduplicated,
+      title: earlier !== null ? 'Already recorded once' : direction === 'RECEIPT' ? 'Money received recorded' : 'Money paid recorded',
+      message: earlier !== null
+        ? `${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'from' : 'to'} ${party.name} was already recorded. It was not recorded twice.`
+        : `${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'received from' : 'paid to'} ${party.name} is in your books${voucher === null ? '' : ` as ${voucher.number}`}.`,
+      effects: [direction === 'RECEIPT' ? `${party.name} now owes ${formatPaise(owed.minor)} on open bills.` : `You now owe ${party.name} ${formatPaise(owed.minor)}.`],
+      paymentId: payment.id,
+      voucherNumber: voucher?.number ?? null,
+      direction,
+      party,
+      mode: payment.mode,
+      amount: jsonAmount(payment.amount.minor),
+      outstanding: jsonAmount(owed.minor),
+      onAccount: direction === 'RECEIPT' ? jsonAmount(position.onAccount.minor) : 0,
+      settled: payment.allocations.map((allocation) => ({ number: allocation.documentNumber, amount: jsonAmount(allocation.amount.minor) })),
+      // Kept for callers written before #230; it is the chosen party's figure now, never the demo customer's.
+      customerOutstanding: jsonAmount(owed.minor),
+    };
+  }
+
+  /** The receipt (money in) or payment voucher (money out) for one recorded payment, as a printable page. */
+  async paymentVoucher(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const payment = await this.paymentRepository.findById(companyId, String(input.paymentId ?? ''));
+    if (payment === null) throw notFound('PAYMENT_NOT_FOUND', 'That payment is not in this business.');
+    const voucher = payment.voucherId === null ? null : await this.shop.ledger.getVoucher(actor, payment.voucherId);
+    const documents = await this.documents.openDocuments(companyId, payment.partyId);
+    const seller = sellerPrint(companyId, { name: this.config.name, gstin: this.config.gstin }).seller;
+    const html = paymentVoucherHtml({
+      payment,
+      number: voucher?.number ?? payment.id,
+      seller,
+      party: this.paymentPartyPrint(companyId, payment.partyId),
+      bills: payment.allocations.map((allocation) => {
+        const bill = documents.find((d) => d.documentId === allocation.documentId);
+        return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor };
+      }),
+    });
+    return { state: 'print' as const, number: voucher?.number ?? payment.id, html };
+  }
+
+  private paymentParty(companyId: CompanyId, input: Record<string, unknown>): { direction: 'RECEIPT' | 'PAYMENT'; party: { id: string; name: string } } {
+    const raw = String(input.direction ?? 'RECEIPT').trim().toUpperCase();
+    if (raw !== 'RECEIPT' && raw !== 'PAYMENT') throw invalid('PAYMENT_DIRECTION_INVALID', 'Say whether this is money received or money paid.');
+    const direction = raw;
+    const wanted = String(input.partyId ?? input.party ?? '').trim();
+    if (direction === 'RECEIPT') {
+      if (wanted === '') throw invalid('PAYMENT_CUSTOMER_REQUIRED', 'Choose the customer who paid you. The money is not put against anybody until you do.');
+      const found = resolveCustomer(companyId, wanted);
+      if (!customers(companyId).some((party) => party.id === found.id)) {
+        throw invalid('CUSTOMER_NOT_FOUND', `"${wanted}" is not in your customer list. Choose the customer who paid you.`);
+      }
+      return { direction, party: { id: found.id, name: found.legalName } };
+    }
+    if (wanted === '') throw invalid('PAYMENT_SUPPLIER_REQUIRED', 'Choose the supplier you paid. The money is not put against anybody until you do.');
+    const found = resolveSupplier(companyId, wanted);
+    return { direction, party: { id: found.id, name: found.legalName } };
+  }
+
+  /** Everything a payment will do, worked out once so the review and the record cannot disagree. */
+  private async paymentPlan(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    permissionPortFromActor.require(actor, 'payments.record', 'record money received or paid');
+    const { direction, party } = this.paymentParty(companyId, input);
+    const amount = paise(input.amount);
+    const date = isoDate(String(input.date ?? ''));
+    const how = paymentHow(direction, input);
+    const reference = String(input.reference ?? '').trim() || null;
+    const key = paymentKeyOf(input);
+    const position = await this.payments.position(actor, party.id as PartyId, date);
+    const open = openBillsOf(position.documents, direction);
+    const theirs = position.documents.filter((d) => d.document.side === (direction === 'RECEIPT' ? 'RECEIVABLE' : 'PAYABLE'));
+    const chosenIds = [...new Set(billIdsOf(input))];
+    const chosen = chosenIds.map((id) => {
+      const found = open.find((d) => d.document.documentId === id);
+      if (found !== undefined) return found;
+      const settled = theirs.find((d) => d.document.documentId === id);
+      if (settled !== undefined) throw invalid('PAYMENT_BILL_ALREADY_PAID', `${settled.document.number} is already fully paid, so nothing more can be put against it.`);
+      throw invalid('PAYMENT_BILL_NOT_THEIRS', `That bill is not one of the open bills of ${party.name}, so this money cannot be put against it.`);
+    }).sort((a, b) => a.document.date.localeCompare(b.document.date) || a.document.number.localeCompare(b.document.number));
+    // Oldest chosen bill first, each up to what is still due on it. Nothing goes on a bill nobody chose.
+    let remaining = amount;
+    const applied: { position: DocumentPosition; amount: bigint }[] = [];
+    for (const position of chosen) {
+      if (remaining <= 0n) break;
+      const put = remaining < position.outstanding.minor ? remaining : position.outstanding.minor;
+      applied.push({ position, amount: put });
+      remaining -= put;
+    }
+    if (direction === 'PAYMENT' && remaining > 0n) {
+      const covered = amount - remaining;
+      throw invalid('PAYMENT_MORE_THAN_BILLS', chosen.length === 0
+        ? `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. Paying a supplier before their bill is not offered yet.`
+        : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills or pay ${formatPaise(covered)}.`);
+    }
+    return {
+      direction, party, amount, date, how, reference, applied, leftOver: remaining,
+      owedBefore: sum(open.map((d) => d.outstanding)).minor,
+      key,
+    };
+  }
+
+  private paymentPartyPrint(companyId: CompanyId, partyId: string): RenderableParty {
+    if (customers(companyId).some((party) => party.id === partyId)) return customerPrint(companyId, partyId);
+    const supplier = supplierParties(companyId).find((party) => party.id === partyId);
+    const address = billingAddressOf(companyId, partyId);
+    const stateCode = address?.stateCode ?? '';
+    return {
+      name: supplier?.legalName ?? (partyId === String(this.config.supplierId) ? this.config.supplierName : partyId),
+      addressLines: address === null ? [] : [address.line1, ...(address.line2 === undefined || address.line2 === '' ? [] : [address.line2]), `${address.city} ${address.pincode}`],
+      gstin: address?.gstin ?? null,
+      stateCode,
+      stateName: STATE_NAMES[stateCode] ?? stateCode,
+    };
+  }
+
+  private partyName(companyId: CompanyId, partyId: string): string {
+    return customers(companyId).find((party) => party.id === partyId)?.legalName
+      ?? supplierParties(companyId).find((party) => party.id === partyId)?.legalName
+      ?? (partyId === String(this.config.supplierId) ? this.config.supplierName : partyId === String(this.config.customerId) ? this.config.customerName : partyId);
   }
 
   // Issue #24 — explicit provider permission and incremental imports. Imported lines remain drafts

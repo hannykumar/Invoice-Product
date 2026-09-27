@@ -182,7 +182,7 @@ test('authenticated sales and customer payments still reach their service module
   assert.equal(pdf.body.subarray(0, 5).toString(), '%PDF-');
   const other = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
   assert.equal((await handleApi('GET', `/api/sales/${recorded.body.invoice.id}/pdf`, {}, `Bearer ${other}`)).status, 404);
-  const payment = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: '50', date: '2026-08-29', reference: 'AUTH-PAY-80', invoice: recorded.body.invoice.id }, owner);
+  const payment = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: '50', date: '2026-08-29', method: 'Cash', reference: 'AUTH-PAY-80', invoice: recorded.body.invoice.id }, owner);
   assert.equal(payment.body.state, 'recorded');
 });
 
@@ -728,7 +728,7 @@ test('a bill that is paid or disputed is not chased, over HTTP either', async ()
   // Settled, and then actually paid through the real payments API.
   const disputeId = held.body.disputes[0].id;
   assert.equal((await request('POST', '/api/reminders/dispute/resolve', { disputeId, resolution: 'The carton was found.' }, owner)).status, 200);
-  const paid = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: String(open.outstanding), date: '2026-08-29', reference: 'REMINDER-23-PAID', invoice: open.documentId }, owner);
+  const paid = await request('POST', '/api/payments/record', { party: 'ABC Traders', amount: String(open.outstanding), date: '2026-08-29', method: 'Cash', reference: 'REMINDER-23-PAID', invoice: open.documentId }, owner);
   assert.equal(paid.body.state, 'recorded');
 
   const settled = await request('GET', '/api/reminders', {}, owner);

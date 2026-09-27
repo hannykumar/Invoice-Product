@@ -218,6 +218,9 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && invoicePreview?.[1]) return json(200, await app.invoicePrint(actor, decodeURIComponent(invoicePreview[1])));
     if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
     if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
+    // Issue #230 — the chosen customer's or supplier's own open bills, and the receipt or payment voucher.
+    if (method === 'POST' && pathname === '/api/payments/open-bills') return json(200, await app.paymentOpenBills(actor, body));
+    if (method === 'POST' && pathname === '/api/payments/voucher') return json(200, await app.paymentVoucher(actor, body));
     // Issue #47 — asking the assistant to do something: what it would do, and then doing it.
     if (method === 'GET' && pathname === '/api/agent/capabilities') return json(200, app.agentCapabilities(actor));
     if (method === 'GET' && pathname === '/api/agent/history') return json(200, await app.agentHistory(actor));
