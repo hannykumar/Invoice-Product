@@ -4,6 +4,10 @@ import test from "node:test";
 import { AuditLog, ConnectorError, ConnectorGateway, StaticWebhookVerifier, registerSecretValues, type ExternalConnector } from "../../../packages/platform/src/index.ts";
 import { SecureLogger, type SafeLogEvent } from "../../../ops/security/src/logging.ts";
 import { jsonResponse } from "../src/server.ts";
+import { useFixedAppClock } from '../src/app-clock.ts';
+
+// Issue #234 — the running app reads the real clock; this file pins it so its dates do not drift.
+useFixedAppClock('2026-09-28T10:00:00.000Z');
 
 test("a registered secret cannot reach connector errors, audits, logs or HTTP JSON", async () => {
   const secret = randomUUID();

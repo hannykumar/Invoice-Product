@@ -12,6 +12,7 @@
 //      hash of four fields we already know, so a reply belonging to another document is caught
 //      instead of being written into the books.
 
+import { indiaDateOf } from "@invoice/kernel";
 import { conflict, forbidden, invalid, notFound, type CompanyId } from "@invoice/kernel";
 import type { ActorContext, AuditPort } from "@invoice/ledger";
 import type { Clock } from "@invoice/kernel";
@@ -440,7 +441,7 @@ export class EInvoiceService {
   }
 
   #today(): IsoDate {
-    return this.#clock.now().toISOString().slice(0, 10);
+    return indiaDateOf(this.#clock.now());
   }
 
   #require(actor: ActorContext, permission: string): void {

@@ -5,6 +5,7 @@
  * record or an item record; it carries the name, the address and the rate **as they were on the
  * day it was issued**. That is what makes a reprint in three years honest.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import { formatQuantity, isoDate, subtract, zero, type IsoDate, type Money } from '@invoice/kernel';
 import type { SalesInvoice } from '@invoice/sales';
 import type { ComputedTaxLine } from '@invoice/gst-calc';
@@ -157,7 +158,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
   };
 };
 
-export const todayIso = (): IsoDate => isoDate(new Date().toISOString().slice(0, 10));
+export const todayIso = (): IsoDate => indiaDateOf(new Date());
 export { nil };
 
 /**

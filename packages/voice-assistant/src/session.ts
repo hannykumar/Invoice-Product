@@ -11,6 +11,7 @@
  *  3. **The draft goes down the ordinary path.** This module produces the same input a person
  *     typing would produce, and issue #9 applies the same permissions and approvals to it.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import { fromDecimalString, invalid, isoDate, quantityFromString, type CompanyId, type IsoDate, type PartyId } from '@invoice/kernel';
 import type { DraftInvoiceInput } from '@invoice/sales';
 import { mergeAlternatives, parseInstruction, type Field, type ParsedInstruction, type ParsedLine } from './parse.ts';
@@ -408,4 +409,4 @@ export class AssistantSession {
   }
 }
 
-export const todayIso = (at: Date): IsoDate => isoDate(at.toISOString().slice(0, 10));
+export const todayIso = (at: Date): IsoDate => indiaDateOf(at);

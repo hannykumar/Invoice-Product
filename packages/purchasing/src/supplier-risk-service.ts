@@ -4,6 +4,7 @@
 // records what it showed. It never decides anything itself: the reasoning lives in one pure
 // function so the same facts can be replayed months later when a supplier disputes a warning.
 
+import { indiaDateOf } from "@invoice/kernel";
 import { conflict, forbidden, invalid, notFound, type CompanyId } from "@invoice/kernel";
 import type { ActorContext, AuditPort } from "@invoice/ledger";
 import type { Clock } from "@invoice/kernel";
@@ -83,7 +84,7 @@ export class SupplierRiskService {
     if (input.supplierName.trim() === "") {
       throw invalid("SUPPLIER_NAME_REQUIRED", "We need to know which supplier you mean.");
     }
-    const on = input.on ?? this.#clock.now().toISOString().slice(0, 10);
+    const on = input.on ?? indiaDateOf(this.#clock.now());
     const policy = await this.#policyFor(actor.companyId, on);
 
     const lookup = input.gstin === undefined

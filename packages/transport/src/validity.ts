@@ -126,8 +126,18 @@ export const canExtendNow = (validUntil: string, now: Date, policy: EwayBillPoli
   return { ok: true, explanation: "This e-way bill can be extended now." };
 };
 
-/** The moment written the way a person reads it, in Indian time. */
-export const describeExpiry = (validUntil: string): string => `${writePortalTimestamp(readPortalTimestamp(validUntil))} (Indian time)`;
+/**
+ * The moment written the way a person reads it, in Indian time.
+ *
+ * Issue #234 — a validity that runs out at midnight is written as the last second of the day it
+ * covers, the way the portal prints it ("valid upto 03/10/2026 11:59 PM"). Written as "04/10/2026
+ * 00:00:00" a 5-day bill raised on 28 Sep reads as if it ran into a sixth day.
+ */
+export const describeExpiry = (validUntil: string): string => {
+  const at = readPortalTimestamp(validUntil);
+  const endOfDay = writePortalTimestamp(at).endsWith(" 00:00:00") ? new Date(at.getTime() - 1000) : at;
+  return `${writePortalTimestamp(endOfDay)} (Indian time)`;
+};
 
 /** How long is left, in plain words, for the screen a dispatch clerk is looking at. */
 export const describeTimeLeft = (validUntil: string, now: Date): string => {

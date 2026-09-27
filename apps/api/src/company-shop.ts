@@ -1,5 +1,6 @@
 /** Production-shaped in-memory composition used by the local HTTP surface. */
-import { asId, fixedClock, isoDate, type CompanyId } from '@invoice/kernel';
+import { asId, isoDate, type CompanyId } from '@invoice/kernel';
+import { appClock } from './app-clock.ts';
 import {
   InMemoryAuditPort,
   InMemoryLedgerStore,
@@ -189,7 +190,9 @@ export async function createCompanyShop(seed: CompanySeed) {
   const approvals = new InMemoryMatchApprovalStore();
   store.join(inventory).join(bills).join(orders).join(receipts).join(approvals);
   const audit = new InMemoryAuditPort();
-  const clock = fixedClock('2026-08-29T10:00:00.000Z');
+  // Issue #234 — the real clock (tests pin it through app-clock.ts). It used to be frozen at
+  // 29 Aug 2026, so an e-way bill raised in September was "valid until" a day in August.
+  const clock = appClock;
   const masters = new CompanyMasters(seed.location, seed.catalogue.items.map((item) => item.id));
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock });
   let sequence = 0;

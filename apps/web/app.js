@@ -723,6 +723,7 @@ const REPORT_TEXT = {
   moneyNoBill: { "en-IN": "Money with no bill", "hi-IN": "Bina bill ka paisa" },
   numberCol: { "en-IN": "Number", "hi-IN": "Number" },
   oldestLate: { "en-IN": "Oldest days late", "hi-IN": "Sabse purana kitne din late" },
+  lateCountedTo: { "en-IN": "Days late are counted up to {date}.", "hi-IN": "Kitne din late hai, yeh {date} tak gina gaya hai." },
   openingEntry: { "en-IN": "Opening entry posted", "hi-IN": "Shuruaati entry darj hui" },
   owedEarned: { "en-IN": "Owed or earned", "hi-IN": "Dena ya kamai" },
   ownedSpent: { "en-IN": "Owned or spent", "hi-IN": "Apna ya kharch" },
@@ -754,10 +755,28 @@ const t = (value) => (value === null || typeof value !== "object" ? (value ?? ""
 
 const text = (key, values = {}) => Object.entries(values).reduce((message, [name, value]) => message.replaceAll(`{${name}}`, String(value)), copy[state.locale][key]);
 const money = (amount) => new Intl.NumberFormat(state.locale, { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(Number(amount) || 0);
-const dateInput = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+// Issue #234 — one "today" for the whole app: the date in India (Asia/Kolkata), taken from the
+// server once Home has loaded, and worked out the same way in the browser until then. Never the
+// device's own time zone, and never UTC, which is still yesterday in India until 05:30.
+const indiaDate = (at = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+const dateInput = () => state.today ?? indiaDate();
+/** "2026-08" — the month before today's: the one a business is actually filing. */
+const previousMonth = () => {
+  const [year, month] = dateInput().split("-").map(Number);
+  return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
 };
+/**
+ * The server's today wins when it differs (a device clock set wrong, or a page left open overnight):
+ * the date fields still showing the old default move to it, and anything a person typed is left alone.
+ */
+function adoptServerToday(today) {
+  if (typeof today !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(today) || today === dateInput()) return;
+  const before = dateInput();
+  state.today = today;
+  document.querySelectorAll("input[type=date]:not([data-no-default])").forEach((field) => { if (field.value === before) field.value = today; });
+  const heading = document.querySelector('[data-i18n="today"]');
+  if (heading) heading.textContent = `${copy[state.locale].today} · ${new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${today}T12:00:00+05:30`))}`;
+}
 
 function translate() {
   document.documentElement.lang = state.locale;
@@ -778,7 +797,7 @@ function translate() {
   });
   document.querySelectorAll("[data-money]").forEach((element) => { element.textContent = money(element.dataset.money); });
   const today = document.querySelector('[data-i18n="today"]');
-  if (today) today.textContent = `${copy[state.locale].today} · ${new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric" }).format(new Date())}`;
+  if (today) today.textContent = `${copy[state.locale].today} · ${new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${dateInput()}T12:00:00+05:30`))}`;
   document.querySelector("#locale").value = state.locale;
   document.querySelectorAll(".draft-form").forEach((form) => setDraftStatus(form, state.draftStatuses[form.dataset.draft] ?? "savedDevice"));
   updateCalculations();
@@ -913,6 +932,7 @@ function activityRow(item) {
 
 function renderDashboard(data) {
   state.dashboard = data;
+  adoptServerToday(data.today);
   document.querySelector("#company-name").textContent = data.company.name;
   document.querySelector("#company-location").textContent = data.company.location;
   document.querySelector("#company-avatar").textContent = data.company.name.split(/\s+/).map((word) => word[0]).slice(0, 2).join("");
@@ -1140,6 +1160,8 @@ function renderReports(data) {
     [{ label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.stillOwed), numeric: true }, { label: t(REPORT_TEXT.moneyNoBill), numeric: true }, { label: t(REPORT_TEXT.oldestLate), numeric: true }],
     data.dues.receivables.rows.map((r) => [r.party, money(r.outstanding), money(r.onAccount), String(r.oldestDaysOverdue)]),
   ));
+  // Issue #234 — say which day lateness is counted to: today, or the end of the period if earlier.
+  if (data.period?.lateCountedTo) dues.append(reportNote(t(REPORT_TEXT.lateCountedTo).replace("{date}", new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${data.period.lateCountedTo}T12:00:00+05:30`)))));
   dues.append(reportTotalRow(t(REPORT_TEXT.oweSuppliers), data.dues.payables.total));
   content.append(dues);
 
@@ -1390,6 +1412,12 @@ function updateCalculations() {
 // A date the business must choose for itself — how long a quoted price holds (#142) — is marked
 // `data-no-default` and left empty: filling it with today would print a promise nobody made.
 document.querySelectorAll("input[type=date]:not([data-no-default])").forEach((field) => { if (!field.value) field.value = dateInput(); });
+// Issue #234 — a new business's books start, by default, on 1 April of the financial year today is in.
+document.querySelectorAll('input[name="booksStartDate"]').forEach((field) => {
+  if (field.value) return;
+  const [year, month] = dateInput().split("-").map(Number);
+  field.value = `${month >= 4 ? year : year - 1}-04-01`;
+});
 document.querySelectorAll(".draft-form").forEach((form) => {
   restoreDraft(form);
   form.addEventListener("input", () => { saveDraft(form); updateCalculations(); });
@@ -4708,9 +4736,7 @@ function gstPeriodValue() {
   const field = document.querySelector("#gst-period");
   if (field.value) return field.value;
   // The month a business is actually filing is the one that has just ended.
-  const now = new Date();
-  const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  field.value = previous.toISOString().slice(0, 7);
+  field.value = previousMonth();
   return field.value;
 }
 
@@ -4877,9 +4903,7 @@ let itcWorkspace = null;
 function itcPeriodValue() {
   const field = document.querySelector("#itc-period");
   if (field.value) return field.value;
-  const now = new Date();
-  const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  field.value = previous.toISOString().slice(0, 7);
+  field.value = previousMonth();
   return field.value;
 }
 

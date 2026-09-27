@@ -483,3 +483,51 @@ test('once buying is written into the books, the profit sentence reads plainly a
   const trial = await business.reports.trialBalance(business.actor, APRIL_TO_MAY);
   assert.equal(trial.body.balanced, true);
 });
+
+// Issue #234 — days late are counted to today, or to the end of the period if that came first.
+// They used to be counted to the period's end: a bill due 27 Oct 2026 in a report for the year to
+// 31 Mar 2027 showed 155 days late on 27 Sep 2026 (27 Oct 2026 to 31 Mar 2027), before it was due.
+const YEAR_2026_27: ReportFilter = { from: on('2026-04-01'), to: on('2027-03-31') };
+
+const aBillDue27October = async (): Promise<Business> => {
+  const business = await makeBusiness();
+  await buyStock(business, { itemId: 'CRATE-P', warehouseId: 'shop', quantity: '10', unit: 'PCS', unitCost: inr(50), on: '2026-08-01', key: 'buy-234' });
+  await issueBill(business, {
+    partyId: ABC,
+    on: '2026-08-28',
+    due: '2026-10-27',
+    key: 'bill-234',
+    lines: [{ itemId: 'CRATE-P', quantity: '2', unit: 'PCS', price: inr(100) }],
+  });
+  return business;
+};
+
+test('a bill due 27 Oct 2026 is not late at all in a report run on 27 Sep 2026 (#234)', async () => {
+  const business = await aBillDue27October();
+  // 11:00 in India on 27 Sep 2026.
+  const ageing = await business.reports.receivablesAgeing(business.actor, YEAR_2026_27, '2026-09-27T05:30:00.000Z');
+  const abc = ageing.body.rows.find((r) => r.partyId === ABC);
+  assert.ok(abc !== undefined);
+  assert.equal(abc.oldestDaysOverdue, 0, 'not yet due, so 0 days late — not 155');
+  assert.match(abc.documents[0]!.description, /not due yet/);
+});
+
+test('the same bill is 10 days late in a report run on 6 Nov 2026: 27 Oct to 6 Nov (#234)', async () => {
+  const business = await aBillDue27October();
+  const ageing = await business.reports.receivablesAgeing(business.actor, YEAR_2026_27, '2026-11-06T05:30:00.000Z');
+  assert.equal(ageing.body.rows.find((r) => r.partyId === ABC)?.oldestDaysOverdue, 10);
+});
+
+test('a report for a period that has already ended still counts to its own last day (#234)', async () => {
+  const business = await aBillDue27October();
+  // Period to 31 Oct 2026, run on 6 Nov 2026: counted to 31 Oct, so 27 Oct to 31 Oct = 4 days.
+  const ageing = await business.reports.receivablesAgeing(business.actor, { from: on('2026-04-01'), to: on('2026-10-31') }, '2026-11-06T05:30:00.000Z');
+  assert.equal(ageing.body.rows.find((r) => r.partyId === ABC)?.oldestDaysOverdue, 4);
+});
+
+test('today is the date in India: at 00:30 in India on 28 Oct it is already 28 Oct, one day late (#234)', async () => {
+  const business = await aBillDue27October();
+  // 19:00 UTC on 27 Oct is 00:30 on 28 Oct in India. Counted in UTC it would still be 0 days late.
+  const ageing = await business.reports.receivablesAgeing(business.actor, YEAR_2026_27, '2026-10-27T19:00:00.000Z');
+  assert.equal(ageing.body.rows.find((r) => r.partyId === ABC)?.oldestDaysOverdue, 1);
+});

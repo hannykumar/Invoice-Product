@@ -141,3 +141,12 @@ test("the portal's twelve-hour timestamps are read, not turned into NaN", async 
   assert.equal(describeExpiry("15/09/2026 11:59:00 PM"), "15/09/2026 23:59:00 (Indian time)");
   assert.match(describeTimeLeft("15/09/2026 11:59:00 PM", new Date("2026-09-15T12:29:00.000Z")), /About 6 hours left/);
 });
+
+test("#234 a validity that ends at midnight is written as the last second of the day it covers", async () => {
+  const { describeExpiry, validUntilFrom } = await import("../src/validity.ts");
+  const { DEFAULT_EWAY_BILL_POLICY } = await import("../src/types.ts");
+  // Raised 04:46 on 28 Sep 2026 in India, 840 km: 840 ÷ 200 = 4.2, so 5 days, to the end of 3 Oct.
+  const until = validUntilFrom(new Date("2026-09-27T23:16:00.000Z"), 840, "REGULAR", DEFAULT_EWAY_BILL_POLICY);
+  assert.equal(until.toISOString(), "2026-10-03T18:30:00.000Z");
+  assert.equal(describeExpiry(until.toISOString()), "03/10/2026 23:59:59 (Indian time)");
+});

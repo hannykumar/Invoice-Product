@@ -9,6 +9,7 @@
 // a receipt moves goods; recording the bill (#17) moves money. Keeping those apart is what lets
 // a delivery on Monday and a bill on Friday both be true.
 
+import { indiaDateOf } from "@invoice/kernel";
 import { conflict, forbidden, invalid, isoDate, notFound, type CompanyId } from "@invoice/kernel";
 import type { ActorContext, AuditPort, LedgerStore } from "@invoice/ledger";
 import type { Clock } from "@invoice/kernel";
@@ -454,7 +455,7 @@ export class ThreeWayMatchingService {
     invoice: MatchInvoice,
     options: { readonly orderId?: string; readonly receiptIds?: readonly string[]; readonly on?: string } = {},
   ): Promise<MatchResult> {
-    const on = options.on ?? this.#clock.now().toISOString().slice(0, 10);
+    const on = options.on ?? indiaDateOf(this.#clock.now());
     const policy = await this.#policyFor(actor.companyId, on);
 
     const order = options.orderId === undefined ? undefined : (await this.#orders.findById(actor.companyId, options.orderId)) ?? undefined;

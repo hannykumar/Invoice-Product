@@ -12,6 +12,7 @@
  * the one thing a business cannot be asked to check for itself.
  */
 import { isoDate, rupees, zero, type CompanyId } from '@invoice/kernel';
+import { appToday } from './app-clock.ts';
 import {
   EMPTY_BRANDING,
   brandedSnapshot,
@@ -239,7 +240,7 @@ export const previewBranding = (
   const locale: Locale = input.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
   const format: PageFormat = input.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : 'A4';
 
-  const snapshot = brandedSnapshot(template, locale, new Date().toISOString().slice(0, 10), branding);
+  const snapshot = brandedSnapshot(template, locale, appToday(), branding);
   return {
     html: renderInvoice(sampleDocument(companyName, branding, upiId), snapshot, { format, locale, purpose: 'DESIGN_PREVIEW' }),
     templateId: template.id,

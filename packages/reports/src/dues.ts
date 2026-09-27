@@ -55,8 +55,10 @@ const documentContribution = (position: DocumentPosition, partyName: string): Co
 });
 
 /**
- * `asOn` is the day lateness is counted from, and it is the closing date of the report rather than
- * today. A statement printed for March must not become more overdue every time it is reopened.
+ * `asOn` is the day lateness is counted from: today, or the closing date of the report if that came
+ * first (issue #234). A statement printed for last March must not become more overdue every time it
+ * is reopened, and a bill in this year's report must not be counted late up to a 31 March that has
+ * not happened yet — a bill due next month is not late at all.
  */
 export const ageingBody = async (
   dues: DuesReadPort,
@@ -64,8 +66,9 @@ export const ageingBody = async (
   companyId: CompanyId,
   filter: ReportFilter,
   side: DuesSide,
+  today: IsoDate,
 ): Promise<AgeingBody> => {
-  const asOn: IsoDate = filter.to;
+  const asOn: IsoDate = today < filter.to ? today : filter.to;
   const parties = await dues.parties(companyId);
 
   const positions: { position: PartyPosition; name: string; documents: readonly DocumentPosition[] }[] = [];

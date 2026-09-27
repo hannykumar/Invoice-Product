@@ -5,6 +5,7 @@
 // the record looked like when that document was raised — which is what keeps a
 // reprinted invoice from silently acquiring this year's address.
 
+import { indiaDateOf } from "@invoice/kernel";
 import { PlatformError } from "../../platform/src/types.ts";
 import type { Id, IsoDate } from "./types.ts";
 
@@ -22,7 +23,7 @@ export interface Version<T> {
 
 const isIsoDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-export const today = (clock: () => Date = () => new Date()): IsoDate => clock().toISOString().slice(0, 10);
+export const today = (clock: () => Date = () => new Date()): IsoDate => indiaDateOf(clock());
 
 /**
  * Append-only store of versioned records, scoped per company. Reads always take a

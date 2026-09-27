@@ -11,6 +11,7 @@
  * There is no step in which anything decides what the answer should be. A model, if one is plugged
  * in at all, may only suggest which of these fixed questions was being asked.
  */
+import { indiaDateOf } from '@invoice/kernel';
 import {
   invalid,
   isoDate,
@@ -118,7 +119,7 @@ export class AssistantService {
     }
 
     const now = this.#deps.clock.now();
-    const today = command.today ?? isoDate(now.toISOString().slice(0, 10));
+    const today = command.today ?? indiaDateOf(now);
     const reading = understand(question);
     const period = resolvePeriod(question, today);
     const instruction = looksLikeAnInstruction(question);

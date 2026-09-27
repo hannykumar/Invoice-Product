@@ -11,6 +11,7 @@
  */
 import {
   compareDates,
+  indiaDateOf,
   invalid,
   type Clock,
   type CompanyId,
@@ -213,13 +214,13 @@ export class ReportService {
 
   async receivablesAgeing(actor: ActorContext, filter: ReportFilter, asAt: string = this.#deps.clock.now().toISOString()): Promise<Report<AgeingBody>> {
     const companyId = await this.#checked(actor, REPORT_PERMISSIONS.dues, 'ageing', filter);
-    const body = await ageingBody(this.#deps.dues, actor, companyId, filter, 'RECEIVABLE');
+    const body = await ageingBody(this.#deps.dues, actor, companyId, filter, 'RECEIVABLE', indiaDateOf(asAt));
     return { header: this.#header('ageing', actor, filter, [], asAt), body };
   }
 
   async payablesAgeing(actor: ActorContext, filter: ReportFilter, asAt: string = this.#deps.clock.now().toISOString()): Promise<Report<AgeingBody>> {
     const companyId = await this.#checked(actor, REPORT_PERMISSIONS.dues, 'ageing', filter);
-    const body = await ageingBody(this.#deps.dues, actor, companyId, filter, 'PAYABLE');
+    const body = await ageingBody(this.#deps.dues, actor, companyId, filter, 'PAYABLE', indiaDateOf(asAt));
     return { header: this.#header('ageing', actor, filter, [], asAt), body };
   }
 
@@ -235,8 +236,8 @@ export class ReportService {
     const [stock, sales, receivables, payables] = await Promise.all([
       stockReportBody(this.#deps.inventory, this.#deps.stockMasterData, this.#deps.names, companyId, filter),
       salesRegister(this.#deps.sales, this.#deps.names, companyId, filter),
-      ageingBody(this.#deps.dues, actor, companyId, filter, 'RECEIVABLE'),
-      ageingBody(this.#deps.dues, actor, companyId, filter, 'PAYABLE'),
+      ageingBody(this.#deps.dues, actor, companyId, filter, 'RECEIVABLE', indiaDateOf(asAt)),
+      ageingBody(this.#deps.dues, actor, companyId, filter, 'PAYABLE', indiaDateOf(asAt)),
     ]);
     const movements: readonly StockMovement[] = await this.#deps.inventory.movements.list(companyId, { to: filter.to });
     const salesInvoices = (await this.#deps.sales.list(companyId)).filter(
