@@ -4663,7 +4663,9 @@ function renderGstWorkspace(workspace) {
       // The bills behind the row, on the row. This is the drill-down the whole design turns on.
       const bills = row.sources.map((source) => `${source.number} (${money(source.amount)})`).join(", ");
       const rate = row.rate === null ? "" : ` · ${row.rate}%`;
-      sections.append(detailRow(`${row.label}${rate}`, `${money(row.taxableValue)} + ${money(row.tax)} GST`, bills));
+      // Issue #232 — the state a bill or note is reported under, beside its number.
+      const where = row.placeOfSupply === null || row.placeOfSupply === undefined ? "" : ` · ${row.placeOfSupply}`;
+      sections.append(detailRow(`${row.label}${where}${rate}`, `${money(row.taxableValue)} + ${money(row.tax)} GST`, bills));
     });
   });
 

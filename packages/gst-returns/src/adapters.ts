@@ -290,12 +290,33 @@ export interface ReturnNoteLike {
     readonly supplyKind: 'GOODS' | 'SERVICES';
     /** As the returns module holds it, for the same reason as on a sales invoice above. */
     readonly quantity: Quantity;
+    /**
+     * Issue #232 — the code and rate copied from the original bill's line when the note was posted
+     * (#186). The return reports a note at the rate it was taxed at; without it the government file
+     * carried the note at 0% with IGST on it.
+     */
+    readonly hsnOrSac?: string | null;
+    readonly ratePercentTimes100?: bigint | null;
     readonly amounts: {
       readonly taxableValue: Money; readonly cgst: Money; readonly sgst: Money;
       readonly utgst: Money; readonly igst: Money; readonly cess: Money; readonly total: Money;
     };
   }[];
   readonly totals: { readonly total: Money };
+}
+
+/**
+ * The one fact a note takes from the bill it corrects.
+ *
+ * Issue #232 — a credit note adjusts a supply that has already been made, so it counts in the state
+ * that supply counted in: the place of supply printed on the original bill. That is not the
+ * seller's own state, and it is not the state in the buyer's GST number either, because goods sent
+ * to an address in a third state make that state the place of supply, and the bill records it.
+ * `null` means the original bill could not be found, which leaves the state unknown — a question on
+ * the return, never a default.
+ */
+export interface NoteOriginalFacts {
+  readonly placeOfSupplyStateCode: string | null;
 }
 
 /**
@@ -308,7 +329,7 @@ export const returnNoteToDocument = (
   note: ReturnNoteLike,
   counterparty: CounterpartyFacts,
   supplier: SupplierFacts,
-  facts: { readonly placeOfSupplyStateCode: string | null; readonly hsnByItem?: Readonly<Record<string, string>>; readonly rateByLine?: Readonly<Record<string, bigint>> },
+  facts: { readonly original: NoteOriginalFacts | null; readonly hsnByItem?: Readonly<Record<string, string>>; readonly rateByLine?: Readonly<Record<string, bigint>> },
 ): OutwardDocument => {
   if (note.kind !== 'SALES_RETURN') {
     throw invalid(
@@ -321,11 +342,11 @@ export const returnNoteToDocument = (
     lineId: line.originalLineId,
     itemId: line.itemId,
     description: line.description,
-    hsnOrSac: facts.hsnByItem?.[line.itemId] ?? null,
+    hsnOrSac: line.hsnOrSac ?? facts.hsnByItem?.[line.itemId] ?? null,
     supplyKind: line.supplyKind,
     unit: line.quantity.unit,
     quantity: toQuantityString(line.quantity),
-    ratePercentTimes100: facts.rateByLine?.[line.originalLineId] ?? null,
+    ratePercentTimes100: facts.rateByLine?.[line.originalLineId] ?? line.ratePercentTimes100 ?? null,
     amounts: {
       taxableValue: line.amounts.taxableValue,
       cgst: line.amounts.cgst,
@@ -352,13 +373,14 @@ export const returnNoteToDocument = (
     partyName: counterparty.name,
     counterpartyGstin: counterparty.gstin,
     counterpartyStateCode: counterparty.stateCode,
-    placeOfSupplyStateCode: facts.placeOfSupplyStateCode,
+    placeOfSupplyStateCode: facts.original?.placeOfSupplyStateCode ?? null,
     reverseCharge: false,
     lines,
     invoiceValue: note.totals.total,
     originalDocument: {
       number: note.originalDocument.number,
       date: note.originalDocument.date as OutwardDocument['documentDate'],
+      ...(facts.original === null ? { missing: true as const } : {}),
     },
     unregisteredConfirmed: counterparty.gstin !== null || counterparty.unregisteredConfirmed,
   };

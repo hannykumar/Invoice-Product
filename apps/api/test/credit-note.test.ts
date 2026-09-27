@@ -178,3 +178,102 @@ test('the deadline is 30 November after the bill\'s financial year, and the warn
   assert.equal(creditNoteDeadline(isoDate('2027-03-31')), '2027-11-30');
   assert.equal(creditNoteDeadline(isoDate('2027-04-01')), '2028-11-30');
 });
+
+// ---------------------------------------------------------------------------- issue #232
+
+/**
+ * Issue #232 — a credit note goes on the GST return under the state of the bill it corrects.
+ *
+ * The full trade check's steps 3, 9 and 11: 450 KGS of TMT bar at ₹90 plus ₹2,000 freight to
+ * Mehta Construction Supplies in Pune, IGST 18% on ₹42,500 = ₹7,650; 50 KGS come back, so the note
+ * is 50 × ₹90 = ₹4,500 and IGST 18% of it = ₹810. Every note used to be given Karnataka, so this
+ * one was called "a sale inside your own state that carries IGST".
+ */
+const MEHTA = {
+  legalName: 'Mehta Construction Supplies', registration: 'regular', gstin: '27AAACM1234K1ZN',
+  line1: 'Plot 22, MIDC Bhosari', city: 'Pune', pincode: '411026',
+};
+
+const customerIdOf = async (session: string, party: typeof MEHTA): Promise<string> =>
+  (await request('GET', '/api/catalogue', {}, session)).body.customers
+    .find((c: { name: string }) => c.name === party.legalName)?.id
+  ?? (await request('POST', '/api/customers', party, session)).body.customer.id;
+
+const returnFifty = async (session: string, invoiceId: string, key: string) => {
+  const documents = (await request('GET', '/api/returns/documents', {}, session)).body.documents;
+  const line = documents.find((d: { id: string }) => d.id === invoiceId).lines
+    .find((l: { name?: string; description?: string; id: string }) => /TMT/.test(l.name ?? l.description ?? '')) ?? documents.find((d: { id: string }) => d.id === invoiceId).lines[0];
+  const recorded = await request('POST', '/api/returns/record', {
+    kind: 'SALES_RETURN', documentId: invoiceId, lineId: line.id, quantity: '50', unit: 'KGS',
+    disposition: 'ACCEPTED', date: '2026-09-20', reference: key, reason: 'Bent bars',
+  }, session);
+  assert.equal(recorded.status, 200, recorded.body.message);
+  return recorded.body.note as { id: string; number: string };
+};
+
+const noteRow = async (session: string, number: string) => {
+  const workspace = (await request('POST', '/api/gst-returns', { period: '2026-09' }, session)).body;
+  const cdnr = (workspace.sections as Record<string, any>[]).find((section) => section.id === 'CDNR');
+  const row = (cdnr?.rows as Record<string, any>[] | undefined)?.find((r) => r.label === number);
+  const questions = [
+    ...(workspace.findings as { document: string | null; code: string; message: string }[])
+      .filter((f) => f.document === number).map((f) => f.code),
+    ...(workspace.exceptions as { number: string; questions: { message: string }[] }[])
+      .filter((e) => e.number === number).flatMap((e) => e.questions.map((q) => q.message)),
+  ];
+  return { row, questions };
+};
+
+test('#232 a credit note against a Karnataka → Maharashtra bill is reported under Maharashtra, with no question', async () => {
+  const session = await signIn();
+  const sold = await request('POST', '/api/sales/record', {
+    customerId: await customerIdOf(session, MEHTA), lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '450', rate: '90' }],
+    freight: '2000', date: '2026-09-17', terms: '30', reference: 'cn-232-mehta',
+  }, session);
+  assert.equal(sold.status, 200, sold.body.message);
+  const note = await returnFifty(session, sold.body.invoice.id, 'cn-232-mehta-return');
+
+  const { row, questions } = await noteRow(session, note.number);
+  assert.deepEqual(questions, [], 'no "inside your own state but carries IGST"');
+  assert.equal(row?.placeOfSupply, 'Maharashtra (27)');
+  assert.equal(row?.taxableValue, -4500);
+  assert.equal(row?.tax, -810);
+  assert.equal(row?.rate, 18, 'the note is reported at the rate it was taxed at, not 0%');
+
+  // The code-wise summary nets the note into the bill's own 18% row, not a row with no rate.
+  const hsn = (await request('POST', '/api/gst-returns', { period: '2026-09' }, session)).body.hsn as Record<string, any>[];
+  const steel = hsn.filter((r) => r.hsn === '72142090');
+  assert.deepEqual(steel.map((r) => r.rate), [18]);
+  assert.ok(steel[0]?.bills.includes(note.number));
+});
+
+test('#232 a credit note against a bill inside Karnataka is reported under Karnataka', async () => {
+  const session = await signIn();
+  const { recorded } = await saleAndReturn(session, 'pos-232-local');
+  assert.equal(recorded.status, 200, recorded.body.message);
+  const { row, questions } = await noteRow(session, recorded.body.note.number);
+  assert.deepEqual(questions, []);
+  assert.equal(row?.placeOfSupply, 'Karnataka (29)');
+  assert.equal(row?.taxableValue, -10500);
+  assert.equal(row?.tax, -1890);
+});
+
+test('#232 a note follows the bill\'s delivery state, not the buyer\'s GST number', async () => {
+  // Mehta is registered in Maharashtra, but these bars went to a site in Gujarat. The bill counts in
+  // Gujarat (24), and so does the note that corrects it.
+  const session = await signIn();
+  const customerId = await customerIdOf(session, MEHTA);
+  const address = await request('POST', '/api/shipping-addresses', {
+    customerId, label: 'Surat site', line1: 'Plot 5, Sachin GIDC', city: 'Surat', pincode: '394230', stateCode: '24',
+  }, session);
+  assert.equal(address.status, 200, address.body.message);
+  const sold = await request('POST', '/api/sales/record', {
+    customerId, lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '450', rate: '90' }],
+    date: '2026-09-17', terms: '30', reference: 'cn-232-surat', shipTo: 'address', shipToAddressId: address.body.address.id,
+  }, session);
+  assert.equal(sold.status, 200, sold.body.message);
+  const note = await returnFifty(session, sold.body.invoice.id, 'cn-232-surat-return');
+  const { row, questions } = await noteRow(session, note.number);
+  assert.deepEqual(questions, []);
+  assert.equal(row?.placeOfSupply, 'Gujarat (24)');
+});

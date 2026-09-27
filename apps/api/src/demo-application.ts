@@ -947,11 +947,20 @@ export class DemoApplication {
           customerOn(String(invoice.partyId)),
           supplier,
         ));
-        const notes = (await returnNotes.list(companyId))
+        // Issue #232 — a credit note counts in the state of the bill it corrects, read from that
+        // bill (which may be in an earlier month). Every note used to be given our own state, so an
+        // inter-state note carrying IGST was flagged as a local sale and filed under Karnataka.
+        const hsnByItem = Object.fromEntries(catalogueItems(companyId).map((item) => [item.id, item.hsnSac]));
+        const notes = await Promise.all((await returnNotes.list(companyId))
           .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
-          .map((note) => returnNoteToDocument(note, customerOn(String(note.partyId)), supplier, {
-            placeOfSupplyStateCode: config.gstin.slice(0, 2),
-            hsnByItem: Object.fromEntries(catalogueItems(companyId).map((item) => [item.id, item.hsnSac])),
+          .map(async (note) => {
+            const original = await salesRepository.findById(companyId, note.originalDocument.id);
+            return returnNoteToDocument(note, customerOn(String(note.partyId)), supplier, {
+              original: original === null ? null : {
+                placeOfSupplyStateCode: original.pricing?.placeOfSupplyStateCode ?? original.placeOfSupplyStateCode,
+              },
+              hsnByItem,
+            });
           }));
         return [...documents, ...notes];
       },
@@ -2437,6 +2446,10 @@ export class DemoApplication {
         tax: jsonAmount(totalTaxOf(section.totals).minor),
         rows: section.rows.map((row) => ({
           label: row.documentNumber ?? row.placeOfSupplyStateCode ?? '—',
+          // Issue #232 — the state each row is reported under, so a note filed under the wrong state
+          // can be seen on the screen and not only in the government file.
+          placeOfSupply: row.placeOfSupplyStateCode === null ? null
+            : `${STATE_NAMES[row.placeOfSupplyStateCode] ?? row.placeOfSupplyStateCode} (${row.placeOfSupplyStateCode})`,
           counterparty: row.counterpartyName,
           date: row.documentDate,
           rate: row.ratePercentTimes100 === null ? null : Number(row.ratePercentTimes100) / 100,

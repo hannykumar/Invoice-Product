@@ -123,7 +123,24 @@ export const isInterState = (document: OutwardDocument): boolean | null => {
 const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
   const found: ReturnFinding[] = [];
 
-  if (document.placeOfSupplyStateCode === null) {
+  if (document.placeOfSupplyStateCode === null && document.originalDocument?.missing === true) {
+    // Issue #232 — a note counts in the state its original bill counted in. Without that bill the
+    // state is unknown, and guessing our own state is exactly how an inter-state note was misfiled.
+    const original = document.originalDocument;
+    found.push(finding(
+      'GSTR1_NOTE_ORIGINAL_MISSING',
+      'BLOCKING',
+      {
+        'en-IN': `Note ${document.number} corrects bill ${original.number} of ${original.date}, but that bill cannot be found in your sales, so the state the note counts in is not known.`,
+        'hi-IN': `Note ${document.number} bill ${original.number} (${original.date}) ko theek karta hai, par woh bill aapki bikri me nahi mil raha, isliye pata nahi ki note kis state ka mana jayega.`,
+      },
+      {
+        'en-IN': `A note counts in the same state as the bill it corrects. Find bill ${original.number} and make sure it is in your sales; the note then takes its state from it.`,
+        'hi-IN': `Note usi state ka hota hai jis state ka bill tha. Bill ${original.number} dhoondhiye aur bikri me hai yeh pakka kijiye; phir note wahi state le lega.`,
+      },
+      document,
+    ));
+  } else if (document.placeOfSupplyStateCode === null) {
     found.push(finding(
       'GSTR1_NO_PLACE_OF_SUPPLY',
       'BLOCKING',
