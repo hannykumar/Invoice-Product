@@ -5,7 +5,7 @@
  */
 import { conflict, invalid, notAllowed, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
-import { GstCalculator, RateTable } from '@invoice/gst-calc';
+import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SalesService, type InventoryPort, type SalesInvoice } from '@invoice/sales';
 import {
@@ -332,6 +332,25 @@ const daysAfter = (date: string, days: number): string => {
 };
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
+
+/**
+ * Issue #231 — a bill's lines as the e-way bill lists them. Freight and other charges are part of the
+ * value of the goods they travel with, so each goods item carries its share (the same share the
+ * printed HSN summary and GSTR-1 use) and no item is left without a goods code. State and
+ * union-territory tax go in the one column the portal has for both.
+ */
+const consignmentLinesOf = (lines: readonly ComputedTaxLine[]): ConsignmentLine[] =>
+  foldChargesIntoGoods(lines).map((item) => ({
+    description: item.line.itemName,
+    hsnCode: item.line.hsnOrSac ?? '',
+    quantity: (Number(item.line.quantity.scaled) / 1_000_000).toString(),
+    unit: item.line.quantity.unit,
+    taxableValuePaise: item.taxableValue.minor,
+    cgstPaise: item.cgst.minor,
+    sgstPaise: item.sgst.minor + item.utgst.minor,
+    igstPaise: item.igst.minor,
+    cessPaise: item.cess.minor,
+  }));
 
 /** Today's date in India, which is what "a bill dated in the future" is measured against. */
 const indiaToday = (): string => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
@@ -912,6 +931,9 @@ export class DemoApplication {
             pricing: invoice.pricing === null ? null : {
               lines: invoice.pricing.lines.map((line) => ({
                 lineId: line.lineId, itemId: line.itemId, itemName: line.itemName, hsnOrSac: line.hsnOrSac,
+                // Issue #231 — without the kind, freight read as a goods line with no code and the
+                // code-wise summary came out short by it.
+                kind: line.kind,
                 quantity: line.quantity, ratePercentTimes100: line.ratePercentTimes100,
                 taxableValue: line.taxableValue, cgst: line.cgst, sgst: line.sgst, utgst: line.utgst,
                 igst: line.igst, cess: line.cess, reverseCharge: line.reverseCharge, rateBasis: line.rateBasis,
@@ -1560,17 +1582,7 @@ export class DemoApplication {
           documentType: 'TAX_INVOICE',
           documentNumber: draft.number ?? draft.id,
           documentDate: draft.documentDate,
-          lines: pricing.lines.map((line) => ({
-            description: line.itemName,
-            hsnCode: line.hsnOrSac ?? '',
-            quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
-            unit: line.quantity.unit,
-            taxableValuePaise: line.taxableValue.minor,
-            cgstPaise: line.cgst.minor,
-            sgstPaise: line.sgst.minor,
-            igstPaise: line.igst.minor,
-            cessPaise: line.cess.minor,
-          })),
+          lines: consignmentLinesOf(pricing.lines),
         }],
         transportMode: 'ROAD',
         vehicleType: 'REGULAR',
@@ -2436,6 +2448,21 @@ export class DemoApplication {
           })),
         })),
       })),
+      // Issue #231 — the code-wise summary (GSTR-1 table 12), so what it reports under each goods
+      // code can be read back and compared with the printed bills.
+      hsn: workspace.gstr1.hsn.map((row) => ({
+        hsn: row.hsnOrSac,
+        description: row.description,
+        unit: row.unit,
+        quantity: row.quantity,
+        rate: row.ratePercentTimes100 === null ? null : Number(row.ratePercentTimes100) / 100,
+        taxableValue: jsonAmount(row.amounts.taxableValue.minor),
+        cgst: jsonAmount(row.amounts.cgst.minor),
+        sgst: jsonAmount(row.amounts.sgst.minor),
+        igst: jsonAmount(row.amounts.igst.minor),
+        cess: jsonAmount(row.amounts.cess.minor),
+        bills: row.sources.map((source) => source.number),
+      })),
       reasons: workspace.reasons.map((reason) => ({ sourceId: reason.sourceId, section: reason.section, reason: reason.reason['en-IN'] })),
       gstr3b: {
         summary: workspace.gstr3b.sentence['en-IN'],
@@ -3107,23 +3134,28 @@ export class DemoApplication {
       stateCode: buyerView.stateCode ?? '',
     };
 
-    const lines: EInvoiceLine[] = pricing.lines.map((line, index) => ({
+    // Issue #231 — freight and other charges are part of the value of the goods they travel with,
+    // so they go inside those goods' items rather than as an item with no goods code.
+    const lines: EInvoiceLine[] = foldChargesIntoGoods(pricing.lines).map((item, index) => ({
       lineNumber: index + 1,
-      description: line.itemName,
+      description: item.line.itemName,
       isService: invoice.supplyKind === 'SERVICES',
-      hsnOrSac: line.hsnOrSac ?? '',
-      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
-      unit: line.quantity.unit,
-      unitPricePaise: line.unitPrice.minor,
-      grossAmountPaise: line.grossAmount.minor,
-      discountPaise: line.discountAmount.minor,
-      taxableValuePaise: line.taxableValue.minor,
-      gstRatePercentTimes100: line.ratePercentTimes100 ?? 0n,
-      cgstPaise: line.cgst.minor,
-      sgstPaise: line.sgst.minor,
-      igstPaise: line.igst.minor,
-      cessPaise: line.cess.minor,
-      lineTotalPaise: line.lineTotal.minor,
+      hsnOrSac: item.line.hsnOrSac ?? '',
+      quantity: (Number(item.line.quantity.scaled) / 1_000_000).toString(),
+      unit: item.line.quantity.unit,
+      unitPricePaise: item.line.unitPrice.minor,
+      // The item's gross carries its share of the freight too, so gross less discount is still the
+      // assessable value, which is how the government checks an item.
+      grossAmountPaise: item.line.grossAmount.minor + item.chargeValue.minor,
+      discountPaise: item.line.discountAmount.minor,
+      taxableValuePaise: item.taxableValue.minor,
+      gstRatePercentTimes100: item.line.ratePercentTimes100 ?? 0n,
+      cgstPaise: item.cgst.minor,
+      // One column for state and union-territory tax, as on the government's schema.
+      sgstPaise: item.sgst.minor + item.utgst.minor,
+      igstPaise: item.igst.minor,
+      cessPaise: item.cess.minor,
+      lineTotalPaise: item.lineTotal.minor,
     }));
 
     return {
@@ -3143,7 +3175,7 @@ export class DemoApplication {
       lines,
       totalTaxableValuePaise: pricing.totals.taxableValue.minor,
       totalCgstPaise: pricing.totals.cgst.minor,
-      totalSgstPaise: pricing.totals.sgst.minor,
+      totalSgstPaise: pricing.totals.sgst.minor + pricing.totals.utgst.minor,
       totalIgstPaise: pricing.totals.igst.minor,
       totalCessPaise: pricing.totals.cess.minor,
       roundOffPaise: pricing.totals.roundOff.minor,
@@ -3313,17 +3345,7 @@ export class DemoApplication {
     const pricing = invoice.pricing;
     if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
 
-    const lines: ConsignmentLine[] = pricing.lines.map((line) => ({
-      description: line.itemName,
-      hsnCode: line.hsnOrSac ?? '',
-      quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
-      unit: line.quantity.unit,
-      taxableValuePaise: line.taxableValue.minor,
-      cgstPaise: line.cgst.minor,
-      sgstPaise: line.sgst.minor,
-      igstPaise: line.igst.minor,
-      cessPaise: line.cess.minor,
-    }));
+    const lines = consignmentLinesOf(pricing.lines);
     const document: ConsignmentDocument = {
       documentId: invoice.id,
       documentType: 'TAX_INVOICE',

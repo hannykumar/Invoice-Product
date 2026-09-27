@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { toDecimalString, zero, type Money } from '@invoice/kernel';
-import { apportionChargesToHsn, type ChargeShareableLine } from '../src/charge-shares.ts';
+import { apportionChargesToHsn, foldChargesIntoGoods, type ChargeShareableLine, type FoldableLine } from '../src/charge-shares.ts';
 import { inr } from './fixtures.ts';
 
 const nil = (): Money => zero('INR');
@@ -78,4 +78,71 @@ test('a charge on a bill with no goods keeps its own row, as before', () => {
   assert.equal(parts.length, 1);
   assert.equal(parts[0]?.hsnOrSac, null);
   assert.equal(parts[0]?.isChargeShare, false);
+});
+
+// ---------------------------------------------------------------- issue #231: the government items
+
+const foldable = (over: Partial<FoldableLine> & Pick<FoldableLine, 'taxableValue'>): FoldableLine => {
+  const base = line(over);
+  const tax = base.cgst.minor + base.sgst.minor + base.utgst.minor + base.igst.minor + base.cess.minor;
+  return { ...base, lineTotal: { currency: 'INR', minor: base.taxableValue.minor + tax }, ...over };
+};
+const rupees = (m: Money): string => toDecimalString(m);
+
+test('#231 the worked bill: 450 KGS TMT at ₹90 with ₹2,000 freight is one item of ₹42,500, IGST ₹7,650', () => {
+  const items = foldChargesIntoGoods([
+    foldable({ hsnOrSac: '72142090', taxableValue: inr(40500), igst: inr(7290) }),
+    foldable({ kind: 'CHARGE', taxableValue: inr(2000), igst: inr(360) }),
+  ]);
+  assert.equal(items.length, 1, 'freight is not an item of its own');
+  const [item] = items;
+  assert.equal(item?.line.hsnOrSac, '72142090');
+  assert.equal(rupees(item!.taxableValue), '42500.00');
+  assert.equal(rupees(item!.igst), '7650.00');
+  assert.equal(rupees(item!.chargeValue), '2000.00');
+  assert.equal(rupees(item!.lineTotal), '50150.00', 'the item adds up to the bill');
+});
+
+test('#231 two codes at 18% (₹30,000 and ₹10,000) share ₹2,000 freight as ₹1,500 and ₹500', () => {
+  const items = foldChargesIntoGoods([
+    foldable({ hsnOrSac: '72142090', taxableValue: inr(30000), cgst: inr(2700), sgst: inr(2700) }),
+    foldable({ hsnOrSac: '73170019', taxableValue: inr(10000), cgst: inr(900), sgst: inr(900) }),
+    foldable({ kind: 'CHARGE', taxableValue: inr(2000), cgst: inr(180), sgst: inr(180) }),
+  ]);
+  assert.deepEqual(items.map((i) => rupees(i.chargeValue)), ['1500.00', '500.00']);
+  assert.deepEqual(items.map((i) => rupees(i.taxableValue)), ['31500.00', '10500.00']);
+  assert.deepEqual(items.map((i) => rupees(i.cgst)), ['2835.00', '945.00']);
+  assert.deepEqual(items.map((i) => rupees(i.lineTotal)), ['37170.00', '12390.00']);
+});
+
+test('#231 each code gets the share the printed summary gives it, and the paise left over go to the largest line', () => {
+  const lines = [
+    foldable({ hsnOrSac: '3923', taxableValue: inr(200), igst: inr(36) }),
+    foldable({ hsnOrSac: '3923', taxableValue: inr(100), igst: inr(18) }),
+    foldable({ hsnOrSac: '3926', taxableValue: inr(100), igst: inr(18) }),
+    foldable({ kind: 'CHARGE', taxableValue: { currency: 'INR', minor: 1000n }, igst: { currency: 'INR', minor: 180n } }),
+  ];
+  const items = foldChargesIntoGoods(lines);
+  // ₹10 over 300 : 100 by code is ₹7.50 and ₹2.50; ₹7.50 over 200 : 100 is ₹5.00 and ₹2.50.
+  assert.deepEqual(items.map((i) => rupees(i.chargeValue)), ['5.00', '2.50', '2.50']);
+  // ₹1.80 of tax: ₹1.35 to 3923 and ₹0.45 to 3926; ₹1.35 over 200 : 100 is ₹0.90 and ₹0.45.
+  assert.deepEqual(items.map((i) => rupees(i.igst)), ['36.90', '18.45', '18.45']);
+  const summary = byCode(lines);
+  const folded3923 = (items[0]!.taxableValue.minor + items[1]!.taxableValue.minor);
+  assert.equal(rupees({ currency: 'INR', minor: folded3923 }), summary['3923']?.taxable);
+
+  const odd = foldChargesIntoGoods([
+    foldable({ hsnOrSac: '3923', taxableValue: inr(100) }),
+    foldable({ hsnOrSac: '3923', taxableValue: inr(200) }),
+    foldable({ kind: 'CHARGE', taxableValue: { currency: 'INR', minor: 100n } }),
+  ]);
+  // ₹1.00 over 100 : 200 is 33.33 and 66.66, and the one paisa left goes to the larger line.
+  assert.deepEqual(odd.map((i) => rupees(i.chargeValue)), ['0.33', '0.67']);
+});
+
+test('#231 a bill with only a charge keeps it as it is, so a government document refuses it rather than dropping it', () => {
+  const items = foldChargesIntoGoods([foldable({ kind: 'CHARGE', ratePercentTimes100: null, taxableValue: inr(500) })]);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.line.kind, 'CHARGE');
+  assert.equal(rupees(items[0]!.taxableValue), '500.00');
 });
