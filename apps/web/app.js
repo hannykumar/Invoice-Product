@@ -941,10 +941,21 @@ function restoreDraft(form) {
   if (!saved) return;
   try {
     const values = JSON.parse(saved);
+    const waiting = {};
     Object.entries(values).forEach(([name, value]) => {
       const field = form.elements.namedItem(name);
-      if (field && "value" in field && typeof value === "string") field.value = value;
+      if (!field || !("value" in field) || typeof value !== "string") return;
+      field.value = value;
+      // Follow-up to #266 — a choice whose list has not arrived yet (the customer, the supplier, the
+      // delivery address) is held and put back when the list comes, never dropped.
+      if (field.value !== value) waiting[name] = value;
     });
+    const lines = Array.isArray(values[DRAFT_LINES]) ? values[DRAFT_LINES] : null;
+    if (Object.keys(waiting).length > 0 || lines !== null) pendingDraft.set(form.dataset.draft, { choices: waiting, lines });
+    // A sale whose goods go somewhere else, or that already carries transport details, opens its
+    // delivery box, so where the goods go (and so which state the sale counts in) is in sight.
+    const deliveryBox = form.querySelector("#sale-delivery");
+    if (deliveryBox && ((values.shipTo && values.shipTo !== "same") || ["transporterId", "vehicleNumber", "lrNumber", "destination", "ewayBillNumber"].some((name) => values[name]))) deliveryBox.open = true;
     // The draft on the device now carries the new date too. Only the date is written back: a box
     // whose choices have not loaded yet (the customer list) must not lose what was saved for it.
     if (settleDraftDate(form, values[DRAFT_STARTED], values[DRAFT_SAVED])) {
@@ -957,14 +968,84 @@ function restoreDraft(form) {
 // Issue #266 — the days a draft was started and last saved, kept beside its fields on the device.
 const DRAFT_STARTED = "__startedOn";
 const DRAFT_SAVED = "__savedOn";
+// Follow-up to #266 — the item lines of a sale or supplier bill, kept with the draft.
+const DRAFT_LINES = "__lines";
+/**
+ * Saved choices and lines still waiting for their lists (customers, suppliers, items, a customer's
+ * delivery addresses), per form. The lists arrive after the page has put the draft back, and a
+ * choice missing from a list cannot be shown, so it waits here instead of being lost.
+ */
+const pendingDraft = new Map();
+
+function draftLines(form) {
+  const box = form.querySelector(".sale-lines");
+  if (!box) return undefined;
+  return [...box.querySelectorAll(".sale-line")].map((line) => Object.fromEntries(
+    [...line.querySelectorAll("[data-line-field]")].map((field) => [field.dataset.lineField, field.value]),
+  ));
+}
 
 function saveDraft(form, startedOn) {
   let started = startedOn;
   if (!started) {
     try { started = JSON.parse(storage?.getItem(`karobar.draft.${form.dataset.draft}`) || "{}")[DRAFT_STARTED]; } catch { started = undefined; }
   }
-  storage?.setItem(`karobar.draft.${form.dataset.draft}`, JSON.stringify({ ...draftData(form), [DRAFT_STARTED]: started || dateInput(), [DRAFT_SAVED]: dateInput() }));
+  // What is still waiting for its list is kept as saved, not replaced by the empty box on screen.
+  const waiting = pendingDraft.get(form.dataset.draft);
+  const lines = waiting?.lines ?? draftLines(form);
+  storage?.setItem(`karobar.draft.${form.dataset.draft}`, JSON.stringify({
+    ...draftData(form), ...(waiting?.choices ?? {}),
+    ...(lines === undefined ? {} : { [DRAFT_LINES]: lines }),
+    [DRAFT_STARTED]: started || dateInput(), [DRAFT_SAVED]: dateInput(),
+  }));
   setDraftStatus(form, "savedDevice");
+}
+
+/**
+ * Puts waiting choices back once their list is on screen. `names` limits it to the boxes that list
+ * fills; with `final`, a choice the loaded list does not have (a customer since removed) is let go.
+ */
+function applyPendingChoices(names, final) {
+  pendingDraft.forEach((waiting, draft) => {
+    const form = document.querySelector(`[data-draft="${draft}"]`);
+    if (!form) return;
+    Object.entries(waiting.choices).forEach(([name, value]) => {
+      if (!names.includes(name)) return;
+      const field = form.elements.namedItem(name);
+      if (field && [...(field.options ?? [])].some((option) => option.value === value)) field.value = value;
+      else if (!final) return;
+      delete waiting.choices[name];
+    });
+    if (Object.keys(waiting.choices).length === 0 && waiting.lines === null) pendingDraft.delete(draft);
+  });
+}
+
+/** Follow-up to #266 — rebuilds a draft's item lines once the item list is there to choose from. */
+function restorePendingLines() {
+  pendingDraft.forEach((waiting, draft) => {
+    if (waiting.lines === null) return;
+    const add = draft === "sale" ? addSaleLine : draft === "purchase" ? addPurchaseLine : null;
+    const box = document.querySelector(`#${draft}-lines`);
+    if (add && box && waiting.lines.length > 0) {
+      box.replaceChildren();
+      waiting.lines.forEach((saved) => {
+        const line = add();
+        if (!line) return;
+        Object.entries(saved).forEach(([name, value]) => {
+          const field = line.querySelector(`[data-line-field="${name}"]`);
+          if (field && typeof value === "string" && (field.tagName !== "SELECT" || [...field.options].some((option) => option.value === value))) field.value = value;
+        });
+        showLineUnit(line);
+      });
+    }
+    waiting.lines = null;
+    if (Object.keys(waiting.choices).length === 0) pendingDraft.delete(draft);
+  });
+  updateCalculations();
+}
+
+function forgetPendingDraft(form) {
+  pendingDraft.delete(form.dataset.draft);
 }
 
 async function api(path, options = {}) {
@@ -1629,6 +1710,7 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     if (form.dataset.draft === "sale") { resetSaleForm(form); setDraftStatus(form, "draftCleared"); return; }
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
     hideDraftDateNote(form);
+    forgetPendingDraft(form);
     form.reset();
     const date = form.querySelector('input[type="date"]:not([data-no-default])');
     if (date) date.value = dateInput();
@@ -2792,6 +2874,7 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     const result = await api(`/api/${form.dataset.endpoint ?? `${form.dataset.draft}s`}/record`, { method: "POST", body: JSON.stringify(state.pendingInput) });
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
     hideDraftDateNote(form);
+    forgetPendingDraft(form);
     // Issue #233 — the form becomes a fresh, empty sale, so pressing Review and Record again cannot
     // make a second bill for the same goods by accident. Done before the dialog is filled, because
     // adding the fresh line re-translates the page, dialog included.
@@ -5511,6 +5594,8 @@ submitStep("#itc-typed-form", async (form) => {
 // on as many lines as it takes.
 
 const catalogue = { customers: [], suppliers: [], items: [], units: [], rates: [], states: [] };
+/** Follow-up to #266 — true once the lists have come from the server at least once. */
+let catalogueLoaded = false;
 /** Issue #182 — the chosen customer's delivery addresses and this business's transporters. */
 const delivery = { transporters: [], addresses: [], customerId: null };
 const saleForm = () => document.querySelector('[data-draft="sale"]');
@@ -5611,6 +5696,8 @@ function renderPickers() {
     else setLineGstFromItem(select.closest(".sale-line"));
   });
 
+  // Follow-up to #266 — the saved customer or supplier, now that the list is here.
+  applyPendingChoices(["party", "partyId", "supplierId", "shipToPartyId"], catalogueLoaded);
   showChosenCustomer();
   showChosenSupplier();
   document.querySelectorAll("#sale-lines .sale-line, #purchase-lines .sale-line").forEach(showLineUnit);
@@ -5702,6 +5789,7 @@ function addSaleLine() {
 function resetSaleForm(form) {
   storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
   hideDraftDateNote(form);
+  forgetPendingDraft(form);
   form.reset();
   form.querySelectorAll('input[type="date"]:not([data-no-default])').forEach((field) => { field.value = dateInput(); });
   const picker = form.querySelector("[data-customer-picker]");
@@ -5757,6 +5845,7 @@ async function loadCatalogue() {
     catalogue.units = read.units;
     catalogue.rates = read.rates;
     catalogue.states = read.states;
+    catalogueLoaded = true;
   } catch { return; }
   const states = document.querySelector("#customer-states");
   if (states) {
@@ -5793,6 +5882,8 @@ async function loadCatalogue() {
   if (document.querySelectorAll("#sale-lines .sale-line").length === 0) addSaleLine();
   if (document.querySelectorAll("#purchase-lines .sale-line").length === 0) addPurchaseLine();
   renderPickers();
+  // Follow-up to #266 — a draft's item lines come back once there are items to choose from.
+  restorePendingLines();
   renderReminderCustomers();
   document.querySelectorAll('form[data-endpoint="payments"]').forEach((form) => loadPaymentBills(form));
 }
@@ -6069,7 +6160,10 @@ async function loadDeliveryChoices() {
     }));
     if (chosen !== "" && addresses.querySelector(`option[value="${CSS.escape(chosen)}"]`)) addresses.value = chosen;
   }
-  showPlaceOfSupply();
+  // Follow-up to #266 — the saved delivery address and transporter, now that this customer's are here.
+  // Only for a real customer: the first load, before any customer is chosen, has nothing to offer.
+  if (customerId !== "") applyPendingChoices(["shipToAddressId", "transporterId"], true);
+  showShipToFields();
 }
 
 document.querySelector("#sale-ship-to")?.addEventListener("change", showShipToFields);
