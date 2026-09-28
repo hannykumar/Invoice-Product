@@ -28,9 +28,11 @@ import {
   type VoucherId,
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort } from '@invoice/ledger';
-import { onAccountOf, positionOf, suggestAllocation, validateAllocation } from './allocation.ts';
+import { advancesPaidOf, onAccountOf, positionOf, suggestAllocation, validateAllocation } from './allocation.ts';
 import {
+  buildAdvanceUsePosting,
   buildChequeClearingPosting,
+  buildSupplierAdvancePosting,
   buildPaymentPosting,
   buildWriteOffPosting,
   resolveAccounts,
@@ -79,6 +81,31 @@ export interface RecordPaymentCommand {
    * customer. Refused if it is more than that receipt still has unused.
    */
   readonly refundOf?: string | null;
+  /**
+   * Issue #261 — the person chose, with its own click, to keep whatever this payment to a supplier
+   * does not put against a bill as an advance. Without it, money paid to a supplier that no bill
+   * takes is refused: nothing becomes an advance by default.
+   */
+  readonly advanceToSupplier?: boolean;
+}
+
+/** Issue #261 — one advance set against one supplier bill. */
+export interface UseSupplierAdvanceCommand {
+  readonly partyId: PartyId;
+  readonly documentId: string;
+  readonly documentNumber: string;
+  /** How much of the supplier's unused advances to take off the bill, at most. */
+  readonly amount: Money;
+  readonly date: IsoDate;
+  /** Makes a retry answer with what was already done, rather than using the advance twice. */
+  readonly idempotencyKey: string;
+}
+
+export interface AdvanceUse {
+  readonly paymentId: string;
+  readonly amount: Money;
+  /** `null` when a retry found the advance already taken off this bill. */
+  readonly voucherId: VoucherId | null;
 }
 
 export class ReceivablesService {
@@ -121,6 +148,7 @@ export class ReceivablesService {
       documents: positions,
       totalOutstanding: sum(positions.map((p) => p.outstanding)),
       onAccount: onAccountOf(payments),
+      advancesPaid: advancesPaidOf(payments),
       chequesNotCleared,
     };
   }
@@ -173,6 +201,17 @@ export class ReceivablesService {
       this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.allocate, 'choose which bills this settles');
       validateAllocation(command.amount, allocations, position.documents.filter((d) => d.document.side === sideOf(command.direction)));
     }
+    // Issue #261 — money paid to a supplier that no bill takes is an advance, and only when a person
+    // said so. It is never left in the supplier's account as a negative amount owed.
+    const againstBills = sum(allocations.map((a) => a.amount));
+    const leftOver = subtract(command.amount, againstBills);
+    const advance = command.direction === 'PAYMENT' && refundOf === null && leftOver.minor > 0n;
+    if (advance && command.advanceToSupplier !== true) {
+      throw invalid(
+        'PAYMENT_ADVANCE_NOT_CHOSEN',
+        `${formatINR(leftOver)} of this payment is not put against any bill. Choose to record it as an advance, or choose the bills it pays.`,
+      );
+    }
 
     const at = this.#clock.now().toISOString();
     const narration =
@@ -189,14 +228,20 @@ export class ReceivablesService {
         command.bankAccountCode ?? null,
         command.direction,
       );
-      const lines = buildPaymentPosting(
-        command.direction,
-        accounts.settlement,
-        accounts.party,
-        command.partyId,
-        command.amount,
-        narration,
-      );
+      const advances = advance ? await uow.accounts.findBySystemRole(actor.companyId, 'ADVANCES_TO_SUPPLIERS') : null;
+      if (advance && advances === null) {
+        throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books have nowhere to keep an advance paid to a supplier yet.', { details: { role: 'ADVANCES_TO_SUPPLIERS' } });
+      }
+      const lines = advance && advances !== null
+        ? buildSupplierAdvancePosting(accounts.settlement, accounts.party, advances.id, command.partyId, againstBills, leftOver, narration)
+        : buildPaymentPosting(
+          command.direction,
+          accounts.settlement,
+          accounts.party,
+          command.partyId,
+          command.amount,
+          narration,
+        );
       const posted = await this.#ledger.postVoucherIn(uow, actor, {
         idempotencyKey: `payment:${command.idempotencyKey}`,
         type: command.direction,
@@ -228,6 +273,7 @@ export class ReceivablesService {
               },
         allocations,
         refundOf,
+        ...(advance ? { advanceToSupplier: true } : {}),
         state: 'RECORDED',
         voucherId: posted.voucher.id,
         reversalVoucherId: null,
@@ -243,6 +289,18 @@ export class ReceivablesService {
     });
 
     await this.#ledger.recordPosted(actor, outcome.voucher);
+    if (advance) {
+      await this.#audit.record({
+        companyId: actor.companyId,
+        actorId: actor.userId,
+        at,
+        action: 'payments.advance_paid',
+        subjectType: 'payment',
+        subjectId: outcome.payment.id,
+        summary: `${formatINR(leftOver)} paid to ${command.partyId} as an advance, before their bill. No GST and no input tax credit on it; it is to be taken off their next bill.`,
+        details: { advance: toDecimalString(leftOver), againstBills: toDecimalString(againstBills), mode: command.mode, reference: command.reference ?? '' },
+      });
+    }
     await this.#audit.record({
       companyId: actor.companyId,
       actorId: actor.userId,
@@ -277,6 +335,10 @@ export class ReceivablesService {
     const payment = await this.#require(actor, paymentId);
     if (payment.state === 'REVERSED') {
       throw notAllowed('PAYMENT_REVERSED', 'This payment was undone, so it cannot be applied to a bill.');
+    }
+    // Issue #261 — an advance is set against a bill in the books as well as linked to it.
+    if (payment.advanceToSupplier === true) {
+      throw notAllowed('PAYMENT_IS_ADVANCE', 'This is an advance paid to a supplier. It is taken off their bill when the bill is entered.');
     }
 
     // The document positions must exclude this payment's own current allocations, or re-applying
@@ -373,6 +435,7 @@ export class ReceivablesService {
     }
 
     if (to === 'BOUNCED') {
+      this.#refuseIfAdvanceUsed(payment);
       // Undo the receipt. The customer owes it again, and both entries stay visible.
       const reversed = await this.#ledger.reverseVoucher(actor, {
         idempotencyKey: `cheque:bounced:${payment.id}`,
@@ -422,6 +485,7 @@ export class ReceivablesService {
     }
     const payment = await this.#require(actor, paymentId);
     if (payment.state === 'REVERSED') return payment;
+    this.#refuseIfAdvanceUsed(payment);
 
     const reversed = await this.#ledger.reverseVoucher(actor, {
       idempotencyKey: `payment:reversed:${payment.id}`,
@@ -508,6 +572,92 @@ export class ReceivablesService {
       overrideReason: input.reason,
     });
     return posted.voucher.id;
+  }
+
+  /**
+   * Issue #261 — sets a supplier's unused advances against one of their bills, oldest advance
+   * first, up to `amount` and never more than the bill still has due. In the books each part moves
+   * from "Advances paid to suppliers" to the supplier's account, so what is owed on the bill falls by
+   * exactly what was used; anything not used stays as an advance. No money moves and no GST changes.
+   */
+  async useSupplierAdvance(actor: ActorContext, command: UseSupplierAdvanceCommand): Promise<AdvanceUse[]> {
+    this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.allocate, 'take an advance off a supplier bill');
+    if (command.idempotencyKey.trim() === '') {
+      throw invalid('PAYMENT_IDEMPOTENCY_KEY_REQUIRED', 'Taking an advance off a bill needs a key so a retry cannot use it twice.');
+    }
+    const payments = await this.#repo.listForParty(actor.companyId, command.partyId);
+    const already = payments.flatMap((p) => p.allocations
+      .filter((a) => a.documentId === command.documentId && p.advanceToSupplier === true)
+      .map((a) => ({ paymentId: p.id, amount: a.amount })));
+    // Retried: the advance was already taken off this bill, so it is not taken off again.
+    if (already.length > 0) return already.map((a) => ({ ...a, voucherId: null }));
+
+    const documents = await this.#documents.openDocuments(actor.companyId, command.partyId);
+    const document = documents.find((d) => d.documentId === command.documentId && d.side === 'PAYABLE');
+    if (document === undefined) {
+      throw invalid('ADVANCE_BILL_NOT_THEIRS', `${command.documentNumber} is not one of this supplier's bills, so their advance cannot be taken off it.`);
+    }
+    let remaining = positionOf(document, payments, command.date).outstanding;
+    if (command.amount.minor < remaining.minor) remaining = command.amount;
+    const advances = payments
+      .filter((p) => p.state === 'RECORDED' && p.direction === 'PAYMENT' && p.advanceToSupplier === true && unallocated(p).minor > 0n)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.recordedAt.localeCompare(b.recordedAt));
+
+    const at = this.#clock.now().toISOString();
+    const uses: AdvanceUse[] = [];
+    for (const payment of advances) {
+      if (remaining.minor <= 0n) break;
+      const free = unallocated(payment);
+      const take = free.minor < remaining.minor ? free : remaining;
+      const posted = await this.#store.transaction(actor.companyId, async (uow) => {
+        const partyAccount = await uow.accounts.findByPartyId(actor.companyId, command.partyId);
+        const advancesAccount = await uow.accounts.findBySystemRole(actor.companyId, 'ADVANCES_TO_SUPPLIERS');
+        if (partyAccount === null) throw invalid('PAYMENT_PARTY_ACCOUNT_MISSING', 'This supplier does not have an account in your books yet.');
+        if (advancesAccount === null) throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books have nowhere that keeps advances paid to suppliers.');
+        const voucher = await this.#ledger.postVoucherIn(uow, actor, {
+          idempotencyKey: `advance-used:${command.idempotencyKey}:${payment.id}`,
+          type: 'JOURNAL',
+          date: command.date,
+          narration: `Advance taken off bill ${command.documentNumber}`,
+          source: { kind: 'payment', id: payment.id, number: command.documentNumber },
+          lines: buildAdvanceUsePosting(partyAccount.id, advancesAccount.id, command.partyId, take, command.documentNumber),
+        });
+        const next: Payment = {
+          ...payment,
+          allocations: [...payment.allocations, { documentId: command.documentId, documentNumber: command.documentNumber, amount: take }],
+          version: payment.version + 1,
+        };
+        await this.#repo.update(next, payment.version);
+        return voucher;
+      });
+      await this.#ledger.recordPosted(actor, posted.voucher);
+      await this.#audit.record({
+        companyId: actor.companyId,
+        actorId: actor.userId,
+        at,
+        action: 'payments.advance_used',
+        subjectType: 'payment',
+        subjectId: payment.id,
+        summary: `${formatINR(take)} of the advance paid on ${payment.date} taken off bill ${command.documentNumber}. ${formatINR(subtract(free, take))} of it is still an advance.`,
+        details: { bill: command.documentNumber, used: toDecimalString(take), stillAdvance: toDecimalString(subtract(free, take)), voucherId: posted.voucher.id },
+      });
+      uses.push({ paymentId: payment.id, amount: take, voucherId: posted.voucher.id });
+      remaining = subtract(remaining, take);
+    }
+    return uses;
+  }
+
+  /**
+   * Issue #261 — an advance already taken off a bill cannot simply be undone: the bill would be
+   * left showing as partly paid by money that is no longer in the books.
+   */
+  #refuseIfAdvanceUsed(payment: Payment): void {
+    if (payment.advanceToSupplier === true && payment.allocations.length > 0) {
+      throw notAllowed(
+        'PAYMENT_ADVANCE_ALREADY_USED',
+        `Part of this advance was already taken off ${payment.allocations.map((a) => a.documentNumber).join(', ')}, so it cannot be undone on its own.`,
+      );
+    }
   }
 
   async payment(actor: ActorContext, id: string): Promise<Payment | null> {

@@ -306,3 +306,8 @@ dialog { border: 0; border-radius: 16px; box-shadow: 0 30px 80px rgba(14,35,29,.
    returns form hides the quantity for "Whole bill"; their label styles must not bring them back. */
 #cancel-bill-dialog [hidden], #return-form label[hidden] { display: none; }
 .draft-date-note { margin: 0 0 1rem; }
+
+/* Issue #261 — the advance choices: on Money paid, and on a supplier bill's review. */
+[data-advance-choice][hidden], #review-advance[hidden] { display: none; }
+#review-advance { display: flex; align-items: flex-start; gap: .55rem; margin: .75rem 0 0; font-size: .85rem; line-height: 1.4; }
+#review-advance input[type="checkbox"] { width: auto; min-height: 0; margin-top: .2rem; flex: none; }

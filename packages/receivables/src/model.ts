@@ -70,6 +70,13 @@ export interface Payment {
    * than counting as a second amount on account.
    */
   readonly refundOf: string | null;
+  /**
+   * Issue #261 — money paid to a supplier before their bill, chosen as an advance by a person. The
+   * part no bill has claimed sits in "Advances paid to suppliers" (something the business owns), not
+   * in the supplier's account as a negative amount owed. It is set against their next bill with
+   * `ReceivablesService.useSupplierAdvance`, which moves it across in the books. Absent means false.
+   */
+  readonly advanceToSupplier?: boolean;
   readonly state: PaymentState;
   readonly voucherId: VoucherId | null;
   /** Set when a cheque bounced or the payment was undone: the entry that reversed it. */
@@ -112,6 +119,11 @@ export interface PartyPosition {
   readonly totalOutstanding: Money;
   /** Money received that no bill has claimed yet. Visible, never guessed at. */
   readonly onAccount: Money;
+  /**
+   * Issue #261 — money paid to this supplier in advance that no bill of theirs has used yet. Kept
+   * apart from what is owed: it is never subtracted from a bill until a person sets it against one.
+   */
+  readonly advancesPaid: Money;
   /** Cheques taken but not yet cleared. Not bank balance, and shown separately for that reason. */
   readonly chequesNotCleared: Money;
 }

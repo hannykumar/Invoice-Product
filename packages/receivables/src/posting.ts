@@ -119,6 +119,51 @@ export const buildPaymentPosting = (
       ];
 };
 
+/**
+ * Issue #261 — money paid to a supplier, part of it (or all of it) before their bill.
+ *
+ * The part put against their bills reduces what we owe them, as any payment does. The rest is an
+ * advance: something the business owns, a claim on goods still to come, so it goes to "Advances
+ * paid to suppliers" and not into the supplier's account, where it would show up as a negative
+ * amount owed hidden inside a total. It carries no GST and gives no input tax credit: for goods, no
+ * tax is due on an advance, and the credit comes only with the supplier's tax invoice.
+ */
+export const buildSupplierAdvancePosting = (
+  settlement: AccountId,
+  partyAccount: AccountId,
+  advancesAccount: AccountId,
+  partyId: PartyId,
+  againstBills: Money,
+  advance: Money,
+  narration: string,
+): PostingLineOut[] => {
+  if (advance.minor <= 0n || againstBills.minor < 0n) {
+    throw invalid('PAYMENT_AMOUNT_NOT_POSITIVE', 'An advance needs an amount greater than zero.');
+  }
+  return [
+    ...(againstBills.minor > 0n
+      ? [{ accountId: partyAccount, partyId, debit: againstBills, credit: nil(), narration: 'Reduces what we owe' }]
+      : []),
+    { accountId: advancesAccount, partyId, debit: advance, credit: nil(), narration: 'Advance paid, to be taken off their next bill' },
+    { accountId: settlement, partyId: null, debit: nil(), credit: sum([againstBills, advance]), narration },
+  ];
+};
+
+/**
+ * Issue #261 — an advance set against the supplier's bill. What we owe them falls by the amount
+ * used, and the advance held falls by the same amount. No money moves and no tax changes.
+ */
+export const buildAdvanceUsePosting = (
+  partyAccount: AccountId,
+  advancesAccount: AccountId,
+  partyId: PartyId,
+  amount: Money,
+  billNumber: string,
+): PostingLineOut[] => [
+  { accountId: partyAccount, partyId, debit: amount, credit: nil(), narration: `Advance taken off bill ${billNumber}` },
+  { accountId: advancesAccount, partyId, debit: nil(), credit: amount, narration: `Advance taken off bill ${billNumber}` },
+];
+
 /** A cheque clearing moves it from "cheques in hand" into the bank. Nothing else changes. */
 export const buildChequeClearingPosting = (
   bankAccount: AccountId,

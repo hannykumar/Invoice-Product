@@ -87,6 +87,27 @@ Additive; nothing existing changed meaning.
 - **`refund`** pays back what is unused with a **refund voucher** (Rule 51), `RFV/26-27/00001`, and
   reverses the tax still held on it.
 
+## Advances paid to suppliers (#261)
+
+Owner's decision, 28 Sep 2026: a supplier is normally paid after their bill, but paying before it is
+allowed as an advance, **only after the person's own click**.
+
+- `RecordPaymentCommand.advanceToSupplier: true` is that click. A `PAYMENT` (not a refund) with any
+  part no bill takes is refused with `PAYMENT_ADVANCE_NOT_CHOSEN` without it.
+- The advance part is posted **Dr "Advances paid to suppliers" (1460, `ADVANCES_TO_SUPPLIERS`, an
+  asset) / Cr cash or bank**, never to the supplier's payable account. No GST line and no input tax
+  credit: for goods no tax is due on an advance (Notification 66/2017-Central Tax), and the credit
+  comes only with the supplier's tax invoice.
+- `PartyPosition.advancesPaid` is the unused part; `onAccount` now counts money **received** only, so
+  a supplier advance never shows as "money with you".
+- `useSupplierAdvance` sets unused advances against one supplier bill, oldest first, up to what the
+  bill owes: Dr supplier / Cr 1460, plus the allocation link. Idempotent per bill.
+- `allocate` refuses an advance (`PAYMENT_IS_ADVANCE`); reversing or bouncing an advance already used
+  is refused (`PAYMENT_ADVANCE_ALREADY_USED`).
+- Audit: `payments.advance_paid` and `payments.advance_used`.
+- Reports: `AgeingRow.advancesPaid` and `AgeingBody.advancesPaid` on the suppliers' page, beside
+  (never subtracted from) what is owed.
+
 ## Errors
 
 | Code | Meaning |

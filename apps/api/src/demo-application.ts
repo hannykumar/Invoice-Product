@@ -239,6 +239,20 @@ const billIdsOf = (input: Record<string, unknown>): string[] => {
 };
 
 /**
+ * Issue #261 — the person's own click to pay a supplier before their bill. Only an explicit yes
+ * counts; anything else, including nothing at all, is no.
+ */
+const chosenAsAdvance = (input: Record<string, unknown>): boolean =>
+  input.advance === true || input.advance === 'yes' || input.advance === 'true';
+
+/** The words on the choice, the same on the screen and in any refusal that points to it. */
+const advanceChoiceLabel = (supplier: string): string => `Record this as an advance to ${supplier}`;
+
+const advanceChoiceHelp = (supplier: string, openBills: number): string => openBills === 0
+  ? `You have no bill from ${supplier} yet. This money will be kept as an advance and taken off their next bill.`
+  : `Whatever is not put against a bill ticked above will be kept as an advance and taken off ${supplier}'s next bill.`;
+
+/**
  * One entry on the screen is one payment, however many times Record is pressed. The screen sends a
  * fresh entry number for each new payment; a caller without one uses the bank's reference.
  */
@@ -315,8 +329,10 @@ const paymentVoucherHtml = (input: {
     ['How it was paid', modeWords(payment)],
     ...(payment.reference === null ? [] : [['Reference', payment.reference] as [string, string]]),
   ];
+  // Issue #261 — money paid to a supplier before their bill says it is an advance, in those words.
+  const advance = payment.advanceToSupplier === true;
   const billRows = bills.length === 0
-    ? '<tr><td colspan="4">Not put against any bill.</td></tr>'
+    ? `<tr><td colspan="4">${advance ? 'No bill yet. Paid as an advance.' : 'Not put against any bill.'}</td></tr>`
     : bills.map((bill) => `<tr><td>${escapeHtml(bill.number)}</td><td>${escapeHtml(bill.date ?? '')}</td><td>${bill.total === null ? '' : formatPaise(bill.total)}</td><td>${formatPaise(bill.settled)}</td></tr>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(number)}</title>
 <style>body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px;text-align:left;vertical-align:top}h1{font-size:20px;margin:0}</style></head><body>
@@ -324,7 +340,7 @@ const paymentVoucherHtml = (input: {
 <table><tr>${block(receipt ? 'Received by' : 'Paid by', seller)}${block(receipt ? 'Received from' : 'Paid to', party)}</tr></table>
 <table>${facts.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('')}</table>
 <table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${billRows}</table>
-${onAccount > 0n ? `<p>On account, not yet put against a bill: ${formatPaise(onAccount)}</p>` : ''}
+${onAccount > 0n ? `<p>${advance ? 'Advance, to be taken off their next bill' : 'On account, not yet put against a bill'}: ${formatPaise(onAccount)}</p>` : ''}
 <p style="margin-top:48px;text-align:right">For ${escapeHtml(seller.name)}<br><br>Authorised signatory</p></body></html>`;
 };
 
@@ -704,7 +720,11 @@ export class DemoApplication {
         return [...purchaseDocuments, ...saleDocuments];
       },
       async parties(companyId) {
-        return [...new Set([...(await purchases.parties(companyId)), ...customers(companyId).map((party) => party.id)])] as unknown as readonly PartyId[];
+        // Issue #261 — every supplier, not only those with a bill: an advance is paid before the bill.
+        return [...new Set([
+          ...(await purchases.parties(companyId)), ...customers(companyId).map((party) => party.id),
+          String(config.supplierId), ...supplierParties(companyId).map((party) => party.id),
+        ])] as unknown as readonly PartyId[];
       },
       async nameOf(companyId, partyId) {
         return customers(companyId).find((party) => party.id === partyId)?.legalName ?? purchases.nameOf(companyId, partyId);
@@ -1215,6 +1235,8 @@ export class DemoApplication {
       id: suppliersOwed.length === 1 ? suppliersOwed[0]!.id : null,
       name: suppliersOwed.length === 1 ? this.partyName(companyId, suppliersOwed[0]!.id) : suppliersOwed.length === 0 ? 'Suppliers' : `${suppliersOwed.length} suppliers`,
       outstanding: jsonAmount(sum(supplierOpen.map((d) => d.outstanding)).minor),
+      // Issue #261 — paid before the bill, not yet taken off one. Beside what is owed, never subtracted.
+      advancesPaid: jsonAmount(sum(supplierPositions.map(({ position }) => position.advancesPaid)).minor),
       documents: supplierOpen.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })),
     };
     // Issue #237 — what every customer owes, worked out exactly as Reports works out its
@@ -1410,7 +1432,8 @@ export class DemoApplication {
       },
       dues: {
         receivables: { title: pack.receivables.header.title, sentence: pack.receivables.body.sentence, total: jsonAmount(pack.receivables.body.total.amount.minor), rows: pack.receivables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), onAccount: jsonAmount(r.onAccount.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
-        payables: { sentence: pack.payables.body.sentence, total: jsonAmount(pack.payables.body.total.amount.minor), rows: pack.payables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
+        // Issue #261 — what is owed never goes below zero; advances paid are their own figure.
+        payables: { sentence: pack.payables.body.sentence, total: jsonAmount(pack.payables.body.total.amount.minor), advancesPaid: jsonAmount(pack.payables.body.advancesPaid.minor), rows: pack.payables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), advancesPaid: jsonAmount(r.advancesPaid.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
       },
       gst: {
         title: pack.gst.header.title,
@@ -1456,18 +1479,53 @@ export class DemoApplication {
     const sumLine = lineTaxes.length > 1
       ? [`${head}: ${lineTaxes.map(formatPaise).join(' + ')} = ${formatPaise(claimable)}`]
       : [];
+    // Issue #261 — an advance already paid to this supplier is offered against this bill, ticked.
+    const advance = await this.supplierAdvanceFor(actor, approved, input);
     return {
       state: 'preview',
       title: 'Ready to record',
       // Nothing has happened yet, so the review says what recording will do, not what it did.
-      message: `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`,
+      message: advance !== null && advance.used > 0n
+        ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} for ${formatPaise(preview.totalPaise)} will take the ${formatPaise(advance.used)} advance already paid off it, so you will owe them ${formatPaise(preview.totalPaise - advance.used)}, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`
+        : `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`,
       amount: jsonAmount(preview.totalPaise),
       supplier: approved.supplierName,
       taxType: intra ? 'CGST_SGST' : 'IGST',
       tax: { cgst: jsonAmount(preview.tax.cgstPaise), sgst: jsonAmount(preview.tax.sgstPaise), igst: jsonAmount(preview.tax.igstPaise), total: jsonAmount(claimable) },
-      effects: [why, ...lines, ...sumLine, ...previewEffects(preview, this.config.location), ...preview.warnings],
+      // Issue #261 — with an advance taken off, the bill's total is not what is due; the sum below says what is.
+      effects: [why, ...lines, ...sumLine,
+        ...previewEffects(preview, this.config.location).map((line) => advance !== null && advance.used > 0n && line.startsWith('Supplier due: ') ? `Bill total: ${formatPaise(preview.totalPaise)}` : line),
+        ...preview.warnings, ...(advance === null ? [] : advance.effects)],
       token: approved.id,
+      advance: advance === null ? null : {
+        available: jsonAmount(advance.available), use: advance.use, used: jsonAmount(advance.used),
+        owe: jsonAmount(preview.totalPaise - advance.used), label: advance.label, effects: advance.effects,
+      },
     };
+  }
+
+  /**
+   * Issue #261 — what of this supplier's advances this bill will use, and the sum, step by step.
+   * Used unless the person unticked it (`useAdvance: no`). `null` when there is no advance to use.
+   */
+  private async supplierAdvanceFor(actor: ActorContext, approved: ApprovedPurchase, input: Record<string, unknown>) {
+    const position = await this.payments.position(actor, approved.supplierPartyId as PartyId, isoDate(approved.invoiceDate));
+    const available = position.advancesPaid.minor;
+    if (available <= 0n) return null;
+    const use = !(input.useAdvance === false || input.useAdvance === 'no' || input.useAdvance === 'false');
+    const total = approved.invoiceTotalPaise;
+    const used = use ? (available < total ? available : total) : 0n;
+    const name = approved.supplierName;
+    const label = `Take the ${formatPaise(available < total ? available : total)} advance already paid to ${name} off this bill`;
+    const effects = use
+      ? [
+        `Advance already paid to ${name}: ${formatPaise(available)}. It is taken off this bill:`,
+        `${formatPaise(total)} − ${formatPaise(used)} = ${formatPaise(total - used)} you will owe ${name}.`,
+        ...(available > used ? [`${formatPaise(available)} − ${formatPaise(used)} = ${formatPaise(available - used)} stays as an advance for their next bill.`] : []),
+        'The GST you can claim is the bill\'s GST only. The advance adds none.',
+      ]
+      : [`Advance already paid to ${name}: ${formatPaise(available)}. You chose not to take it off this bill, so you will owe them ${formatPaise(total)} and the advance stays for a later bill.`];
+    return { available, use, used, effects, label };
   }
 
   async recordPurchase(actor: ActorContext, input: Record<string, unknown>) {
@@ -1482,9 +1540,33 @@ export class DemoApplication {
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: approved.supplierPartyId, name: approved.supplierName, kind: 'SUPPLIER' });
+    // Issue #261 — worked out before the bill is posted, so it is the advance the review showed.
+    const advance = await this.supplierAdvanceFor(actor, approved, input);
+    if (advance !== null && advance.used > 0n && approved.taxLiability === 'REVERSE_CHARGE') {
+      // Tax on a reverse-charge service falls due when it is paid, so an advance would have moved
+      // that date. This screen does not handle reverse charge, so it says so rather than mis-tax it.
+      throw notAllowed('PURCHASE_ADVANCE_REVERSE_CHARGE', 'This bill is under reverse charge, and an advance paid on it changes when its GST was due. That is not handled here yet, so nothing was recorded.');
+    }
     const result = await this.shop.posting.post(actor, approved, `web:${approved.id}`);
+    const used = advance !== null && advance.used > 0n
+      ? await this.payments.useSupplierAdvance(actor, {
+        partyId: approved.supplierPartyId as PartyId, documentId: result.bill.id, documentNumber: result.bill.invoiceNumber,
+        amount: money(advance.used), date: isoDate(approved.invoiceDate), idempotencyKey: `web-purchase:${result.bill.id}`,
+      })
+      : [];
+    const usedTotal = used.reduce((total, part) => total + part.amount.minor, 0n);
     const dashboard = await state();
-    return { state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded', message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary, bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier };
+    const owe = result.bill.totalPaise - usedTotal;
+    return {
+      state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded',
+      message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary,
+      ...(usedTotal > 0n ? { effects: [
+        `Advance taken off this bill: ${formatPaise(result.bill.totalPaise)} − ${formatPaise(usedTotal)} = ${formatPaise(owe)} you owe ${result.bill.supplierName}.`,
+        ...(advance !== null && advance.available > usedTotal ? [`${formatPaise(advance.available - usedTotal)} stays as an advance for their next bill.`] : []),
+      ] } : {}),
+      advanceUsed: jsonAmount(usedTotal), owe: jsonAmount(owe),
+      bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier,
+    };
   }
 
   /** Issue #237 — the stock of the goods just bought, not whichever item Home puts first. */
@@ -2608,6 +2690,9 @@ export class DemoApplication {
       party,
       owed: jsonAmount(sum(open.map((d) => d.outstanding)).minor),
       onAccount: direction === 'RECEIPT' ? jsonAmount(position.onAccount.minor) : 0,
+      // Issue #261 — advances already paid to this supplier and not yet taken off a bill.
+      advancesPaid: direction === 'PAYMENT' ? jsonAmount(position.advancesPaid.minor) : 0,
+      advanceChoice: direction === 'PAYMENT' ? { label: advanceChoiceLabel(party.name), help: advanceChoiceHelp(party.name, open.length) } : null,
       bills: open.map((d) => ({
         id: d.document.documentId,
         number: d.document.number,
@@ -2624,6 +2709,7 @@ export class DemoApplication {
     const plan = await this.paymentPlan(actor, input);
     const { direction, party, amount, how, applied, leftOver, owedBefore } = plan;
     const owedAfter = owedBefore - (amount - leftOver);
+    if (plan.advance > 0n) return this.previewSupplierAdvance(actor, plan, owedAfter);
     const whose = direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`;
     return {
       state: 'preview',
@@ -2643,6 +2729,38 @@ export class DemoApplication {
             : `${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} is more than the bills chosen, so it stays on account for ${party.name}.`]
           : []),
         `${direction === 'RECEIPT' ? `${party.name} owes` : `You owe ${party.name}`} ${formatPaise(owedBefore)} on open bills now, and ${formatPaise(owedAfter < 0n ? 0n : owedAfter)} after this.`,
+      ],
+    };
+  }
+
+  /**
+   * Issue #261 — the review of money paid to a supplier before their bill. It says plainly that this
+   * is an advance, that nothing is owed because of it, and that it comes off their next bill.
+   */
+  private async previewSupplierAdvance(actor: ActorContext, plan: Awaited<ReturnType<DemoApplication['paymentPlan']>>, owedAfter: bigint) {
+    const { party, amount, how, applied, advance } = plan;
+    const position = await this.payments.position(actor, party.id as PartyId, plan.date);
+    const heldBefore = position.advancesPaid.minor;
+    const against = amount - advance;
+    return {
+      state: 'preview',
+      title: 'Advance to a supplier — check it',
+      message: owedAfter <= 0n
+        ? `Advance paid to ${party.name}: ${formatPaise(advance)}. You owe them nothing yet; when their bill is entered, ${formatPaise(advance)} will be taken off it.`
+        : `Advance paid to ${party.name}: ${formatPaise(advance)}. It is not taken off the ${formatPaise(owedAfter)} you already owe them on open bills; when their next bill is entered, ${formatPaise(advance)} will be taken off it.`,
+      amount: jsonAmount(amount),
+      advance: jsonAmount(advance),
+      party,
+      direction: plan.direction,
+      token: plan.key,
+      effects: [
+        `Paid to ${party.name} by ${how.words}.`,
+        ...applied.map(({ position: bill, amount: put }) =>
+          `${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} still due on this bill`),
+        ...(applied.length > 0 ? [`${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} is kept as an advance.`] : []),
+        ...(heldBefore > 0n ? [`Advances already with ${party.name}: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`] : []),
+        `In your books it is kept under "Advances paid to suppliers", not as money you owe.`,
+        'No GST is entered for this advance, and no GST credit is claimed on it. The credit comes with their bill.',
       ],
     };
   }
@@ -2675,6 +2793,7 @@ export class DemoApplication {
       bankAccountCode: how.bankAccountCode,
       ...(how.cheque === undefined ? {} : { cheque: how.cheque }),
       ...(applied.length === 0 ? {} : { allocations: applied.map(({ position, amount: put }) => ({ documentId: position.document.documentId, documentNumber: position.document.number, amount: money(put) })) }),
+      ...(plan.advance > 0n ? { advanceToSupplier: true } : {}),
     });
     // The same request twice is one payment. The same key for a different payment is a mistake, not a retry.
     if (payment.partyId !== party.id || payment.amount.minor !== amount || payment.direction !== direction) {
@@ -2689,14 +2808,22 @@ export class DemoApplication {
     const position = await this.payments.position(actor, party.id as PartyId, payment.date);
     const owed = sum(openBillsOf(position.documents, direction).map((d) => d.outstanding));
     const voucher = payment.voucherId === null ? null : await this.shop.ledger.getVoucher(actor, payment.voucherId);
+    const advance = payment.advanceToSupplier === true ? payment.amount.minor - sum(payment.allocations.map((a) => a.amount)).minor : 0n;
     return {
       state: 'recorded',
       deduplicated,
-      title: earlier !== null ? 'Already recorded once' : direction === 'RECEIPT' ? 'Money received recorded' : 'Money paid recorded',
+      title: earlier !== null ? 'Already recorded once' : direction === 'RECEIPT' ? 'Money received recorded' : payment.advanceToSupplier === true ? 'Advance paid recorded' : 'Money paid recorded',
       message: earlier !== null
         ? `${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'from' : 'to'} ${party.name} was already recorded. It was not recorded twice.`
         : `${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'received from' : 'paid to'} ${party.name} is in your books${voucher === null ? '' : ` as ${voucher.number}`}.`,
-      effects: [direction === 'RECEIPT' ? `${party.name} now owes ${formatPaise(owed.minor)} on open bills.` : `You now owe ${party.name} ${formatPaise(owed.minor)}.`],
+      effects: [
+        direction === 'RECEIPT' ? `${party.name} now owes ${formatPaise(owed.minor)} on open bills.` : `You now owe ${party.name} ${formatPaise(owed.minor)}.`,
+        ...(direction === 'PAYMENT' && position.advancesPaid.minor > 0n
+          ? [`Advance with ${party.name}, to be taken off their next bill: ${formatPaise(position.advancesPaid.minor)}.`]
+          : []),
+      ],
+      advance: jsonAmount(advance),
+      advancesPaid: direction === 'PAYMENT' ? jsonAmount(position.advancesPaid.minor) : 0,
       paymentId: payment.id,
       voucherNumber: voucher?.number ?? null,
       direction,
@@ -2780,14 +2907,21 @@ export class DemoApplication {
       applied.push({ position, amount: put });
       remaining -= put;
     }
-    if (direction === 'PAYMENT' && remaining > 0n) {
+    // Issue #261 — paying a supplier before their bill is allowed, but only as an advance the person
+    // chose with its own click. Without that click, money no bill takes is refused, as before.
+    const advanceChosen = direction === 'PAYMENT' && chosenAsAdvance(input);
+    const tick = `tick “${advanceChoiceLabel(party.name)}”`;
+    if (direction === 'PAYMENT' && remaining > 0n && !advanceChosen) {
       const covered = amount - remaining;
       throw invalid('PAYMENT_MORE_THAN_BILLS', chosen.length === 0
-        ? `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. Paying a supplier before their bill is not offered yet.`
-        : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills or pay ${formatPaise(covered)}.`);
+        ? open.length === 0
+          ? `You have no bill from ${party.name} yet. To pay them before their bill, ${tick}. Nothing was recorded.`
+          : `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. To pay them before a bill instead, ${tick}.`
+        : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills, pay ${formatPaise(covered)}, or ${tick} to keep ${formatPaise(remaining)} as an advance.`);
     }
     return {
       direction, party, amount, date, how, reference, applied, leftOver: remaining,
+      advance: direction === 'PAYMENT' ? remaining : 0n,
       owedBefore: sum(open.map((d) => d.outstanding)).minor,
       key,
     };

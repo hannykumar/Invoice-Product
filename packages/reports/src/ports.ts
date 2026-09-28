@@ -116,7 +116,7 @@ export const noDues: DuesReadPort = {
   },
   async position(_actor: ActorContext, partyId: PartyId) {
     const nil = { currency: 'INR' as const, minor: 0n };
-    return { partyId, documents: [], totalOutstanding: nil, onAccount: nil, chequesNotCleared: nil };
+    return { partyId, documents: [], totalOutstanding: nil, onAccount: nil, chequesNotCleared: nil, advancesPaid: nil };
   },
 };
 

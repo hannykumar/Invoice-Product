@@ -9,7 +9,7 @@ const copy = {
     stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the final total come from the approved item and sale-date rules when you review. This draft does not guess them.", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is used only for this preview and is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", purchaseLinesLabel: "Items on this supplier bill", purchaseTaxFromGstin: "Whether this bill carries IGST, or CGST and SGST, is worked out from the supplier's GST number and yours. Nobody is asked which state they are in.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "Tick the bills this money pays. If you tick none, or it is more than the bills, the rest stays on account for this customer.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
-    navPaid: "Money paid", paidTitle: "Record money paid to a supplier", paidHelp: "Pick the supplier, tick the bills you are paying, and say how you paid.", paidTo: "Paid to", amountPaid: "Amount paid", paidDate: "Date paid", paidMethod: "How did you pay?", chooseSupplierBill: "Bills this pays", chooseSupplierBillHelp: "Tick the supplier's bills this money pays, oldest first. The money must go against their bills.", paidSummary: "Payment summary", paidSafety: "This is a draft. It does not reduce what you owe the supplier until it is reviewed and saved.", reviewPaid: "Review payment",
+    navPaid: "Money paid", paidTitle: "Record money paid to a supplier", paidHelp: "Pick the supplier, tick the bills you are paying, and say how you paid.", paidTo: "Paid to", amountPaid: "Amount paid", paidDate: "Date paid", paidMethod: "How did you pay?", chooseSupplierBill: "Bills this pays", chooseSupplierBillHelp: "Tick the supplier's bills this money pays, oldest first. Paying before their bill? Choose the advance below.", advanceChoice: "Record this as an advance to {supplier}", advanceHelpNoBill: "You have no bill from {supplier} yet. This money will be kept as an advance and taken off their next bill.", advanceHelpMore: "Whatever is not put against a bill ticked above will be kept as an advance and taken off {supplier}'s next bill.", advanceAlready: "Advance already with {supplier}: {amount}.", supplierAdvances: "Advances paid to suppliers: {amount}", useAdvanceOnBill: "Take the {amount} advance already paid to {supplier} off this bill", paidSummary: "Payment summary", paidSafety: "This is a draft. It does not reduce what you owe the supplier until it is reviewed and saved.", reviewPaid: "Review payment",
     choosePaymentCustomer: "Choose the customer who paid", choosePaymentSupplier: "Choose the supplier you paid", chequeNumber: "Cheque number", chequeDate: "Date on the cheque", paymentReferenceLabel: "Reference (UTR or UPI number, optional)", noOpenBills: "No bills are waiting to be paid.", chooseAPartyFirst: "Choose who it is, and their open bills appear here.", openBillLine: "{number} · {date} · bill {total} · still due {due}", printVoucher: "Print", receiptTitle: "Receipt {number}", paymentVoucherTitle: "Payment voucher {number}", chooseSaleCustomer: "Choose the customer", cancelBill: "Cancel this bill", cancelBillReason: "Why is this bill being cancelled?", cancelBillReasonHelp: "Kept with the bill and in the audit trail. The bill number stays used and is never given out again.", cancelBillConfirm: "Cancel the bill", cancelGovernmentFirst: "Cancel with the government first, then this bill", cancelBillChecking: "Checking what cancelling this bill will do…", billCancelledNote: "This bill is cancelled. It stays on record with its number, marked CANCELLED.", makeWholeBillNote: "Make a credit note for the whole bill", wholeBillChoice: "Whole bill · every item and charge · {amount} left to credit", documentsIssued: "Documents issued (GSTR-1 table 13)", documentsIssuedLine: "{from} to {to}: {total} numbers used, {cancelled} cancelled, {issued} counted", documentKindINVOICE: "Invoices", documentKindCREDIT_NOTE: "Credit notes", documentKindDEBIT_NOTE: "Debit notes",
     noteHelp: "Give the customer this page. It carries the bill it is against, so they can reverse the GST credit they claimed.", notePrint: "Print the note", noteFrame: "The printed note", notesTitle: "Credit and debit notes issued", noteAgainst: "against {number}", notePrintAction: "Print", noteNotPrintable: "Recorded before notes could be printed", returnsTitle: "Record a return", returnsHelp: "Choose the original bill and what came back. The original stays unchanged; a linked credit or debit note records the correction.", originalBill: "Original customer or supplier bill", returnItem: "Item being returned", returnQuantity: "Quantity returned", disposition: "What happens to the goods", dispAccepted: "Accepted back into usable stock", dispDamaged: "Move to damaged stock", dispScrapped: "Scrap after receiving", dispReplacement: "Replacement is being arranged", returnDate: "Return date", returnReference: "Return reference", returnReason: "Why is it being returned?", returnReasonHelp: "This explanation stays in the audit trail.", returnRemaining: "Choose a bill to see the quantity still eligible.", returnEligible: "{quantity} {unit} still eligible on the original bill.", returnLineChoice: "{item} · {quantity} {unit} left", customerSale: "Customer sale", supplierPurchase: "Supplier purchase", returnCheckQuantity: "Returned quantity cannot exceed the original eligible quantity", returnCheckBooks: "Stock, GST and the customer or supplier balance change together", returnCheckCompliance: "Registered documents are marked for a compliance adjustment", returnSafety: "Checking changes nothing. Recording creates a linked note; it never edits or hides the original bill.", checkReturn: "Review return", noReturnDocuments: "No issued bills are available for return yet.", returnActivity: "Linked return note posted without changing the original", customerReturnChecked: "Customer return checked", supplierReturnChecked: "Supplier return checked", returnCheckedBody: "The checked return comes to {amount}.", returnCustomerEffect: "A credit note will reduce what the customer owes.", returnSupplierEffect: "A debit note will reduce what you owe the supplier.", returnSalesStockEffect: "Accepted goods will go back into stock.", returnPurchaseStockEffect: "Returned goods will leave stock.", returnComplianceEffect: "The registered document needs a compliance adjustment.", returnNoComplianceEffect: "No government-document adjustment is needed.", returnRecorded: "Return recorded", returnAlreadyRecorded: "Return already recorded once", returnRecordedBody: "Linked note {number} was recorded without changing the original bill.",
     workspace: "Workspace", activityTitle: "All activity", activityHelp: "Every completed action will appear here with its status and time.", demoHistory: "This preview has sample activity", demoHistoryBody: "Connect the application services to show the company's full history. You can still test the draft flows now.", createFirstSale: "Create a sale",
@@ -341,7 +341,7 @@ const copy = {
     stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "GST aur final total review ke samay approved saman aur tareekh ke rule se aayega. Yeh draft koi rate nahin maanta.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf is preview mein hai aur upload nahi hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", purchaseLinesLabel: "Is supplier bill ki cheezein", purchaseTaxFromGstin: "Is bill par IGST lagega ya CGST aur SGST, yeh supplier ke GST number aur aapke GST number se tay hota hai. Kisi se unka rajya nahin poochha jata.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Jin bills ka yeh paisa hai, unpar tick karein. Koi tick na ho, ya paisa bills se zyada ho, to baaki is customer ke khaate mein alag dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
-    navPaid: "Diya paisa", paidTitle: "Supplier ko diya paisa darj karen", paidHelp: "Supplier chunen, jin bills ka payment hai unpar tick karein, aur batayen kaise diya.", paidTo: "Kisko diya", amountPaid: "Di gayi rakam", paidDate: "Dene ki tareekh", paidMethod: "Aapne kaise diya?", chooseSupplierBill: "Yeh kin bills ka payment hai", chooseSupplierBillHelp: "Supplier ke jin bills ka yeh paisa hai, unpar tick karein. Paisa unke bills ke saamne hi jana chahiye.", paidSummary: "Payment ka saar", paidSafety: "Yeh draft hai. Review aur save hone tak supplier ka baki kam nahi hoga.", reviewPaid: "Payment dekhen",
+    navPaid: "Diya paisa", paidTitle: "Supplier ko diya paisa darj karen", paidHelp: "Supplier chunen, jin bills ka payment hai unpar tick karein, aur batayen kaise diya.", paidTo: "Kisko diya", amountPaid: "Di gayi rakam", paidDate: "Dene ki tareekh", paidMethod: "Aapne kaise diya?", chooseSupplierBill: "Yeh kin bills ka payment hai", chooseSupplierBillHelp: "Supplier ke jin bills ka yeh paisa hai, unpar tick karein. Bill se pehle de rahe hain? Neeche advance chunen.", advanceChoice: "Ise {supplier} ko advance ke roop mein darj karein", advanceHelpNoBill: "{supplier} ka abhi koi bill nahin hai. Yeh paisa advance rahega aur unke agle bill se kata jayega.", advanceHelpMore: "Jo paisa upar tick kiye bills ke saamne nahin laga, woh advance rahega aur {supplier} ke agle bill se kata jayega.", advanceAlready: "{supplier} ke paas pehle se advance: {amount}.", supplierAdvances: "Suppliers ko diya advance: {amount}", useAdvanceOnBill: "{supplier} ko diya {amount} advance is bill se kaatein", paidSummary: "Payment ka saar", paidSafety: "Yeh draft hai. Review aur save hone tak supplier ka baki kam nahi hoga.", reviewPaid: "Payment dekhen",
     choosePaymentCustomer: "Jis customer ne diya, use chunen", choosePaymentSupplier: "Jis supplier ko diya, use chunen", chequeNumber: "Cheque number", chequeDate: "Cheque par likhi tareekh", paymentReferenceLabel: "Reference (UTR ya UPI number, zaroori nahin)", noOpenBills: "Koi bill baki nahin hai.", chooseAPartyFirst: "Pehle chunen kisse len-den hai; unke khule bill yahan dikhenge.", openBillLine: "{number} · {date} · bill {total} · baki {due}", printVoucher: "Print", receiptTitle: "Receipt {number}", paymentVoucherTitle: "Payment voucher {number}", chooseSaleCustomer: "Customer chunen", cancelBill: "Yeh bill radd karein", cancelBillReason: "Yeh bill kyon radd ho raha hai?", cancelBillReasonHelp: "Bill ke saath aur audit record mein rahega. Bill ka number istemal ho chuka hai aur dobara kabhi nahin diya jayega.", cancelBillConfirm: "Bill radd karein", cancelGovernmentFirst: "Pehle government ke saath radd karein, phir yeh bill", cancelBillChecking: "Dekh rahe hain ki bill radd karne se kya hoga…", billCancelledNote: "Yeh bill radd ho chuka hai. Apne number ke saath CANCELLED likha hua record mein rahega.", makeWholeBillNote: "Poore bill ka credit note banayein", wholeBillChoice: "Poora bill · har saman aur kharcha · {amount} credit karna baki", documentsIssued: "Jaari kiye gaye documents (GSTR-1 table 13)", documentsIssuedLine: "{from} se {to}: {total} number istemal hue, {cancelled} radd, {issued} gine gaye", documentKindINVOICE: "Invoice", documentKindCREDIT_NOTE: "Credit note", documentKindDEBIT_NOTE: "Debit note",
     noteHelp: "Yeh panna customer ko dein. Is par woh bill likha hai jiske against yeh hai, taaki woh apna GST credit wapas kar sake.", notePrint: "Note print karein", noteFrame: "Chhapa hua note", notesTitle: "Jaari kiye gaye credit aur debit note", noteAgainst: "{number} ke against", notePrintAction: "Print", noteNotPrintable: "Print ki suvidha se pehle darj hua", returnsTitle: "Wapsi darj karen", returnsHelp: "Asli bill aur wapas aaya saman chunen. Asli bill nahi badlega; juda hua credit ya debit note sudhar darj karega.", originalBill: "Asli customer ya supplier bill", returnItem: "Wapas ho raha saman", returnQuantity: "Wapas matra", disposition: "Saman ka kya hoga", dispAccepted: "Sahi stock mein wapas rakhen", dispDamaged: "Kharab stock mein rakhen", dispScrapped: "Wapas lekar scrap karen", dispReplacement: "Badla hua saman aayega", returnDate: "Wapsi ki tareekh", returnReference: "Wapsi reference", returnReason: "Wapas kyon ho raha hai?", returnReasonHelp: "Yeh wajah audit record mein rahegi.", returnRemaining: "Bachi hui eligible matra dekhne ke liye bill chunen.", returnEligible: "Asli bill par abhi {quantity} {unit} wapas ho sakta hai.", returnLineChoice: "{item} · {quantity} {unit} bacha", customerSale: "Customer ki bikri", supplierPurchase: "Supplier ki kharid", returnCheckQuantity: "Wapas matra asli eligible matra se zyada nahi ho sakti", returnCheckBooks: "Stock, GST aur customer ya supplier balance ek saath badlenge", returnCheckCompliance: "Registered document ko compliance adjustment ke liye mark kiya jayega", returnSafety: "Jaanchne se kuch nahi badalta. Darj karne par juda hua note banta hai; asli bill kabhi badalta ya chhupta nahi.", checkReturn: "Wapsi dekhen", noReturnDocuments: "Wapsi ke liye abhi koi jaari bill nahi hai.", returnActivity: "Asli bill badle bina juda hua return note darj hua", customerReturnChecked: "Customer wapsi jaanch li", supplierReturnChecked: "Supplier wapsi jaanch li", returnCheckedBody: "Jaanchi hui wapsi {amount} ki hai.", returnCustomerEffect: "Credit note customer se lene wali rakam ghataega.", returnSupplierEffect: "Debit note supplier ko dene wali rakam ghataega.", returnSalesStockEffect: "Sahi saman stock mein wapas jayega.", returnPurchaseStockEffect: "Wapas saman stock se bahar jayega.", returnComplianceEffect: "Registered document ke liye compliance adjustment karna hoga.", returnNoComplianceEffect: "Kisi government-document adjustment ki zaroorat nahi hai.", returnRecorded: "Wapsi darj hui", returnAlreadyRecorded: "Wapsi pehle hi ek baar darj hai", returnRecordedBody: "Asli bill badle bina juda note {number} darj hua.",
     workspace: "Kaam ki jagah", activityTitle: "Saara kaam", activityHelp: "Har poora kaam uske samay aur sthiti ke saath yahan dikhega.", demoHistory: "Is preview mein sample kaam hai", demoHistoryBody: "Company ka poora itihaas dikhane ke liye services jodni hongi. Abhi draft flows check kar sakte hain.", createFirstSale: "Bikri banayen",
@@ -761,6 +761,8 @@ const REPORT_TEXT = {
   whatItWas: { "en-IN": "What it was", "hi-IN": "Kya tha" },
   businessOwns: { "en-IN": "What the business owns", "hi-IN": "Business ke paas kya hai" },
   oweSuppliers: { "en-IN": "What you owe suppliers", "hi-IN": "Suppliers ko kya dena hai" },
+  // Issue #261 — paid before the bill; beside what is owed, never taken out of it.
+  advancesToSuppliers: { "en-IN": "Advances paid to suppliers", "hi-IN": "Suppliers ko diya advance" },
   worth: { "en-IN": "Worth", "hi-IN": "Keemat" },
   openingBooks: { "en-IN": "Its opening books, straight from the ledger", "hi-IN": "Iski shuruaati books, seedha ledger se" },
   nothingCreated: { "en-IN": "Nothing was created. Fix these and check again.", "hi-IN": "Kuch nahin bana. Inhein theek karke dobara jaanchein." },
@@ -1128,6 +1130,12 @@ function renderDashboard(data) {
   document.querySelector("#stock-detail").textContent = text("stockLeastFirst", { location: data.company.location, count: String(stockItems.filter((item) => item.needsAttention).length) });
   document.querySelector("#supplier-title").textContent = text("supplierDue", { supplier: data.supplier.name, amount: money(data.supplier.outstanding) });
   document.querySelector("#supplier-detail").textContent = text(data.supplier.documents.length === 1 ? "supplierDocumentsOne" : "supplierDocumentsMany", { count: data.supplier.documents.length });
+  // Issue #261 — advances paid to suppliers, on their own line, never taken out of what is owed.
+  const advances = document.querySelector("#supplier-advances");
+  if (advances) {
+    advances.hidden = !(data.supplier.advancesPaid > 0);
+    advances.textContent = text("supplierAdvances", { amount: money(data.supplier.advancesPaid ?? 0) });
+  }
 
   for (const selector of ["#recent-activity", "#all-activity"]) {
     const list = document.querySelector(selector);
@@ -1352,6 +1360,7 @@ function renderReports(data) {
   // Issue #234 — say which day lateness is counted to: today, or the end of the period if earlier.
   if (data.period?.lateCountedTo) dues.append(reportNote(t(REPORT_TEXT.lateCountedTo).replace("{date}", new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${data.period.lateCountedTo}T12:00:00+05:30`)))));
   dues.append(reportTotalRow(t(REPORT_TEXT.oweSuppliers), data.dues.payables.total));
+  dues.append(reportTotalRow(t(REPORT_TEXT.advancesToSuppliers), data.dues.payables.advancesPaid ?? 0));
   content.append(dues);
 
   // GST collected and paid.
@@ -1523,7 +1532,8 @@ function localizeResult(result, flow, mode) {
   if (state.locale === "en-IN") return result;
   if (mode === "preview") {
     if (flow === "sale") return { ...result, title: copy[state.locale].saleChecked, message: text("saleCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].saleEffectInvoice, copy[state.locale].saleEffectBalance] };
-    if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseChecked, message: text("purchaseCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].purchaseEffectStock, copy[state.locale].purchaseEffectBooks] };
+    // Issue #261 — the advance and its sum are kept, whatever the language, so the bill never hides it.
+    if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseChecked, message: text("purchaseCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].purchaseEffectStock, copy[state.locale].purchaseEffectBooks, ...(result.advance?.effects ?? [])] };
     // Issue #230 — the server's own sentences name the customer or supplier and show the sums; a
     // generic line here would say "customer" about a supplier.
     return { ...result, title: copy[state.locale].paymentChecked };
@@ -1570,6 +1580,14 @@ function showDialog(result, mode) {
   cancel.textContent = mode === "preview" ? copy[state.locale].keepEditing : copy[state.locale].close;
   cancel.disabled = mode === "loading";
   confirm.hidden = mode !== "preview";
+  // Issue #261 — a supplier's advance, offered against their bill: ticked, visible, and one click to leave it.
+  const advance = document.querySelector("#review-advance");
+  const offered = mode === "preview" && result.advance && state.pendingForm?.dataset.draft === "purchase";
+  advance.hidden = !offered;
+  if (offered) {
+    document.querySelector("#review-advance-use").checked = result.advance.use === true;
+    document.querySelector("#review-advance-label").textContent = text("useAdvanceOnBill", { amount: money(Math.min(result.advance.available, result.amount)), supplier: result.supplier });
+  }
   // Issue #239 — when the app cannot yet tell whether e-invoices apply, one button to the question.
   document.querySelector("#review-turnover").hidden = !(result.askTurnover === true && mode !== "loading");
   const download = document.querySelector("#review-download");
@@ -1777,6 +1795,9 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     // Issue #230 — the bills ticked, and one entry number per payment so pressing Record twice records once.
     if (form.dataset.endpoint === "payments") {
       input.bills = JSON.stringify([...form.querySelectorAll("[data-bill]:checked")].map((box) => box.value));
+      // Issue #261 — an advance only with its own tick, and only while the choice is on the screen.
+      const choice = form.querySelector("[data-advance-choice]");
+      if (choice) input.advance = !choice.hidden && form.querySelector("[data-advance]")?.checked ? "yes" : "no";
       form.dataset.requestId ||= newPaymentRequestId();
       input.requestId = form.dataset.requestId;
     }
@@ -1855,7 +1876,7 @@ async function loadPaymentBills(form) {
     empty.textContent = copy[state.locale][key];
     box.replaceChildren(empty);
   };
-  if (!partyId || !state.sessionId) { note("chooseAPartyFirst"); return; }
+  if (!partyId || !state.sessionId) { note("chooseAPartyFirst"); updateAdvanceChoice(form); return; }
   let read;
   try {
     read = await api("/api/payments/open-bills", { method: "POST", body: JSON.stringify({ direction: form.dataset.direction, partyId }) });
@@ -1865,6 +1886,8 @@ async function loadPaymentBills(form) {
   }
   // The party may have been changed while the list was on its way.
   if ((form.querySelector("[data-payment-party]")?.value ?? "") !== partyId) return;
+  form.paymentRead = read;
+  updateAdvanceChoice(form);
   if (read.bills.length === 0) { note("noOpenBills"); return; }
   box.replaceChildren(...read.bills.map((bill) => {
     const label = document.createElement("label");
@@ -1873,6 +1896,7 @@ async function loadPaymentBills(form) {
     input.type = "checkbox";
     input.value = bill.id;
     input.dataset.bill = "";
+    input.dataset.due = String(bill.outstanding);
     input.checked = ticked.has(bill.id);
     const words = document.createElement("span");
     words.textContent = text("openBillLine", { number: bill.number, date: bill.date, total: money(bill.total), due: money(bill.outstanding) });
@@ -1880,6 +1904,42 @@ async function loadPaymentBills(form) {
     return label;
   }));
 }
+
+/**
+ * Issue #261 — the advance choice on Money paid. It appears when the supplier has no open bill, or
+ * when more is being paid than the bills ticked still have due, and it is never ticked for the
+ * person: an advance is recorded only after its own click.
+ */
+function updateAdvanceChoice(form) {
+  const choice = form?.querySelector("[data-advance-choice]");
+  if (!choice) return;
+  const read = form.paymentRead;
+  const partyId = form.querySelector("[data-payment-party]")?.value ?? "";
+  if (!read || !partyId || read.party?.id !== partyId) { choice.hidden = true; choice.querySelector("[data-advance]").checked = false; return; }
+  const amount = Number(form.querySelector('[name="amount"]')?.value) || 0;
+  const ticked = [...form.querySelectorAll("[data-bill]:checked")].reduce((total, box) => total + (Number(box.dataset.due) || 0), 0);
+  const show = read.bills.length === 0 || amount > ticked + 0.001;
+  if (!show) choice.querySelector("[data-advance]").checked = false;
+  choice.hidden = !show;
+  const supplier = read.party.name;
+  choice.querySelector("[data-advance-label]").textContent = text("advanceChoice", { supplier });
+  const help = [text(read.bills.length === 0 ? "advanceHelpNoBill" : "advanceHelpMore", { supplier })];
+  if (read.advancesPaid > 0) help.push(text("advanceAlready", { supplier, amount: money(read.advancesPaid) }));
+  choice.querySelector("[data-advance-help]").textContent = help.join(" ");
+}
+
+// Issue #261 — unticking (or ticking) the advance on a purchase review checks the bill again, so
+// the sum on the screen is always the one that will be recorded.
+document.querySelector("#review-advance-use")?.addEventListener("change", async (event) => {
+  if (!state.pendingForm || !state.pendingInput || state.pendingForm.dataset.draft !== "purchase") return;
+  state.pendingInput = { ...state.pendingInput, useAdvance: event.currentTarget.checked ? "yes" : "no" };
+  try {
+    const result = await api("/api/purchases/preview", { method: "POST", body: JSON.stringify(state.pendingInput) });
+    showDialog(localizeResult(result, "purchase", "preview"), "preview");
+  } catch (error) {
+    showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+  }
+});
 
 async function paymentRecorded(form, result) {
   delete form.dataset.requestId;
@@ -1900,6 +1960,8 @@ async function paymentRecorded(form, result) {
 
 document.querySelectorAll('form[data-endpoint="payments"]').forEach((form) => {
   form.querySelector("[data-payment-party]")?.addEventListener("change", () => loadPaymentBills(form));
+  form.addEventListener("input", () => updateAdvanceChoice(form));
+  form.addEventListener("change", () => updateAdvanceChoice(form));
   form.querySelector("[data-payment-method]")?.addEventListener("change", () => showChequeFields(form));
   showChequeFields(form);
   form.closest(".view")?.querySelector("[data-voucher-print]")?.addEventListener("click", (event) => {
