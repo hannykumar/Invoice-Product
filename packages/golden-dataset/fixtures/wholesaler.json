@@ -73,7 +73,7 @@
       ],
       "expectedCode": "SALES_NEEDS_INFO",
       "why": "Only 30 boxes are left. Selling 50 would promise goods that are not there, and the product refuses rather than letting stock go negative.",
-      "expectedMessageContains": "This bill asks for 50 BOX."
+      "expectedMessageContains": "This bill asks for 50 BOX. If the goods have arrived, enter their purchase bill first, then make this sale."
     },
     {
       "kind": "payment",

@@ -85,7 +85,7 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
     const refused = await request('POST', path, tooMuch, owner);
     assert.equal(refused.status, 409, JSON.stringify(refused.body));
     assert.equal(refused.body.code, 'SALES_STOCK_NOT_ENOUGH');
-    assert.equal(refused.body.message, 'You have 50 KGS of TMT Steel Bar 12mm in Bengaluru · Peenya godown. This bill asks for 600 KGS.');
+    assert.equal(refused.body.message, 'You have 50 KGS of TMT Steel Bar 12mm in Bengaluru · Peenya godown. This bill asks for 600 KGS. If the goods have arrived, enter their purchase bill first, then make this sale.');
   }
   assert.deepEqual((await steelRows(owner)).map((row: any) => row.closing), ['50.000']);
 
@@ -129,4 +129,57 @@ test('a service is sold without any stock, and never touches the godown', async 
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   const after = (await request('GET', '/api/reports', {}, owner)).body.stock.rows;
   assert.deepEqual(after, before);
+});
+
+/**
+ * Issue #262 — a sale stopped for short stock says the way through, and the way through works.
+ *
+ *   in stock after this file's first test     90 kg (it starts from whatever is there)
+ *   the sale asks for                          stock + 550 kg
+ *   refused, naming the goods and the godown
+ *   purchase bill of 550 kg recorded           stock + 550 kg
+ *   the same sale, unchanged, goes through     stock + 550 − (stock + 550) = 0 kg
+ */
+test('#262: a short sale is refused with the way through, and after the purchase bill the same sale goes through to 0', async () => {
+  const owner = await signIn();
+  const before = Number((await steelRows(owner))[0]?.closing ?? '0');
+  const customers = (await request('GET', '/api/catalogue', {}, owner)).body.customers;
+  const mehta = customers.find((row: any) => row.name === 'Mehta Construction Supplies');
+  assert.ok(mehta, 'the first test added this customer');
+  const wanted = String(before + 550);
+  const sale = {
+    customerId: mehta.id, item: 'TMT Steel Bar 12mm', quantity: wanted, rate: '90',
+    vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'stock-262-sale',
+  };
+
+  const refused = await request('POST', '/api/sales/preview', sale, owner);
+  assert.equal(refused.status, 409, JSON.stringify(refused.body));
+  assert.equal(refused.body.code, 'SALES_STOCK_NOT_ENOUGH');
+  assert.equal(refused.body.message, `You have ${before} KGS of TMT Steel Bar 12mm in Bengaluru · Peenya godown. This bill asks for ${wanted} KGS. If the goods have arrived, enter their purchase bill first, then make this sale.`);
+  assert.equal(refused.body.details['hi-IN'], `Bengaluru · Peenya godown mein TMT Steel Bar 12mm ke ${before} KGS hain. Yeh bill ${wanted} KGS maangta hai. Agar maal aa gaya hai, to pehle uska purchase bill darj karen, phir yeh bikri karen.`);
+  const short = JSON.parse(refused.body.details.shortStock);
+  assert.equal(short.length, 1);
+  assert.equal(short[0].warehouseId, 'wh-main');
+  assert.deepEqual(
+    [short[0].itemName, short[0].warehouseName, short[0].unit, short[0].available, short[0].required, short[0].shortBy],
+    ['TMT Steel Bar 12mm', 'Bengaluru · Peenya godown', 'KGS', String(before), wanted, '550'],
+  );
+  // The item the purchase screen is opened with is the one the catalogue calls TMT Steel Bar 12mm.
+  const items = (await request('GET', '/api/catalogue', {}, owner)).body.items;
+  assert.equal(items.find((item: any) => item.id === short[0].itemId)?.name, 'TMT Steel Bar 12mm');
+  // Nothing moved on the refusal.
+  assert.deepEqual((await steelRows(owner)).map((row: any) => Number(row.closing)), [before]);
+
+  const bought = await request('POST', '/api/purchases/record', {
+    supplierId: SHREE_RAM, reference: 'SRS-262', date: DATE,
+    lines: [{ itemId: short[0].itemId, quantity: '550', rate: '64', gst: '1800' }],
+  }, owner);
+  assert.equal(bought.status, 200, JSON.stringify(bought.body));
+  assert.deepEqual((await steelRows(owner)).map((row: any) => Number(row.closing)), [before + 550]);
+
+  const recorded = await request('POST', '/api/sales/record', sale, owner);
+  assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
+  assert.ok(recorded.body.invoice.number);
+  // before + 550 − (before + 550) = 0: all of it went, and not a gram below nothing.
+  assert.deepEqual((await steelRows(owner)).map((row: any) => Number(row.closing)), [0]);
 });

@@ -573,3 +573,116 @@ test("#266 follow-up: the lists put the waiting choices back where they arrive",
   assert.match(await functionSource("loadDeliveryChoices"), /if \(customerId !== ""\) applyPendingChoices\(\["shipToAddressId", "transporterId"\], true\);/);
   assert.equal((script.match(/forgetPendingDraft\(form\);/g) ?? []).length, 3, "cleared, reset and recorded forms wait for nothing");
 });
+
+/**
+ * Issue #262 — a sale stopped for short stock offers "Enter the purchase bill", which opens Purchase
+ * with the short goods already chosen; once that bill is recorded, "Back to the sale" returns to the
+ * sale as it was typed. Runs the real functions from app.js.
+ */
+async function purchaseForSaleHarness(lines: Array<{ item: string; rate: string }>) {
+  const script = await read("app.js");
+  const locales = await localeCopy();
+  const store = new Map<string, string>([["karobar.draft.sale", JSON.stringify({ party: "mehta", __lines: [{ item: "tmt", quantity: "600", rate: "90" }] })]]);
+  const opened: string[] = [];
+  const saved: string[] = [];
+  const makeLine = (item: string, rate: string) => {
+    const picker = new SelectBox();
+    picker.fill("tmt", "soap");
+    picker.value = item;
+    const parts: Record<string, any> = { item: picker, rate: Object.assign(new TextBox(), { value: rate }), quantity: Object.assign(new TextBox(), { value: "1" }) };
+    return { parts, querySelector: (selector: string) => parts[selector.match(/data-line-field="?([a-z]+)/)?.[1] ?? ""] ?? null };
+  };
+  const rows = lines.map((line) => makeLine(line.item, line.rate));
+  const box = { querySelectorAll: () => rows };
+  const noteText = { textContent: "" };
+  const backButton = { textContent: "" };
+  const note = { hidden: true, querySelector: (selector: string) => (selector === "[data-note-text]" ? noteText : backButton) };
+  const dialog = { open: true, close() { this.open = false; } };
+  const purchaseForm = { dataset: { draft: "purchase" } };
+  const context: Record<string, unknown> = {
+    state: { locale: "en-IN" }, copy: locales,
+    storage: { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value), removeItem: (key: string) => store.delete(key) },
+    document: {
+      querySelector: (selector: string) => ({
+        "#review-dialog": dialog, "#purchase-lines": box, '[data-draft="purchase"]': purchaseForm, "#purchase-for-sale-note": note,
+      } as Record<string, unknown>)[selector] ?? null,
+    },
+    text: (key: string, values: Record<string, string>) => Object.entries(values).reduce((message, [name, value]) => message.replaceAll(`{${name}}`, value), locales["en-IN"]![key]!),
+    openView: (view: string) => opened.push(view),
+    addPurchaseLine: () => { const row = makeLine("soap", ""); rows.push(row); return row; },
+    setLineGstFromItem: () => undefined, showLineUnit: () => undefined,
+    saveDraft: (form: { dataset: { draft: string } }) => saved.push(form.dataset.draft),
+    JSON, Array, Object,
+  };
+  const line = (name: string) => script.match(new RegExp(`^const ${name} = .*$`, "m"))![0];
+  vm.runInNewContext([
+    line("SALE_WAITING_KEY"),
+    await functionSource("shortStockOf"), await functionSource("saleWaitingForStock"), await functionSource("showPurchaseForSaleNote"),
+    await functionSource("openPurchaseForSale"), await functionSource("purchaseForSaleRecorded"), await functionSource("backToSale"),
+    "this.run = (code) => eval(code);",
+  ].join("\n"), context);
+  return { run: context.run as (code: string) => any, rows, note, noteText, backButton, dialog, opened, saved, store };
+}
+
+const REFUSAL = {
+  code: "SALES_STOCK_NOT_ENOUGH",
+  message: "You have 50 KGS of TMT Steel Bar 12mm in Bengaluru · Peenya godown. This bill asks for 600 KGS. If the goods have arrived, enter their purchase bill first, then make this sale.",
+  details: { shortStock: JSON.stringify([{ itemId: "tmt", itemName: "TMT Steel Bar 12mm", warehouseId: "wh-main", warehouseName: "Bengaluru · Peenya godown", unit: "KGS", available: "50", required: "600", shortBy: "550" }]) },
+};
+
+test("#262: the refusal's button opens Purchase with the short item chosen and says which godown", async () => {
+  const h = await purchaseForSaleHarness([{ item: "soap", rate: "" }]);
+  assert.equal(h.run(`shortStockOf({ code: "SALE_DATE_AFTER_TODAY", details: {} })`), null, "only a short-stock refusal gets the button");
+  const short = h.run(`shortStockOf(${JSON.stringify(REFUSAL)})`);
+  assert.equal(short[0].itemId, "tmt");
+  h.run(`openPurchaseForSale(shortStockOf(${JSON.stringify(REFUSAL)}))`);
+  assert.equal(h.dialog.open, false);
+  assert.deepEqual(h.opened, ["purchase"]);
+  assert.equal(h.rows.length, 1, "the untouched line is used, not a second one added");
+  assert.equal(h.rows[0]!.parts.item.value, "tmt");
+  assert.equal(h.rows[0]!.parts.quantity.value, "", "the quantity is the supplier's bill's to say, never guessed");
+  assert.deepEqual(h.saved, ["purchase"]);
+  assert.equal(h.note.hidden, false);
+  assert.equal(h.noteText.textContent, "For the sale you were making: it asks for 600 KGS of TMT Steel Bar 12mm, and Bengaluru · Peenya godown has 50 KGS. Type the quantity printed on the supplier's bill. The goods go into Bengaluru · Peenya godown.");
+  assert.equal(h.backButton.textContent, "Back to the sale");
+  // The sale as typed is still on the device, untouched.
+  assert.deepEqual(JSON.parse(h.store.get("karobar.draft.sale")!).__lines, [{ item: "tmt", quantity: "600", rate: "90" }]);
+
+  // After the purchase is recorded: the dialog carries the way back; pressing it returns to the sale.
+  const recorded = h.run(`purchaseForSaleRecorded({ title: "Purchase recorded", effects: ["Stock: +550 KGS"] })`);
+  assert.equal(recorded.backToSale, true);
+  assert.equal(recorded.effects.at(-1), "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.");
+  h.dialog.open = true;
+  h.run("backToSale()");
+  assert.deepEqual(h.opened, ["purchase", "sale"]);
+  assert.equal(h.dialog.open, false);
+  assert.equal(h.note.hidden, true, "the purchase screen no longer speaks of the sale");
+  assert.equal(h.store.has("karobar.draft.sale"), true, "going back never clears the sale");
+});
+
+test("#262: a supplier bill already being typed keeps its lines; the short item is added beside them", async () => {
+  const filled = await purchaseForSaleHarness([{ item: "soap", rate: "40" }]);
+  filled.run(`openPurchaseForSale(shortStockOf(${JSON.stringify(REFUSAL)}))`);
+  assert.deepEqual(filled.rows.map((row) => [row.parts.item.value, row.parts.rate.value]), [["soap", "40"], ["tmt", ""]]);
+
+  const already = await purchaseForSaleHarness([{ item: "tmt", rate: "64" }]);
+  already.run(`openPurchaseForSale(shortStockOf(${JSON.stringify(REFUSAL)}))`);
+  assert.deepEqual(already.rows.map((row) => [row.parts.item.value, row.parts.rate.value]), [["tmt", "64"]], "the item is not put on the bill twice");
+});
+
+test("#262: the refusal dialog, the purchase screen and both languages carry the way through, and nothing lets the sale past", async () => {
+  const [html, script, locales] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
+  assert.match(html, /<button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill">/);
+  assert.match(html, /<button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale">/);
+  assert.match(html, /id="purchase-for-sale-note"[^>]*hidden[\s\S]*?id="purchase-back-to-sale"/);
+  assert.equal(locales["en-IN"]!.enterPurchaseBill, "Enter the purchase bill");
+  for (const key of ["enterPurchaseBill", "backToSale", "purchaseForSale", "purchaseForSaleDone"]) assert.ok(locales["hi-IN"]![key], key);
+  // The sale's review and its Record both show the refusal with the button.
+  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 2);
+  // A Hindi reader gets the server's Hindi sentence, not "could not complete".
+  assert.match(await functionSource("localizedError"), /SALES_STOCK_NOT_ENOUGH"\) return error\.details\?\.\[state\.locale\] \|\| error\.message;/);
+  assert.doesNotMatch(script, /negativeOverride|override_negative/, "no way to let a short sale through from the screen");
+  // A recorded supplier bill leaves a fresh Purchase form, so the next one never opens on its figures.
+  assert.match(script, /if \(form\.dataset\.draft === "purchase"\) resetPurchaseForm\(form\);/);
+  assert.match(await functionSource("resetPurchaseForm"), /form\.reset\(\);[\s\S]*replaceChildren\(\);\s*addPurchaseLine\(\);/);
+});

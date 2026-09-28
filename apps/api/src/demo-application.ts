@@ -1939,8 +1939,15 @@ export class DemoApplication {
     const stocked = await this.sales.checkStock(actor, draft.id);
     const short = stocked.problems.filter((problem) => problem.code === 'STOCK_NOT_ENOUGH');
     if (short.length > 0) {
+      // Issue #262 — the refusal also carries the Hindi sentence and, for each short line, the goods
+      // and the godown, so the screen can open the purchase bill for exactly those goods. The sale
+      // itself stays stopped: there is no override and stock never goes below nothing.
       throw notAllowed('SALES_STOCK_NOT_ENOUGH', short.map((problem) => problem.message['en-IN']).join(' '), {
         messageId: 'stock.not_enough',
+        details: {
+          'hi-IN': short.map((problem) => problem.message['hi-IN']).join(' '),
+          shortStock: JSON.stringify(short.flatMap((problem) => (problem.stock === undefined ? [] : [problem.stock]))),
+        },
       });
     }
 

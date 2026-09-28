@@ -60,6 +60,20 @@ export interface InvoiceProblem {
   readonly lineId?: string;
   readonly message: { readonly 'en-IN': string; readonly 'hi-IN': string };
   readonly messageId?: string;
+  /**
+   * Issue #262 — for a line the godown cannot cover: which goods, which godown, and the figures, so
+   * a screen can open the purchase bill for exactly those goods without reading the sentence back.
+   */
+  readonly stock?: {
+    readonly itemId: string;
+    readonly itemName: string;
+    readonly warehouseId: string | null;
+    readonly warehouseName: string;
+    readonly unit: string;
+    readonly available: string;
+    readonly required: string;
+    readonly shortBy: string;
+  };
 }
 
 export interface SalesInvoice {
