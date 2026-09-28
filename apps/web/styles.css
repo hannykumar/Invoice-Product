@@ -40,6 +40,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .nav-item { border: 0; background: transparent; color: #c9dbd5; min-height: 46px; border-radius: 10px; padding: 0 .85rem; display: flex; align-items: center; gap: .85rem; text-align: left; }
 .nav-item > span:first-child { width: 20px; font-size: 1.2rem; text-align: center; }
 .nav-item:hover, .nav-item.active { background: rgba(255,255,255,.1); color: white; }
+/* Issue #241 — the menu in the order of a trade: Buying, Stock, Selling, GST, Books, then Settings folded away. */
+.sidebar { overflow-y: auto; }
+.nav-group { display: grid; gap: .2rem; margin: .55rem 0 0; padding: 0; border: 0; }
+.nav-group-title { margin: 0 0 .1rem; padding: 0 .85rem; color: #8fb3a8; font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+details.nav-settings { margin-top: .55rem; border-top: 0; padding-top: 0; }
+details.nav-settings > summary.nav-group-title { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: #8fb3a8; }
+details.nav-settings > summary.nav-group-title:hover { color: white; }
+details.nav-settings > summary.nav-group-title { list-style: none; }
+details.nav-settings > summary.nav-group-title::-webkit-details-marker { display: none; }
+details.nav-settings > summary.nav-group-title::after { content: "▸"; margin-left: .45rem; }
+details.nav-settings[open] > summary.nav-group-title::after { content: "▾"; }
+@media (min-width: 761px) { .nav-group .nav-item { min-height: 34px; } .nav-group { gap: .1rem; } } /* a desktop mouse needs less room than a thumb */
 .sidebar-note { margin-top: auto; border-top: 1px solid rgba(255,255,255,.12); padding: 1rem .55rem .2rem; display: flex; gap: .7rem; align-items: flex-start; }
 .sidebar-note strong, .sidebar-note small { display: block; }
 .sidebar-note strong { font-size: .8rem; }
@@ -90,6 +102,8 @@ main { min-width: 0; padding: 1.45rem 2rem 3rem; }
 .panel-heading { display: flex; justify-content: space-between; align-items: start; gap: 1rem; margin-bottom: .7rem; }
 .panel-heading h2, .summary-card h2 { margin: 0; font-size: 1rem; }.panel-heading p { margin: .2rem 0 0; color: var(--muted); font-size: .72rem; }
 .activity-row { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; gap: .7rem; align-items: center; padding: .85rem 0; border-top: 1px solid var(--line); }
+/* An "Open the bill" button sits under the words, not squeezed into the narrow icon column. */
+.activity-row > .secondary-button { grid-column: 2 / -1; justify-self: start; }
 .activity-row strong, .activity-row small { display: block; }.activity-row > div > strong { font-size: .8rem; }.activity-row small { font-size: .67rem; color: var(--muted); margin-top: .18rem; }
 .activity-icon, .attention-symbol { display: grid; place-items: center; border-radius: 9px; font-weight: 800; }.activity-icon { width: 34px; height: 34px; }.activity-icon.green, .attention-symbol.green { background: var(--mint); color: var(--brand-2); }.activity-icon.blue, .attention-symbol.blue { background: var(--blue-bg); color: var(--blue); }.activity-icon.amber, .attention-symbol.amber { background: var(--amber-bg); color: var(--amber); }.attention-symbol.red { background: var(--red-bg); color: var(--red); }
 .activity-value { text-align: right; }.activity-value strong { font-size: .8rem; }.pill { display: inline-block !important; margin-top: .25rem; padding: .16rem .42rem; border-radius: 999px; font-size: .58rem !important; }.pill.done { color: var(--brand-2); background: var(--mint); }.pill.waiting { color: var(--amber); background: var(--amber-bg); }

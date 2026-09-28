@@ -296,3 +296,41 @@ test("#233: an issued bill can be cancelled with a reason, and the returns scree
   // The GST returns screen shows the documents-issued table, cancelled numbers included.
   assert.match(script, /workspace\.documentsIssued/);
 });
+
+test("#241: the menu follows a trade — Buying, Stock, Selling, GST, Books, Settings folded — and the phone bar is five buttons", async () => {
+  const [html, script, locales] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
+  const sidebar = html.slice(html.indexOf('<nav class="nav-list"'), html.indexOf("</nav>", html.indexOf('<nav class="nav-list"')));
+  const en = locales["en-IN"]!;
+  const label = (key: string) => en[key];
+  // Each group, in order, with its entries in order, read off the page as a person would see it.
+  const groups = [...sidebar.matchAll(/<(div|details) class="nav-group[^"]*"[^>]*>([\s\S]*?)<\/\1>/g)].map(([, tag, body]) => ({
+    title: label(/class="nav-group-title"[^>]*data-i18n="([^"]+)"/.exec(body!)![1]!),
+    folded: tag === "details" && !/<details[^>]*\bopen\b/.test(body!),
+    entries: [...body!.matchAll(/<button class="nav-item"[^>]*>.*?data-i18n="([^"]+)"/g)].map((m) => label(m[1]!)),
+  }));
+  assert.deepEqual(groups, [
+    { title: "Buying", folded: false, entries: ["Purchase", "Orders and deliveries", "Supplier check", "Money paid"] },
+    { title: "Stock", folded: false, entries: ["What is in the godown"] },
+    { title: "Selling", folded: false, entries: ["Sale", "Delivery challan", "E-way bill", "Vehicle check", "Money received", "Returns", "Reminders"] },
+    { title: "GST", folded: false, entries: ["Purchase check", "GST returns", "E-invoice"] },
+    { title: "Books", folded: false, entries: ["Reports", "Activity", "Bank feeds", "Ask"] },
+    { title: "Settings", folded: true, entries: ["Business details", "Bill design", "Set up a business", "Bring your data", "Your plan", "Operations", "Quotation / Proforma"] },
+  ]);
+  assert.match(html, /<details class="nav-group nav-settings" id="nav-settings">/, "Settings starts folded");
+  // No screen was dropped: every screen in the page has a menu entry.
+  const screens = [...html.matchAll(/<section class="view[^"]*" id="view-([^"]+)"/g)].map((m) => m[1]!).sort();
+  const entries = new Set([...sidebar.matchAll(/data-view="([^"]+)"/g)].map((m) => m[1]!));
+  assert.deepEqual(screens.filter((screen) => !entries.has(screen)), []);
+  // The stock report is the stock part of Reports, opened at that part.
+  assert.match(sidebar, /data-view="reports" data-section="report-stock"/);
+  assert.match(script, /stock\.id = "report-stock"/);
+  // Phone: Home, Sale, Purchase, Money, More — More opens the grouped list with Settings unfolded, so every screen is two taps away.
+  const bar = html.slice(html.indexOf('<nav class="bottom-nav"'), html.indexOf("</nav>", html.indexOf('<nav class="bottom-nav"')));
+  assert.deepEqual([...bar.matchAll(/<small data-i18n="([^"]+)"/g)].map((m) => label(m[1]!)), ["Home", "Sale", "Purchase", "Money", "More"]);
+  assert.match(bar, /data-view="payment" data-also-views="paid"/);
+  assert.match(bar, /id="more-button"[^>]*aria-controls="primary-sidebar"/);
+  assert.match(script, /querySelector\("#more-button"\)\.addEventListener\("click", toggleMenu\)/);
+  assert.match(script, /function toggleMenu\(\)[\s\S]*?settings\.open = true/);
+  // Hindi has every new word too.
+  for (const key of ["navGroupBuying", "navGroupStock", "navGroupSelling", "navGroupGst", "navGroupBooks", "navGroupSettings", "navStock", "navMoney", "navMore"]) assert.ok(locales["hi-IN"]![key], key);
+});
