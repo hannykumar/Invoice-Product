@@ -270,6 +270,7 @@ test("#233: after a recorded sale the form has no customer and one fresh line, a
     document: { querySelector: (selector: string) => (selector === "#sale-lines" ? lines : null) },
     dateInput: () => "2026-09-28",
     hideDraftDateNote: () => calls.push("hideDraftDateNote"),
+    forgetPendingDraft: () => calls.push("forgetPendingDraft"),
     addSaleLine: () => { lines.children.push({ id: "fresh" }); calls.push("addSaleLine"); },
     showChosenCustomer: () => calls.push("showChosenCustomer"),
     showShipToFields: () => calls.push("showShipToFields"),
@@ -369,7 +370,7 @@ async function restoreOn(flow: string, saved: Record<string, string> | null, tod
     Intl, Date, JSON, Object,
   };
   vm.runInNewContext([
-    line("DRAFT_DATE_RULES"), line("longDate"), line("DRAFT_STARTED"), line("DRAFT_SAVED"),
+    line("DRAFT_DATE_RULES"), line("longDate"), line("DRAFT_STARTED"), line("DRAFT_SAVED"), line("DRAFT_LINES"), line("pendingDraft"),
     await functionSource("draftDateNote"), await functionSource("settleDraftDate"), await functionSource("restoreDraft"),
     "restoreDraft(form);",
   ].join("\n"), context);
@@ -427,4 +428,148 @@ test("#266: every draft form has its date line, the sale review shows the server
   for (const key of ["draftSaleDateMoved", "draftPurchaseDateKept", "draftMoneyDateKept"]) {
     assert.ok(locales["hi-IN"]![key] && locales["hi-IN"]![key] !== locales["en-IN"]![key], key);
   }
+});
+
+/**
+ * Follow-up to #266 — the customer, delivery address and item lines of a saved sale come back even
+ * when their lists arrive after the draft is put back (a slow network, a cold server). Runs the real
+ * restore, save and re-apply code from app.js against boxes that, like a browser's, refuse a value
+ * that is not one of their choices.
+ */
+class Choice { value: string; constructor(value: string) { this.value = value; } }
+class SelectBox {
+  tagName = "SELECT";
+  options: Choice[] = [];
+  #value = "";
+  get value() { return this.#value; }
+  set value(next: string) { this.#value = this.options.some((option) => option.value === next) ? next : ""; }
+  fill(...values: string[]) { this.options = values.map((value) => new Choice(value)); }
+}
+class TextBox { tagName = "INPUT"; value = ""; }
+
+async function draftHarness(flow: "sale" | "purchase" | "payment" | "paid", saved: Record<string, unknown>, selects: string[]) {
+  const script = await read("app.js");
+  const line = (name: string) => {
+    const match = script.match(new RegExp(`^const ${name} = .*$`, "m"));
+    assert.ok(match, `app.js has no const ${name}`);
+    return match[0];
+  };
+  const store = new Map<string, string>([[`karobar.draft.${flow}`, JSON.stringify(saved)]]);
+  const fields: Record<string, SelectBox | TextBox> = {};
+  for (const name of Object.keys(saved)) if (!name.startsWith("__")) fields[name] = selects.includes(name) ? new SelectBox() : new TextBox();
+  const lineBox = { children: [] as any[], querySelectorAll: (selector: string) => (selector === ".sale-line" ? lineBox.children : []), replaceChildren() { lineBox.children = []; } };
+  const form = {
+    dataset: { draft: flow } as Record<string, string>,
+    elements: { namedItem: (name: string) => fields[name] ?? null },
+    querySelector: (selector: string) => (selector === ".sale-lines" && (flow === "sale" || flow === "purchase") ? lineBox : null),
+  };
+  const newLine = () => {
+    const parts: Record<string, SelectBox | TextBox> = { item: new SelectBox(), quantity: new TextBox(), rate: new TextBox(), ...(flow === "purchase" ? { gst: new SelectBox() } : {}) };
+    (parts.item as SelectBox).fill("tmt", "soap");
+    if (parts.gst) (parts.gst as SelectBox).fill("500", "1800");
+    const row = {
+      parts,
+      querySelector: (selector: string) => parts[selector.match(/data-line-field="?([a-z]+)/)?.[1] ?? ""] ?? null,
+      querySelectorAll: () => Object.entries(parts).map(([name, field]) => Object.assign(field, { dataset: { lineField: name } })),
+    };
+    lineBox.children.push(row);
+    return row;
+  };
+  const context: Record<string, unknown> = {
+    form,
+    storage: { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value), removeItem: (key: string) => store.delete(key) },
+    document: {
+      querySelector: (selector: string) => (selector === `[data-draft="${flow}"]` ? form : selector === `#${flow}-lines` ? lineBox : null),
+    },
+    dateInput: () => "2026-09-29",
+    setDraftStatus: () => undefined,
+    settleDraftDate: () => false,
+    draftData: () => Object.fromEntries(Object.entries(fields).map(([name, field]) => [name, field.value])),
+    addSaleLine: newLine, addPurchaseLine: newLine, showLineUnit: () => undefined, updateCalculations: () => undefined,
+    Object, JSON, Array,
+  };
+  vm.runInNewContext([
+    line("DRAFT_STARTED"), line("DRAFT_SAVED"), line("DRAFT_LINES"), line("pendingDraft"),
+    await functionSource("draftLines"), await functionSource("saveDraft"), await functionSource("restoreDraft"),
+    await functionSource("applyPendingChoices"), await functionSource("restorePendingLines"),
+    "this.run = (code) => eval(code);",
+  ].join("\n"), context);
+  const run = context.run as (code: string) => unknown;
+  return { fields, lineBox, stored: () => JSON.parse(store.get(`karobar.draft.${flow}`)!), run };
+}
+
+test("#266 follow-up: a sale's customer, delivery address and lines come back when the lists arrive late", async () => {
+  const saved = {
+    party: "mehta", shipTo: "address", shipToAddressId: "addr-pune", transporterId: "vrl", reference: "PO-7", date: "2026-09-29",
+    __lines: [{ item: "tmt", quantity: "450", rate: "90" }], __startedOn: "2026-09-29", __savedOn: "2026-09-29",
+  };
+  const sale = await draftHarness("sale", saved, ["party", "shipTo", "shipToAddressId", "transporterId"]);
+  (sale.fields.shipTo as SelectBox).fill("same", "address", "party");
+  sale.run("restoreDraft(form)");
+  assert.equal(sale.fields.party!.value, "", "the customer list is not here yet, so the box cannot show Mehta");
+
+  // Something is typed while the lists are still loading: the saved customer, address and lines survive it.
+  sale.fields.reference!.value = "PO-7A";
+  sale.run("saveDraft(form)");
+  assert.equal(sale.stored().party, "mehta");
+  assert.equal(sale.stored().shipToAddressId, "addr-pune");
+  assert.deepEqual(sale.stored().__lines, [{ item: "tmt", quantity: "450", rate: "90" }]);
+  assert.equal(sale.stored().reference, "PO-7A");
+
+  // The customer list arrives (late), then the item lines are rebuilt.
+  (sale.fields.party as SelectBox).fill("", "abc", "mehta");
+  sale.run('applyPendingChoices(["party", "partyId", "supplierId", "shipToPartyId"], true)');
+  sale.run("restorePendingLines()");
+  assert.equal(sale.fields.party!.value, "mehta");
+  assert.equal(sale.lineBox.children.length, 1);
+  assert.deepEqual(Object.fromEntries(Object.entries(sale.lineBox.children[0].parts).map(([name, field]: [string, any]) => [name, field.value])), { item: "tmt", quantity: "450", rate: "90" });
+
+  // A first delivery load for nobody offers nothing; Mehta's addresses and transporters arrive after.
+  sale.run('applyPendingChoices(["shipToAddressId", "transporterId"], false)');
+  assert.equal(sale.stored().shipToAddressId, "addr-pune", "still waiting, not dropped");
+  (sale.fields.shipToAddressId as SelectBox).fill("addr-pune", "addr-nashik");
+  (sale.fields.transporterId as SelectBox).fill("", "vrl");
+  sale.run('applyPendingChoices(["shipToAddressId", "transporterId"], true)');
+  assert.equal(sale.fields.shipToAddressId!.value, "addr-pune");
+  assert.equal(sale.fields.transporterId!.value, "vrl");
+  sale.run("saveDraft(form)");
+  assert.equal(sale.stored().party, "mehta");
+  assert.deepEqual(sale.stored().__lines, [{ item: "tmt", quantity: "450", rate: "90" }], "the lines on screen are what is saved now");
+});
+
+test("#266 follow-up: supplier bills and money entries get their supplier or customer back; a removed one is let go", async () => {
+  const purchase = await draftHarness("purchase", {
+    supplierId: "shree-ram", reference: "SRS-101", __lines: [{ item: "tmt", quantity: "500", rate: "64", gst: "1800" }],
+  }, ["supplierId"]);
+  purchase.run("restoreDraft(form)");
+  (purchase.fields.supplierId as SelectBox).fill("shree-ram");
+  purchase.run('applyPendingChoices(["party", "partyId", "supplierId", "shipToPartyId"], true)');
+  purchase.run("restorePendingLines()");
+  assert.equal(purchase.fields.supplierId!.value, "shree-ram");
+  assert.equal((purchase.lineBox.children[0].parts.gst as SelectBox).value, "1800", "the GST rate on the supplier's bill is kept");
+
+  for (const flow of ["payment", "paid"] as const) {
+    const money = await draftHarness(flow, { partyId: "mehta", amount: "500" }, ["partyId"]);
+    money.run("restoreDraft(form)");
+    (money.fields.partyId as SelectBox).fill("", "mehta");
+    money.run('applyPendingChoices(["party", "partyId", "supplierId", "shipToPartyId"], true)');
+    assert.equal(money.fields.partyId!.value, "mehta", flow);
+  }
+
+  // The list has loaded and the saved customer is not on it: it is let go, not kept forever.
+  const gone = await draftHarness("payment", { partyId: "removed", amount: "500" }, ["partyId"]);
+  gone.run("restoreDraft(form)");
+  (gone.fields.partyId as SelectBox).fill("", "mehta");
+  gone.run('applyPendingChoices(["party", "partyId", "supplierId", "shipToPartyId"], true)');
+  gone.fields.amount!.value = "600";
+  gone.run("saveDraft(form)");
+  assert.equal(gone.stored().partyId, "");
+});
+
+test("#266 follow-up: the lists put the waiting choices back where they arrive", async () => {
+  const script = await read("app.js");
+  assert.match(await functionSource("renderPickers"), /applyPendingChoices\(\["party", "partyId", "supplierId", "shipToPartyId"\], catalogueLoaded\);\s*showChosenCustomer\(\);/);
+  assert.match(await functionSource("loadCatalogue"), /catalogueLoaded = true;[\s\S]*renderPickers\(\);[\s\S]*restorePendingLines\(\);/);
+  assert.match(await functionSource("loadDeliveryChoices"), /if \(customerId !== ""\) applyPendingChoices\(\["shipToAddressId", "transporterId"\], true\);/);
+  assert.equal((script.match(/forgetPendingDraft\(form\);/g) ?? []).length, 3, "cleared, reset and recorded forms wait for nothing");
 });
