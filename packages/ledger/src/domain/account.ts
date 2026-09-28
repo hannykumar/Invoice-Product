@@ -63,6 +63,13 @@ export type SystemAccountRole =
    * linked — or when the advance is refunded — so the tax is never counted twice.
    */
   | 'GST_ON_ADVANCES'
+  /**
+   * Money paid to a supplier before their bill (issue #261). It is something the business owns — a
+   * claim on goods still to come — not a negative amount owed hidden inside what the business owes
+   * suppliers. It moves to the supplier's account only when their bill is entered and the advance
+   * is set against it. An advance for goods carries no GST and gives no input tax credit.
+   */
+  | 'ADVANCES_TO_SUPPLIERS'
   | 'INPUT_CGST'
   | 'INPUT_SGST'
   | 'INPUT_IGST'

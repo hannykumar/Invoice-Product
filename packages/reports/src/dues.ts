@@ -26,6 +26,11 @@ export interface AgeingRow {
   /** Money received that no bill has claimed. Shown, never applied to whatever looks closest. */
   readonly onAccount: Money;
   readonly chequesNotCleared: Money;
+  /**
+   * Issue #261 — on the suppliers' page only: money paid to this supplier before their bill that no
+   * bill has used yet. Shown beside what is owed, never subtracted from it.
+   */
+  readonly advancesPaid: Money;
   readonly documents: readonly Contribution[];
   /** One sentence the owner can read without reading the table. */
   readonly sentence: Bilingual;
@@ -37,6 +42,8 @@ export interface AgeingBody {
   readonly rows: readonly AgeingRow[];
   readonly total: Figure;
   readonly bucketTotals: readonly Money[];
+  /** Issue #261 — advances paid to suppliers and not yet used, in total. Zero on the customers' page. */
+  readonly advancesPaid: Money;
   readonly sentence: Bilingual;
 }
 
@@ -79,7 +86,9 @@ export const ageingBody = async (
     );
     // Money on account belongs to the party, not to one side of the books. It is shown once, with
     // what customers owe, rather than on both pages where it would be counted twice.
-    const worthShowing = documents.length > 0 || (side === 'RECEIVABLE' && position.onAccount.minor !== 0n);
+    const worthShowing = documents.length > 0
+      || (side === 'RECEIVABLE' && position.onAccount.minor !== 0n)
+      || (side === 'PAYABLE' && position.advancesPaid.minor !== 0n);
     if (!worthShowing) continue;
     positions.push({ position, name: await dues.nameOf(companyId, partyId), documents });
   }
@@ -105,6 +114,7 @@ export const ageingBody = async (
         buckets,
         onAccount: side === 'RECEIVABLE' ? entry.position.onAccount : zero('INR'),
         chequesNotCleared: side === 'RECEIVABLE' ? entry.position.chequesNotCleared : zero('INR'),
+        advancesPaid: side === 'PAYABLE' ? entry.position.advancesPaid : zero('INR'),
         documents: entry.documents.map((d) => documentContribution(d, entry.name)),
         sentence: summary?.sentence ?? {
           'en-IN': `${entry.name} has nothing outstanding.`,
@@ -112,7 +122,7 @@ export const ageingBody = async (
         },
       };
     })
-    .filter((row) => row.outstanding.minor !== 0n || row.onAccount.minor !== 0n)
+    .filter((row) => row.outstanding.minor !== 0n || row.onAccount.minor !== 0n || row.advancesPaid.minor !== 0n)
     .sort((a, b) =>
       a.oldestDaysOverdue === b.oldestDaysOverdue
         ? Number(b.outstanding.minor - a.outstanding.minor)
@@ -122,6 +132,7 @@ export const ageingBody = async (
   const total = figureOf(rows.flatMap((r) => r.documents));
   const bucketTotals = AGEING_BANDS.map((_band, index) => sum(rows.map((r) => r.buckets[index] ?? zero('INR'))));
   const late = rows.filter((r) => r.oldestDaysOverdue > 0).length;
+  const advancesPaid = sum(rows.map((r) => r.advancesPaid));
 
   return {
     side,
@@ -129,6 +140,7 @@ export const ageingBody = async (
     rows,
     total,
     bucketTotals,
+    advancesPaid,
     sentence:
       side === 'RECEIVABLE'
         ? {
@@ -136,8 +148,8 @@ export const ageingBody = async (
             'hi-IN': `Customers se ${formatINR(total.amount)} lena baaki hai, aur unmein ${late} late hain.`,
           }
         : {
-            'en-IN': `You still owe suppliers ${formatINR(total.amount)}, and ${late} of them ${late === 1 ? 'is' : 'are'} already past the date.`,
-            'hi-IN': `Suppliers ko ${formatINR(total.amount)} dena baaki hai, aur unmein ${late} ki tareekh nikal chuki hai.`,
+            'en-IN': `You still owe suppliers ${formatINR(total.amount)}, and ${late} of them ${late === 1 ? 'is' : 'are'} already past the date.${advancesPaid.minor > 0n ? ` Separately, you have paid suppliers ${formatINR(advancesPaid)} in advance, to be taken off their next bills.` : ''}`,
+            'hi-IN': `Suppliers ko ${formatINR(total.amount)} dena baaki hai, aur unmein ${late} ki tareekh nikal chuki hai.${advancesPaid.minor > 0n ? ` Alag se, aapne suppliers ko ${formatINR(advancesPaid)} advance diya hai, jo unke agle bill se kata jayega.` : ''}`,
           },
   };
 };

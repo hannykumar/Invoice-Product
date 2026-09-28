@@ -131,14 +131,27 @@ export const validateAllocation = (
   }
 };
 
-/** Money received that no bill has claimed. Visible, and never quietly attached to something. */
+/**
+ * Money received that no bill has claimed. Visible, and never quietly attached to something.
+ *
+ * Only money that came **in** counts. An advance paid out to a supplier (#261) is the business's
+ * money held by them, the opposite fact; it is `advancesPaidOf`, never "money with you".
+ */
 export const onAccountOf = (payments: readonly Payment[]): Money => {
   const recorded = payments.filter((p) => p.state === 'RECORDED');
   return subtract(
-    sum(recorded.filter((p) => p.refundOf === null).map((p) => subtract(p.amount, sum(p.allocations.map((a) => a.amount))))),
+    sum(recorded.filter((p) => p.refundOf === null && p.direction === 'RECEIPT').map((p) => subtract(p.amount, sum(p.allocations.map((a) => a.amount))))),
     sum(recorded.filter((p) => p.refundOf !== null).map((p) => p.amount)),
   );
 };
+
+/** Issue #261 — what of the advances paid to a supplier no bill of theirs has used yet. */
+export const advancesPaidOf = (payments: readonly Payment[]): Money =>
+  sum(
+    payments
+      .filter((p) => p.state === 'RECORDED' && p.direction === 'PAYMENT' && p.advanceToSupplier === true)
+      .map((p) => subtract(p.amount, sum(p.allocations.map((a) => a.amount)))),
+  );
 
 export const totalOutstanding = (positions: readonly DocumentPosition[]): Money =>
   sum(positions.map((p) => p.outstanding));
