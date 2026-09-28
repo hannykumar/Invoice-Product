@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
+import { saveTurnoverBand } from './turnover-helper.ts';
 import { appToday, useFixedAppClock } from '../src/app-clock.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
@@ -193,7 +194,8 @@ test('money received, a return and the government papers are built the same way'
   assert.equal(previewed.status, 200, JSON.stringify(previewed.body));
   assert.equal((await request('POST', '/api/returns/record', back, owner)).status, 200);
   await request('POST', '/api/eway/preview', { invoice: bill.id, distanceKm: '840', vehicle: 'KA01AB1234', reason: 'SUPPLY' }, owner);
-  await request('POST', '/api/einvoices/preview', { invoice: bill.id, turnover: '80000000' }, owner);
+  await saveTurnoverBand(owner, '5_TO_10_CRORE');
+  await request('POST', '/api/einvoices/preview', { invoice: bill.id }, owner);
   // A payment larger than the bill is refused with a sentence that names both amounts.
   await request('POST', '/api/payments/preview', { ...payment, amount: '90000', requestId: 'home-237-too-much' }, owner);
 });

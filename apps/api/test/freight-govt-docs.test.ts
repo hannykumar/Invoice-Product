@@ -14,6 +14,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
+import { saveTurnoverBand } from './turnover-helper.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 
@@ -97,12 +98,13 @@ test('#231 a goods bill with freight gets an e-way bill and an e-invoice, and GS
   assert.equal(raised.status, 200, raised.body.message);
 
   // E-invoice: ready, one item carrying the freight, no "other charges".
-  const einvoice = await request('POST', '/api/einvoices/preview', { invoice, turnover: '80000000' }, session);
+  await saveTurnoverBand(session, '5_TO_10_CRORE');
+  const einvoice = await request('POST', '/api/einvoices/preview', { invoice }, session);
   assert.equal(einvoice.status, 200, einvoice.body.message);
   assert.deepEqual(einvoice.body.problems, []);
   assert.equal(einvoice.body.ready, true);
 
-  const file = await request('POST', '/api/einvoices/offline', { invoice, turnover: '80000000' }, session);
+  const file = await request('POST', '/api/einvoices/offline', { invoice }, session);
   assert.equal(file.status, 200, file.body.message);
   const payload = JSON.parse(String(file.body.json)).InvoiceList[0];
   assert.equal(payload.ItemList.length, 1);

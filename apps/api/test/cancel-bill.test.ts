@@ -18,6 +18,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
+import { saveTurnoverBand } from './turnover-helper.ts';
 import { appToday, useFixedAppClock } from '../src/app-clock.ts';
 
 // Issue #234 — the running app reads the real clock; this file pins it so its dates do not drift.
@@ -220,7 +221,8 @@ test('#233: a bill with a live e-invoice is cancelled only after the e-invoice i
   const { owner, mehta } = await shop();
   await request('POST', '/api/gst-returns/reopen', { period: MONTH, reason: 'test' }, owner);
   const bill = await sell(owner, mehtaSale(mehta, 'cancel-233-irn', '10'));
-  const registered = await request('POST', '/api/einvoices/register', { invoice: bill.id, turnover: '80000000' }, owner);
+  await saveTurnoverBand(owner, '5_TO_10_CRORE');
+  const registered = await request('POST', '/api/einvoices/register', { invoice: bill.id }, owner);
   assert.equal(registered.status, 200, JSON.stringify(registered.body));
   assert.equal(registered.body.status, 'REGISTERED');
 

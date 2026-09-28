@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
+import { saveTurnoverBand } from './turnover-helper.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 
@@ -93,7 +94,8 @@ test('the Bill design preview still shows the labelled boxes', async () => {
 test('once the bill is registered, the government\'s IRN and QR print in that space', async () => {
   const session = await signIn();
   const invoiceId = await issueGoodsBill(session, 'issued-189-registered');
-  const registered = await request('POST', '/api/einvoices/register', { invoice: invoiceId, turnover: '80000000' }, session);
+  await saveTurnoverBand(session, '5_TO_10_CRORE');
+  const registered = await request('POST', '/api/einvoices/register', { invoice: invoiceId }, session);
   assert.equal(registered.body.status, 'REGISTERED', registered.body.message);
 
   const bill = await request('POST', '/api/sales/print', { invoice: invoiceId }, session);

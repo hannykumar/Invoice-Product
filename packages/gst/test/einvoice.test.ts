@@ -16,6 +16,7 @@ import { decideApplicability, thresholdOn, TURNOVER_THRESHOLDS } from "../src/ap
 import { buildEInvoicePayload, toOfflineJson, toRupees } from "../src/payload.ts";
 import { checkAcknowledgement, computeIrn, financialYearOf, readAckDate } from "../src/irn.ts";
 import { DEFAULT_EINVOICE_POLICY } from "../src/einvoice-types.ts";
+import { exactTurnover, reportingDeadline } from "../src/reporting-window.ts";
 import { EInvoiceService } from "../src/einvoice-service.ts";
 import { SyntheticIrp, irpAdapter } from "../src/einvoice-adapters.ts";
 import {
@@ -28,7 +29,7 @@ import {
 test("an ordinary small trader is told plainly that no e-invoice number is needed", () => {
   const decision = decideApplicability(belowThreshold());
   assert.equal(decision.outcome, "NOT_APPLICABLE");
-  assert.match(decision.reason, /below the ₹5,00,00,000\.00 limit/);
+  assert.match(decision.reason, /not above the ₹5,00,00,000\.00 limit/);
   assert.match(decision.reason, /It is an ordinary GST bill/);
   assert.equal(decision.thresholdApplied?.ruleId, "EINV.THRESHOLD.5CR");
   assert.match(decision.sourceRef ?? "", /Notification 10\/2023/);
@@ -37,7 +38,7 @@ test("an ordinary small trader is told plainly that no e-invoice number is neede
 test("a business above the limit must report, and is told which limit and why", () => {
   const decision = decideApplicability(aboveThreshold());
   assert.equal(decision.outcome, "APPLICABLE");
-  assert.match(decision.reason, /₹8,00,00,000\.00 is at or above the ₹5,00,00,000\.00 limit/);
+  assert.match(decision.reason, /₹8,00,00,000\.00 is above the ₹5,00,00,000\.00 limit/);
   assert.equal(decision.ruleId, "EINV.THRESHOLD.5CR");
 });
 
@@ -384,7 +385,8 @@ test("preview shows the IRN the bill will get, before anything is sent", async (
   const preview = await desk.service.preview(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
   assert.equal(preview.applicability.outcome, "APPLICABLE");
   assert.equal(preview.ready, true);
-  assert.equal(preview.reportableUntil, "2026-09-20", "30 days from the bill date");
+  assert.equal(preview.reportableUntil, undefined, "₹8 crore: the 30-day limit is for ₹10 crore and above (#236)");
+  assert.equal(preview.deadline?.kind, "NO_LIMIT");
   assert.equal(desk.portal.registeredIrns().length, 0, "a preview sends nothing");
 
   const record = await desk.service.register(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
@@ -485,10 +487,10 @@ test("reconciling answers 'did it actually go through?' by asking the government
 test("documents still to be reported are listed, so a deadline is never missed silently", async () => {
   const desk = makeEInvoiceDesk();
   desk.portal.setMode("outage");
-  await desk.service.register(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
+  await desk.service.register(desk.actor, { document: invoiceDocument(), applicability: twelveCrore() });
   const waiting = await desk.service.awaitingReport(desk.actor, "2026-08-25");
   assert.equal(waiting.length, 1);
-  assert.equal(waiting[0]!.reportableUntil, "2026-09-20");
+  assert.equal(waiting[0]!.reportableUntil, "2026-09-19", "dated 21 August, the 30th day counting that day");
 });
 
 // ------------------------------------------------- permissions, tenancy, audit
@@ -534,11 +536,93 @@ test("the audit trail records the IRN but not the signed QR blob or any credenti
   assert.equal(written.includes("vault://"), false, "no credential reference reaches the trail");
 });
 
-test("the policy in force is used, and a company may set its own", async () => {
+test("the reporting time limit is the law's, not a company setting (#236)", () => {
+  assert.equal("reportingWindowDays" in DEFAULT_EINVOICE_POLICY, false);
+});
+
+// --------------------------------------------- #236: the 30-day limit is for ₹10 crore and above
+
+const TEN_CRORE = 10_00_00_000_00n;
+const twelveCrore = () => aboveThreshold({ supplier: { gstin: SUPPLIER_GSTIN, aggregateTurnoverPaise: 12_00_00_000_00n } });
+
+test("#236: a business in the ₹5 to ₹10 crore band has no reporting deadline", () => {
+  const deadline = reportingDeadline("2026-09-27", { atLeastPaise: 5_00_00_000_01n, belowPaise: TEN_CRORE }, "2026-09-27");
+  assert.equal(deadline.kind, "NO_LIMIT");
+  assert.match(deadline.message, /no deadline/i);
+});
+
+test("#236: ₹8 crore typed as a figure has no deadline either", () => {
+  assert.equal(reportingDeadline("2026-09-27", exactTurnover(8_00_00_000_00n), "2026-09-27").kind, "NO_LIMIT");
+});
+
+test("#236: ₹10 crore and above, bill dated 27 Sep 2026: last day 26 Oct 2026, as the advisory's own example counts", () => {
+  const deadline = reportingDeadline("2026-09-27", { atLeastPaise: TEN_CRORE }, "2026-09-27");
+  assert.equal(deadline.kind, "LIMIT");
+  assert.equal(deadline.kind === "LIMIT" && deadline.lastDay, "2026-10-26");
+  assert.equal(deadline.kind === "LIMIT" && deadline.closed, false);
+  assert.match(deadline.message, /must be sent by 26 Oct 2026/);
+  // The advisory's example: dated 1 April 2025, cannot be reported after 30 April 2025.
+  const example = reportingDeadline("2025-04-01", { atLeastPaise: TEN_CRORE }, "2025-04-01");
+  assert.equal(example.kind === "LIMIT" && example.lastDay, "2025-04-30");
+});
+
+test("#236: exactly ₹10 crore is inside the limit — the advisory says '10 crores and above'", () => {
+  assert.equal(reportingDeadline("2026-09-27", exactTurnover(TEN_CRORE), "2026-09-27").kind, "LIMIT");
+  assert.equal(reportingDeadline("2026-09-27", exactTurnover(TEN_CRORE - 1n), "2026-09-27").kind, "NO_LIMIT");
+});
+
+test("#236: a bill dated before 1 April 2025 at ₹12 crore could be sent however old until 31 March 2025, then only within 30 days", () => {
+  // The portal checks on the day of reporting. Dated 31 March 2025: day 30 is 29 April 2025.
+  const lastMarch = reportingDeadline("2025-03-31", exactTurnover(12_00_00_000_00n), "2025-03-31");
+  assert.equal(lastMarch.kind === "LIMIT" && lastMarch.lastDay, "2025-04-29");
+  // Dated 1 January 2025: no limit then applied to ₹12 crore, so the last day was 31 March 2025.
+  const january = reportingDeadline("2025-01-01", exactTurnover(12_00_00_000_00n), "2025-02-15");
+  assert.equal(january.kind === "LIMIT" && january.lastDay, "2025-03-31");
+  // Today, both are long past.
+  assert.equal(reportingDeadline("2025-03-31", exactTurnover(12_00_00_000_00n), "2026-09-27").kind === "LIMIT", true);
+});
+
+test("#236: once the last day has passed, a plain sentence says the portal will refuse it and what to do", () => {
+  const deadline = reportingDeadline("2026-08-01", { atLeastPaise: TEN_CRORE }, "2026-09-27");
+  assert.equal(deadline.kind === "LIMIT" && deadline.closed, true);
+  assert.match(deadline.message, /portal will now refuse it/);
+  assert.match(deadline.message, /issue a fresh one dated today/);
+});
+
+test("#236: not told which side of ₹10 crore is a question, never a deadline and never a 'no limit'", () => {
+  const deadline = reportingDeadline("2026-09-27", { atLeastPaise: 5_00_00_000_01n }, "2026-09-27");
+  assert.equal(deadline.kind, "UNKNOWN");
+  assert.equal(deadline.kind === "UNKNOWN" && deadline.lastDayIfItApplies, "2026-10-26");
+  assert.match(deadline.message, /Business details/);
+});
+
+test("#236: the service shows no deadline at ₹8 crore and 30 days at ₹12 crore", async () => {
   const desk = makeEInvoiceDesk();
-  desk.policies.set("sampoorna" as never, { ...DEFAULT_EINVOICE_POLICY, reportingWindowDays: 7 });
-  const preview = await desk.service.preview(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
-  assert.equal(preview.reportableUntil, "2026-08-28", "seven days, not thirty");
+  const eight = await desk.service.preview(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
+  assert.equal(eight.reportableUntil, undefined);
+  const twelve = await desk.service.preview(desk.actor, { document: invoiceDocument(), applicability: twelveCrore() });
+  assert.equal(twelve.reportableUntil, "2026-09-19");
+  assert.match(twelve.summary, /must be sent by 19 Sep 2026/);
+});
+
+test("#236: a bill past its last day is not sent to be refused; the reason is said plainly", async () => {
+  const desk = makeEInvoiceDesk({ now: "2026-09-27T10:00:00.000Z" });
+  const preview = await desk.service.preview(desk.actor, { document: invoiceDocument(), applicability: twelveCrore() });
+  assert.equal(preview.ready, false);
+  assert.match(preview.summary, /portal will now refuse it/);
+  await assert.rejects(
+    () => desk.service.register(desk.actor, { document: invoiceDocument(), applicability: twelveCrore() }),
+    (error: DomainError) => error.code === "EINVOICE_REPORTING_TIME_LIMIT_PASSED",
+  );
+  assert.equal(desk.portal.registeredIrns().length, 0);
+  // The same old bill at ₹8 crore still goes: there is no limit below ₹10 crore.
+  const record = await desk.service.register(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
+  assert.equal(record.status, "REGISTERED");
+});
+
+test("#236: exactly ₹5 crore does not need an e-invoice — the notification says 'exceeds'", () => {
+  const decision = decideApplicability(aboveThreshold({ supplier: { gstin: SUPPLIER_GSTIN, aggregateTurnoverPaise: 5_00_00_000_00n } }));
+  assert.equal(decision.outcome, "NOT_APPLICABLE");
 });
 
 test("the offline export refuses for a bill that needs no e-invoice at all", async () => {

@@ -76,7 +76,7 @@ import {
   setCustomerCreditLimit,
 } from './catalogue-application.ts';
 import { dispatchFrom, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
-import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
+import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
@@ -165,6 +165,7 @@ import { showQuantity } from '../../../packages/purchasing/src/matching.ts';
 import type { SupplierRiskAssessment } from '../../../packages/purchasing/src/supplier-risk-types.ts';
 import { DEMO_REGISTRATIONS } from './company-shop.ts';
 import type { EInvoiceRecord } from '../../../packages/gst/src/einvoice-types.ts';
+import { readableDate, reportingDeadline } from '../../../packages/gst/src/reporting-window.ts';
 import { decideApplicability } from '../../../packages/gst/src/applicability.ts';
 import type { EInvoiceDocument, EInvoiceLine, PartyDetails } from '../../../packages/gst/src/payload.ts';
 import { EXPORT_SUPPLIES, checkExportParticulars, exportSupplyKindFor, type ExportParticulars } from '../../../packages/gst/src/export-supply.ts';
@@ -1996,15 +1997,20 @@ export class DemoApplication {
     // turnover is above the limit. Deliberately not the full applicability call — that one builds a
     // payload and can fail, and nothing on the e-invoice path may decide whether a bill is issued.
     const eInvoiceExpected = final.invoice.customerType === 'B2B'
-      && this.declaredTurnoverBand(final.invoice.documentDate)?.above === true;
+      && this.eInvoiceTurnoverReached(final.invoice.documentDate);
+    const deadline = reportingDeadline(final.invoice.documentDate, this.turnoverFactsOn(final.invoice.documentDate).lastYearTurnover ?? {}, appToday());
+    const lateForPortal = deadline.kind === 'LIMIT' && deadline.closed ? deadline.message : null;
     return {
       state: 'recorded', deduplicated: final.deduplicated,
       title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded',
       message: `${final.invoice.number} was issued.`,
       // Said on the screen the moment the bill is issued, so nobody has to go looking for it.
-      eInvoice: eInvoiceExpected
-        ? { expected: true, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' }
-        : { expected: false, message: null },
+      eInvoice: !eInvoiceExpected
+        ? { expected: false, message: null }
+        : lateForPortal !== null
+          // Issue #236 — a bill dated too long ago for the portal is not described as being sent.
+          ? { expected: true, message: `This bill has to carry a government e-invoice number, but it cannot be sent. ${lateForPortal}` }
+          : { expected: true, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' },
       invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
     };
   }
@@ -2237,11 +2243,12 @@ export class DemoApplication {
     const acknowledgement = eInvoiceRecords.find((record) => record.status === 'REGISTERED')?.acknowledgement ?? null;
     // Issue #189 — only a bill that is meant to be registered keeps a space for the government's
     // QR. It is meant to be once the business has started registering it, or when the business
-    // told us its turnover is above ₹5 crore (the e-invoice threshold, the same question #187 asks)
-    // and the customer is a registered business. Every other bill prints no e-invoice block at all.
+    // told us its turnover went over ₹5 crore (the e-invoice threshold — last year, or any year from
+    // 2017-18 on, #236) and the customer is a registered business. Every other bill prints no
+    // e-invoice block at all.
     const eInvoiceExpected =
       eInvoiceRecords.length > 0 ||
-      (invoice.customerType === 'B2B' && turnoverAnswerOn(turnoverAnswersOf(companyId), invoice.documentDate) === 'YES');
+      (invoice.customerType === 'B2B' && this.eInvoiceTurnoverReached(invoice.documentDate));
     const upiId = upiIdOf(companyId);
     // Issue #182 — the e-way bill number is raised against the issued invoice, so it only exists
     // after the bill is frozen. It is layered on here exactly as the government's IRN is: the
@@ -3593,23 +3600,51 @@ export class DemoApplication {
     };
   }
 
-  /** The turnover and category facts the applicability rules need, as the form supplies them. */
   /**
-   * The turnover fact this product actually holds: the business's own yes/no against ₹5 crore.
+   * The turnover facts this product actually holds: the band the business picked in Business
+   * details for the bill's financial year. Never a figure typed on the E-invoice screen (#236) —
+   * one saved answer, read everywhere, so the screens cannot disagree.
    *
-   * Issue #210 part 3 — the automatic path has no form to read a figure from, and inventing one
-   * would be inventing a threshold. The band is what was asked and what was answered.
+   * Two different facts come out of it:
+   *
+   *  - whether turnover *exceeded* ₹5 crore in any year from 2017-18 on, which decides whether the
+   *    bill needs an e-invoice at all (Notification 13/2020 as amended by 10/2023); and
+   *  - last year's turnover as bounds, which decides whether the portal's 30-day limit applies
+   *    (₹10 crore and above, GSTN advisory of 5 November 2024).
+   *
+   * "Not sure", an unanswered year, and an old yes/no that does not settle a fact all leave that
+   * fact out, and the rules then ask rather than guess.
    */
-  private declaredTurnoverBand(on: string) {
-    const answer = turnoverAnswerOn(turnoverAnswersOf(this.config.companyId), isoDate(on));
-    if (answer !== 'YES' && answer !== 'NO') return undefined;
-    // The question the business was asked is the e-invoice threshold itself (#187 asks the same one).
-    return { thresholdPaise: 5_00_00_000_00n, above: answer === 'YES' };
+  private turnoverFactsOn(on: string): { readonly declaredTurnoverBand?: { thresholdPaise: bigint; above: boolean }; readonly lastYearTurnover?: { atLeastPaise?: bigint; belowPaise?: bigint } } {
+    const answers = turnoverAnswersOf(this.config.companyId);
+    const band = turnoverBandOn(answers, isoDate(on));
+    const legacy = band === null ? turnoverAnswerOn(answers, isoDate(on)) : null;
+    const FIVE = 5_00_00_000_00n;
+    const TEN = 10_00_00_000_00n;
+    // "Up to ₹5 crore" is at most ₹5 crore, so below one paisa more.
+    const upToFive = { belowPaise: FIVE + 1n };
+    const overFive = { atLeastPaise: FIVE + 1n };
+    const everAbove = band === '5_TO_10_CRORE' || band === '10_CRORE_AND_ABOVE' || band === 'UP_TO_5_CRORE_EARLIER_ABOVE' || legacy === 'YES'
+      ? true
+      : band === 'UP_TO_5_CRORE' ? false : undefined;
+    const lastYear = band === 'UP_TO_5_CRORE' || band === 'UP_TO_5_CRORE_EARLIER_ABOVE' || legacy === 'NO'
+      ? upToFive
+      : band === '5_TO_10_CRORE' ? { ...overFive, belowPaise: TEN }
+        : band === '10_CRORE_AND_ABOVE' ? { atLeastPaise: TEN }
+          : legacy === 'YES' ? overFive : undefined;
+    return {
+      ...(everAbove === undefined ? {} : { declaredTurnoverBand: { thresholdPaise: FIVE, above: everAbove } }),
+      ...(lastYear === undefined ? {} : { lastYearTurnover: lastYear }),
+    };
+  }
+
+  /** Whether the business has told us it is over the e-invoice limit — what the bill and the issue screen say. */
+  private eInvoiceTurnoverReached(on: string): boolean {
+    return this.turnoverFactsOn(on).declaredTurnoverBand?.above === true;
   }
 
   private applicabilityFor(document: EInvoiceDocument, input: Record<string, unknown>) {
-    const turnover = String(input.turnover ?? '').trim();
-    const band = this.declaredTurnoverBand(document.documentDate);
+    const facts = this.turnoverFactsOn(document.documentDate);
     return {
       documentType: document.documentType,
       documentDate: document.documentDate,
@@ -3617,9 +3652,7 @@ export class DemoApplication {
       ...(document.recipient.gstin === '' ? {} : { recipientGstin: document.recipient.gstin }),
       supplier: {
         gstin: document.supplier.gstin,
-        // Blank means "we have not been told", which is a question, not a zero.
-        ...(turnover === '' ? {} : { aggregateTurnoverPaise: paise(turnover) }),
-        ...(band === undefined ? {} : { declaredTurnoverBand: band }),
+        ...facts,
         ...(input.exempt ? { exemptCategories: [String(input.exempt)] as never } : {}),
       },
     };
@@ -3670,6 +3703,7 @@ export class DemoApplication {
       signedQrCode: record.acknowledgement?.signedQrCode ?? null,
       cancellableUntil: record.cancellableUntil ?? null,
       reportableUntil: record.reportableUntil ?? null,
+      reportableUntilLabel: record.reportableUntil === undefined ? null : readableDate(record.reportableUntil),
       failure: record.failure ?? null,
       raw: record,
     };
@@ -3694,6 +3728,10 @@ export class DemoApplication {
       ready: preview.ready,
       expectedIrn: preview.expectedIrn ?? null,
       reportableUntil: preview.reportableUntil ?? null,
+      // Issue #236 — "must be reported by" only for a business the limit applies to; otherwise one
+      // plain sentence saying there is no deadline, or that we need its turnover to tell.
+      reportableUntilLabel: preview.reportableUntil === undefined ? null : readableDate(preview.reportableUntil),
+      deadline: preview.deadline === undefined ? null : { kind: preview.deadline.kind, message: preview.deadline.message },
       problems: preview.problems.map((problem) => ({ field: problem.field, message: problem.message })),
       documentNumber: document.documentNumber,
     };

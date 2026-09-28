@@ -91,7 +91,7 @@ test('an export under LUT: no tax, the endorsement, the shipping bill and the do
   assert.ok(!html.includes('999999'), 'the placeholder PIN is never printed');
 
   // The e-invoice is built from the same particulars: the same supply type, shipping bill and currency.
-  const offline = await request('POST', '/api/einvoices/offline', { invoice: invoiceId, turnover: '600000000' }, session);
+  const offline = await request('POST', '/api/einvoices/offline', { invoice: invoiceId }, session);
   assert.equal(offline.status, 200, offline.body.message);
   const payload = JSON.parse(String(offline.body.json)).InvoiceList[0];
   assert.equal(payload.TranDtls.SupTyp, 'EXPWOP');

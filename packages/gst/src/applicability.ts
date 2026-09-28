@@ -169,14 +169,14 @@ export const decideApplicability = (input: EInvoiceApplicabilityInput): Applicab
     if (band.above && band.thresholdPaise >= threshold.thresholdPaise) {
       return {
         ...base, outcome: "APPLICABLE", ruleId: threshold.ruleId, sourceRef: threshold.sourceRef,
-        reason: `You told us your yearly turnover is above ${formatPaise(band.thresholdPaise)}, which is at or above the ${formatPaise(threshold.thresholdPaise)} limit that applies from ${threshold.effectiveFrom}, so this bill needs an e-invoice number before it goes to the customer.`,
+        reason: `You told us your turnover has gone over ${formatPaise(band.thresholdPaise)} (last year, or in any year from 2017-18 on). E-invoicing applies to every business over the ${formatPaise(threshold.thresholdPaise)} limit from ${threshold.effectiveFrom}, so this bill needs an e-invoice number before it goes to the customer.`,
         thresholdApplied: threshold,
       };
     }
     if (!band.above && band.thresholdPaise <= threshold.thresholdPaise) {
       return {
         ...base, outcome: "NOT_APPLICABLE", ruleId: threshold.ruleId, sourceRef: threshold.sourceRef,
-        reason: `You told us your yearly turnover is below ${formatPaise(band.thresholdPaise)}, which is under the ${formatPaise(threshold.thresholdPaise)} limit, so this bill does not need an e-invoice number. It is an ordinary GST bill.`,
+        reason: `You told us your turnover has never gone over ${formatPaise(band.thresholdPaise)} in any year from 2017-18 on, which keeps you under the ${formatPaise(threshold.thresholdPaise)} limit, so this bill does not need an e-invoice number. It is an ordinary GST bill.`,
         thresholdApplied: threshold,
       };
     }
@@ -192,17 +192,18 @@ export const decideApplicability = (input: EInvoiceApplicabilityInput): Applicab
     };
   }
 
-  if (turnover >= threshold.thresholdPaise) {
+  // Issue #236 — the notification's word is "exceeds": a business at exactly the limit is not in.
+  if (turnover > threshold.thresholdPaise) {
     return {
       ...base, outcome: "APPLICABLE", ruleId: threshold.ruleId, sourceRef: threshold.sourceRef,
-      reason: `Your yearly turnover of ${formatPaise(turnover)} is at or above the ${formatPaise(threshold.thresholdPaise)} limit that applies from ${threshold.effectiveFrom}, so this bill needs an e-invoice number before it goes to the customer.`,
+      reason: `Your yearly turnover of ${formatPaise(turnover)} is above the ${formatPaise(threshold.thresholdPaise)} limit that applies from ${threshold.effectiveFrom}, so this bill needs an e-invoice number before it goes to the customer.`,
       thresholdApplied: threshold,
     };
   }
 
   return {
     ...base, outcome: "NOT_APPLICABLE", ruleId: threshold.ruleId, sourceRef: threshold.sourceRef,
-    reason: `Your yearly turnover of ${formatPaise(turnover)} is below the ${formatPaise(threshold.thresholdPaise)} limit, so this bill does not need an e-invoice number. It is an ordinary GST bill.`,
+    reason: `Your yearly turnover of ${formatPaise(turnover)} is not above the ${formatPaise(threshold.thresholdPaise)} limit, so this bill does not need an e-invoice number. It is an ordinary GST bill.`,
     thresholdApplied: threshold,
   };
 };

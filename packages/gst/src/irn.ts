@@ -142,11 +142,3 @@ export const cancellableUntil = (ackDate: string, windowHours: number): string =
   return new Date(acknowledged.getTime() + windowHours * 3_600_000).toISOString();
 };
 
-/** The last date this document can be reported without being late, when a limit applies. */
-export const reportableUntil = (documentDate: string, windowDays: number | undefined): string | undefined => {
-  if (windowDays === undefined) return undefined;
-  const raised = new Date(`${documentDate}T00:00:00Z`);
-  if (Number.isNaN(raised.getTime())) return undefined;
-  raised.setUTCDate(raised.getUTCDate() + windowDays);
-  return raised.toISOString().slice(0, 10);
-};

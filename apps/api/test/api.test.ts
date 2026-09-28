@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
+import { saveTurnoverBand } from './turnover-helper.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 
@@ -612,20 +613,24 @@ test('the HTTP surface refuses to assume every bill needs an IRN', async () => {
   assert.equal(invoices[0].eInvoiceStatus, 'NOT_SENT', "the bill's state and the government's are separate");
 
   // A small trader is told plainly that nothing needs sending, with the rule that decided it.
-  const small = await request('POST', '/api/einvoices/preview', { invoice, turnover: '9000000' }, session);
+  // Issue #236 — the turnover is the one saved in Business details; the screen does not ask again.
+  await saveTurnoverBand(session, 'UP_TO_5_CRORE');
+  const small = await request('POST', '/api/einvoices/preview', { invoice }, session);
   assert.equal(small.body.outcome, 'NOT_APPLICABLE');
   assert.equal(small.body.ready, false);
   assert.equal(small.body.ruleId, 'EINV.THRESHOLD.5CR');
   assert.match(small.body.sourceRef, /Notification 10\/2023/);
   assert.match(small.body.reason, /It is an ordinary GST bill/);
 
-  // A turnover we were never given is a question, not a guess in either direction.
+  // "Not sure" is a question, not a guess in either direction.
+  await saveTurnoverBand(session, 'UNKNOWN');
   const unknown = await request('POST', '/api/einvoices/preview', { invoice }, session);
   assert.equal(unknown.body.outcome, 'CANNOT_DECIDE');
   assert.equal(unknown.body.ready, false);
 
   // And sending one that does not need it is refused outright.
-  const refused = await request('POST', '/api/einvoices/register', { invoice, turnover: '9000000' }, session);
+  await saveTurnoverBand(session, 'UP_TO_5_CRORE');
+  const refused = await request('POST', '/api/einvoices/register', { invoice }, session);
   assert.equal(refused.status, 409);
   assert.match(refused.body.message, /does not need an e-invoice number/);
 });
@@ -635,13 +640,25 @@ test('the HTTP surface registers once, verifies the reply, and cannot make a sec
   const { invoices } = (await request('GET', '/api/einvoices/invoices', {}, session)).body;
   const invoice = invoices[0].id;
 
-  const preview = await request('POST', '/api/einvoices/preview', { invoice, turnover: '80000000' }, session);
+  // Issue #236 — ₹5 to ₹10 crore: an e-invoice is needed, and there is no deadline for sending it.
+  await saveTurnoverBand(session, '5_TO_10_CRORE');
+  const middle = await request('POST', '/api/einvoices/preview', { invoice }, session);
+  assert.equal(middle.body.outcome, 'APPLICABLE');
+  assert.equal(middle.body.reportableUntil, null);
+  assert.equal(middle.body.deadline.kind, 'NO_LIMIT');
+
+  // ₹10 crore and above: the 30-day limit, the bill's own date counted as day one.
+  await saveTurnoverBand(session, '10_CRORE_AND_ABOVE');
+  const preview = await request('POST', '/api/einvoices/preview', { invoice }, session);
   assert.equal(preview.body.outcome, 'APPLICABLE');
   assert.equal(preview.body.ready, true);
   assert.match(preview.body.expectedIrn, /^[0-9a-f]{64}$/);
-  assert.equal(preview.body.reportableUntil.length, 10);
+  const day = new Date(`${invoices[0].date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + 29);
+  assert.equal(preview.body.reportableUntil, day.toISOString().slice(0, 10));
+  await saveTurnoverBand(session, '5_TO_10_CRORE');
 
-  const registered = await request('POST', '/api/einvoices/register', { invoice, turnover: '80000000' }, session);
+  const registered = await request('POST', '/api/einvoices/register', { invoice }, session);
   assert.equal(registered.body.status, 'REGISTERED');
   // What we predicted is what came back, which is the verification working end to end.
   assert.equal(registered.body.irn, preview.body.expectedIrn);
@@ -649,11 +666,11 @@ test('the HTTP surface registers once, verifies the reply, and cannot make a sec
   assert.ok(registered.body.signedQrCode.length > 0, 'the signed QR is kept for the customer copy');
   assert.ok(registered.body.cancellableUntil.length > 0);
 
-  const again = await request('POST', '/api/einvoices/register', { invoice, turnover: '80000000' }, session);
+  const again = await request('POST', '/api/einvoices/register', { invoice }, session);
   assert.equal(again.body.irn, registered.body.irn, 'a retry never produces a second IRN');
 
   const cancelled = await request('POST', '/api/einvoices/cancel', {
-    invoice, turnover: '80000000', reasonCode: 'DATA_ENTRY_MISTAKE', reason: "The buyer's GST number was typed wrong",
+    invoice, reasonCode: 'DATA_ENTRY_MISTAKE', reason: "The buyer's GST number was typed wrong",
   }, session);
   assert.equal(cancelled.body.status, 'CANCELLED');
   assert.match(cancelled.body.message, /The bill in your books is unchanged/);
@@ -662,7 +679,7 @@ test('the HTTP surface registers once, verifies the reply, and cannot make a sec
 test('the offline export is offered and says it is not yet an e-invoice', async () => {
   const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const { invoices } = (await request('GET', '/api/einvoices/invoices', {}, session)).body;
-  const exported = await request('POST', '/api/einvoices/offline', { invoice: invoices[0].id, turnover: '80000000' }, session);
+  const exported = await request('POST', '/api/einvoices/offline', { invoice: invoices[0].id }, session);
   assert.equal(exported.status, 200);
   assert.match(exported.body.fileName, /^einvoice-.*\.json$/);
   const file = JSON.parse(exported.body.json);
@@ -672,7 +689,7 @@ test('the offline export is offered and says it is not yet an e-invoice', async 
 
 test('e-invoices belong to the signed-in company alone', async () => {
   const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
-  const stolen = await request('POST', '/api/einvoices/preview', { invoice: 'not-ours', turnover: '80000000' }, konkan);
+  const stolen = await request('POST', '/api/einvoices/preview', { invoice: 'not-ours' }, konkan);
   assert.equal(stolen.status, 404);
 });
 
@@ -1300,7 +1317,7 @@ test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper i
   assert.match(hindi.body.html, /<html lang="hi">/);
 
   // Once the government has registered the bill, its own signed square prints on it.
-  const registered = await request('POST', '/api/einvoices/register', { invoice: recorded.body.invoice.id, turnover: '80000000' }, owner);
+  const registered = await request('POST', '/api/einvoices/register', { invoice: recorded.body.invoice.id }, owner);
   assert.equal(registered.body.status, 'REGISTERED');
   const withIrn = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, owner);
   assert.match(withIrn.body.html, new RegExp(registered.body.irn));
