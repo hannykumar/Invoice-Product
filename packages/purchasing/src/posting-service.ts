@@ -291,7 +291,7 @@ export class PurchasePostingService {
   async reverse(
     actor: ActorContext,
     billId: string,
-    input: { readonly on: IsoDate; readonly reason: string; readonly negativeOverrideReason?: string },
+    input: { readonly on: IsoDate; readonly reason: string },
   ): Promise<PurchaseBill> {
     const bill = await this.#bills.findById(actor.companyId, billId);
     if (bill === null) throw notFound("PURCHASE_BILL_UNKNOWN", "We could not find that purchase bill.");
@@ -312,7 +312,7 @@ export class PurchasePostingService {
       });
 
       // The goods go back out in the same unit of work. If some of them have already been sold,
-      // the godown refuses unless an authorised person says why, and the whole reversal is undone
+      // the godown refuses (stock never goes below nothing, #262), and the whole reversal is undone
       // rather than leaving the books and the shelf disagreeing.
       for (const receipt of bill.receipts) {
         await this.#inventory.returnIn(actor, {
@@ -326,7 +326,6 @@ export class PurchasePostingService {
           documentDate: input.on,
           source: { kind: "purchase_invoice", id: bill.purchaseId, number: bill.invoiceNumber },
           reason: input.reason,
-          ...(input.negativeOverrideReason === undefined ? {} : { negativeOverrideReason: input.negativeOverrideReason }),
         });
       }
 

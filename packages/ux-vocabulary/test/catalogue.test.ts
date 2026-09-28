@@ -237,23 +237,30 @@ test('rendering produces a complete sentence in both languages', () => {
 });
 
 test('actions a user cannot perform are not offered to them', () => {
-  const values = {
-    itemName: 'Apple box, 10 kg',
-    warehouseName: 'Narela godown',
-    available: '30',
-    required: '70',
-    shortfall: '40',
-    unit: 'boxes',
-  };
-  const rendered = renderMessage('stock.not_enough', 'en-IN', values);
+  const values = { partyName: 'ABC Traders', limit: '₹50,000', outstanding: '₹40,000', billValue: '₹20,000', excess: '₹10,000' };
+  const rendered = renderMessage('credit.limit_crossed', 'en-IN', values);
   const withoutPermission = permittedSteps(rendered, []);
   assert.ok(
     withoutPermission.every((s) => s.requiresPermission === undefined),
     'a step needing a permission must not be offered to a user without it',
   );
   assert.ok(withoutPermission.length > 0, 'a user without the override permission still needs something to do');
-  const withPermission = permittedSteps(rendered, ['inventory.override_negative']);
+  const withPermission = permittedSteps(rendered, ['sales.override_credit_limit']);
   assert.equal(withPermission.length, rendered.nextSteps.length);
+});
+
+test('#262: short stock offers no way past it — no step needs a permission, and none is an override', () => {
+  const rendered = renderMessage('stock.not_enough', 'en-IN', {
+    itemName: 'Apple box, 10 kg', warehouseName: 'Narela godown', available: '30', required: '70', shortfall: '40', unit: 'boxes',
+  });
+  assert.deepEqual(rendered.nextSteps.map((s) => s.id), ['reduce', 'other_warehouse', 'record_purchase']);
+  assert.ok(rendered.nextSteps.every((s) => s.requiresPermission === undefined));
+  for (const locale of LOCALES) {
+    const shown = renderMessage('stock.not_enough', locale, {
+      itemName: 'Apple box, 10 kg', warehouseName: 'Narela godown', available: '30', required: '70', shortfall: '40', unit: 'boxes',
+    });
+    assert.ok(shown.nextSteps.every((s) => !/permission|ijaazat/i.test(s.label)), locale);
+  }
 });
 
 test('the plain word for an accounting term is available, and internal terms stay hidden', () => {

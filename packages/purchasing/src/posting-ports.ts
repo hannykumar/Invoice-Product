@@ -32,7 +32,7 @@ export interface PurchaseReceiptCommand {
 export interface PurchaseInventoryPort {
   receiveIn(actor: ActorContext, command: PurchaseReceiptCommand): Promise<StockMovement>;
   /** Takes a receipt back out when a bill is reversed. */
-  returnIn(actor: ActorContext, command: PurchaseReceiptCommand & { readonly negativeOverrideReason?: string }): Promise<StockMovement>;
+  returnIn(actor: ActorContext, command: PurchaseReceiptCommand): Promise<StockMovement>;
 }
 
 export interface PurchaseBillRepository {

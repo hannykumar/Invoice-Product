@@ -211,7 +211,7 @@ export const replay = async (fixture: GoldenFixture): Promise<ReplayResult> => {
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { negativeStock: 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory,
   });
 

@@ -38,7 +38,7 @@ Workflow specification version **1.0.0**.
 - Step 3 (Apply price and check credit): The price source is always shown.
 - Step 3 (Apply price and check credit): Credit uses outstanding plus pending transactions.
 - Step 4 (Check and reserve stock): Availability is physical minus reserved.
-- Step 4 (Check and reserve stock): Overselling requires an authorised override with a reason.
+- Step 4 (Check and reserve stock): Overselling is always refused; there is no override (#262).
 - Step 5 (Calculate GST): A missing place-of-supply fact blocks the sale and opens an exception item.
 - Step 5 (Calculate GST): An LLM never chooses the rate.
 - Step 6 (Show a preview and take approval): Preview repeats customer, quantity, unit, price, tax basis and stock impact in plain words.
@@ -54,7 +54,7 @@ Workflow specification version **1.0.0**.
 
 | Situation | What the product does |
 | --- | --- |
-| Stock short | Block with the exact shortfall and offer reduce quantity, choose another warehouse, or authorised override. |
+| Stock short | Block with the exact shortfall and offer reduce quantity, choose another warehouse, or enter the purchase bill first. No override (#262). |
 | Place of supply unknown | Move to the exception queue; never post a guessed tax split. |
 | IRP or e-way service down | Invoice stays FINAL and correct in the books; the government step shows a retryable failed state. |
 | Duplicate submit after timeout | The idempotency key returns the original invoice. |

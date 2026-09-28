@@ -37,10 +37,11 @@ will never use. Two lines of one bill cannot both claim the last box either.
 
 ## Negative stock
 
-Default is `BLOCK`. A business that genuinely sells ahead of its paperwork switches to
-`WARN_WITH_OVERRIDE`, and then every override needs the `inventory.override_negative` permission
-and a written reason, both recorded on the movement and in the audit trail. The resulting negative
-balance stays **visible**, not hidden.
+Stock never goes below zero, and there is no setting, permission or reason that allows it (owner's
+decision, 28 Sep 2026, issue #262). Any movement that would take out more than the godown holds is
+refused with `STOCK_WOULD_GO_NEGATIVE` and writes nothing. The way through is to record the
+purchase that brought the goods in. The earlier `WARN_WITH_OVERRIDE` policy and the
+`inventory.override_negative` permission have been removed.
 
 ## Units, batches and serials
 

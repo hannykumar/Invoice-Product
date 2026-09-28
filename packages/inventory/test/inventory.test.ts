@@ -332,44 +332,23 @@ test('by default, stock cannot go below zero', async () => {
   assert.equal(formatQuantity(balance.physical), '10.000 KGS', 'a refused movement writes nothing');
 });
 
-test('a business that allows it can go negative, but only named and reasoned', async () => {
-  const g = makeGodown({ policy: { negativeStock: 'WARN_WITH_OVERRIDE' } });
-  await buyApples(g, '1', 'p1');
-
+test('#262: there is no way past it — the owner, with every permission and a reason, is refused too', async () => {
+  const g = makeGodown();
+  await buyApples(g, '1', 'p1'); // 10 kg
   await assert.rejects(
     () =>
       g.service.recordMovement(g.actor, {
         idempotencyKey: 'o1', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'SALE_OUT',
         quantity: qty('20', 'KGS'), documentDate: on('2026-04-12'), source: source('bill-x'),
+        // What the old override asked for. It is not part of the command any more and changes nothing.
+        ...({ negativeOverride: { reason: 'goods received, supplier bill still coming' } } as object),
       }),
-    (e: unknown) => e instanceof DomainError && e.code === 'STOCK_OVERRIDE_REASON_REQUIRED',
+    (e: unknown) => e instanceof DomainError && e.code === 'STOCK_WOULD_GO_NEGATIVE',
   );
-
-  const clerk = actorWith(ALL_PERMISSIONS.filter((p) => p !== 'inventory.override_negative'));
-  await assert.rejects(
-    () =>
-      g.service.recordMovement(clerk, {
-        idempotencyKey: 'o2', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'SALE_OUT',
-        quantity: qty('20', 'KGS'), documentDate: on('2026-04-12'), source: source('bill-x'),
-        negativeOverride: { reason: 'goods received, bill pending' },
-      }),
-    (e: unknown) => e instanceof DomainError && e.kind === 'FORBIDDEN',
-  );
-
-  const allowed = await g.service.recordMovement(g.actor, {
-    idempotencyKey: 'o3', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'SALE_OUT',
-    quantity: qty('20', 'KGS'), documentDate: on('2026-04-12'), source: source('bill-x'),
-    negativeOverride: { reason: 'goods received, supplier bill still coming' },
-  });
-  assert.equal(allowed.negativeOverride?.reason, 'goods received, supplier bill still coming');
-  assert.equal(allowed.negativeOverride?.allowedBy, g.actor.userId);
-
-  const audited = g.audit.events.filter((e) => e.action === 'inventory.negative_stock_allowed');
-  assert.equal(audited.length, 1);
-  assert.match(audited[0]?.overrideReason ?? '', /supplier bill still coming/);
-
+  assert.equal(g.audit.events.filter((e) => e.action === 'inventory.negative_stock_allowed').length, 0);
   const balance = await g.service.balance(g.actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' });
-  assert.equal(formatQuantity(balance.physical), '-10.000 KGS', 'the shortfall is visible, not hidden');
+  assert.equal(formatQuantity(balance.physical), '10.000 KGS', 'never below nothing');
+  assert.equal('negativeStock' in g.service.policy, false, 'there is no setting that would allow it');
 });
 
 test('the same movement recorded twice moves stock once', async () => {

@@ -52,7 +52,7 @@ import type {
 const COMPANY: CompanyId = asId<'Company'>('gates-co');
 const PERMISSIONS = [
   'ledger.setup', 'ledger.post.sale', 'ledger.post.journal', 'ledger.post.receipt', 'ledger.reverse',
-  'inventory.move', 'inventory.adjust', 'inventory.override_negative',
+  'inventory.move', 'inventory.adjust',
 ];
 const actor: ActorContext = {
   companyId: COMPANY,
@@ -207,7 +207,7 @@ export const observeLive = async (): Promise<Omit<Observations, 'rules' | 'golde
   const inventory = new InventoryService({
     store, inventory: inventoryStore, masterData: new Masters(),
     permissions: permissionPortFromActor, audit, clock,
-    policy: { negativeStock: 'WARN_WITH_OVERRIDE', reservationMinutes: 60, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 60, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory,
   });
   await inventory.recordMovement(actor, {
@@ -218,27 +218,23 @@ export const observeLive = async (): Promise<Omit<Observations, 'rules' | 'golde
     source: { kind: 'purchase_invoice', id: 'p1', number: 'P1' },
     unitCost: rupees(50),
   });
-  // Taking out more than there is, with an authorised reason: allowed, and recorded as such.
-  await inventory.recordMovement(actor, {
-    idempotencyKey: 'gate-stock-over',
-    itemId: 'CRATE', warehouseId: 'shop', kind: 'SALE_OUT',
-    quantity: quantityFromString('12', 'PCS'),
-    documentDate: isoDate('2026-04-11'),
-    source: { kind: 'sales_invoice', id: 's1', number: 'S1' },
-    negativeOverride: { reason: 'The goods are on the van, the bill has not been entered yet.' },
-  });
+  // Taking out more than there is is refused, whoever asks (#262). If it ever went through, the
+  // balance below would be under zero and the stock gate would fail the build.
+  try {
+    await inventory.recordMovement(actor, {
+      idempotencyKey: 'gate-stock-over',
+      itemId: 'CRATE', warehouseId: 'shop', kind: 'SALE_OUT',
+      quantity: quantityFromString('12', 'PCS'),
+      documentDate: isoDate('2026-04-11'),
+      source: { kind: 'sales_invoice', id: 's1', number: 'S1' },
+    });
+  } catch (error) {
+    if (!(error instanceof DomainError)) throw error;
+  }
 
   const balance = await inventory.balance(actor, { itemId: 'CRATE', warehouseId: 'shop' });
-  const movements = await inventoryStore.movements.list(COMPANY, { itemId: 'CRATE', warehouseId: 'shop' });
-  const override = movements.map((movement) => movement.negativeOverride).filter((o) => o !== null).at(-1) ?? null;
   const stock: StockObservation[] = [
-    {
-      itemId: 'CRATE',
-      warehouseId: 'shop',
-      physical: balance.physical.scaled,
-      overrideReason: override?.reason ?? null,
-      overrideAllowedBy: override?.allowedBy ?? null,
-    },
+    { itemId: 'CRATE', warehouseId: 'shop', physical: balance.physical.scaled },
   ];
 
   const vouchers = (await store.read().vouchers.list(COMPANY, {})).map(

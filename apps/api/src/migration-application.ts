@@ -103,7 +103,7 @@ const openWorkspace = async (owner: RequestContext): Promise<Workspace> => {
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { negativeStock: 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
   });
   const mastersAdapter = new MastersMigrationAdapter(masters, options);
   const service = new MigrationService({

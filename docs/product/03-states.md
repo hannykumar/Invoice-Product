@@ -54,7 +54,7 @@ Owned by **GPT1** under issue **#9**.
 
 | From | Event | To | Must be true first |
 | --- | --- | --- | --- |
-| `DRAFT` | `submit` | `PENDING_APPROVAL` | `stock_reserved_or_override`, `tax_decided`, `party_resolved` |
+| `DRAFT` | `submit` | `PENDING_APPROVAL` | `stock_reserved`, `tax_decided`, `party_resolved` |
 | `DRAFT` | `missingFact` | `NEEDS_INFO` | — |
 | `NEEDS_INFO` | `factSupplied` | `DRAFT` | — |
 | `PENDING_APPROVAL` | `reject` | `DRAFT` | `reason_required` |

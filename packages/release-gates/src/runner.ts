@@ -13,7 +13,7 @@ import {
   finalRecordsAreImmutable,
   goldenDatasetStillMatches,
   retriesAreIdempotent,
-  stockNeverSilentlyNegative,
+  stockNeverNegative,
   taxPartsSumToTotal,
   trialBalanceIsLevel,
   uncertainModelOutputIsAskedAbout,
@@ -58,8 +58,8 @@ export const runGates = (observations: Observations): GateReport => {
       everyVoucherBalances(observations.vouchers)),
     evaluate('LEDGER_TRIAL_BALANCE', 'The two sides of the books come to the same figure', () =>
       trialBalanceIsLevel(observations.totalDebits, observations.totalCredits, observations.vouchers.length)),
-    evaluate('STOCK_NEVER_SILENTLY_NEGATIVE', 'Stock never goes below zero without someone allowing it', () =>
-      stockNeverSilentlyNegative(observations.stock)),
+    evaluate('STOCK_NEVER_NEGATIVE', 'Stock never goes below zero', () =>
+      stockNeverNegative(observations.stock)),
     evaluate('TAX_PARTS_SUM_TO_TOTAL', 'The parts of the GST add up to the GST charged', () =>
       taxPartsSumToTotal(observations.tax)),
     evaluate('RETRY_IS_IDEMPOTENT', 'Doing the same thing twice records it once', () =>

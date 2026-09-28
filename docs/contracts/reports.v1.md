@@ -106,7 +106,6 @@ nobody can check.
 | `BILL_STUCK_BEFORE_ISSUE` | A bill has sat unissued in the period being reported |
 | `MONEY_WITHOUT_A_BILL` | Money received or paid that no bill has claimed |
 | `CHEQUE_NOT_CLEARED` | Cheques counted as taken but not yet money |
-| `STOCK_WENT_NEGATIVE` | An authorised override let stock go below zero, with its reason |
 
 An exception carries its own contributions, so it drills like any other figure. Exceptions are
 **reported, never resolved here** — this package changes nothing.

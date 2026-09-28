@@ -39,7 +39,7 @@
         "CANCELLED": { "group": "accepted", "plain": "Bill cancelled", "terminal": true }
       },
       "transitions": [
-        { "from": "DRAFT", "to": "PENDING_APPROVAL", "event": "submit", "guards": ["stock_reserved_or_override", "tax_decided", "party_resolved"] },
+        { "from": "DRAFT", "to": "PENDING_APPROVAL", "event": "submit", "guards": ["stock_reserved", "tax_decided", "party_resolved"] },
         { "from": "DRAFT", "to": "NEEDS_INFO", "event": "missingFact" },
         { "from": "NEEDS_INFO", "to": "DRAFT", "event": "factSupplied" },
         { "from": "PENDING_APPROVAL", "to": "DRAFT", "event": "reject", "guards": ["reason_required"] },

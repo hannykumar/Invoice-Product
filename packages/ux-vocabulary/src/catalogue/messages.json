@@ -19,8 +19,7 @@
       "nextSteps": [
         { "id": "reduce", "label": { "en-IN": "Reduce the quantity to {available}", "hi-IN": "Quantity ghata kar {available} karein" } },
         { "id": "other_warehouse", "label": { "en-IN": "Pick a different godown", "hi-IN": "Doosra godown chunein" } },
-        { "id": "record_purchase", "label": { "en-IN": "Record the purchase that brought this stock in", "hi-IN": "Jis kharid se maal aaya, use darj karein" } },
-        { "id": "override", "label": { "en-IN": "Ask someone with permission to allow it and give a reason", "hi-IN": "Permission wale se ijaazat lein aur kaaran likhein" }, "requiresPermission": "inventory.override_negative" }
+        { "id": "record_purchase", "label": { "en-IN": "Record the purchase that brought this stock in", "hi-IN": "Jis kharid se maal aaya, use darj karein" } }
       ]
     },
     {

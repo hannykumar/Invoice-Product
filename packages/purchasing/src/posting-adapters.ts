@@ -109,7 +109,6 @@ export const purchaseInventoryPort = (
       documentDate: isoDate(command.documentDate),
       source: command.source,
       ...(command.reason === undefined ? {} : { reason: command.reason }),
-      ...(command.negativeOverrideReason === undefined ? {} : { negativeOverride: { reason: command.negativeOverrideReason } }),
     });
   },
   };

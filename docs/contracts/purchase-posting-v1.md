@@ -88,9 +88,9 @@ Reusing one key with genuinely different input still raises the platform's `CONF
 closes what was owed — all in one transaction. The original voucher is untouched; posted entries
 are immutable, so a correction is always a visible new entry.
 
-Taking stock back out can push a bin negative when the goods have already been sold. #12 refuses
-that unless the caller holds `inventory.override_negative` and gives a written reason, and the
-whole reversal is undone rather than leaving the books and the shelf disagreeing.
+Taking stock back out can push a bin negative when the goods have already been sold. #12 always
+refuses that (stock never goes below zero, #262), and the whole reversal is undone rather than
+leaving the books and the shelf disagreeing.
 
 A reversed bill cannot be posted again: it must be approved afresh, so the correction stays in
 the trail.
@@ -107,8 +107,8 @@ leaving it would show money owed that the ledger disagrees with.
 ## Permissions
 
 `ledger.post.purchase` to post and `ledger.reverse` to reverse — both already exist in `ledger.v1`;
-this contract adds no new permission. Moving stock additionally requires `inventory.move`, and the
-negative-stock override requires `inventory.override_negative`, both enforced inside #12.
+this contract adds no new permission. Moving stock additionally requires `inventory.move`, enforced inside #12. There is no
+negative-stock override (#262).
 
 ## Both proposals to GPT 1 are now settled (issue #73)
 

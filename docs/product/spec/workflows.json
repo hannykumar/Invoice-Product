@@ -11,7 +11,7 @@
         { "n": 1, "step": "Capture the instruction", "actor": "user", "module": "packages/voice-assistant", "issue": 10, "output": "Draft sale request with a confidence score for every extracted field.", "rules": ["Low-confidence party, item, quantity, unit or price is confirmed with the user, never assumed."] },
         { "n": 2, "step": "Resolve the customer and items", "actor": "system", "module": "packages/master-data", "issue": 5, "output": "Party id, item ids, units, HSN/SAC, tax profile.", "rules": ["Two similar names must be disambiguated by the user.", "An unknown customer is created only after the user confirms the details."] },
         { "n": 3, "step": "Apply price and check credit", "actor": "system", "module": "packages/pricing-credit", "issue": 11, "output": "Rate with its source, discount authority check, credit-limit decision (allow, warn, block).", "rules": ["The price source is always shown.", "Credit uses outstanding plus pending transactions."] },
-        { "n": 4, "step": "Check and reserve stock", "actor": "system", "module": "packages/inventory", "issue": 12, "output": "Reservation or a shortage block.", "rules": ["Availability is physical minus reserved.", "Overselling requires an authorised override with a reason."] },
+        { "n": 4, "step": "Check and reserve stock", "actor": "system", "module": "packages/inventory", "issue": 12, "output": "Reservation or a shortage block.", "rules": ["Availability is physical minus reserved.", "Overselling is always refused; there is no override (#262)."] },
         { "n": 5, "step": "Calculate GST", "actor": "system", "module": "packages/gst-calc", "issue": 25, "output": "Tax lines with place of supply, rate, CGST/SGST/UTGST/IGST split, cess and the rule version used.", "rules": ["A missing place-of-supply fact blocks the sale and opens an exception item.", "An LLM never chooses the rate."] },
         { "n": 6, "step": "Show a preview and take approval", "actor": "user", "module": "packages/workflow-audit", "issue": 6, "output": "Approval decision recorded with actor and time.", "rules": ["Preview repeats customer, quantity, unit, price, tax basis and stock impact in plain words."] },
         { "n": 7, "step": "Finalise the invoice", "actor": "system", "module": "packages/sales", "issue": 9, "output": "Permanent invoice number, immutable invoice record.", "rules": ["Numbering is unique per company, branch and financial year and is concurrency safe.", "The same idempotency key never creates a second invoice."] },
@@ -23,7 +23,7 @@
         { "n": 13, "step": "Track the receivable", "actor": "system", "module": "packages/receivables-payables", "issue": 20, "output": "Open receivable with due date and ageing bucket.", "rules": [] }
       ],
       "failureModes": [
-        { "case": "Stock short", "behaviour": "Block with the exact shortfall and offer reduce quantity, choose another warehouse, or authorised override." },
+        { "case": "Stock short", "behaviour": "Block with the exact shortfall and offer reduce quantity, choose another warehouse, or enter the purchase bill first. No override (#262)." },
         { "case": "Place of supply unknown", "behaviour": "Move to the exception queue; never post a guessed tax split." },
         { "case": "IRP or e-way service down", "behaviour": "Invoice stays FINAL and correct in the books; the government step shows a retryable failed state." },
         { "case": "Duplicate submit after timeout", "behaviour": "The idempotency key returns the original invoice." }

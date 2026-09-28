@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   asId,
+  DomainError,
   fixedClock,
   isoDate,
   quantityFromString,
@@ -48,7 +49,7 @@ const ABC = asId<'Party'>('abc');
 const PERMISSIONS = [
   'ledger.setup', 'ledger.post.sale', 'ledger.post.journal', 'ledger.reverse',
   'sales.draft.write', 'sales.finalise', 'sales.cancel',
-  'inventory.move', 'inventory.adjust', 'inventory.transfer', 'inventory.override_negative',
+  'inventory.move', 'inventory.adjust', 'inventory.transfer',
   'sales.approve',
 ];
 
@@ -74,7 +75,7 @@ class StockMasters implements StockMasterData {
 
 let counter = 0;
 
-const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE'; books?: boolean; failIssue?: boolean } = {}) => {
+const makeTill = async (options: { books?: boolean; failIssue?: boolean } = {}) => {
   const store = new InMemoryLedgerStore();
   const salesRepo = new InMemorySalesRepository();
   const inventoryStore = new InMemoryInventoryStore();
@@ -99,7 +100,7 @@ const makeTill = async (options: { negativeStock?: 'BLOCK' | 'WARN_WITH_OVERRIDE
   const inventory = new InventoryService({
     store, inventory: inventoryStore, masterData: new StockMasters(),
     permissions: permissionPortFromActor, audit, clock,
-    policy: { negativeStock: options.negativeStock ?? 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory,
     ...(options.books === true ? { books: ledgerStockBooks(store, ledger) } : {}),
   });
@@ -233,33 +234,28 @@ test('cancelling an issued bill puts the goods back on the shelf', async () => {
   assert.equal(toDecimalString(owed.balance), '0.00');
 });
 
-test('a business that allows it can oversell, and the override is on the record', async () => {
-  const till = await makeTill({ negativeStock: 'WARN_WITH_OVERRIDE' });
+test('#262: overselling is refused at the hold and at the godown, for the owner too, and nothing moves', async () => {
+  const till = await makeTill();
   await till.inventory.recordMovement(actor, {
     idempotencyKey: 'buy-30', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'PURCHASE_IN',
     quantity: quantity('30', 'BOX'), documentDate: isoDate('2026-04-04'),
     source: { kind: 'purchase_invoice', id: 'p', number: null },
   });
 
-  // The hold still refuses, because holding is about what can be promised.
   const draft = await sellBoxes(till, 'sale-1', '70');
   const blocked = await till.sales.submitForApproval(actor, draft.id);
   assert.equal(blocked.state, 'NEEDS_INFO');
 
-  // The override belongs on the movement, where a person names it and takes responsibility.
-  const overridden = await till.inventory.recordMovement(actor, {
-    idempotencyKey: 'oversell', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'SALE_OUT',
-    quantity: quantity('70', 'BOX'), documentDate: isoDate('2026-04-12'),
-    source: { kind: 'sales_invoice', id: draft.id, number: null },
-    negativeOverride: { reason: 'Goods are in the van, supplier bill still coming' },
-  });
-  assert.equal(overridden.negativeOverride?.allowedBy, OWNER);
-  const balance = await till.inventory.balance(actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' });
-  assert.equal(formatQuantity(balance.physical), '-40.000 BOX', 'the shortfall is visible, not hidden');
-  assert.equal(
-    till.audit.events.filter((e) => e.action === 'inventory.negative_stock_allowed').length,
-    1,
+  await assert.rejects(
+    () => till.inventory.recordMovement(actor, {
+      idempotencyKey: 'oversell', itemId: 'APL-BOX-10', warehouseId: 'narela', kind: 'SALE_OUT',
+      quantity: quantity('70', 'BOX'), documentDate: isoDate('2026-04-12'),
+      source: { kind: 'sales_invoice', id: draft.id, number: null },
+    }),
+    (e: unknown) => e instanceof DomainError && e.code === 'STOCK_WOULD_GO_NEGATIVE',
   );
+  const balance = await till.inventory.balance(actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' });
+  assert.equal(formatQuantity(balance.physical), '30.000 BOX');
 });
 
 test('a services bill never touches stock', async () => {

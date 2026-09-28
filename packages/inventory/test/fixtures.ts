@@ -21,7 +21,6 @@ export const ALL_PERMISSIONS = [
   'inventory.move',
   'inventory.adjust',
   'inventory.transfer',
-  'inventory.override_negative',
 ];
 
 export const actorWith = (permissions: readonly string[], companyId: CompanyId = COMPANY): ActorContext => ({
@@ -87,7 +86,6 @@ export const makeGodown = (options: { policy?: Partial<InventoryPolicy>; permiss
     audit,
     clock: fixedClock('2026-08-29T10:00:00.000Z'),
     policy: {
-      negativeStock: 'BLOCK',
       reservationMinutes: 120,
       valuationMethod: 'WEIGHTED_AVERAGE',
       ...options.policy,

@@ -27,8 +27,8 @@ testable rules.
    zero. Nothing that touches money bypasses it.
 2. **Final transactions are immutable.** Corrections happen by reversal, amendment, credit note or
    debit note, and the original stays visible forever.
-3. **Stock cannot go negative** unless an authorised override policy allows it and records who
-   allowed it and why.
+3. **Stock cannot go negative.** There is no override. A sale of goods not in the godown is stopped;
+   the way through is to enter the purchase bill first (owner's decision, 28 Sep 2026, #262).
 4. **Compliance decisions are deterministic and effective-dated**, linked to an authoritative
    source. No model invents a threshold, a rate or a due date.
 5. **Destructive, financial and government actions need preview, approval and idempotency
@@ -169,7 +169,7 @@ by the product owner, and each is referenced by the modules that depend on it.
 | A2 | Financial year 1 April – 31 March, invoice numbering resets per financial year | Numbering series design in #9 |
 | A3 | Money held as integer paise, half-up rounding at two decimals | Ledger and tax arithmetic in #4 and #25 |
 | A4 | Quantities to six decimal places | Unit conversion in #12 |
-| A5 | Negative stock is blocked by default; a company may switch to warn-with-override | #12 policy design |
+| A5 | Negative stock is always blocked; there is no override (owner's decision, 28 Sep 2026, #262) | #12 policy design |
 | A6 | Cancellation of a final invoice is allowed only inside a configurable window and only when no live IRN exists; otherwise a credit note is required | #9 cancellation policy |
 | A7 | Composition dealers are supported for recording and reporting, not for input tax credit | #25 classification |
 | A8 | Exports, SEZ and multi-currency are refused with an explanation rather than approximated | Scope control |
