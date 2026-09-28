@@ -46,6 +46,8 @@ test("critical runtime states have distinct English and Hindi wording", async ()
     assert.notEqual(locales["en-IN"]?.[key], locales["hi-IN"]?.[key], `${key} must not fall back to English`);
   }
   assert.match(locales["en-IN"]!.physicalBalance!, /\{location\}/);
+  assert.match(locales["en-IN"]!.stockLeastFirst!, /\{location\}/);
+  assert.notEqual(locales["en-IN"]?.stockLeastFirst, locales["hi-IN"]?.stockLeastFirst);
   assert.match(locales["hi-IN"]!.saleCheckedBody!, /\{amount\}/);
 });
 
@@ -76,7 +78,15 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /authorization: `Bearer \$\{state\.sessionId\}`/);
   assert.match(script, /\/api\/auth\/login/);
   assert.match(script, /karobar\.session/);
-  assert.match(script, /text\("physicalBalance", \{ location: data\.company\.location \}\)/);
+  // Issue #237 — the stock tile names the goods least left first, in this company's own godown.
+  assert.match(script, /text\("stockLeastFirst", \{ location: data\.company\.location,/);
+  // Issue #237 — after anything is recorded, issued or cancelled, every list is read again.
+  assert.match(script, /async function refreshDocumentLists\(\)/);
+  for (const loader of ["loadIssuedInvoices", "loadEwayRoad", "loadChallans", "loadReturnDocuments", "loadReturnNotes", "loadReminders"]) {
+    assert.match(script.slice(script.indexOf("async function refreshDocumentLists()"), script.indexOf("async function loadDashboard()")), new RegExp(`quietly\\(${loader}\\)`));
+  }
+  // Issue #237 — setting up a business reads the full list of states, not twelve typed into the page.
+  assert.equal((html.match(/<select name="stateCode" id="setup-states"[\s\S]*?<\/select>/)?.[0].match(/<option/g) ?? []).length, 1);
   assert.match(script, /copy\[state\.locale\]\.demoTitle/);
   assert.match(script, /setFormBusy\(form, true\)/);
   assert.match(script, /draftRestored/);

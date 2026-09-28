@@ -908,6 +908,7 @@
             <h2 data-i18n="remindersStopTitle"></h2>
             <form id="reminders-stop-form">
               <div class="field-grid">
+                <label class="full-field"><span data-i18n="remindersCustomer"></span><select name="partyId" id="reminders-party-choices" required></select></label>
                 <label class="full-field"><span data-i18n="remindersStopReason"></span><input name="reason" placeholder="They asked us to call instead of messaging" required /></label>
               </div>
               <button type="submit" class="secondary-button" data-i18n="remindersStop"></button>
@@ -1033,20 +1034,9 @@
                 </select>
               </label>
               <label><span data-i18n="setupState"></span>
-                <select name="stateCode" required>
+                <!-- Issue #237 — filled from the same list Business details offers (every current state). -->
+                <select name="stateCode" id="setup-states" required>
                   <option value="" data-i18n="setupChoose"></option>
-                  <option value="07">Delhi (07)</option>
-                  <option value="27">Maharashtra (27)</option>
-                  <option value="29">Karnataka (29)</option>
-                  <option value="08">Rajasthan (08)</option>
-                  <option value="09">Uttar Pradesh (09)</option>
-                  <option value="24">Gujarat (24)</option>
-                  <option value="33">Tamil Nadu (33)</option>
-                  <option value="19">West Bengal (19)</option>
-                  <option value="06">Haryana (06)</option>
-                  <option value="23">Madhya Pradesh (23)</option>
-                  <option value="36">Telangana (36)</option>
-                  <option value="03">Punjab (03)</option>
                 </select>
               </label>
               <label><span data-i18n="setupAddress1"></span><input name="address1" placeholder="No. 14, 2nd Main, Peenya Industrial Area" /></label>

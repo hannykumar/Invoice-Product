@@ -24,6 +24,7 @@ import {
   isoDate,
   notAllowed,
   notFound,
+  formatINR,
   toDecimalString,
   zero,
   type Clock,
@@ -351,7 +352,7 @@ export class SalesService {
       action: 'sales.submitted_for_approval',
       subjectType: 'sales_invoice',
       subjectId: invoice.id,
-      summary: `Bill of ${toDecimalString(next.pricing?.totals.invoiceValue ?? nil())} sent for approval.`,
+      summary: `Bill of ${formatINR(next.pricing?.totals.invoiceValue ?? nil())} sent for approval.`,
       details: { value: toDecimalString(next.pricing?.totals.invoiceValue ?? nil()) },
     });
     return next;
@@ -430,7 +431,7 @@ export class SalesService {
     if (needsApproval(this.#policy, pricing.totals.invoiceValue) && priced.state !== 'PENDING_APPROVAL') {
       throw notAllowed(
         'SALES_APPROVAL_REQUIRED',
-        `A bill of ${toDecimalString(pricing.totals.invoiceValue)} needs approval before it can be issued.`,
+        `A bill of ${formatINR(pricing.totals.invoiceValue)} needs approval before it can be issued.`,
         { messageId: 'approval.needed', details: { reason: 'the amount is above the limit your business set', approverRole: 'a manager' } },
       );
     }
@@ -472,7 +473,7 @@ export class SalesService {
     if (recomputed.totals.invoiceValue.minor !== pricing.totals.invoiceValue.minor) {
       throw conflict(
         'SALES_PRICING_CHANGED',
-        `The total changed from ${toDecimalString(pricing.totals.invoiceValue)} to ${toDecimalString(recomputed.totals.invoiceValue)} while this bill was open. Please check it again.`,
+        `The total changed from ${formatINR(pricing.totals.invoiceValue)} to ${formatINR(recomputed.totals.invoiceValue)} while this bill was open. Please check it again.`,
       );
     }
 
@@ -522,7 +523,7 @@ export class SalesService {
       action: 'sales.invoice_finalised',
       subjectType: 'sales_invoice',
       subjectId: outcome.final.id,
-      summary: `Bill ${outcome.final.number} issued for ${toDecimalString(pricing.totals.invoiceValue)}.`,
+      summary: `Bill ${outcome.final.number} issued for ${formatINR(pricing.totals.invoiceValue)}.`,
       details: {
         number: outcome.final.number ?? '',
         value: toDecimalString(pricing.totals.invoiceValue),

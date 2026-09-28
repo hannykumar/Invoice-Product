@@ -9,7 +9,7 @@
  *  2. **Nothing is over-applied.** ₹30,000 cannot settle ₹30,000 of one bill and ₹10,000 of
  *     another, and a bill already settled cannot absorb more.
  */
-import { compareDates, invalid, isZero, subtract, sum, toDecimalString, zero, type IsoDate, type Money } from '@invoice/kernel';
+import { compareDates, invalid, isZero, subtract, sum, formatINR, toDecimalString, zero, type IsoDate, type Money } from '@invoice/kernel';
 import type { Allocation, DocumentPosition, OpenDocument, Payment } from './model.ts';
 
 const nil = (): Money => zero('INR');
@@ -115,7 +115,7 @@ export const validateAllocation = (
     if (allocation.amount.minor > position.outstanding.minor) {
       throw invalid(
         'ALLOCATION_EXCEEDS_OUTSTANDING',
-        `${allocation.documentNumber} only has ${toDecimalString(position.outstanding)} left to pay, but ${toDecimalString(allocation.amount)} was put against it.`,
+        `${allocation.documentNumber} only has ${formatINR(position.outstanding)} left to pay, but ${formatINR(allocation.amount)} was put against it.`,
         { details: { documentNumber: allocation.documentNumber, outstanding: toDecimalString(position.outstanding) } },
       );
     }
@@ -125,7 +125,7 @@ export const validateAllocation = (
   if (total.minor > amount.minor) {
     throw invalid(
       'ALLOCATION_EXCEEDS_PAYMENT',
-      `${toDecimalString(total)} has been put against bills, but only ${toDecimalString(amount)} was received.`,
+      `${formatINR(total)} has been put against bills, but only ${formatINR(amount)} was received.`,
       { details: { allocated: toDecimalString(total), amount: toDecimalString(amount) } },
     );
   }

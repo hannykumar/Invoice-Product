@@ -18,6 +18,7 @@ import {
   notFound,
   subtract,
   sum,
+  formatINR,
   toDecimalString,
   zero,
   type Clock,
@@ -161,7 +162,7 @@ export class ReceivablesService {
         throw invalid('PAYMENT_REFUND_MISMATCH', 'Only money received from this same customer, and not undone, can be paid back to them.');
       }
       if (command.amount.minor > left.minor) {
-        throw invalid('PAYMENT_REFUND_EXCEEDS', `Only ${toDecimalString(left)} of that receipt is unused, so ${toDecimalString(command.amount)} cannot be paid back from it.`);
+        throw invalid('PAYMENT_REFUND_EXCEEDS', `Only ${formatINR(left)} of that receipt is unused, so ${formatINR(command.amount)} cannot be paid back from it.`);
       }
     }
 
@@ -249,7 +250,7 @@ export class ReceivablesService {
       action: command.direction === 'RECEIPT' ? 'payments.received' : 'payments.paid',
       subjectType: 'payment',
       subjectId: outcome.payment.id,
-      summary: `${toDecimalString(command.amount)} ${command.direction === 'RECEIPT' ? 'received from' : 'paid to'} ${command.partyId} by ${command.mode.toLowerCase().replace(/_/g, ' ')}.`,
+      summary: `${formatINR(command.amount)} ${command.direction === 'RECEIPT' ? 'received from' : 'paid to'} ${command.partyId} by ${command.mode.toLowerCase().replace(/_/g, ' ')}.`,
       details: {
         amount: toDecimalString(command.amount),
         mode: command.mode,
@@ -299,7 +300,7 @@ export class ReceivablesService {
       action: 'payments.allocated',
       subjectType: 'payment',
       subjectId: payment.id,
-      summary: `${toDecimalString(payment.amount)} applied to ${allocations.length} bill${allocations.length === 1 ? '' : 's'}.`,
+      summary: `${formatINR(payment.amount)} applied to ${allocations.length} bill${allocations.length === 1 ? '' : 's'}.`,
       details: Object.fromEntries(allocations.map((a) => [a.documentNumber, toDecimalString(a.amount)])),
     });
     return next;
@@ -446,7 +447,7 @@ export class ReceivablesService {
       action: 'payments.reversed',
       subjectType: 'payment',
       subjectId: payment.id,
-      summary: `${toDecimalString(payment.amount)} undone.`,
+      summary: `${formatINR(payment.amount)} undone.`,
       details: { reversalVoucherId: reversed.voucher.id },
       overrideReason: input.reason,
     });
@@ -476,7 +477,7 @@ export class ReceivablesService {
     if (input.amount.minor > position.totalOutstanding.minor) {
       throw invalid(
         'WRITE_OFF_EXCEEDS_OUTSTANDING',
-        `This customer owes ${toDecimalString(position.totalOutstanding)}, so ${toDecimalString(input.amount)} cannot be written off.`,
+        `This customer owes ${formatINR(position.totalOutstanding)}, so ${formatINR(input.amount)} cannot be written off.`,
       );
     }
 
@@ -502,7 +503,7 @@ export class ReceivablesService {
       action: 'payments.written_off',
       subjectType: 'party',
       subjectId: input.partyId,
-      summary: `${toDecimalString(input.amount)} written off.`,
+      summary: `${formatINR(input.amount)} written off.`,
       details: { amount: toDecimalString(input.amount), voucherId: posted.voucher.id },
       overrideReason: input.reason,
     });

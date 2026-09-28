@@ -51,7 +51,7 @@ import {
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { masterData, mastersContext } from './master-data.ts';
-import { turnoverAnswersOf } from './business-details-application.ts';
+import { currentStates, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
@@ -243,10 +243,9 @@ export const readCatalogue = (companyId: CompanyId | string) => ({
   items: items(companyId).map((item) => itemViewOf(companyId, item)),
   units: DEFAULT_UNITS.map((unit) => ({ code: unit.code, name: unit.name })),
   rates: GST_RATE_CHOICES,
-  states: Object.entries(GST_STATE_CODES)
-    .filter(([, state]) => state.retired !== true)
-    .map(([code, state]) => ({ code, name: state.name })),
+  states: currentStates(),
 });
+
 
 /**
  * Finds the customer somebody named. An exact record id wins; otherwise the name is resolved
@@ -353,7 +352,8 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
     );
   }
   const stateCode = overseas ? OVERSEAS_STATE_CODE : registeredState !== '' ? registeredState : typedState;
-  if (!overseas && (stateCode === '' || GST_STATE_CODES[stateCode] === undefined)) {
+  // Issue #237 — a retired code (25, 28) is not a state anybody can be in today.
+  if (!overseas && (stateCode === '' || GST_STATE_CODES[stateCode] === undefined || (registeredState === '' && GST_STATE_CODES[stateCode]?.retired === true))) {
     throw invalid('CUSTOMER_STATE', 'Choose the state the customer is in. It decides whether the bill carries IGST, or CGST and SGST.');
   }
   // Issue #224 — a PIN from another state prints a wrong address on every bill to this customer.

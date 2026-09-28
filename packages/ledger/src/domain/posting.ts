@@ -11,6 +11,7 @@ import {
   isNegative,
   isZero,
   sum,
+  formatINR,
   toDecimalString,
   zero,
   type Money,
@@ -104,9 +105,9 @@ export const validatePosting = (
   if (!check.balanced) {
     throw invalid(
       'LEDGER_UNBALANCED',
-      `The two sides do not match. One side is ${toDecimalString(check.totalDebit)} and the other is ${toDecimalString(
+      `The two sides do not match. One side is ${formatINR(check.totalDebit)} and the other is ${formatINR(
         check.totalCredit,
-      )}, a difference of ${toDecimalString(check.difference)}.`,
+      )}, a difference of ${formatINR(check.difference)}.`,
       { details: { difference: toDecimalString(check.difference) } },
     );
   }

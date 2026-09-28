@@ -8,7 +8,7 @@
  * Compliance rules are a different rule set (`in.gst`) and are DRAFT until issue #54 records an
  * authoritative source for each one.
  */
-import { fromDecimalString, isoDate, roundToWholeUnits, subtract, toDecimalString, type Money } from '@invoice/kernel';
+import { fromDecimalString, isoDate, roundToWholeUnits, subtract, formatINR, toDecimalString, type Money } from '@invoice/kernel';
 import type { FactSet } from '../facts.ts';
 import type { Rule, RuleOutcome } from '../rule.ts';
 import type { RuleSet } from '../registry.ts';
@@ -42,9 +42,9 @@ const roundingRule: Rule = {
       outcome: 'ALLOW',
       usedFacts: ['invoice.totalBeforeRounding'],
       explanationValues: {
-        before: toDecimalString(before),
-        rounded: toDecimalString(rounded),
-        difference: toDecimalString(magnitude),
+        before: formatINR(before),
+        rounded: formatINR(rounded),
+        difference: formatINR(magnitude),
         direction: difference.minor >= 0n ? 'added' : 'taken off',
       },
       computed: {
@@ -83,11 +83,11 @@ const creditLimitRule: Rule = {
       outcome: over ? 'WARN' : 'ALLOW',
       usedFacts: ['party.creditLimit', 'party.outstanding', 'party.pendingValue', 'sale.value'],
       explanationValues: {
-        limit: toDecimalString(limit),
-        outstanding: toDecimalString(outstanding),
-        pending: toDecimalString(pending),
-        sale: toDecimalString(sale),
-        total: toDecimalString(total),
+        limit: formatINR(limit),
+        outstanding: formatINR(outstanding),
+        pending: formatINR(pending),
+        sale: formatINR(sale),
+        total: formatINR(total),
       },
       computed: {
         totalExposure: toDecimalString(total),

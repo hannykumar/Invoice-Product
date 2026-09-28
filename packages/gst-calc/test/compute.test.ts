@@ -430,10 +430,10 @@ test('every explanation is understandable without accounting training', () => {
 test('the explanation names the treatment that was chosen, so a person can check it', () => {
   const { calculator } = makeCalculator();
   const intra = computed(calculator.compute(crateSale()));
-  assert.match(intra.explanation['en-IN'], /counts in state 07, so two separate GST amounts apply/);
+  assert.match(intra.explanation['en-IN'], /counts in Delhi \(07\), so two separate GST amounts apply/);
 
   const inter = computed(calculator.compute(crateSale({ partyId: 'gurugram-fresh' })));
-  assert.match(inter.explanation['en-IN'], /counts in state 06, so one combined GST applies/);
+  assert.match(inter.explanation['en-IN'], /counts in Haryana \(06\), so one combined GST applies/);
   assert.match(inter.lines[0]?.explanation['en-IN'] ?? '', /at 18% gives .* as one combined GST/);
 });
 

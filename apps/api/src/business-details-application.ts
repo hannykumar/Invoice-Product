@@ -40,7 +40,22 @@ import {
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
+import { GST_STATE_CODES } from '../../../packages/masters/src/validation.ts';
 import { masterData, mastersContext } from './master-data.ts';
+
+/**
+ * Issue #237 — the one list of states a business, a customer or an address can be in: every
+ * current GST state code, and the "Other Territory" code. The retired codes (25, merged into 26 in
+ * 2020, and 28, the undivided Andhra Pradesh) stay valid for reading old documents but are never
+ * offered for anything new. Setting up a business, Business details and the customer forms all
+ * read this list, so none of them can offer a different set of states from the others.
+ */
+export const currentStates = (): readonly { readonly code: string; readonly name: string }[] =>
+  Object.entries(GST_STATE_CODES)
+    .filter(([, state]) => state.retired !== true)
+    .map(([code, state]) => ({ code, name: state.name }))
+    // Object keys like "10" are listed before "01"; the list reads in code order, 01 to 38, then 97.
+    .sort((a, b) => a.code.localeCompare(b.code));
 
 /** What one business has told us about itself. Everything but the address may be absent. */
 export interface BusinessDetails {
@@ -132,7 +147,9 @@ export const readBusinessDetails = (
       city: remembered?.city ?? '',
       pincode: remembered?.pincode ?? '',
     },
-    states: Object.entries(STATE_NAMES).map(([code, name]) => ({ code, name })),
+    // Issue #237 — the same list setting up a business offers. A registration made under a code
+    // that has since been retired is still shown, because the GST number decides this state.
+    states: currentStates().some((state) => state.code === stateCode) ? currentStates() : [...currentStates(), { code: stateCode, name: STATE_NAMES[stateCode] ?? stateCode }],
     turnover: turnoverView(companyId),
   };
 };

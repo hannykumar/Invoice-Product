@@ -12,7 +12,7 @@
  * file. When #54 supplies the sources, the values and the review state change together, in a new
  * rule-set version, and every decision made under the old version still replays exactly.
  */
-import { compare, isoDate, toDecimalString, type Money } from '@invoice/kernel';
+import { compare, isoDate, formatINR, toDecimalString, type Money } from '@invoice/kernel';
 import type { FactSet } from '../facts.ts';
 import type { Rule, RuleOutcome } from '../rule.ts';
 import type { RuleSet } from '../registry.ts';
@@ -125,8 +125,8 @@ const ewayFor = (
       outcome: overThreshold ? 'REQUIRED' : 'NOT_REQUIRED',
       usedFacts: ['consignment.value', 'movement.type', 'movement.mode'],
       explanationValues: {
-        value: toDecimalString(value),
-        threshold: toDecimalString(threshold),
+        value: formatINR(value),
+        threshold: formatINR(threshold),
         verdict: overThreshold ? 'needed' : 'not needed',
       },
       computed: { thresholdApplied: toDecimalString(threshold), overThreshold: String(overThreshold) },

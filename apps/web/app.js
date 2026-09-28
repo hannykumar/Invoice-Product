@@ -106,7 +106,7 @@ const copy = {
     billPaper: "Paper", billPaperA4: "A4 sheet", billPaperThermal: "Till roll, 80mm", billPaperMobile: "Phone screen", printBill: "Print the bill", printBillCopies: "Print the bill ({copies} copies)",
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
-    liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
+    liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Supplier payment posted to the ledger", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
     navAsk: "Ask",
     agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
@@ -279,7 +279,7 @@ const copy = {
     remindersPromise: "They promised to pay", remindersDispute: "They say something is wrong with the bill",
     remindersPromisedOn: "Promised by", remindersAmount: "Amount they promised", remindersNote: "In their words",
     remindersRecord: "Record this", remindersStopTitle: "Stop reminding this customer",
-    remindersStopReason: "Why", remindersStop: "Stop reminders", remindersResume: "Start reminders again",
+    remindersCustomer: "Customer", remindersStopReason: "Why", remindersStop: "Stop reminders", remindersResume: "Start reminders again",
     remindersHistory: "What was sent", remindersOutbox: "What the customer received",
     remindersNothing: "Nothing yet.",
     supplierTitle: "Check a supplier before you pay", supplierHelp: "We show you what the GST department says and what your own books say, with the date and source of every single thing. We never tell you what kind of business someone is — only what the records show.",
@@ -426,7 +426,7 @@ const copy = {
     billPaper: "Kagaz", billPaperA4: "A4 panna", billPaperThermal: "Chhoti parchi, 80mm", billPaperMobile: "Phone ki screen", printBill: "Bill print karein", printBillCopies: "Bill print karein ({copies} copy)",
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
-    liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
+    liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko bhugtan ledger mein darj hua", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
     navAsk: "Poochein",
     agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
@@ -599,7 +599,7 @@ const copy = {
     remindersPromise: "Unhone dene ka vaada kiya", remindersDispute: "Unka kehna hai bill mein kuch galat hai",
     remindersPromisedOn: "Kab tak dene ko kaha", remindersAmount: "Kitne ka vaada", remindersNote: "Unke shabdon mein",
     remindersRecord: "Yeh likh lein", remindersStopTitle: "Is grahak ko yaad dilana band karein",
-    remindersStopReason: "Kyun", remindersStop: "Yaad dilana band karein", remindersResume: "Dobara shuru karein",
+    remindersCustomer: "Customer", remindersStopReason: "Kyun", remindersStop: "Yaad dilana band karein", remindersResume: "Dobara shuru karein",
     remindersHistory: "Kya bheja gaya", remindersOutbox: "Grahak ko kya mila",
     remindersNothing: "Abhi kuch nahin.",
     supplierTitle: "Paisa dene se pehle supplier jaanchen", supplierHelp: "Hum dikhate hain ki GST vibhag kya kehta hai aur aapki apni bahi kya kehti hai — har baat ki tareekh aur source ke saath. Hum kabhi nahin batate ki koi kaisa hai; sirf yeh ki record mein kya likha hai.",
@@ -842,6 +842,7 @@ function openView(view) {
   if (target === "ask") loadAskExamples();
   if (target === "ask") { loadAskExamples(); loadAgentCapabilities(); }
   if (target === "business") openBusinessDetails();
+  if (target === "setup") loadSetupStates();
   if (target === "branding") openBranding();
 }
 
@@ -909,7 +910,7 @@ function activityRow(item) {
   const title = document.createElement("strong");
   title.textContent = item.title;
   const detail = document.createElement("small");
-  detail.textContent = item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale].paymentActivity : item.kind === "return" ? copy[state.locale].returnActivity : copy[state.locale].saleActivity;
+  detail.textContent = item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale][item.direction === "PAYMENT" ? "supplierPaymentActivity" : "paymentActivity"] : item.kind === "return" ? copy[state.locale].returnActivity : copy[state.locale].saleActivity;
   description.append(title, detail);
   const value = document.createElement("div");
   value.className = "activity-value";
@@ -945,8 +946,10 @@ function renderDashboard(data) {
   document.querySelector("#metric-attention").textContent = String(data.metrics.needsAttention);
   document.querySelector("#customer-summary").textContent = text(data.customer.documents.length === 1 ? "customerDocumentsOne" : "customerDocumentsMany", { count: data.customer.documents.length });
   document.querySelector("#supplier-summary").textContent = text(data.supplier.documents.length === 1 ? "supplierBillsOne" : "supplierBillsMany", { count: data.supplier.documents.length });
-  document.querySelector("#stock-title").textContent = `${data.stock.name}: ${data.stock.quantity} ${data.stock.unit}`;
-  document.querySelector("#stock-detail").textContent = text("physicalBalance", { location: data.company.location });
+  // Issue #237 — the goods that need looking at, the least left first, not one fixed item.
+  const stockItems = data.stockItems ?? [data.stock];
+  document.querySelector("#stock-title").textContent = stockItems.slice(0, 3).map((item) => `${item.name}: ${item.quantity} ${item.unit}`).join(" · ");
+  document.querySelector("#stock-detail").textContent = text("stockLeastFirst", { location: data.company.location, count: String(stockItems.filter((item) => item.needsAttention).length) });
   document.querySelector("#supplier-title").textContent = text("supplierDue", { supplier: data.supplier.name, amount: money(data.supplier.outstanding) });
   document.querySelector("#supplier-detail").textContent = text(data.supplier.documents.length === 1 ? "supplierDocumentsOne" : "supplierDocumentsMany", { count: data.supplier.documents.length });
 
@@ -965,18 +968,25 @@ function renderDashboard(data) {
   // Issue #230 — the payment screens list the chosen customer's or supplier's own bills, read afresh.
   document.querySelectorAll('form[data-endpoint="payments"]').forEach((form) => loadPaymentBills(form));
 
-  const collectionDocument = document.querySelector("#collection-document");
-  if (collectionDocument) {
-    const prior = collectionDocument.value;
-    collectionDocument.replaceChildren();
-    data.customer.documents.forEach((openDocument) => {
-      const option = document.createElement("option");
-      option.value = openDocument.id;
-      option.textContent = `${openDocument.number} · ${money(openDocument.outstanding)}`;
-      collectionDocument.append(option);
-    });
-    if ([...collectionDocument.options].some((option) => option.value === prior)) collectionDocument.value = prior;
-  }
+}
+
+/**
+ * Issue #237 — after anything is recorded, issued or cancelled, every list that can show that
+ * document is read again, so a bill made a minute ago is already in the e-invoice, e-way bill,
+ * challan, returns, payment and reminder lists without reloading the page. Each list is its own
+ * read; one failing does not stop the others.
+ */
+async function refreshDocumentLists() {
+  const quietly = (load) => Promise.resolve().then(load).catch(() => {});
+  await Promise.all([
+    quietly(loadDashboard),
+    quietly(loadIssuedInvoices),
+    quietly(loadEwayRoad),
+    quietly(loadChallans),
+    quietly(loadReturnDocuments),
+    quietly(loadReturnNotes),
+    quietly(loadReminders),
+  ]);
 }
 
 async function loadDashboard() {
@@ -1189,6 +1199,27 @@ async function loadReports() {
     message.textContent = `The reports could not be reached: ${error.message}`;
     content.append(message);
   }
+}
+
+/** Issue #237 — every current state, the same list Business details offers, read from the server. */
+async function loadSetupStates() {
+  const select = document.querySelector("#setup-states");
+  if (!select) return;
+  try {
+    const { states } = await api("/api/states");
+    const chosen = select.value;
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.dataset.i18n = "setupChoose";
+    blank.textContent = copy[state.locale].setupChoose;
+    select.replaceChildren(blank, ...states.map((entry) => {
+      const option = document.createElement("option");
+      option.value = entry.code;
+      option.textContent = `${entry.name} (${entry.code})`;
+      return option;
+    }));
+    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+  } catch { /* the form still says which state is missing when it is checked */ }
 }
 
 function setupData() {
@@ -2506,6 +2537,8 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     loadEwayStates();
     loadVehicleChoices();
     loadVehiclesHeld();
+    loadSetupStates();
+    loadReminders();
   } catch { error.textContent = copy[state.locale].loginInvalid; }
   finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
 });
@@ -2594,7 +2627,7 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
       showDialog({ ...localized, effects: [`${result.note.number} · ${money(result.note.amount)}`] }, "recorded");
       // Issue #186 — the note is waiting on the screen behind the dialog, ready to print or send.
       await showReturnNote(result.note.id);
-      await Promise.all([loadDashboard(), loadReturnDocuments(), loadReturnNotes()]);
+      await refreshDocumentLists();
     } catch (error) {
       showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
     }
@@ -2617,7 +2650,7 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     if (form.dataset.endpoint === "payments" && result.paymentId) await paymentRecorded(form, result);
     // Issue #132 — the bill is waiting on the screen behind the dialog, not on a developer's laptop.
     if (form.dataset.draft === "sale" && result.invoice) await showSaleBill(result.invoice.id);
-    await Promise.all([loadDashboard(), loadReturnDocuments()]);
+    await refreshDocumentLists();
   } catch (error) {
     showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
   }
@@ -2735,7 +2768,7 @@ document.querySelector("#cancel-bill-form")?.addEventListener("submit", async (e
     document.querySelector("#cancel-bill-dialog").close();
     showDialog({ title: result.title, message: result.message, effects: result.onAccount ? [result.onAccount.message] : [] }, "recorded");
     await showSaleBill(result.invoice.id);
-    await Promise.all([loadDashboard(), loadReturnDocuments()]);
+    await refreshDocumentLists();
   } catch (error) {
     document.querySelector("#cancel-bill-error").textContent = localizedError(error);
   } finally { confirm.disabled = false; }
@@ -3059,7 +3092,7 @@ submitStep("#receipt-form", async (form) => {
     const result = await api("/api/goods-receipts", { method: "POST", body: JSON.stringify(formValues(form)) });
     showStep("#receipt-result", result.message, false);
     refreshStock(result.stock);
-    await loadDashboard();
+    await refreshDocumentLists();
   } catch (error) { showStep("#receipt-result", error.message, true); }
 });
 
@@ -3561,7 +3594,7 @@ function sentRow(reminder) {
   icon.textContent = reminder.state === "SENT" ? "✓" : reminder.state === "FAILED" ? "!" : "·";
   const body = document.createElement("div");
   const title = document.createElement("strong");
-  title.textContent = `${reminder.bill} · ${reminder.level} · ${reminder.channel} · ${reminder.state}`;
+  title.textContent = `${reminder.bill} · ${reminder.party} · ${reminder.level} · ${reminder.channel} · ${reminder.state}`;
   const detail = document.createElement("p");
   detail.textContent = reminder.failureReason ?? t(reminder.message);
   body.append(title, detail);
@@ -3603,19 +3636,24 @@ function renderReminders(data) {
   document.querySelector("#reminders-summary").textContent = t(data.summary);
   document.querySelector("#reminders-plan").replaceChildren(...data.candidates.map(reminderRow));
 
+  // Issue #237 — every bill is shown with the customer it belongs to; a promise or a dispute is
+  // recorded against that customer, whoever it is.
   const choices = document.querySelector("#reminders-bill-choices");
   if (choices) {
+    const chosen = choices.value;
     const open = data.candidates.filter((candidate) => candidate.reason !== "SETTLED");
     choices.replaceChildren(...open.map((candidate) => {
       const option = document.createElement("option");
       option.value = candidate.documentId;
-      option.textContent = `${candidate.bill} · ${money(candidate.outstanding)}`;
+      option.textContent = `${candidate.bill} · ${candidate.partyName} · ${money(candidate.outstanding)}`;
       return option;
     }));
+    if ([...choices.options].some((option) => option.value === chosen)) choices.value = chosen;
   }
+  renderReminderCustomers();
 
   document.querySelector("#reminders-promises").replaceChildren(
-    ...data.promises.map((promise) => simpleRow(`${promise.outcome} · ${money(promise.amount)}`, t(promise.explanation))),
+    ...data.promises.map((promise) => simpleRow(`${promise.party} · ${promise.outcome} · ${money(promise.amount)}`, t(promise.explanation))),
   );
   const history = document.querySelector("#reminders-history");
   history.replaceChildren(...(data.history.length === 0
@@ -3625,6 +3663,20 @@ function renderReminders(data) {
   outbox.replaceChildren(...(data.outbox.length === 0
     ? [simpleRow(copy[state.locale].remindersNothing, "")]
     : data.outbox.map((message) => simpleRow(`${message.channel} → ${message.to}`, message.body))));
+}
+
+/** Issue #237 — stopping or restarting reminders is for one chosen customer, from the customer list. */
+function renderReminderCustomers() {
+  const select = document.querySelector("#reminders-party-choices");
+  if (!select) return;
+  const chosen = select.value;
+  select.replaceChildren(...catalogue.customers.map((customer) => {
+    const option = document.createElement("option");
+    option.value = customer.id;
+    option.textContent = customer.name;
+    return option;
+  }));
+  if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
 }
 
 async function loadReminders() {
@@ -3675,7 +3727,8 @@ submitStep("#reminders-stop-form", async (form) => {
 
 document.querySelector("#reminders-resume")?.addEventListener("click", async () => {
   try {
-    const result = await api("/api/reminders/resume", { method: "POST", body: JSON.stringify({}) });
+    const partyId = document.querySelector("#reminders-party-choices")?.value ?? "";
+    const result = await api("/api/reminders/resume", { method: "POST", body: JSON.stringify({ partyId }) });
     showDialog({ title: result.title, message: result.message }, "recorded");
   } catch (error) { showDialog({ title: "Nothing was changed", message: error.message }, "failed"); }
   loadReminders();
@@ -3764,7 +3817,7 @@ const eInvoiceAction = (selector, path, extra = () => ({})) => {
   button.addEventListener("click", async () => {
     try {
       renderEInvoice(await api(path, { method: "POST", body: JSON.stringify({ ...eInvoiceInput(), ...extra() }) }), "record");
-      await loadIssuedInvoices();
+      await refreshDocumentLists();
     } catch (error) {
       showDialog({ title: "Nothing was sent", message: error.message }, "failed");
     }
@@ -3779,7 +3832,7 @@ submitStep("#einvoice-cancel-form", async (form) => {
     renderEInvoice(await api("/api/einvoices/cancel", {
       method: "POST", body: JSON.stringify({ ...eInvoiceInput(), ...formValues(form) }),
     }), "record");
-    await loadIssuedInvoices();
+    await refreshDocumentLists();
   } catch (error) {
     showDialog({ title: "Nothing was cancelled", message: error.message }, "failed");
   }
@@ -3997,7 +4050,7 @@ document.querySelector("#presale-sale-issue")?.addEventListener("click", async (
     const result = await api("/api/presale/issue-sale", { method: "POST", body: JSON.stringify({ token: presaleState.saleToken }) });
     document.querySelector("#presale-sale").hidden = true;
     showDialog({ title: result.title, message: result.message }, "recorded");
-    await loadPresale();
+    await Promise.all([loadPresale(), refreshDocumentLists()]);
   } catch (error) {
     showDialog({ title: "The bill was not issued", message: error.message }, "failed");
   }
@@ -4154,9 +4207,8 @@ document.querySelector("#challan-issue")?.addEventListener("click", async () => 
     const result = await api("/api/challans/issue", { method: "POST", body: JSON.stringify(challanInput()) });
     document.querySelector("#challan-panel").hidden = true;
     showDialog({ title: result.title, message: result.message }, "recorded");
-    await loadChallans();
+    await refreshDocumentLists();
     await openChallan(result.challan.id);
-    loadEwayRoad();
   } catch (error) {
     showDialog({ title: "No challan was issued", message: error.message }, "failed");
   }
@@ -4222,9 +4274,8 @@ const challanAction = (selector, path, failureTitle) => submitStep(selector, asy
     const result = await api(path, { method: "POST", body: JSON.stringify({ ...values, ...(checkbox ? { [checkbox.name]: checkbox.checked } : {}), challan: challanState.open.id }) });
     showDialog({ title: result.title, message: result.message, effects: result.effects }, "recorded");
     form.reset();
-    await loadChallans();
+    await refreshDocumentLists();
     await openChallan(challanState.open.id);
-    loadEwayRoad();
   } catch (error) {
     showDialog({ title: failureTitle, message: error.message }, "failed");
   }
@@ -4307,7 +4358,7 @@ const ewayAction = (selector, path) => {
   button.addEventListener("click", async () => {
     try {
       renderEway(await api(path, { method: "POST", body: JSON.stringify(ewayInput()) }), "record");
-      await loadEwayRoad();
+      await refreshDocumentLists();
     } catch (error) {
       showDialog({ title: "Nothing was raised", message: error.message }, "failed");
     }
@@ -4322,7 +4373,7 @@ const ewayForm = (selector, path, failureTitle) => submitStep(selector, async (f
     renderEway(await api(path, {
       method: "POST", body: JSON.stringify({ ...ewayInput(), ...formValues(form) }),
     }), "record");
-    await loadEwayRoad();
+    await refreshDocumentLists();
   } catch (error) {
     showDialog({ title: failureTitle, message: error.message }, "failed");
   }
@@ -4722,7 +4773,7 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); if (state.view === "operations") loadOperations(); } else showLogin();
+if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); if (state.view === "operations") loadOperations(); } else showLogin();
 
 // ------------------------------------ issue #30: the month's GST returns
 //
@@ -5083,6 +5134,9 @@ submitStep("#itc-typed-form", async (form) => {
 // on as many lines as it takes.
 
 const catalogue = { customers: [], suppliers: [], items: [], units: [], rates: [], states: [] };
+/** Issue #182 — the chosen customer's delivery addresses and this business's transporters. */
+const delivery = { transporters: [], addresses: [], customerId: null };
+const saleForm = () => document.querySelector('[data-draft="sale"]');
 
 const itemById = (id) => catalogue.items.find((item) => item.id === id) ?? null;
 
@@ -5215,6 +5269,15 @@ function showChosenCustomer() {
     ? ""
     : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin !== null ? ` · ${customer.gstin}` : customer.registration === "overseas" ? "" : ` · ${copy[state.locale].customerUnregistered}`}${customer.creditLimit === null || customer.creditLimit === undefined ? "" : ` · ${text("customerCreditLimitShown", { amount: money(customer.creditLimit) })}`}`;
   showExportFields(customer);
+  // Issue #237 — the state this sale counts in follows the customer the moment it changes, however
+  // it changed: picked from the list, just added, or cleared after a bill was issued. The other
+  // customer's delivery addresses are dropped at once, so they can never decide this sale's state.
+  if (delivery.customerId !== picker.value) {
+    delivery.customerId = picker.value;
+    delivery.addresses = [];
+    if (picker.value !== "") loadDeliveryChoices();
+  }
+  showPlaceOfSupply();
 }
 
 /**
@@ -5352,6 +5415,7 @@ async function loadCatalogue() {
   if (document.querySelectorAll("#sale-lines .sale-line").length === 0) addSaleLine();
   if (document.querySelectorAll("#purchase-lines .sale-line").length === 0) addPurchaseLine();
   renderPickers();
+  renderReminderCustomers();
   document.querySelectorAll('form[data-endpoint="payments"]').forEach((form) => loadPaymentBills(form));
 }
 
@@ -5364,6 +5428,8 @@ document.addEventListener("change", (event) => {
   if (select.matches("[data-customer-picker]") && select.value === "__add__") {
     pickerAwaitingNewRecord = select;
     select.value = select.dataset.pickerBlank ? "" : catalogue.customers[0]?.id ?? "";
+    // Issue #237 — the sale's state hint follows the picker even while the new customer is typed in.
+    showChosenCustomer();
     showCustomerRegistrationFields();
     document.querySelector("#customer-dialog")?.showModal();
     return;
@@ -5546,9 +5612,7 @@ if (state.sessionId) loadCatalogue();
 // required when it differs from the place of supply, and the vehicle number and e-way bill number
 // are what the person driving the lorry has to be able to show.
 
-const delivery = { transporters: [], addresses: [] };
 
-const saleForm = () => document.querySelector('[data-draft="sale"]');
 
 /** Shows only the ship-to question that was asked for, and reloads that customer's addresses. */
 function showShipToFields() {
@@ -5593,6 +5657,8 @@ async function loadDeliveryChoices() {
   const customerId = form?.elements.namedItem("party")?.value ?? "";
   try {
     const read = await api("/api/delivery/choices", { method: "POST", body: JSON.stringify({ customerId }) });
+    // A slower answer for a customer who is no longer chosen must not replace the new one's addresses.
+    if ((form?.elements.namedItem("party")?.value ?? "") !== customerId) return;
     delivery.transporters = read.transporters;
     delivery.addresses = read.addresses.filter((row) => row.use !== "billing");
   } catch { return; }
@@ -5630,9 +5696,6 @@ async function loadDeliveryChoices() {
 
 document.querySelector("#sale-ship-to")?.addEventListener("change", showShipToFields);
 document.querySelector("#sale-ship-address")?.addEventListener("change", showPlaceOfSupply);
-document.querySelector('[data-draft="sale"] [data-customer-picker]')?.addEventListener("change", () => {
-  loadDeliveryChoices();
-});
 
 document.querySelector("#sale-add-transporter")?.addEventListener("click", () => {
   document.querySelector("#transporter-dialog")?.showModal();

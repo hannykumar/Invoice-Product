@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
@@ -92,6 +92,7 @@ import {
 } from '@invoice/trade-terms';
 import {
   ReportService,
+  ageingBody,
   duesFrom,
   type Figure,
   type PurchaseDocument,
@@ -436,12 +437,12 @@ const previewEffects = (preview: PurchasePostingPreview, location: string): stri
   if (effects.length === 0) effects.push('Stock: nothing, this is a service');
   effects.push(
     tax.reverseCharge
-      ? `GST: ${jsonAmount(claimable).toFixed(2)} payable by you under reverse charge`
-      : `GST you can claim back: ${jsonAmount(claimable).toFixed(2)} (${tax.intraState ? 'CGST + SGST' : 'IGST'})`,
+      ? `GST: ${formatPaise(claimable)} payable by you under reverse charge`
+      : `GST you can claim back: ${formatPaise(claimable)} (${tax.intraState ? 'CGST + SGST' : 'IGST'})`,
   );
-  effects.push(`Supplier due: ${jsonAmount(preview.totalPaise).toFixed(2)}`);
+  effects.push(`Supplier due: ${formatPaise(preview.totalPaise)}`);
   effects.push(`Due date: ${preview.dueDate}`);
-  if (preview.roundOffPaise !== 0n) effects.push(`Rounding recorded separately: ${jsonAmount(preview.roundOffPaise < 0n ? -preview.roundOffPaise : preview.roundOffPaise).toFixed(2)}`);
+  if (preview.roundOffPaise !== 0n) effects.push(`Rounding recorded separately: ${formatPaise(preview.roundOffPaise < 0n ? -preview.roundOffPaise : preview.roundOffPaise)}`);
   return effects;
 };
 
@@ -857,7 +858,8 @@ export class DemoApplication {
             topic: 'gst.place_of_supply',
             facts: {
               'supply.type': 'GOODS',
-              'supply.deliveryStateCode': config.customerGstin.slice(0, 2),
+              // Issue #237 — this bill's own place of supply, not the demo customer's state.
+              'supply.deliveryStateCode': invoice.placeOfSupplyStateCode ?? billingAddressOf(companyId, invoice.partyId)?.stateCode ?? config.gstin.slice(0, 2),
               'supply.supplierStateCode': config.gstin.slice(0, 2),
             },
           });
@@ -867,7 +869,8 @@ export class DemoApplication {
           number: invoice.number,
           kind: 'SALES_INVOICE',
           date: invoice.documentDate,
-          partyName: config.customerName,
+          // Issue #237 — the customer this bill is made out to.
+          partyName: customers(companyId).find((party) => party.id === invoice.partyId)?.legalName ?? String(invoice.partyId),
           reasons,
         };
       },
@@ -904,7 +907,17 @@ export class DemoApplication {
       sessionId: `collections:${from.userId}`,
     });
     const reminderContacts: PartyContactPort = {
-      async contact(_companyId, partyId) {
+      // Issue #237 — a reminder goes to the customer who owes the bill, on the phone or email saved
+      // on that customer's own record. A customer with neither saved is not reminded (the plan says
+      // why), rather than having the message sent to somebody else.
+      async contact(companyId, partyId) {
+        const party = customers(companyId).find((candidate) => candidate.id === partyId);
+        if (party === undefined) return null;
+        const phone = party.phones[0];
+        if (phone !== undefined && phone !== '') return { recipientId: phone, channels: ['whatsapp', 'sms'] };
+        const email = party.emails[0];
+        if (email !== undefined && email !== '') return { recipientId: email, channels: ['email'] };
+        // The seeded demo customer's own synthetic address, which exists only in the local outbox.
         return partyId === config.customerId
           ? { recipientId: `${config.customerName.toLowerCase().replace(/[^a-z]+/g, '-')}@example.invalid`, channels: ['whatsapp', 'email', 'in_app'] }
           : null;
@@ -957,13 +970,14 @@ export class DemoApplication {
       .register(stopRemindingTool(collections))
       .register(cancelInvoiceTool());
     const agentParties: PartyDirectoryPort = {
-      async resolve(_actor, text) {
+      // Issue #237 — every customer of this business, not only the demo one.
+      async resolve(actor, text) {
         const needle = text.trim().toLowerCase();
-        const known = [{ partyId: String(config.customerId), name: config.customerName }];
+        const known = customers(actor.companyId).map((party) => ({ partyId: String(party.id), name: party.legalName }));
         return known.filter((party) => party.name.toLowerCase().includes(needle) || needle.includes(party.name.toLowerCase()));
       },
-      async nameOf(_actor, partyId) {
-        return partyId === String(config.customerId) ? config.customerName : partyId;
+      async nameOf(actor, partyId) {
+        return customers(actor.companyId).find((party) => party.id === partyId)?.legalName ?? partyId;
       },
     };
     const agent = new ActionAgentService({
@@ -1191,32 +1205,78 @@ export class DemoApplication {
       outstanding: jsonAmount(sum(supplierOpen.map((d) => d.outstanding)).minor),
       documents: supplierOpen.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })),
     };
-    const customer = await this.payments.position(actor, this.config.customerId, today);
-    // Issue #228 — purchases now receive the item from the item list, so the tile reads that item's
-    // balance; the old short id belonged to the purchase screen's retired three-item list.
-    const tileItem = catalogueItems(companyId).find((item) => item.id.endsWith(':item:TMT12'))
-      ?? catalogueItems(companyId).find((item) => item.kind === 'goods');
-    const stock = await this.shop.inventoryService.balance(actor, { itemId: tileItem?.id ?? 'TMT12', warehouseId: 'wh-main' });
+    // Issue #237 — what every customer owes, worked out exactly as Reports works out its
+    // receivables total (same parties, same positions, same financial year, same day), so the two
+    // screens can never disagree. Only issued bills count; a cancelled bill is owed by nobody.
+    const receivables = await ageingBody(duesFrom(this.documents, this.payments), actor, companyId, currentFinancialYear(), 'RECEIVABLE', today);
+    const customerOpen = receivables.rows.flatMap((row) => row.documents.map((document) => ({ ...document, partyName: row.partyName })));
+    const stockItems = await this.stockNeedingAttention(actor, companyId);
+    const stockTile = stockItems[0] ?? { itemId: '', name: 'No goods yet', quantity: 0, unit: '', reorderLevel: null, needsAttention: false };
     return {
       today,
       company: { id: companyId, name: this.config.name, location: this.config.location },
       metrics: {
         salesToday: jsonAmount(sales.filter((invoice) => invoice.documentDate === today).reduce((sum, invoice) => sum + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n)),
-        customersOwe: jsonAmount(customer.totalOutstanding.minor),
+        customersOwe: jsonAmount(receivables.total.amount.minor),
         purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === today.slice(0, 7)).reduce((sum, bill) => sum + bill.totalPaise, 0n)),
-        needsAttention: (stock.physical.scaled <= 0n ? 1 : 0) + supplierOpen.filter((position) => position.daysOverdue > 0).length,
+        needsAttention: stockItems.filter((item) => item.needsAttention).length + supplierOpen.filter((position) => position.daysOverdue > 0).length,
       },
-      stock: { itemId: tileItem?.id ?? 'TMT12', name: tileItem?.name ?? 'TMT Steel Bar 12mm', quantity: Number(stock.physical.scaled) / 1_000_000, unit: stock.physical.unit },
+      // Issue #237 — the goods that need looking at, the least left first, not one fixed item.
+      stock: stockTile,
+      stockItems,
       supplier: supplierTile,
-      customer: { id: this.config.customerId, name: this.config.customerName, outstanding: jsonAmount(customer.totalOutstanding.minor), documents: customer.documents.map((position) => ({ id: position.document.documentId, number: position.document.number, dueDate: position.document.dueDate, outstanding: jsonAmount(position.outstanding.minor), status: position.status })) },
+      customer: {
+        id: receivables.rows.length === 1 ? receivables.rows[0]!.partyId : null,
+        name: receivables.rows.length === 1 ? receivables.rows[0]!.partyName : receivables.rows.length === 0 ? 'Customers' : `${receivables.rows.length} customers`,
+        outstanding: jsonAmount(receivables.total.amount.minor),
+        documents: customerOpen.map((document) => ({ id: document.sourceId, number: document.sourceNumber, party: document.partyName, outstanding: jsonAmount(document.amount.minor) })),
+      },
       activity: [
-        ...sales.map((invoice) => ({ id: invoice.id, kind: 'sale', title: `${invoice.number} · ${this.config.customerName}`, amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n), status: 'Recorded' })),
+        // Issue #237 — each bill under the customer it was made out to, as printed on it.
+        ...sales.map((invoice) => ({ id: invoice.id, kind: 'sale', title: `${invoice.number} · ${this.invoicePrints.get(invoice.id)?.document.buyer.name ?? this.partyName(companyId, String(invoice.partyId))}`, amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n), status: 'Recorded' })),
         ...purchases.map((bill) => ({ id: bill.id, kind: 'purchase', title: `${bill.invoiceNumber} · ${bill.supplierName}`, amount: jsonAmount(bill.totalPaise), status: bill.state === 'POSTED' ? 'Recorded' : bill.state })),
         // Issue #230 — who actually paid, or was paid; not the demo customer for every payment.
-        ...payments.map((payment) => ({ id: payment.id, kind: 'payment', title: `${payment.direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${this.partyName(companyId, payment.partyId)} · ${payment.mode.replace('_', ' ')}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
+        ...payments.map((payment) => ({ id: payment.id, kind: 'payment', direction: payment.direction, title: `${payment.direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${this.partyName(companyId, payment.partyId)} · ${payment.mode.replace('_', ' ')}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
         ...returnNotes.map((note) => ({ id: note.id, kind: 'return', title: `${note.number} · ${note.originalDocument.number}`, amount: jsonAmount(note.totals.total.minor), status: 'Recorded' })),
       ].reverse(),
     };
+  }
+
+  /**
+   * Issue #237 — the goods on the Home screen's stock tile, the ones that need looking at first.
+   *
+   * An item needs attention when none is left, or when what is left is at or below the reorder
+   * level the business set on it. They come first, the least cover first (for an item with a
+   * reorder level, what is left as a share of that level; for one without, none left counts as no
+   * cover at all). Everything else follows, the smallest quantity first.
+   */
+  private async stockNeedingAttention(actor: ActorContext, companyId: CompanyId) {
+    const goods = catalogueItems(companyId).filter((item) => item.kind === 'goods' && item.active !== false);
+    const rows = await Promise.all(goods.map(async (item) => {
+      const balance = await this.shop.inventoryService.balance(actor, { itemId: item.id, warehouseId: 'wh-main' });
+      const left = balance.physical.scaled;
+      const reorder = item.reorderLevel?.scaled ?? null;
+      const needsAttention = left <= 0n || (reorder !== null && left <= reorder);
+      // Cover in millionths of the reorder level, so the order is exact and never a float.
+      const cover = left <= 0n ? -1n : reorder !== null && reorder > 0n ? (left * 1_000_000n) / reorder : null;
+      return {
+        itemId: item.id,
+        name: item.name,
+        quantity: Number(left) / 1_000_000,
+        unit: balance.physical.unit,
+        reorderLevel: reorder === null ? null : Number(reorder) / 1_000_000,
+        needsAttention,
+        left,
+        cover,
+      };
+    }));
+    rows.sort((a, b) => {
+      if (a.needsAttention !== b.needsAttention) return a.needsAttention ? -1 : 1;
+      if (a.cover !== null && b.cover !== null && a.cover !== b.cover) return a.cover < b.cover ? -1 : 1;
+      if ((a.cover === null) !== (b.cover === null)) return a.cover !== null ? -1 : 1;
+      return a.left === b.left ? a.name.localeCompare(b.name) : a.left < b.left ? -1 : 1;
+    });
+    return rows.map(({ left: _left, cover: _cover, ...row }) => row);
   }
 
   /**
@@ -1405,14 +1465,19 @@ export class DemoApplication {
     if ('alreadyRecorded' in draft) {
       // Pressing Record twice, or typing the same bill in again, records it once.
       const dashboard = await state();
-      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: dashboard.stock, supplier: dashboard.supplier };
+      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier };
     }
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: approved.supplierPartyId, name: approved.supplierName, kind: 'SUPPLIER' });
     const result = await this.shop.posting.post(actor, approved, `web:${approved.id}`);
     const dashboard = await state();
-    return { state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded', message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary, bill: DemoApplication.purchaseBillJson(result.bill), stock: dashboard.stock, supplier: dashboard.supplier };
+    return { state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded', message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary, bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier };
+  }
+
+  /** Issue #237 — the stock of the goods just bought, not whichever item Home puts first. */
+  private static stockOf(dashboard: Awaited<ReturnType<DemoApplication['dashboard']>>, itemId: string | undefined) {
+    return dashboard.stockItems.find((item) => item.itemId === itemId) ?? dashboard.stock;
   }
 
   /** A posted supplier bill as the screen shows it: who, which number, and the tax under each head. */
@@ -1467,6 +1532,8 @@ export class DemoApplication {
       id: reminder.id,
       bill: reminder.snapshot.documentNumber,
       documentId: reminder.documentId,
+      partyId: reminder.partyId,
+      party: this.partyName(reminder.companyId, String(reminder.partyId)),
       state: reminder.state,
       level: reminder.level,
       channel: reminder.channel,
@@ -1482,7 +1549,7 @@ export class DemoApplication {
 
   /** Everything the Reminders screen shows: the plan, what was sent, promises and disputes. */
   async reminders(actor: ActorContext, input: Record<string, unknown> = {}) {
-    this.companyOf(actor);
+    const companyId = this.companyOf(actor);
     const today = this.reminderDate(input);
     const plan = await this.collections.plan(actor, today);
     return {
@@ -1494,6 +1561,8 @@ export class DemoApplication {
       promises: (await this.collections.promises(actor, today)).map((view) => ({
         id: view.promise.id,
         documentId: view.promise.documentId,
+        partyId: view.promise.partyId,
+        party: this.partyName(companyId, String(view.promise.partyId)),
         amount: jsonAmount(view.promise.amount.minor),
         promisedOn: view.promise.promisedOn,
         outcome: view.outcome,
@@ -1501,6 +1570,7 @@ export class DemoApplication {
       })),
       disputes: (await this.collections.disputes(actor)).map((dispute) => ({
         id: dispute.id, documentId: dispute.documentId, reason: dispute.reason, state: dispute.state,
+        partyId: dispute.partyId, party: this.partyName(companyId, String(dispute.partyId)),
       })),
       outbox: this.outbox.messages.slice(0, 10),
     };
@@ -1541,26 +1611,50 @@ export class DemoApplication {
     return { state: 'recorded', title: `Reminder ${reminder.state.toLowerCase()}`, message: reminder.failureReason ?? reminder.message['en-IN'], reminder: this.reminderJson(reminder) };
   }
 
+  /**
+   * Issue #237 — the customer a bill is made out to. A promise or a dispute about a bill is always
+   * recorded against the bill's own customer, never against whichever customer the demo started
+   * with, and a bill that is not one of this business's issued bills is refused.
+   */
+  private async billParty(actor: ActorContext, documentId: string): Promise<{ partyId: PartyId; name: string; number: string }> {
+    const companyId = this.companyOf(actor);
+    const invoice = documentId === '' ? undefined : (await this.salesRepository.list(companyId, { state: 'FINAL' })).find((candidate) => candidate.id === documentId);
+    if (invoice === undefined) throw notFound('REMINDER_BILL_NOT_FOUND', 'Choose one of your issued bills. That bill is not among them.');
+    return { partyId: invoice.partyId, name: this.partyName(companyId, String(invoice.partyId)), number: invoice.number ?? invoice.id };
+  }
+
+  /** Issue #237 — the customer chosen on the screen, from this business's own customer list. */
+  private chosenCustomer(actor: ActorContext, input: Record<string, unknown>): { partyId: PartyId; name: string } {
+    const companyId = this.companyOf(actor);
+    const wanted = String(input.partyId ?? '').trim();
+    if (wanted === '') throw invalid('REMINDER_CUSTOMER_REQUIRED', 'Choose the customer this is about.');
+    const party = customers(companyId).find((candidate) => candidate.id === wanted);
+    if (party === undefined) throw notFound('REMINDER_CUSTOMER_NOT_FOUND', 'That customer is not in your customer list.');
+    return { partyId: party.id as unknown as PartyId, name: party.legalName };
+  }
+
   async recordPromiseToPay(actor: ActorContext, input: Record<string, unknown>) {
-    this.companyOf(actor);
+    const bill = await this.billParty(actor, String(input.documentId ?? ''));
     const promise = await this.collections.recordPromise(actor, {
-      partyId: this.config.customerId,
+      partyId: bill.partyId,
       documentId: String(input.documentId ?? ''),
       amount: money(paise(input.amount)),
       promisedOn: isoDate(String(input.promisedOn ?? '')),
       note: input.note === undefined ? null : String(input.note),
     });
-    return { state: 'recorded', title: 'Promise recorded', message: `Reminders for this bill are paused until ${promise.promisedOn}.` };
+    return { state: 'recorded', title: 'Promise recorded', message: `${bill.name} promised ${formatINR(promise.amount)} against ${bill.number} by ${promise.promisedOn}. Reminders for this bill are paused until then.`, partyId: bill.partyId, party: bill.name };
   }
 
   async raiseBillDispute(actor: ActorContext, input: Record<string, unknown>) {
-    this.companyOf(actor);
+    const documentId = input.documentId === undefined || input.documentId === '' ? null : String(input.documentId);
+    // A dispute about one bill belongs to that bill's customer; one about the whole account names the customer.
+    const party = documentId === null ? this.chosenCustomer(actor, input) : await this.billParty(actor, documentId);
     await this.collections.raiseDispute(actor, {
-      partyId: this.config.customerId,
-      documentId: input.documentId === undefined || input.documentId === '' ? null : String(input.documentId),
+      partyId: party.partyId,
+      documentId,
       reason: String(input.reason ?? ''),
     });
-    return { state: 'recorded', title: 'Dispute recorded', message: 'This bill will not be chased until the dispute is closed.' };
+    return { state: 'recorded', title: 'Dispute recorded', message: documentId === null ? `${party.name}'s bills will not be chased until the dispute is closed.` : `${'number' in party ? party.number : 'This bill'} for ${party.name} will not be chased until the dispute is closed.`, partyId: party.partyId, party: party.name };
   }
 
   async resolveBillDispute(actor: ActorContext, input: Record<string, unknown>) {
@@ -1570,15 +1664,15 @@ export class DemoApplication {
   }
 
   async stopReminders(actor: ActorContext, input: Record<string, unknown>) {
-    this.companyOf(actor);
-    await this.collections.optOut(actor, this.config.customerId, String(input.reason ?? ''));
-    return { state: 'recorded', title: 'Reminders stopped', message: `${this.config.customerName} will not receive automatic reminders.` };
+    const party = this.chosenCustomer(actor, input);
+    await this.collections.optOut(actor, party.partyId, String(input.reason ?? ''));
+    return { state: 'recorded', title: 'Reminders stopped', message: `${party.name} will not receive automatic reminders.`, partyId: party.partyId, party: party.name };
   }
 
-  async resumeReminders(actor: ActorContext, _input: Record<string, unknown> = {}) {
-    this.companyOf(actor);
-    await this.collections.resumeReminders(actor, this.config.customerId);
-    return { state: 'recorded', title: 'Reminders started again', message: `${this.config.customerName} will receive automatic reminders again.` };
+  async resumeReminders(actor: ActorContext, input: Record<string, unknown> = {}) {
+    const party = this.chosenCustomer(actor, input);
+    await this.collections.resumeReminders(actor, party.partyId);
+    return { state: 'recorded', title: 'Reminders started again', message: `${party.name} will receive automatic reminders again.`, partyId: party.partyId, party: party.name };
   }
 
   /**

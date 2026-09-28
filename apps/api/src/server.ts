@@ -7,7 +7,7 @@ import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { chooseMark, searchMarks } from './trade-mark-application.ts';
 import { previewBranding, readBranding, saveBranding, saveUpiId } from './branding-application.ts';
-import { readBusinessDetails, saveBusinessDetails } from './business-details-application.ts';
+import { currentStates, readBusinessDetails, saveBusinessDetails } from './business-details-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
 import { ChallanDesk } from './challan-application.ts';
@@ -75,6 +75,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/assistant/ask') return json(200, await app.ask(actor, body));
     // Setting up a business runs against its own fresh company, so it needs a signed-in session but
     // not the session's company. Gated by authentication above, like the rest of the app.
+    // Issue #237 — the one list of current states, for setting up a business.
+    if (method === 'GET' && pathname === '/api/states') return json(200, { states: currentStates() });
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body, context.companyId));
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body, context.companyId));
     // Issue #147 — the mark of a trade: search the picture library, then keep what was picked.

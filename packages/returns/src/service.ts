@@ -1,5 +1,5 @@
 import {
-  add, conflict, invalid, money, notFound, sum,
+  add, conflict, formatINR, invalid, money, notFound, sum,
   type Clock, type IsoDate, type Money, type Quantity,
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort } from '@invoice/ledger';
@@ -181,8 +181,8 @@ export class ReturnService {
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
     const summary = command.wholeBill === true
-      ? `The whole of ${original.number} (${lines.length} line${lines.length === 1 ? '' : 's'}, charges included) will be credited for ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`
-      : `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`;
+      ? `The whole of ${original.number} (${lines.length} line${lines.length === 1 ? '' : 's'}, charges included) will be credited for ${formatINR(totals.total)}.`
+      : `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ${formatINR(totals.total)}.`;
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: deadline.warning === null ? [] : [deadline.warning] };
   }
 
@@ -228,7 +228,7 @@ export class ReturnService {
         reason: command.reason, lines: checked.lines, totals: checked.totals, voucherId: posted.voucher.id,
         complianceStatus: checked.complianceStatus, createdBy: actor.userId, createdAt: at,
         idempotencyKey: command.idempotencyKey,
-        summary: `${number} credits ₹${(Number(checked.totals.total.minor) / 100).toFixed(2)} against ${original.number}.`,
+        summary: `${number} credits ${formatINR(checked.totals.total)} against ${original.number}.`,
       };
       await this.#repo.insert(note);
       return { note, voucher: posted.voucher };
@@ -290,7 +290,7 @@ export class ReturnService {
       });
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
-    const summary = `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will reduce the supplier balance by ₹${(Number(totals.total.minor) / 100).toFixed(2)}.`;
+    const summary = `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will reduce the supplier balance by ${formatINR(totals.total)}.`;
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: [] };
   }
 
@@ -332,7 +332,7 @@ export class ReturnService {
         reason: command.reason, lines: checked.lines, totals: checked.totals, voucherId: posted.voucher.id,
         complianceStatus: checked.complianceStatus, createdBy: actor.userId, createdAt: at,
         idempotencyKey: command.idempotencyKey,
-        summary: `${number} reduces what is owed to ${original.partyName} by ₹${(Number(checked.totals.total.minor) / 100).toFixed(2)} against ${original.number}.`,
+        summary: `${number} reduces what is owed to ${original.partyName} by ${formatINR(checked.totals.total)} against ${original.number}.`,
       };
       await this.#repo.insert(note);
       return { note, voucher: posted.voucher };
