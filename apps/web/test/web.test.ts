@@ -269,6 +269,7 @@ test("#233: after a recorded sale the form has no customer and one fresh line, a
     storage: { removeItem: (key: string) => removed.push(key) },
     document: { querySelector: (selector: string) => (selector === "#sale-lines" ? lines : null) },
     dateInput: () => "2026-09-28",
+    hideDraftDateNote: () => calls.push("hideDraftDateNote"),
     addSaleLine: () => { lines.children.push({ id: "fresh" }); calls.push("addSaleLine"); },
     showChosenCustomer: () => calls.push("showChosenCustomer"),
     showShipToFields: () => calls.push("showShipToFields"),
@@ -333,4 +334,97 @@ test("#241: the menu follows a trade — Buying, Stock, Selling, GST, Books, Set
   assert.match(script, /function toggleMenu\(\)[\s\S]*?settings\.open = true/);
   // Hindi has every new word too.
   for (const key of ["navGroupBuying", "navGroupStock", "navGroupSelling", "navGroupGst", "navGroupBooks", "navGroupSettings", "navStock", "navMoney", "navMore"]) assert.ok(locales["hi-IN"]![key], key);
+});
+
+/**
+ * Issue #266 — runs the real restore code from app.js against a draft saved on the device on an
+ * earlier day, for each form that keeps a draft.
+ */
+async function restoreOn(flow: string, saved: Record<string, string> | null, today: string) {
+  const script = await read("app.js");
+  const line = (name: string) => {
+    const match = script.match(new RegExp(`^const ${name} = .*$`, "m"));
+    assert.ok(match, `app.js has no const ${name}`);
+    return match[0];
+  };
+  const locales = await localeCopy();
+  const store = new Map<string, string>(saved === null ? [] : [[`karobar.draft.${flow}`, JSON.stringify(saved)]]);
+  const fields: Record<string, { value: string }> = {};
+  for (const [name, value] of Object.entries(saved ?? {})) if (!name.startsWith("__")) fields[name] = { value: "" };
+  fields.date ??= { value: "" };
+  const noteText = { textContent: "" };
+  const note = { hidden: true, querySelector: () => noteText };
+  const statuses: string[] = [];
+  const form = {
+    dataset: { draft: flow } as Record<string, string>,
+    elements: { namedItem: (name: string) => fields[name] ?? null },
+    querySelector: (selector: string) => (selector === 'input[name="date"]' ? fields.date : null),
+  };
+  const context = {
+    form, storage: { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value), removeItem: (key: string) => store.delete(key) },
+    document: { querySelector: (selector: string) => (selector === `#${flow}-draft-date-note` ? note : null) },
+    dateInput: () => today,
+    setDraftStatus: (_form: unknown, key: string) => statuses.push(key),
+    text: (key: string, values: Record<string, string>) => Object.entries(values).reduce((message, [name, value]) => message.replaceAll(`{${name}}`, value), locales["en-IN"]![key]!),
+    Intl, Date, JSON, Object,
+  };
+  vm.runInNewContext([
+    line("DRAFT_DATE_RULES"), line("longDate"), line("DRAFT_STARTED"), line("DRAFT_SAVED"),
+    await functionSource("draftDateNote"), await functionSource("settleDraftDate"), await functionSource("restoreDraft"),
+    "restoreDraft(form);",
+  ].join("\n"), context);
+  const kept = store.get(`karobar.draft.${flow}`);
+  return { date: fields.date.value, note: note.hidden ? null : noteText.textContent, statuses, kept: kept === undefined ? null : JSON.parse(kept), fields };
+}
+
+test("#266: a sale draft saved yesterday comes back dated today, with one line saying so", async () => {
+  const restored = await restoreOn("sale", { party: "mehta", date: "2026-09-28", __startedOn: "2026-09-28", __savedOn: "2026-09-28" }, "2026-09-29");
+  assert.equal(restored.date, "2026-09-29");
+  assert.equal(restored.note, "This sale was started on 28 September 2026. Its date is now today, 29 September 2026. Change it only if the goods really left on another day.");
+  assert.deepEqual(restored.statuses, ["draftRestored"]);
+  // The draft on the device moves too, and nothing else in it is lost.
+  assert.equal(restored.kept.date, "2026-09-29");
+  assert.equal(restored.kept.party, "mehta");
+  assert.equal(restored.kept.__startedOn, "2026-09-28");
+  assert.equal(restored.kept.__savedOn, "2026-09-29");
+});
+
+test("#266: a sale draft saved before the day was recorded is still brought up to today", async () => {
+  // Drafts saved before this change carry no save day: the date in them is the best guess.
+  const restored = await restoreOn("sale", { party: "mehta", date: "2026-09-28" }, "2026-09-29");
+  assert.equal(restored.date, "2026-09-29");
+  assert.match(restored.note!, /^This sale was started on 28 September 2026\. Its date is now today, 29 September 2026\./);
+});
+
+test("#266: a sale dated yesterday on purpose today is left alone when reloaded the same day", async () => {
+  const restored = await restoreOn("sale", { party: "mehta", date: "2026-09-28", __startedOn: "2026-09-29", __savedOn: "2026-09-29" }, "2026-09-29");
+  assert.equal(restored.date, "2026-09-28");
+  assert.equal(restored.note, null);
+});
+
+test("#266: a supplier bill keeps the supplier's date, and a money entry keeps its day; both say so", async () => {
+  const purchase = await restoreOn("purchase", { reference: "SRS-101", date: "2026-09-27", __startedOn: "2026-09-28", __savedOn: "2026-09-28" }, "2026-09-29");
+  assert.equal(purchase.date, "2026-09-27", "the supplier's bill date is never changed");
+  assert.equal(purchase.note, "This supplier bill was started on 28 September 2026. Its bill date is kept as 27 September 2026, because it is the supplier's date. Check it against their bill.");
+  assert.equal(purchase.kept.date, "2026-09-27");
+  for (const flow of ["payment", "paid"]) {
+    const money = await restoreOn(flow, { amount: "500", date: "2026-09-28", __startedOn: "2026-09-28", __savedOn: "2026-09-28" }, "2026-09-29");
+    assert.equal(money.date, "2026-09-28", `${flow}: the day the money moved is kept`);
+    assert.equal(money.note, "This entry was started on 28 September 2026. Its date is kept as 28 September 2026. Change it if the money moved on another day.");
+  }
+});
+
+test("#266: every draft form has its date line, the sale review shows the server's date line first, and a new day follows the server's today", async () => {
+  const [html, script, locales] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
+  for (const flow of ["sale", "purchase", "payment", "paid"]) {
+    assert.match(html, new RegExp(`id="${flow}-draft-date-note"[^>]*hidden><span aria-hidden="true">i</span><span data-note-text></span></p>\\s*<form[^>]+data-draft="${flow}"`));
+  }
+  assert.match(script, /const notes = \[\s*\/\/[^\n]*\n\s*\.\.\.\(result\.dateNotice \? \[result\.dateNotice\] : \[\]\),/);
+  assert.match(script, /function adoptServerToday[\s\S]*?settleDraftDate\(form, form\.dataset\.draftStartedOn/);
+  // Cleared, reset and recorded forms lose the line.
+  assert.match(await functionSource("resetSaleForm"), /hideDraftDateNote\(form\);/);
+  assert.equal((script.match(/hideDraftDateNote\(form\);/g) ?? []).length, 3);
+  for (const key of ["draftSaleDateMoved", "draftPurchaseDateKept", "draftMoneyDateKept"]) {
+    assert.ok(locales["hi-IN"]![key] && locales["hi-IN"]![key] !== locales["en-IN"]![key], key);
+  }
 });

@@ -126,6 +126,8 @@
 
         <section class="view" id="view-sale" aria-labelledby="sale-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <!-- Issue #266 — said when a draft from an earlier day comes back. -->
+          <p class="safety-note draft-date-note" id="sale-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="transaction-layout draft-form" data-draft="sale">
             <article class="panel form-panel">
               <div class="field-grid">
@@ -220,6 +222,8 @@
 
         <section class="view" id="view-purchase" aria-labelledby="purchase-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" tabindex="-1" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <!-- Issue #266 — said when a draft from an earlier day comes back. -->
+          <p class="safety-note draft-date-note" id="purchase-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="transaction-layout draft-form" data-draft="purchase">
             <article class="panel form-panel">
               <!-- Issue #228 — the supplier is a record from the supplier list, and nothing here asks
@@ -241,6 +245,8 @@
 
         <section class="view" id="view-payment" aria-labelledby="payment-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="payment-title" tabindex="-1" data-i18n="paymentTitle"></h1><p data-i18n="paymentHelp"></p></div><span class="save-state" id="payment-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <!-- Issue #266 — said when a draft from an earlier day comes back. -->
+          <p class="safety-note draft-date-note" id="payment-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="transaction-layout draft-form" data-draft="payment" data-endpoint="payments" data-direction="RECEIPT">
             <article class="panel form-panel"><div class="field-grid"><input type="hidden" name="direction" value="RECEIPT" /><label><span data-i18n="receivedFrom"></span><select name="partyId" data-customer-picker data-picker-blank="choosePaymentCustomer" data-payment-party required></select></label><label><span data-i18n="amountReceived"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paymentDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paymentMethod"></span><select name="method" data-payment-method><option value="UPI">UPI</option><option value="CASH" data-i18n="cash"></option><option value="BANK_TRANSFER" data-i18n="bankTransfer"></option><option value="CHEQUE" data-i18n="cheque"></option></select></label><label data-cheque-field hidden><span data-i18n="chequeNumber"></span><input name="chequeNumber" /></label><label data-cheque-field hidden><span data-i18n="chequeDate"></span><input name="chequeDate" type="date" data-no-default /></label><label><span data-i18n="paymentReferenceLabel"></span><input name="reference" /></label><fieldset class="full-field payment-bills"><legend data-i18n="chooseBill"></legend><div data-payment-bills></div><small data-i18n="chooseBillHelp"></small></fieldset></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paymentSummary"></h2><div class="summary-total"><span data-i18n="amountReceived"></span><strong data-payment-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paymentSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPayment"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
@@ -253,6 +259,8 @@
 
         <section class="view" id="view-paid" aria-labelledby="paid-title">
           <div class="page-heading compact"><div><h1 id="paid-title" tabindex="-1" data-i18n="paidTitle"></h1><p data-i18n="paidHelp"></p></div><span class="save-state" id="paid-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <!-- Issue #266 — said when a draft from an earlier day comes back. -->
+          <p class="safety-note draft-date-note" id="paid-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="transaction-layout draft-form" data-draft="paid" data-endpoint="payments" data-direction="PAYMENT">
             <article class="panel form-panel"><div class="field-grid"><input type="hidden" name="direction" value="PAYMENT" /><label><span data-i18n="paidTo"></span><select name="partyId" data-supplier-picker data-picker-blank="choosePaymentSupplier" data-payment-party required></select></label><label><span data-i18n="amountPaid"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0.01" step="0.01" required /></span></label><label><span data-i18n="paidDate"></span><input name="date" type="date" required /></label><label><span data-i18n="paidMethod"></span><select name="method" data-payment-method><option value="BANK_TRANSFER" data-i18n="bankTransfer"></option><option value="UPI">UPI</option><option value="CASH" data-i18n="cash"></option><option value="CHEQUE" data-i18n="cheque"></option></select></label><label data-cheque-field hidden><span data-i18n="chequeNumber"></span><input name="chequeNumber" /></label><label data-cheque-field hidden><span data-i18n="chequeDate"></span><input name="chequeDate" type="date" data-no-default /></label><label><span data-i18n="paymentReferenceLabel"></span><input name="reference" /></label><fieldset class="full-field payment-bills"><legend data-i18n="chooseSupplierBill"></legend><div data-payment-bills></div><small data-i18n="chooseSupplierBillHelp"></small></fieldset></div></article>
             <aside class="panel summary-card"><h2 data-i18n="paidSummary"></h2><div class="summary-total"><span data-i18n="amountPaid"></span><strong data-paid-total>₹0.00</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="paidSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPaid"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>

@@ -107,7 +107,7 @@ const copy = {
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Supplier payment posted to the ledger", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
-    checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftCleared: "Draft discarded", working: "Working…",
+    checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…",
     navAsk: "Ask",
     agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
     agentRequest: "What should I do?", agentRequestPlaceholder: "Find ABC Traders' unpaid invoices and send reminders",
@@ -436,7 +436,7 @@ const copy = {
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko bhugtan ledger mein darj hua", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
-    checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
+    checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
     navAsk: "Poochein",
     agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
     agentRequest: "Main kya karun?", agentRequestPlaceholder: "ABC Traders ke baaki bill dekh kar reminder bhej do",
@@ -793,6 +793,10 @@ function adoptServerToday(today) {
   const before = dateInput();
   state.today = today;
   document.querySelectorAll("input[type=date]:not([data-no-default])").forEach((field) => { if (field.value === before) field.value = today; });
+  // Issue #266 — a draft's date line names today, so it follows the server's today too.
+  document.querySelectorAll(".draft-form").forEach((form) => {
+    if (form.dataset.draftStartedOn) settleDraftDate(form, form.dataset.draftStartedOn, form.dataset.draftStartedOn);
+  });
   const heading = document.querySelector('[data-i18n="today"]');
   if (heading) heading.textContent = `${copy[state.locale].today} · ${new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${today}T12:00:00+05:30`))}`;
 }
@@ -883,6 +887,55 @@ function setDraftStatus(form, key) {
   if (status) status.textContent = copy[state.locale][key];
 }
 
+/**
+ * Issue #266 — what a saved draft's date means when it comes back on a later day, form by form.
+ *
+ *   - sale: the date a tax invoice carries is the day it is issued, so a draft left from an earlier
+ *     day comes back dated today, and one line above the form says so.
+ *   - purchase: the bill date is the supplier's, printed on their bill; it is never changed. The
+ *     line says it was kept, so it is checked against the paper.
+ *   - payment / paid: the date the money came in or went out, which is a fact about that day, so it
+ *     is kept too, and the line says so.
+ */
+const DRAFT_DATE_RULES = { sale: "moveToToday", purchase: "keepSupplierDate", payment: "keepMoneyDate", paid: "keepMoneyDate" };
+const longDate = (iso) => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(`${iso}T12:00:00+05:30`));
+
+function draftDateNote(form) {
+  return document.querySelector(`#${form.dataset.draft}-draft-date-note`);
+}
+
+function hideDraftDateNote(form) {
+  const note = draftDateNote(form);
+  if (note) { note.hidden = true; note.querySelector("[data-note-text]").textContent = ""; }
+  delete form.dataset.draftStartedOn;
+}
+
+/** Brings a restored draft's date up to today where the form says it should, and says what happened. */
+function settleDraftDate(form, startedOn, savedOn) {
+  const rule = DRAFT_DATE_RULES[form.dataset.draft];
+  const field = form.querySelector('input[name="date"]');
+  const note = draftDateNote(form);
+  if (!rule || !field || !field.value) return false;
+  const today = dateInput();
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(startedOn || "") ? startedOn : field.value;
+  const lastSaved = /^\d{4}-\d{2}-\d{2}$/.test(savedOn || "") ? savedOn : field.value;
+  // Saved today: whatever date is in the box was put there today, on purpose or by default.
+  if (lastSaved >= today) return false;
+  form.dataset.draftStartedOn = from;
+  let message;
+  let moved = false;
+  if (rule === "moveToToday") {
+    if (field.value !== today) { field.value = today; moved = true; }
+    message = text("draftSaleDateMoved", { started: longDate(from), today: longDate(today) });
+  } else if (rule === "keepSupplierDate") {
+    message = text("draftPurchaseDateKept", { started: longDate(from), date: longDate(field.value) });
+  } else {
+    message = text("draftMoneyDateKept", { started: longDate(from), date: longDate(field.value) });
+  }
+  if (note) { note.querySelector("[data-note-text]").textContent = message; note.hidden = false; }
+  return moved;
+}
+
 function restoreDraft(form) {
   const saved = storage?.getItem(`karobar.draft.${form.dataset.draft}`);
   if (!saved) return;
@@ -892,12 +945,25 @@ function restoreDraft(form) {
       const field = form.elements.namedItem(name);
       if (field && "value" in field && typeof value === "string") field.value = value;
     });
+    // The draft on the device now carries the new date too. Only the date is written back: a box
+    // whose choices have not loaded yet (the customer list) must not lose what was saved for it.
+    if (settleDraftDate(form, values[DRAFT_STARTED], values[DRAFT_SAVED])) {
+      storage?.setItem(`karobar.draft.${form.dataset.draft}`, JSON.stringify({ ...values, date: dateInput(), [DRAFT_STARTED]: values[DRAFT_STARTED] || values.date, [DRAFT_SAVED]: dateInput() }));
+    }
     setDraftStatus(form, "draftRestored");
   } catch { storage?.removeItem(`karobar.draft.${form.dataset.draft}`); }
 }
 
-function saveDraft(form) {
-  storage?.setItem(`karobar.draft.${form.dataset.draft}`, JSON.stringify(draftData(form)));
+// Issue #266 — the days a draft was started and last saved, kept beside its fields on the device.
+const DRAFT_STARTED = "__startedOn";
+const DRAFT_SAVED = "__savedOn";
+
+function saveDraft(form, startedOn) {
+  let started = startedOn;
+  if (!started) {
+    try { started = JSON.parse(storage?.getItem(`karobar.draft.${form.dataset.draft}`) || "{}")[DRAFT_STARTED]; } catch { started = undefined; }
+  }
+  storage?.setItem(`karobar.draft.${form.dataset.draft}`, JSON.stringify({ ...draftData(form), [DRAFT_STARTED]: started || dateInput(), [DRAFT_SAVED]: dateInput() }));
   setDraftStatus(form, "savedDevice");
 }
 
@@ -1350,6 +1416,9 @@ async function createSetup() {
 
 function localizedError(error) {
   if (state.locale === "en-IN") return error.message || copy[state.locale].requestFailed;
+  // Issue #266 — why a bill's date was refused names the dates, so the server's sentence is shown
+  // rather than a general "could not complete".
+  if (["SALE_DATE_AFTER_TODAY", "SALE_DATE_MONTH_CLOSED"].includes(error.code) && error.message) return error.message;
   const key = {
     API_AMOUNT_INVALID: "amountInvalid",
     API_REFERENCE_REQUIRED: "referenceRequired",
@@ -1537,6 +1606,8 @@ document.querySelectorAll(".draft-form").forEach((form) => {
       // may not leave without one. The reminder never holds the bill back: an e-way bill is raised
       // against an invoice number, so the bill is issued first.
       const notes = [
+        // Issue #266 — a bill dated before today says so, first, so it is never issued unnoticed.
+        ...(result.dateNotice ? [result.dateNotice] : []),
         ...(result.placeOfSupply ? [result.placeOfSupply] : []),
         // Issue #143 — the endorsement the bill will carry, so an export is never issued as a local sale.
         ...(result.exportSupply ? [result.exportSupply.endorsement] : []),
@@ -1557,6 +1628,7 @@ document.querySelectorAll(".draft-form").forEach((form) => {
   form.querySelector(".clear-draft").addEventListener("click", () => {
     if (form.dataset.draft === "sale") { resetSaleForm(form); setDraftStatus(form, "draftCleared"); return; }
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
+    hideDraftDateNote(form);
     form.reset();
     const date = form.querySelector('input[type="date"]:not([data-no-default])');
     if (date) date.value = dateInput();
@@ -2719,6 +2791,7 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     const form = state.pendingForm;
     const result = await api(`/api/${form.dataset.endpoint ?? `${form.dataset.draft}s`}/record`, { method: "POST", body: JSON.stringify(state.pendingInput) });
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
+    hideDraftDateNote(form);
     // Issue #233 — the form becomes a fresh, empty sale, so pressing Review and Record again cannot
     // make a second bill for the same goods by accident. Done before the dialog is filled, because
     // adding the fresh line re-translates the page, dialog included.
@@ -5628,6 +5701,7 @@ function addSaleLine() {
  */
 function resetSaleForm(form) {
   storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
+  hideDraftDateNote(form);
   form.reset();
   form.querySelectorAll('input[type="date"]:not([data-no-default])').forEach((field) => { field.value = dateInput(); });
   const picker = form.querySelector("[data-customer-picker]");
