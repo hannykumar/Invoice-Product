@@ -24,6 +24,7 @@ import {
   readPortalTimestamp, validityDays,
 } from "./validity.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
+import { describeValiditySum, planDistance, type EwayDistancePlan } from "./distance.ts";
 import type {
   ConsolidatedTripRecord, EwayApplicabilityDecision, EwayBillPolicy, EwayBillRecord,
   EwayBillStatus, EwayCancelReasonCode, EwayRejectReasonCode, EwayVehicleLeg, Movement,
@@ -71,6 +72,10 @@ export interface EwayBillPreview {
   /** True when Part B can go in straight away, so the goods can actually leave. */
   readonly vehicleReady: boolean;
   readonly summary: string;
+  /** Issue #240 — how the distance will be settled: sent as 0 for the portal, or typed and checked. */
+  readonly distance?: EwayDistancePlan;
+  /** Issue #240 — the days worked out in full: "840 ÷ 200 = 4.2, and part of a day counts as a whole day, so 5 days". */
+  readonly validitySum?: string;
 }
 
 export class EwayBillService {
@@ -166,18 +171,28 @@ export class EwayBillService {
       };
     }
 
+    const distance = await this.distancePlan(actor, movement);
     const built = buildPartA(movement, this.#optionsFor(movement));
-    const days = movement.approximateDistanceKm === undefined
+    const days = distance.validityKm === undefined
       ? undefined
-      : validityDays(movement.approximateDistanceKm, movement.vehicle?.vehicleType ?? movement.vehicleType, policy);
+      : validityDays(distance.validityKm, movement.vehicle?.vehicleType ?? movement.vehicleType, policy);
     const vehicleReady = movement.vehicle !== undefined;
+    const kmPerDay = (movement.vehicle?.vehicleType ?? movement.vehicleType) === "ODC" ? policy.kilometresPerDayOdc : policy.kilometresPerDayRegular;
+    const validitySum = days === undefined || distance.validityKm === undefined ? undefined : describeValiditySum(distance.validityKm, kmPerDay, days);
+    // Issue #240 — a typed distance the portal would refuse is refused here first, in words.
+    const problems: readonly PayloadProblem[] = [
+      ...(distance.refusal === undefined ? [] : [{ field: "transDistance", message: distance.refusal }]),
+      ...(built.ok ? [] : built.problems),
+    ];
 
-    if (!built.ok) {
+    if (problems.length > 0) {
       return {
-        applicability, ready: false, problems: built.problems, vehicleReady,
+        applicability, ready: false, problems, vehicleReady,
         consignmentValuePaise: value.valuePaise,
         ...(days === undefined ? {} : { validityDays: days }),
-        summary: `This movement needs an e-way bill, but ${built.problems.length === 1 ? "one thing is" : `${built.problems.length} things are`} missing first: ${built.problems[0]?.message ?? ""}`,
+        ...(validitySum === undefined ? {} : { validitySum }),
+        distance,
+        summary: `This movement needs an e-way bill, but ${problems.length === 1 ? "one thing is" : `${problems.length} things are`} ${distance.refusal === undefined ? "missing first" : "not right yet"}: ${problems[0]?.message ?? ""}`,
       };
     }
 
@@ -185,10 +200,43 @@ export class EwayBillService {
       applicability, ready: true, problems: [], vehicleReady,
       consignmentValuePaise: value.valuePaise,
       ...(days === undefined ? {} : { validityDays: days }),
+      ...(validitySum === undefined ? {} : { validitySum }),
+      distance,
       summary: vehicleReady
-        ? `This movement needs an e-way bill and everything is ready${days === undefined ? "" : `. Once the vehicle goes on it, it will be valid for ${days} day${days === 1 ? "" : "s"}`}.`
+        ? `This movement needs an e-way bill and everything is ready${days === undefined ? ". How long it lasts is shown once the portal has worked out the distance" : `. Once the vehicle goes on it, it will be valid for ${days} day${days === 1 ? "" : "s"}`}.`
         : "This movement needs an e-way bill. It can be raised now, but the goods may not leave until a vehicle number is added to it.",
     };
+  }
+
+  /**
+   * Issue #240 — how the distance will be settled for this movement.
+   *
+   * The PIN-to-PIN distance is only ever the portal's: remembered from its earlier reply for the
+   * same two PIN codes, never made up here. Blank or 0 goes to the portal as 0, for it to work out.
+   */
+  async distancePlan(actor: ActorContext, movement: Movement): Promise<EwayDistancePlan> {
+    this.#require(actor, EWAY_VIEW_PERMISSION);
+    const fromPincode = (movement.dispatchFrom ?? movement.consignor).pincode ?? "";
+    const toPincode = (movement.shipTo ?? movement.billTo).pincode ?? "";
+    const knownKm = await this.knownDistance(actor, fromPincode, toPincode);
+    const typed = movement.approximateDistanceKm;
+    return planDistance({
+      fromPincode, toPincode,
+      ...(typed === undefined || !Number.isFinite(typed) ? {} : { typedKm: typed }),
+      ...(knownKm === undefined ? {} : { knownKm }),
+    });
+  }
+
+  /** The portal's own distance between two PIN codes, from its latest reply naming them. */
+  async knownDistance(actor: ActorContext, fromPincode: string, toPincode: string): Promise<number | undefined> {
+    this.#require(actor, EWAY_VIEW_PERMISSION);
+    if (fromPincode === "" || toPincode === "") return undefined;
+    const said = (await this.#records.list(actor.companyId))
+      .filter((record) => record.acknowledgement?.portalDistanceKm !== undefined
+        && ((record.fromPincode === fromPincode && record.toPincode === toPincode)
+          || (record.fromPincode === toPincode && record.toPincode === fromPincode)))
+      .sort((left, right) => (left.updatedAt < right.updatedAt ? -1 : 1));
+    return said[said.length - 1]?.acknowledgement?.portalDistanceKm;
   }
 
   // ------------------------------------------------------------------------ writing
@@ -227,6 +275,12 @@ export class EwayBillService {
       );
     }
 
+    // Issue #240 — a typed distance more than 10% over the portal's own is refused before sending.
+    const distance = await this.distancePlan(actor, movement);
+    if (distance.refusal !== undefined) {
+      throw invalid("EWAY_DISTANCE_TOO_FAR", `This e-way bill has not been raised. ${distance.refusal}`);
+    }
+
     const partA = buildPartA(movement, this.#optionsFor(movement));
     if (!partA.ok) {
       throw invalid(
@@ -257,6 +311,8 @@ export class EwayBillService {
     // do not know" rather than no record at all.
     const pending: EwayBillRecord = {
       ...record, status: "PENDING", applicability, updatedAt: at,
+      // What this attempt sends, which after a correction is not what the first attempt sent.
+      distanceKm: distance.sentKm, fromPincode: distance.fromPincode, toPincode: distance.toPincode,
       message: "This movement has been sent to the e-way bill portal and we are waiting for the number.",
     };
     await this.#records.update(pending);
@@ -313,7 +369,7 @@ export class EwayBillService {
       message: outcome.kind === "DUPLICATE"
         ? "This consignment already had an e-way bill, so the existing number has been kept. Nothing has been raised twice."
         : moving
-          ? `E-way bill ${acknowledgement.ewayBillNumber} is ready. Keep the number with the driver.${acknowledgement.validUntil === undefined ? "" : ` It is valid until ${describeExpiry(acknowledgement.validUntil)}.`}`
+          ? `E-way bill ${acknowledgement.ewayBillNumber} is ready. Keep the number with the driver.${this.#distanceSaid(distance, acknowledgement.portalDistanceKm, movement, policy)}${acknowledgement.validUntil === undefined ? "" : ` It is valid until ${describeExpiry(acknowledgement.validUntil)}.`}`
           : `E-way bill ${acknowledgement.ewayBillNumber} has been raised without a vehicle. The goods may not move until the vehicle number is added to it.`,
     };
     await this.#records.update(generated);
@@ -697,6 +753,18 @@ export class EwayBillService {
 
   // --------------------------------------------------------------------- internals
 
+  /** Issue #240 — one sentence on the distance the validity was worked out from, with the sum. */
+  #distanceSaid(distance: EwayDistancePlan, portalKm: number | undefined, movement: Movement, policy: EwayBillPolicy): string {
+    const km = distance.sentKm === 0 ? portalKm : distance.sentKm;
+    if (km === undefined) return "";
+    const type = movement.vehicle?.vehicleType ?? movement.vehicleType;
+    const perDay = type === "ODC" ? policy.kilometresPerDayOdc : policy.kilometresPerDayRegular;
+    const sum = describeValiditySum(km, perDay, validityDays(km, type, policy));
+    return distance.sentKm === 0
+      ? ` The portal worked out ${km} km from PIN ${distance.fromPincode} to PIN ${distance.toPincode}: ${sum}.`
+      : ` The distance sent was ${km} km: ${sum}.`;
+  }
+
   /**
    * Expiry read at the moment of looking.
    *
@@ -740,7 +808,9 @@ export class EwayBillService {
       consignmentValuePaise: consignmentValueOf(movement.documents).valuePaise,
       fromStateCode: route.fromStateCode,
       toStateCode: route.toStateCode,
-      ...(movement.approximateDistanceKm === undefined ? {} : { distanceKm: movement.approximateDistanceKm }),
+      distanceKm: movement.approximateDistanceKm ?? 0,
+      fromPincode: (movement.dispatchFrom ?? movement.consignor).pincode ?? "",
+      toPincode: (movement.shipTo ?? movement.billTo).pincode ?? "",
       vehicleLegs: [],
       message: "This movement is about to be sent to the e-way bill portal.",
       createdBy: actor.userId,

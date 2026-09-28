@@ -1830,7 +1830,7 @@ export class DemoApplication {
    * consignment's value including tax and the two states, so the reminder and the decision cannot
    * disagree.
    */
-  private async ewayReminder(actor: ActorContext, draft: SalesInvoice, delivery: DeliveryDetails) {
+  private async ewayReminder(actor: ActorContext, draft: SalesInvoice, delivery: DeliveryDetails | null) {
     const pricing = draft.pricing;
     if (pricing === null) return null;
     try {
@@ -1842,7 +1842,7 @@ export class DemoApplication {
         consignor,
         billTo,
         // Where the goods actually finish, which is what the limit is judged on.
-        ...(delivery.deliverTo === null ? {} : { shipTo: delivery.deliverTo }),
+        ...(delivery === null || delivery.deliverTo === null ? {} : { shipTo: delivery.deliverTo }),
         documents: [{
           documentId: draft.id,
           documentType: 'TAX_INVOICE',
@@ -2042,6 +2042,9 @@ export class DemoApplication {
             ? { expected: true, needed: 'YES' as const, message: decision.message, askTurnover: false }
             : { expected: true, needed: 'YES' as const, askTurnover: false, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' },
       invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
+      // Issue #240 — whether these goods need an e-way bill, so the screen can offer it in one press.
+      // It is never raised here: the goods and the lorry may not be ready yet.
+      ewayBill: await this.ewayReminder(actor, final.invoice, this.deliveries.get(token) ?? null),
     };
   }
 
@@ -3932,8 +3935,16 @@ export class DemoApplication {
     };
     // Issue #224 — where the bill itself says the goods went, when it says somewhere other than the
     // buyer's billing address. The e-way bill carries that address rather than asking for it again.
-    const recorded = this.deliveries.get(invoice.id)?.deliverTo ?? null;
-    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input, String(invoice.partyId), recorded);
+    const delivery = this.deliveries.get(invoice.id);
+    const recorded = delivery?.deliverTo ?? null;
+    // Issue #240 — what the sale already said about the journey: the vehicle and the transporter.
+    // A form that sends its own vehicle box wins, even empty (Part A now, the lorry later); a caller
+    // that sends nothing gets the bill's.
+    const fromBill = {
+      vehicle: delivery?.transport?.vehicleNumber ?? null,
+      carrier: delivery?.carrier ?? null,
+    };
+    return this.movementOf(document, String(input.reason ?? 'SUPPLY') as MovementReason, input, String(invoice.partyId), recorded, fromBill);
   }
 
   /** One movement of goods: the document on the lorry, why it is moving, and what the form said. */
@@ -3953,7 +3964,11 @@ export class DemoApplication {
     };
   }
 
-  private movementOf(document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>, partyId: string, recorded: MovementParty | null = null): Movement {
+  private movementOf(
+    document: ConsignmentDocument, reason: MovementReason, input: Record<string, unknown>, partyId: string,
+    recorded: MovementParty | null = null,
+    fromBill: { readonly vehicle: string | null; readonly carrier: DeliveryDetails['carrier'] } = { vehicle: null, carrier: null },
+  ): Movement {
     // Issue #180 — where the goods actually leave from, taken from the business's own address. An
     // e-way bill that disagrees with the invoice about the dispatch place is exactly the
     // discrepancy an officer stops a lorry over.
@@ -3965,7 +3980,11 @@ export class DemoApplication {
     const shipTo = DemoApplication.deliveryPlace(billTo, recorded, input);
 
     const distance = String(input.distanceKm ?? '').trim();
-    const vehicleNumber = String(input.vehicle ?? '').trim();
+    if (distance !== '' && !/^\d{1,4}$/.test(distance)) {
+      throw invalid('EWAY_DISTANCE', `"${distance}" is not a distance. Type whole kilometres, for example 840, or leave it empty and the portal works it out from the PIN codes.`);
+    }
+    const vehicleNumber = (input.vehicle === undefined ? fromBill.vehicle ?? '' : String(input.vehicle)).trim();
+    const carrier = fromBill.carrier;
     const withinSameCity = String(input.withinSameCity ?? '').trim();
     const vehicle: VehicleAssignment | undefined = vehicleNumber === '' ? undefined : {
       registrationNumber: vehicleNumber,
@@ -3984,8 +4003,17 @@ export class DemoApplication {
       transportMode: 'ROAD',
       vehicleType: input.oversized === 'yes' ? 'ODC' : 'REGULAR',
       conveyance: 'OWN_VEHICLE',
-      // Blank means "we have not been told", which stays a question rather than becoming a zero.
+      // Issue #240 — blank is sent as 0: the portal works the road distance out from the two PIN
+      // codes itself. A typed distance is checked against the portal's own before it is sent.
       ...(distance === '' ? {} : { approximateDistanceKm: Number(distance) }),
+      ...(carrier === null ? {} : {
+        transporter: {
+          name: carrier.name,
+          transporterId: carrier.transporterId,
+          ...(carrier.documentNumber === undefined ? {} : { documentNumber: carrier.documentNumber }),
+          ...(carrier.documentDate === undefined ? {} : { documentDate: carrier.documentDate as IsoDate }),
+        },
+      }),
       ...(withinSameCity === '' ? {} : { withinSameCity: withinSameCity === 'yes' }),
       ...(vehicle === undefined ? {} : { vehicle }),
     };
@@ -4010,6 +4038,12 @@ export class DemoApplication {
     const shipToState = typed('shipToState');
 
     if (recorded !== null) {
+      // Issue #240 — the screen fills the bill's own address in; typed back unchanged, it is the bill's.
+      const typedAddress = typed('shipToAddress');
+      const typedPin = typed('shipToPincode');
+      if ((typedAddress !== '' && typedAddress !== recorded.address1) || (typedPin !== '' && typedPin !== recorded.pincode)) {
+        throw invalid('EWAY_SHIP_TO_DIFFERS_FROM_BILL', `The bill says these goods go to ${recorded.address1}, ${recorded.place} ${recorded.pincode}, but the form says ${typedAddress || recorded.address1}, ${typedPin || recorded.pincode}. One bill cannot describe two journeys. Use the bill's address, or correct the bill.`);
+      }
       if (shipToState !== '' && shipToState !== recorded.stateCode) {
         const recordedState = STATE_NAMES[recorded.stateCode] ?? recorded.stateCode;
         const typedState = STATE_NAMES[shipToState] ?? shipToState;
@@ -4018,6 +4052,9 @@ export class DemoApplication {
       return recorded;
     }
     if (shipToState === '' || (shipToState === billTo.stateCode && typed('shipToAddress') === '' && typed('shipToPincode') === '')) return undefined;
+    // Issue #240 — the buyer's own address, as the screen fills it in from the bill: not a ship-to.
+    if (shipToState === billTo.stateCode && typed('shipToAddress') === billTo.address1 && typed('shipToPincode') === billTo.pincode
+      && (typed('shipToPlace') === '' || typed('shipToPlace') === billTo.place)) return undefined;
 
     const address1 = typed('shipToAddress');
     if (address1 === '') throw invalid('EWAY_SHIP_TO_ADDRESS', 'Type the delivery address — the building, street or area the goods are going to.');
@@ -4086,7 +4123,9 @@ export class DemoApplication {
     return {
       state: 'preview' as const,
       title: preview.applicability.outcome === 'REQUIRED'
-        ? (preview.ready ? (preview.vehicleReady ? 'Ready to raise' : 'Ready, but no vehicle yet') : 'Something is missing')
+        ? (preview.ready
+          ? (preview.vehicleReady ? 'Ready to raise' : 'Ready, but no vehicle yet')
+          : preview.distance?.refusal !== undefined ? 'The distance is more than the portal accepts' : 'Something is missing')
         : preview.applicability.outcome === 'CANNOT_DECIDE' ? 'We need one more fact' : 'No e-way bill needed',
       message: preview.summary,
       outcome: preview.applicability.outcome,
@@ -4103,10 +4142,125 @@ export class DemoApplication {
       ready: preview.ready,
       vehicleReady: preview.vehicleReady,
       validityDays: preview.validityDays ?? null,
+      validitySum: preview.validitySum ?? null,
       consignmentValue: jsonAmount(preview.consignmentValuePaise),
       problems: preview.problems.map((problem) => ({ field: problem.field, message: problem.message })),
       documentNumber: movement.documents[0]?.documentNumber ?? '',
+      // Issue #240 — how the distance is settled, and everything the e-way bill will carry.
+      distance: preview.distance ?? null,
+      filled: DemoApplication.ewayFilled(movement),
     };
+  }
+
+  /**
+   * Issue #240 — everything the e-way bill will carry, as the screen shows it for confirming:
+   * both parties with GST numbers, addresses, PIN codes and states, the bill, its lines, the vehicle
+   * and the transporter. All of it comes from the bill; none of it is typed.
+   */
+  private static ewayFilled(movement: Movement) {
+    const party = (who: MovementParty) => ({
+      name: who.legalName,
+      gstin: who.gstin,
+      address: [who.address1, who.address2].filter((line) => line !== undefined && line !== '').join(', '),
+      place: who.place,
+      pincode: who.pincode,
+      stateCode: who.stateCode,
+      state: STATE_NAMES[who.stateCode] ?? who.stateCode,
+    });
+    const document = movement.documents[0];
+    const lines = document?.lines ?? [];
+    const sum = (pick: (line: (typeof lines)[number]) => bigint) => lines.reduce((total, line) => total + pick(line), 0n);
+    return {
+      from: party(movement.dispatchFrom ?? movement.consignor),
+      billTo: party(movement.billTo),
+      to: party(movement.shipTo ?? movement.billTo),
+      document: document === undefined ? null : { number: document.documentNumber, date: document.documentDate, type: document.documentType },
+      lines: lines.map((line) => ({
+        description: line.description, hsn: line.hsnCode, quantity: line.quantity, unit: line.unit,
+        value: jsonAmount(line.taxableValuePaise),
+        tax: jsonAmount(line.cgstPaise + line.sgstPaise + line.igstPaise + line.cessPaise),
+      })),
+      taxable: jsonAmount(sum((line) => line.taxableValuePaise)),
+      cgst: jsonAmount(sum((line) => line.cgstPaise)),
+      sgst: jsonAmount(sum((line) => line.sgstPaise)),
+      igst: jsonAmount(sum((line) => line.igstPaise)),
+      transportMode: movement.transportMode === 'ROAD' ? 'Road' : movement.transportMode,
+      vehicle: movement.vehicle?.registrationNumber ?? null,
+      transporter: movement.transporter === undefined ? null : {
+        name: movement.transporter.name,
+        transporterId: movement.transporter.transporterId,
+        documentNumber: movement.transporter.documentNumber ?? null,
+        documentDate: movement.transporter.documentDate ?? null,
+      },
+    };
+  }
+
+  /**
+   * Issue #240 — a bill, ready for its e-way bill: the form filled from the bill, the check already
+   * run, and what (if anything) has been raised for it. Nothing is written.
+   */
+  async ewayBillForBill(actor: ActorContext, input: Record<string, unknown>) {
+    const invoiceId = String(input.invoice ?? '');
+    // Only the bill: the vehicle and transporter are the bill's own.
+    const movement = await this.movementFor(actor, invoiceId, { reason: 'SUPPLY' });
+    const check = await this.previewEwayBill(actor, { invoice: invoiceId, reason: 'SUPPLY' });
+    const record = await this.shop.ewayBill.forMovement(actor, movement.movementId);
+    const to = movement.shipTo ?? movement.billTo;
+    const raised = record !== null && record.acknowledgement !== undefined && !['CANCELLED', 'REJECTED', 'FAILED'].includes(record.status);
+    return {
+      invoice: invoiceId,
+      check,
+      raised: raised ? DemoApplication.ewayJson(record, this.shop.clock.now()) : null,
+      // The form, as the screen fills it. The distance box stays empty: the portal works it out.
+      form: {
+        invoice: invoiceId,
+        reason: 'SUPPLY',
+        shipToState: to.stateCode,
+        shipToAddress: to.address1,
+        shipToPlace: to.place,
+        shipToPincode: to.pincode,
+        distanceKm: '',
+        vehicle: movement.vehicle?.registrationNumber ?? '',
+      },
+    };
+  }
+
+  /**
+   * Issue #240 — the bills to choose from on the e-way bill screen: each with its customer and
+   * total, and whether it needs an e-way bill. Those that need one and have none come first.
+   */
+  async ewayBillChoices(actor: ActorContext) {
+    const companyId = this.companyOf(actor);
+    const invoices = await this.salesRepository.list(companyId, { state: 'FINAL' });
+    const records = await this.shop.ewayBill.list(actor);
+    const rows = [];
+    for (const invoice of invoices) {
+      if (invoice.number === null) continue;
+      let customer: string | null = null;
+      try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch { customer = null; }
+      let outcome: string = 'CANNOT_DECIDE';
+      try {
+        const movement = await this.movementFor(actor, invoice.id, { reason: 'SUPPLY' });
+        outcome = decideEwayApplicability(movement).outcome;
+      } catch { /* the check itself says what is wrong once the bill is chosen */ }
+      const record = records.find((candidate) => candidate.movementId === invoice.id && candidate.acknowledgement !== undefined
+        && !['CANCELLED', 'REJECTED', 'FAILED'].includes(candidate.status));
+      const status = record !== undefined ? 'RAISED' : outcome === 'REQUIRED' ? 'NEEDED' : outcome === 'NOT_REQUIRED' ? 'NOT_NEEDED' : 'ASK';
+      rows.push({
+        id: invoice.id,
+        number: invoice.number,
+        date: invoice.documentDate,
+        customer,
+        amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n),
+        status,
+        label: status === 'RAISED' ? `e-way bill ${record?.acknowledgement?.ewayBillNumber ?? ''}`
+          : status === 'NEEDED' ? 'needs one'
+            : status === 'NOT_NEEDED' ? 'not needed' : 'check it',
+      });
+    }
+    const order: Record<string, number> = { NEEDED: 0, ASK: 1, RAISED: 2, NOT_NEEDED: 3 };
+    rows.sort((left, right) => (order[left.status] ?? 9) - (order[right.status] ?? 9) || (left.date < right.date ? 1 : left.date > right.date ? -1 : 0));
+    return { invoices: rows };
   }
 
   /** Raises the e-way bill with the portal, once. */

@@ -75,12 +75,16 @@ Each of these must be on the A4 bill:
 
 ### Step 6. E-way bill (from the finished sale, #240)
 
+Press **Raise e-way bill** in the "Sale recorded" box (or under the bill). Type nothing.
+
 What must appear:
-- The bill, the Pune address, PIN 411026 and vehicle KA01AB1234 are already filled in.
-- The distance is worked out from the two PIN codes. For 840 km: 840 ÷ 200 = 4.2, and part of a day counts as a whole day, so the bill is valid for **5 days**.
+- The E-way bill screen opens on "INV/26-27/000004 · Mehta Construction Supplies · ₹50,150.00 · needs one", listed first.
+- Already filled in from the bill: our GST number and PIN 560058, Mehta's GST number, Plot 22, MIDC Bhosari, Pune 411026, Maharashtra (27), the steel with HSN 72142090, ₹42,500 + IGST ₹7,650, road, vehicle KA01AB1234. The distance box is empty.
+- The distance line says the portal works it out from PIN 560058 to PIN 411026 (0 is sent), and how long the bill lasts is shown once the portal answers.
 - No complaint about freight (#231).
-- "Valid until" is 5 days after **today**, not a date in the past (#234).
-- After Raise: a 12-digit e-way bill number, and "Print for the driver".
+- After **Raise the e-way bill**: a 12-digit e-way bill number, and "The portal worked out 840 km from PIN 560058 to PIN 411026: 840 ÷ 200 = 4.2, and part of a day counts as a whole day, so 5 days."
+- "Valid until" is 5 days after **today**, not a date in the past (#234). "Print for the driver" is offered.
+- Then type **925** in the distance and press Check: refused, "You typed 925 km, but the portal counts 840 km from PIN 560058 to PIN 411026. It accepts at most 10% more: 840 + 84 = 924 km. …". 924 is accepted.
 
 ### Step 7. Money received (Payment, #230)
 

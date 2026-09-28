@@ -167,8 +167,11 @@
                 <button type="button" class="primary-button" id="sale-bill-print" data-i18n="printBill"></button>
                 <!-- Issue #233 — a wrong bill is cancelled, never deleted; its number stays used. -->
                 <button type="button" class="secondary-button" id="sale-bill-cancel" data-i18n="cancelBill"></button>
+                <!-- Issue #240 — the e-way bill, filled in from this bill, in one press. -->
+                <button type="button" class="secondary-button" id="sale-bill-eway" hidden data-i18n="ewayFromBill"></button>
               </div>
             </div>
+            <p id="sale-bill-eway-note" hidden></p>
             <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
             <!-- Issue #183 — the whole marked set, fetched only when Print is pressed on A4, so the
                  screen keeps showing the Original the customer is given. -->
@@ -524,6 +527,7 @@
 
           <article class="panel form-panel">
             <form id="eway-form">
+              <p class="safety-note" id="eway-filled-note" hidden><span aria-hidden="true">i</span><span id="eway-filled-text"></span></p>
               <div class="field-grid">
                 <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="eway-invoices" required></select></label>
                 <label><span data-i18n="whyMoving"></span><select name="reason"><option value="SUPPLY" data-i18n="moveSupply"></option><option value="JOB_WORK" data-i18n="moveJobWork"></option><option value="BRANCH_TRANSFER" data-i18n="moveBranch"></option><option value="SALES_RETURN" data-i18n="moveReturn"></option></select><small data-i18n="ewayChallanReasonHelp"></small></label>
@@ -531,7 +535,7 @@
                 <label class="full-field"><span data-i18n="deliveryAddress"></span><input name="shipToAddress" placeholder="Plot 12, IDA Uppal" /></label>
                 <label><span data-i18n="deliveryPlace"></span><input name="shipToPlace" placeholder="Hyderabad" /></label>
                 <label><span data-i18n="deliveryPincode"></span><input name="shipToPincode" inputmode="numeric" maxlength="6" placeholder="500039" /><small data-i18n="deliveryPincodeHelp"></small></label>
-                <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" placeholder="840" /><small data-i18n="distanceHelp"></small></label>
+                <label><span data-i18n="distanceKm"></span><input name="distanceKm" type="number" min="0" max="4000" step="1" /><small data-i18n="distanceHelp"></small></label>
                 <label><span data-i18n="vehicleNumber"></span><input name="vehicle" placeholder="KA01AB1234" /><small data-i18n="vehicleHelp"></small></label>
                 <label><span data-i18n="oversized"></span><select name="oversized"><option value="no" data-i18n="answerNo"></option><option value="yes" data-i18n="answerYes"></option></select></label>
                 <label><span data-i18n="sameCity"></span><select name="withinSameCity"><option value="" data-i18n="answerNotSaid"></option><option value="yes" data-i18n="answerYes"></option><option value="no" data-i18n="answerNo"></option></select><small data-i18n="sameCityHelp"></small></label>
@@ -1362,7 +1366,7 @@
       </form>
       <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
-    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
     <!-- Issue #233 — cancelling an issued bill: what it will do, why it cannot, and the reason kept with it. -->
     <dialog id="cancel-bill-dialog" aria-labelledby="cancel-bill-title">
       <h2 id="cancel-bill-title" data-i18n="cancelBill"></h2>

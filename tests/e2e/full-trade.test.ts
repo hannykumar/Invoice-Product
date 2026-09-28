@@ -207,6 +207,8 @@ test('Step 3. Sell 450 KGS at ₹90 with ₹2,000 freight: ₹42,500 + IGST ₹7
   assertRupees(recorded.invoice.amount, '₹50,150.00', 'bill total');
   assert.ok(trade.invoiceNumber.length <= 16, `${trade.invoiceNumber} is ${trade.invoiceNumber.length} characters; the government allows 16`);
   assert.match(trade.invoiceNumber, /^INV\/26-27\/\d{6}$/);
+  // The "Sale recorded" dialog knows these goods need an e-way bill, and offers it (#240).
+  assert.equal(recorded.ewayBill.outcome, 'REQUIRED');
 
   // Stock: 500 − 450 = 50 KGS (#229)
   assert.deepEqual((await steelRows()).map((row: any) => row.closing), ['50.000']);
@@ -279,18 +281,53 @@ test('Step 5. The printed A4 bill carries every field the document lists', async
   t.diagnostic(`A4 bill ${trade.invoiceNumber}: all ${wanted.length} listed fields present, due 27 October 2026, vehicle KA01AB1234`);
 });
 
-test('Step 6. E-way bill for 840 km: valid 5 days (840 ÷ 200 = 4.2, part of a day is a day), until 2 Oct 2026, no freight complaint', async (t) => {
-  // What the E-way bill screen sends today: the bill, the distance and the vehicle typed in.
-  const dispatch = { invoice: trade.invoiceId, reason: 'SUPPLY', distanceKm: '840', vehicle: 'KA01AB1234' };
-  const check = await ok('POST', '/api/eway/preview', dispatch);
-  assert.deepEqual(check.problems, [], 'no complaint about freight or anything else (#231)');
-  assert.equal(check.ready, true);
-  assert.equal(check.validityDays, 5);
-  assertRupees(check.consignmentValue, '₹50,150.00', 'consignment value');
+test('Step 6 (filled from the bill, #240). Choosing the bill fills the parties, Pune 411026, the goods and KA01AB1234; the distance is left to the portal', async (t) => {
+  // The "Sale recorded" dialog offers the e-way bill in one press, because these goods need one.
+  const bills = await ok('GET', '/api/eway/bills');
+  const first = bills.invoices[0];
+  assert.equal(first.id, trade.invoiceId, 'a bill that needs an e-way bill and has none is listed first');
+  assert.deepEqual([first.number, first.customer, paise(first.amount), first.label], [trade.invoiceNumber, MEHTA, rs('₹50,150'), 'needs one']);
 
-  const raised = await ok('POST', '/api/eway/generate', dispatch);
+  // Only the bill is chosen: nothing is typed.
+  const opened = await ok('POST', '/api/eway/for-bill', { invoice: trade.invoiceId });
+  assert.equal(opened.raised, null);
+  assert.deepEqual(opened.form, {
+    invoice: trade.invoiceId, reason: 'SUPPLY', shipToState: '27', shipToAddress: 'Plot 22, MIDC Bhosari',
+    shipToPlace: 'Pune', shipToPincode: '411026', distanceKm: '', vehicle: 'KA01AB1234',
+  });
+  const check = opened.check;
+  assert.deepEqual(check.problems, [], 'no complaint about freight or anything else (#231)');
+  assert.equal(check.outcome, 'REQUIRED');
+  assert.equal(check.ready, true);
+  assert.equal(check.vehicleReady, true, 'KA01AB1234 comes from the bill');
+  assertRupees(check.consignmentValue, '₹50,150.00', 'consignment value');
+  const filled = check.filled;
+  assert.deepEqual([filled.from.gstin, filled.from.pincode, filled.from.stateCode], ['29AAAAA0000A1ZY', '560058', '29']);
+  assert.deepEqual([filled.to.name, filled.to.gstin, filled.to.address, filled.to.pincode, filled.to.state], [MEHTA, '27AAACM1234K1ZN', 'Plot 22, MIDC Bhosari', '411026', 'Maharashtra']);
+  assert.deepEqual([filled.document.number, filled.document.date], [trade.invoiceNumber, TODAY]);
+  assert.deepEqual(filled.lines.map((line: any) => [line.description, line.hsn, line.quantity, line.unit]).slice(0, 1), [[STEEL, '72142090', '450', 'KGS']]);
+  assertRupees(filled.taxable, '₹42,500.00', 'taxable value on the e-way bill');
+  assertRupees(filled.igst, '₹7,650.00', 'IGST on the e-way bill');
+  assert.deepEqual([filled.transportMode, filled.vehicle], ['Road', 'KA01AB1234']);
+  // The distance is not typed: 0 goes to the portal, which works it out from 560058 and 411026.
+  // Nothing has ever been sent between these two PIN codes, so no distance is made up here.
+  assert.equal(check.distance.sentKm, 0);
+  assert.deepEqual([check.distance.fromPincode, check.distance.toPincode], ['560058', '411026']);
+  assert.equal(check.distance.knownKm, undefined);
+  assert.equal(check.validityDays, null, 'validity is shown once the portal has answered');
+  t.diagnostic(`filled from ${trade.invoiceNumber}: ${filled.to.address}, ${filled.to.place} ${filled.to.pincode}, vehicle ${filled.vehicle}; distance sent 0`);
+});
+
+test('Step 6. Raise: the portal works out 840 km from the PIN codes, so valid 5 days (840 ÷ 200 = 4.2, part of a day is a day), until 2 Oct 2026', async (t) => {
+  // What the E-way bill screen sends: the form exactly as it was filled from the bill.
+  const opened = await ok('POST', '/api/eway/for-bill', { invoice: trade.invoiceId });
+  const raised = await ok('POST', '/api/eway/generate', opened.form);
   trade.ewayBillNumber = raised.ewayBillNumber;
+  assert.equal(raised.status, 'ACTIVE');
   assert.match(raised.ewayBillNumber, /^\d{12}$/, 'a 12-digit e-way bill number');
+  assert.equal(raised.raw.distanceKm, 0, 'the distance sent was 0');
+  assert.equal(raised.raw.acknowledgement.portalDistanceKm, 840);
+  assert.match(raised.message, /The portal worked out 840 km from PIN 560058 to PIN 411026: 840 ÷ 200 = 4\.2, and part of a day counts as a whole day, so 5 days\./);
   // Raised 27 Sep: five days, each ending at midnight, to the end of 27 + 5 = 2 Oct (#234).
   assert.equal(raised.validUntilLabel, '02/10/2026 23:59:59 (Indian time)');
   assert.equal(raised.validUntil, '2026-10-02T18:30:00.000Z');
@@ -299,16 +336,17 @@ test('Step 6. E-way bill for 840 km: valid 5 days (840 ÷ 200 = 4.2, part of a d
   // Print for the driver.
   const copy = await ok('POST', '/api/eway/print', { invoice: trade.invoiceId });
   assert.match(pageText(String(copy.html ?? '')), new RegExp(raised.ewayBillNumber.replace(/(\d{4})(?=\d)/g, '$1\\s?')));
-  t.diagnostic(`e-way bill ${raised.ewayBillNumber}: valid ${check.validityDays} days, until ${raised.validUntilLabel}; printed for the driver`);
-});
 
-test('Step 6 (filled from the bill). Choosing the bill fills address, PIN and vehicle, and the distance comes from the PIN codes', { todo: '#240' }, async () => {
-  // Only the bill is chosen: nothing is typed.
-  const check = await ok('POST', '/api/eway/preview', { invoice: trade.invoiceId });
-  assert.deepEqual(check.problems, []);
-  assert.equal(check.ready, true);
-  assert.equal(check.vehicleReady, true, 'KA01AB1234 comes from the bill');
-  assert.equal(check.validityDays, 5, 'the distance between 560058 and 411026, worked out, not typed');
+  // The same two PIN codes again: the portal's 840 km is now known, so the check says 5 days in
+  // advance, and a typed distance is held to 10% more: 840 + 84 = 924 km.
+  const known = await ok('POST', '/api/eway/preview', { invoice: trade.invoiceId });
+  assert.deepEqual([known.distance.knownKm, known.distance.longestAllowedKm, known.validityDays], [840, 924, 5]);
+  assert.deepEqual((await ok('POST', '/api/eway/preview', { invoice: trade.invoiceId, distanceKm: '924' })).problems, []);
+  const tooFar = await ok('POST', '/api/eway/preview', { invoice: trade.invoiceId, distanceKm: '925' });
+  assert.equal(tooFar.ready, false);
+  assert.deepEqual(tooFar.problems.map((problem: any) => problem.field), ['transDistance']);
+  assert.match(tooFar.problems[0].message, /^You typed 925 km, but the portal counts 840 km from PIN 560058 to PIN 411026\. It accepts at most 10% more: 840 \+ 84 = 924 km\./);
+  t.diagnostic(`e-way bill ${raised.ewayBillNumber}: distance sent 0, portal said 840 km, valid 5 days, until ${raised.validUntilLabel}; 925 km refused`);
 });
 
 test('Step 7. ₹30,000 received from Mehta by bank transfer: ₹50,150 − ₹30,000 = ₹20,150 still due; ABC Traders unchanged at ₹1,838', async (t) => {

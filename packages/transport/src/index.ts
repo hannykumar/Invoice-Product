@@ -2,6 +2,8 @@ export * from "./types.ts";
 export * from "./rules.ts";
 export * from "./applicability.ts";
 export * from "./validity.ts";
+// Issue #240 — the road distance, worked out from the PIN codes by the portal.
+export * from "./distance.ts";
 export * from "./payload.ts";
 export * from "./ports.ts";
 export * from "./service.ts";

@@ -11,6 +11,7 @@ import type { TransactionParticipant } from "@invoice/ledger";
 import { ConnectorError, type ConnectorGateway, type ConnectorRequest } from "../../platform/src/connectors.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
 import { readPortalTimestamp, validUntilFrom, writePortalTimestamp } from "./validity.ts";
+import { distanceFromPortalAlert, longestAllowedDistance, pinPairKey } from "./distance.ts";
 import type {
   ConsolidatedTripRecord, EwayBillAcknowledgement, EwayBillPolicy, EwayBillRecord, VehicleType,
 } from "./types.ts";
@@ -49,6 +50,8 @@ const readAck = (payload: Readonly<Record<string, unknown>>, providerRequestId: 
     // empty string here would read on screen as "valid until nothing".
     ...(text("validUpto") === "" ? {} : { validUntil: text("validUpto") }),
     ...(text("alert") === "" ? {} : { alert: text("alert") }),
+    // Issue #240 — the portal's own PIN-to-PIN distance, when its alert says it.
+    ...(distanceFromPortalAlert(text("alert") || undefined) === undefined ? {} : { portalDistanceKm: distanceFromPortalAlert(text("alert")) as number }),
     providerRequestId,
     receivedAt,
   };
@@ -247,8 +250,27 @@ interface StoredBill {
  * Indian time, cancellation after twenty-four hours is refused with 108, and a consignment an
  * officer has verified on the road cannot be cancelled at all.
  */
+/**
+ * Issue #240 — the synthetic portal's own table of road distances between PIN codes, standing in
+ * for the portal's. Only the demo company's routes are in it; any other pair is unknown to it, as a
+ * PIN the real portal has no distance for is. The app never reads this table: it only learns a
+ * distance from the portal's reply, as it would from the real one.
+ */
+export const SYNTHETIC_PIN_DISTANCES: Readonly<Record<string, number>> = Object.freeze({
+  // Peenya, Bengaluru to MIDC Bhosari, Pune — the full trade check's route.
+  [pinPairKey("560058", "411026")]: 840,
+  // Peenya, Bengaluru to Laxmi Road, Pune.
+  [pinPairKey("560058", "411030")]: 840,
+});
+
+/** The portal's code for a typed distance too far above its own PIN-to-PIN distance. */
+export const EWB_DISTANCE_TOO_HIGH_CODE = "702";
+/** The synthetic portal's code for "no distance known between these PIN codes, and 0 was sent". */
+export const EWB_DISTANCE_UNKNOWN_CODE = "721";
+
 export class SyntheticEwayBillPortal {
   readonly kind = "eway_bill" as const;
+  readonly #pinDistances: Readonly<Record<string, number>>;
   readonly #bills = new Map<string, StoredBill>();
   readonly #byConsignment = new Map<string, string>();
   readonly #seen = new Map<string, { providerRequestId: string; payload: Record<string, unknown> }>();
@@ -259,9 +281,17 @@ export class SyntheticEwayBillPortal {
   #sequence = 0;
   #rejectWith: { code: string; message: string } | null = null;
 
-  constructor(now: () => Date = () => new Date(), policy: EwayBillPolicy = DEFAULT_EWAY_BILL_POLICY) {
+  constructor(now: () => Date = () => new Date(), policy: EwayBillPolicy = DEFAULT_EWAY_BILL_POLICY, pinDistances: Readonly<Record<string, number>> = SYNTHETIC_PIN_DISTANCES) {
     this.#now = now;
     this.#policy = policy;
+    this.#pinDistances = pinDistances;
+  }
+
+  /** The portal's own distance between two PIN codes, either way round, or undefined. */
+  #pinDistance(from: unknown, to: unknown): number | undefined {
+    const a = String(from ?? "");
+    const b = String(to ?? "");
+    return this.#pinDistances[pinPairKey(a, b)] ?? this.#pinDistances[pinPairKey(b, a)];
   }
 
   setMode(mode: "healthy" | "timeout" | "outage"): void { this.#mode = mode; }
@@ -285,7 +315,10 @@ export class SyntheticEwayBillPortal {
 
     const providerRequestId = `synthetic-ewb-${(this.#sequence += 1)}`;
     const payload = this.#handle(request);
-    this.#seen.set(request.idempotencyKey, { providerRequestId, payload });
+    // Only an answer that did something is replayed. A refusal changed nothing on the portal, so
+    // the corrected request (same consignment, same key) must be looked at afresh, as the real
+    // portal would.
+    if (payload.errorCode === undefined) this.#seen.set(request.idempotencyKey, { providerRequestId, payload });
     return { providerRequestId, status: "completed", payload };
   }
 
@@ -327,10 +360,21 @@ export class SyntheticEwayBillPortal {
       };
     }
 
+    // Issue #240 — the distance, as the portal settles it: 0 means "work it out from the PIN codes",
+    // and a typed distance may be at most 10% more than the portal's own.
+    const typedKm = Number(payload.transDistance ?? 0);
+    const pinKm = this.#pinDistance(payload.fromPincode, payload.toPincode);
+    if (typedKm === 0 && pinKm === undefined) {
+      return { errorCode: EWB_DISTANCE_UNKNOWN_CODE, errorMessage: `The portal has no road distance between PIN ${String(payload.fromPincode ?? "")} and PIN ${String(payload.toPincode ?? "")}. Type the distance in kilometres.` };
+    }
+    if (pinKm !== undefined && typedKm > longestAllowedDistance(pinKm)) {
+      return { errorCode: EWB_DISTANCE_TOO_HIGH_CODE, errorMessage: `The distance between the pincodes given is too high. The portal counts ${pinKm} km and accepts at most ${longestAllowedDistance(pinKm)} km.` };
+    }
+    const distanceKm = typedKm === 0 ? (pinKm as number) : typedKm;
+
     const now = this.#now();
     // Twelve digits, as the portal issues.
     const number = String(100_000_000_000n + BigInt(this.#sequence) * 7n + 3n);
-    const distanceKm = Number(payload.transDistance ?? 0);
     const vehicleType: VehicleType = payload.vehicleType === "O" ? "ODC" : "REGULAR";
     const hasVehicle = typeof payload.vehicleNo === "string" && payload.vehicleNo !== "";
     const bill: StoredBill = {
@@ -351,6 +395,8 @@ export class SyntheticEwayBillPortal {
       ewayBillDate: bill.generatedAt,
       ...(bill.validUntil === undefined ? {} : { validUpto: bill.validUntil }),
       status: bill.status === "ACTIVE" ? "ACT" : "PARTA",
+      // The portal's own way of saying the PIN-to-PIN distance.
+      ...(pinKm === undefined ? {} : { alert: `, Distance between these two pincodes is ${pinKm}, ` }),
     };
   }
 

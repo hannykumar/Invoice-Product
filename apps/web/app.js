@@ -263,7 +263,7 @@ const copy = {
     deliveryState: "Which state are the goods going to?", deliveryStateHelp: "Every state's own limit is built in. Leave it on \"Wherever the buyer is\" unless the goods are being delivered somewhere else. If the bill already has a delivery address, that one is used.", buyerOwnState: "Wherever the buyer is",
     deliveryPlace: "Delivery town or city", deliveryAddress: "Delivery address (building, street, area)",
     deliveryPincode: "Delivery PIN code", deliveryPincodeHelp: "The PIN code of the delivery address, not the buyer's. The portal works out the route from it.",
-    distanceKm: "Road distance (km)", distanceHelp: "This decides how many days the bill lasts: one day for every 200 km, or part of it.",
+    distanceKm: "Road distance (km)", distanceHelp: "Leave it empty: the portal works the distance out from the two PIN codes. Type it only if the road really is longer; the portal accepts at most 10% more than its own distance. The distance decides how many days the bill lasts: one day for every 200 km, or part of it.", ewayFromBill: "Raise e-way bill", ewayOpen: "Open the e-way bill", ewayFilledFrom: "Filled in from bill {number}. Check it, then press the raise button.",
     vehicleNumber: "Vehicle number", vehicleHelp: "Leave blank to raise Part A now and add the lorry later. Goods may not move until it is added.",
     oversized: "Is it an oversized load?", answerYes: "Yes", answerNo: "No", answerNotSaid: "Not said",
     sameCity: "Does it stay inside one city?", sameCityHelp: "Some states, such as Gujarat, ask for no e-way bill at all inside one city. Leave it as 'not said' if you are unsure — we will ask rather than guess.",
@@ -591,7 +591,7 @@ const copy = {
     deliveryState: "Maal kis rajya mein ja raha hai?", deliveryStateHelp: "Har rajya ki apni limit isme bani hui hai. Agar maal kharidar ke apne pate par hi ja raha hai to ise waise hi rehne den. Agar bill par pehle se delivery ka pata hai, to wahi liya jayega.", buyerOwnState: "Jahan kharidar hai",
     deliveryPlace: "Delivery ka shehar", deliveryAddress: "Delivery ka pata (building, gali, ilaka)",
     deliveryPincode: "Delivery ka PIN code", deliveryPincodeHelp: "Delivery wale pate ka PIN code, kharidar ka nahin. Portal isi se raasta nikalta hai.",
-    distanceKm: "Sadak ki doori (km)", distanceHelp: "Isse tay hota hai bill kitne din chalega: har 200 km ya uske hisse par ek din.",
+    distanceKm: "Sadak ki doori (km)", distanceHelp: "Khali chhod den: portal dono PIN code se doori khud nikalta hai. Tabhi bharen jab sadak sach mein lambi ho; portal apni doori se zyada se zyada 10% zyada maanta hai. Doori se tay hota hai bill kitne din chalega: har 200 km ya uske hisse par ek din.", ewayFromBill: "E-way bill banayein", ewayOpen: "E-way bill kholen", ewayFilledFrom: "Bill {number} se bhara gaya. Jaanch len, phir banane ka button dabayein.",
     vehicleNumber: "Gaadi ka number", vehicleHelp: "Khali chhod den to abhi Part A ban jayega aur gaadi baad mein jodi ja sakti hai. Gaadi jude bina maal nahin hil sakta.",
     oversized: "Kya load bahut bada hai?", answerYes: "Haan", answerNo: "Nahin", answerNotSaid: "Bataya nahin",
     sameCity: "Kya maal ek hi shehar mein reh raha hai?", sameCityHelp: "Kuch rajya, jaise Gujarat, ek hi shehar ke andar koi e-way bill nahin maangte. Pakka nahin to 'bataya nahin' rehne den — hum poochenge, andaza nahin lagayenge.",
@@ -852,6 +852,9 @@ function openView(view) {
   if (target === "challan") openChallans();
   // The document picker must include anything issued since sign-in, invoices and challans alike.
   if (target === "eway") loadEwayRoad();
+  // Issue #240 — back on the bill after raising its e-way bill, the line under it says so.
+  // (Guarded: the first view opens while the page is still loading, before the bill state exists.)
+  try { if (target === "sale" && billOnScreen.invoiceId) showSaleBillEway(billOnScreen.invoiceId, false); } catch { /* not loaded yet */ }
   if (target === "itc") openItc();
   if (target === "gst-returns") openGstReturns();
   if (target === "bank-feeds") loadBankFeeds();
@@ -1413,12 +1416,23 @@ function showDialog(result, mode) {
   download.textContent = copy[state.locale].downloadPdf;
   download.dataset.invoice = result.invoice?.id || "";
   download.dataset.number = result.invoice?.number || "invoice";
+  // Issue #240 — goods that need an e-way bill get it in one press, filled in from this bill.
+  const eway = document.querySelector("#review-eway");
+  eway.hidden = !(mode === "recorded" && result.ewayBill?.outcome === "REQUIRED" && result.invoice?.id);
+  eway.textContent = copy[state.locale].ewayFromBill;
+  eway.dataset.invoice = result.invoice?.id || "";
   confirm.disabled = false;
   confirm.textContent = copy[state.locale].recordOnce;
   dialog.dataset.mode = mode;
   dialog.setAttribute("aria-busy", String(mode === "loading"));
   if (!dialog.open) dialog.showModal();
 }
+
+document.querySelector("#review-eway").addEventListener("click", (event) => {
+  const invoiceId = event.currentTarget.dataset.invoice;
+  document.querySelector("#review-dialog").close();
+  if (invoiceId) openEwayForBill(invoiceId);
+});
 
 document.querySelector("#review-download").addEventListener("click", async (event) => {
   const button = event.currentTarget;
@@ -2728,6 +2742,7 @@ async function showSaleBill(invoiceId) {
     const cancelButton = document.querySelector("#sale-bill-cancel");
     if (cancelButton) { cancelButton.hidden = printed.cancelled === true; cancelButton.dataset.number = printed.number; }
     document.querySelector("#sale-bill-frame").srcdoc = printed.html;
+    showSaleBillEway(invoiceId, printed.cancelled === true);
     // Issue #183 — the button says how many sheets one press will produce, because a goods bill is
     // prepared in triplicate and a services bill in duplicate, and the person pressing Print is
     // entitled to know before the paper comes out.
@@ -2744,6 +2759,41 @@ async function showSaleBill(invoiceId) {
     note.textContent = localizedError(error);
   }
 }
+
+// Issue #240 — under the bill: its e-way bill in one press when the goods need one, the number when
+// it has been raised, and a plain "not needed, because…" when it is not.
+async function showSaleBillEway(invoiceId, cancelled) {
+  const button = document.querySelector("#sale-bill-eway");
+  const note = document.querySelector("#sale-bill-eway-note");
+  if (!button || !note) return;
+  button.hidden = true;
+  note.hidden = true;
+  if (cancelled) return;
+  try {
+    const found = await api("/api/eway/for-bill", { method: "POST", body: JSON.stringify({ invoice: invoiceId }) });
+    if (billOnScreen.invoiceId !== invoiceId) return;
+    button.dataset.invoice = invoiceId;
+    if (found.raised) {
+      button.hidden = false;
+      button.textContent = copy[state.locale].ewayOpen;
+      note.hidden = false;
+      note.textContent = `${found.raised.title}: ${found.raised.ewayBillNumber}${found.raised.validUntilLabel ? ` · ${found.raised.validUntilLabel}` : ""}`;
+    } else if (found.check.outcome === "REQUIRED") {
+      button.hidden = false;
+      button.textContent = copy[state.locale].ewayFromBill;
+      note.hidden = false;
+      note.textContent = found.check.reason;
+    } else {
+      note.hidden = false;
+      note.textContent = `${found.check.title}. ${found.check.reason}`;
+    }
+  } catch { /* the bill stands whatever the e-way bill check says; the e-way bill screen still works */ }
+}
+
+document.querySelector("#sale-bill-eway")?.addEventListener("click", (event) => {
+  const invoiceId = event.currentTarget.dataset.invoice;
+  if (invoiceId) openEwayForBill(invoiceId);
+});
 
 // ------------------------------------------------- issue #233: cancelling a wrong bill
 //
@@ -4470,7 +4520,23 @@ function renderEway(result, mode) {
 
   if (mode === "preview") {
     if (result.threshold) detail.append(detailRow("Limit compared against", money(result.threshold.amount), result.threshold.note || undefined));
-    if (result.validityDays) detail.append(detailRow("Days it would be valid for", String(result.validityDays), "One day for every 200 km, or part of it. The clock starts when a vehicle goes on."));
+    // Issue #240 — what the e-way bill will carry, all of it from the bill, for the person to confirm.
+    const filled = result.filled;
+    if (filled && result.outcome === "REQUIRED") {
+      const place = (who) => `${who.name}${who.gstin && who.gstin !== "URP" ? ` · GSTIN ${who.gstin}` : ""}`;
+      const where = (who) => `${who.address}, ${who.place} ${who.pincode}, ${who.state} (${who.stateCode})`;
+      if (filled.document) detail.append(detailRow("Bill", `${filled.document.number} · ${filled.document.date}`));
+      detail.append(detailRow("From", place(filled.from), where(filled.from)));
+      detail.append(detailRow("To", place(filled.billTo), where(filled.to)));
+      filled.lines.forEach((line) => detail.append(detailRow(line.description, `${line.quantity} ${line.unit} · ${money(line.value)}`, `HSN ${line.hsn} · tax ${money(line.tax)}`)));
+      detail.append(detailRow("Value and tax", `${money(filled.taxable)} + tax ${money(filled.cgst + filled.sgst + filled.igst)}`, [filled.igst ? `IGST ${money(filled.igst)}` : "", filled.cgst ? `CGST ${money(filled.cgst)} · SGST ${money(filled.sgst)}` : ""].filter(Boolean).join(" · ") || undefined));
+      detail.append(detailRow("Transport", `${filled.transportMode}${filled.vehicle ? ` · vehicle ${filled.vehicle}` : " · no vehicle yet"}`, filled.transporter ? `${filled.transporter.name} · ${filled.transporter.transporterId}${filled.transporter.documentNumber ? ` · LR ${filled.transporter.documentNumber}` : ""}` : undefined));
+    }
+    if (result.distance && result.outcome === "REQUIRED") {
+      detail.append(detailRow("Distance", result.distance.sentKm === 0 ? "Worked out by the portal (0 is sent)" : `${result.distance.sentKm} km, typed`, result.distance.refusal ?? result.distance.message));
+    }
+    if (result.validityDays) detail.append(detailRow("Days it would be valid for", String(result.validityDays), `${result.validitySum ? `${result.validitySum}. ` : ""}Each day ends at midnight. The clock starts when a vehicle goes on.`));
+    else if (result.outcome === "REQUIRED" && result.distance?.sentKm === 0) detail.append(detailRow("Days it would be valid for", "Shown once the portal answers", "The portal works the distance out when the e-way bill is raised: one day for every 200 km, or part of it."));
     result.problems.forEach((problem) => detail.append(detailRow("Needs fixing", problem.message, problem.field)));
   } else {
     if (result.ewayBillNumber) detail.append(detailRow("E-way bill number", result.ewayBillNumber, "Keep this number with the driver."));
@@ -4628,6 +4694,52 @@ function showEwayStateRule() {
   line.textContent = parts.join(" ");
 }
 
+// Issue #240 — which bill the e-way bill screen is on, and which bill the form was last filled from.
+const ewayChoice = { wanted: null, filledFor: null };
+
+/** Opens the e-way bill screen on one bill, everything filled in from it and the check already run. */
+async function openEwayForBill(invoiceId) {
+  ewayChoice.wanted = invoiceId;
+  ewayChoice.filledFor = null;
+  openView("eway");
+  await loadEwayRoad();
+}
+
+/** Fills the e-way bill form from the bill, and shows the check (or the e-way bill already raised). */
+async function fillEwayFromBill(invoiceId) {
+  const form = document.querySelector("#eway-form");
+  if (!form || !invoiceId) return;
+  try {
+    const found = await api("/api/eway/for-bill", { method: "POST", body: JSON.stringify({ invoice: invoiceId }) });
+    Object.entries(found.form).forEach(([name, value]) => {
+      const field = form.elements.namedItem(name);
+      if (field && name !== "invoice") field.value = value;
+    });
+    ewayChoice.filledFor = invoiceId;
+    const note = document.querySelector("#eway-filled-note");
+    note.hidden = false;
+    document.querySelector("#eway-filled-text").textContent = text("ewayFilledFrom", { number: found.check.documentNumber });
+    showEwayStateRule();
+    if (found.raised) renderEway(found.raised, "record"); else renderEway(found.check, "preview");
+  } catch (error) {
+    showDialog({ title: "The bill could not be filled in", message: error.message }, "failed");
+  }
+}
+
+document.querySelector("#eway-invoices")?.addEventListener("change", (event) => {
+  const select = event.currentTarget;
+  ewayChoice.wanted = select.value;
+  if (select.selectedOptions[0]?.dataset.kind === "invoice") { fillEwayFromBill(select.value); return; }
+  // A delivery challan brings its own details; the bill's are cleared so none of them carry over.
+  ewayChoice.filledFor = null;
+  ["shipToState", "shipToAddress", "shipToPlace", "shipToPincode", "distanceKm", "vehicle"].forEach((name) => {
+    const field = document.querySelector("#eway-form").elements.namedItem(name);
+    if (field) field.value = "";
+  });
+  document.querySelector("#eway-filled-note").hidden = true;
+  document.querySelector("#eway-panel").hidden = true;
+});
+
 async function loadEwayRoad() {
   const list = document.querySelector("#eway-road");
   const select = document.querySelector("#eway-invoices");
@@ -4635,14 +4747,19 @@ async function loadEwayRoad() {
   try {
     // Issue #141 — a delivery challan can be the document on the lorry, in place of an invoice. Both
     // lists are fetched before the picker is touched, so two loads racing cannot interleave rows.
-    const [{ invoices }, { challans }] = await Promise.all([api("/api/einvoices/invoices"), api("/api/challans/movable")]);
+    // Issue #240 — each bill with its customer, its total and whether it needs an e-way bill; the ones
+    // that need one and have none come first.
+    const [{ invoices }, { challans }] = await Promise.all([api("/api/eway/bills"), api("/api/challans/movable")]);
     const chosen = select.value;
-    const option = (value, label) => Object.assign(document.createElement("option"), { value, textContent: label });
+    const make = (value, label, kind) => { const entry = document.createElement("option"); entry.value = value; entry.textContent = label; entry.dataset.kind = kind; return entry; };
     select.replaceChildren(
-      ...invoices.map((invoice) => option(invoice.id, `${invoice.number} · ${money(invoice.amount)}`)),
-      ...challans.map((challan) => option(challan.id, `${copy[state.locale].navChallan} ${challan.number} · ${money(challan.value)}`)),
+      ...invoices.map((invoice) => make(invoice.id, [invoice.number, invoice.customer, money(invoice.amount), invoice.label].filter(Boolean).join(" · "), "invoice")),
+      ...challans.map((challan) => make(challan.id, `${copy[state.locale].navChallan} ${challan.number} · ${money(challan.value)}`, "challan")),
     );
-    if ([...select.options].some((entry) => entry.value === chosen)) select.value = chosen;
+    const wanted = ewayChoice.wanted ?? chosen;
+    if ([...select.options].some((entry) => entry.value === wanted)) select.value = wanted;
+    // Issue #240 — the chosen bill fills the form by itself; nobody retypes what the bill says.
+    if (select.selectedOptions[0]?.dataset.kind === "invoice" && ewayChoice.filledFor !== select.value) await fillEwayFromBill(select.value);
 
     const { consignments } = await api("/api/eway/on-the-road");
     list.replaceChildren();

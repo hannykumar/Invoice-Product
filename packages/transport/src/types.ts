@@ -262,6 +262,11 @@ export interface EwayBillAcknowledgement {
   readonly receivedAt: string;
   /** Only set when the portal returned an alert alongside a successful generation. */
   readonly alert?: string;
+  /**
+   * Issue #240 — the road distance the portal itself counts between the two PIN codes, read from
+   * its alert. Absent when the reply did not say.
+   */
+  readonly portalDistanceKm?: number;
 }
 
 /** The government's four cancellation reasons. */
@@ -295,7 +300,11 @@ export interface EwayBillRecord {
   readonly consignmentValuePaise: Paise;
   readonly fromStateCode: string;
   readonly toStateCode: string;
+  /** The distance sent to the portal. 0 means the portal worked it out from the PIN codes. */
   readonly distanceKm?: number;
+  /** Issue #240 — the PIN codes the goods leave from and go to, as sent to the portal. */
+  readonly fromPincode?: string;
+  readonly toPincode?: string;
   readonly acknowledgement?: EwayBillAcknowledgement;
   /** Every vehicle this consignment has travelled on, oldest first. */
   readonly vehicleLegs: readonly EwayVehicleLeg[];
