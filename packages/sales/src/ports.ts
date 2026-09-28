@@ -20,6 +20,11 @@ export interface SalesRepository {
    * draft is normal in a shop; silently overwriting one of them is not.
    */
   update(invoice: SalesInvoice, expectedVersion: number): Promise<void>;
+  /**
+   * Issue #256 — forgets a bill that was never issued. Only ever called for an unnumbered draft
+   * with no entry in the books (see `SalesService.discardDraft`); an issued bill is never removed.
+   */
+  remove(companyId: CompanyId, id: string): Promise<void>;
   list(companyId: CompanyId, filter?: { partyId?: string; state?: SalesInvoice['state'] }): Promise<SalesInvoice[]>;
 }
 

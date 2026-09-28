@@ -1479,6 +1479,10 @@ document.querySelectorAll(".draft-form").forEach((form) => {
       // Issue #233 — one key per review. Record sends this same review, so pressing it twice issues
       // one bill; the next review is a new sale with a new key.
       input.requestId = newPaymentRequestId();
+      // Issue #256 — the review this one replaces. It was never issued, so the server forgets it
+      // instead of keeping it as "a bill waiting".
+      if (form.dataset.saleReview) input.replaces = form.dataset.saleReview;
+      form.dataset.saleReview = input.requestId;
     }
     // Issue #228 — and a supplier bill's lines, each with the GST rate printed on it.
     if (form.dataset.draft === "purchase") input.lines = JSON.stringify(purchaseLineValues());

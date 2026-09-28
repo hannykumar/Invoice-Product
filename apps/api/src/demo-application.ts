@@ -1769,26 +1769,55 @@ export class DemoApplication {
     // pressing Record twice issues one bill. The screen never uses the customer's own reference as
     // the key: two real sales can carry the same order number, and the second must not come back as
     // the first. (Callers without a review key still fall back to it, as before.)
+    // Issue #256 — this review replaces the one the same sale form showed before it. That earlier
+    // review was never issued, so it is forgotten rather than left behind as "a bill waiting".
+    const replaced = String(input.replaces ?? '').trim();
+    if (replaced !== '' && replaced !== String(input.requestId ?? '')) {
+      await this.discardReview(actor, `web-sale:${replaced}`, 'a later review of the same sale replaced it');
+    }
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.requestId || input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
-    if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
-    const checked = await this.checkSale(actor, draft);
-    // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
-    // frozen with exactly what the screen showed rather than with a second reading of the form.
-    const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
-    const delivery = deliveryDetails(this.config.companyId, customer, input);
-    this.deliveries.set(draft.id, delivery);
-    return {
-      ...checked,
-      placeOfSupply: delivery.placeOfSupplyReason,
-      // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
-      exportSupply: exportSale === null ? null : {
-        kind: exportSale.kind,
-        endorsement: EXPORT_SUPPLIES[exportSale.kind].endorsement,
-      },
-      // Whether this consignment may not leave without an e-way bill. It never blocks the bill:
-      // an e-way bill is raised against an issued invoice number, so the bill comes first.
-      ewayBill: await this.ewayReminder(actor, draft, delivery),
-    };
+    try {
+      if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
+      const checked = await this.checkSale(actor, draft);
+      // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
+      // frozen with exactly what the screen showed rather than with a second reading of the form.
+      const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+      const delivery = deliveryDetails(this.config.companyId, customer, input);
+      this.deliveries.set(draft.id, delivery);
+      return {
+        ...checked,
+        placeOfSupply: delivery.placeOfSupplyReason,
+        // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
+        exportSupply: exportSale === null ? null : {
+          kind: exportSale.kind,
+          endorsement: EXPORT_SUPPLIES[exportSale.kind].endorsement,
+        },
+        // Whether this consignment may not leave without an e-way bill. It never blocks the bill:
+        // an e-way bill is raised against an issued invoice number, so the bill comes first.
+        ewayBill: await this.ewayReminder(actor, draft, delivery),
+      };
+    } catch (error) {
+      // Issue #256 — a review the app refused (600 KGS asked, 50 KGS in the godown) saved nothing
+      // from the person's point of view, so nothing of it is kept: no draft for Reports to call
+      // "a bill waiting". It never had a number, so the number series is untouched.
+      // The refusal is what the person needs to read, so a failure to tidy up never replaces it.
+      await this.discardReview(actor, draft.idempotencyKey, 'the app refused the review').catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /**
+   * Issue #256 — forgets a sale review that was never issued, found by its review key. Only the
+   * person who made the review can have it forgotten, only while it is still unissued, and a bill
+   * held for approval is never touched: that one was held on purpose.
+   */
+  private async discardReview(actor: ActorContext, key: string, reason: string): Promise<void> {
+    const review = await this.salesRepository.findByIdempotencyKey(this.companyOf(actor), key);
+    if (review === null || review.createdBy !== actor.userId) return;
+    if ((review.state !== 'DRAFT' && review.state !== 'NEEDS_INFO') || review.number !== null) return;
+    await this.sales.discardDraft(actor, review.id, reason);
+    this.exportSales.delete(review.id);
+    this.deliveries.delete(review.id);
   }
 
   /**
