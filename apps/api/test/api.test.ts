@@ -1041,6 +1041,17 @@ test('a GST return cannot be exported before it is approved, and approving fixes
   assert.equal(approved.body.status, 'APPROVED');
   assert.ok(approved.body.approvedAt !== null);
 
+  // And the books cannot move under it quietly: a new April bill is reported, not absorbed.
+  // Issue #266 — the review of that bill says the approved return has to be approved again.
+  const before = approved.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0);
+  const late = { ...sale, reference: 'GSTR-30-LATE', quantity: '1' };
+  const lateReview = await request('POST', '/api/sales/preview', late, owner);
+  assert.match(lateReview.body.dateNotice, /The GST return for April 2026 is already approved without it/);
+  assert.equal((await request('POST', '/api/sales/record', late, owner)).status, 200);
+  const after = await request('POST', '/api/gst-returns', { period: '2026-04' }, owner);
+  assert.ok(after.body.drift !== null);
+  assert.equal(after.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0), before);
+
   // The manual export path, which must work with no licensed intermediary anywhere in the picture.
   const file = await request('POST', '/api/gst-returns/export', { period: '2026-04', returnType: 'GSTR1' }, owner);
   assert.equal(file.status, 200);
@@ -1048,12 +1059,10 @@ test('a GST return cannot be exported before it is approved, and approving fixes
   assert.equal(file.body.payload.fp, '042026');
   assert.match(file.body.message, /Nothing has been sent from here/);
 
-  // And the books cannot move under it quietly: a new April bill is reported, not absorbed.
-  const before = approved.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0);
-  assert.equal((await request('POST', '/api/sales/record', { ...sale, reference: 'GSTR-30-LATE', quantity: '1' }, owner)).status, 200);
-  const after = await request('POST', '/api/gst-returns', { period: '2026-04' }, owner);
-  assert.ok(after.body.drift !== null);
-  assert.equal(after.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0), before);
+  // Issue #266 — once the file has been downloaded for filing, no new bill can be dated in April.
+  const refused = await request('POST', '/api/sales/record', { ...sale, reference: 'GSTR-30-AFTER-EXPORT', quantity: '1' }, owner);
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.code, 'SALE_DATE_MONTH_CLOSED');
 });
 
 test('GST return APIs require both a session and the dedicated permission', async () => {

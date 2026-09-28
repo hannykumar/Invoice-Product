@@ -204,6 +204,8 @@ import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
 const WHOLE_BILL = '__whole__';
 const LOCKED_RETURN_STATES: ReadonlySet<string> = new Set(['APPROVED', 'EXPORTED', 'SUBMITTING', 'FILED', 'SUBMISSION_FAILED']);
+/** Issue #266 — a return in one of these states has left for the government; the words say how far. */
+const SENT_RETURN_STATES: Readonly<Record<string, string>> = { EXPORTED: 'downloaded for filing', SUBMITTING: 'sent for filing', FILED: 'filed' };
 
 const paise = (value: unknown): bigint => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
@@ -488,6 +490,11 @@ export class DemoApplication {
   private readonly deliveries = new Map<string, DeliveryDetails>();
   /** Issue #233 — what stops a bill being cancelled; the same guard the sales service asks. */
   private cancelGuard: CancellationGuardPort = { async blockers() { return []; } };
+  /**
+   * Issue #266 — the GST returns as prepared on the GST returns screen, so a new bill is never
+   * dated into a month whose return is already approved or filed.
+   */
+  private returnMonths: InMemoryReturnPreparations = new InMemoryReturnPreparations();
   /**
    * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
    * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
@@ -1129,6 +1136,7 @@ export class DemoApplication {
 
     const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale, exportSales);
     app.cancelGuard = cancellationGuard;
+    app.returnMonths = gstPreparations;
     await app.seed();
     return app;
   }
@@ -1778,6 +1786,8 @@ export class DemoApplication {
     const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.requestId || input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
     try {
       if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
+      // Issue #266 — the date the bill will carry, said plainly when it is not today.
+      const dateNotice = await this.saleDateNotice(actor, draft.documentDate);
       const checked = await this.checkSale(actor, draft);
       // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
       // frozen with exactly what the screen showed rather than with a second reading of the form.
@@ -1786,6 +1796,7 @@ export class DemoApplication {
       this.deliveries.set(draft.id, delivery);
       return {
         ...checked,
+        dateNotice,
         placeOfSupply: delivery.placeOfSupplyReason,
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
@@ -1807,6 +1818,54 @@ export class DemoApplication {
       await this.discardReview(actor, draft.idempotencyKey, 'the app refused the review').catch(() => undefined);
       throw error;
     }
+  }
+
+  /**
+   * Issue #266 — what the date on a new bill means, checked on every review and again at Record.
+   *
+   *   - **After today: refused.** A tax invoice carries the date it is issued. A bill issued today
+   *     cannot say tomorrow, and a date in the next financial year would also take a number from
+   *     next year's series.
+   *   - **In a month whose GST return has gone to the government (downloaded for filing, being
+   *     filed, or filed): refused.** That return went without this bill, so the bill would be missing
+   *     from it. A correction to a filed month is a credit or debit note, never a new bill dated back.
+   *   - **In a month whose return is approved but not yet sent: allowed, and said.** The GST returns
+   *     screen already reports the change (#30), and the return is reopened and approved again.
+   *   - **Before today: allowed, and said.** A bill can be made the day after the goods left, and the
+   *     demo books hold older bills, so an earlier date is not refused; the review says it in one line.
+   *   - **Before a bill already issued: allowed, and said.** The numbers stay in one unbroken run;
+   *     the review says this bill will have a later number than a bill with a later date.
+   */
+  private async saleDateNotice(actor: ActorContext, date: IsoDate): Promise<string | null> {
+    const today = appToday();
+    if (date > today) {
+      throw invalid('SALE_DATE_AFTER_TODAY', `A bill cannot be dated after today. This one says ${formatClaimDate(date)}, and today is ${formatClaimDate(today)}. Date it today, or the day the goods left if that was earlier.`);
+    }
+    const companyId = this.companyOf(actor);
+    const period = taxPeriodOf(date);
+    const month = formatTaxPeriod(period);
+    let approvedMonth = false;
+    for (const returnType of ['GSTR1', 'GSTR3B'] as const) {
+      const prepared = await this.returnMonths.find(companyId, period, returnType);
+      if (prepared === null || !LOCKED_RETURN_STATES.has(prepared.state)) continue;
+      const sent = SENT_RETURN_STATES[prepared.state];
+      if (sent !== undefined) {
+        throw notAllowed('SALE_DATE_MONTH_CLOSED', `This bill says ${formatClaimDate(date)}, but the GST return for ${month} has already been ${sent}, so a new bill cannot be dated in that month. Date it today, ${formatClaimDate(today)}.`);
+      }
+      approvedMonth = true;
+    }
+    if (date === today) return null;
+    const lines = [`This bill will be dated ${formatClaimDate(date)}, which is before today, ${formatClaimDate(today)}.`];
+    if (approvedMonth) {
+      lines.push(`The GST return for ${month} is already approved without it, so that return will have to be reopened and approved again.`);
+    }
+    const later = (await this.salesRepository.list(companyId))
+      .filter((bill) => bill.number !== null && financialYearOf(bill.documentDate) === financialYearOf(date) && bill.documentDate > date)
+      .sort((a, b) => b.documentDate.localeCompare(a.documentDate))[0];
+    if (later !== undefined) {
+      lines.push(`Bill ${later.number} is already issued with the date ${formatClaimDate(later.documentDate)}, so this bill will get a later number with an earlier date.`);
+    }
+    return lines.join(' ');
   }
 
   /**
