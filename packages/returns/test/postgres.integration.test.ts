@@ -110,6 +110,11 @@ test('note numbers run through one financial year on PostgreSQL without a unique
     assert.equal(first?.documentDate, '2026-04-10');
     assert.equal(first?.lines[0]?.quantity.scaled, 1_000000n);
     assert.equal(first?.totals.total.minor, 11800n);
+    // Issue #249 — the supplier's credit note, added after the return, is saved and read back.
+    const dn = saved.find((note) => note.number === 'DN/26-27/0000001');
+    assert.equal(dn?.supplierCreditNote, null);
+    await service.recordSupplierCreditNote(actor, { noteId: dn!.id, number: 'SUP-CN-7', date: isoDate('2026-04-12') });
+    assert.deepEqual((await repository.findById(company, dn!.id))?.supplierCreditNote, { number: 'SUP-CN-7', date: '2026-04-12' });
     const counters = await db.query(
       "SELECT scope, value FROM ledger_sequence WHERE company_id = $1 AND (scope LIKE 'sales-return:%' OR scope LIKE 'purchase-return:%') ORDER BY scope",
       [company],

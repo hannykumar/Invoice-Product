@@ -127,6 +127,26 @@ export interface BookPurchaseDocument {
   readonly voucherId: string | null;
   /** The bill was reversed in our books after posting. */
   readonly reversed: boolean;
+  /**
+   * Issue #249 — goods we sent back to the supplier, handed over as a `CREDIT_NOTE`: the bill the
+   * return corrects. The credit on that bill comes down by this document's tax from the month of the
+   * return, whether or not the supplier's own note has reached the government's record yet.
+   */
+  readonly original?: {
+    readonly sourceKind: string;
+    readonly sourceId: string;
+    readonly number: string;
+    readonly date: IsoDate;
+  } | null;
+  /** Issue #249 — what went back, in words ("50 KGS"), for the sentence on the line. */
+  readonly goodsReturned?: string | null;
+  /** Issue #249 — our own return note's number (the debit note), shown beside the supplier's. */
+  readonly ourReference?: string | null;
+  /**
+   * Issue #249 — the supplier's credit-note number is not known yet, so `number` is our own debit
+   * note's number and cannot be expected to appear in the government's record.
+   */
+  readonly awaitingSupplierNote?: boolean;
 }
 
 // ---------------------------------------------------------------------------- matching
@@ -308,7 +328,11 @@ export type ItcFindingCode =
   /** Section 16(4) — the last date for claiming credit on this bill has gone by. */
   | 'ITC_TIME_BARRED'
   /** The last date is close and these bills have not been claimed yet. */
-  | 'ITC_CLAIM_DEADLINE_NEAR';
+  | 'ITC_CLAIM_DEADLINE_NEAR'
+  /** Issue #249 — goods went back; the credit came down; the supplier's note is not in 2B yet. */
+  | 'ITC_SUPPLIER_CREDIT_NOTE_AWAITED'
+  /** Issue #249 — goods went back against a bill whose own credit is still waiting. */
+  | 'ITC_RETURN_WAITS_WITH_BILL';
 
 /** One row of the reconciliation: two pieces of paper, or one and a hole where the other should be. */
 export interface ReconciliationLine {
@@ -424,6 +448,19 @@ export interface Gstr3bLinkage {
   readonly contributions: readonly SourceRef[];
   /** Said on the 3B screen, so nobody files thinking the held-back credit was simply missed. */
   readonly caution: Bilingual;
+  /**
+   * Issue #249 — why the credit on the return can differ from the input GST the ledger moved this
+   * month, for the return's books-versus-return line on purchases. Both are net of credit notes.
+   *
+   * `fromEarlierMonths` is credit on this return for documents dated before the month (a bill that
+   * waited on its supplier and was settled now). `notClaimedThisMonth` is credit on this month's
+   * documents that is not on the return (held back, too late, or a second copy). The ledger's figure
+   * plus the first, less the second, is what the return should show.
+   */
+  readonly booksExplanation?: {
+    readonly fromEarlierMonths: TaxAmounts;
+    readonly notClaimedThisMonth: TaxAmounts;
+  };
 }
 
 // ---------------------------------------------------------------------------- policy

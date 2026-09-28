@@ -14,7 +14,7 @@ import {
   validateNoteSeries,
   type NoteSeries,
 } from './note-series.ts';
-import { RETURN_PERMISSIONS, isChargeLine, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts } from './model.ts';
+import { RETURN_PERMISSIONS, isChargeLine, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts, type SupplierCreditNoteRef } from './model.ts';
 import type { OriginalReturnLine, PurchaseReturnSourcePort, ReturnInventoryPort, ReturnNoteRepository, SalesReturnSourcePort } from './ports.ts';
 
 export interface SalesReturnLineInput {
@@ -62,7 +62,20 @@ export interface PurchaseReturnCommand {
   readonly reason: string;
   readonly lines: readonly PurchaseReturnLineInput[];
   readonly periodOverrideReason?: string;
+  /**
+   * Issue #249 — the supplier's own credit note for these goods, when it is already in hand. It is
+   * usually not: the supplier sends it later, and it is added then with `recordSupplierCreditNote`.
+   */
+  readonly supplierCreditNote?: { readonly number: string; readonly date: IsoDate } | null;
 }
+
+/**
+ * Issue #249 — a supplier's note number reduced to what two people typing it would agree on, the
+ * same rule the purchase comparison uses to match it against the government's record (case,
+ * punctuation and leading zeros set aside), so "SRS-CN-1" and "srs/cn/001" are one note.
+ */
+const normaliseNoteNumber = (value: string): string =>
+  value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/0*(\d+)/g, (_all, digits: string) => String(BigInt(digits)));
 
 export type PurchaseReturnPreview = SalesReturnPreview;
 
@@ -252,6 +265,9 @@ export class ReturnService {
     const original = await this.#purchases.findPurchaseDocument(actor.companyId, command.originalBillId);
     if (original === null) throw notFound('RETURN_ORIGINAL_NOT_FOUND', 'We could not find that supplier bill in this business.');
     if (original.state !== 'FINAL') throw conflict('RETURN_ORIGINAL_NOT_FINAL', 'A reversed supplier bill cannot have a new return note.');
+    if (command.supplierCreditNote !== undefined && command.supplierCreditNote !== null) {
+      await this.#checkSupplierCreditNote(actor, original.partyId, original.date, command.supplierCreditNote, null);
+    }
     if (original.reverseCharge && original.lines.some((line) => line.ineligibleTax.minor !== 0n)) {
       throw invalid('RETURN_RCM_INELIGIBLE_REVIEW_REQUIRED', 'This reverse-charge bill includes GST that was added to cost. Put this return in the exception queue for a tax review.');
     }
@@ -333,6 +349,9 @@ export class ReturnService {
         complianceStatus: checked.complianceStatus, createdBy: actor.userId, createdAt: at,
         idempotencyKey: command.idempotencyKey,
         summary: `${number} reduces what is owed to ${original.partyName} by ${formatINR(checked.totals.total)} against ${original.number}.`,
+        supplierCreditNote: command.supplierCreditNote === undefined || command.supplierCreditNote === null
+          ? null
+          : { number: command.supplierCreditNote.number.trim(), date: command.supplierCreditNote.date },
       };
       await this.#repo.insert(note);
       return { note, voucher: posted.voucher };
@@ -345,6 +364,75 @@ export class ReturnService {
       ...(command.periodOverrideReason === undefined ? {} : { overrideReason: command.periodOverrideReason }),
     });
     return { note: outcome.note, deduplicated: false };
+  }
+
+  /**
+   * Issue #249 — adds the supplier's credit-note number and date to a purchase return that was
+   * recorded without them, or corrects a mistyped one.
+   *
+   * Only the reference changes. The debit note's money, its voucher and the credit it took off are
+   * posted and stay exactly as they are; the number is what the purchase comparison uses to find
+   * the supplier's note in the government's record.
+   */
+  async recordSupplierCreditNote(
+    actor: ActorContext,
+    input: { readonly noteId: string; readonly number: string; readonly date: IsoDate },
+  ): Promise<ReturnNote> {
+    this.#permissions.require(actor, RETURN_PERMISSIONS.create, "record the supplier's credit note");
+    const note = await this.#repo.findById(actor.companyId, input.noteId);
+    if (note === null) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
+    if (note.kind !== 'PURCHASE_RETURN') {
+      throw invalid('RETURN_NOT_A_PURCHASE_RETURN', "Only goods sent back to a supplier have a supplier's credit note.");
+    }
+    const reference: SupplierCreditNoteRef = { number: input.number.trim(), date: input.date };
+    const current = note.supplierCreditNote ?? null;
+    if (current !== null && current.number === reference.number && current.date === reference.date) return note;
+    await this.#checkSupplierCreditNote(actor, note.partyId, note.originalDocument.date, reference, note.id);
+    const updated = await this.#repo.setSupplierCreditNote(actor.companyId, note.id, reference);
+    await this.#audit.record({
+      companyId: actor.companyId, actorId: actor.userId, at: this.#clock.now().toISOString(),
+      action: 'return.supplier_credit_note_recorded', subjectType: 'debit_note', subjectId: note.id,
+      summary: `Supplier's credit note ${reference.number} dated ${reference.date} recorded on ${note.number}.`,
+      details: {
+        number: note.number, supplierCreditNote: reference.number, supplierCreditNoteDate: reference.date,
+        ...(current === null ? {} : { previousNumber: current.number, previousDate: current.date }),
+      },
+    });
+    return updated;
+  }
+
+  /**
+   * The supplier's note number is how our return is found in the government's record, so it has to
+   * be one the record can hold (16 characters at most), dated no earlier than the bill it corrects,
+   * and not already on another of our returns from the same supplier — two returns carrying one
+   * note would look like the same return twice.
+   */
+  async #checkSupplierCreditNote(
+    actor: ActorContext,
+    partyId: string,
+    billDate: IsoDate,
+    reference: { readonly number: string; readonly date: IsoDate },
+    exceptNoteId: string | null,
+  ): Promise<void> {
+    const number = reference.number.trim();
+    if (number === '') throw invalid('RETURN_SUPPLIER_NOTE_NUMBER_REQUIRED', "Type the number printed on the supplier's credit note.");
+    if (number.length > 16) {
+      throw invalid('RETURN_SUPPLIER_NOTE_NUMBER_TOO_LONG', `"${number}" has ${number.length} letters and digits. A credit-note number on the government's record has 16 at most, so check it against the supplier's paper.`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(reference.date)) || Number.isNaN(Date.parse(`${reference.date}T00:00:00Z`))) {
+      throw invalid('RETURN_SUPPLIER_NOTE_DATE_INVALID', "Enter the date printed on the supplier's credit note.");
+    }
+    if (reference.date < billDate) {
+      throw invalid('RETURN_SUPPLIER_NOTE_BEFORE_BILL', `The supplier's credit note is dated ${reference.date}, before their bill of ${billDate}. A credit note cannot come before the bill it corrects, so check the date.`);
+    }
+    const wanted = normaliseNoteNumber(number);
+    const clash = (await this.#repo.list(actor.companyId)).find((other) =>
+      other.kind === 'PURCHASE_RETURN' && other.id !== exceptNoteId && String(other.partyId) === String(partyId)
+      && other.supplierCreditNote !== undefined && other.supplierCreditNote !== null
+      && normaliseNoteNumber(other.supplierCreditNote.number) === wanted);
+    if (clash !== undefined) {
+      throw conflict('RETURN_SUPPLIER_NOTE_ALREADY_USED', `The supplier's credit note ${number} is already recorded on return ${clash.number}. Check the number on the paper; each return here carries its own note.`);
+    }
   }
 
   #assertQuantity(source: OriginalReturnLine, quantity: Quantity, already: bigint): void {

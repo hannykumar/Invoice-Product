@@ -46,6 +46,19 @@ export interface ReturnNoteLine {
  */
 export const isChargeLine = (line: { readonly itemId: string }): boolean => line.itemId.startsWith('charge:');
 
+/**
+ * Issue #249 — the supplier's own credit note for goods we sent back to them.
+ *
+ * The supplier issues it, often days after the goods leave, and it is what shows up in the
+ * government's purchase record (GSTR-2B). It is matched against our return there. It is optional
+ * when the return is recorded and can be added later; the credit comes down from the month of the
+ * return either way, because the credit on goods we no longer hold is not ours to keep.
+ */
+export interface SupplierCreditNoteRef {
+  readonly number: string;
+  readonly date: IsoDate;
+}
+
 export interface ReturnNote {
   readonly id: string;
   readonly companyId: CompanyId;
@@ -67,6 +80,8 @@ export interface ReturnNote {
   readonly createdAt: string;
   readonly idempotencyKey: string;
   readonly summary: string;
+  /** Issue #249 — purchase returns only. `null` (or absent) until the supplier's note is known. */
+  readonly supplierCreditNote?: SupplierCreditNoteRef | null;
 }
 
 export const RETURN_PERMISSIONS = {

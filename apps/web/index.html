@@ -272,6 +272,12 @@
                 <label><span data-i18n="returnDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="returnReference"></span><input name="reference" required /></label>
                 <label class="full-field"><span data-i18n="returnReason"></span><textarea name="reason" rows="3" required></textarea><small data-i18n="returnReasonHelp"></small></label>
+                <!-- Issue #249 — the supplier's credit note, optional: it can be added when it comes. -->
+                <fieldset class="full-field field-grid" id="return-supplier-note" hidden>
+                  <label><span data-i18n="supplierNoteNumber"></span><input name="supplierNoteNumber" maxlength="16" /></label>
+                  <label><span data-i18n="supplierNoteDate"></span><input name="supplierNoteDate" type="date" /></label>
+                  <small class="full-field" data-i18n="supplierNoteHelp"></small>
+                </fieldset>
               </div>
             </article>
             <aside class="panel summary-card">
@@ -631,6 +637,7 @@
             <div class="panel-heading"><div><h2 data-i18n="itcTypedTitle"></h2><p data-i18n="itcTypedHelp"></p></div></div>
             <form id="itc-typed-form">
               <div class="field-grid">
+                <label><span data-i18n="itcTypedKind"></span><select name="kind"><option value="INVOICE" data-i18n="itcKindInvoice"></option><option value="CREDIT_NOTE" data-i18n="itcKindCreditNote"></option></select></label>
                 <label><span data-i18n="itcTypedGstin"></span><input name="gstin" required placeholder="29AAAAA0000A1ZY" /></label>
                 <label><span data-i18n="itcTypedSupplier"></span><input name="supplierName" /></label>
                 <label><span data-i18n="itcTypedNumber"></span><input name="number" required /></label>
@@ -699,6 +706,9 @@
           <article class="panel" id="gst-books-panel" hidden>
             <div class="panel-heading"><div><h2 data-i18n="gstBooksTitle"></h2><p id="gst-books-sentence"></p></div></div>
             <div class="activity-list" id="gst-books"></div>
+            <h3 data-i18n="gstPurchaseBooksTitle"></h3>
+            <p id="gst-purchase-books-sentence"></p>
+            <div class="activity-list" id="gst-purchase-books"></div>
           </article>
 
           <article class="panel" id="gst-3b-panel" hidden>

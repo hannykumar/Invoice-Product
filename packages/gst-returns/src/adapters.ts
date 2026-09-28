@@ -569,6 +569,25 @@ export const ledgerInwardTaxPort = (uow: UnitOfWork): InwardTaxPort => ({
   },
 });
 
+/**
+ * Issue #249 — the input GST the ledger moved in a period, for the purchases books-versus-return
+ * line. The same read as `ledgerInwardTaxPort`, in the shape the comparison takes: purchases add to
+ * the input-tax accounts and purchase returns take away, so a return is already netted here.
+ */
+export const ledgerInputBookTaxPort = (uow: UnitOfWork): BookTaxPort => ({
+  async totalsFor(companyId: CompanyId, period: TaxPeriod): Promise<BookTaxTotals> {
+    const summary = await ledgerInwardTaxPort(uow).summaryFor(companyId, period);
+    return {
+      period,
+      cgst: summary.allOtherItc.cgst,
+      sgst: summary.allOtherItc.sgst,
+      igst: summary.allOtherItc.igst,
+      cess: summary.allOtherItc.cess,
+      contributions: summary.contributions,
+    };
+  },
+});
+
 /** A book-tax source held in memory, for tests that are not exercising the ledger. */
 export class InMemoryBookTax implements BookTaxPort {
   readonly #rows = new Map<string, BookTaxTotals>();

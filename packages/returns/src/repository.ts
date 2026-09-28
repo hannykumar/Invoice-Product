@@ -1,6 +1,6 @@
-import { conflict, type CompanyId } from '@invoice/kernel';
+import { conflict, notFound, type CompanyId } from '@invoice/kernel';
 import type { TransactionParticipant } from '@invoice/ledger';
-import type { ReturnNote } from './model.ts';
+import type { ReturnNote, SupplierCreditNoteRef } from './model.ts';
 import type { ReturnNoteRepository } from './ports.ts';
 
 export class InMemoryReturnNoteRepository implements ReturnNoteRepository, TransactionParticipant {
@@ -33,5 +33,13 @@ export class InMemoryReturnNoteRepository implements ReturnNoteRepository, Trans
 
   async list(companyId: CompanyId): Promise<ReturnNote[]> {
     return this.#notes.filter((note) => note.companyId === companyId);
+  }
+
+  async setSupplierCreditNote(companyId: CompanyId, id: string, reference: SupplierCreditNoteRef): Promise<ReturnNote> {
+    const index = this.#notes.findIndex((note) => note.companyId === companyId && note.id === id);
+    if (index < 0) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
+    const updated = Object.freeze({ ...(this.#notes[index] as ReturnNote), supplierCreditNote: { number: reference.number, date: reference.date } });
+    this.#notes = this.#notes.map((note, at) => (at === index ? updated : note));
+    return updated;
   }
 }

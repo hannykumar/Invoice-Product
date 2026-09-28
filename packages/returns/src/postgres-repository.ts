@@ -5,9 +5,9 @@
  * its number and the voucher it posts are saved together or not at all — the database's version of
  * what `InMemoryReturnNoteRepository` does by joining the in-memory store.
  */
-import { conflict, money, type CompanyId, type IsoDate, type Money } from '@invoice/kernel';
+import { conflict, money, notFound, type CompanyId, type IsoDate, type Money } from '@invoice/kernel';
 import type { PostgresLedgerStore, Sql } from '@invoice/ledger';
-import type { ReturnNote, ReturnNoteLine, ReturnTaxAmounts } from './model.ts';
+import type { ReturnNote, ReturnNoteLine, ReturnTaxAmounts, SupplierCreditNoteRef } from './model.ts';
 import type { ReturnNoteRepository } from './ports.ts';
 
 type Row = Record<string, unknown>;
@@ -21,7 +21,8 @@ const placeholders = (from: number, count: number): string => Array.from({ lengt
 
 const NOTE_COLUMNS = `id, company_id, kind, number, document_date::text AS document_date, original_document_id, original_document_number,
   original_document_date::text AS original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status,
-  created_by, created_at, idempotency_key, summary`;
+  created_by, created_at, idempotency_key, summary, supplier_credit_note_number,
+  supplier_credit_note_date::text AS supplier_credit_note_date`;
 
 export class PostgresReturnNoteRepository implements ReturnNoteRepository {
   readonly #store: PostgresLedgerStore;
@@ -34,11 +35,12 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
         await sql.query(
           `INSERT INTO return_notes (id, company_id, kind, number, document_date, original_document_id, original_document_number,
              original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status, created_by, created_at,
-             idempotency_key, summary)
-           VALUES (${placeholders(1, 25)})`,
+             idempotency_key, summary, supplier_credit_note_number, supplier_credit_note_date)
+           VALUES (${placeholders(1, 27)})`,
           [note.id, note.companyId, note.kind, note.number, note.documentDate, note.originalDocument.id, note.originalDocument.number,
             note.originalDocument.date, note.partyId, note.reason, ...amountValues(note.totals), note.voucherId, note.complianceStatus,
-            note.createdBy, note.createdAt, note.idempotencyKey, note.summary],
+            note.createdBy, note.createdAt, note.idempotencyKey, note.summary,
+            note.supplierCreditNote?.number ?? null, note.supplierCreditNote?.date ?? null],
         );
       } catch (error) {
         if ((error as { code?: string }).code === '23505') throw conflict('RETURN_NOTE_DUPLICATE', 'This return note has already been recorded.');
@@ -75,6 +77,20 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
     return this.#select(companyId, 'true', []);
   }
 
+  async setSupplierCreditNote(companyId: CompanyId, id: string, reference: SupplierCreditNoteRef): Promise<ReturnNote> {
+    await this.#store.withSql(companyId, async (sql) => {
+      const updated = await sql.query(
+        `UPDATE return_notes SET supplier_credit_note_number = $3, supplier_credit_note_date = $4
+          WHERE company_id = $1 AND id = $2 AND kind = 'PURCHASE_RETURN' RETURNING id`,
+        [companyId, id, reference.number, reference.date],
+      );
+      if (updated.rows.length === 0) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
+    });
+    const note = await this.findById(companyId, id);
+    if (note === null) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
+    return note;
+  }
+
   #select(companyId: CompanyId, where: string, values: unknown[]): Promise<ReturnNote[]> {
     return this.#store.withSql(companyId, async (sql: Sql) => {
       const notes = await sql.query(
@@ -96,6 +112,9 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
         complianceStatus: r.compliance_status as ReturnNote['complianceStatus'], createdBy: r.created_by as ReturnNote['createdBy'],
         createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
         idempotencyKey: String(r.idempotency_key), summary: String(r.summary),
+        supplierCreditNote: r.supplier_credit_note_number === null || r.supplier_credit_note_number === undefined
+          ? null
+          : { number: String(r.supplier_credit_note_number), date: r.supplier_credit_note_date as IsoDate },
       }));
     });
   }

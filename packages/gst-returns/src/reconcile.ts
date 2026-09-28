@@ -201,3 +201,129 @@ export const reconcile = (input: ReconcileInput): Reconciliation => {
 };
 
 const absolute = (amount: Money): Money => ({ currency: 'INR', minor: amount.minor < 0n ? -amount.minor : amount.minor });
+
+// ---------------------------------------------------------------------------- purchases (issue #249)
+
+export interface PurchaseReconciliationHead {
+  readonly head: 'CGST' | 'SGST' | 'IGST' | 'CESS';
+  /** Credit on the return, after credit given back (form box 4C). */
+  readonly onTheReturn: Money;
+  /** Input GST the ledger moved this month, after purchase returns. */
+  readonly inTheBooks: Money;
+  /** The part of the gap the purchase check accounts for (earlier months' bills, held-back bills). */
+  readonly explained: Money;
+  /** What is left once that is taken away. Zero when the two sides agree. */
+  readonly unexplained: Money;
+  readonly agrees: boolean;
+}
+
+export interface PurchaseReconciliation {
+  readonly period: TaxPeriod;
+  readonly heads: readonly PurchaseReconciliationHead[];
+  /** Every head's unexplained gap is within a rupee. */
+  readonly agrees: boolean;
+  readonly onTheReturn: Money;
+  readonly inTheBooks: Money;
+  readonly sentence: Bilingual;
+  readonly findings: readonly ReturnFinding[];
+}
+
+export interface ReconcilePurchasesInput {
+  readonly period: TaxPeriod;
+  /** Box 4C of the return, head by head. */
+  readonly netCredit: TaxAmounts;
+  /** Input-tax movement in the ledger for the month. */
+  readonly books: BookTaxTotals;
+  readonly explanation?: { readonly fromEarlierMonths: TaxAmounts; readonly notClaimedThisMonth: TaxAmounts };
+}
+
+const HEAD_WORDS_IN: Readonly<Record<PurchaseReconciliationHead['head'], string>> = {
+  CGST: 'the central share of GST credit',
+  SGST: 'the state share of GST credit',
+  IGST: 'IGST credit',
+  CESS: 'credit of the extra charge on some goods',
+};
+
+/**
+ * Issue #249 — the credit side: the return's credit against the input GST in the books.
+ *
+ * Sales has had this line since #30; purchases never had it, which is how a return claiming the full
+ * credit on goods already sent back went unnoticed while the ledger had taken the credit down.
+ *
+ * The two may differ for good reasons, and the purchase check knows each one: a bill from an earlier
+ * month settled now (on the return, not in this month's books), and a bill of this month still
+ * waiting on its supplier (in the books, not on the return). Those are taken out first. What remains
+ * is a real disagreement. A return claiming more than the books can support is an over-claim and
+ * blocks approval; a return claiming less is credit left behind, and is a warning.
+ */
+export const reconcilePurchases = (input: ReconcilePurchasesInput): PurchaseReconciliation => {
+  const zero = (): TaxAmounts => ({
+    taxableValue: { currency: 'INR', minor: 0n }, cgst: { currency: 'INR', minor: 0n },
+    sgst: { currency: 'INR', minor: 0n }, igst: { currency: 'INR', minor: 0n }, cess: { currency: 'INR', minor: 0n },
+  });
+  const earlier = input.explanation?.fromEarlierMonths ?? zero();
+  const waiting = input.explanation?.notClaimedThisMonth ?? zero();
+  const pick = (amounts: TaxAmounts | BookTaxTotals, head: PurchaseReconciliationHead['head']): Money =>
+    head === 'CGST' ? amounts.cgst : head === 'SGST' ? amounts.sgst : head === 'IGST' ? amounts.igst : amounts.cess;
+  const heads = (['CGST', 'SGST', 'IGST', 'CESS'] as const).map((head): PurchaseReconciliationHead => {
+    const onTheReturn = pick(input.netCredit, head);
+    const inTheBooks = pick(input.books, head);
+    const explained: Money = { currency: 'INR', minor: pick(earlier, head).minor - pick(waiting, head).minor };
+    const unexplained: Money = { currency: 'INR', minor: onTheReturn.minor - inTheBooks.minor - explained.minor };
+    return {
+      head, onTheReturn, inTheBooks, explained, unexplained,
+      agrees: (unexplained.minor < 0n ? -unexplained.minor : unexplained.minor) <= TOLERANCE_PAISE,
+    };
+  });
+  const total = (pickOne: (head: PurchaseReconciliationHead) => Money): Money =>
+    ({ currency: 'INR', minor: heads.reduce((sum, head) => sum + pickOne(head).minor, 0n) });
+  const onTheReturn = total((head) => head.onTheReturn);
+  const inTheBooks = total((head) => head.inTheBooks);
+  const explained = total((head) => head.explained);
+  const agrees = heads.every((head) => head.agrees);
+
+  const findings: ReturnFinding[] = heads.filter((head) => !head.agrees).map((head) => {
+    const over = head.unexplained.minor > 0n;
+    return {
+      code: over ? 'GSTR_CREDIT_ABOVE_BOOKS' : 'GSTR_CREDIT_BELOW_BOOKS',
+      severity: over ? 'BLOCKING' as const : 'WARNING' as const,
+      origin: 'RECONCILIATION' as const,
+      message: {
+        'en-IN': `For ${HEAD_WORDS_IN[head.head]}, the return claims ${formatINR(head.onTheReturn)} but your books show ${formatINR(head.inTheBooks)}${head.explained.minor === 0n ? '' : ` (${formatINR(absolute(head.explained))} of the gap is explained by the purchase check)`} — ${formatINR(absolute(head.unexplained))} ${over ? 'more' : 'less'} than the books support.`,
+        'hi-IN': `${HEAD_WORDS_IN[head.head]} par return ${formatINR(head.onTheReturn)} le raha hai par books ${formatINR(head.inTheBooks)} dikhati hain — books se ${formatINR(absolute(head.unexplained))} ${over ? 'zyada' : 'kam'}.`,
+      },
+      whatToDo: over
+        ? {
+          'en-IN': 'Claiming more credit than your books hold is an over-claim, and it comes back with interest. Usually a purchase was reversed or goods were sent back without the purchase check seeing it. Open the purchase check for this month and find the bill.',
+          'hi-IN': 'Books se zyada credit lena over-claim hai, jo byaj ke saath wapas dena padta hai. Aksar koi kharid reverse hui ya maal wapas gaya aur purchase check ne nahin dekha. Is mahine ka purchase check kholkar woh bill dhoondhiye.',
+        }
+        : {
+          'en-IN': 'Your books hold more credit than the return claims. Usually input GST was entered as a journal rather than as a purchase bill, so the purchase check never saw it.',
+          'hi-IN': 'Books mein return se zyada credit hai. Aksar input GST bill ki jagah journal se daala gaya, isliye purchase check ne use nahin dekha.',
+        },
+    };
+  });
+
+  return {
+    period: input.period,
+    heads,
+    agrees,
+    onTheReturn,
+    inTheBooks,
+    findings,
+    sentence: agrees
+      ? explained.minor === 0n
+        ? {
+          'en-IN': `${formatTaxPeriod(input.period)}: the return and your books both show ${formatINR(onTheReturn)} of GST credit on purchases.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: return aur books dono kharid par ${formatINR(onTheReturn)} GST credit dikha rahe hain.`,
+        }
+        : {
+          'en-IN': `${formatTaxPeriod(input.period)}: the return claims ${formatINR(onTheReturn)} of GST credit on purchases and your books show ${formatINR(inTheBooks)}. The ${formatINR(absolute(explained))} between them is ${explained.minor < 0n ? 'credit on this month\'s bills still waiting on the purchase check' : 'credit on earlier months\' bills settled this month'}, so the two agree.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: return kharid par ${formatINR(onTheReturn)} GST credit le raha hai aur books ${formatINR(inTheBooks)} dikhati hain. Beech ka ${formatINR(absolute(explained))} purchase check mein ruka ya pichhle mahine ka credit hai, isliye dono milte hain.`,
+        }
+      : {
+        'en-IN': `${formatTaxPeriod(input.period)}: the return claims ${formatINR(onTheReturn)} of GST credit on purchases and your books show ${formatINR(inTheBooks)}, and the purchase check does not account for the difference.`,
+        'hi-IN': `${formatTaxPeriod(input.period)}: return kharid par ${formatINR(onTheReturn)} GST credit le raha hai aur books ${formatINR(inTheBooks)} dikhati hain, aur purchase check is antar ko nahin samjhata.`,
+      },
+  };
+};
