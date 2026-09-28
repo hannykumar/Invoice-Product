@@ -192,7 +192,7 @@ export class EwayBillService {
         ...(days === undefined ? {} : { validityDays: days }),
         ...(validitySum === undefined ? {} : { validitySum }),
         distance,
-        summary: `This movement needs an e-way bill, but ${problems.length === 1 ? "one thing is" : `${problems.length} things are`} ${distance.refusal === undefined ? "missing first" : "not right yet"}: ${problems[0]?.message ?? ""}`,
+        summary: `This movement needs an e-way bill, but ${problems.length === 1 ? "one thing is" : `${problems.length} things are`} ${distance.refusal === undefined || distance.refusalKind === "NEEDED" ? "missing first" : "not right yet"}: ${problems[0]?.message ?? ""}`,
       };
     }
 
@@ -278,7 +278,7 @@ export class EwayBillService {
     // Issue #240 — a typed distance more than 10% over the portal's own is refused before sending.
     const distance = await this.distancePlan(actor, movement);
     if (distance.refusal !== undefined) {
-      throw invalid("EWAY_DISTANCE_TOO_FAR", `This e-way bill has not been raised. ${distance.refusal}`);
+      throw invalid(distance.refusalKind === "NEEDED" ? "EWAY_DISTANCE_NEEDED" : "EWAY_DISTANCE_TOO_FAR", `This e-way bill has not been raised. ${distance.refusal}`);
     }
 
     const partA = buildPartA(movement, this.#optionsFor(movement));

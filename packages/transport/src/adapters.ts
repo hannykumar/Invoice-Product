@@ -11,7 +11,7 @@ import type { TransactionParticipant } from "@invoice/ledger";
 import { ConnectorError, type ConnectorGateway, type ConnectorRequest } from "../../platform/src/connectors.ts";
 import { DEFAULT_EWAY_BILL_POLICY } from "./types.ts";
 import { readPortalTimestamp, validUntilFrom, writePortalTimestamp } from "./validity.ts";
-import { distanceFromPortalAlert, longestAllowedDistance, pinPairKey } from "./distance.ts";
+import { distanceFromPortalAlert, longestAllowedDistance, pinPairKey, SAME_PIN_MAX_KM } from "./distance.ts";
 import type {
   ConsolidatedTripRecord, EwayBillAcknowledgement, EwayBillPolicy, EwayBillRecord, VehicleType,
 } from "./types.ts";
@@ -267,6 +267,8 @@ export const SYNTHETIC_PIN_DISTANCES: Readonly<Record<string, number>> = Object.
 export const EWB_DISTANCE_TOO_HIGH_CODE = "702";
 /** The synthetic portal's code for "no distance known between these PIN codes, and 0 was sent". */
 export const EWB_DISTANCE_UNKNOWN_CODE = "721";
+/** The synthetic portal's code for a same-PIN trip sent with 0 or with more than 100 km. */
+export const EWB_SAME_PIN_DISTANCE_CODE = "722";
 
 export class SyntheticEwayBillPortal {
   readonly kind = "eway_bill" as const;
@@ -363,6 +365,12 @@ export class SyntheticEwayBillPortal {
     // Issue #240 — the distance, as the portal settles it: 0 means "work it out from the PIN codes",
     // and a typed distance may be at most 10% more than the portal's own.
     const typedKm = Number(payload.transDistance ?? 0);
+    // Same PIN code at both ends: the distance must be typed, 1 to 100 km.
+    if (String(payload.fromPincode ?? "") !== "" && String(payload.fromPincode) === String(payload.toPincode ?? "")) {
+      if (typedKm < 1 || typedKm > SAME_PIN_MAX_KM) {
+        return { errorCode: EWB_SAME_PIN_DISTANCE_CODE, errorMessage: `For the same source and destination PIN code, the distance must be between 1 and ${SAME_PIN_MAX_KM} km.` };
+      }
+    }
     const pinKm = this.#pinDistance(payload.fromPincode, payload.toPincode);
     if (typedKm === 0 && pinKm === undefined) {
       return { errorCode: EWB_DISTANCE_UNKNOWN_CODE, errorMessage: `The portal has no road distance between PIN ${String(payload.fromPincode ?? "")} and PIN ${String(payload.toPincode ?? "")}. Type the distance in kilometres.` };

@@ -230,9 +230,12 @@ eight-hour extension window. No production credential is needed to run or test a
    against that state's current order; every row carries a `sourceRef` and a `sourceKind` so the
    check is a lookup rather than an investigation, and a change is a change to the table rather
    than to any code.
-2. **Distance is supplied, not computed.** The portal can work it out from pin codes when it is
-   left at zero; this product does not compute road distance, and a blank one is left blank rather
-   than guessed. Validity days are only shown once a distance is known.
+2. **Distance is the portal's, never computed here (#240).** A blank distance is sent as 0 and the
+   portal works it out from the two PIN codes; its answer (the alert "Distance between these two
+   pincodes is N") is remembered per PIN pair. A typed distance is refused above 10% more than the
+   remembered one. When both PIN codes are the same the portal cannot work it out, so a distance of
+   1 to 100 km must be typed and 0 or more than 100 is refused. Validity days are only shown once a
+   distance is known.
 3. **Exempt goods are matched by HSN prefix** against the part of the Rule 138(14) annexure a small
    business actually moves. The list is not exhaustive, so a line can also be marked exempt
    directly. A GST rate of zero does **not** imply e-way-bill exemption and is never read as one.

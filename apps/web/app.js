@@ -4533,10 +4533,10 @@ function renderEway(result, mode) {
       detail.append(detailRow("Transport", `${filled.transportMode}${filled.vehicle ? ` · vehicle ${filled.vehicle}` : " · no vehicle yet"}`, filled.transporter ? `${filled.transporter.name} · ${filled.transporter.transporterId}${filled.transporter.documentNumber ? ` · LR ${filled.transporter.documentNumber}` : ""}` : undefined));
     }
     if (result.distance && result.outcome === "REQUIRED") {
-      detail.append(detailRow("Distance", result.distance.sentKm === 0 ? "Worked out by the portal (0 is sent)" : `${result.distance.sentKm} km, typed`, result.distance.refusal ?? result.distance.message));
+      detail.append(detailRow("Distance", result.distance.refusalKind === "NEEDED" ? "Type it: same PIN code at both ends" : result.distance.sentKm === 0 ? "Worked out by the portal (0 is sent)" : `${result.distance.sentKm} km, typed`, result.distance.refusal ?? result.distance.message));
     }
     if (result.validityDays) detail.append(detailRow("Days it would be valid for", String(result.validityDays), `${result.validitySum ? `${result.validitySum}. ` : ""}Each day ends at midnight. The clock starts when a vehicle goes on.`));
-    else if (result.outcome === "REQUIRED" && result.distance?.sentKm === 0) detail.append(detailRow("Days it would be valid for", "Shown once the portal answers", "The portal works the distance out when the e-way bill is raised: one day for every 200 km, or part of it."));
+    else if (result.outcome === "REQUIRED" && result.distance?.sentKm === 0 && !result.distance.samePin) detail.append(detailRow("Days it would be valid for", "Shown once the portal answers", "The portal works the distance out when the e-way bill is raised: one day for every 200 km, or part of it."));
     result.problems.forEach((problem) => detail.append(detailRow("Needs fixing", problem.message, problem.field)));
   } else {
     if (result.ewayBillNumber) detail.append(detailRow("E-way bill number", result.ewayBillNumber, "Keep this number with the driver."));
