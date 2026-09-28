@@ -6,7 +6,7 @@ import { DomainError } from "@invoice/kernel";
 import {
   describeValiditySum, distanceFromPortalAlert, longestAllowedDistance, planDistance,
 } from "../src/distance.ts";
-import { interStateMovement, lorry, makeEwayDesk, PUNE_BUYER } from "../src/fixtures.ts";
+import { CONSIGNOR, interStateMovement, intraStateMovement, lorry, makeEwayDesk, PUNE_BUYER, soapLine } from "../src/fixtures.ts";
 
 /** Bengaluru 560058 to Pune 411030 with nothing typed: the distance is the portal's to work out. */
 const untyped = (over: Parameters<typeof interStateMovement>[0] = {}) => {
@@ -102,4 +102,49 @@ test("the portal itself refuses a typed distance more than 10% over its own, whe
   const raised = await desk.service.generate(desk.actor, untyped());
   assert.equal(raised.status, "ACTIVE");
   assert.equal(raised.acknowledgement?.portalDistanceKm, 840);
+});
+
+test("same PIN code at both ends: a distance must be typed, 1 to 100 km, and 0 or 101 km is refused with the numbers", () => {
+  const empty = planDistance({ fromPincode: "560058", toPincode: "560058" });
+  assert.equal(empty.refusalKind, "NEEDED");
+  assert.equal(empty.refusal, "The goods leave from and arrive at the same PIN code, 560058, so the portal cannot work the distance out. Type the road distance: at least 1 km and at most 100 km.");
+  const over = planDistance({ fromPincode: "560058", toPincode: "560058", typedKm: 101 });
+  assert.equal(over.refusalKind, "TOO_FAR");
+  assert.equal(over.refusal, "You typed 101 km, but the goods leave from and arrive at the same PIN code, 560058. For that the portal accepts at most 100 km, and 101 is 1 km more. Type 100 km or less.");
+  const hundred = planDistance({ fromPincode: "560058", toPincode: "560058", typedKm: 100 });
+  assert.equal(hundred.refusal, undefined);
+  assert.equal(hundred.validityKm, 100);
+});
+
+test("a same-PIN trip is refused before sending when empty or over 100 km, and goes through at 100 km", async () => {
+  const desk = makeEwayDesk();
+  const local = (km?: number) => {
+    const { approximateDistanceKm: _typed, ...movement } = intraStateMovement({
+      billTo: { ...CONSIGNOR, legalName: "Peenya Builders", gstin: CONSIGNOR.gstin.replace("AAECS5678D", "AAFCP4321L"), address1: "Plot 3, Peenya 2nd Stage" },
+      documents: [{ documentId: "inv-local", documentType: "TAX_INVOICE", documentNumber: "SAM/2026/0200", documentDate: "2026-08-21", lines: [soapLine({ taxableValuePaise: 90_000_00n, cgstPaise: 8_100_00n, sgstPaise: 8_100_00n })] }],
+      vehicle: lorry(),
+    });
+    return km === undefined ? movement : { ...movement, approximateDistanceKm: km };
+  };
+  const preview = await desk.service.preview(desk.actor, local());
+  assert.equal(preview.applicability.outcome, "REQUIRED");
+  assert.equal(preview.ready, false);
+  assert.deepEqual(preview.problems.map((problem) => problem.field), ["transDistance"]);
+  await assert.rejects(() => desk.service.generate(desk.actor, local()), (error: unknown) => error instanceof DomainError && error.code === "EWAY_DISTANCE_NEEDED");
+  await assert.rejects(() => desk.service.generate(desk.actor, local(101)), (error: unknown) => error instanceof DomainError && error.code === "EWAY_DISTANCE_TOO_FAR");
+  assert.equal(desk.portal.numbers().length, 0, "nothing reached the portal");
+  const raised = await desk.service.generate(desk.actor, local(100));
+  assert.equal(raised.status, "ACTIVE");
+  assert.equal(raised.distanceKm, 100);
+});
+
+test("the synthetic portal itself refuses 0 and 101 km for a same-PIN trip", async () => {
+  const desk = makeEwayDesk();
+  const call = (km: number) => desk.portal.execute({
+    tenantId: "t", operation: "eway.generate", idempotencyKey: `same-pin-${km}`, correlationId: "c",
+    payload: { fromGstin: "X", docNo: `D${km}`, docDate: "21/08/2026", fromPincode: 560058, toPincode: 560058, transDistance: String(km) },
+  });
+  assert.equal((await call(0)).payload.errorCode, "722");
+  assert.equal((await call(101)).payload.errorCode, "722");
+  assert.equal((await call(100)).payload.errorCode, undefined);
 });

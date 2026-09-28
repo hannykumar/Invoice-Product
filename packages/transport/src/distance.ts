@@ -16,6 +16,12 @@
 export const TYPED_DISTANCE_ALLOWANCE_PERCENT = 10;
 
 /**
+ * Both ends in one PIN code: the portal cannot work a distance out, so it must be typed, at least
+ * 1 km and at most this many.
+ */
+export const SAME_PIN_MAX_KM = 100;
+
+/**
  * The longest distance the portal will accept for a pair of PIN codes it knows as `knownKm` apart.
  * Whole kilometres, rounded down, so what we allow is never more than the portal allows.
  */
@@ -54,8 +60,12 @@ export interface EwayDistancePlan {
   /** The distance validity follows: the typed one, else the portal's, else unknown until it answers. */
   readonly validityKm?: number;
   readonly message: string;
-  /** Set when the typed distance is more than the portal will accept. */
+  /** Set when the typed distance is more than the portal will accept, or one must be typed. */
   readonly refusal?: string;
+  /** Why it was refused: too far, or (same PIN code at both ends) a distance must be typed. */
+  readonly refusalKind?: "TOO_FAR" | "NEEDED";
+  /** True when both ends are in the same PIN code: then the distance is typed, 1 to 100 km. */
+  readonly samePin?: boolean;
 }
 
 export const planDistance = (input: {
@@ -66,6 +76,32 @@ export const planDistance = (input: {
 }): EwayDistancePlan => {
   const { fromPincode, toPincode, typedKm, knownKm } = input;
   const route = `PIN ${fromPincode} to PIN ${toPincode}`;
+
+  // Both ends in one PIN code: the portal has no distance to work out, so 0 is not accepted. The
+  // distance is typed, at least 1 km and at most 100 km.
+  if (fromPincode.trim() !== "" && fromPincode.trim() === toPincode.trim()) {
+    const same = { fromPincode, toPincode, samePin: true, longestAllowedKm: SAME_PIN_MAX_KM };
+    if (typedKm === undefined || typedKm === 0) {
+      return {
+        ...same, sentKm: 0,
+        message: `The goods leave from and arrive at the same PIN code, ${fromPincode}.`,
+        refusalKind: "NEEDED",
+        refusal: `The goods leave from and arrive at the same PIN code, ${fromPincode}, so the portal cannot work the distance out. Type the road distance: at least 1 km and at most ${SAME_PIN_MAX_KM} km.`,
+      };
+    }
+    if (typedKm > SAME_PIN_MAX_KM) {
+      return {
+        ...same, sentKm: typedKm, typedKm,
+        message: `You typed ${typedKm} km.`,
+        refusalKind: "TOO_FAR",
+        refusal: `You typed ${typedKm} km, but the goods leave from and arrive at the same PIN code, ${fromPincode}. For that the portal accepts at most ${SAME_PIN_MAX_KM} km, and ${typedKm} is ${typedKm - SAME_PIN_MAX_KM} km more. Type ${SAME_PIN_MAX_KM} km or less.`,
+      };
+    }
+    return {
+      ...same, sentKm: typedKm, typedKm, validityKm: typedKm,
+      message: `You typed ${typedKm} km. The goods stay inside PIN code ${fromPincode}, where the portal accepts 1 to ${SAME_PIN_MAX_KM} km.`,
+    };
+  }
   const base = { fromPincode, toPincode, ...(knownKm === undefined ? {} : { knownKm, longestAllowedKm: longestAllowedDistance(knownKm) }) };
 
   if (typedKm === undefined || typedKm === 0) {
@@ -86,6 +122,7 @@ export const planDistance = (input: {
       sentKm: typedKm,
       typedKm,
       message: `You typed ${typedKm} km.`,
+      refusalKind: "TOO_FAR",
       refusal: `You typed ${typedKm} km, but the portal counts ${knownKm} km from ${route}. It accepts at most 10% more: ${knownKm} + ${longest - knownKm} = ${longest} km. Type ${longest} km or less, or leave the distance empty and the portal will use ${knownKm} km.`,
     };
   }

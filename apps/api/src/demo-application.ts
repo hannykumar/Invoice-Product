@@ -4125,7 +4125,8 @@ export class DemoApplication {
       title: preview.applicability.outcome === 'REQUIRED'
         ? (preview.ready
           ? (preview.vehicleReady ? 'Ready to raise' : 'Ready, but no vehicle yet')
-          : preview.distance?.refusal !== undefined ? 'The distance is more than the portal accepts' : 'Something is missing')
+          : preview.distance?.refusalKind === 'TOO_FAR' ? 'The distance is more than the portal accepts'
+            : preview.distance?.refusalKind === 'NEEDED' ? 'Type the distance' : 'Something is missing')
         : preview.applicability.outcome === 'CANNOT_DECIDE' ? 'We need one more fact' : 'No e-way bill needed',
       message: preview.summary,
       outcome: preview.applicability.outcome,
