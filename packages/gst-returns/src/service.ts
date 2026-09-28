@@ -24,7 +24,8 @@ import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId } fr
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { buildGstr1, sourcesOfSection, type Gstr1BuildResult } from './gstr1.ts';
 import { buildGstr3b } from './gstr3b.ts';
-import { reconcile, type Reconciliation } from './reconcile.ts';
+import { reconcile, reconcilePurchases, type PurchaseReconciliation, type Reconciliation } from './reconcile.ts';
+import { addAmounts, negateAmounts } from './types.ts';
 import { toGstr1Json, toGstr3bJson, exportFileName } from './json-export.ts';
 import { blockingOf, countBySeverity, validateDocuments } from './validate.ts';
 import { B2clThresholdTable } from './thresholds.ts';
@@ -60,6 +61,11 @@ export interface GstReturnServiceDeps {
   readonly outward: OutwardSupplyPort;
   readonly inward: InwardTaxPort;
   readonly books: BookTaxPort;
+  /**
+   * Issue #249 — the input GST the ledger moved, for the purchases books-versus-return line. Absent,
+   * the line is not shown (a source that cannot be compared is not reported as agreeing).
+   */
+  readonly inputBooks?: BookTaxPort;
   readonly repository: ReturnPreparationRepository;
   readonly audit: AuditPort;
   readonly clock: Clock;
@@ -93,6 +99,8 @@ export interface ReturnWorkspace {
   readonly gstr1: Gstr1Return;
   readonly gstr3b: Gstr3bReturn;
   readonly reconciliation: Reconciliation;
+  /** Issue #249 — the credit on the return against the input GST in the books. */
+  readonly purchaseReconciliation: PurchaseReconciliation | null;
   /** Documents that could not be placed on the return, with the question that would place them. */
   readonly exceptions: readonly { readonly document: OutwardDocument; readonly findings: readonly ReturnFinding[] }[];
   readonly findings: readonly ReturnFinding[];
@@ -123,6 +131,7 @@ export class GstReturnService {
   readonly #outward: OutwardSupplyPort;
   readonly #inward: InwardTaxPort;
   readonly #books: BookTaxPort;
+  readonly #inputBooks: BookTaxPort | undefined;
   readonly #repository: ReturnPreparationRepository;
   readonly #audit: AuditPort;
   readonly #clock: Clock;
@@ -136,6 +145,7 @@ export class GstReturnService {
     this.#outward = deps.outward;
     this.#inward = deps.inward;
     this.#books = deps.books;
+    this.#inputBooks = deps.inputBooks;
     this.#repository = deps.repository;
     this.#audit = deps.audit;
     this.#clock = deps.clock;
@@ -528,6 +538,18 @@ export class GstReturnService {
       unresolvedSources: build.unresolved.map((entry) => refOf(entry.document)),
     });
 
+    // Issue #249 — the credit side, as sales has had since #30. Built from the photographed credit
+    // (what is on the return) and a live read of the ledger's input-tax accounts.
+    const purchaseReconciliation = this.#inputBooks === undefined ? null : reconcilePurchases({
+      period: snapshot.period,
+      netCredit: addAmounts(
+        addAmounts(addAmounts(snapshot.inward.allOtherItc, snapshot.inward.reverseChargeItc), snapshot.inward.importItc),
+        negateAmounts(snapshot.inward.reversedItc),
+      ),
+      books: await this.#inputBooks.totalsFor(actor.companyId, snapshot.period),
+      ...(snapshot.inward.booksExplanation === undefined ? {} : { explanation: snapshot.inward.booksExplanation }),
+    });
+
     const validation = validateDocuments({
       period: snapshot.period,
       supplierGstin: input.gstin,
@@ -539,6 +561,7 @@ export class GstReturnService {
       ...build.findings,
       ...validation,
       ...(policy.requireBooksToAgree ? reconciliation.findings : reconciliation.findings.map(downgrade)),
+      ...(purchaseReconciliation === null ? [] : policy.requireBooksToAgree ? purchaseReconciliation.findings : purchaseReconciliation.findings.map(downgrade)),
       ...(drift === null ? [] : [driftFinding(drift)]),
     ];
 
@@ -572,6 +595,7 @@ export class GstReturnService {
       gstr1: build.return,
       gstr3b,
       reconciliation,
+      purchaseReconciliation,
       exceptions: build.unresolved,
       findings,
       counts,

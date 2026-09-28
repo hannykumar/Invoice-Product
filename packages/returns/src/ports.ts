@@ -1,6 +1,6 @@
 import type { CompanyId, IsoDate, Money, PartyId, Quantity } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
-import type { ReturnNote } from './model.ts';
+import type { ReturnNote, SupplierCreditNoteRef } from './model.ts';
 
 export interface OriginalReturnLine {
   readonly lineId: string;
@@ -60,6 +60,11 @@ export interface ReturnNoteRepository {
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ReturnNote | null>;
   listForOriginal(companyId: CompanyId, originalDocumentId: string): Promise<ReturnNote[]>;
   list(companyId: CompanyId): Promise<ReturnNote[]>;
+  /**
+   * Issue #249 — records the supplier's credit-note number and date on a purchase return. Nothing
+   * else about the note changes: its money and its voucher are posted and stay as they are.
+   */
+  setSupplierCreditNote(companyId: CompanyId, id: string, reference: SupplierCreditNoteRef): Promise<ReturnNote>;
 }
 
 export interface ReturnInventoryLine {

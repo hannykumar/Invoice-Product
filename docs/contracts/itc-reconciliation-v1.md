@@ -119,6 +119,28 @@ stays visible month after month together with the latest portal evidence held fo
 `TIME_BARRED` after section 16(4)'s deadline, and can never feed two returns because `(company,
 source kind, source id)` is unique in `itc_claims`.
 
+## Goods sent back to a supplier (issue #249)
+
+Every purchase return is handed to the comparison as a book document of kind `CREDIT_NOTE`
+(`sourceKind: 'purchase_return'`), with the supplier's GSTIN, the supplier's credit-note number and
+date when known (our debit note's number until then, `awaitingSupplierNote: true`), the tax heads
+the return took off the original bill, and `original` naming that bill. Its period is the month of
+our return.
+
+- It is matched with the supplier's credit note in GSTR-2B by GSTIN and normalised note number.
+- The credit comes down by **our** figure (the tax the ledger reversed) from the month of the
+  return, matched or not. A supplier note that disagrees raises a warning; it does not change the
+  reduction. A matched pair is reduced once.
+- When the original bill's own credit has not been taken (held back, or too late), the return waits
+  with it: nothing comes off this month, the held-back total is shown net of the return, and the
+  return goes on the return in the month the bill does.
+- A supplier credit note in 2B with no return in our books keeps the `ITC_ONLY_ON_PORTAL` warning,
+  naming the supplier's bills we hold (their note does not say which bill it corrects).
+- `Gstr3bLinkage.booksExplanation` gives credit taken this month on earlier months' documents and
+  credit on this month's documents not taken, so the return can compare its credit with the
+  ledger's input GST for the month. Reverse-charge liability and exempt inward value count only
+  the month's own documents.
+
 ## Known limitations
 
 - The GSP download is exercised against `SyntheticPortalSource`; no production intermediary is

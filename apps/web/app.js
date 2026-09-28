@@ -186,6 +186,13 @@ const copy = {
     gstExport: "Download the file to upload yourself",
     gstOwe: "you owe", gstCredit: "already paid", gstLeftOver: "left over",
     gstOnReturn: "on the return", gstInBooks: "in your books",
+    // Issue #249 — goods sent back to a supplier, and the credit side of the books check.
+    supplierNoteNumber: "Supplier's credit note number", supplierNoteDate: "Supplier's credit note date",
+    supplierNoteHelp: "If the supplier has already given you their credit note, type it here. If not, leave these empty and add it when it comes — the credit comes down from this month either way.",
+    supplierNoteAdd: "Add supplier's credit note", supplierNoteSave: "Save", supplierNoteShown: "supplier's note {number} of {date}",
+    supplierNoteAwaited: "supplier's credit note not yet received",
+    gstPurchaseBooksTitle: "Credit on purchases: return against your books", gstPurchaseExplained: "explained by the purchase check",
+    itcTypedKind: "Kind of document", itcKindInvoice: "Bill", itcKindCreditNote: "Credit note",
     navVehicle: "Vehicle check",
     vehicleCheckTitle: "Can this lorry carry this load?",
     vehicleCheckHelp: "Before the goods leave the yard we compare what is being loaded against what the vehicle is registered to carry. Every answer says where the fact came from, and a service we could not reach is never shown as 'nothing wrong'.",
@@ -506,6 +513,12 @@ const copy = {
     gstExport: "Khud upload karne ke liye file lein",
     gstOwe: "dena hai", gstCredit: "pehle diya", gstLeftOver: "bacha",
     gstOnReturn: "return par", gstInBooks: "books mein",
+    supplierNoteNumber: "Supplier ke credit note ka number", supplierNoteDate: "Supplier ke credit note ki tareekh",
+    supplierNoteHelp: "Agar supplier ne apna credit note de diya hai to yahan likhiye. Nahin to khali chhodiye aur aane par jodiye — credit is mahine se ghat jata hai.",
+    supplierNoteAdd: "Supplier ka credit note jodiye", supplierNoteSave: "Save", supplierNoteShown: "supplier ka note {number}, {date}",
+    supplierNoteAwaited: "supplier ka credit note abhi nahin aaya",
+    gstPurchaseBooksTitle: "Kharid par credit: return aur books", gstPurchaseExplained: "purchase check se samjha gaya",
+    itcTypedKind: "Document ki kism", itcKindInvoice: "Bill", itcKindCreditNote: "Credit note",
     navVehicle: "Gaadi ki jaanch",
     vehicleCheckTitle: "Kya yeh gaadi itna maal le ja sakti hai?",
     vehicleCheckHelp: "Maal nikalne se pehle hum dekhte hain ki kitna load ho raha hai aur gaadi kitna le jaane ke liye registered hai. Har jawab batata hai wo baat kahan se aayi, aur jo service hum tak pahunch hi nahin payi use kabhi 'sab theek hai' nahin dikhaya jata.",
@@ -2829,6 +2842,9 @@ function updateReturnLines() {
     return;
   }
   documentSelect.form.elements.kind.value = selectedDocument.kind;
+  // Issue #249 — only goods sent back to a supplier have a supplier's credit note.
+  const supplierNote = document.querySelector("#return-supplier-note");
+  if (supplierNote) supplierNote.hidden = selectedDocument.kind !== "PURCHASE_RETURN";
   selectedDocument.lines.forEach((line) => {
     const option = document.createElement("option");
     option.value = line.id;
@@ -2899,6 +2915,30 @@ async function loadReturnNotes() {
       const label = document.createElement("span");
       label.textContent = `${note.number} · ${text("noteAgainst", { number: note.against })} · ${money(note.amount)}`;
       row.append(label);
+      // Issue #249 — a return to a supplier shows their credit note, or lets it be added when it comes.
+      if (note.kind === "PURCHASE_RETURN") {
+        const small = document.createElement("small");
+        small.textContent = ` · ${note.supplierCreditNote
+          ? text("supplierNoteShown", { number: note.supplierCreditNote.number, date: note.supplierCreditNote.date })
+          : copy[state.locale].supplierNoteAwaited}`;
+        row.append(small);
+        if (!note.supplierCreditNote) {
+          const form = document.createElement("form");
+          form.className = "inline-form";
+          form.dataset.supplierNote = note.id;
+          const number = document.createElement("input");
+          number.name = "supplierNoteNumber"; number.required = true; number.maxLength = 16;
+          number.placeholder = copy[state.locale].supplierNoteNumber;
+          number.setAttribute("aria-label", copy[state.locale].supplierNoteNumber);
+          const date = document.createElement("input");
+          date.name = "supplierNoteDate"; date.type = "date"; date.required = true;
+          date.setAttribute("aria-label", copy[state.locale].supplierNoteDate);
+          const save = document.createElement("button");
+          save.type = "submit"; save.className = "text-button"; save.textContent = copy[state.locale].supplierNoteAdd;
+          form.append(number, " ", date, " ", save);
+          row.append(" ", form);
+        }
+      }
       if (note.printable) {
         const button = document.createElement("button");
         button.type = "button";
@@ -2916,6 +2956,21 @@ async function loadReturnNotes() {
   } catch { /* the list is a convenience; the note itself is shown after recording */ }
 }
 
+document.querySelector("#note-list")?.addEventListener("submit", async (event) => {
+  const form = event.target instanceof HTMLFormElement ? event.target : null;
+  if (!form?.dataset.supplierNote) return;
+  event.preventDefault();
+  try {
+    const result = await api("/api/returns/supplier-note", {
+      method: "POST",
+      body: JSON.stringify({ noteId: form.dataset.supplierNote, ...formValues(form) }),
+    });
+    showDialog({ title: result.title, message: result.message }, "recorded");
+    loadReturnNotes();
+  } catch (error) {
+    showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+  }
+});
 document.querySelector("#note-list")?.addEventListener("click", (event) => {
   const button = event.target instanceof Element ? event.target.closest("[data-print-note]") : null;
   if (button) showReturnNote(button.dataset.printNote);
@@ -4884,6 +4939,16 @@ function renderGstWorkspace(workspace) {
   books.replaceChildren();
   workspace.reconciliation.heads.forEach((head) => {
     books.append(detailRow(head.head, `${words.gstOnReturn} ${money(head.onTheReturn)} · ${words.gstInBooks} ${money(head.inTheBooks)}`, head.agrees ? undefined : workspace.reconciliation.sentence));
+  });
+
+  // Issue #249 — the credit side, as the sales side above.
+  const purchaseBooks = document.querySelector("#gst-purchase-books");
+  purchaseBooks.replaceChildren();
+  const purchase = workspace.purchaseReconciliation;
+  document.querySelector("#gst-purchase-books-sentence").textContent = purchase ? purchase.sentence : "";
+  (purchase?.heads ?? []).filter((head) => head.onTheReturn !== 0 || head.inTheBooks !== 0 || !head.agrees).forEach((head) => {
+    const explained = head.explained === 0 ? "" : ` · ${money(head.explained)} ${words.gstPurchaseExplained}`;
+    purchaseBooks.append(detailRow(head.head, `${words.gstOnReturn} ${money(head.onTheReturn)} · ${words.gstInBooks} ${money(head.inTheBooks)}${explained}`, head.agrees ? undefined : purchase.sentence));
   });
 
   document.querySelector("#gst-3b-panel").hidden = false;

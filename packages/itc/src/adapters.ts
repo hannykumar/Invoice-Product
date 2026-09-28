@@ -285,6 +285,102 @@ export const purchaseBillToBookDocument = (
   reversed: bill.state === 'REVERSED',
 });
 
+/**
+ * Issue #249 — a return of goods to a supplier, in the shape the returns module stores it.
+ *
+ * Declared here rather than imported so this module does not depend on the returns module, the same
+ * way `PostedBillLike` stands for a purchase bill.
+ */
+export interface PurchaseReturnLike {
+  readonly id: string;
+  readonly companyId: string;
+  readonly kind: 'SALES_RETURN' | 'PURCHASE_RETURN';
+  readonly number: string;
+  readonly documentDate: string;
+  readonly partyId: string;
+  readonly originalDocument: { readonly id: string; readonly number: string; readonly date: string };
+  readonly voucherId: string;
+  readonly totals: {
+    readonly taxableValue: { readonly minor: bigint };
+    readonly cgst: { readonly minor: bigint };
+    readonly sgst: { readonly minor: bigint };
+    readonly utgst: { readonly minor: bigint };
+    readonly igst: { readonly minor: bigint };
+    readonly cess: { readonly minor: bigint };
+    readonly ineligibleTax: { readonly minor: bigint };
+    readonly reverseChargeTax: { readonly minor: bigint };
+    readonly total: { readonly minor: bigint };
+  };
+  readonly lines: readonly { readonly quantity: { readonly scaled: bigint; readonly unit: string }; readonly supplyKind: 'GOODS' | 'SERVICES' }[];
+  readonly supplierCreditNote?: { readonly number: string; readonly date: string } | null;
+}
+
+/** "50 KGS", "50 KGS and 2 BOX" — what went back, from the note's own lines. */
+const goodsOf = (lines: PurchaseReturnLike['lines']): string | null => {
+  const byUnit = new Map<string, bigint>();
+  for (const line of lines) {
+    if (line.supplyKind !== 'GOODS') continue;
+    byUnit.set(line.quantity.unit, (byUnit.get(line.quantity.unit) ?? 0n) + line.quantity.scaled);
+  }
+  const parts = [...byUnit.entries()].map(([unit, scaled]) => {
+    const whole = scaled / 1_000_000n;
+    const fraction = (scaled % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+    return `${whole}${fraction === '' ? '' : `.${fraction}`} ${unit}`;
+  });
+  return parts.length === 0 ? null : parts.join(' and ');
+};
+
+/**
+ * Issue #249 — a purchase return as the credit note the purchase comparison matches.
+ *
+ * The supplier's own note number is used when it is known, because that is what appears in their
+ * filing (GSTR-2B); until then our own debit note's number stands in, and the line says the
+ * supplier's note is awaited. The month is always the month of our return: the credit comes down
+ * from then, not from whenever the supplier gets round to their note. The tax heads are the ones
+ * the returns module took off the original bill, so an IGST bill is reduced in IGST.
+ */
+export const purchaseReturnToBookDocument = (
+  note: PurchaseReturnLike,
+  supplier: { readonly gstin: string | null; readonly name: string },
+): BookPurchaseDocument => {
+  const theirs = note.supplierCreditNote ?? null;
+  const reverseCharge = note.totals.reverseChargeTax.minor > 0n;
+  return {
+    sourceKind: 'purchase_return',
+    sourceId: note.id,
+    companyId: note.companyId as CompanyId,
+    supplierPartyId: note.partyId,
+    supplierName: supplier.name,
+    supplierGstin: supplier.gstin,
+    kind: 'CREDIT_NOTE',
+    number: theirs?.number ?? note.number,
+    documentDate: (theirs?.date ?? note.documentDate) as IsoDate,
+    period: note.documentDate.slice(0, 7) as TaxPeriod,
+    amounts: {
+      taxableValue: { currency: 'INR', minor: note.totals.taxableValue.minor },
+      cgst: { currency: 'INR', minor: note.totals.cgst.minor },
+      sgst: { currency: 'INR', minor: note.totals.sgst.minor + note.totals.utgst.minor },
+      igst: { currency: 'INR', minor: note.totals.igst.minor },
+      cess: { currency: 'INR', minor: note.totals.cess.minor },
+    },
+    invoiceValue: { currency: 'INR', minor: note.totals.total.minor + (reverseCharge ? note.totals.reverseChargeTax.minor : 0n) },
+    ineligibleItc: { currency: 'INR', minor: note.totals.ineligibleTax.minor },
+    reverseCharge,
+    imported: false,
+    voucherId: note.voucherId,
+    reversed: false,
+    original: {
+      sourceKind: 'purchase_bill',
+      sourceId: note.originalDocument.id,
+      number: note.originalDocument.number,
+      date: note.originalDocument.date as IsoDate,
+    },
+    goodsReturned: goodsOf(note.lines),
+    ourReference: note.number,
+    awaitingSupplierNote: theirs === null,
+  };
+};
+
 // ---------------------------------------------------------------------------- the two bridges
 
 /**
@@ -309,6 +405,7 @@ export const itcInwardTaxPort = (
       reverseChargeLiability: linkage.reverseChargeLiability,
       exemptInwardValue: linkage.exemptInwardValue,
       contributions: linkage.contributions,
+      ...(linkage.booksExplanation === undefined ? {} : { booksExplanation: linkage.booksExplanation }),
     };
   },
 });

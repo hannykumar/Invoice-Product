@@ -153,7 +153,23 @@ export interface LineInput {
   readonly period?: TaxPeriod;
   /** Today, for the case where an old period is only being prepared now. */
   readonly today?: IsoDate;
+  /**
+   * Issue #249 — the supplier's bills in our books, newest first. A credit note the supplier filed
+   * does not say which bill it corrects, so when there is no return in our books to match it, these
+   * are the bills the warning names.
+   */
+  readonly supplierBills?: readonly { readonly number: string; readonly date: IsoDate }[];
 }
+
+/** Issue #249 — a credit note lowers the credit, so "safe to claim" is the wrong label for it. */
+const CREDIT_NOTE_APPLIED: Bilingual = {
+  'en-IN': "Comes off this month's credit",
+  'hi-IN': 'Is mahine ke credit se ghatta hai',
+};
+
+/** Issue #249 — "SRS-101", "SRS-101 or SRS-099", "SRS-101, SRS-099 or SRS-090". */
+const orList = (items: readonly string[], or: string): string =>
+  items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} ${or} ${items[items.length - 1]}`;
 
 /**
  * One pair, one person's answer, and the conclusion the two of them produce.
@@ -243,6 +259,27 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
       'en-IN': `No credit is being taken on this copy of bill ${number}.`,
       'hi-IN': `Bill ${number} ki is copy par koi credit nahin liya ja raha.`,
     };
+  } else if (book === null && portal !== null && portal.kind === 'CREDIT_NOTE') {
+    // Issue #249 — the supplier says goods came back (or the price came down), and our books hold no
+    // return against them. Their note does not say which bill it corrects, so the bills we hold from
+    // them are named: that is where the search starts.
+    const bills = (input.supplierBills ?? []).slice(0, 3).map((bill) => bill.number);
+    const against = bills.length === 0
+      ? { en: 'Your books hold no bill from them either.', hi: 'Aapki books mein unka koi bill bhi nahin hai.' }
+      : bills.length === 1
+        ? { en: `It will be against their bill ${bills[0]}.`, hi: `Yeh unke bill ${bills[0]} ke against hoga.` }
+        : { en: `It will be against one of their bills: ${orList(bills, 'or')}.`, hi: `Yeh unke kisi bill ke against hoga: ${orList(bills, 'ya')}.` };
+    findings.push(finding('ITC_ONLY_ON_PORTAL', 'WARNING', key, {
+      'en-IN': `${supplier} has reported credit note ${number} of ${formatINR(portal.invoiceValue)} to the government, and your books have no return against it. ${against.en}`,
+      'hi-IN': `${supplier} ne sarkar ko ${formatINR(portal.invoiceValue)} ka credit note ${number} bataya hai, aur aapki books mein iske against koi wapsi nahin hai. ${against.hi}`,
+    }, {
+      'en-IN': `If goods did go back${bills.length === 0 ? '' : ` on ${bills.length === 1 ? 'that bill' : 'one of those bills'}`}, record the return on the Returns screen with this note's number, and the credit will come down by its tax. If nothing went back, ask ${supplier} why they issued it.`,
+      'hi-IN': `Agar maal wapas gaya tha${bills.length === 0 ? '' : ` ${bills.length === 1 ? 'us bill par' : 'in mein se kisi bill par'}`}, to Returns screen par is note ke number ke saath wapsi darj kijiye, credit uske tax jitna ghat jayega. Agar kuch wapas nahin gaya, to ${supplier} se poochhiye ki yeh note kyon diya.`,
+    }));
+    sentence = {
+      'en-IN': `${supplier}'s credit note ${number} has no return in your books against it.`,
+      'hi-IN': `${supplier} ke credit note ${number} ke against aapki books mein koi wapsi nahin hai.`,
+    };
   } else if (book === null && portal !== null) {
     findings.push(finding('ITC_ONLY_ON_PORTAL', 'WARNING', key, {
       'en-IN': `${supplier} has reported bill ${number} of ${formatINR(portal.invoiceValue)} to the government, and there is no such bill in your books.`,
@@ -299,6 +336,72 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}, so it is not on this month's return.`,
         'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha, isliye yeh is mahine ke return par nahin hai.`,
       };
+  } else if (book !== null && book.kind === 'CREDIT_NOTE') {
+    // Issue #249 — goods we sent back to the supplier. The credit on them comes down from the month
+    // of the return, at the tax our own books took off (which is what the ledger reversed), whatever
+    // the supplier's note says or whether it has arrived at all: the credit on goods we no longer
+    // hold is not ours to keep, and waiting for the supplier would keep it. Their note in the
+    // government's record is matched as evidence, and any disagreement is said out loud.
+    outcome = 'CLAIM_NOW';
+    claimable = creditable;
+    const tax = formatINR(totalTaxOf(creditable));
+    const goods = book.goodsReturned === undefined || book.goodsReturned === null || book.goodsReturned === ''
+      ? { en: 'goods back', hi: 'maal wapas' }
+      : { en: `${book.goodsReturned} back`, hi: `${book.goodsReturned} wapas` };
+    const onBill = book.original === undefined || book.original === null ? { en: '', hi: '' }
+      : { en: ` against bill ${book.original.number}`, hi: ` bill ${book.original.number} ke against` };
+    if (portal === null) {
+      const awaiting = book.awaitingSupplierNote === true;
+      const message: Bilingual = {
+        'en-IN': `You sent ${goods.en} to ${supplier}${onBill.en}. ${tax} of credit comes off this month. ${awaiting ? 'Ask them for their credit note.' : `Their credit note ${number} is not in the government's record yet.`}`,
+        'hi-IN': `Aapne ${supplier} ko${onBill.hi} ${goods.hi} bheja. Is mahine ${tax} credit ghat jata hai. ${awaiting ? 'Unse unka credit note maangiye.' : `Unka credit note ${number} abhi sarkari record mein nahin hai.`}`,
+      };
+      findings.push(finding('ITC_SUPPLIER_CREDIT_NOTE_AWAITED', 'INFORMATION', key, message, awaiting
+        ? {
+          'en-IN': "When their credit note comes, add its number and date to this return on the Returns screen. The credit has already come down, so nothing else changes.",
+          'hi-IN': 'Jab unka credit note aaye, Returns screen par is wapsi mein uska number aur tareekh daal dijiye. Credit pehle hi ghat chuka hai, aur kuch nahin badlega.',
+        }
+        : {
+          'en-IN': `Ask ${supplier} to file credit note ${number}. The credit has already come down, so nothing else needs doing here.`,
+          'hi-IN': `${supplier} se credit note ${number} file karne ko kahiye. Credit pehle hi ghat chuka hai, yahan aur kuch nahin karna.`,
+        }));
+      sentence = message;
+    } else {
+      if (portal.reversed) {
+        findings.push(finding('ITC_SUPPLIER_REVERSED', 'WARNING', key, {
+          'en-IN': `${supplier} withdrew credit note ${number} from their filing after reporting it.`,
+          'hi-IN': `${supplier} ne credit note ${number} report karne ke baad apni filing se hata diya.`,
+        }, {
+          'en-IN': `The goods still went back, so the credit stays down by ${tax}. Ask ${supplier} to file the note again.`,
+          'hi-IN': `Maal to wapas gaya hai, isliye credit ${tax} ghata hi rahega. ${supplier} se note dobara file karwaiye.`,
+        }));
+      }
+      const differing = disagreements(evidence);
+      if (differing.length > 0) {
+        findings.push(finding(
+          differing.some((row) => row.field === 'TAX_TYPE') ? 'ITC_TAX_TYPE_DIFFERS' : 'ITC_FIGURES_DIFFER',
+          'WARNING',
+          key,
+          {
+            'en-IN': `Credit note ${number}: ${differing.map((row) => `${row.label['en-IN'].toLowerCase()} — yours ${row.ours ?? '—'}, theirs ${row.theirs ?? '—'}`).join('; ')}.`,
+            'hi-IN': `Credit note ${number}: ${differing.map((row) => `${row.label['hi-IN']} — aapka ${row.ours ?? '—'}, unka ${row.theirs ?? '—'}`).join('; ')}.`,
+          },
+          {
+            'en-IN': `The credit comes down by ${tax}, the tax on the goods your books show going back. Compare the supplier's note with your return, and ask them to correct it if theirs is wrong.`,
+            'hi-IN': `Credit ${tax} ghatta hai, jitna tax aapki books ke hisaab se wapas gaye maal par tha. Supplier ka note apni wapsi se milaiye, aur unka galat ho to theek karwaiye.`,
+          },
+        ));
+      }
+      sentence = status === 'EXACT' && !portal.reversed
+        ? {
+          'en-IN': `Your return${onBill.en} and ${supplier}'s credit note ${number} agree. ${tax} of GST comes off this month's credit.`,
+          'hi-IN': `Aapki wapsi${onBill.hi} aur ${supplier} ka credit note ${number} milte hain. Is mahine ke credit se ${tax} GST ghat jata hai.`,
+        }
+        : {
+          'en-IN': `${tax} of GST comes off this month's credit for the goods you sent back${onBill.en}. The supplier's note does not fully agree; see below.`,
+          'hi-IN': `${onBill.hi.trim() === '' ? '' : `${onBill.hi.trim()} `}wapas bheje maal ke liye is mahine ke credit se ${tax} GST ghat jata hai. Supplier ka note poori tarah nahin milta; neeche dekhiye.`,
+        };
+    }
   } else if (book !== null && book.supplierGstin === null) {
     // Nothing can be compared, so nothing is concluded. This is a missing fact, and a missing fact
     // is a question rather than a default — the credit waits for somebody to supply the number.
@@ -456,7 +559,7 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     evidence,
     matchNote,
     outcome,
-    outcomeLabel: OUTCOME_PLAIN[outcome],
+    outcomeLabel: isCreditNote && outcome === 'CLAIM_NOW' ? CREDIT_NOTE_APPLIED : OUTCOME_PLAIN[outcome],
     claimable,
     heldBack: { ...heldBack, taxableValue: outcome === 'CLAIM_NOW' || outcome === 'CLAIM_AT_RISK' ? zeroMoney : creditable.taxableValue },
     decision,
@@ -538,13 +641,20 @@ export const linkageFor = (
   const importItc = bucket((line) => !isCreditNote(line) && line.book?.imported === true);
   const reversedItc = bucket(isCreditNote);
 
-  const reverseChargeLiability = sumAmounts(
-    allBooks.filter((book) => book.reverseCharge && !book.reversed && book.kind === 'INVOICE').map((book) => book.amounts),
+  // Issue #249 — the books hand over every unclaimed document up to this month (so late credit can
+  // be taken, #222), but tax owed under reverse charge and the value of untaxed purchases belong to
+  // the month of the document only. Counting an earlier month's bill again would owe its tax twice.
+  const monthBooks = allBooks.filter((book) => book.period === period);
+  // Issue #249 — goods sent back on a reverse-charge purchase lower the tax owed on it, as the ledger
+  // does when it posts the return; the liability here is net of them.
+  const reverseChargeLiability = subtract(
+    sumAmounts(monthBooks.filter((book) => book.reverseCharge && !book.reversed && book.kind === 'INVOICE').map((book) => book.amounts)),
+    sumAmounts(monthBooks.filter((book) => book.reverseCharge && !book.reversed && book.kind === 'CREDIT_NOTE').map((book) => book.amounts)),
   );
   const exemptInwardValue: Money = {
     currency: 'INR',
-    minor: allBooks
-      .filter((book) => !book.reversed && totalTaxOf(book.amounts).minor === 0n)
+    minor: monthBooks
+      .filter((book) => !book.reversed && book.kind === 'INVOICE' && totalTaxOf(book.amounts).minor === 0n)
       .reduce((total, book) => total + book.amounts.taxableValue.minor, 0n),
   };
 
@@ -568,6 +678,17 @@ export const linkageFor = (
   const held = sumAmounts(lines.filter((line) => line.outcome !== 'TIME_BARRED').map((line) => line.heldBack));
   const barred = sumAmounts(lines.filter((line) => line.outcome === 'TIME_BARRED').map((line) => line.heldBack));
 
+  // Issue #249 — the gap between this return's credit and the ledger's input GST for the month, and
+  // where it comes from. A credit note counts against the credit on both sides.
+  const signed = (line: ReconciliationLine, amounts: TaxAmounts): TaxAmounts =>
+    isCreditNote(line) && totalTaxOf(amounts).minor > 0n ? negate(amounts) : amounts;
+  const fromEarlierMonths = sumAmounts(claimed
+    .filter((line) => line.book !== null && line.book.period < period)
+    .map((line) => signed(line, line.claimable)));
+  const notClaimedThisMonth = sumAmounts(lines
+    .filter((line) => line.book !== null && line.book.period === period && !line.book.reversed)
+    .map((line) => signed(line, line.heldBack)));
+
   return {
     period,
     allOtherItc,
@@ -578,8 +699,94 @@ export const linkageFor = (
     exemptInwardValue,
     contributions,
     caution: cautionFor(held, barred),
+    booksExplanation: { fromEarlierMonths, notClaimedThisMonth },
   };
 };
+
+// ---------------------------------------------------------------------------- returns and their bills
+
+const negate = (amounts: TaxAmounts): TaxAmounts => ({
+  taxableValue: { currency: 'INR', minor: -amounts.taxableValue.minor },
+  cgst: { currency: 'INR', minor: -amounts.cgst.minor },
+  sgst: { currency: 'INR', minor: -amounts.sgst.minor },
+  igst: { currency: 'INR', minor: -amounts.igst.minor },
+  cess: { currency: 'INR', minor: -amounts.cess.minor },
+});
+
+/**
+ * Issue #249 — goods sent back against a bill whose own credit has not been taken.
+ *
+ * The return takes its tax off the credit on the bill it corrects. When that bill's credit is on
+ * this return, or went on an earlier one, the reduction stands this month. When the bill is still
+ * waiting — its supplier has not filed it, or somebody is holding it — there is no credit on it yet
+ * to reduce, and reducing this month would give back credit that was never taken. So the return
+ * waits with the bill: nothing comes off this month, and the credit held back on the bill is shown
+ * net of the return (₹5,760 on the bill, less ₹576 back, is ₹5,184 waiting). The return goes on the
+ * return in the month the bill does, and a matched pair is reduced exactly once.
+ *
+ * `claimedBefore` is the set of `sourceKind|sourceId` whose credit went on an earlier return.
+ */
+export const settleReturnsAgainstBills = (
+  lines: readonly ReconciliationLine[],
+  claimedBefore: ReadonlySet<string>,
+): readonly ReconciliationLine[] =>
+  lines.map((line) => {
+    const book = line.book;
+    if (book === null || book.kind !== 'CREDIT_NOTE' || line.outcome !== 'CLAIM_NOW') return line;
+    const linked = book.original ?? null;
+    const claimedNow = (candidate: ReconciliationLine): boolean => candidate.outcome === 'CLAIM_NOW' || candidate.outcome === 'CLAIM_AT_RISK';
+    let billLine: ReconciliationLine | undefined;
+    if (linked !== null) {
+      if (claimedBefore.has(`${linked.sourceKind}|${linked.sourceId}`)) return line;
+      billLine = lines.find((candidate) => candidate.book !== null && candidate.book.kind === 'INVOICE'
+        && candidate.book.sourceKind === linked.sourceKind && candidate.book.sourceId === linked.sourceId);
+    } else {
+      // A credit note that does not say which bill it corrects: it waits only when every bill from
+      // that supplier in this month's comparison is itself waiting, and none of theirs is claimed.
+      const theirs = lines.filter((candidate) => candidate.book !== null && candidate.book.kind === 'INVOICE'
+        && book.supplierGstin !== null && (candidate.book.supplierGstin ?? '').toUpperCase() === book.supplierGstin.toUpperCase());
+      if (theirs.length === 0 || theirs.some(claimedNow)) return line;
+      billLine = theirs[0];
+    }
+    if (billLine === undefined || claimedNow(billLine)) return line;
+    const original = linked ?? { number: (billLine.book as BookPurchaseDocument).number };
+    const reduction = line.claimable;
+    const tax = formatINR(totalTaxOf(reduction));
+    const barred = billLine.outcome === 'TIME_BARRED';
+    const supplier = book.supplierName;
+    const goods = book.goodsReturned === undefined || book.goodsReturned === null || book.goodsReturned === '' ? 'goods' : book.goodsReturned;
+    const message: Bilingual = barred
+      ? {
+        'en-IN': `You sent ${goods} back to ${supplier} against bill ${original.number}. The credit on that bill can no longer be claimed, so there is nothing for this return to take off.`,
+        'hi-IN': `Aapne bill ${original.number} ke against ${supplier} ko ${goods} wapas bheja. Us bill ka credit ab liya nahin ja sakta, isliye is wapsi se ghatane ko kuch nahin hai.`,
+      }
+      : {
+        'en-IN': `You sent ${goods} back to ${supplier} against bill ${original.number}. ${tax} of credit comes off that bill. Its own credit is still waiting, so nothing comes off this month; when bill ${original.number} is claimed, it is claimed less this ${tax}.`,
+        'hi-IN': `Aapne bill ${original.number} ke against ${supplier} ko ${goods} wapas bheja. Us bill ke credit se ${tax} ghatta hai. Us bill ka apna credit abhi ruka hai, isliye is mahine kuch nahin ghatta; jab bill ${original.number} ka credit liya jayega, ${tax} kam liya jayega.`,
+      };
+    return {
+      ...line,
+      outcome: barred ? 'TIME_BARRED' : 'HELD_BACK',
+      outcomeLabel: barred ? OUTCOME_PLAIN.TIME_BARRED : {
+        'en-IN': `Waits with bill ${original.number}`,
+        'hi-IN': `Bill ${original.number} ke saath ruka hai`,
+      },
+      claimable: emptyAmounts(),
+      // Negative on purpose: it is taken off the credit held back on the bill, so the month's total
+      // held back is what will actually come back.
+      heldBack: negate(reduction),
+      findings: [
+        ...line.findings.filter((one) => one.code !== 'ITC_SUPPLIER_CREDIT_NOTE_AWAITED'),
+        finding('ITC_RETURN_WAITS_WITH_BILL', 'INFORMATION', line.key, message, barred
+          ? { 'en-IN': 'Nothing to do.', 'hi-IN': 'Kuch karna nahin hai.' }
+          : {
+            'en-IN': `Settle bill ${original.number} first. This return follows it onto the return in the same month.`,
+            'hi-IN': `Pehle bill ${original.number} nipta lijiye. Yeh wapsi usi mahine uske saath return par jayegi.`,
+          }),
+      ],
+      sentence: message,
+    };
+  });
 
 /** Adds one line's contribution to a running set of totals. Used by the workspace. */
 export const accumulate = (total: TaxAmounts, line: TaxAmounts): TaxAmounts => addAmounts(total, line);

@@ -265,6 +265,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));
     // Issue #186 — the credit or debit note on paper: listed, printed, and downloaded as a PDF.
     if (method === 'GET' && pathname === '/api/returns/notes') return json(200, await app.listReturnNotes(actor));
+    // Issue #249 — the supplier's credit note for goods sent back, added when it arrives.
+    if (method === 'POST' && pathname === '/api/returns/supplier-note') return json(200, await app.recordSupplierCreditNote(actor, body));
     if (method === 'POST' && pathname === '/api/returns/print') {
       const input = body as Record<string, unknown>;
       return json(200, await app.notePrint(actor, String(input.note ?? ''), { format: input.format, locale: input.locale }));

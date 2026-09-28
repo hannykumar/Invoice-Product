@@ -31,8 +31,9 @@ import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platf
 import { ItcReconciliationService } from '../../../packages/itc/src/service.ts';
 import {
   InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
-  purchaseBillToBookDocument,
+  purchaseBillToBookDocument, purchaseReturnToBookDocument,
 } from '../../../packages/itc/src/adapters.ts';
+import { InMemoryReturnNoteRepository } from '../../../packages/returns/src/repository.ts';
 import type { BookPurchaseDocument, TaxPeriod } from '../../../packages/itc/src/types.ts';
 import { EInvoiceService } from '../../../packages/gst/src/einvoice-service.ts';
 import {
@@ -188,7 +189,10 @@ export async function createCompanyShop(seed: CompanySeed) {
   const orders = new InMemoryPurchaseOrderStore();
   const receipts = new InMemoryGoodsReceiptStore();
   const approvals = new InMemoryMatchApprovalStore();
-  store.join(inventory).join(bills).join(orders).join(receipts).join(approvals);
+  // Issue #249 — the credit and debit notes live here, beside the bills, because the purchase
+  // comparison reads both: goods sent back to a supplier take their credit off the bill they correct.
+  const returnNotes = new InMemoryReturnNoteRepository();
+  store.join(inventory).join(bills).join(orders).join(receipts).join(approvals).join(returnNotes);
   const audit = new InMemoryAuditPort();
   // Issue #234 — the real clock (tests pin it through app-clock.ts). It used to be frozen at
   // 29 Aug 2026, so an e-way bill raised in September was "valid until" a day in August.
@@ -298,7 +302,7 @@ export async function createCompanyShop(seed: CompanySeed) {
     books: {
       async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
         const posted = await bills.list(companyId);
-        return posted
+        const fromBills = posted
           .filter((bill) => bill.invoiceDate.slice(0, 7) <= period)
           .map((bill) => purchaseBillToBookDocument(
             {
@@ -314,6 +318,18 @@ export async function createCompanyShop(seed: CompanySeed) {
             },
             { gstin: gstinOfParty(bill.supplierPartyId) },
           ));
+        // Issue #249 — every return of goods to a supplier, as a credit note linked to its bill, from
+        // the month of the return. It used to be left out, so the credit stayed at the full bill.
+        const returned = await Promise.all((await returnNotes.list(companyId))
+          .filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) <= period)
+          .map(async (note) => {
+            const bill = await bills.findById(companyId, note.originalDocument.id);
+            return purchaseReturnToBookDocument(note, {
+              gstin: gstinOfParty(String(note.partyId)),
+              name: bill?.supplierName ?? String(note.partyId),
+            });
+          }));
+        return [...fromBills, ...returned];
       },
     },
     records: itcRecords,
@@ -446,7 +462,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
   return {
-    store, inventory, inventoryService, bills, orders, receipts, approvals, audit, clock, ledger, posting,
+    store, inventory, inventoryService, bills, returnNotes, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
     itc, itcRecords, itcBatches, itcDecisions, itcClaims,
     eInvoice, eInvoices, eInvoicePolicies, irpPortal,

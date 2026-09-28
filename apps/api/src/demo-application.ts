@@ -193,7 +193,7 @@ import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src
 import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
 import { formatClaimDate } from '../../../packages/itc/src/deadline.ts';
 import {
-  GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInwardTaxPort,
+  GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInputBookTaxPort, ledgerInwardTaxPort,
   formatTaxPeriod, returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
   type OutwardDocument, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
@@ -567,8 +567,9 @@ export class DemoApplication {
     const shop = await createCompanyShop(config);
     const salesRepository = new InMemorySalesRepository();
     const paymentRepository = new InMemoryPaymentRepository();
-    const returnNotes = new InMemoryReturnNoteRepository();
-    shop.store.join(salesRepository).join(paymentRepository).join(returnNotes);
+    // Issue #249 — the shop holds the notes, so the purchase comparison reads the same ones.
+    const returnNotes = shop.returnNotes;
+    shop.store.join(salesRepository).join(paymentRepository);
     // Issue #181 — the customers and items this company actually keeps, in `packages/masters`.
     // The screens add to the same records, so a customer added at the counter is a customer the
     // bill can be made out to a moment later.
@@ -1089,6 +1090,8 @@ export class DemoApplication {
         permissions: [ITC_PERMISSIONS.view],
       })),
       books: ledgerBookTaxPort(shop.store.read()),
+      // Issue #249 — the input-tax side of the same ledger, for the purchases books-versus-return line.
+      inputBooks: ledgerInputBookTaxPort(shop.store.read()),
       repository: gstPreparations,
       audit: shop.audit,
       clock: appClock,
@@ -2854,6 +2857,20 @@ export class DemoApplication {
           agrees: head.agrees,
         })),
       },
+      // Issue #249 — the credit side: what the return claims against the input GST in the books.
+      purchaseReconciliation: workspace.purchaseReconciliation === null ? null : {
+        agrees: workspace.purchaseReconciliation.agrees,
+        sentence: workspace.purchaseReconciliation.sentence['en-IN'],
+        onTheReturn: jsonAmount(workspace.purchaseReconciliation.onTheReturn.minor),
+        inTheBooks: jsonAmount(workspace.purchaseReconciliation.inTheBooks.minor),
+        heads: workspace.purchaseReconciliation.heads.map((head) => ({
+          head: head.head,
+          onTheReturn: jsonAmount(head.onTheReturn.minor),
+          inTheBooks: jsonAmount(head.inTheBooks.minor),
+          explained: jsonAmount(head.explained.minor),
+          agrees: head.agrees,
+        })),
+      },
       // The bills that are in the books but cannot go on the return until somebody answers.
       exceptions: workspace.exceptions.map((exception) => ({
         number: exception.document.number,
@@ -2923,6 +2940,10 @@ export class DemoApplication {
         stale: line.decisionStale,
       },
       portalSource: line.portal?.source ?? null,
+      // Issue #249 — goods sent back: the bill the return corrects and our own note's number.
+      againstBill: line.book?.original?.number ?? null,
+      ourReference: line.book?.ourReference ?? null,
+      awaitingSupplierNote: line.book?.awaitingSupplierNote === true,
     };
   }
 
@@ -3192,7 +3213,28 @@ export class DemoApplication {
           id: note.id, number: note.number, kind: note.kind, date: note.documentDate,
           against: note.originalDocument.number, amount: jsonAmount(note.totals.total.minor),
           printable: this.notePrints.has(note.id),
+          // Issue #249 — the supplier's own credit note, once known, for goods sent back to them.
+          supplierCreditNote: note.supplierCreditNote ?? null,
         })),
+    };
+  }
+
+  /**
+   * Issue #249 — the supplier's credit-note number and date on a return of goods to them, added when
+   * their note arrives. The purchase check then looks for it in the government's record.
+   */
+  async recordSupplierCreditNote(actor: ActorContext, input: Record<string, unknown>) {
+    const noteId = String(input.noteId ?? '').trim();
+    if (noteId === '') throw invalid('RETURN_NOTE_REQUIRED', 'Choose the return the credit note is for.');
+    const note = await this.returns.recordSupplierCreditNote(actor, {
+      noteId,
+      number: String(input.supplierNoteNumber ?? ''),
+      date: isoDate(String(input.supplierNoteDate ?? '')),
+    });
+    return {
+      state: 'recorded', title: "Supplier's credit note added",
+      message: `${note.number} now carries ${note.supplierCreditNote?.number ?? ''} dated ${note.supplierCreditNote?.date ?? ''}. The purchase check will look for it in the government's record.`,
+      note: { id: note.id, number: note.number, supplierCreditNote: note.supplierCreditNote ?? null },
     };
   }
 
@@ -4678,9 +4720,22 @@ export class DemoApplication {
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
       lines: [{ originalLineId: lineId, quantity, disposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT', warehouseId: 'wh-main' }],
     };
+    // Issue #249 — the supplier's credit note, when it is already in hand. Both or neither.
+    const supplierNoteNumber = String(input.supplierNoteNumber ?? '').trim();
+    const supplierNoteDate = String(input.supplierNoteDate ?? '').trim();
+    // The date field starts filled with today, so an empty number means "not received yet".
+    if (supplierNoteNumber !== '' && supplierNoteDate === '') {
+      throw invalid('RETURN_SUPPLIER_NOTE_INCOMPLETE', "Type the date printed on the supplier's credit note too, or leave the number empty and add both when it arrives.");
+    }
     return kind === 'SALES_RETURN'
       ? { kind, command: { ...shared, originalInvoiceId: documentId } }
-      : { kind, command: { ...shared, originalBillId: documentId } };
+      : {
+        kind,
+        command: {
+          ...shared, originalBillId: documentId,
+          ...(supplierNoteNumber === '' ? {} : { supplierCreditNote: { number: supplierNoteNumber, date: isoDate(supplierNoteDate) } }),
+        },
+      };
   }
 
   private companyOf(actor: ActorContext): CompanyId {

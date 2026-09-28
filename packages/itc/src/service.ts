@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { checksumOf, parsePortalFile, parseTypedRecord, type ParsedPortalRecord, type TypedPortalRecord } from './import.ts';
-import { assessLine, linkageFor } from './itc.ts';
+import { assessLine, linkageFor, settleReturnsAgainstBills } from './itc.ts';
 import { lineKeyOf, matchDocuments } from './match.ts';
 import type {
   ImportBatchRepository,
@@ -174,10 +174,19 @@ export class ItcReconciliationService {
 
     const pairs = matchDocuments({ books, portal, policy });
     const today = indiaDateOf(this.#clock.now());
-    const lines = pairs.map((pair) => {
-      const provisional = assessLine({ pair, decision: null, policy, period, today });
-      return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy, period, today });
+    // Issue #249 — a supplier's credit note does not say which bill it corrects, so one with no
+    // return in our books is shown beside the bills we hold from that supplier, newest first.
+    const billsFrom = (gstin: string | null) => gstin === null ? [] : availableBooks
+      .filter((book) => book.kind === 'INVOICE' && !book.reversed && (book.supplierGstin ?? '').toUpperCase() === gstin.toUpperCase())
+      .sort((left, right) => right.documentDate.localeCompare(left.documentDate))
+      .map((book) => ({ number: book.number, date: book.documentDate }));
+    const assessed = pairs.map((pair) => {
+      const supplierBills = pair.book === null && pair.portal?.kind === 'CREDIT_NOTE' ? billsFrom(pair.portal.supplierGstin) : [];
+      const provisional = assessLine({ pair, decision: null, policy, period, today, supplierBills });
+      return assessLine({ pair, decision: latest.get(provisional.key) ?? null, policy, period, today, supplierBills });
     });
+    // Issue #249 — goods sent back against a bill whose own credit is still waiting wait with it.
+    const lines = settleReturnsAgainstBills(assessed, claimedBefore);
 
     return this.#assemble(period, lines, books, portal, lastImport);
   }
@@ -610,6 +619,8 @@ export class ItcReconciliationService {
       counts[line.status] += 1;
       outcomeCounts[line.outcome] += 1;
     }
+    // Issue #249 — a return waiting with its bill is not another bill that needs an answer.
+    const waitingBills = lines.filter((line) => line.outcome === 'HELD_BACK' && totalTaxOf(line.heldBack).minor >= 0n).length;
 
     const linkage = linkageFor(period, lines, books);
     // The headline figure is the *net* credit: a credit note the supplier reported lowers what can
@@ -698,8 +709,8 @@ export class ItcReconciliationService {
       atRisk,
       findings,
       sentence: {
-        'en-IN': `${formatTaxPeriod(period)}: ${formatINR(claimedTax)} of GST on your purchases is safe to claim this month, and ${formatINR(heldTax)} is being held back${heldTax.minor === 0n ? '' : ` on ${outcomeCounts.HELD_BACK} ${outcomeCounts.HELD_BACK === 1 ? 'bill that still needs' : 'bills that still need'} an answer`}.`,
-        'hi-IN': `${formatTaxPeriod(period)}: aapki kharid par ${formatINR(claimedTax)} GST is mahine lena theek hai, aur ${formatINR(heldTax)} roka gaya hai${heldTax.minor === 0n ? '' : `, ${outcomeCounts.HELD_BACK} bill par abhi jawab chahiye`}.`,
+        'en-IN': `${formatTaxPeriod(period)}: ${formatINR(claimedTax)} of GST on your purchases is safe to claim this month, and ${formatINR(heldTax)} is being held back${heldTax.minor === 0n || waitingBills === 0 ? '' : ` on ${waitingBills} ${waitingBills === 1 ? 'bill that still needs' : 'bills that still need'} an answer`}.`,
+        'hi-IN': `${formatTaxPeriod(period)}: aapki kharid par ${formatINR(claimedTax)} GST is mahine lena theek hai, aur ${formatINR(heldTax)} roka gaya hai${heldTax.minor === 0n || waitingBills === 0 ? '' : `, ${waitingBills} bill par abhi jawab chahiye`}.`,
       },
       returnLinkage: linkage,
     };

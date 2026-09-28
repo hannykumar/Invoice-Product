@@ -84,4 +84,20 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
     ALTER TABLE return_note_lines ADD COLUMN unit_price_paise bigint;
   `,
   down: `ALTER TABLE return_note_lines DROP COLUMN IF EXISTS unit_price_paise, DROP COLUMN IF EXISTS rate_percent_times100, DROP COLUMN IF EXISTS hsn_or_sac;`,
+}, {
+  // Issue #249 — the supplier's own credit note for goods sent back to them, matched against the
+  // government's purchase record. Known later than the return itself, so both columns are nullable
+  // and are set together or not at all.
+  id: '20260928T000645782Z_returns_334156bf2057_supplier_credit_note_on_purchase_returns',
+  up: `
+    ALTER TABLE return_notes ADD COLUMN supplier_credit_note_number text;
+    ALTER TABLE return_notes ADD COLUMN supplier_credit_note_date date;
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_supplier_credit_note_check CHECK (
+      (supplier_credit_note_number IS NULL AND supplier_credit_note_date IS NULL)
+      OR (kind = 'PURCHASE_RETURN' AND supplier_credit_note_number IS NOT NULL AND supplier_credit_note_date IS NOT NULL
+          AND length(trim(supplier_credit_note_number)) BETWEEN 1 AND 16)
+    );
+  `,
+  down: `ALTER TABLE return_notes DROP CONSTRAINT IF EXISTS return_notes_supplier_credit_note_check;
+    ALTER TABLE return_notes DROP COLUMN IF EXISTS supplier_credit_note_date, DROP COLUMN IF EXISTS supplier_credit_note_number;`,
 }]);

@@ -131,3 +131,33 @@ test('debit note numbers run on across 1 January and start again on 1 April', as
   assert.deepEqual(numbers, ['DN/26-27/0000001', 'DN/26-27/0000002', 'DN/27-28/0000001']);
   for (const number of numbers) assert.equal(number.length, 16, `${number} must use all sixteen characters`);
 });
+
+test('issue #249 — the supplier\'s credit note is optional on the return and can be added later, once', async () => {
+  const f = await setup();
+  const withNote = await f.service.postPurchase(f.actor, command(f.bill.id, {
+    idempotencyKey: 'with-supplier-note',
+    lines: [{ originalLineId: '1', quantity: quantityFromString('50', 'KGS'), disposition: 'ACCEPTED' }],
+    supplierCreditNote: { number: 'SRS-CN-1', date: isoDate('2026-08-30') },
+  }));
+  assert.deepEqual(withNote.note.supplierCreditNote, { number: 'SRS-CN-1', date: '2026-08-30' });
+
+  const later = await f.service.postPurchase(f.actor, command(f.bill.id, {
+    idempotencyKey: 'without-supplier-note',
+    lines: [{ originalLineId: '1', quantity: quantityFromString('50', 'KGS'), disposition: 'ACCEPTED' }],
+  }));
+  assert.equal(later.note.supplierCreditNote, null);
+  await assert.rejects(
+    f.service.recordSupplierCreditNote(f.actor, { noteId: later.note.id, number: 'srs/cn/001', date: isoDate('2026-08-31') }),
+    (error: any) => error.code === 'RETURN_SUPPLIER_NOTE_ALREADY_USED',
+    'the same note written differently is still the same note',
+  );
+  await assert.rejects(
+    f.service.recordSupplierCreditNote(f.actor, { noteId: later.note.id, number: 'SRS-CN-2', date: isoDate('2020-01-01') }),
+    (error: any) => error.code === 'RETURN_SUPPLIER_NOTE_BEFORE_BILL',
+  );
+  const added = await f.service.recordSupplierCreditNote(f.actor, { noteId: later.note.id, number: 'SRS-CN-2', date: isoDate('2026-08-31') });
+  assert.deepEqual(added.supplierCreditNote, { number: 'SRS-CN-2', date: '2026-08-31' });
+  assert.equal(added.voucherId, later.note.voucherId, 'the posted money is untouched');
+  const again = await f.service.recordSupplierCreditNote(f.actor, { noteId: later.note.id, number: 'SRS-CN-2', date: isoDate('2026-08-31') });
+  assert.equal(again.id, later.note.id);
+});

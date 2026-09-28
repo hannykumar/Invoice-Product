@@ -234,6 +234,15 @@ export interface InwardTaxSummary {
   /** Purchases that carried no GST at all, reported as a memorandum figure. */
   readonly exemptInwardValue: Money;
   readonly contributions: readonly SourceRef[];
+  /**
+   * Issue #249 — why the credit on the return can differ from the input GST the books moved this
+   * month: credit on earlier months' documents taken now, and credit on this month's documents
+   * not taken yet. Absent from a source that cannot say, and then the difference is not explained.
+   */
+  readonly booksExplanation?: {
+    readonly fromEarlierMonths: TaxAmounts;
+    readonly notClaimedThisMonth: TaxAmounts;
+  };
 }
 
 // ---------------------------------------------------------------------------- traceability
