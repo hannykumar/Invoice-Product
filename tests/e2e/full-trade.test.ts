@@ -224,10 +224,14 @@ test('Step 3. Sell 450 KGS at ₹90 with ₹2,000 freight: ₹42,500 + IGST ₹7
   t.diagnostic(`bill ${trade.invoiceNumber} (${trade.invoiceNumber.length} characters): ${inr(recorded.invoice.amount)}; stock 50 KGS; Home owed ${inr(screen.metrics.customersOwe)}`);
 });
 
-test('Step 3 (e-invoice line). The sale review says whether this bill needs an e-invoice', { todo: '#239' }, async () => {
+test('Step 3 (e-invoice line). The sale review says whether this bill needs an e-invoice', async (t) => {
+  // Sampoorna has not answered the turnover question in Business details, so the app cannot tell
+  // and says so, pointing to Business details — it never guesses (#239).
   const review = await ok('POST', '/api/sales/preview', saleInput('1', 'full-trade-238-einvoice-question'));
-  assert.equal(typeof review.eInvoice?.message, 'string', 'the review says, in one line, whether an e-invoice is needed');
-  assert.match(review.eInvoice.message, /e-invoice/i);
+  assert.equal(review.eInvoice.needed, 'UNKNOWN');
+  assert.equal(review.eInvoice.askTurnover, true, 'with a button to Business details');
+  assert.equal(review.eInvoice.message, "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.");
+  t.diagnostic(`e-invoice line: "${review.eInvoice.message}"`);
 });
 
 test('Step 4. Selling 600 KGS with 50 KGS in stock is refused, and no bill number is used up', async (t) => {

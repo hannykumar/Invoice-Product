@@ -75,7 +75,7 @@ import {
   creditLimitPaiseOf,
   setCustomerCreditLimit,
 } from './catalogue-application.ts';
-import { dispatchFrom, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
+import { dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
 import { STATE_NAMES } from '@invoice/transport';
@@ -1795,6 +1795,9 @@ export class DemoApplication {
         // Whether this consignment may not leave without an e-way bill. It never blocks the bill:
         // an e-way bill is raised against an issued invoice number, so the bill comes first.
         ewayBill: await this.ewayReminder(actor, draft, delivery),
+        // Issue #239 — whether this bill needs a government e-invoice number, decided here from
+        // what the app already knows and said in one line. Never a reason to hold the bill back.
+        eInvoice: this.eInvoiceDecisionFor(draft),
       };
     } catch (error) {
       // Issue #256 — a review the app refused (600 KGS asked, 50 KGS in the godown) saved nothing
@@ -1975,7 +1978,7 @@ export class DemoApplication {
   private startAutomaticEInvoice(actor: ActorContext, invoiceId: string): void {
     void (async () => {
       const document = await this.eInvoiceDocumentFor(actor, invoiceId);
-      const applicability = this.applicabilityFor(document, {});
+      const applicability = this.applicabilityFor(document);
       // Decided here rather than inside the service, because the service refuses a bill that does
       // not need one — and for a bill issued to a shopkeeper who never asked, that refusal is the
       // right answer, not an error worth showing them.
@@ -2000,7 +2003,7 @@ export class DemoApplication {
     for (const record of waiting) {
       try {
         const document = await this.eInvoiceDocumentFor(actor, record.documentId);
-        await this.shop.eInvoice.register(actor, { document, applicability: this.applicabilityFor(document, {}) });
+        await this.shop.eInvoice.register(actor, { document, applicability: this.applicabilityFor(document) });
         sent += 1;
       } catch {
         // Still down, or the bill has changed. It stays on the list and is tried again next time.
@@ -2022,24 +2025,22 @@ export class DemoApplication {
     });
     // Issue #210 part 3 — started, never awaited. The bill is issued whatever the portal does.
     if (!final.deduplicated) this.startAutomaticEInvoice(actor, final.invoice.id);
-    // The same cheap answer #189 prints by: a registered buyer, and a business that told us its
-    // turnover is above the limit. Deliberately not the full applicability call — that one builds a
-    // payload and can fail, and nothing on the e-invoice path may decide whether a bill is issued.
-    const eInvoiceExpected = final.invoice.customerType === 'B2B'
-      && this.eInvoiceTurnoverReached(final.invoice.documentDate);
-    const deadline = reportingDeadline(final.invoice.documentDate, this.turnoverFactsOn(final.invoice.documentDate).lastYearTurnover ?? {}, appToday());
-    const lateForPortal = deadline.kind === 'LIMIT' && deadline.closed ? deadline.message : null;
+    // Issue #239 — the same decision the review showed, from the same facts: the buyer (registered,
+    // consumer or export), the bill's date, and the turnover band and exemption in Business details.
+    // It builds no payload, so it cannot fail in a way that touches the bill.
+    const decision = this.eInvoiceDecisionFor(final.invoice);
     return {
       state: 'recorded', deduplicated: final.deduplicated,
       title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded',
       message: `${final.invoice.number} was issued.`,
       // Said on the screen the moment the bill is issued, so nobody has to go looking for it.
-      eInvoice: !eInvoiceExpected
-        ? { expected: false, message: null }
-        : lateForPortal !== null
-          // Issue #236 — a bill dated too long ago for the portal is not described as being sent.
-          ? { expected: true, message: `This bill has to carry a government e-invoice number, but it cannot be sent. ${lateForPortal}` }
-          : { expected: true, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' },
+      eInvoice: decision.needed === 'NO'
+        ? { expected: false, needed: 'NO' as const, message: null, askTurnover: false }
+        : decision.needed === 'UNKNOWN'
+          ? { expected: false, needed: 'UNKNOWN' as const, message: decision.message, askTurnover: decision.askTurnover }
+          : decision.lateForPortal === true
+            ? { expected: true, needed: 'YES' as const, message: decision.message, askTurnover: false }
+            : { expected: true, needed: 'YES' as const, askTurnover: false, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' },
       invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
     };
   }
@@ -2275,9 +2276,10 @@ export class DemoApplication {
     // told us its turnover went over ₹5 crore (the e-invoice threshold — last year, or any year from
     // 2017-18 on, #236) and the customer is a registered business. Every other bill prints no
     // e-invoice block at all.
+    // Issue #239 — the same decision the sale review and the E-invoice screen show, so an exempt
+    // business or an export is judged here exactly as there.
     const eInvoiceExpected =
-      eInvoiceRecords.length > 0 ||
-      (invoice.customerType === 'B2B' && this.eInvoiceTurnoverReached(invoice.documentDate));
+      eInvoiceRecords.length > 0 || this.eInvoiceDecisionFor(invoice).needed === 'YES';
     const upiId = upiIdOf(companyId);
     // Issue #182 — the e-way bill number is raised against the issued invoice, so it only exists
     // after the bill is frozen. It is layered on here exactly as the government's IRN is: the
@@ -3667,44 +3669,138 @@ export class DemoApplication {
     };
   }
 
-  /** Whether the business has told us it is over the e-invoice limit — what the bill and the issue screen say. */
-  private eInvoiceTurnoverReached(on: string): boolean {
-    return this.turnoverFactsOn(on).declaredTurnoverBand?.above === true;
-  }
-
-  private applicabilityFor(document: EInvoiceDocument, input: Record<string, unknown>) {
-    const facts = this.turnoverFactsOn(document.documentDate);
-    return {
-      documentType: document.documentType,
+  /**
+   * Issue #239 — the facts the rules decide on, all of them already held by the app: the bill's own
+   * date and buyer, the turnover band and the exemption from Business details. Nothing is taken
+   * from what somebody types on the E-invoice screen, so that screen and the sale review cannot
+   * give two different answers for one bill.
+   */
+  private applicabilityFor(document: EInvoiceDocument) {
+    return this.applicabilityOf({
       documentDate: document.documentDate,
       recipientKind: document.recipientKind,
-      ...(document.recipient.gstin === '' ? {} : { recipientGstin: document.recipient.gstin }),
+      recipientGstin: document.recipient.gstin,
+    });
+  }
+
+  private applicabilityOf(bill: { readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null }) {
+    const exemption = eInvoiceExemptionOf(this.config.companyId);
+    return {
+      documentType: 'INVOICE' as const,
+      documentDate: bill.documentDate,
+      recipientKind: bill.recipientKind,
+      ...(bill.recipientGstin === null || bill.recipientGstin === '' || bill.recipientGstin === 'URP' ? {} : { recipientGstin: bill.recipientGstin }),
       supplier: {
-        gstin: document.supplier.gstin,
-        ...facts,
-        ...(input.exempt ? { exemptCategories: [String(input.exempt)] as never } : {}),
+        gstin: this.config.gstin,
+        ...this.turnoverFactsOn(bill.documentDate),
+        ...(exemption === 'NONE' ? {} : { exemptCategories: [exemption] }),
       },
     };
   }
 
-  /** The invoices this company has issued, for the picker on the e-invoice screen. */
+  /**
+   * Issue #239 — whether this bill needs a government e-invoice number, said in one line.
+   *
+   * Decided by the same rules that decide whether the bill is sent, from what the app already
+   * knows: who the buyer is (a registered business, a consumer, an export), the bill's date, and
+   * the turnover band and exemption saved in Business details. When the turnover is not known the
+   * answer is "we don't know yet" with a pointer to Business details — never a guess either way.
+   * It never stops a bill being issued (#210 part 3).
+   */
+  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string }): {
+    readonly needed: 'YES' | 'NO' | 'UNKNOWN';
+    readonly message: string;
+    readonly askTurnover: boolean;
+    readonly ruleId: string;
+    /** Needed, but dated too long ago for the portal to take it (#236). */
+    readonly lateForPortal?: boolean;
+  } {
+    let gstin: string | null = null;
+    try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch { gstin = null; }
+    const recipientKind = this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
+    const decision = decideApplicability(this.applicabilityOf({ documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
+    const NOT_NEEDED = 'This bill does not need an e-invoice number';
+    if (decision.outcome === 'APPLICABLE') {
+      const deadline = reportingDeadline(bill.documentDate, this.turnoverFactsOn(bill.documentDate).lastYearTurnover ?? {}, appToday());
+      // Issue #236 — a bill dated too long ago for the portal is not described as being sent.
+      const late = deadline.kind === 'LIMIT' && deadline.closed;
+      const message = late
+        ? `This bill needs a government e-invoice number, but it cannot be sent. ${deadline.message}`
+        : 'This bill needs a government e-invoice number. It is sent by itself when you issue it.';
+      return { needed: 'YES', message, askTurnover: false, ruleId: decision.ruleId, lateForPortal: late };
+    }
+    if (decision.outcome === 'NOT_APPLICABLE') {
+      const exemption = eInvoiceExemptionOf(this.config.companyId);
+      const message = decision.ruleId === 'EINV.RECIPIENT.B2C'
+        ? `${NOT_NEEDED}: the customer has no GST number.`
+        : decision.ruleId.startsWith('EINV.EXEMPT.') && exemption !== 'NONE'
+          ? `${NOT_NEEDED}: Business details says your business is ${EINVOICE_EXEMPTION_WORDS[exemption]}, and the e-invoice rules leave those out whatever the turnover.`
+          : decision.ruleId.startsWith('EINV.THRESHOLD.')
+            ? `${NOT_NEEDED}: Business details says your turnover has never been over ₹5 crore in any year since 2017-18.`
+            : `${NOT_NEEDED}. ${decision.reason}`;
+      return { needed: 'NO', message, askTurnover: false, ruleId: decision.ruleId };
+    }
+    if (decision.ruleId === 'EINV.TURNOVER.UNKNOWN') {
+      return {
+        needed: 'UNKNOWN', askTurnover: true, ruleId: decision.ruleId,
+        message: "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.",
+      };
+    }
+    return { needed: 'UNKNOWN', askTurnover: false, ruleId: decision.ruleId, message: decision.reason };
+  }
+
+  /**
+   * The invoices this company has issued: the pickers on other screens, and the E-invoice screen's
+   * list (#239) — each bill, whether it needs an e-invoice number and why, and where it stands with
+   * the government in plain words. Nothing here asks the person anything.
+   */
   async issuedInvoices(actor: ActorContext) {
     const companyId = this.companyOf(actor);
     const invoices = await this.salesRepository.list(companyId, { state: 'FINAL' });
     const records = await this.shop.eInvoice.list(actor);
+    const now = new Date().toISOString();
     return {
       invoices: invoices.map((invoice) => {
         const record = records.find((candidate) => candidate.documentId === invoice.id);
+        const decision = this.eInvoiceDecisionFor(invoice);
+        let customer: string | null = null;
+        try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch { customer = null; }
+        const status = record?.status ?? 'NOT_SENT';
         return {
           id: invoice.id,
           number: invoice.number,
           date: invoice.documentDate,
+          customer,
           amount: jsonAmount(invoice.pricing?.totals.invoiceValue.minor ?? 0n),
           // The bill's own state and the government's are shown separately, never merged.
-          eInvoiceStatus: record?.status ?? 'NOT_SENT',
+          eInvoiceStatus: status,
+          // Issue #239 — decided by the app, never asked.
+          needed: decision.needed,
+          // The bill is already issued, so "sent by itself when you issue it" is not said here;
+          // the status line says where it stands.
+          decision: decision.needed === 'YES' && decision.lateForPortal !== true
+            ? 'This bill needs a government e-invoice number.'
+            : decision.message,
+          askTurnover: decision.askTurnover,
+          statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
+          canRetry: status === 'FAILED' && record?.failure?.retryable === true && decision.needed === 'YES',
+          canCancel: status === 'REGISTERED' && (record?.cancellableUntil === undefined || record.cancellableUntil > now),
         };
       }),
     };
+  }
+
+  /** Issue #239 — where a bill stands with the government, in one plain line. */
+  private static eInvoiceStatusText(status: string, failure: { readonly message: string; readonly retryable: boolean } | null, needed: 'YES' | 'NO' | 'UNKNOWN'): string {
+    switch (status) {
+      case 'REGISTERED': return 'Sent. The government gave it an e-invoice number.';
+      case 'PENDING': return 'Waiting for the government to answer.';
+      case 'CANCELLED': return 'Cancelled with the government.';
+      case 'FAILED': return failure === null
+        ? 'Refused by the government.'
+        : `Refused by the government: ${failure.message}${failure.retryable ? ' Worth trying again.' : ''}`;
+      default: return needed === 'YES' ? 'Not sent yet.' : needed === 'NO' ? 'Nothing to send.' : 'Not sent: waiting for your turnover answer in Business details.';
+    }
   }
 
   private static eInvoiceJson(record: EInvoiceRecord) {
@@ -3741,8 +3837,9 @@ export class DemoApplication {
   /** Whether this bill needs an IRN, and what would be sent. Writes nothing, sends nothing. */
   async previewEInvoice(actor: ActorContext, input: Record<string, unknown>) {
     const document = await this.eInvoiceDocumentFor(actor, String(input.invoice ?? ''));
+    const existing = (await this.shop.eInvoice.list(actor)).find((record) => record.documentId === document.documentId) ?? null;
     const preview = await this.shop.eInvoice.preview(actor, {
-      document, applicability: this.applicabilityFor(document, input),
+      document, applicability: this.applicabilityFor(document),
     });
     return {
       state: 'preview' as const,
@@ -3763,6 +3860,9 @@ export class DemoApplication {
       deadline: preview.deadline === undefined ? null : { kind: preview.deadline.kind, message: preview.deadline.message },
       problems: preview.problems.map((problem) => ({ field: problem.field, message: problem.message })),
       documentNumber: document.documentNumber,
+      // Issue #239 — what the government already holds for this bill, so a bill already sent is
+      // shown as sent (with Cancel), not as "Ready to send" (left over from #236).
+      record: existing === null ? null : DemoApplication.eInvoiceJson(existing),
     };
   }
 
@@ -3770,7 +3870,7 @@ export class DemoApplication {
   async registerEInvoice(actor: ActorContext, input: Record<string, unknown>) {
     const document = await this.eInvoiceDocumentFor(actor, String(input.invoice ?? ''));
     const record = await this.shop.eInvoice.register(actor, {
-      document, applicability: this.applicabilityFor(document, input),
+      document, applicability: this.applicabilityFor(document),
     });
     return DemoApplication.eInvoiceJson(record);
   }
@@ -3793,7 +3893,7 @@ export class DemoApplication {
   async eInvoiceOfflineJson(actor: ActorContext, input: Record<string, unknown>) {
     const document = await this.eInvoiceDocumentFor(actor, String(input.invoice ?? ''));
     const json = await this.shop.eInvoice.offlineJson(actor, {
-      document, applicability: this.applicabilityFor(document, input),
+      document, applicability: this.applicabilityFor(document),
     });
     return { state: 'offline' as const, fileName: `einvoice-${document.documentNumber.replace(/\//g, '-')}.json`, json };
   }
@@ -4810,3 +4910,14 @@ export class DemoApplication {
     return actor.companyId;
   }
 }
+
+/** Issue #239 — the exempt kinds of business, as the sale review names them. */
+const EINVOICE_EXEMPTION_WORDS: Readonly<Record<Exclude<ReturnType<typeof eInvoiceExemptionOf>, 'NONE'>, string>> = {
+  BANKING_OR_NBFC: 'a bank or a finance company (NBFC)',
+  INSURANCE: 'an insurance company',
+  GOODS_TRANSPORT_AGENCY: 'a goods transport agency',
+  PASSENGER_TRANSPORT: 'a passenger transport business',
+  CINEMA_ADMISSION: 'a cinema',
+  SEZ_UNIT: 'a unit in a Special Economic Zone',
+  GOVERNMENT_DEPARTMENT: 'a government department or local authority',
+};

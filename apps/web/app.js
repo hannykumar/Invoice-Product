@@ -94,7 +94,7 @@ const copy = {
     customerStateHelp: "For a registered customer the state comes from the first two digits of their GST number, and cannot be changed.",
     customerPhone: "Phone (optional)", saveCustomer: "Save customer",
     customerCreditLimit: "Credit limit in ₹ (optional)", customerCreditLimitHelp: "The most this customer may owe you. Leave it empty for no limit: then no bill to them is checked against one.", customerCreditLimitShown: "credit limit {amount}",
-    changeItemCode: "Change HSN code", itemCodeTitle: "Change the item's HSN code", itemCodeCurrent: "{item} carries the code {code} ({digits} digits).", itemCodeNew: "New HSN or SAC code", itemCodeHelp: "Type every digit you have. More digits are always accepted; a shorter code is never padded with zeros.", itemCodeSave: "Save code", itemCodePick: "Choose an item first.", turnoverLegend: "Turnover last year", turnoverQuestion: "What was your business's total turnover last financial year? Count all sales under your PAN across every GST registration in India, including exempt sales and exports, before GST.", turnoverUpTo5: "₹5 crore or less, and never more than ₹5 crore in any year since 2017-18", turnoverUpTo5Earlier: "₹5 crore or less last year, but more than ₹5 crore in some earlier year since 2017-18", turnover5To10: "More than ₹5 crore, but less than ₹10 crore", turnover10Plus: "₹10 crore or more", turnoverUnsure: "Not sure", turnoverWhy: "Until you tell us, we ask for 6 HSN digits, and we ask you before sending any bill for a government e-invoice number.", turnoverFor: "This answer is for bills in {year}. It decides how many HSN digits each bill needs, whether a bill needs a government e-invoice number, and whether it must be sent within 30 days.", turnoverAskAgainYES: "Earlier you only told us it was more than ₹5 crore. Please pick one answer above: only a business with ₹10 crore or more has to send each bill for its e-invoice number within 30 days.", turnoverAskAgainNO: "Earlier you only told us it was ₹5 crore or less. Please pick one answer above: a business that went over ₹5 crore in any year since 2017-18 still needs e-invoice numbers.", addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
+    changeItemCode: "Change HSN code", itemCodeTitle: "Change the item's HSN code", itemCodeCurrent: "{item} carries the code {code} ({digits} digits).", itemCodeNew: "New HSN or SAC code", itemCodeHelp: "Type every digit you have. More digits are always accepted; a shorter code is never padded with zeros.", itemCodeSave: "Save code", itemCodePick: "Choose an item first.", turnoverLegend: "Turnover last year", turnoverQuestion: "What was your business's total turnover last financial year? Count all sales under your PAN across every GST registration in India, including exempt sales and exports, before GST.", turnoverUpTo5: "₹5 crore or less, and never more than ₹5 crore in any year since 2017-18", turnoverUpTo5Earlier: "₹5 crore or less last year, but more than ₹5 crore in some earlier year since 2017-18", turnover5To10: "More than ₹5 crore, but less than ₹10 crore", turnover10Plus: "₹10 crore or more", turnoverUnsure: "Not sure", turnoverWhy: "Until you tell us, we ask for 6 HSN digits, no bill is sent for a government e-invoice number, and each sale review says we don't know yet whether it needs one.", turnoverFor: "This answer is for bills in {year}. It decides how many HSN digits each bill needs, whether a bill needs a government e-invoice number, and whether it must be sent within 30 days.", turnoverAskAgainYES: "Earlier you only told us it was more than ₹5 crore. Please pick one answer above: only a business with ₹10 crore or more has to send each bill for its e-invoice number within 30 days.", turnoverAskAgainNO: "Earlier you only told us it was ₹5 crore or less. Please pick one answer above: a business that went over ₹5 crore in any year since 2017-18 still needs e-invoice numbers.", addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
     itemName: "What it is called on the bill", itemKind: "Goods or a service?", itemGoods: "Goods", itemService: "A service",
     itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits; bills to GST-registered customers need at least 4, and at least 6 above ₹5 crore turnover. A service carries a 6-digit SAC starting 99.",
     itemUnit: "How is it counted?", itemTax: "The GST you charge on it", itemTaxHelp: "This is the rate your business charges. We record it as yours and the bill says so; we never pick one for you.",
@@ -132,10 +132,12 @@ const copy = {
     migrationRead: "Read this file",
     saleChecked: "Sale checked", saleCheckedBody: "The checked sale comes to {amount}.", saleEffectInvoice: "A numbered invoice will be issued.", saleEffectBalance: "The customer balance will increase.", purchaseChecked: "Purchase checked", purchaseCheckedBody: "The checked supplier bill comes to {amount}.", purchaseEffectStock: "Stock will update from this purchase.", purchaseEffectBooks: "GST and the supplier balance will post together.", paymentChecked: "Payment checked", paymentCheckedBody: "A receipt of {amount} is ready to record.", paymentEffectBalance: "The customer balance will reduce when this is recorded.", saleRecorded: "Sale recorded", saleRecordedBody: "Invoice {number} was issued.", purchaseRecorded: "Purchase recorded", purchaseRecordedBody: "Stock, GST and the supplier balance were recorded together.", paymentRecorded: "Payment recorded", paymentRecordedBody: "The customer receipt was recorded once.", amountInvalid: "Enter a valid amount greater than zero.", referenceRequired: "Enter the supplier bill number.", rateRequired: "Enter a price and quantity.", permissionDenied: "You do not have permission to do this work.",
     navEInvoice: "E-invoice",
-    einvoiceTitle: "Does this bill need a government e-invoice number?", einvoiceHelp: "Most bills do not. We work it out from your turnover and who the bill is for, tell you which rule decided it, and only then offer to send it.",
-    whichBill: "Which bill", einvoiceTurnoverFrom: "We use the turnover you gave in Business details, so you are not asked for it again here. To change it, open Business details.",
-    exemptCategory: "Is your business exempt?", notExempt: "No", exemptBank: "A bank or finance company", exemptGta: "A goods transport agency", exemptSez: "A unit in an SEZ",
-    checkNeeded: "Check this bill", einvoiceSafety: "Checking sends nothing. Nothing reaches the government until you press the send button.",
+    einvoiceTitle: "E-invoice numbers for your bills", einvoiceHelp: "The app works out for every bill whether it needs a government e-invoice number, from who the bill is for and your answers in Business details. You are not asked anything here.",
+    whichBill: "Which bill", einvoiceTurnoverFrom: "Worked out from your turnover and business type in Business details. To change them, open Business details.",
+    einvoiceListTitle: "Your bills", einvoiceAskTurnover: "We don't know yet whether you need e-invoices, because Business details does not say whether your turnover has been over ₹5 crore.", answerInBusinessDetails: "Answer once in Business details", backToSale: "Back to the sale", einvoiceNoBills: "No bills issued yet.", einvoiceOpen: "Open", einvoiceRetry: "Try sending again", einvoiceCancelOpen: "Cancel…",
+    einvoiceNeedsYes: "Needs an e-invoice number", einvoiceNeedsNo: "No e-invoice needed", einvoiceNeedsUnknown: "Not known yet",
+    exemptLegend: "E-invoice exemption", exemptCategory: "Is your business one of these kinds?", notExempt: "No, none of these", exemptBank: "A bank or finance company (NBFC)", exemptInsurance: "An insurance company", exemptGta: "A goods transport agency", exemptPassenger: "A passenger transport business", exemptCinema: "A cinema", exemptSez: "A unit in an SEZ", exemptGovernment: "A government department or local authority", exemptHint: "The government leaves these kinds of business out of e-invoicing whatever their turnover. Most businesses are none of them.",
+    checkNeeded: "Check this bill", einvoiceSafety: "A bill that needs an e-invoice number is sent by itself when you issue it. Nothing else is sent from here unless you press a button.",
     sendToGovernment: "Send to the government", downloadOffline: "Download the file instead", askGovernment: "Ask the government what it has",
     cancelReasonKind: "Why are you cancelling?", reasonMistake: "Something was typed wrong", reasonDuplicate: "The same bill was sent twice", reasonOrderOff: "The order was cancelled", reasonOther: "Another reason",
     cancelReasonWhy: "Say it in your own words", cancelEInvoice: "Cancel with the government",
@@ -421,7 +423,7 @@ const copy = {
     customerStateHelp: "Registered customer ka rajya unke GST number ke pehle do ank se aata hai, aur badla nahin ja sakta.",
     customerPhone: "Phone (marzi se)", saveCustomer: "Customer save karen",
     customerCreditLimit: "Udhaar seema ₹ mein (marzi se)", customerCreditLimitHelp: "Yeh customer aapka zyada se zyada kitna baaki rakh sakta hai. Khali chhodein to koi seema nahin, aur unka koi bill seema se nahin jaancha jayega.", customerCreditLimitShown: "udhaar seema {amount}",
-    changeItemCode: "HSN code badlein", itemCodeTitle: "Item ka HSN code badlein", itemCodeCurrent: "{item} ka code {code} hai ({digits} ank).", itemCodeNew: "Naya HSN ya SAC code", itemCodeHelp: "Jitne ank aapke paas hain, sab bharein. Zyada ank hamesha chalte hain; chhote code mein zero nahin joda jata.", itemCodeSave: "Code save karen", itemCodePick: "Pehle item chunen.", turnoverLegend: "Pichhle saal ka turnover", turnoverQuestion: "Pichhle financial year mein aapke business ka kul turnover kitna tha? Aapke PAN par Bharat ke har GST registration ki saari bikri, exempt aur export milakar, GST se pehle.", turnoverUpTo5: "₹5 crore ya usse kam, aur 2017-18 se kisi bhi saal ₹5 crore se zyada nahin", turnoverUpTo5Earlier: "Pichhle saal ₹5 crore ya usse kam, par 2017-18 se kisi pehle saal ₹5 crore se zyada", turnover5To10: "₹5 crore se zyada, par ₹10 crore se kam", turnover10Plus: "₹10 crore ya usse zyada", turnoverUnsure: "Pakka nahin", turnoverWhy: "Jab tak aap nahin batate, hum HSN ke 6 ank maangte hain, aur kisi bhi bill ko sarkari e-invoice number ke liye bhejne se pehle aapse poochte hain.", turnoverFor: "Yeh jawab {year} ke bills ke liye hai. Isse tay hota hai ki har bill par HSN ke kitne ank chahiye, bill ko sarkari e-invoice number chahiye ya nahin, aur use 30 din ke andar bhejna hai ya nahin.", turnoverAskAgainYES: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore se zyada tha. Upar ek jawab chunen: sirf ₹10 crore ya usse zyada wale business ko har bill 30 din ke andar e-invoice number ke liye bhejna hota hai.", turnoverAskAgainNO: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore ya usse kam tha. Upar ek jawab chunen: jo business 2017-18 se kisi bhi saal ₹5 crore se upar gaya, use ab bhi e-invoice number chahiye.", addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
+    changeItemCode: "HSN code badlein", itemCodeTitle: "Item ka HSN code badlein", itemCodeCurrent: "{item} ka code {code} hai ({digits} ank).", itemCodeNew: "Naya HSN ya SAC code", itemCodeHelp: "Jitne ank aapke paas hain, sab bharein. Zyada ank hamesha chalte hain; chhote code mein zero nahin joda jata.", itemCodeSave: "Code save karen", itemCodePick: "Pehle item chunen.", turnoverLegend: "Pichhle saal ka turnover", turnoverQuestion: "Pichhle financial year mein aapke business ka kul turnover kitna tha? Aapke PAN par Bharat ke har GST registration ki saari bikri, exempt aur export milakar, GST se pehle.", turnoverUpTo5: "₹5 crore ya usse kam, aur 2017-18 se kisi bhi saal ₹5 crore se zyada nahin", turnoverUpTo5Earlier: "Pichhle saal ₹5 crore ya usse kam, par 2017-18 se kisi pehle saal ₹5 crore se zyada", turnover5To10: "₹5 crore se zyada, par ₹10 crore se kam", turnover10Plus: "₹10 crore ya usse zyada", turnoverUnsure: "Pakka nahin", turnoverWhy: "Jab tak aap nahin batate, hum HSN ke 6 ank maangte hain, koi bill sarkari e-invoice number ke liye nahin bheja jata, aur har bikri jaanch par likha aata hai ki abhi pata nahin use e-invoice chahiye ya nahin.", turnoverFor: "Yeh jawab {year} ke bills ke liye hai. Isse tay hota hai ki har bill par HSN ke kitne ank chahiye, bill ko sarkari e-invoice number chahiye ya nahin, aur use 30 din ke andar bhejna hai ya nahin.", turnoverAskAgainYES: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore se zyada tha. Upar ek jawab chunen: sirf ₹10 crore ya usse zyada wale business ko har bill 30 din ke andar e-invoice number ke liye bhejna hota hai.", turnoverAskAgainNO: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore ya usse kam tha. Upar ek jawab chunen: jo business 2017-18 se kisi bhi saal ₹5 crore se upar gaya, use ab bhi e-invoice number chahiye.", addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
     itemName: "Bill par iska naam", itemKind: "Maal hai ya seva?", itemGoods: "Maal", itemService: "Seva",
     itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai; GST-registered customer ke bill par kam se kam 4, aur ₹5 crore se zyada turnover par kam se kam 6. Seva ka SAC 6 ank ka, 99 se shuru.",
     itemUnit: "Kaise gina jata hai?", itemTax: "Aap ispar kitna GST lete hain", itemTaxHelp: "Yeh aapke vyapar ka rate hai. Hum ise aapka rate likhte hain aur bill par bhi yahi likha jata hai; hum khud koi rate nahin chunte.",
@@ -459,10 +461,12 @@ const copy = {
     migrationRead: "Yeh file padhein",
     saleChecked: "Bikri jaanch li", saleCheckedBody: "Jaanchi hui bikri {amount} ki hai.", saleEffectInvoice: "Number wali invoice jaari hogi.", saleEffectBalance: "Customer ka baki paisa badhega.", purchaseChecked: "Kharid jaanch li", purchaseCheckedBody: "Jaancha hua supplier bill {amount} ka hai.", purchaseEffectStock: "Is kharid se stock update hoga.", purchaseEffectBooks: "GST aur supplier balance ek saath darj honge.", paymentChecked: "Payment jaanch li", paymentCheckedBody: "{amount} ki receipt darj karne ke liye taiyar hai.", paymentEffectBalance: "Darj hone par customer ka baki paisa kam hoga.", saleRecorded: "Bikri darj hui", saleRecordedBody: "Invoice {number} jaari hui.", purchaseRecorded: "Kharid darj hui", purchaseRecordedBody: "Stock, GST aur supplier balance ek saath darj hue.", paymentRecorded: "Payment darj hua", paymentRecordedBody: "Customer receipt ek baar darj hui.", amountInvalid: "Zero se badi sahi rakam bharen.", referenceRequired: "Supplier bill number bharen.", rateRequired: "Daam aur matra bharen.", permissionDenied: "Aapko yeh kaam karne ki permission nahin hai.",
     navEInvoice: "E-invoice",
-    einvoiceTitle: "Kya is bill ko sarkari e-invoice number chahiye?", einvoiceHelp: "Zyadatar bills ko nahin chahiye. Hum aapke turnover aur bill kiske liye hai, isse tay karte hain, batate hain kaunsa niyam laga, aur tabhi bhejne ko kehte hain.",
-    whichBill: "Kaunsa bill", einvoiceTurnoverFrom: "Hum Business details mein diya gaya turnover lete hain, isliye yahan dobara nahin poochte. Badalna ho to Business details kholen.",
-    exemptCategory: "Kya aapka business chhoot mein hai?", notExempt: "Nahin", exemptBank: "Bank ya finance company", exemptGta: "Maal dhulai agency", exemptSez: "SEZ ki unit",
-    checkNeeded: "Yeh bill jaanchen", einvoiceSafety: "Jaanchne se kuch nahin jata. Bhejne ka button dabane tak sarkar tak kuch nahin pahunchta.",
+    einvoiceTitle: "Aapke bills ke e-invoice number", einvoiceHelp: "App har bill ke liye khud tay karta hai ki use sarkari e-invoice number chahiye ya nahin — bill kiske liye hai aur Business details mein aapke jawab se. Yahan aapse kuch nahin poocha jata.",
+    whichBill: "Kaunsa bill", einvoiceTurnoverFrom: "Business details mein diye turnover aur business ke prakar se tay hota hai. Badalna ho to Business details kholen.",
+    einvoiceListTitle: "Aapke bills", einvoiceAskTurnover: "Abhi pata nahin ki aapko e-invoice chahiye ya nahin, kyonki Business details mein nahin likha ki aapka turnover kabhi ₹5 crore se upar gaya ya nahin.", answerInBusinessDetails: "Business details mein ek baar batayein", backToSale: "Bikri par wapas", einvoiceNoBills: "Abhi koi bill jaari nahin hua.", einvoiceOpen: "Kholen", einvoiceRetry: "Phir se bhejein", einvoiceCancelOpen: "Radd karen…",
+    einvoiceNeedsYes: "E-invoice number chahiye", einvoiceNeedsNo: "E-invoice nahin chahiye", einvoiceNeedsUnknown: "Abhi pata nahin",
+    exemptLegend: "E-invoice se chhoot", exemptCategory: "Kya aapka business inmein se hai?", notExempt: "Nahin, inmein se koi nahin", exemptBank: "Bank ya finance company (NBFC)", exemptInsurance: "Insurance company", exemptGta: "Maal dhulai agency", exemptPassenger: "Savari transport business", exemptCinema: "Cinema", exemptSez: "SEZ ki unit", exemptGovernment: "Sarkari vibhag ya local authority", exemptHint: "Sarkar in businesses ko turnover chahe jitna ho, e-invoice se bahar rakhti hai. Zyadatar business inmein se koi nahin hote.",
+    checkNeeded: "Yeh bill jaanchen", einvoiceSafety: "Jis bill ko e-invoice number chahiye, woh jaari karte hi apne aap chala jata hai. Yahan se aur kuch tabhi jata hai jab aap button dabayein.",
     sendToGovernment: "Sarkar ko bhejein", downloadOffline: "File download karen", askGovernment: "Sarkar se poochen unke paas kya hai",
     cancelReasonKind: "Radd kyon kar rahe hain?", reasonMistake: "Kuch galat type ho gaya", reasonDuplicate: "Wahi bill do baar chala gaya", reasonOrderOff: "Order radd ho gaya", reasonOther: "Doosri wajah",
     cancelReasonWhy: "Apne shabdon mein batayein", cancelEInvoice: "Sarkar ke saath radd karen",
@@ -855,6 +859,7 @@ function openView(view) {
   if (target === "ask") loadAskExamples();
   if (target === "ask") { loadAskExamples(); loadAgentCapabilities(); }
   if (target === "business") openBusinessDetails();
+  if (target === "einvoice") loadIssuedInvoices();
   if (target === "setup") loadSetupStates();
   if (target === "branding") openBranding();
 }
@@ -1345,6 +1350,12 @@ function localizedError(error) {
 }
 
 function localizeResult(result, flow, mode) {
+  // Issue #210 part 3 / #239 — the bill is already issued. Whether it has to carry a government
+  // e-invoice number (or that we don't know yet) is said here in every language, rather than
+  // leaving the person to go looking on another screen.
+  if (flow === "sale" && mode !== "preview" && result.eInvoice?.message) {
+    result = { ...result, effects: [result.eInvoice.message], askTurnover: result.eInvoice.askTurnover === true };
+  }
   if (state.locale === "en-IN") return result;
   if (mode === "preview") {
     if (flow === "sale") return { ...result, title: copy[state.locale].saleChecked, message: text("saleCheckedBody", { amount: money(result.amount) }), effects: [copy[state.locale].saleEffectInvoice, copy[state.locale].saleEffectBalance] };
@@ -1359,7 +1370,6 @@ function localizeResult(result, flow, mode) {
     ...result,
     title: copy[state.locale].saleRecorded,
     message: text("saleRecordedBody", { number: result.invoice?.number ?? "—" }),
-    ...(result.eInvoice?.expected ? { effects: [result.eInvoice.message] } : {}),
   };
   if (flow === "purchase") return { ...result, title: copy[state.locale].purchaseRecorded, message: copy[state.locale].purchaseRecordedBody };
   return { ...result, title: copy[state.locale].paymentRecorded };
@@ -1396,6 +1406,8 @@ function showDialog(result, mode) {
   cancel.textContent = mode === "preview" ? copy[state.locale].keepEditing : copy[state.locale].close;
   cancel.disabled = mode === "loading";
   confirm.hidden = mode !== "preview";
+  // Issue #239 — when the app cannot yet tell whether e-invoices apply, one button to the question.
+  document.querySelector("#review-turnover").hidden = !(result.askTurnover === true && mode !== "loading");
   const download = document.querySelector("#review-download");
   download.hidden = mode !== "recorded" || !result.invoice?.id;
   download.textContent = copy[state.locale].downloadPdf;
@@ -1508,13 +1520,15 @@ document.querySelectorAll(".draft-form").forEach((form) => {
         // Issue #143 — the endorsement the bill will carry, so an export is never issued as a local sale.
         ...(result.exportSupply ? [result.exportSupply.endorsement] : []),
         ...(result.ewayBill ? [`${result.ewayBill.message} ${result.ewayBill.reason}`] : []),
+        // Issue #239 — whether this bill needs a government e-invoice number, decided by the app.
+        ...(result.eInvoice?.message ? [result.eInvoice.message] : []),
         ...(result.chargeLines || []).map((line) => text("chargeReview", {
           charge: copy[state.locale][line.kind === "FREIGHT" ? "freight" : "otherCharges"],
           amount: money(line.taxableValue),
           gst: money(line.gst),
         })),
       ];
-      showDialog({ ...shown, effects: [...notes, ...(shown.effects || [])] }, "preview");
+      showDialog({ ...shown, effects: [...notes, ...(shown.effects || [])], askTurnover: result.eInvoice?.askTurnover === true }, "preview");
     } catch (error) {
       showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
     } finally { setFormBusy(form, false); }
@@ -2210,6 +2224,7 @@ async function openBusinessDetails() {
     text.businessGstinNote.replace("{gstin}", read.gstin).replace("{state}", `${read.gstinStateName} (${read.gstinStateCode})`);
   document.querySelector("#business-pan-note").textContent = text.businessPanNote.replace("{pan}", read.gstinPan);
   showTurnoverAnswer(read.turnover);
+  fill("eInvoiceExemption", read.eInvoiceExemption ?? "NONE");
   renderBusinessSignature();
 }
 
@@ -2240,6 +2255,12 @@ async function saveBusinessDetails(clear = []) {
     status.textContent = copy[state.locale].businessSaved;
     document.querySelector("#business-bank-remove").hidden = result.bank === null;
     if (result.turnover) showTurnoverAnswer(result.turnover);
+    // Issue #239 — came here from "Answer once in Business details": back to where they were.
+    if (state.returnAfterTurnover) {
+      const back = state.returnAfterTurnover;
+      state.returnAfterTurnover = null;
+      if (back !== "business") openView(back);
+    }
     if (result.bank === null) {
       for (const name of ["bankName", "accountNumber", "branch", "ifsc"]) {
         const field = form.elements.namedItem(name);
@@ -3866,15 +3887,22 @@ function renderEInvoice(result, mode) {
   document.querySelector("#einvoice-cancel-form").hidden = !registered;
 }
 
-const eInvoiceInput = () => formValues(document.querySelector("#einvoice-form"));
+// Issue #239 — the bill the detail panel is showing, chosen from the list. Nothing is typed here.
+const einvoiceState = { selected: "" };
+const eInvoiceInput = () => ({ invoice: einvoiceState.selected });
 
-submitStep("#einvoice-form", async () => {
+async function openEInvoice(invoiceId, focusCancel = false) {
+  einvoiceState.selected = invoiceId;
   try {
-    renderEInvoice(await api("/api/einvoices/preview", { method: "POST", body: JSON.stringify(eInvoiceInput()) }), "preview");
+    const result = await api("/api/einvoices/preview", { method: "POST", body: JSON.stringify(eInvoiceInput()) });
+    // A bill already sent is shown as it stands with the government, not as "Ready to send".
+    if (result.record) renderEInvoice(result.record, "record"); else renderEInvoice(result, "preview");
+    document.querySelector("#einvoice-panel").scrollIntoView?.({ block: "start" });
+    if (focusCancel) document.querySelector('#einvoice-cancel-form [name="reason"]')?.focus();
   } catch (error) {
     showDialog({ title: "Nothing was checked", message: error.message }, "failed");
   }
-});
+}
 
 const eInvoiceAction = (selector, path, extra = () => ({})) => {
   const button = document.querySelector(selector);
@@ -3917,23 +3945,85 @@ document.querySelector("#einvoice-offline")?.addEventListener("click", async () 
   }
 });
 
+/**
+ * Issue #239 — every issued bill, whether it needs an e-invoice number (decided by the app, with
+ * the reason), and where it stands with the government, with Try again and Cancel where they apply.
+ */
+function renderEInvoiceList(invoices) {
+  const list = document.querySelector("#einvoice-list");
+  if (!list) return;
+  const text = copy[state.locale];
+  document.querySelector("#einvoice-ask").hidden = !invoices.some((invoice) => invoice.askTurnover);
+  if (invoices.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "bill-choice-empty";
+    empty.textContent = text.einvoiceNoBills;
+    list.replaceChildren(empty);
+    return;
+  }
+  list.replaceChildren(...invoices.map((invoice) => {
+    const row = document.createElement("div");
+    row.className = "activity-row";
+    row.dataset.einvoiceRow = invoice.id;
+    const icon = document.createElement("span");
+    icon.className = "activity-icon blue";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "✦";
+    const badge = document.createElement("span");
+    badge.className = `pill ${invoice.needed === "YES" ? (invoice.eInvoiceStatus === "REGISTERED" ? "done" : invoice.eInvoiceStatus === "FAILED" ? "hold" : "warn") : invoice.needed === "NO" ? "done" : "hold"}`;
+    badge.textContent = text[invoice.needed === "YES" ? "einvoiceNeedsYes" : invoice.needed === "NO" ? "einvoiceNeedsNo" : "einvoiceNeedsUnknown"];
+    const body = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.textContent = [invoice.number, invoice.customer, money(invoice.amount)].filter(Boolean).join(" · ");
+    const decision = document.createElement("small");
+    decision.textContent = invoice.decision;
+    const status = document.createElement("small");
+    status.textContent = invoice.statusText;
+    body.append(strong, badge, decision, status);
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    actions.style.margin = ".4rem 0 0";
+    const button = (label, handler) => {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = "text-button";
+      element.textContent = label;
+      element.addEventListener("click", handler);
+      actions.append(element);
+    };
+    if (invoice.canRetry) button(text.einvoiceRetry, async () => {
+      einvoiceState.selected = invoice.id;
+      try {
+        renderEInvoice(await api("/api/einvoices/register", { method: "POST", body: JSON.stringify(eInvoiceInput()) }), "record");
+        await refreshDocumentLists();
+      } catch (error) { showDialog({ title: "Nothing was sent", message: error.message }, "failed"); }
+    });
+    if (invoice.canCancel) button(text.einvoiceCancelOpen, () => openEInvoice(invoice.id, true));
+    if (invoice.needed !== "NO" || invoice.eInvoiceStatus !== "NOT_SENT") button(text.einvoiceOpen, () => openEInvoice(invoice.id));
+    if (actions.childElementCount > 0) body.append(actions);
+    row.append(icon, body);
+    return row;
+  }));
+}
+
 async function loadIssuedInvoices() {
-  const select = document.querySelector("#einvoice-invoices");
-  if (!select) return;
   try {
     const { invoices } = await api("/api/einvoices/invoices");
-    const chosen = select.value;
-    select.replaceChildren();
-    invoices.forEach((invoice) => {
-      const option = document.createElement("option");
-      option.value = invoice.id;
-      // The bill's number and the government's state, side by side and never merged.
-      option.textContent = `${invoice.number} · ${money(invoice.amount)} · ${invoice.eInvoiceStatus === "NOT_SENT" ? "not sent to the government" : invoice.eInvoiceStatus.toLowerCase()}`;
-      select.append(option);
-    });
-    if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
-  } catch { /* the picker is a convenience; the rest of the page still works */ }
+    renderEInvoiceList(invoices);
+  } catch { /* the list is a convenience; the rest of the page still works */ }
 }
+
+// Issue #239 — "Answer once in Business details": opens that one question, and brings the person
+// back to where they were (the sale they were reviewing) once it is saved.
+document.querySelectorAll("[data-open-turnover]").forEach((button) => button.addEventListener("click", () => {
+  state.returnAfterTurnover = state.view;
+  const dialog = document.querySelector("#review-dialog");
+  if (dialog.open) dialog.close("cancel");
+  openView("business");
+  const fieldset = document.querySelector("#business-turnover");
+  fieldset?.scrollIntoView?.({ block: "center" });
+  fieldset?.querySelector('[name="turnoverBand"]')?.focus();
+}));
 
 
 // ------------------------------------------------ issue #142: quotations and proforma invoices

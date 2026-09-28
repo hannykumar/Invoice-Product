@@ -314,16 +314,13 @@
             </div>
           </div>
 
-          <article class="panel form-panel">
-            <form id="einvoice-form">
-              <div class="field-grid">
-                <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="einvoice-invoices" required></select></label>
-                <p class="setup-hint full-field" data-i18n="einvoiceTurnoverFrom"></p>
-                <label><span data-i18n="exemptCategory"></span><select name="exempt"><option value="" data-i18n="notExempt"></option><option value="BANKING_OR_NBFC" data-i18n="exemptBank"></option><option value="GOODS_TRANSPORT_AGENCY" data-i18n="exemptGta"></option><option value="SEZ_UNIT" data-i18n="exemptSez"></option></select></label>
-              </div>
-              <button type="submit" class="primary-button wide" data-i18n="checkNeeded"></button>
-              <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="einvoiceSafety"></span></p>
-            </form>
+          <!-- Issue #239 — the app decides whether each bill needs an e-invoice number, from the
+               customer and Business details. This screen lists the answers; it asks nothing. -->
+          <article class="panel" id="einvoice-list-panel">
+            <div class="panel-heading"><div><h2 data-i18n="einvoiceListTitle"></h2><p class="setup-hint" data-i18n="einvoiceTurnoverFrom"></p></div></div>
+            <p class="setup-hint" id="einvoice-ask" hidden><span data-i18n="einvoiceAskTurnover"></span> <button type="button" class="text-button" data-open-turnover data-i18n="answerInBusinessDetails"></button></p>
+            <div class="activity-list" id="einvoice-list"></div>
+            <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="einvoiceSafety"></span></p>
           </article>
 
           <article class="panel" id="einvoice-panel" hidden>
@@ -1134,7 +1131,7 @@
               <label><span data-i18n="businessState"></span><select name="stateCode" id="business-state"></select></label>
               <p class="setup-hint" id="business-gstin-note"></p>
             </fieldset>
-            <fieldset>
+            <fieldset id="business-turnover">
               <legend data-i18n="turnoverLegend"></legend>
               <p class="setup-hint" data-i18n="turnoverQuestion"></p>
               <label class="choice"><input type="radio" name="turnoverBand" value="UP_TO_5_CRORE" /> <span data-i18n="turnoverUpTo5"></span></label>
@@ -1143,6 +1140,12 @@
               <label class="choice"><input type="radio" name="turnoverBand" value="10_CRORE_AND_ABOVE" /> <span data-i18n="turnover10Plus"></span></label>
               <label class="choice"><input type="radio" name="turnoverBand" value="UNKNOWN" /> <span data-i18n="turnoverUnsure"></span></label>
               <p class="setup-hint" id="business-turnover-note"></p>
+            </fieldset>
+            <!-- Issue #239 — asked once here, never on the E-invoice screen. -->
+            <fieldset>
+              <legend data-i18n="exemptLegend"></legend>
+              <label><span data-i18n="exemptCategory"></span><select name="eInvoiceExemption"><option value="NONE" data-i18n="notExempt"></option><option value="BANKING_OR_NBFC" data-i18n="exemptBank"></option><option value="INSURANCE" data-i18n="exemptInsurance"></option><option value="GOODS_TRANSPORT_AGENCY" data-i18n="exemptGta"></option><option value="PASSENGER_TRANSPORT" data-i18n="exemptPassenger"></option><option value="CINEMA_ADMISSION" data-i18n="exemptCinema"></option><option value="SEZ_UNIT" data-i18n="exemptSez"></option><option value="GOVERNMENT_DEPARTMENT" data-i18n="exemptGovernment"></option></select></label>
+              <p class="setup-hint" data-i18n="exemptHint"></p>
             </fieldset>
             <fieldset>
               <legend data-i18n="businessContactLegend"></legend>
@@ -1359,7 +1362,7 @@
       </form>
       <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
-    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
     <!-- Issue #233 — cancelling an issued bill: what it will do, why it cannot, and the reason kept with it. -->
     <dialog id="cancel-bill-dialog" aria-labelledby="cancel-bill-title">
       <h2 id="cancel-bill-title" data-i18n="cancelBill"></h2>

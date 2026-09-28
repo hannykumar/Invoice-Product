@@ -96,6 +96,13 @@ const details = new Map<string, BusinessDetails>();
 const prefills = new Map<string, BusinessPrefill>();
 /** Issue #187 — the turnover answer, one per financial year, kept apart from the address. */
 const turnoverAnswers = new Map<string, readonly TurnoverAnswer[]>();
+/**
+ * Issue #239 — whether the business is one the e-invoice rules leave out whatever its turnover
+ * (a bank, an insurer, a goods transport agency, …). A fact about the kind of business, not about a
+ * year, so it is asked once here and never on the E-invoice screen. Unanswered means "no": the
+ * rules name a handful of kinds of business, and an ordinary trader is none of them.
+ */
+const eInvoiceExemptions = new Map<string, EInvoiceExemption>();
 
 const str = (value: unknown): string => String(value ?? '').trim();
 
@@ -155,7 +162,31 @@ export const readBusinessDetails = (
     // that has since been retired is still shown, because the GST number decides this state.
     states: currentStates().some((state) => state.code === stateCode) ? currentStates() : [...currentStates(), { code: stateCode, name: STATE_NAMES[stateCode] ?? stateCode }],
     turnover: turnoverView(companyId),
+    eInvoiceExemption: eInvoiceExemptionOf(companyId),
   };
+};
+
+// ---------------------------------------------------- the e-invoice exemption, asked once (#239)
+
+/** The kinds of business the e-invoice notifications leave out, whatever their turnover. */
+export const EINVOICE_EXEMPTIONS = [
+  'BANKING_OR_NBFC', 'INSURANCE', 'GOODS_TRANSPORT_AGENCY', 'PASSENGER_TRANSPORT',
+  'CINEMA_ADMISSION', 'SEZ_UNIT', 'GOVERNMENT_DEPARTMENT',
+] as const;
+export type EInvoiceExemption = typeof EINVOICE_EXEMPTIONS[number] | 'NONE';
+
+/** The saved answer; "NONE" when the business never said it is one of the exempt kinds. */
+export const eInvoiceExemptionOf = (companyId: CompanyId | string): EInvoiceExemption =>
+  eInvoiceExemptions.get(String(companyId)) ?? 'NONE';
+
+/** Saves the answer when the screen sent one; a request without it leaves the saved answer alone. */
+export const recordEInvoiceExemption = (companyId: CompanyId | string, value: unknown): void => {
+  if (value === undefined || value === null) return;
+  const answer = (str(value).toUpperCase() || 'NONE') as EInvoiceExemption;
+  if (answer !== 'NONE' && !(EINVOICE_EXEMPTIONS as readonly string[]).includes(answer)) {
+    throw invalid('BUSINESS_EINVOICE_EXEMPTION', 'Choose one of the kinds of business listed, or "No".');
+  }
+  eInvoiceExemptions.set(String(companyId), answer);
 };
 
 // ------------------------------------------------------------- the turnover question (#187)
@@ -281,6 +312,7 @@ export const saveBusinessDetails = (
 
   const bankAccountId = saveBankAccount(companyId, legalName, input, clear, current);
   recordTurnoverAnswer(companyId, { band: input.turnoverBand, above5Crore: input.turnoverAbove5Crore });
+  recordEInvoiceExemption(companyId, input.eInvoiceExemption);
 
   const next: BusinessDetails = {
     legalName,
@@ -301,7 +333,7 @@ export const saveBusinessDetails = (
     signatureDataUri,
   };
   details.set(String(companyId), next);
-  return { details: next, bank: bankAccountOf(companyId, bankAccountId), turnover: turnoverView(companyId) };
+  return { details: next, bank: bankAccountOf(companyId, bankAccountId), turnover: turnoverView(companyId), eInvoiceExemption: eInvoiceExemptionOf(companyId) };
 };
 
 /** Writes the bank account into `packages/masters`, or leaves the saved one alone. */
@@ -430,4 +462,5 @@ export const requireIssuable = (companyId: CompanyId | string): BusinessDetails 
 export const forgetBusinessDetails = (companyId: CompanyId | string): void => {
   details.delete(String(companyId));
   turnoverAnswers.delete(String(companyId));
+  eInvoiceExemptions.delete(String(companyId));
 };
