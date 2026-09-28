@@ -281,6 +281,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
       title: error instanceof AuthenticationError ? 'Sign in required' : 'Nothing was saved',
       code: error instanceof DomainError || error instanceof PlatformError ? error.code : undefined,
       message: error instanceof Error ? error.message : 'The request could not be completed.',
+      // Issue #262 — the facts behind a refusal (never secrets: errors are logged), for the screen.
+      ...(error instanceof DomainError && Object.keys(error.details).length > 0 ? { details: error.details } : {}),
     });
   }
 }

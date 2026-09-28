@@ -184,7 +184,7 @@ test('buy 100, sell 70, and the second sale of 70 is blocked — the user exampl
   assert.equal(blocked.problems[0]?.messageId, 'stock.not_enough');
   assert.match(
     blocked.problems[0]?.message['en-IN'] ?? '',
-    /You have 30 BOX of Apple box, 10 kg in Narela godown\. This bill asks for 70 BOX\./,
+    /You have 30 BOX of Apple box, 10 kg in Narela godown\. This bill asks for 70 BOX\. If the goods have arrived, enter their purchase bill first, then make this sale\./,
   );
 
   assert.ok((await trialBalance(till.store.read(), COMPANY)).balanced);
@@ -321,7 +321,7 @@ test('the review check refuses 70 against 30 in plain words, and holds nothing a
   });
   const short = await till.sales.checkStock(actor, (await sellBoxes(till, 'sale-1', '70')).id);
   assert.equal(short.state, 'NEEDS_INFO');
-  assert.equal(short.problems[0]?.message['en-IN'], 'You have 30 BOX of Apple box, 10 kg in Narela godown. This bill asks for 70 BOX.');
+  assert.equal(short.problems[0]?.message['en-IN'], 'You have 30 BOX of Apple box, 10 kg in Narela godown. This bill asks for 70 BOX. If the goods have arrived, enter their purchase bill first, then make this sale.');
   const fits = await till.sales.checkStock(actor, (await sellBoxes(till, 'sale-2', '20')).id);
   assert.equal(fits.state, 'DRAFT');
   const balance = await till.inventory.balance(actor, { itemId: 'APL-BOX-10', warehouseId: 'narela' });

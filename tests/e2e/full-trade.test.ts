@@ -241,13 +241,16 @@ test('Step 4. Selling 600 KGS with 50 KGS in stock is refused, and no bill numbe
     const refused = await call('POST', path, saleInput('600', 'full-trade-238-too-much'));
     assert.equal(refused.status, 409, JSON.stringify(refused.body));
     assert.equal(refused.body.code, 'SALES_STOCK_NOT_ENOUGH');
-    assert.equal(refused.body.message, `You have 50 KGS of ${STEEL} in Bengaluru · Peenya godown. This bill asks for 600 KGS.`);
+    assert.equal(refused.body.message, `You have 50 KGS of ${STEEL} in Bengaluru · Peenya godown. This bill asks for 600 KGS. If the goods have arrived, enter their purchase bill first, then make this sale.`);
+    // Issue #262 — the refusal names the short goods and godown, for the "Enter the purchase bill" button.
+    const [short] = JSON.parse(refused.body.details.shortStock);
+    assert.deepEqual([short.itemName, short.warehouseName, short.available, short.required, short.shortBy], [STEEL, 'Bengaluru · Peenya godown', '50', '600', '550']);
   }
   assert.deepEqual((await steelRows()).map((row: any) => row.closing), ['50.000']);
   // Only one new bill is in the books; step 11 also shows September's numbers run from and to the one bill.
   const numbers = ((await reports()).sales.rows ?? []).map((row: any) => row.number);
   assert.equal(numbers.length, trade.salesBefore + 1, numbers.join(', '));
-  t.diagnostic('600 KGS refused: "You have 50 KGS … This bill asks for 600 KGS."');
+  t.diagnostic('600 KGS refused: "You have 50 KGS … This bill asks for 600 KGS. If the goods have arrived, enter their purchase bill first, then make this sale."');
 });
 
 test('Step 4 (nothing left behind). The refused review leaves no "bill waiting" in Reports', async () => {

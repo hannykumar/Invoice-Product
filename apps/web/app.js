@@ -107,7 +107,7 @@ const copy = {
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Supplier payment posted to the ledger", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
-    checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…",
+    checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…", enterPurchaseBill: "Enter the purchase bill", backToSale: "Back to the sale", purchaseForSale: "For the sale you were making: it asks for {required} {unit} of {item}, and {warehouse} has {available} {unit}. Type the quantity printed on the supplier's bill. The goods go into {warehouse}.", purchaseForSaleDone: "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.",
     navAsk: "Ask",
     agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
     agentRequest: "What should I do?", agentRequestPlaceholder: "Find ABC Traders' unpaid invoices and send reminders",
@@ -436,7 +436,7 @@ const copy = {
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko bhugtan ledger mein darj hua", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
-    checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…",
+    checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…", enterPurchaseBill: "Purchase bill darj karen", backToSale: "Bikri par wapas jayen", purchaseForSale: "Jo bikri aap bana rahe the: usmein {item} ke {required} {unit} hain, aur {warehouse} mein {available} {unit} hain. Supplier ke bill par chhapi matra likhen. Saman {warehouse} mein jayega.", purchaseForSaleDone: "Saman ab stock mein hai. Bikri par wapas jayen: aapka likha sab wahin hai. Bill jaari karne ke liye use dobara dekhen.",
     navAsk: "Poochein",
     agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
     agentRequest: "Main kya karun?", agentRequestPlaceholder: "ABC Traders ke baaki bill dekh kar reminder bhej do",
@@ -1058,6 +1058,8 @@ async function api(path, options = {}) {
     const error = new Error(payload.message || copy[state.locale].requestFailed);
     error.status = response.status;
     error.code = payload.code;
+    // Issue #262 — the facts behind a refusal (the Hindi sentence, the goods that are short).
+    error.details = payload.details ?? {};
     if (response.status === 401 && path !== "/api/auth/login") {
       state.sessionId = null;
       storage?.removeItem("karobar.session");
@@ -1500,6 +1502,8 @@ function localizedError(error) {
   // Issue #266 — why a bill's date was refused names the dates, so the server's sentence is shown
   // rather than a general "could not complete".
   if (["SALE_DATE_AFTER_TODAY", "SALE_DATE_MONTH_CLOSED"].includes(error.code) && error.message) return error.message;
+  // Issue #262 — a sale stopped for short stock says why, and what to do, in the reader's language.
+  if (error.code === "SALES_STOCK_NOT_ENOUGH") return error.details?.[state.locale] || error.message;
   const key = {
     API_AMOUNT_INVALID: "amountInvalid",
     API_REFERENCE_REQUIRED: "referenceRequired",
@@ -1578,6 +1582,16 @@ function showDialog(result, mode) {
   eway.hidden = !(mode === "recorded" && result.ewayBill?.outcome === "REQUIRED" && result.invoice?.id);
   eway.textContent = copy[state.locale].ewayFromBill;
   eway.dataset.invoice = result.invoice?.id || "";
+  // Issue #262 — a sale stopped for short stock offers the one way through: the purchase bill.
+  const purchase = document.querySelector("#review-purchase");
+  purchase.hidden = !(mode === "failed" && Array.isArray(result.shortStock) && result.shortStock.length > 0);
+  purchase.textContent = copy[state.locale].enterPurchaseBill;
+  // The goods the refusal on screen is about, for the button.
+  state.saleShortStock = purchase.hidden ? null : result.shortStock;
+  // …and once that purchase is recorded, the way back to the sale.
+  const back = document.querySelector("#review-back-to-sale");
+  back.hidden = !(mode === "recorded" && result.backToSale === true);
+  back.textContent = copy[state.locale].backToSale;
   confirm.disabled = false;
   confirm.textContent = copy[state.locale].recordOnce;
   dialog.dataset.mode = mode;
@@ -1609,6 +1623,97 @@ document.querySelector("#review-download").addEventListener("click", async (even
     showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
   } finally { button.disabled = false; }
 });
+
+// ------------------------------------------------- issue #262: short stock → purchase bill → back
+//
+// A sale of goods the godown does not hold is always stopped (Samay, 28 Sep 2026): no override, no
+// permission, and stock never goes below nothing. The only way through is to enter the purchase bill
+// first. The refusal carries a button that opens Purchase with the short goods already chosen, and
+// once that bill is recorded, a button back to the sale. The sale form is never cleared on the way:
+// it is the same form, and its draft is kept on the device (#266), so nothing is typed twice.
+
+const SALE_WAITING_KEY = "karobar.saleWaitingForStock";
+/** The short goods of a stopped sale, from the refusal, or null when this was some other failure. */
+function shortStockOf(error) {
+  if (error?.code !== "SALES_STOCK_NOT_ENOUGH") return null;
+  try {
+    const lines = JSON.parse(error.details?.shortStock ?? "[]");
+    return Array.isArray(lines) && lines.length > 0 ? lines : null;
+  } catch { return null; }
+}
+
+/** The failure dialog for a sale; a short-stock refusal gets the purchase bill button. */
+function showSaleFailure(error) {
+  showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error), shortStock: shortStockOf(error) ?? undefined }, "failed");
+}
+
+function saleWaitingForStock() {
+  try {
+    const saved = JSON.parse(storage?.getItem(SALE_WAITING_KEY) || "null");
+    return Array.isArray(saved) && saved.length > 0 ? saved : null;
+  } catch { return null; }
+}
+
+/** The line above the purchase form saying which sale it is for, where the goods go, and the way back. */
+function showPurchaseForSaleNote(done = false) {
+  const note = document.querySelector("#purchase-for-sale-note");
+  if (!note) return;
+  const waiting = saleWaitingForStock();
+  note.hidden = waiting === null;
+  if (waiting === null) return;
+  note.querySelector("[data-note-text]").textContent = done
+    ? copy[state.locale].purchaseForSaleDone
+    : waiting.map((line) => text("purchaseForSale", { required: line.required, unit: line.unit, item: line.itemName, warehouse: line.warehouseName, available: line.available })).join(" ");
+  note.querySelector("#purchase-back-to-sale").textContent = copy[state.locale].backToSale;
+}
+
+/** Opens Purchase with each short item already on a line of the supplier bill. */
+function openPurchaseForSale(shortStock) {
+  storage?.setItem(SALE_WAITING_KEY, JSON.stringify(shortStock));
+  document.querySelector("#review-dialog").close();
+  openView("purchase");
+  const form = document.querySelector('[data-draft="purchase"]');
+  const box = document.querySelector("#purchase-lines");
+  if (form && box) {
+    shortStock.forEach((short) => {
+      const lines = [...box.querySelectorAll(".sale-line")];
+      if (lines.some((line) => line.querySelector("[data-line-field=item]")?.value === short.itemId)) return;
+      // An untouched line (no price typed yet) is used; a line already filled in is never changed.
+      const untouched = lines.length === 1 && (lines[0].querySelector("[data-line-field=rate]")?.value ?? "") === "" ? lines[0] : null;
+      const line = untouched ?? addPurchaseLine();
+      const picker = line?.querySelector("[data-line-field=item]");
+      if (!picker || ![...picker.options].some((option) => option.value === short.itemId)) return;
+      picker.value = short.itemId;
+      // How many came is printed on the supplier's bill; it is typed from there, never guessed.
+      const quantity = line.querySelector("[data-line-field=quantity]");
+      if (quantity) quantity.value = "";
+      setLineGstFromItem(line);
+      showLineUnit(line);
+    });
+    saveDraft(form);
+  }
+  showPurchaseForSaleNote();
+  document.querySelector('#purchase-lines [data-line-field="quantity"]')?.focus?.();
+}
+
+/** The "purchase recorded" dialog, when the purchase was entered for a stopped sale. */
+function purchaseForSaleRecorded(recorded) {
+  return { ...recorded, effects: [...(recorded.effects || []), copy[state.locale].purchaseForSaleDone], backToSale: true };
+}
+
+/** Back to the sale as it was typed. It is reviewed again, against the stock as it is now. */
+function backToSale() {
+  storage?.removeItem(SALE_WAITING_KEY);
+  showPurchaseForSaleNote();
+  const dialog = document.querySelector("#review-dialog");
+  if (dialog.open) dialog.close();
+  openView("sale");
+}
+
+document.querySelector("#review-purchase").addEventListener("click", () => { if (state.saleShortStock) openPurchaseForSale(state.saleShortStock); });
+document.querySelector("#review-back-to-sale").addEventListener("click", backToSale);
+document.querySelector("#purchase-back-to-sale")?.addEventListener("click", backToSale);
+showPurchaseForSaleNote();
 
 function setFormBusy(form, busy) {
   form.setAttribute("aria-busy", String(busy));
@@ -1703,7 +1808,7 @@ document.querySelectorAll(".draft-form").forEach((form) => {
       ];
       showDialog({ ...shown, effects: [...notes, ...(shown.effects || [])], askTurnover: result.eInvoice?.askTurnover === true }, "preview");
     } catch (error) {
-      showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+      showSaleFailure(error);
     } finally { setFormBusy(form, false); }
   });
   form.querySelector(".clear-draft").addEventListener("click", () => {
@@ -2878,15 +2983,19 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     // Issue #233 — the form becomes a fresh, empty sale, so pressing Review and Record again cannot
     // make a second bill for the same goods by accident. Done before the dialog is filled, because
     // adding the fresh line re-translates the page, dialog included.
+    // Issue #262 — a purchase entered for a sale that was stopped: the goods are in, so the way back.
+    const forSale = form.dataset.draft === "purchase" && saleWaitingForStock() !== null;
+    if (form.dataset.draft === "purchase") resetPurchaseForm(form);
     if (form.dataset.draft === "sale" && result.invoice) resetSaleForm(form);
-    showDialog(localizeResult(result, form.dataset.draft, "recorded"), "recorded");
+    showDialog(forSale ? purchaseForSaleRecorded(localizeResult(result, form.dataset.draft, "recorded")) : localizeResult(result, form.dataset.draft, "recorded"), "recorded");
+    if (forSale) showPurchaseForSaleNote(true);
     // Issue #230 — the receipt or payment voucher is ready behind the dialog, and the form is empty for the next one.
     if (form.dataset.endpoint === "payments" && result.paymentId) await paymentRecorded(form, result);
     // Issue #132 — the bill is waiting on the screen behind the dialog, not on a developer's laptop.
     if (form.dataset.draft === "sale" && result.invoice) await showSaleBill(result.invoice.id);
     await refreshDocumentLists();
   } catch (error) {
-    showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+    showSaleFailure(error);
   }
 });
 
@@ -5800,6 +5909,19 @@ function resetSaleForm(form) {
   showChosenCustomer();
   showShipToFields();
   updateCalculations();
+}
+
+/**
+ * Issue #262 — after a supplier bill is recorded the Purchase form is a fresh one: one new line, today's
+ * date, no bill number or amount from the bill just recorded. Otherwise the next purchase (the one
+ * a stopped sale sends the person to make) opens showing the last bill's figures.
+ */
+function resetPurchaseForm(form) {
+  form.reset();
+  form.querySelectorAll('input[type="date"]:not([data-no-default])').forEach((field) => { field.value = dateInput(); });
+  document.querySelector("#purchase-lines")?.replaceChildren();
+  addPurchaseLine();
+  showChosenSupplier();
 }
 
 /** Issue #228 — a supplier bill carries as many lines as it has, like a sale. */

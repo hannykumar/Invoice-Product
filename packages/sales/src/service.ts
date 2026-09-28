@@ -53,6 +53,12 @@ import { noCancellationGuard, type CancellationGuardPort, type ComplianceHookPor
 const nil = (): Money => zero('INR');
 
 /** "50.000" reads as "50" and "12.500" as "12.5": a shopkeeper counts kilos, not decimal places. */
+/** Issue #262 — what to do when the goods are short. There is no other way through. */
+export const STOCK_WAY_THROUGH = {
+  'en-IN': 'If the goods have arrived, enter their purchase bill first, then make this sale.',
+  'hi-IN': 'Agar maal aa gaya hai, to pehle uska purchase bill darj karen, phir yeh bikri karen.',
+} as const;
+
 const plain = (amount: string): string => (amount.includes('.') ? amount.replace(/0+$/, '').replace(/\.$/, '') : amount);
 
 export interface SalesServiceDeps {
@@ -417,8 +423,20 @@ export class SalesService {
           lineId: s.lineId,
           messageId: 'stock.not_enough',
           message: {
-            'en-IN': `You have ${plain(s.available)} ${s.unit} of ${s.itemName} in ${s.warehouseName}. This bill asks for ${plain(s.required)} ${s.unit}.`,
-            'hi-IN': `${s.warehouseName} mein ${s.itemName} ke ${plain(s.available)} ${s.unit} hain. Yeh bill ${plain(s.required)} ${s.unit} maangta hai.`,
+            // Issue #262 — a sale without the goods is always stopped; the one way through is the
+            // purchase bill, so the refusal says so.
+            'en-IN': `You have ${plain(s.available)} ${s.unit} of ${s.itemName} in ${s.warehouseName}. This bill asks for ${plain(s.required)} ${s.unit}. ${STOCK_WAY_THROUGH['en-IN']}`,
+            'hi-IN': `${s.warehouseName} mein ${s.itemName} ke ${plain(s.available)} ${s.unit} hain. Yeh bill ${plain(s.required)} ${s.unit} maangta hai. ${STOCK_WAY_THROUGH['hi-IN']}`,
+          },
+          stock: {
+            itemId: s.itemId,
+            itemName: s.itemName,
+            warehouseId: invoice.lines.find((line) => line.lineId === s.lineId)?.warehouseId ?? null,
+            warehouseName: s.warehouseName,
+            unit: s.unit,
+            available: plain(s.available),
+            required: plain(s.required),
+            shortBy: plain(s.shortfall),
           },
         }),
       ),

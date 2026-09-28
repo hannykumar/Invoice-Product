@@ -59,7 +59,9 @@ After **Record once**:
 
 - Same customer, 600 KGS of TMT Steel Bar 12mm at ₹90
 
-What must appear: **refused**. "You have 50 KGS … This bill asks for 600 KGS." No bill number is used up (#229).
+What must appear: **refused**. "You have 50 KGS … This bill asks for 600 KGS. If the goods have arrived, enter their purchase bill first, then make this sale." Beside it, a button **Enter the purchase bill** that opens Purchase with TMT Steel Bar 12mm already on the bill (#262). There is no way to let the sale through without that purchase. No bill number is used up (#229).
+
+Do not press the button during this check: the steps below count on the 50 KGS staying as they are.
 
 ### Step 5. Check the printed bill (the bill below the Sale screen)
 

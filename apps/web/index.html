@@ -222,6 +222,8 @@
 
         <section class="view" id="view-purchase" aria-labelledby="purchase-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" tabindex="-1" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <!-- Issue #262 — opened from a sale refused for short stock: which goods, which godown, and the way back. -->
+          <p class="safety-note" id="purchase-for-sale-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span> <button class="secondary-button" type="button" id="purchase-back-to-sale" data-i18n="backToSale"></button></p>
           <!-- Issue #266 — said when a draft from an earlier day comes back. -->
           <p class="safety-note draft-date-note" id="purchase-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="transaction-layout draft-form" data-draft="purchase">
@@ -1376,7 +1378,7 @@
       </form>
       <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
-    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill"></button><button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
     <!-- Issue #233 — cancelling an issued bill: what it will do, why it cannot, and the reason kept with it. -->
     <dialog id="cancel-bill-dialog" aria-labelledby="cancel-bill-title">
       <h2 id="cancel-bill-title" data-i18n="cancelBill"></h2>
