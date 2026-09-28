@@ -27,7 +27,7 @@ export { COMPANY, SUPPLIER, actorWith } from "./posting-fixtures.ts";
 /** Everything #18 needs, plus the permissions a buyer and a godown keeper actually hold. */
 export const MATCHING_PERMISSIONS = [
   "purchase.order.write", "purchase.order.cancel", "purchase.receipt.write", "purchase.match.approve",
-  "inventory.move", "inventory.adjust", "inventory.override_negative",
+  "inventory.move", "inventory.adjust",
   "ledger.setup", "ledger.post.purchase", "ledger.reverse",
 ];
 
@@ -51,7 +51,7 @@ export const makeYard = async (options: { permissions?: readonly string[] } = {}
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock });
   const inventoryService = new InventoryService({
     store, inventory, masterData: new Masters(), permissions: permissionPortFromActor, audit, clock,
-    policy: { negativeStock: "BLOCK", reservationMinutes: 120, valuationMethod: "WEIGHTED_AVERAGE" },
+    policy: { reservationMinutes: 120, valuationMethod: "WEIGHTED_AVERAGE" },
     idFactory: () => `mv${counter}-${String((n += 1)).padStart(4, "0")}`,
   });
   const matching = new ThreeWayMatchingService({

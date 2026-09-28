@@ -20,7 +20,7 @@ import {
   renderReport,
   retriesAreIdempotent,
   runGates,
-  stockNeverSilentlyNegative,
+  stockNeverNegative,
   taxPartsSumToTotal,
   trialBalanceIsLevel,
   uncertainModelOutputIsAskedAbout,
@@ -74,26 +74,20 @@ test('books that are out by even one paisa are caught (ledger)', () => {
   assert.match(result.detail, /out by 1 paise/);
 });
 
-test('stock below zero with nobody having allowed it is caught (inventory)', () => {
-  const result = stockNeverSilentlyNegative([
-    { itemId: 'CRATE', warehouseId: 'shop', physical: -5_000_000n, overrideReason: null, overrideAllowedBy: null },
+test('stock below zero is caught, whatever anyone said about it (inventory)', () => {
+  const result = stockNeverNegative([
+    { itemId: 'CRATE', warehouseId: 'shop', physical: -5_000_000n },
   ]);
   assert.equal(result.passed, false);
-  assert.match(result.detail, /nobody recorded as having allowed it/);
+  assert.match(result.detail, /below zero\. Nobody may allow that\./);
 });
 
-test('stock below zero with a reason and an authoriser is allowed (inventory)', () => {
-  const result = stockNeverSilentlyNegative([
-    { itemId: 'CRATE', warehouseId: 'shop', physical: -5_000_000n, overrideReason: 'On the van already.', overrideAllowedBy: 'priya' },
+test('stock at zero or above passes (inventory)', () => {
+  const result = stockNeverNegative([
+    { itemId: 'CRATE', warehouseId: 'shop', physical: 0n },
+    { itemId: 'SOAP', warehouseId: 'shop', physical: 10_000_000n },
   ]);
-  assert.equal(result.passed, true, 'the gate is about silence, not about negatives');
-});
-
-test('an override with a blank reason does not count as an explanation (inventory)', () => {
-  const result = stockNeverSilentlyNegative([
-    { itemId: 'CRATE', warehouseId: 'shop', physical: -1n, overrideReason: '   ', overrideAllowedBy: 'priya' },
-  ]);
-  assert.equal(result.passed, false);
+  assert.equal(result.passed, true);
 });
 
 test('a GST split that does not add up to the GST charged is caught (tax)', () => {

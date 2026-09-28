@@ -89,7 +89,7 @@ export const buildHarness = async (options: { permissions?: readonly string[] } 
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { negativeStock: 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
   });
 
   const mastersAdapter = new MastersMigrationAdapter(masters, adapterOptions);

@@ -189,7 +189,7 @@ const main = async (): Promise<void> => {
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { negativeStock: 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory,
   });
 

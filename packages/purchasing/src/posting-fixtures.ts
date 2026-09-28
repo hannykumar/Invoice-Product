@@ -28,7 +28,7 @@ export const SUPPLIER = "party-srs";
 
 export const ALL_PERMISSIONS = [
   "ledger.setup", "ledger.post.purchase", "ledger.reverse",
-  "inventory.move", "inventory.adjust", "inventory.override_negative",
+  "inventory.move", "inventory.adjust",
 ];
 
 export const actorWith = (permissions: readonly string[], companyId: CompanyId = COMPANY): ActorContext => ({
@@ -75,7 +75,7 @@ export const makeShop = async (options: { permissions?: readonly string[] } = {}
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock });
   const inventoryService = new InventoryService({
     store, inventory, masterData: new Masters(), permissions: permissionPortFromActor, audit, clock,
-    policy: { negativeStock: "BLOCK", reservationMinutes: 120, valuationMethod: "WEIGHTED_AVERAGE" },
+    policy: { reservationMinutes: 120, valuationMethod: "WEIGHTED_AVERAGE" },
     idFactory: () => `mv${counter}-${String((n += 1)).padStart(4, "0")}`,
   });
   const posting = new PurchasePostingService({

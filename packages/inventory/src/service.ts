@@ -66,8 +66,6 @@ export interface RecordMovementCommand {
   readonly documentDate: IsoDate;
   readonly source: SourceDocument;
   readonly reason?: string | null;
-  /** Only for a policy that allows it, and only with the permission and a written reason. */
-  readonly negativeOverride?: { readonly reason: string };
 }
 
 export interface ReserveLine {
@@ -242,7 +240,7 @@ export class InventoryService {
       );
     }
 
-    const overridden = await this.#guardNegative(actor, command, item.baseUnit, base, batchId, item.name);
+    await this.#guardNegative(actor, command, item.baseUnit, base, batchId, item.name);
 
     const movement: StockMovement = {
       id: this.#newId(),
@@ -263,7 +261,6 @@ export class InventoryService {
       idempotencyKey: command.idempotencyKey,
       reversesMovementId: null,
       reason: command.reason ?? null,
-      negativeOverride: overridden,
     };
     return this.#insert(actor, movement);
   }
@@ -314,6 +311,11 @@ export class InventoryService {
     return valueStock(movements).averageUnitCost;
   }
 
+  /**
+   * Stock never goes below nothing (Samay, 28 Sep 2026, issue #262). Taking out more than the
+   * godown holds is always refused: there is no override, no permission and no reason box. The way
+   * through is to record the purchase that brought the goods in.
+   */
   async #guardNegative(
     actor: ActorContext,
     command: RecordMovementCommand,
@@ -321,40 +323,17 @@ export class InventoryService {
     base: Quantity,
     batchId: string | null,
     itemName: string,
-  ): Promise<{ reason: string; allowedBy: UserId } | null> {
-    if (DIRECTION_OF[command.kind] === 'IN') return null;
+  ): Promise<void> {
+    if (DIRECTION_OF[command.kind] === 'IN') return;
     const balance = await this.#balanceIn(actor.companyId, command.itemId, command.warehouseId, batchId, baseUnit);
-    if (balance.physical.scaled >= base.scaled) return null;
+    if (balance.physical.scaled >= base.scaled) return;
 
     const shortfall = { scaled: base.scaled - balance.physical.scaled, unit: baseUnit };
-    if (this.#policy.negativeStock === 'BLOCK') {
-      throw notAllowed(
-        'STOCK_WOULD_GO_NEGATIVE',
-        `There is not enough of "${itemName}" in the godown. You have ${formatQuantity(balance.physical)} and this takes out ${formatQuantity(base)}, so ${formatQuantity(shortfall)} is missing.`,
-        { messageId: 'stock.not_enough', details: { itemName, shortfall: formatQuantity(shortfall) } },
-      );
-    }
-    const override = command.negativeOverride;
-    if (override === undefined || override.reason.trim() === '') {
-      throw invalid(
-        'STOCK_OVERRIDE_REASON_REQUIRED',
-        'Please write why you are taking out stock you do not have on record.',
-        { messageId: 'override.reason_required' },
-      );
-    }
-    this.#permissions.require(actor, INVENTORY_PERMISSIONS.overrideNegative, 'allow a sale with stock you do not have');
-    await this.#audit.record({
-      companyId: actor.companyId,
-      actorId: actor.userId,
-      at: this.#clock.now().toISOString(),
-      action: 'inventory.negative_stock_allowed',
-      subjectType: 'item',
-      subjectId: command.itemId,
-      summary: `${formatQuantity(shortfall)} of "${itemName}" taken out beyond what is on record.`,
-      details: { itemName, warehouseId: command.warehouseId, shortfall: formatQuantity(shortfall) },
-      overrideReason: override.reason,
-    });
-    return { reason: override.reason, allowedBy: actor.userId };
+    throw notAllowed(
+      'STOCK_WOULD_GO_NEGATIVE',
+      `There is not enough of "${itemName}" in the godown. You have ${formatQuantity(balance.physical)} and this takes out ${formatQuantity(base)}, so ${formatQuantity(shortfall)} is missing.`,
+      { messageId: 'stock.not_enough', details: { itemName, shortfall: formatQuantity(shortfall) } },
+    );
   }
 
   /**
@@ -539,7 +518,6 @@ export class InventoryService {
           idempotencyKey: `return:${command.documentId}:${movement.id}`,
           reversesMovementId: movement.id,
           reason: command.reason,
-          negativeOverride: null,
         };
         return this.#insert(actor, created);
       });

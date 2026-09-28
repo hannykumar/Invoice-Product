@@ -11,7 +11,6 @@
  */
 import { formatINR, subtract, type IsoDate, type Money } from '@invoice/kernel';
 import type { SalesInvoice } from '@invoice/sales';
-import type { StockMovement } from '@invoice/inventory';
 import { figureOf, type Bilingual, type Contribution, type Figure } from './model.ts';
 import { contributionsForAccount, type LoadedBooks } from './source.ts';
 import type { AgeingBody } from './dues.ts';
@@ -24,8 +23,7 @@ export type ExceptionCode =
   | 'BILL_WITHOUT_TAX_DECISION'
   | 'BILL_STUCK_BEFORE_ISSUE'
   | 'MONEY_WITHOUT_A_BILL'
-  | 'CHEQUE_NOT_CLEARED'
-  | 'STOCK_WENT_NEGATIVE';
+  | 'CHEQUE_NOT_CLEARED';
 
 /** How much attention it needs, in the order a person should work down the page. */
 export type ExceptionSeverity = 'BLOCKING' | 'NEEDS_A_DECISION' | 'WORTH_KNOWING';
@@ -49,7 +47,6 @@ export interface ExceptionsBody {
 export interface ExceptionsInput {
   readonly books: LoadedBooks;
   readonly stock: StockBody;
-  readonly movements: readonly StockMovement[];
   readonly salesInvoices: readonly SalesInvoice[];
   readonly sales: RegisterBody;
   readonly receivables: AgeingBody;
@@ -219,33 +216,6 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
         partyId: row.partyId,
         description: `${row.partyName} gave cheques that have not cleared`,
         amount: row.chequesNotCleared,
-      })),
-    });
-  }
-
-  const overrides = input.movements.filter((m) => m.negativeOverride !== null && m.documentDate <= input.to);
-  if (overrides.length > 0) {
-    found.push({
-      code: 'STOCK_WENT_NEGATIVE',
-      severity: 'NEEDS_A_DECISION',
-      what: {
-        'en-IN': `${count(overrides.length, 'time', 'times')}, goods were sent out that the records did not show as being there.`,
-        'hi-IN': `${count(overrides.length, 'baar', 'baar')} aisa maal bahar gaya jo record mein tha hi nahin.`,
-      },
-      why: {
-        'en-IN': 'Someone with permission allowed it and gave a reason. Usually it means a purchase has not been recorded yet, and until it is, what the goods cost is a guess.',
-        'hi-IN': 'Permission wale ne ijaazat di aur kaaran likha. Aksar iska matlab hai ki koi kharid abhi darj nahin hui, aur tab tak maal ki lagat ka pata nahin.',
-      },
-      amount: nil(),
-      records: overrides.map((movement) => ({
-        sourceKind: 'stock_movement',
-        sourceId: movement.id,
-        sourceNumber: movement.source.number,
-        date: movement.documentDate,
-        branchId: null,
-        partyId: null,
-        description: movement.negativeOverride?.reason ?? 'Allowed to go below zero',
-        amount: nil(),
       })),
     });
   }

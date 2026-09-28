@@ -156,7 +156,7 @@ export const DEMO_REGISTRATIONS = [
 
 const SETUP_PERMISSIONS = [
   'ledger.setup', 'ledger.post.purchase', 'ledger.post.sale', 'ledger.post.receipt', 'ledger.post.payment',
-  'ledger.post.journal', 'ledger.reverse', 'inventory.move', 'inventory.adjust', 'inventory.override_negative',
+  'ledger.post.journal', 'ledger.reverse', 'inventory.move', 'inventory.adjust',
   'ledger.post.credit_note', 'ledger.post.debit_note', 'returns.create',
   'sales.draft.write', 'sales.finalise', 'sales.approve', 'sales.cancel', 'payments.record', 'payments.allocate',
   'payments.reverse', 'payments.write_off', 'dashboard.read',
@@ -207,7 +207,7 @@ export async function createCompanyShop(seed: CompanySeed) {
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { negativeStock: 'BLOCK', reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory: () => `${seed.companyId}:movement:${sequence += 1}`,
     // Issue #229 — every movement writes its value into the books, in the same transaction.
     books: ledgerStockBooks(store, ledger),

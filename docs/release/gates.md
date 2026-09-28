@@ -15,7 +15,7 @@ a report. It is part of `npm run verify`, so a release condition nobody runs can
 | --- | --- | --- |
 | `LEDGER_VOUCHERS_BALANCE` | Every recorded entry puts the same amount on both sides | Critical |
 | `LEDGER_TRIAL_BALANCE` | The two sides of the books come to the same figure | Critical |
-| `STOCK_NEVER_SILENTLY_NEGATIVE` | Stock never goes below zero without someone allowing it and saying why | Critical |
+| `STOCK_NEVER_NEGATIVE` | Stock never goes below zero. There is no override (#262) | Critical |
 | `TAX_PARTS_SUM_TO_TOTAL` | The parts of the GST on a bill add up to the GST charged | Critical |
 | `RETRY_IS_IDEMPOTENT` | Pressing the button twice records one thing | Critical |
 | `APPROVED_RULES_CITE_A_SOURCE` | Every settled compliance rule names its source and effective date | Critical |

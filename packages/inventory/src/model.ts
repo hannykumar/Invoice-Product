@@ -73,8 +73,6 @@ export interface StockMovement {
   /** Set on a movement that undoes another. Nothing is ever deleted. */
   readonly reversesMovementId: string | null;
   readonly reason: string | null;
-  /** Recorded when an authorised person allowed stock to go below zero. */
-  readonly negativeOverride: { readonly reason: string; readonly allowedBy: UserId } | null;
 }
 
 /** See docs/product/spec/states.json, machine `stock_reservation`. */
@@ -129,5 +127,4 @@ export const INVENTORY_PERMISSIONS = {
   move: 'inventory.move',
   adjust: 'inventory.adjust',
   transfer: 'inventory.transfer',
-  overrideNegative: 'inventory.override_negative',
 } as const;

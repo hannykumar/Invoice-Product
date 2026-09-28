@@ -46,10 +46,8 @@ export interface VoucherObservation {
 export interface StockObservation {
   readonly itemId: string;
   readonly warehouseId: string;
-  /** Micro-units. Negative is only allowed with a recorded override. */
+  /** Micro-units. Never below zero: there is no override (issue #262). */
   readonly physical: bigint;
-  readonly overrideReason: string | null;
-  readonly overrideAllowedBy: string | null;
 }
 
 export interface TaxObservation {
@@ -136,18 +134,16 @@ export const trialBalanceIsLevel = (totalDebits: bigint, totalCredits: bigint, e
  * Negative stock itself is not the defect. Negative stock that nobody allowed and nobody explained
  * is, because it means goods left the godown with no record of the decision.
  */
-export const stockNeverSilentlyNegative = (balances: readonly StockObservation[]): GateResult => {
-  const id = 'STOCK_NEVER_SILENTLY_NEGATIVE';
-  const title = 'Stock never goes below zero without someone allowing it and saying why';
-  const unexplained = balances.filter(
-    (balance) => balance.physical < 0n && (balance.overrideReason === null || balance.overrideReason.trim() === '' || balance.overrideAllowedBy === null),
-  );
-  if (unexplained.length > 0) {
-    const worst = unexplained[0] as StockObservation;
+export const stockNeverNegative = (balances: readonly StockObservation[]): GateResult => {
+  const id = 'STOCK_NEVER_NEGATIVE';
+  const title = 'Stock never goes below zero';
+  const below = balances.filter((balance) => balance.physical < 0n);
+  if (below.length > 0) {
+    const worst = below[0] as StockObservation;
     return fail(id, title, 'CRITICAL', balances.length,
-      `${worst.itemId} at ${worst.warehouseId} is ${worst.physical} with nobody recorded as having allowed it.`);
+      `${worst.itemId} at ${worst.warehouseId} is ${worst.physical}, below zero. Nobody may allow that.`);
   }
-  return pass(id, title, 'CRITICAL', balances.length, `${balances.length} stock positions checked, none unexplained.`);
+  return pass(id, title, 'CRITICAL', balances.length, `${balances.length} stock positions checked, none below zero.`);
 };
 
 /** The parts of the tax add up to the tax. */

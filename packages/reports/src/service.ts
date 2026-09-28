@@ -18,7 +18,7 @@ import {
   type IsoDate,
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerStore, PermissionPort } from '@invoice/ledger';
-import type { InventoryStore, StockMasterData, StockMovement } from '@invoice/inventory';
+import type { InventoryStore, StockMasterData } from '@invoice/inventory';
 import type { SalesRepository } from '@invoice/sales';
 import {
   REPORT_PERMISSIONS,
@@ -239,14 +239,12 @@ export class ReportService {
       ageingBody(this.#deps.dues, actor, companyId, filter, 'RECEIVABLE', indiaDateOf(asAt)),
       ageingBody(this.#deps.dues, actor, companyId, filter, 'PAYABLE', indiaDateOf(asAt)),
     ]);
-    const movements: readonly StockMovement[] = await this.#deps.inventory.movements.list(companyId, { to: filter.to });
     const salesInvoices = (await this.#deps.sales.list(companyId)).filter(
       (i) => filter.branchId === undefined || i.branchId === filter.branchId,
     );
     const body = exceptionsBody({
       books,
       stock,
-      movements,
       salesInvoices,
       sales,
       receivables,

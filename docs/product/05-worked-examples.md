@@ -138,7 +138,7 @@ The product blocks it and says, in plain words:
 > **Not enough stock.** You have **30 boxes** of Apple box, 10 kg at Narela godown. This bill needs
 > **70 boxes**, so **40 are missing**.
 > You can: reduce the quantity to 30 · pick a different godown · record the purchase that brought
-> the stock in · ask someone with permission to allow a negative-stock sale and give a reason.
+> the stock in. There is no way to sell goods that are not there (#262).
 
 Nothing is posted. No partial invoice is created.
 

@@ -386,7 +386,7 @@ export class ThreeWayMatchingService {
   async cancelReceipt(
     actor: ActorContext,
     receiptId: string,
-    input: { readonly reason: string; readonly negativeOverrideReason?: string },
+    input: { readonly reason: string },
   ): Promise<GoodsReceipt> {
     this.#require(actor, RECEIPT_WRITE_PERMISSION);
     const receipt = await this.#mustFindReceipt(actor, receiptId);
@@ -409,7 +409,6 @@ export class ThreeWayMatchingService {
           documentDate: isoDate(receipt.receiptDate),
           source: { kind: "goods_receipt", id: receipt.id, number: receipt.receiptNumber },
           reason: input.reason,
-          ...(input.negativeOverrideReason === undefined ? {} : { negativeOverrideReason: input.negativeOverrideReason }),
         });
       }
       const updated: GoodsReceipt = {

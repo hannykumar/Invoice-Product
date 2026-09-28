@@ -252,7 +252,7 @@ export const makeBusiness = async (
     permissions: permissionPortFromActor,
     audit,
     clock,
-    policy: { negativeStock: 'BLOCK', reservationMinutes: 60, valuationMethod: 'WEIGHTED_AVERAGE' },
+    policy: { reservationMinutes: 60, valuationMethod: 'WEIGHTED_AVERAGE' },
     idFactory,
   });
 
