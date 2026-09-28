@@ -244,7 +244,7 @@ test('Step 4. Selling 600 KGS with 50 KGS in stock is refused, and no bill numbe
   t.diagnostic('600 KGS refused: "You have 50 KGS … This bill asks for 600 KGS."');
 });
 
-test('Step 4 (nothing left behind). The refused review leaves no "bill waiting" in Reports', { todo: '#256' }, async () => {
+test('Step 4 (nothing left behind). The refused review leaves no "bill waiting" in Reports', async () => {
   const findings = (await reports()).exceptions.items.map((item: any) => item.code);
   assert.equal(findings.includes('BILL_STUCK_BEFORE_ISSUE'), false, findings.join(', '));
 });

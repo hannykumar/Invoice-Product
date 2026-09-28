@@ -330,6 +330,41 @@ export class SalesService {
     return cleared;
   }
 
+  /**
+   * Issue #256 — forgets a bill that was only ever a review: one the app refused (not enough stock,
+   * no tax it could stand behind), or one a later review of the same sale replaced.
+   *
+   * Only a bill nobody has been given is forgotten. It has no number, so the number series is not
+   * touched, and it has no entry in the books. A bill held for approval was held on purpose and is
+   * refused here; it stays waiting until someone approves or rejects it. Any goods held for it are
+   * let go. Returns false when there was nothing to forget.
+   */
+  async discardDraft(actor: ActorContext, invoiceId: string, reason: string): Promise<boolean> {
+    this.#permissions.require(actor, SALES_PERMISSIONS.draft, 'discard this bill');
+    const invoice = await this.#repo.findById(actor.companyId, invoiceId);
+    if (invoice === null) return false;
+    if (!isEditable(invoice) || invoice.number !== null || invoice.voucherId !== null) {
+      throw notAllowed('SALES_NOT_DISCARDABLE', invoice.state === 'PENDING_APPROVAL'
+        ? 'This bill is waiting for approval. Approve it or send it back; it is not thrown away.'
+        : `${invoice.number ?? 'This bill'} has already been issued, so it stays on record.`);
+    }
+    await this.#inventory.release(actor, invoice.id);
+    await this.#store.transaction(actor.companyId, async () => {
+      await this.#repo.remove(actor.companyId, invoice.id);
+    });
+    await this.#audit.record({
+      companyId: actor.companyId,
+      actorId: actor.userId,
+      at: this.#clock.now().toISOString(),
+      action: 'sales.draft_discarded',
+      subjectType: 'sales_invoice',
+      subjectId: invoice.id,
+      summary: `An unissued bill was discarded: ${reason}`,
+      details: { reason, state: invoice.state },
+    });
+    return true;
+  }
+
   /** Holds the stock and asks for approval when the business's policy requires one. */
   async submitForApproval(actor: ActorContext, invoiceId: string): Promise<SalesInvoice> {
     this.#permissions.require(actor, SALES_PERMISSIONS.draft, 'send this bill for approval');

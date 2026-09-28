@@ -74,6 +74,16 @@ export class InMemorySalesRepository implements SalesRepository, TransactionPart
     this.#state = { invoices: next };
   }
 
+  async remove(companyId: CompanyId, id: string): Promise<void> {
+    const current = this.#state.invoices.find((i) => i.companyId === companyId && i.id === id);
+    if (current === undefined) return;
+    // Issue #256 — a numbered or posted bill is part of the books and is never removed.
+    if (current.number !== null || current.voucherId !== null) {
+      throw conflict('SALES_ISSUED_NOT_REMOVABLE', `${current.number ?? 'This bill'} has been issued, so it stays on record.`);
+    }
+    this.#state = { invoices: this.#state.invoices.filter((i) => i !== current) };
+  }
+
   async list(
     companyId: CompanyId,
     filter: { partyId?: string; state?: SalesInvoice['state'] } = {},
