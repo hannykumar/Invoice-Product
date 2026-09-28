@@ -31,6 +31,7 @@ Neither was findable inside a single module. Both are now pinned by a test.
 | `concurrency.test.ts` | Two tills, one last pallet; a payment button pressed twice; a bill posted twice at once |
 | `backup-restore.test.ts` | A real day of trading backed up, moved on from, and restored |
 | `volume.test.ts` | A month of a busy small trader, and whether anything is quietly quadratic |
+| `full-trade.test.ts` | The permanent full trade check (#242, `docs/checks/full-trade-check.md`), step by step, over HTTP against the web server, to the paisa; steps waiting on an open issue are `todo` with its number |
 | `regressions.test.ts` | That every entry in the register is still pinned by a test that exists |
 
 `harness.ts` builds the business every scenario shares: the real ledger, inventory, purchase
