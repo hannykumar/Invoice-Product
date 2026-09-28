@@ -1,6 +1,6 @@
 const copy = {
   "en-IN": {
-    skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Payment", navReturns: "Returns", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
+    skip: "Skip to main content", brandSubtitle: "Business workspace", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Money received", navMoney: "Money", navMore: "More", navStock: "What is in the godown", navGroupBuying: "Buying", navGroupStock: "Stock", navGroupSelling: "Selling", navGroupGst: "GST", navGroupBooks: "Books", navGroupSettings: "Settings", navReturns: "Returns", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Workspace navigation", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft protection is on", draftProtection: "Your unfinished work stays on this device.", companyLocation: "Delhi · Main shop", language: "Language",
     demoTitle: "Connected demo company.", demoBody: "Preview checks are read-only. Recording uses the real sales, purchasing, inventory, ledger and receivables modules.", today: "Today", welcome: "Good to see you, Hanny", welcomeBody: "Live company state from Sampoorna Traders.", newSale: "New sale",
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
@@ -297,7 +297,7 @@ const copy = {
     supplierSafety: "This only looks things up. Nothing is recorded against the supplier and no money moves.",
     whatWeFound: "What we found", whereFrom: "Where each answer came from",
     ackReason: "Why is it alright to go ahead?", ackButton: "Accept and go ahead",
-    navDeliveries: "Deliveries", orderDate: "Order date", deliveryDate: "Delivery date",
+    navDeliveries: "Orders and deliveries", orderDate: "Order date", deliveryDate: "Delivery date",
     deliveriesTitle: "Orders, deliveries and the supplier's bill", deliveriesHelp: "Check what you ordered against what actually arrived and what you are being charged for. None of it is forced — if you never raise orders, skip the first box.",
     stepOrder: "1 · What you ordered", stepOrderHelp: "Only if you work with orders. This buys nothing and changes no stock.",
     orderNumber: "Order number", orderedQty: "How many you ordered", agreedRate: "Agreed price of one, before GST",
@@ -332,7 +332,7 @@ const copy = {
     draftReady: "Your draft is ready to review", draftReadyBody: "This development preview stops before making any entry in your books. Your draft remains saved on this device.", keepEditing: "Keep editing", understand: "I understand"
   },
   "hi-IN": {
-    skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Payment", navReturns: "Wapsi", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
+    skip: "Seedha mukhya hissa kholen", brandSubtitle: "Aapke business ki jagah", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Mila paisa", navMoney: "Paisa", navMore: "Aur", navStock: "Godown mein kya hai", navGroupBuying: "Kharid", navGroupStock: "Stock", navGroupSelling: "Bikri", navGroupGst: "GST", navGroupBooks: "Bahi", navGroupSettings: "Settings", navReturns: "Wapsi", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Kaam ki navigation", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft surakshit hai", draftProtection: "Adhura kaam isi device par rahega.", companyLocation: "Delhi · Mukhya dukaan", language: "Bhasha",
     demoTitle: "Connected demo company.", demoBody: "Preview sirf jaanch karta hai. Record karne par asli sales, purchasing, inventory, ledger aur receivables modules chalte hain.", today: "Aaj", welcome: "Namaste Hanny", welcomeBody: "Sampoorna Traders ki live company state.", newSale: "Nayi bikri",
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
@@ -625,7 +625,7 @@ const copy = {
     supplierSafety: "Yeh sirf dekhta hai. Supplier ke khaate mein kuch darj nahin hota aur paisa nahin hilta.",
     whatWeFound: "Humein kya mila", whereFrom: "Har jawab kahan se aaya",
     ackReason: "Aage badhna kyon theek hai?", ackButton: "Sweekar karke aage badhein",
-    navDeliveries: "Delivery", orderDate: "Order ki tareekh", deliveryDate: "Delivery ki tareekh",
+    navDeliveries: "Order aur delivery", orderDate: "Order ki tareekh", deliveryDate: "Delivery ki tareekh",
     deliveriesTitle: "Order, delivery aur supplier ka bill", deliveriesHelp: "Jo mangaya, jo asli mein aaya, aur jiska paisa maanga ja raha hai — teenon milaen. Kuch zaroori nahi hai — agar aap order nahi banate, pehla box chhod den.",
     stepOrder: "1 · Aapne kya mangaya", stepOrderHelp: "Sirf agar aap order banate hain. Isse kuch khareeda nahi jata aur stock nahi badalta.",
     orderNumber: "Order number", orderedQty: "Kitna mangaya", agreedRate: "Ek ka tay daam, GST se pehle",
@@ -829,20 +829,26 @@ function translate() {
   if (lastAskAnswer !== null) renderAnswer(lastAskAnswer);
 }
 
-function openView(view) {
+// Issue #241 — a menu entry may open one part of a screen ("What is in the godown" is the stock
+// part of Reports), and a phone button may stand for more than one screen ("Money" is both money
+// received and money paid). Only the entry for what is on screen is marked as the current one.
+function openView(view, section = null) {
   const target = document.querySelector(`#view-${view}`) ? view : "dashboard";
   state.view = target;
   document.querySelectorAll(".view").forEach((element) => element.classList.toggle("active", element.id === `view-${target}`));
   document.querySelectorAll("[data-view]").forEach((element) => {
-    const active = element.dataset.view === target;
+    const sameScreen = element.dataset.view === target && (element.dataset.section ?? null) === section;
+    const active = sameScreen || (element.dataset.alsoViews ?? "").split(" ").includes(target);
     element.classList.toggle("active", active);
     if (active) element.setAttribute("aria-current", "page"); else element.removeAttribute("aria-current");
   });
+  // A screen kept under Settings opens that group, so the current entry is never hidden.
+  const settings = document.querySelector("#nav-settings");
+  if (settings?.querySelector(".nav-item.active")) settings.open = true;
   history.replaceState(null, "", `#${target}`);
-  document.body.classList.remove("menu-open");
-  document.querySelector("#menu-button").setAttribute("aria-expanded", "false");
+  closeMenu();
   document.querySelector(`#view-${target} h1`)?.focus?.();
-  if (target === "reports") loadReports();
+  if (target === "reports") loadReports().then(() => { if (section && state.view === "reports") document.querySelector(`#${section}`)?.scrollIntoView({ block: "start" }); });
   if (target === "migration") startMigration();
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
   if (target === "reminders") loadReminders();
@@ -1181,6 +1187,7 @@ function renderReports(data) {
 
   // What is left in the godown.
   const stock = reportCard(t(data.stock.title), t(data.stock.sentence));
+  stock.id = "report-stock"; // Issue #241 — the menu's "What is in the godown" opens here.
   if (data.stock.rows.length > 0) stock.append(reportTable(
     [{ label: t(REPORT_TEXT.itemCol) }, { label: t(REPORT_TEXT.godown) }, { label: t(REPORT_TEXT.leftCol) }, { label: t(REPORT_TEXT.canBeSold) }, { label: t(REPORT_TEXT.worth), numeric: true }],
     data.stock.rows.map((r) => [r.item, r.warehouse, `${r.closing} ${r.unit}`, `${r.available} ${r.unit}`, money(r.value)]),
@@ -2563,10 +2570,25 @@ document.querySelector("#branding-mark-query")?.addEventListener("keydown", (eve
 document.querySelector("#branding-template")?.addEventListener("change", refreshBrandingPreview);
 document.querySelector("#branding-format")?.addEventListener("change", refreshBrandingPreview);
 
-document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view)));
+document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view, button.dataset.section ?? null)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
-document.querySelector("#menu-button").addEventListener("click", (event) => { const open = !document.body.classList.contains("menu-open"); document.body.classList.toggle("menu-open", open); event.currentTarget.setAttribute("aria-expanded", String(open)); });
+// Issue #241 — on a phone, "More" (and the ☰ at the top) opens the whole grouped menu. Settings is
+// opened with it, so every screen is at most two taps away: "More", then the screen.
+function closeMenu() {
+  document.body.classList.remove("menu-open");
+  for (const id of ["#menu-button", "#more-button"]) document.querySelector(id)?.setAttribute("aria-expanded", "false");
+}
+function toggleMenu() {
+  const open = !document.body.classList.contains("menu-open");
+  if (!open) { closeMenu(); return; }
+  document.body.classList.add("menu-open");
+  for (const id of ["#menu-button", "#more-button"]) document.querySelector(id)?.setAttribute("aria-expanded", "true");
+  const settings = document.querySelector("#nav-settings");
+  if (settings) settings.open = true;
+}
+document.querySelector("#menu-button").addEventListener("click", toggleMenu);
+document.querySelector("#more-button").addEventListener("click", toggleMenu);
 document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
   const email = document.querySelector('#login-form [name="email"]');
   email.value = event.target.value.endsWith("11") ? "owner@konkan.example.invalid" : "owner@sampoorna.example.invalid";
