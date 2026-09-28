@@ -42,7 +42,7 @@ const preview = await desk.service.preview(desk.actor, { document: invoiceDocume
 console.log(preview.summary);
 console.log(`Ready to send: ${preview.ready}`);
 console.log(`The e-invoice number this bill will get: ${preview.expectedIrn}`);
-console.log(`Must be reported by: ${preview.reportableUntil}`);
+console.log(`Deadline: ${preview.deadline?.message ?? "none"}`);
 console.log(`Registered with the government so far: ${desk.portal.registeredIrns().length}`);
 
 heading("3. Sending it");

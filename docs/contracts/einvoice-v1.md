@@ -109,8 +109,20 @@ refusal is honoured if the two ever disagree.
 A reason is required and kept. The four codes the government accepts are `DUPLICATE`,
 `DATA_ENTRY_MISTAKE`, `ORDER_CANCELLED`, `OTHER`.
 
-`awaitingReport()` lists applicable documents not yet reported, so a 30-day reporting deadline is
-never missed silently.
+`awaitingReport()` lists applicable documents not yet reported, so a reporting deadline is never
+missed silently.
+
+**The reporting time limit is not for everyone (#236).** `reporting-window.ts` holds it as law,
+not as a company setting: from 1 April 2025 the portals refuse a document older than 30 days only
+for a business whose annual aggregate turnover is **₹10 crore or more** (GSTN advisory, 5 November
+2024; before that, ₹100 crore and above from 1 November 2023). Below ₹10 crore there is no limit
+and no "must be reported by" date is shown. The bill's own date is day 1 — the advisory's example
+is a bill dated 1 April 2025 that cannot be reported after 30 April 2025. The check is made on the
+day of reporting, so a bill dated before a limit began could be reported however old until the day
+before it began. The supplier facts carry `lastYearTurnover` as bounds; a business that has not
+said which side of ₹10 crore it is on gets `UNKNOWN` and a question, never a guessed date. Past
+the last day, `preview()` says the portal will refuse it and what to do, and `register()` refuses
+with `EINVOICE_REPORTING_TIME_LIMIT_PASSED` rather than sending it to be refused.
 
 ## Offline export
 

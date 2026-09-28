@@ -1,5 +1,6 @@
 export * from "./einvoice-types.ts";
 export * from "./applicability.ts";
+export * from "./reporting-window.ts";
 export * from "./irn.ts";
 export * from "./payload.ts";
 export * from "./einvoice-ports.ts";

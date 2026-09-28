@@ -318,7 +318,7 @@
             <form id="einvoice-form">
               <div class="field-grid">
                 <label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="einvoice-invoices" required></select></label>
-                <label><span data-i18n="yourTurnover"></span><span class="input-with-prefix"><span>₹</span><input name="turnover" type="number" min="0" step="1" placeholder="80000000" /></span><small data-i18n="turnoverHelp"></small></label>
+                <p class="setup-hint full-field" data-i18n="einvoiceTurnoverFrom"></p>
                 <label><span data-i18n="exemptCategory"></span><select name="exempt"><option value="" data-i18n="notExempt"></option><option value="BANKING_OR_NBFC" data-i18n="exemptBank"></option><option value="GOODS_TRANSPORT_AGENCY" data-i18n="exemptGta"></option><option value="SEZ_UNIT" data-i18n="exemptSez"></option></select></label>
               </div>
               <button type="submit" class="primary-button wide" data-i18n="checkNeeded"></button>
@@ -1075,10 +1075,12 @@
               </label>
               <label><span data-i18n="setupBooksFrom"></span><input type="date" name="booksStartDate" data-no-default /></label>
               <label><span data-i18n="turnoverQuestion"></span>
-                <select name="turnoverAbove5Crore">
+                <select name="turnoverBand">
                   <option value="UNKNOWN" data-i18n="turnoverUnsure"></option>
-                  <option value="NO" data-i18n="turnoverNo"></option>
-                  <option value="YES" data-i18n="turnoverYes"></option>
+                  <option value="UP_TO_5_CRORE" data-i18n="turnoverUpTo5"></option>
+                  <option value="UP_TO_5_CRORE_EARLIER_ABOVE" data-i18n="turnoverUpTo5Earlier"></option>
+                  <option value="5_TO_10_CRORE" data-i18n="turnover5To10"></option>
+                  <option value="10_CRORE_AND_ABOVE" data-i18n="turnover10Plus"></option>
                 </select>
               </label>
               <p class="setup-hint" data-i18n="turnoverWhy"></p>
@@ -1135,9 +1137,11 @@
             <fieldset>
               <legend data-i18n="turnoverLegend"></legend>
               <p class="setup-hint" data-i18n="turnoverQuestion"></p>
-              <label class="choice"><input type="radio" name="turnoverAbove5Crore" value="YES" /> <span data-i18n="turnoverYes"></span></label>
-              <label class="choice"><input type="radio" name="turnoverAbove5Crore" value="NO" /> <span data-i18n="turnoverNo"></span></label>
-              <label class="choice"><input type="radio" name="turnoverAbove5Crore" value="UNKNOWN" /> <span data-i18n="turnoverUnsure"></span></label>
+              <label class="choice"><input type="radio" name="turnoverBand" value="UP_TO_5_CRORE" /> <span data-i18n="turnoverUpTo5"></span></label>
+              <label class="choice"><input type="radio" name="turnoverBand" value="UP_TO_5_CRORE_EARLIER_ABOVE" /> <span data-i18n="turnoverUpTo5Earlier"></span></label>
+              <label class="choice"><input type="radio" name="turnoverBand" value="5_TO_10_CRORE" /> <span data-i18n="turnover5To10"></span></label>
+              <label class="choice"><input type="radio" name="turnoverBand" value="10_CRORE_AND_ABOVE" /> <span data-i18n="turnover10Plus"></span></label>
+              <label class="choice"><input type="radio" name="turnoverBand" value="UNKNOWN" /> <span data-i18n="turnoverUnsure"></span></label>
               <p class="setup-hint" id="business-turnover-note"></p>
             </fieldset>
             <fieldset>

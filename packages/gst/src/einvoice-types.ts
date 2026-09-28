@@ -12,6 +12,7 @@
 // acceptance criterion is that the two are never confused.
 
 import type { Id, IsoDate, Paise } from "../../masters/src/types.ts";
+import type { TurnoverBounds } from "./reporting-window.ts";
 
 // ------------------------------------------------------------------------ applicability
 
@@ -84,6 +85,12 @@ export interface EInvoiceSupplierFacts {
     readonly above: boolean;
     readonly forFinancialYear?: string;
   };
+  /**
+   * Issue #236 — last financial year's aggregate turnover as the business told it to us, as bounds
+   * (a band, not a figure). Decides whether the portal's 30-day reporting limit applies, which it
+   * does only at ₹10 crore and above. Absent means "not told", which is a question, never a no.
+   */
+  readonly lastYearTurnover?: TurnoverBounds;
   readonly exemptCategories?: readonly ExemptCategory[];
   /** Set when the business has been told by the department that it must report, regardless. */
   readonly mandatedByDepartment?: boolean;
@@ -198,8 +205,9 @@ export interface EInvoiceRecord {
 export interface EInvoicePolicy {
   /** Hours after acknowledgement during which the government still accepts a cancellation. */
   readonly cancellationWindowHours: number;
-  /** Days after the document date within which it must be reported, when a limit applies. */
-  readonly reportingWindowDays?: number;
+  // Issue #236 — there is no reporting window here. How long a bill may wait before it is sent is
+  // the law's, not a company setting, and it depends on the business's turnover: see
+  // `reporting-window.ts`. A single 30 days for everyone was wrong below ₹10 crore.
   /** Whether to check the IRN the provider returned against the published formula. */
   readonly verifyIrnHash: boolean;
   readonly effectiveFrom: IsoDate;
@@ -207,7 +215,6 @@ export interface EInvoicePolicy {
 
 export const DEFAULT_EINVOICE_POLICY: EInvoicePolicy = Object.freeze({
   cancellationWindowHours: 24,
-  reportingWindowDays: 30,
   verifyIrnHash: true,
   effectiveFrom: "2026-04-01",
 });

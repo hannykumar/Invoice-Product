@@ -18,8 +18,9 @@ import type { ActorContext, AuditPort } from "@invoice/ledger";
 import type { Clock } from "@invoice/kernel";
 import { decideApplicability } from "./applicability.ts";
 import {
-  cancellableUntil, checkAcknowledgement, computeIrn, financialYearOf, readAckDate, reportableUntil,
+  cancellableUntil, checkAcknowledgement, computeIrn, financialYearOf, readAckDate,
 } from "./irn.ts";
+import { exactTurnover, reportingDeadline, type ReportingDeadline } from "./reporting-window.ts";
 import { buildEInvoicePayload, toOfflineJson, type PayloadOptions } from "./payload.ts";
 import { DEFAULT_EINVOICE_POLICY } from "./einvoice-types.ts";
 import type {
@@ -63,7 +64,10 @@ export interface EInvoicePreview {
   readonly problems: readonly PayloadProblem[];
   /** The IRN this document will receive, computed before it is sent. */
   readonly expectedIrn?: string;
+  /** The last day the portal accepts it. Only set when a time limit certainly applies (#236). */
   readonly reportableUntil?: IsoDate;
+  /** Whether a time limit applies to this business, and what it means for this bill. */
+  readonly deadline?: ReportingDeadline;
   readonly summary: string;
 }
 
@@ -117,7 +121,6 @@ export class EInvoiceService {
    */
   async preview(actor: ActorContext, input: RegisterInput): Promise<EInvoicePreview> {
     this.#require(actor, EINVOICE_VIEW_PERMISSION);
-    const policy = await this.#policyFor(actor.companyId, input.document.documentDate);
     const applicability = decideApplicability(input.applicability);
 
     if (applicability.outcome !== "APPLICABLE") {
@@ -129,20 +132,24 @@ export class EInvoiceService {
     }
 
     const built = buildEInvoicePayload(input.document, this.#payloadOptions);
-    const due = reportableUntil(input.document.documentDate, policy.reportingWindowDays);
+    const deadline = this.#deadline(input);
+    const due = deadline.kind === "LIMIT" ? { reportableUntil: deadline.lastDay } : {};
     if (!built.ok) {
       return {
-        applicability, ready: false, problems: built.problems,
-        ...(due === undefined ? {} : { reportableUntil: due }),
+        applicability, ready: false, problems: built.problems, deadline, ...due,
         summary: `This bill needs an e-invoice number, but ${built.problems.length === 1 ? "one thing is" : `${built.problems.length} things are`} missing first: ${built.problems[0]?.message ?? ""}`,
       };
+    }
+
+    if (deadline.kind === "LIMIT" && deadline.closed) {
+      return { applicability, ready: false, problems: [], deadline, ...due, summary: deadline.message };
     }
 
     return {
       applicability, ready: true, problems: [],
       expectedIrn: this.#expectedIrn(input.document),
-      ...(due === undefined ? {} : { reportableUntil: due }),
-      summary: `This bill needs an e-invoice number and is ready to send${due === undefined ? "" : `. It should be sent by ${due}`}.`,
+      deadline, ...due,
+      summary: `This bill needs an e-invoice number and is ready to send.${deadline.kind === "LIMIT" ? ` ${deadline.message}` : ""}`,
     };
   }
 
@@ -185,6 +192,17 @@ export class EInvoiceService {
       );
     }
 
+    // Issue #236 — the portal refuses a bill that is past its time limit, so it is not sent to be
+    // refused; and a business that has not told us which side of the limit it is on is asked
+    // before a bill that would be late under it goes anywhere.
+    const deadline = this.#deadline(input);
+    if (deadline.kind === "LIMIT" && deadline.closed) {
+      throw conflict("EINVOICE_REPORTING_TIME_LIMIT_PASSED", deadline.message, { details: { lastDay: deadline.lastDay, rule: deadline.ruleId } });
+    }
+    if (deadline.kind === "UNKNOWN" && deadline.lastDayIfItApplies < this.#today()) {
+      throw invalid("EINVOICE_CANNOT_DECIDE", `Nothing has been sent. ${deadline.message}`, { details: { missing: "lastYearTurnover" } });
+    }
+
     const built = buildEInvoicePayload(document, this.#payloadOptions);
     if (!built.ok) {
       throw invalid(
@@ -196,7 +214,7 @@ export class EInvoiceService {
 
     // Derived from the document, never from the attempt: that is what makes a retry the same call.
     const idempotencyKey = `einvoice:generate:${actor.companyId}:${document.documentId}`;
-    const record = existing ?? this.#blank(actor, document, applicability, policy, at, idempotencyKey);
+    const record = existing ?? this.#blank(actor, document, applicability, deadline, at, idempotencyKey);
     if (existing === null) await this.#records.insert(record);
 
     // Marked pending before the call, so a process that dies mid-flight leaves a record saying
@@ -389,11 +407,11 @@ export class EInvoiceService {
     actor: ActorContext,
     document: EInvoiceDocument,
     applicability: ApplicabilityDecision,
-    policy: EInvoicePolicy,
+    deadline: ReportingDeadline,
     at: string,
     idempotencyKey: string,
   ): EInvoiceRecord {
-    const due = reportableUntil(document.documentDate, policy.reportingWindowDays);
+    const due = deadline.kind === "LIMIT" ? deadline.lastDay : undefined;
     return {
       id: this.#newId(),
       companyId: actor.companyId,
@@ -438,6 +456,14 @@ export class EInvoiceService {
     // Tenancy from the query, never from an id the caller supplied.
     if (record === null) throw notFound("EINVOICE_UNKNOWN", "We have no e-invoice record for that bill.");
     return record;
+  }
+
+  /** Issue #236 — the time limit, from last year's turnover as the business told it to us. */
+  #deadline(input: RegisterInput): ReportingDeadline {
+    const supplier = input.applicability.supplier;
+    const bounds = supplier.lastYearTurnover
+      ?? (supplier.aggregateTurnoverPaise === undefined ? {} : exactTurnover(supplier.aggregateTurnoverPaise));
+    return reportingDeadline(input.document.documentDate, bounds, this.#today());
   }
 
   #today(): IsoDate {

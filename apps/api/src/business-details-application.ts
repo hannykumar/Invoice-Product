@@ -33,9 +33,13 @@ import {
   validatePincode,
   validatePincodeForState,
   turnoverAnswerOn,
+  turnoverBandOn,
   withTurnoverAnswer,
+  above5CroreOf,
+  TURNOVER_BANDS,
   type BankAccount,
   type TurnoverAbove5Crore,
+  type TurnoverBand,
   type TurnoverAnswer,
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
@@ -168,22 +172,50 @@ export const turnoverAnswerForYear = (companyId: CompanyId | string, financialYe
   turnoverAnswersOf(companyId).find((answer) => answer.forFinancialYear === financialYear)?.answer ?? 'UNKNOWN';
 
 /**
- * Records "was last financial year's turnover above ₹5 crore?" for the financial year running today.
- * The answer is about the year before, so it governs this year's bills, and on 1 April the question
- * is open again.
+ * Records the turnover band for the financial year running today (#236). The answer is about the
+ * year before, so it governs this year's bills, and on 1 April the question is open again.
+ *
+ * `band` is one of the five answers the screens offer. The older yes/no (`turnoverAbove5Crore`) is
+ * still accepted from anything that sends it, and is kept as a yes/no: a "yes" says nothing about
+ * ₹10 crore and a "no" nothing about the years before last, so Business details asks again.
  */
-export const recordTurnoverAnswer = (companyId: CompanyId | string, raw: unknown, today = todayIso()): void => {
-  const answer = str(raw).toUpperCase() as TurnoverAbove5Crore;
+export const recordTurnoverAnswer = (
+  companyId: CompanyId | string,
+  input: { readonly band?: unknown; readonly above5Crore?: unknown },
+  today = todayIso(),
+): void => {
+  const forFinancialYear = financialYearOf(today);
+  const band = str(input.band).toUpperCase() as TurnoverBand;
+  if (band !== ('' as TurnoverBand)) {
+    if (!TURNOVER_BANDS.includes(band)) throw invalid('BUSINESS_TURNOVER_ANSWER', 'Choose one of the turnover answers, or Not sure.');
+    turnoverAnswers.set(String(companyId), withTurnoverAnswer(turnoverAnswersOf(companyId), { answer: above5CroreOf(band), band, forFinancialYear }));
+    return;
+  }
+  const answer = str(input.above5Crore).toUpperCase() as TurnoverAbove5Crore;
   if (answer === ('' as TurnoverAbove5Crore)) return;
   if (!TURNOVER_ANSWERS.includes(answer)) throw invalid('BUSINESS_TURNOVER_ANSWER', 'Choose Yes, No or Not sure.');
-  turnoverAnswers.set(String(companyId), withTurnoverAnswer(turnoverAnswersOf(companyId), { answer, forFinancialYear: financialYearOf(today) }));
+  // A bare yes/no never overwrites a band already given for this year with less than it said.
+  const current = turnoverAnswersOf(companyId).find((given) => given.forFinancialYear === forFinancialYear);
+  if (current?.band !== undefined && current.answer === answer) return;
+  turnoverAnswers.set(String(companyId), withTurnoverAnswer(turnoverAnswersOf(companyId), { answer, forFinancialYear }));
 };
+
+/** The band that governs a bill dated `on`, or null when it has to be asked (#236). */
+export const turnoverBandFor = (companyId: CompanyId | string, on: string): TurnoverBand | null =>
+  turnoverBandOn(turnoverAnswersOf(companyId), isoDate(on));
 
 const turnoverView = (companyId: CompanyId | string) => {
   const today = todayIso();
   const financialYear = financialYearOf(today);
-  const answered = turnoverAnswersOf(companyId).some((answer) => answer.forFinancialYear === financialYear);
-  return { answer: answered ? turnoverAnswerOn(turnoverAnswersOf(companyId), today) : null, financialYear };
+  const given = turnoverAnswersOf(companyId).find((answer) => answer.forFinancialYear === financialYear);
+  return {
+    answer: given === undefined ? null : turnoverAnswerOn(turnoverAnswersOf(companyId), today),
+    // Null when this year was never answered, or answered only with the old yes/no.
+    band: turnoverBandOn(turnoverAnswersOf(companyId), today),
+    // Issue #236 — an old "yes" or "no" is shown for what it was, with the question asked again.
+    askAgain: given !== undefined && given.band === undefined && given.answer !== 'UNKNOWN' ? given.answer : null,
+    financialYear,
+  };
 };
 
 // ---------------------------------------------------------------------------------- saving them
@@ -248,7 +280,7 @@ export const saveBusinessDetails = (
   }
 
   const bankAccountId = saveBankAccount(companyId, legalName, input, clear, current);
-  recordTurnoverAnswer(companyId, input.turnoverAbove5Crore);
+  recordTurnoverAnswer(companyId, { band: input.turnoverBand, above5Crore: input.turnoverAbove5Crore });
 
   const next: BusinessDetails = {
     legalName,

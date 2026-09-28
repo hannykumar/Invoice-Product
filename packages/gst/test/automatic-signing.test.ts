@@ -29,7 +29,7 @@ test("the business's own yes to the ₹5 crore question decides the bill, with n
   const decision = decideApplicability(banded);
 
   assert.equal(decision.outcome, "APPLICABLE");
-  assert.match(decision.reason, /above ₹5,00,00,000\.00/);
+  assert.match(decision.reason, /gone over ₹5,00,00,000\.00/);
   assert.equal(decision.thresholdApplied?.ruleId, "EINV.THRESHOLD.5CR");
 });
 

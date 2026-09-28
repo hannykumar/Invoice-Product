@@ -150,7 +150,7 @@ test('sending the same bill again produces no second IRN', async () => {
   assert.equal(first.status, 'REGISTERED');
 
   // The button on the E-invoice screen, pressed after the automatic send already succeeded.
-  const again = await request('POST', '/api/einvoices/register', { invoice: recorded.body.invoice.id, turnover: '60000000' }, session);
+  const again = await request('POST', '/api/einvoices/register', { invoice: recorded.body.invoice.id }, session);
 
   assert.equal(again.status, 200, JSON.stringify(again.body));
   assert.equal(again.body.irn, first.irn, 'the same IRN comes back, not a second one');

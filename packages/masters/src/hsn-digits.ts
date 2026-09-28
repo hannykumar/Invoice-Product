@@ -21,8 +21,44 @@ import { financialYearOf, type IsoDate } from "@invoice/kernel";
 /** The business's answer to "was last financial year's turnover more than ₹5 crore?". */
 export type TurnoverAbove5Crore = "YES" | "NO" | "UNKNOWN";
 
+/**
+ * Issue #236 — the band the business picked for last financial year's aggregate turnover.
+ *
+ * Three limits hang off this one answer, and a yes/no against ₹5 crore could only settle one:
+ *
+ *  - HSN digits on the bill (Notification 78/2020): more than ₹5 crore last year, six digits.
+ *  - E-invoicing (Notification 13/2020 as amended by 10/2023): turnover that *exceeded* ₹5 crore in
+ *    **any** financial year from 2017-18 on. A business under ₹5 crore last year that was over it
+ *    in an earlier year must still e-invoice, which is why the lowest band is split in two.
+ *  - The 30-day reporting limit (GSTN advisory, 5 November 2024): ₹10 crore and above, from
+ *    1 April 2025. Below ₹10 crore there is no limit.
+ *
+ * `UNKNOWN` is "Not sure": we ask before anything depends on it, and never assume either way.
+ */
+export type TurnoverBand =
+  | "UP_TO_5_CRORE"
+  | "UP_TO_5_CRORE_EARLIER_ABOVE"
+  | "5_TO_10_CRORE"
+  | "10_CRORE_AND_ABOVE"
+  | "UNKNOWN";
+
+export const TURNOVER_BANDS: readonly TurnoverBand[] = [
+  "UP_TO_5_CRORE", "UP_TO_5_CRORE_EARLIER_ABOVE", "5_TO_10_CRORE", "10_CRORE_AND_ABOVE", "UNKNOWN",
+];
+
+/** The yes/no against ₹5 crore last year that a band implies — what the HSN rule reads. */
+export const above5CroreOf = (band: TurnoverBand): TurnoverAbove5Crore =>
+  band === "UNKNOWN" ? "UNKNOWN" : band === "5_TO_10_CRORE" || band === "10_CRORE_AND_ABOVE" ? "YES" : "NO";
+
 export interface TurnoverAnswer {
+  /** Last year above ₹5 crore — derived from `band` when there is one, kept for the HSN rule. */
   readonly answer: TurnoverAbove5Crore;
+  /**
+   * The band itself (#236). Absent on an answer given before the bands existed: a bare "yes" says
+   * nothing about ₹10 crore, and a bare "no" says nothing about the years before last, so both are
+   * asked again rather than guessed.
+   */
+  readonly band?: TurnoverBand;
   /**
    * The financial year the answer was given for, e.g. "2026-27" — the year whose bills it governs.
    * On 1 April a new year starts, last year's answer no longer describes "the previous year", and the
@@ -39,6 +75,14 @@ export interface TurnoverAnswer {
 export const turnoverAnswerOn = (answers: readonly TurnoverAnswer[] | null | undefined, date: IsoDate): TurnoverAbove5Crore => {
   const year = financialYearOf(date);
   return answers?.find((candidate) => candidate.forFinancialYear === year)?.answer ?? "UNKNOWN";
+};
+
+/** The band for a bill dated `date`, or null when that year was answered only with a yes/no, or not at all. */
+export const turnoverBandOn = (answers: readonly TurnoverAnswer[] | null | undefined, date: IsoDate): TurnoverBand | null => {
+  const year = financialYearOf(date);
+  const given = answers?.find((candidate) => candidate.forFinancialYear === year);
+  if (given === undefined) return null;
+  return given.band ?? (given.answer === "UNKNOWN" ? "UNKNOWN" : null);
 };
 
 /** Records a new answer for one financial year, replacing any earlier answer for that same year. */
