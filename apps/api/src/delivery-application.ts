@@ -239,6 +239,11 @@ export interface DeliveryDetails {
   /** One line for the screen: which state the sale counts in, and why that one. */
   readonly placeOfSupplyReason: string;
   readonly transport: RenderableTransport | null;
+  /**
+   * Issue #240 — the transporter chosen on the sale, with their 15-character ID and the lorry
+   * receipt, as the e-way bill names them. Null when the sale named no transporter.
+   */
+  readonly carrier: { readonly name: string; readonly transporterId: string; readonly documentNumber?: string; readonly documentDate?: string } | null;
   readonly references: RenderableReferences | null;
   readonly poReference: string | null;
 }
@@ -394,7 +399,14 @@ export const deliveryDetails = (
         paymentTerms,
       };
 
-  return { shipTo, deliverTo, placeOfSupplyStateCode, placeOfSupplyReason, transport, references, poReference };
+  const carrier = transporter === null || str(transporter.transporterId) === '' ? null : {
+    name: transporter.name,
+    transporterId: str(transporter.transporterId),
+    ...(lrNumber === '' ? {} : { documentNumber: lrNumber }),
+    ...(lrDate === '' ? {} : { documentDate: String(isoDate(lrDate)) }),
+  };
+
+  return { shipTo, deliverTo, placeOfSupplyStateCode, placeOfSupplyReason, transport, carrier, references, poReference };
 };
 
 /**

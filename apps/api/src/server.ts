@@ -155,6 +155,9 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
     if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
     if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));
+    // Issue #240 — the bills to choose from, and one bill's e-way bill filled in from the bill.
+    if (method === 'GET' && pathname === '/api/eway/bills') return json(200, await app.ewayBillChoices(actor));
+    if (method === 'POST' && pathname === '/api/eway/for-bill') return json(200, await app.ewayBillForBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/generate') return json(200, await app.generateEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/eway/vehicle') return json(200, await app.updateEwayVehicle(actor, body));
     if (method === 'POST' && pathname === '/api/eway/extend') return json(200, await app.extendEwayValidity(actor, body));
