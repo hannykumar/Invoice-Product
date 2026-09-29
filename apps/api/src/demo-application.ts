@@ -4085,7 +4085,7 @@ export class DemoApplication {
     const companyId = this.companyOf(actor);
     const invoices = await this.salesRepository.list(companyId, { state: 'FINAL' });
     const records = await this.shop.eInvoice.list(actor);
-    const now = new Date().toISOString();
+    const now = appClock.now().toISOString();
     return {
       invoices: invoices.map((invoice) => {
         const record = records.find((candidate) => candidate.documentId === invoice.id);
