@@ -3509,7 +3509,7 @@ export class DemoApplication {
       effects: [
         command.kind === 'SALES_RETURN' ? 'A credit note will reduce what the customer owes.' : 'A debit note will reduce what you owe the supplier.',
         command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
-        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'The registered document needs a compliance adjustment.' : 'No government-document adjustment is needed.',
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
         ...preview.warnings,
       ],
       // Issue #186 — e.g. the 30 November deadline is close. Kept apart so every language shows it.

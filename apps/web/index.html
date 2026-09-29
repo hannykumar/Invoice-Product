@@ -4,8 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#173f35" />
-    <meta name="description" content="Invoice Product development workspace" />
-    <title>Karobar workspace</title>
+    <meta name="description" content="Karobar: bills, stock and GST for your shop" />
+    <title>Karobar</title>
+    <!-- Issue #303 — Mukta (Latin and Devanagari in one family) for all text, Baloo 2 for big numbers
+         and headings. styles.css names system fallbacks for both scripts, so the page reads the same
+         if these never arrive. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&amp;family=Mukta:wght@400;500;600;700&amp;display=swap" />
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/app.js"></script>
   </head>
@@ -92,15 +98,16 @@
       </header>
 
       <main id="main" tabindex="-1">
-        <div class="demo-banner" id="connection-banner" role="status">
-          <span aria-hidden="true">◉</span>
-          <span><strong data-i18n="demoTitle"></strong> <span data-i18n="demoBody"></span></span>
+        <!-- Issue #312 — no banner while the shop answers; it appears only when something failed. -->
+        <div class="demo-banner" id="connection-banner" role="status" hidden>
+          <span aria-hidden="true">!</span>
+          <span><strong></strong> <span></span></span>
         </div>
 
         <section class="view active" id="view-dashboard" aria-labelledby="dashboard-title">
           <div class="page-heading">
             <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" tabindex="-1" data-i18n="welcome"></h1><p id="welcome-body" data-i18n="welcomeBody"></p></div>
-            <button class="primary-button" data-open="sale"><span aria-hidden="true">＋</span><span data-i18n="newSale"></span></button>
+            <button class="action-button" data-open="sale"><span aria-hidden="true">＋</span><span data-i18n="newSale"></span></button>
           </div>
 
           <div class="metric-grid" aria-label="Business summary" data-i18n-aria="businessSummary">
@@ -1354,6 +1361,67 @@
             <div id="agent-capabilities" class="activity-list"></div>
           </article>
         </section>
+
+        <!-- Issue #303 — the design system on one page, for the owner: every piece a redesigned screen
+             is built from, in English and Hindi side by side. Reached at #design; not in the menu. -->
+        <section class="view" id="view-design" aria-labelledby="design-title">
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="designEyebrow"></p><h1 id="design-title" tabindex="-1" data-i18n="designTitle"></h1><p data-i18n="designHelp"></p></div></div>
+          <p class="safety-note" id="design-owner-only" hidden><span aria-hidden="true">i</span><span data-i18n="designOwnerOnly"></span></p>
+          <div id="design-content" hidden>
+            <div class="design-row" role="group" aria-labelledby="design-theme-label">
+              <span id="design-theme-label" data-i18n="designTheme"></span>
+              <button type="button" class="chip" data-theme-choice="" aria-pressed="true" data-i18n="designThemeDevice"></button>
+              <button type="button" class="chip" data-theme-choice="light" aria-pressed="false" data-i18n="designThemeLight"></button>
+              <button type="button" class="chip" data-theme-choice="dark" aria-pressed="false" data-i18n="designThemeDark"></button>
+            </div>
+            <div class="design-grid" id="design-specimens"></div>
+          </div>
+        </section>
+        <template id="design-specimen">
+          <article class="panel design-specimen">
+            <h2 data-design="dsLanguage"></h2>
+            <h3 data-design="dsButtons"></h3>
+            <div class="design-row">
+              <button type="button" class="action-button" data-design="dsMakeBill"></button>
+              <button type="button" class="primary-button" data-design="dsSave"></button>
+              <button type="button" class="secondary-button" data-design="dsBack"></button>
+              <button type="button" class="text-button" data-design="dsLater"></button>
+            </div>
+            <h3 data-design="dsChips"></h3>
+            <div class="design-row">
+              <span class="chip paid" data-design="dsPaid"></span>
+              <span class="chip due" data-design="dsDue"></span>
+              <span class="chip late" data-design="dsLate"></span>
+              <span class="chip" data-design="dsWalkIn"></span>
+            </div>
+            <h3 data-design="dsMoneyCard"></h3>
+            <div class="money-card">
+              <div><small data-design="dsToCollect"></small><strong class="amount amount-big" data-design-money="customersOwe"></strong></div>
+              <div class="money-card-row">
+                <div><small data-design="dsSalesToday"></small><strong class="amount" data-design-money="salesToday"></strong></div>
+                <div><small data-design="dsToPay"></small><strong class="amount" data-design-money="suppliersOwed"></strong></div>
+              </div>
+            </div>
+            <h3 data-design="dsSlide"></h3>
+            <div class="slide-frame">
+              <div class="slide-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+              <div class="slide" data-slide aria-live="polite">
+                <p class="slide-title" data-slide-title></p>
+                <p class="line-ok" data-slide-ok hidden><span aria-hidden="true">✓</span><span data-design="dsFineLine"></span></p>
+                <span class="done-tick" data-slide-tick hidden aria-hidden="true">✓</span>
+              </div>
+              <div class="bill-bar"><span><small data-design="dsCustomerPays"></small> <strong class="amount" data-design-money="specimen"></strong></span><button type="button" class="action-button" data-slide-next></button></div>
+            </div>
+            <h3 data-design="dsBottomBar"></h3>
+            <div class="tabbar">
+              <button type="button" aria-current="page"><span aria-hidden="true">⌂</span><small data-design="dsHome"></small></button>
+              <button type="button"><span aria-hidden="true">▤</span><small data-design="dsKhata"></small></button>
+              <button type="button" class="tab-main"><span aria-hidden="true">＋</span><small data-design="dsBill"></small></button>
+              <button type="button"><span aria-hidden="true">▦</span><small data-design="dsItems"></small></button>
+              <button type="button"><span aria-hidden="true">☰</span><small data-design="dsMore"></small></button>
+            </div>
+          </article>
+        </template>
       </main>
 
       <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
@@ -1378,7 +1446,7 @@
       </form>
       <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
-    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><label class="bill-choice" id="review-advance" hidden><input type="checkbox" id="review-advance-use" /><strong id="review-advance-label"></strong></label><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill"></button><button class="secondary-button" id="review-advance-voucher" type="button" hidden data-i18n="printAdvanceVoucher"></button><button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><!-- Issue #312 — on a sale review: one green line for what the law needs (it happens by itself), and at most one warning, only when the owner must act. --><p class="line-ok" id="review-ok" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p><p class="line-warn" id="review-warning" hidden><span aria-hidden="true">!</span><span data-line-text></span></p><label class="bill-choice" id="review-advance" hidden><input type="checkbox" id="review-advance-use" /><strong id="review-advance-label"></strong></label><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill"></button><button class="secondary-button" id="review-advance-voucher" type="button" hidden data-i18n="printAdvanceVoucher"></button><button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
     <!-- Issue #233 — cancelling an issued bill: what it will do, why it cannot, and the reason kept with it. -->
     <dialog id="cancel-bill-dialog" aria-labelledby="cancel-bill-title">
       <h2 id="cancel-bill-title" data-i18n="cancelBill"></h2>

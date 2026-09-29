@@ -87,7 +87,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   }
   // Issue #237 — setting up a business reads the full list of states, not twelve typed into the page.
   assert.equal((html.match(/<select name="stateCode" id="setup-states"[\s\S]*?<\/select>/)?.[0].match(/<option/g) ?? []).length, 1);
-  assert.match(script, /copy\[state\.locale\]\.demoTitle/);
+  // Issue #312 — no developer banner: it is hidden while the shop answers and shown only on a failure.
+  assert.match(html, /id="connection-banner" role="status" hidden>/);
+  assert.match(script, /banner\.hidden = true;/);
   assert.match(script, /setFormBusy\(form, true\)/);
   assert.match(script, /draftRestored/);
   assert.match(script, /customerDocumentsOne/);
@@ -187,8 +189,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /copy\[state\.locale\]\.openBill/);
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
-  // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 26);
+  // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six;
+  // #303's owner-only design page makes twenty-seven.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 27);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -319,10 +322,11 @@ test("#241: the menu follows a trade — Buying, Stock, Selling, GST, Books, Set
     { title: "Settings", folded: true, entries: ["Business details", "Bill design", "Set up a business", "Bring your data", "Your plan", "Operations", "Quotation / Proforma"] },
   ]);
   assert.match(html, /<details class="nav-group nav-settings" id="nav-settings">/, "Settings starts folded");
-  // No screen was dropped: every screen in the page has a menu entry.
+  // No screen was dropped: every screen in the page has a menu entry, except #303's owner-only
+  // design page, which is reached at #design and is not a place a shopkeeper works.
   const screens = [...html.matchAll(/<section class="view[^"]*" id="view-([^"]+)"/g)].map((m) => m[1]!).sort();
   const entries = new Set([...sidebar.matchAll(/data-view="([^"]+)"/g)].map((m) => m[1]!));
-  assert.deepEqual(screens.filter((screen) => !entries.has(screen)), []);
+  assert.deepEqual(screens.filter((screen) => !entries.has(screen) && screen !== "design"), []);
   // The stock report is the stock part of Reports, opened at that part.
   assert.match(sidebar, /data-view="reports" data-section="report-stock"/);
   assert.match(script, /stock\.id = "report-stock"/);
