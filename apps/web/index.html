@@ -226,7 +226,8 @@
 
         <template id="purchase-line-template">
           <div class="sale-line">
-            <label><span data-i18n="item"></span><select data-line-field="item" data-item-picker required></select></label>
+            <!-- Issue #308 — the same item picker as a sale line: search, scan, + New item. -->
+            <div class="item-picker"><input type="hidden" data-line-field="item" /><label><span data-i18n="item"></span><input data-item-search data-i18n-placeholder="itemSearchPlaceholder" /></label></div>
             <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
             <label><span data-i18n="ratePerUnit"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" required /></span></label>
             <label><span data-i18n="gstRate"></span><select data-line-field="gst" data-gst-picker required></select></label>

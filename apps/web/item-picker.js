@@ -10,12 +10,17 @@
  *     input,                         // an <input>; it becomes an ARIA combobox and gets a listbox
  *     items: () => catalogue.items,  // [{ id, name, hsnSac, unit, code, barcodes, aliases, price, ratePercent }]
  *     sold: () => ({ [itemId]: n }), // bills each item went on; more sold ranks first
- *     words: () => ({ newItem: "+ New item", newItemCode: "+ New item with barcode {code}", noMatch: "…" }),
+ *     words: () => ({ newItem: "+ New item", newItemCode: "+ New item with barcode {code}", noMatch: "…",
+ *                     scan: "Scan", scanTitle: "…", scanHint: "…", scanCancel: "Cancel" }),
  *     onPick(item) {},               // chosen with a click, tap or Enter
  *     onScan(item) {},               // a barcode typed or scanned that matches one item exactly
  *     onCreate({ name, barcode }) {},// "+ New item", with what was typed filled in
+ *     onCameraError(error) {},       // optional: the camera was refused or could not start
  *   });
  *   picker.show(item | null);       // what the box shows when it is not being typed in
+ *   picker.scanButton               // the camera "Scan" button, or null where the browser has no
+ *                                   // BarcodeDetector or camera; a camera scan takes the same path
+ *                                   // as a typed one (onScan, or onCreate for an unknown code)
  *
  *   KarobarItemPicker.listenForScanner(document, (code) => …) // a scan with no box focused
  *
@@ -126,8 +131,82 @@ export const looksLikeCode = (text) => /^[A-Za-z0-9-]{6,48}$/.test(String(text).
 
 let pickers = 0;
 
+/** True where the browser can read barcodes from the camera: BarcodeDetector and getUserMedia. */
+export const cameraScanAvailable = (env = globalThis) =>
+  typeof env.BarcodeDetector === "function" && typeof env.navigator?.mediaDevices?.getUserMedia === "function";
+
+/**
+ * Opens the back camera in a dialog and resolves with the first barcode it reads, or null when the
+ * person cancels. The camera is always switched off again, however it ends.
+ */
+export async function readBarcodeFromCamera({ env = globalThis, doc = globalThis.document, words, interval = 150 }) {
+  const formats = await env.BarcodeDetector.getSupportedFormats?.().catch(() => undefined);
+  const detector = new env.BarcodeDetector(formats?.length ? { formats } : undefined);
+  const stream = await env.navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+  const dialog = doc.createElement("dialog");
+  dialog.className = "scan-dialog";
+  dialog.setAttribute("aria-label", words.scanTitle);
+  const video = doc.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.srcObject = stream;
+  const hint = doc.createElement("p");
+  hint.textContent = words.scanHint;
+  const cancel = doc.createElement("button");
+  cancel.type = "button";
+  cancel.className = "secondary-button";
+  cancel.textContent = words.scanCancel;
+  dialog.append(video, hint, cancel);
+  doc.body.append(dialog);
+  let done = false;
+  try {
+    dialog.showModal?.();
+    await video.play?.();
+    return await new Promise((resolve) => {
+      const finish = (code) => { if (!done) { done = true; resolve(code); } };
+      cancel.addEventListener("click", () => finish(null));
+      dialog.addEventListener("cancel", () => finish(null));
+      const look = async () => {
+        if (done) return;
+        try {
+          const [found] = await detector.detect(video);
+          if (found?.rawValue) { finish(found.rawValue); return; }
+        } catch { /* the first frames may not be ready yet */ }
+        setTimeout(look, interval);
+      };
+      look();
+    });
+  } finally {
+    done = true;
+    stream.getTracks().forEach((track) => track.stop());
+    dialog.close?.();
+    dialog.remove();
+  }
+}
+
+/**
+ * Puts a camera "Scan" button beside the box. Returns null, and adds nothing, where the browser
+ * cannot read barcodes from the camera: a desktop with a USB scanner types into the box instead.
+ */
+export function addScanButton(input, { env = globalThis, doc = globalThis.document, words, onCode, onError = () => {} }) {
+  if (!cameraScanAvailable(env)) return null;
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = "secondary-button item-picker-scan";
+  button.textContent = words().scan;
+  button.setAttribute("aria-label", words().scanTitle);
+  button.addEventListener("click", async () => {
+    let code = null;
+    try { code = await readBarcodeFromCamera({ env, doc, words: words() }); } catch (error) { onError(error); return; }
+    if (code) onCode(code);
+  });
+  (input.closest?.("label") ?? input).after(button);
+  return button;
+}
+
 /** Turns an input into an accessible combobox over the item list. See the top of this file. */
-export function createItemPicker({ input, items, sold = () => ({}), words, onPick, onScan = onPick, onCreate = () => {} }) {
+export function createItemPicker({ input, items, sold = () => ({}), words, onPick, onScan = onPick, onCreate = () => {}, onCameraError }) {
   pickers += 1;
   const list = document.createElement("ul");
   list.id = `item-picker-list-${pickers}`;
@@ -142,6 +221,12 @@ export function createItemPicker({ input, items, sold = () => ({}), words, onPic
   input.setAttribute("aria-controls", list.id);
   input.autocomplete = "off";
   input.spellcheck = false;
+  // A camera scan takes the path a typed one does: the item if one has the code, else a new item.
+  const scanButton = addScanButton(input, {
+    words,
+    onCode: (code) => { const item = findByCode(items(), code); if (item) onScan(item); else onCreate({ name: "", barcode: code }); },
+    ...(onCameraError ? { onError: onCameraError } : {}),
+  });
 
   let shown = null;
   let options = [];
@@ -237,6 +322,7 @@ export function createItemPicker({ input, items, sold = () => ({}), words, onPic
   return {
     input,
     list,
+    scanButton,
     /** What the box shows when nobody is typing: the chosen item's name, or nothing. */
     show(item) { shown = item ?? null; if (document.activeElement !== input || list.hidden) restore(); },
     close,
@@ -265,4 +351,4 @@ export function listenForScanner(target, onCode, { gap = 50, minLength = 6 } = {
   return () => target.removeEventListener("keydown", listener);
 }
 
-globalThis.KarobarItemPicker = { normalise, scoreItem, searchItems, findByCode, looksLikeCode, createItemPicker, listenForScanner };
+globalThis.KarobarItemPicker = { normalise, scoreItem, searchItems, findByCode, looksLikeCode, cameraScanAvailable, readBarcodeFromCamera, addScanButton, createItemPicker, listenForScanner };

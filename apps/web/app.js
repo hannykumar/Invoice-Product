@@ -87,7 +87,7 @@ const copy = {
     addressLabelName: "What to call it", deliveryStateHelp: "Goods sent to another state make this sale count in that state.",
     deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address", saveCorrection: "Save changes",
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
-    saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item", itemSearchPlaceholder: "Name, code, HSN or scan", mostSoldThisWeek: "Sold most this week", newItemFromSearch: "＋ New item", newItemWithCode: "＋ New item with barcode {code}", noItemMatch: "No item matches. Check the spelling, or add it as a new item.", priceLastCharged: "Last charged to them: {amount}, {date}", priceUsual: "Usual price", itemBarcode: "Barcode (optional)", itemBarcodeHelp: "Scan it here, or type the digits under the lines. Scanning it on the Sale screen then adds this item.", itemPrice: "Usual selling price (optional)", itemPriceHelp: "A new bill starts at this price, unless this customer was charged a different one last time.", itemOtherName: "Other name (optional)", itemOtherNameHelp: "Another name to find it by, in Hindi or any language — for example साबुन.",
+    saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item", itemSearchPlaceholder: "Name, code, HSN or scan", scanButton: "Scan", scanTitle: "Scan a barcode with the camera", scanHint: "Hold the barcode in front of the camera. It is read by itself.", cameraRefused: "The camera could not be opened. Allow the camera for this site, or type the barcode in the box.", mostSoldThisWeek: "Sold most this week", newItemFromSearch: "＋ New item", newItemWithCode: "＋ New item with barcode {code}", noItemMatch: "No item matches. Check the spelling, or add it as a new item.", priceLastCharged: "Last charged to them: {amount}, {date}", priceUsual: "Usual price", itemBarcode: "Barcode (optional)", itemBarcodeHelp: "Scan it here, or type the digits under the lines. Scanning it on the Sale screen then adds this item.", itemPrice: "Usual selling price (optional)", itemPriceHelp: "A new bill starts at this price, unless this customer was charged a different one last time.", itemOtherName: "Other name (optional)", itemOtherNameHelp: "Another name to find it by, in Hindi or any language — for example साबुन.",
     // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
     walkInCustomer: "Walk-in / cash customer", walkInShort: "Walk-in", walkInChoose: "Walk-in customer", walkInDetail: "Sold at your counter in {state}. No name or address is needed below ₹50,000.", placeOfSupplyCounter: "the goods are handed over at your counter.",
     paidBy: "Paid by", paidCash: "Cash", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Paid now by {mode}: {amount}. Nothing is left to pay on this bill.", saleEffectPartPaid: "Paid now by {mode}: {amount}. {due} is added to the customer's khata.",
@@ -426,7 +426,7 @@ const copy = {
     addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.", correctAddress: "Pata sahi karen", correctAddressTitle: "Is customer ka pata ya udhaar seema sahi karen", correctAddressHelp: "Galat gali, shehar ya PIN code theek karen, ya unki udhaar seema tay karen. Pehle jaari hue bill par wahi pata rahega jo tab tha. Rajya waisa hi rahega, kyonki tax usi se tay hota hai.", addressCorrected: "Pata sahi ho gaya", addressStateFixed: "Rajya:",
     addressLabelName: "Ise kya kahen", deliveryStateHelp: "Doosre rajya bheja gaya maal is bikri ko us rajya ki bana deta hai.",
     deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen", saveCorrection: "Badlav save karen",
-    saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden", itemSearchPlaceholder: "Naam, code, HSN ya scan", mostSoldThisWeek: "Is hafte sabse zyada bika", newItemFromSearch: "＋ Naya saman", newItemWithCode: "＋ Barcode {code} ke saath naya saman", noItemMatch: "Koi saman nahin mila. Spelling dekhen, ya naya saman joden.", priceLastCharged: "Pichhli baar inse liya: {amount}, {date}", priceUsual: "Aam daam", itemBarcode: "Barcode (zaroori nahin)", itemBarcodeHelp: "Yahan scan karen, ya lakeeron ke neeche ke ank likhen. Phir Bikri screen par scan karte hi yeh saman jud jayega.", itemPrice: "Aam bikri daam (zaroori nahin)", itemPriceHelp: "Naya bill isi daam se shuru hota hai, jab tak is customer se pichhli baar alag daam na liya gaya ho.", itemOtherName: "Dusra naam (zaroori nahin)", itemOtherNameHelp: "Dhoondhne ke liye ek aur naam, Hindi ya kisi bhi bhasha mein — jaise साबुन.",
+    saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden", itemSearchPlaceholder: "Naam, code, HSN ya scan", scanButton: "Scan", scanTitle: "Camera se barcode scan karen", scanHint: "Barcode ko camera ke saamne rakhen. Woh apne aap padh liya jayega.", cameraRefused: "Camera nahin khul saka. Is site ko camera ki anumati den, ya barcode box mein likhen.", mostSoldThisWeek: "Is hafte sabse zyada bika", newItemFromSearch: "＋ Naya saman", newItemWithCode: "＋ Barcode {code} ke saath naya saman", noItemMatch: "Koi saman nahin mila. Spelling dekhen, ya naya saman joden.", priceLastCharged: "Pichhli baar inse liya: {amount}, {date}", priceUsual: "Aam daam", itemBarcode: "Barcode (zaroori nahin)", itemBarcodeHelp: "Yahan scan karen, ya lakeeron ke neeche ke ank likhen. Phir Bikri screen par scan karte hi yeh saman jud jayega.", itemPrice: "Aam bikri daam (zaroori nahin)", itemPriceHelp: "Naya bill isi daam se shuru hota hai, jab tak is customer se pichhli baar alag daam na liya gaya ho.", itemOtherName: "Dusra naam (zaroori nahin)", itemOtherNameHelp: "Dhoondhne ke liye ek aur naam, Hindi ya kisi bhi bhasha mein — jaise साबुन.",
     // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
     walkInCustomer: "Walk-in / nakad grahak", walkInShort: "walk-in grahak", walkInChoose: "Walk-in grahak", walkInDetail: "{state} mein aapke counter par bikri. ₹50,000 se kam par naam ya pata zaroori nahin.", placeOfSupplyCounter: "maal aapke counter par diya ja raha hai.",
     paidBy: "Kaise mila", paidCash: "Nakad", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Abhi {mode} se {amount} mile. Is bill par kuch baaki nahin.", saleEffectPartPaid: "Abhi {mode} se {amount} mile. {due} customer ke khate mein judega.",
@@ -1889,7 +1889,8 @@ function openPurchaseForSale(shortStock) {
       const untouched = lines.length === 1 && (lines[0].querySelector("[data-line-field=rate]")?.value ?? "") === "" ? lines[0] : null;
       const line = untouched ?? addPurchaseLine();
       const picker = line?.querySelector("[data-line-field=item]");
-      if (!picker || ![...picker.options].some((option) => option.value === short.itemId)) return;
+      // Only goods the item list still has; the line's item box then shows its name (#308).
+      if (!picker || itemById(short.itemId) === null) return;
       picker.value = short.itemId;
       // How many came is printed on the supplier's bill; it is typed from there, never guessed.
       const quantity = line.querySelector("[data-line-field=quantity]");
@@ -6347,6 +6348,8 @@ function addPurchaseLine() {
   if (!template || !lines) return null;
   const line = template.content.firstElementChild.cloneNode(true);
   lines.append(line);
+  // Issue #308 — the same item picker as a sale line.
+  mountLinePicker(line);
   translate();
   renderPickers();
   setLineGstFromItem(line);
@@ -6388,7 +6391,8 @@ function saleLineValues() {
 /** Bills per item, the week's most-sold, and this customer's last prices, from /api/items/selling. */
 const selling = { sold: {}, mostSoldThisWeek: [], lastPrices: {} };
 const linePickers = new WeakMap();
-const pickerWords = () => ({ newItem: copy[state.locale].newItemFromSearch, newItemCode: copy[state.locale].newItemWithCode, noMatch: copy[state.locale].noItemMatch });
+const pickerWords = () => ({ newItem: copy[state.locale].newItemFromSearch, newItemCode: copy[state.locale].newItemWithCode, noMatch: copy[state.locale].noItemMatch, scan: copy[state.locale].scanButton, scanTitle: copy[state.locale].scanTitle, scanHint: copy[state.locale].scanHint, scanCancel: copy[state.locale].cancel });
+const cameraRefused = () => showDialog({ title: copy[state.locale].scanTitle, message: copy[state.locale].cameraRefused, effects: [] }, "failed");
 
 async function loadSelling() {
   if (!state.sessionId) return;
@@ -6414,17 +6418,22 @@ function renderItemChips() {
   }));
 }
 
+/** Which bill a line is on: "sale" or "purchase". */
+const flowOf = (line) => (line.closest?.("#purchase-lines") ? "purchase" : "sale");
+
 function mountLinePicker(line) {
   const input = line.querySelector("[data-item-search]");
   if (!input || !globalThis.KarobarItemPicker) return;
+  const flow = flowOf(line);
   linePickers.set(line, globalThis.KarobarItemPicker.createItemPicker({
     input,
     items: () => catalogue.items,
     sold: () => selling.sold,
     words: pickerWords,
-    onPick: (item) => setLineItem(line, item),
-    onScan: (item) => addItemToSale(item, line),
+    onPick: (item) => putItemOnLine(line, item),
+    onScan: (item) => addItemToLines(item, flow, line),
     onCreate: (typed) => openNewItem(typed, line),
+    onCameraError: cameraRefused,
   }));
 }
 
@@ -6449,26 +6458,43 @@ function setLineItem(line, item) {
   updateCalculations();
 }
 
+/**
+ * A supplier bill's line gets its item, the GST rate the business declared for it (the supplier's
+ * bill may say otherwise, and the person changes it there) and its unit. Its price is on the
+ * supplier's bill, so it is never filled in.
+ */
+function choosePurchaseItem(line, item) {
+  line.querySelector("[data-line-field=item]").value = item.id;
+  setLineGstFromItem(line);
+  showLineUnit(line);
+  const form = document.querySelector('[data-draft="purchase"]');
+  if (form) saveDraft(form);
+}
+
+const putItemOnLine = (line, item) => (flowOf(line) === "purchase" ? choosePurchaseItem(line, item) : setLineItem(line, item));
+
 /** A scan or a chip: one more on the line that has the item, else the first empty line, else a new line. */
-function addItemToSale(item, fromLine = null) {
-  const lines = [...document.querySelectorAll("#sale-lines .sale-line")];
+function addItemToLines(item, flow, fromLine = null) {
+  const lines = [...document.querySelectorAll(`#${flow}-lines .sale-line`)];
   const itemOf = (line) => line.querySelector("[data-line-field=item]")?.value ?? "";
   const same = lines.find((line) => itemOf(line) === item.id);
   if (same) {
     const quantity = same.querySelector("[data-line-field=quantity]");
     quantity.value = String(Math.round(((Number(quantity.value) || 0) + 1) * 1000) / 1000);
-    const form = saleForm();
+    const form = document.querySelector(`[data-draft="${flow}"]`);
     if (form) saveDraft(form);
     updateCalculations();
     return;
   }
   const empty = fromLine && itemOf(fromLine) === "" ? fromLine : lines.find((line) => itemOf(line) === "");
-  setLineItem(empty ?? addSaleLine(), item);
+  putItemOnLine(empty ?? (flow === "purchase" ? addPurchaseLine() : addSaleLine()), item);
 }
 
+const addItemToSale = (item) => addItemToLines(item, "sale");
+
 /** "+ New item" from the picker, or a barcode nobody has: the add-item dialog, with what was typed. */
-function openNewItem(typed, line) {
-  const target = line ?? [...document.querySelectorAll("#sale-lines .sale-line")].find((row) => row.querySelector("[data-line-field=item]").value === "") ?? addSaleLine();
+function openNewItem(typed, line, flow = "sale") {
+  const target = line ?? [...document.querySelectorAll(`#${flow}-lines .sale-line`)].find((row) => row.querySelector("[data-line-field=item]").value === "") ?? (flow === "purchase" ? addPurchaseLine() : addSaleLine());
   pickerAwaitingNewRecord = target.querySelector("[data-line-field=item]");
   const form = document.querySelector("#item-form");
   form.reset();
@@ -6479,10 +6505,11 @@ function openNewItem(typed, line) {
 }
 
 globalThis.KarobarItemPicker?.listenForScanner(document, (code) => {
-  if (state.view !== "sale" || document.querySelector("dialog[open]")) return;
+  const flow = state.view;
+  if ((flow !== "sale" && flow !== "purchase") || document.querySelector("dialog[open]")) return;
   const item = globalThis.KarobarItemPicker.findByCode(catalogue.items, code);
-  if (item) addItemToSale(item);
-  else openNewItem({ name: "", barcode: code }, null);
+  if (item) addItemToLines(item, flow);
+  else openNewItem({ name: "", barcode: code }, null, flow);
 });
 
 async function loadCatalogue() {

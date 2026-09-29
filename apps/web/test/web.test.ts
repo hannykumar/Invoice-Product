@@ -177,7 +177,7 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // is added there like any other item), each with its own GST rate, and the supplier comes from the
   // supplier list. Nothing asks which state the supplier is in: their GST number says it.
   assert.match(html, /<select name="supplierId" data-supplier-picker required>/);
-  assert.match(html, /id="purchase-line-template"[\s\S]*data-line-field="item" data-item-picker[\s\S]*data-line-field="gst" data-gst-picker/);
+  assert.match(html, /id="purchase-line-template"[\s\S]*?<input type="hidden" data-line-field="item" \/>[\s\S]*?data-item-search[\s\S]*?data-line-field="gst" data-gst-picker/);
   assert.match(html, /id="new-supplier-dialog"/);
   // One id, one element: the Supplier check screen already has a form called "supplier-form".
   assert.equal([...html.matchAll(/id="supplier-form"/g)].length, 1);
@@ -477,8 +477,8 @@ async function draftHarness(flow: "sale" | "purchase" | "payment" | "paid", save
     querySelector: (selector: string) => (selector === ".sale-lines" && (flow === "sale" || flow === "purchase") ? lineBox : null),
   };
   const newLine = () => {
-    const parts: Record<string, SelectBox | TextBox> = { item: new SelectBox(), quantity: new TextBox(), rate: new TextBox(), ...(flow === "purchase" ? { gst: new SelectBox() } : {}) };
-    (parts.item as SelectBox).fill("tmt", "soap");
+    // Issue #308 — the item is the picker's hidden field on both bills; the GST rate is still a choice.
+    const parts: Record<string, SelectBox | TextBox> = { item: new TextBox(), quantity: new TextBox(), rate: new TextBox(), ...(flow === "purchase" ? { gst: new SelectBox() } : {}) };
     if (parts.gst) (parts.gst as SelectBox).fill("500", "1800");
     const row = {
       parts,
@@ -599,8 +599,8 @@ async function purchaseForSaleHarness(lines: Array<{ item: string; rate: string 
   const opened: string[] = [];
   const saved: string[] = [];
   const makeLine = (item: string, rate: string) => {
-    const picker = new SelectBox();
-    picker.fill("tmt", "soap");
+    // Issue #308 — the line's item is the picker's hidden field, as on the page.
+    const picker = new TextBox();
     picker.value = item;
     const parts: Record<string, any> = { item: picker, rate: Object.assign(new TextBox(), { value: rate }), quantity: Object.assign(new TextBox(), { value: "1" }) };
     return { parts, querySelector: (selector: string) => parts[selector.match(/data-line-field="?([a-z]+)/)?.[1] ?? ""] ?? null };
@@ -622,6 +622,8 @@ async function purchaseForSaleHarness(lines: Array<{ item: string; rate: string 
     },
     text: (key: string, values: Record<string, string>) => Object.entries(values).reduce((message, [name, value]) => message.replaceAll(`{${name}}`, value), locales["en-IN"]![key]!),
     openView: (view: string) => opened.push(view),
+    // The item list the purchase line can choose from.
+    itemById: (id: string) => (["tmt", "soap"].includes(id) ? { id } : null),
     addPurchaseLine: () => { const row = makeLine("soap", ""); rows.push(row); return row; },
     setLineGstFromItem: () => undefined, showLineUnit: () => undefined,
     saveDraft: (form: { dataset: { draft: string } }) => saved.push(form.dataset.draft),
@@ -681,6 +683,11 @@ test("#262: a supplier bill already being typed keeps its lines; the short item 
   const already = await purchaseForSaleHarness([{ item: "tmt", rate: "64" }]);
   already.run(`openPurchaseForSale(shortStockOf(${JSON.stringify(REFUSAL)}))`);
   assert.deepEqual(already.rows.map((row) => [row.parts.item.value, row.parts.rate.value]), [["tmt", "64"]], "the item is not put on the bill twice");
+
+  // Issue #308 — goods no longer on the item list are never put on the supplier bill.
+  const gone = await purchaseForSaleHarness([{ item: "", rate: "" }]);
+  gone.run(`openPurchaseForSale(shortStockOf(${JSON.stringify({ ...REFUSAL, details: { shortStock: JSON.stringify([{ ...JSON.parse(REFUSAL.details.shortStock)[0], itemId: "removed" }]) } })}))`);
+  assert.deepEqual(gone.rows.map((row) => row.parts.item.value), [""]);
 });
 
 test("#262: the refusal dialog, the purchase screen and both languages carry the way through, and nothing lets the sale past", async () => {

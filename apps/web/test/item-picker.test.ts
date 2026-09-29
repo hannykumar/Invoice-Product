@@ -67,3 +67,79 @@ test("#308: 1,000 items answer in under 100 ms", () => {
   }
   assert.equal(searchItems(many, "8901000000999", { sold })[0].id, "i999");
 });
+
+/** Just enough of a page for the camera button: elements that record what was done to them. */
+const fakePage = () => {
+  const made: any[] = [];
+  const element = (tag: string) => {
+    const listeners: Record<string, Array<() => unknown>> = {};
+    const node: any = {
+      tag, attributes: {} as Record<string, string>, children: [] as any[], removed: false, opened: false, placedAfter: null,
+      setAttribute(name: string, value: string) { this.attributes[name] = value; },
+      addEventListener(type: string, listener: () => unknown) { (listeners[type] ??= []).push(listener); },
+      fire(type: string) { return Promise.all((listeners[type] ?? []).map((listener) => listener())); },
+      append(...nodes: any[]) { this.children.push(...nodes); },
+      after(other: any) { other.placedAfter = this; },
+      showModal() { this.opened = true; }, close() { this.opened = false; }, remove() { this.removed = true; },
+      play: async () => undefined,
+    };
+    made.push(node);
+    return node;
+  };
+  return { made, doc: { createElement: element, body: element("body") } };
+};
+
+const WORDS = () => ({ scan: "Scan", scanTitle: "Scan a barcode with the camera", scanHint: "Hold the barcode in front of the camera", scanCancel: "Cancel" });
+
+test("#308: without BarcodeDetector or a camera there is no Scan button, and nothing is added to the page", () => {
+  const { cameraScanAvailable, addScanButton } = picker;
+  const input = { closest: () => null, after: () => { throw new Error("nothing may be placed"); } };
+  const noPage = { createElement: () => { throw new Error("nothing may be made"); } };
+  for (const env of [{}, { navigator: { mediaDevices: { getUserMedia() {} } } }, { BarcodeDetector: class {}, navigator: {} }]) {
+    assert.equal(cameraScanAvailable(env), false);
+    assert.equal(addScanButton(input, { env, doc: noPage, words: WORDS, onCode: () => assert.fail("no scan") }), null);
+  }
+  assert.equal(cameraScanAvailable({ BarcodeDetector: class {}, navigator: { mediaDevices: { getUserMedia() {} } } }), true);
+});
+
+test("#308: the camera's barcode goes down the same path as a typed one, and the camera is switched off", async () => {
+  const { addScanButton } = picker;
+  const { made, doc } = fakePage();
+  let frames = 0;
+  const stopped: string[] = [];
+  const env = {
+    BarcodeDetector: class {
+      static async getSupportedFormats() { return ["ean_13", "code_128"]; }
+      async detect() { frames += 1; return frames < 3 ? [] : [{ rawValue: "8901030865278" }]; }
+    },
+    navigator: { mediaDevices: { async getUserMedia(wanted: any) { assert.equal(wanted.video.facingMode, "environment"); return { getTracks: () => [{ stop: () => stopped.push("video") }] }; } } },
+  };
+  const label = { after(other: any) { other.placedAfter = label; } };
+  const codes: string[] = [];
+  const button = addScanButton({ closest: () => label }, { env, doc, words: WORDS, onCode: (code: string) => codes.push(code) });
+  assert.equal(button.textContent, "Scan");
+  assert.equal(button.attributes["aria-label"], "Scan a barcode with the camera");
+  assert.equal(button.placedAfter, label, "beside the search box");
+  await button.fire("click");
+  assert.deepEqual(codes, ["8901030865278"]);
+  assert.equal(frames, 3, "frames are read until one carries a barcode");
+  assert.deepEqual(stopped, ["video"], "the camera is off again");
+  assert.equal(made.find((node) => node.tag === "dialog").removed, true);
+
+  // The person cancels: nothing is scanned, and the camera still goes off.
+  const cancelled = fakePage();
+  const env2 = { ...env, BarcodeDetector: class { async detect() { return []; } } };
+  const second = addScanButton({ closest: () => label }, { env: env2, doc: cancelled.doc, words: WORDS, onCode: () => assert.fail("nothing was scanned") });
+  const clicked = second.fire("click");
+  await new Promise((done) => setTimeout(done, 20));
+  await cancelled.made.find((node) => node.tag === "button" && node.textContent === "Cancel").fire("click");
+  await clicked;
+  assert.deepEqual(stopped, ["video", "video"]);
+
+  // The camera refused: the screen is told, and nothing is scanned.
+  const refused: unknown[] = [];
+  const env3 = { ...env, navigator: { mediaDevices: { async getUserMedia() { throw new Error("NotAllowedError"); } } } };
+  const third = addScanButton({ closest: () => label }, { env: env3, doc: fakePage().doc, words: WORDS, onCode: () => assert.fail("nothing was scanned"), onError: (error: unknown) => refused.push(error) });
+  await third.fire("click");
+  assert.equal(refused.length, 1);
+});
