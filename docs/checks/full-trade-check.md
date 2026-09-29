@@ -138,6 +138,15 @@ What must appear:
 - Suppliers owed: **₹0**
 - Days late: Mehta's bill is **not yet due** (0 days), counted to today and not to 31 March (#234)
 - No "stock value not in the books" warning (#229)
+- What you earned and what you spent (#273): goods returned by customers are taken off sales, not counted as a cost:
+  - Sales of goods ₹1,750 (the three old soap bills) + ₹42,500 (the steel) = **₹44,250.00**
+  - Less: goods returned by customers **−₹4,500.00**
+  - Net sales: ₹44,250.00 − ₹4,500.00 = **₹39,750.00**
+  - Earned: ₹39,750.00 + ₹0.50 rounding difference = **₹39,750.50**
+  - Spent: purchases ₹32,000.00 + change in stock −₹5,000.00 = **₹27,000.00**
+  - Kept: ₹39,750.50 − ₹27,000.00 = **₹12,750.50**
+  - The sentence reads: "You earned ₹39,750.50 and spent ₹27,000.00, so you kept ₹12,750.50."
+- Home's "Sales today": ₹50,150.00 billed − ₹5,310.00 returned by customers = **₹44,840.00**, with that subtraction written under it
 
 ## Paths not yet covered
 

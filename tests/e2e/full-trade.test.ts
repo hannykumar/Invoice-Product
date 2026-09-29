@@ -470,7 +470,7 @@ test('Step 11. September GST: on sales ₹7,650 − ₹810 = ₹6,840 IGST; cred
   t.diagnostic(`September 3B: IGST on sales ${inr(heads.IGST.liability)}, credit ${inr(heads.IGST.credit)}, cash ${inr(heads.IGST.difference)}; credit note under ${sections.CDNR.rows[0].placeOfSupply}`);
 });
 
-test('Step 12. The books: stock 100 KGS on one line; customers owe ₹1,838 + ₹14,840 = ₹16,678 on Reports and Home; suppliers ₹0; Mehta 0 days late', async (t) => {
+test('Step 12. The books: stock 100 KGS on one line; customers owe ₹1,838 + ₹14,840 = ₹16,678 on Reports and Home; suppliers ₹0; Mehta 0 days late; net sales ₹44,250 − ₹4,500 = ₹39,750, kept ₹12,750.50', async (t) => {
   const books = await reports();
   const screen = await home();
   assert.deepEqual((books.stock.rows as any[]).filter((row) => row.item === STEEL).map((row) => row.closing), ['100.000']);
@@ -489,5 +489,32 @@ test('Step 12. The books: stock 100 KGS on one line; customers owe ₹1,838 + �
   // No "stock value not in the books" warning (#229), and the books hold together.
   assert.equal(books.exceptions.items.some((item: any) => item.code === 'STOCK_VALUE_NOT_IN_BOOKS'), false);
   assert.equal(books.trialBalance.balanced, true);
-  t.diagnostic(`books: stock 100 KGS; owed ${inr(books.dues.receivables.total)} (Home ${inr(screen.metrics.customersOwe)}); suppliers ${inr(books.dues.payables.total)}; Mehta ${(await receivable(MEHTA)).oldestDaysOverdue} days late`);
+
+  // Net sales (#273): goods returned by customers are taken off sales, not counted as a cost.
+  //   Sales of goods ₹44,250.00 (₹1,750 of old soap bills + ₹42,500 of steel)
+  //   Less: goods returned by customers −₹4,500.00
+  //   Net sales ₹44,250.00 − ₹4,500.00 = ₹39,750.00
+  //   Earned: ₹39,750.00 + ₹0.50 rounding = ₹39,750.50
+  //   Spent: purchases ₹32,000.00 + change in stock −₹5,000.00 = ₹27,000.00
+  //   Kept: ₹39,750.50 − ₹27,000.00 = ₹12,750.50
+  const pnl = books.profitAndLoss;
+  const line = (lines: any[], label: string) => lines.find((l) => l.label['en-IN'] === label)?.amount;
+  assertRupees(line(pnl.income.lines, 'Sales of goods'), '₹44,250.00', 'sales of goods');
+  assertRupees(line(pnl.income.lines, 'Less: goods returned by customers'), '-₹4,500.00', 'less goods returned by customers');
+  assertRupees(line(pnl.income.lines, 'Net sales'), '₹39,750.00', 'net sales');
+  assertRupees(line(pnl.income.lines, 'Rounding difference'), '₹0.50', 'rounding difference');
+  assertRupees(pnl.netSales, '₹39,750.00', 'net sales');
+  assertRupees(pnl.income.total, '₹39,750.50', 'earned');
+  assertRupees(line(pnl.expenses.lines, 'Purchases of goods'), '₹32,000.00', 'purchases');
+  assertRupees(line(pnl.expenses.lines, 'Change in stock of goods'), '-₹5,000.00', 'change in stock');
+  assert.equal(line(pnl.expenses.lines, 'Goods returned by customers'), undefined, 'a customer return is not a cost');
+  assertRupees(pnl.expenses.total, '₹27,000.00', 'spent');
+  assertRupees(pnl.result, '₹12,750.50', 'kept');
+  assert.equal(pnl.sentence['en-IN'], 'You earned ₹39,750.50 and spent ₹27,000.00, so you kept ₹12,750.50.');
+  // Home's sales today is net of the return too: ₹50,150.00 billed − ₹5,310.00 returned = ₹44,840.00.
+  assertRupees(screen.metrics.salesTodayBilled, '₹50,150.00', 'Home: billed today');
+  assertRupees(screen.metrics.salesTodayReturned, '₹5,310.00', 'Home: returned today');
+  assertRupees(screen.metrics.salesToday, '₹44,840.00', 'Home: sales today');
+
+  t.diagnostic(`books: stock 100 KGS; owed ${inr(books.dues.receivables.total)} (Home ${inr(screen.metrics.customersOwe)}); suppliers ${inr(books.dues.payables.total)}; Mehta ${(await receivable(MEHTA)).oldestDaysOverdue} days late; net sales ${inr(pnl.netSales)}; ${pnl.sentence['en-IN']}`);
 });

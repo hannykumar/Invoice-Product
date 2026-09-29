@@ -95,6 +95,7 @@ import {
   ageingBody,
   duesFrom,
   type Figure,
+  type StatementLine,
   type PurchaseDocument,
   type PurchaseReadPort,
   type ReportFilter,
@@ -1246,13 +1247,25 @@ export class DemoApplication {
     const customerOpen = receivables.rows.flatMap((row) => row.documents.map((document) => ({ ...document, partyName: row.partyName })));
     const stockItems = await this.stockNeedingAttention(actor, companyId);
     const stockTile = stockItems[0] ?? { itemId: '', name: 'No goods yet', quantity: 0, unit: '', reorderLevel: null, needsAttention: false };
+    const month = today.slice(0, 7);
+    const salesTodayBilled = sales.filter((invoice) => invoice.documentDate === today).reduce((total, invoice) => total + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n);
+    const salesTodayReturned = returnNotes.filter((note) => note.kind === 'SALES_RETURN' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n);
+    const purchasesMonthBilled = purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === month).reduce((total, bill) => total + bill.totalPaise, 0n);
+    const purchasesMonthReturned = returnNotes.filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) === month).reduce((total, note) => total + note.totals.total.minor, 0n);
     return {
       today,
       company: { id: companyId, name: this.config.name, location: this.config.location },
       metrics: {
-        salesToday: jsonAmount(sales.filter((invoice) => invoice.documentDate === today).reduce((sum, invoice) => sum + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n)),
+        // Issue #273 — sales are net of goods returned by customers, and purchases net of goods
+        // sent back to suppliers, as in Reports. What was billed and what came back are published
+        // beside each so the screen can write the subtraction out.
+        salesToday: jsonAmount(salesTodayBilled - salesTodayReturned),
+        salesTodayBilled: jsonAmount(salesTodayBilled),
+        salesTodayReturned: jsonAmount(salesTodayReturned),
         customersOwe: jsonAmount(receivables.total.amount.minor),
-        purchasesMonth: jsonAmount(purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === today.slice(0, 7)).reduce((sum, bill) => sum + bill.totalPaise, 0n)),
+        purchasesMonth: jsonAmount(purchasesMonthBilled - purchasesMonthReturned),
+        purchasesMonthBilled: jsonAmount(purchasesMonthBilled),
+        purchasesMonthReturned: jsonAmount(purchasesMonthReturned),
         needsAttention: stockItems.filter((item) => item.needsAttention).length + supplierOpen.filter((position) => position.daysOverdue > 0).length,
       },
       // Issue #237 — the goods that need looking at, the least left first, not one fixed item.
@@ -1377,6 +1390,8 @@ export class DemoApplication {
     const pack = await this.reportService.pack(actor, filter);
     const drill = (figure: Figure) =>
       figure.contributors.map((c) => ({ date: c.date, number: c.sourceNumber, description: c.description, amount: jsonAmount(c.amount.minor) }));
+    const statementLines = (lines: readonly StatementLine[]) =>
+      lines.map((l) => ({ kind: l.kind, label: l.label, amount: jsonAmount(l.amount.amount.minor) }));
 
     return {
       period: { from: filter.from, to: filter.to, lateCountedTo: today < filter.to ? today : filter.to },
@@ -1391,8 +1406,15 @@ export class DemoApplication {
       profitAndLoss: {
         title: pack.profitAndLoss.header.title,
         sentence: pack.profitAndLoss.body.sentence,
-        income: { total: jsonAmount(pack.profitAndLoss.body.income.total.amount.minor), rows: pack.profitAndLoss.body.income.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })), drill: drill(pack.profitAndLoss.body.income.total) },
-        expenses: { total: jsonAmount(pack.profitAndLoss.body.expenses.total.amount.minor), rows: pack.profitAndLoss.body.expenses.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })) },
+        income: { total: jsonAmount(pack.profitAndLoss.body.income.total.amount.minor), rows: pack.profitAndLoss.body.income.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })), lines: statementLines(pack.profitAndLoss.body.income.lines), drill: drill(pack.profitAndLoss.body.income.total) },
+        expenses: { total: jsonAmount(pack.profitAndLoss.body.expenses.total.amount.minor), rows: pack.profitAndLoss.body.expenses.rows.map((r) => ({ name: r.name, amount: jsonAmount(r.movement.amount.minor) })), lines: statementLines(pack.profitAndLoss.body.expenses.lines) },
+        // Issue #273 — sales less goods returned by customers, and purchases less goods sent back.
+        grossSales: jsonAmount(pack.profitAndLoss.body.grossSales.amount.minor),
+        salesReturns: jsonAmount(pack.profitAndLoss.body.salesReturns.amount.minor),
+        netSales: jsonAmount(pack.profitAndLoss.body.netSales.amount.minor),
+        grossPurchases: jsonAmount(pack.profitAndLoss.body.grossPurchases.amount.minor),
+        purchaseReturns: jsonAmount(pack.profitAndLoss.body.purchaseReturns.amount.minor),
+        netPurchases: jsonAmount(pack.profitAndLoss.body.netPurchases.amount.minor),
         result: jsonAmount(pack.profitAndLoss.body.result.amount.minor),
       },
       balanceSheet: {

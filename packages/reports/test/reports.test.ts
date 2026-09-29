@@ -15,6 +15,7 @@ import {
   drillTable,
   exportReport,
   loadBooks,
+  profitAndLossTable,
   reconciles,
   registerTable,
   trialBalanceTable,
@@ -530,4 +531,73 @@ test('today is the date in India: at 00:30 in India on 28 Oct it is already 28 O
   // 19:00 UTC on 27 Oct is 00:30 on 28 Oct in India. Counted in UTC it would still be 0 days late.
   const ageing = await business.reports.receivablesAgeing(business.actor, YEAR_2026_27, '2026-10-27T19:00:00.000Z');
   assert.equal(ageing.body.rows.find((r) => r.partyId === ABC)?.oldestDaysOverdue, 1);
+});
+
+// Issue #273 — a return is taken off what it undoes. Goods returned by customers come off sales,
+// giving net sales; goods sent back to suppliers come off purchases, giving net purchases. Neither
+// is shown as a cost or as income of its own.
+test('goods returned are taken off sales and purchases, with net sales and net purchases shown (#273)', async () => {
+  const business = await makeBusiness();
+  const companyId = business.actor.companyId;
+  const account = (code: string) => asId<'Account'>(`${companyId}:acc:${code}`);
+  const post = (key: string, type: 'PURCHASE' | 'JOURNAL', date: string, narration: string, debit: string, credit: string, amount: number, partyId: typeof ABC) =>
+    business.ledger.postVoucher(business.actor, {
+      idempotencyKey: key, type, date: on(date), narration,
+      lines: [
+        { accountId: account(debit), debit: rupees(amount), credit: rupees(0), partyId: debit.startsWith('1') || debit.startsWith('2') ? partyId : null, narration: null },
+        { accountId: account(credit), debit: rupees(0), credit: rupees(amount), partyId: credit.startsWith('1') || credit.startsWith('2') ? partyId : null, narration: null },
+      ],
+    });
+  await post('p', 'PURCHASE', '2026-04-01', 'Crates bought', '5100', '2101', 5000, NASHIK);
+  await post('pr', 'JOURNAL', '2026-04-03', 'Crates sent back', '2101', '5150', 1000, NASHIK);
+  await post('s', 'JOURNAL', '2026-04-05', 'Crates sold', '1201', '4100', 3000, ABC);
+  await post('sr', 'JOURNAL', '2026-04-07', 'Crates returned', '5200', '1201', 500, ABC);
+
+  const { body } = await business.reports.profitAndLoss(business.actor, APRIL_TO_MAY);
+  const shown = (lines: typeof body.income.lines) => lines.map((l) => [l.kind, l.label['en-IN'], l.amount.amount.minor]);
+  // Sales ₹3,000 − ₹500 returned = net sales ₹2,500.
+  assert.deepEqual(shown(body.income.lines), [
+    ['ACCOUNT', 'Sales of goods', 3000_00n],
+    ['LESS', 'Less: goods returned by customers', -500_00n],
+    ['NET', 'Net sales', 2500_00n],
+  ]);
+  // Purchases ₹5,000 − ₹1,000 sent back = net purchases ₹4,000.
+  assert.deepEqual(shown(body.expenses.lines), [
+    ['ACCOUNT', 'Purchases of goods', 5000_00n],
+    ['LESS', 'Less: goods returned to suppliers', -1000_00n],
+    ['NET', 'Net purchases', 4000_00n],
+  ]);
+  assert.equal(body.grossSales.amount.minor, 3000_00n);
+  assert.equal(body.salesReturns.amount.minor, 500_00n);
+  assert.equal(body.netSales.amount.minor, 2500_00n);
+  assert.equal(body.grossPurchases.amount.minor, 5000_00n);
+  assert.equal(body.purchaseReturns.amount.minor, 1000_00n);
+  assert.equal(body.netPurchases.amount.minor, 4000_00n);
+  // Earned ₹2,500; spent ₹4,000; ₹2,500 − ₹4,000 = short by ₹1,500. The return is in neither as a cost.
+  assert.equal(body.income.total.amount.minor, 2500_00n);
+  assert.equal(body.expenses.total.amount.minor, 4000_00n);
+  assert.equal(body.result.amount.minor, -1500_00n);
+  assert.equal(body.expenses.rows.some((r) => r.systemRole === 'SALES_RETURNS'), false);
+  assert.equal(body.sentence['en-IN'], 'You earned ₹2,500.00 and spent ₹4,000.00, so you are short by ₹1,500.00.');
+  // The lines add up to the section total, the net line aside; and every figure keeps its records.
+  for (const section of [body.income, body.expenses]) {
+    assert.equal(sum(section.lines.filter((l) => l.kind !== 'NET').map((l) => l.amount.amount)).minor, section.total.amount.minor);
+    for (const line of section.lines) assert.ok(reconciles(line.amount));
+  }
+  // The exported table and the Hindi carry the same lines.
+  const table = profitAndLossTable(body, 'en-IN');
+  assert.ok(table.rows.some((row) => row[1] === 'Less: goods returned by customers' && row[2] === '-500.00'));
+  assert.ok(table.rows.some((row) => row[1] === 'Net sales' && row[2] === '2500.00'));
+  assert.ok(profitAndLossTable(body, 'hi-IN').rows.some((row) => row[1] === 'Net bikri' && row[2] === '2500.00'));
+  // The balance sheet is unaffected: the same books, only shown differently.
+  const sheet = await business.reports.balanceSheet(business.actor, APRIL_TO_MAY);
+  assert.equal(sheet.body.resultSoFar.amount.minor, -1500_00n);
+});
+
+test('with nothing returned, sales and purchases stand alone and no net line is printed (#273)', async () => {
+  const business = await aBusyMonth();
+  const { body } = await business.reports.profitAndLoss(business.actor, APRIL_TO_MAY);
+  assert.equal(body.income.lines.some((l) => l.kind !== 'ACCOUNT'), false);
+  assert.equal(body.expenses.lines.some((l) => l.kind !== 'ACCOUNT'), false);
+  assert.equal(body.netSales.amount.minor, body.grossSales.amount.minor);
 });

@@ -100,9 +100,48 @@ export interface StatementSection {
   readonly total: Figure;
 }
 
+/**
+ * Issue #273 — one line of the profit and loss as a person reads it.
+ *
+ * `ACCOUNT` is an account's own figure. `LESS` is a return taken off the line above it, carried as
+ * a negative figure because that is what it does to the total. `NET` is the line above less the
+ * return: net sales, or net purchases. The lines of a section always add up to its total, with the
+ * `NET` line left out of the sum because it only restates the two lines above it.
+ */
+export interface StatementLine {
+  readonly kind: 'ACCOUNT' | 'LESS' | 'NET';
+  readonly label: Bilingual;
+  readonly amount: Figure;
+}
+
+export interface ProfitAndLossSection extends StatementSection {
+  readonly lines: readonly StatementLine[];
+}
+
 export interface ProfitAndLossBody {
-  readonly income: StatementSection;
-  readonly expenses: StatementSection;
+  /**
+   * What the business earned: sales less goods returned by customers (net sales), then any other
+   * income. A sales return is a reduction of revenue, not a cost, so it is shown here, taken off
+   * sales, and never among what was spent.
+   */
+  readonly income: ProfitAndLossSection;
+  /**
+   * What the business spent: purchases less goods returned to suppliers (net purchases), then every
+   * other cost. A purchase return reduces purchases; it is not income.
+   */
+  readonly expenses: ProfitAndLossSection;
+  /** Sales of goods and services, before anything came back. */
+  readonly grossSales: Figure;
+  /** Goods returned by customers in the period, as a positive amount. */
+  readonly salesReturns: Figure;
+  /** Sales less goods returned by customers. */
+  readonly netSales: Figure;
+  /** Purchases of goods, before anything was sent back. */
+  readonly grossPurchases: Figure;
+  /** Goods returned to suppliers in the period, as a positive amount. */
+  readonly purchaseReturns: Figure;
+  /** Purchases less goods returned to suppliers. */
+  readonly netPurchases: Figure;
   /** Income less expenses for the period. Positive means the business made money. */
   readonly result: Figure;
   readonly madeMoney: boolean;
@@ -121,18 +160,72 @@ const sectionOf = (heading: Bilingual, rows: readonly AccountRow[], pick: (row: 
   total: addFigures(rows.map(pick)),
 });
 
+const negated = (figure: Figure): Figure => subtractFigures(emptyFigure(), figure);
+
+const sameName = (name: string): Bilingual => ({ 'en-IN': name, 'hi-IN': name });
+
+/**
+ * A group that has a return taken off it: the group's own accounts, the return on its own line as
+ * a deduction, and the net line under them. With no return in the period there is nothing to take
+ * off, so the accounts stand alone and no net line is printed.
+ */
+const groupWithReturns = (
+  accounts: readonly AccountRow[],
+  returned: AccountRow | undefined,
+  returnedAmount: Figure,
+  net: Bilingual,
+): StatementLine[] => {
+  const lines: StatementLine[] = accounts.map((r) => ({ kind: 'ACCOUNT', label: sameName(r.name), amount: r.movement }));
+  if (returned === undefined || returnedAmount.amount.minor === 0n) return lines;
+  return [
+    ...lines,
+    { kind: 'LESS', label: { 'en-IN': `Less: ${returned.name.toLowerCase()}`, 'hi-IN': `Ghatayein: ${returned.name.toLowerCase()}` }, amount: negated(returnedAmount) },
+    { kind: 'NET', label: net, amount: subtractFigures(addFigures(accounts.map((r) => r.movement)), returnedAmount) },
+  ];
+};
+
 export const profitAndLossBody = (books: LoadedBooks): ProfitAndLossBody => {
   const rows = accountRows(books).filter((r) => appearsInProfitAndLoss(r.type));
-  const income = sectionOf(
-    { 'en-IN': 'Money the business earned', 'hi-IN': 'Business ne jo kamaya' },
-    rows.filter((r) => r.type === 'INCOME'),
-    (r) => r.movement,
+  const byRole = (role: SystemAccountRole): AccountRow | undefined => rows.find((r) => r.systemRole === role);
+
+  // Issue #273 — returns are taken off the side they undo. Goods returned by customers are kept
+  // in their own account on the spending side of the ledger, and that posting is right; it is the
+  // statement that moves them under sales, re-signed towards the earning side so the figure there
+  // is negative. Goods returned to suppliers already sit under purchases as a credit, so they are
+  // already negative there and only need to be placed next to purchases.
+  const salesAccounts = rows.filter((r) => r.systemRole === 'SALES_GOODS' || r.systemRole === 'SALES_SERVICES');
+  const salesReturnRow = byRole('SALES_RETURNS');
+  const salesReturns = salesReturnRow?.movement ?? emptyFigure();
+  const salesReturnOnIncomeSide: AccountRow | undefined =
+    salesReturnRow === undefined ? undefined : { ...salesReturnRow, movement: negated(salesReturnRow.movement) };
+  const otherIncome = rows.filter((r) => r.type === 'INCOME' && !salesAccounts.includes(r));
+
+  const purchaseAccounts = rows.filter((r) => r.systemRole === 'PURCHASES_GOODS');
+  const purchaseReturnRow = byRole('PURCHASE_RETURNS');
+  const purchaseReturns = purchaseReturnRow === undefined ? emptyFigure() : negated(purchaseReturnRow.movement);
+  const otherExpenses = rows.filter(
+    (r) => r.type === 'EXPENSE' && !purchaseAccounts.includes(r) && r !== purchaseReturnRow && r !== salesReturnRow,
   );
-  const expenses = sectionOf(
-    { 'en-IN': 'Money the business spent', 'hi-IN': 'Business ne jo kharch kiya' },
-    rows.filter((r) => r.type === 'EXPENSE'),
-    (r) => r.movement,
-  );
+
+  const incomeRows = [...salesAccounts, ...(salesReturnOnIncomeSide ? [salesReturnOnIncomeSide] : []), ...otherIncome];
+  const expenseRows = [...purchaseAccounts, ...(purchaseReturnRow ? [purchaseReturnRow] : []), ...otherExpenses];
+  const income: ProfitAndLossSection = {
+    ...sectionOf({ 'en-IN': 'Money the business earned', 'hi-IN': 'Business ne jo kamaya' }, incomeRows, (r) => r.movement),
+    lines: [
+      ...groupWithReturns(salesAccounts, salesReturnRow, salesReturns, { 'en-IN': 'Net sales', 'hi-IN': 'Net bikri' }),
+      ...otherIncome.map((r): StatementLine => ({ kind: 'ACCOUNT', label: sameName(r.name), amount: r.movement })),
+    ],
+  };
+  const expenses: ProfitAndLossSection = {
+    ...sectionOf({ 'en-IN': 'Money the business spent', 'hi-IN': 'Business ne jo kharch kiya' }, expenseRows, (r) => r.movement),
+    lines: [
+      ...groupWithReturns(purchaseAccounts, purchaseReturnRow, purchaseReturns, { 'en-IN': 'Net purchases', 'hi-IN': 'Net khareed' }),
+      ...otherExpenses.map((r): StatementLine => ({ kind: 'ACCOUNT', label: sameName(r.name), amount: r.movement })),
+    ],
+  };
+  const grossSales = addFigures(salesAccounts.map((r) => r.movement));
+  const grossPurchases = addFigures(purchaseAccounts.map((r) => r.movement));
+
   const result = subtractFigures(income.total, expenses.total);
   const madeMoney = result.amount.minor >= 0n;
   const amount = formatINR(money(result.amount.minor < 0n ? -result.amount.minor : result.amount.minor));
@@ -142,6 +235,12 @@ export const profitAndLossBody = (books: LoadedBooks): ProfitAndLossBody => {
   return {
     income,
     expenses,
+    grossSales,
+    salesReturns,
+    netSales: subtractFigures(grossSales, salesReturns),
+    grossPurchases,
+    purchaseReturns,
+    netPurchases: subtractFigures(grossPurchases, purchaseReturns),
     result,
     madeMoney,
     costOfGoodsInBooks,

@@ -268,7 +268,10 @@ test('reports require a session and are computed from that company alone', async
   // A bill whose total lands on a half rupee is rounded to the nearest rupee, and that difference
   // is income of its own, so income is the taxable value plus whatever the rounding came to.
   const roundingOff = reports.body.sales.total - (reports.body.sales.taxable + reports.body.sales.tax);
-  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.taxable + roundingOff);
+  // Goods returned by customers are taken off sales (#273): earlier tests in this file take a
+  // return, so income is the register's taxable value less those returns, plus the rounding.
+  assert.equal(reports.body.profitAndLoss.netSales, reports.body.profitAndLoss.grossSales - reports.body.profitAndLoss.salesReturns);
+  assert.equal(reports.body.profitAndLoss.income.total, reports.body.sales.taxable - reports.body.profitAndLoss.salesReturns + roundingOff);
   assert.ok(reports.body.sales.tax > 0, 'and there is real tax in these books to be excluded');
   assert.equal(
     reports.body.sales.taxable + reports.body.sales.tax + roundingOff,
