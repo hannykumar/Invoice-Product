@@ -80,6 +80,9 @@ const setUpCompany = () => setUp ??= (async () => {
     items.push({ id: created.body.item.id, unit });
   }
   await stockEverything(`Bearer ${owner}`);
+  // Issue #288 — the walk-in customer, as the Sale screen names it. Reading the list makes it once.
+  assert.equal((await request('GET', '/api/catalogue', {}, owner)).body.customers.some((row: any) => row.walkIn), true);
+  customers.push('walk-in');
   return { owner, customers, items };
 })();
 
@@ -89,7 +92,8 @@ test('#306: for random bills the estimate is exactly the review, head by head', 
   const next = random(306);
   const pick = <T>(list: readonly T[]): T => list[Math.floor(next() * list.length)]!;
   const splits = new Set<string>();
-  for (let run = 0; run < 40; run += 1) {
+  let refusedAlike = 0;
+  for (let run = 0; run < 60; run += 1) {
     const lines = Array.from({ length: 1 + Math.floor(next() * 4) }, () => {
       const item = pick(items);
       const quantity = item.unit === 'KGS' ? (1 + Math.floor(next() * 4000) / 100).toFixed(2) : String(1 + Math.floor(next() * 30));
@@ -102,10 +106,16 @@ test('#306: for random bills the estimate is exactly the review, head by head', 
     };
     const estimate = await request('POST', '/api/sales/estimate', input, owner);
     assert.equal(estimate.status, 200, JSON.stringify(estimate.body));
-    assert.deepEqual(estimate.body.refusals, [], JSON.stringify(input));
     const preview = await request('POST', '/api/sales/preview', { ...input, requestId: `estimate-306-${run}` }, owner);
-    assert.equal(preview.status, 200, JSON.stringify(preview.body));
     const what = `run ${run}: ${JSON.stringify(input)}`;
+    if (estimate.body.refusals.length > 0) {
+      // What stops the estimate stops the review, with the same code (a walk-in from ₹50,000).
+      assert.equal(preview.status, 422, what);
+      assert.equal(preview.body.code, estimate.body.refusals[0].code, what);
+      refusedAlike += 1;
+      continue;
+    }
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
     assert.equal(estimate.body.total, preview.body.amount, what);
 
     // Every head against the draft the review stored.
@@ -129,6 +139,7 @@ test('#306: for random bills the estimate is exactly the review, head by head', 
     assert.ok(estimate.body.eInvoice['en-IN'] && estimate.body.eInvoice['hi-IN']);
   }
   assert.deepEqual([...splits].sort(), ['CGST_SGST', 'IGST'], 'both kinds of GST were tried');
+  assert.ok(refusedAlike > 0, 'a walk-in bill over the limit was tried, and refused alike');
 });
 
 test('#306: a hundred estimates leave no draft, no audit entry, no stock held and no number used', async () => {

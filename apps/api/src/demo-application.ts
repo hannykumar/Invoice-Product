@@ -2057,9 +2057,12 @@ export class DemoApplication {
     };
   }
 
-  async previewSale(actor: ActorContext, given: Record<string, unknown>) {
+  /**
+   * Issue #288 — "walk-in" names the company's walk-in customer, for callers that have not read the
+   * list. Shared by the review and the live total (#306), so both bill the same customer.
+   */
+  private async saleCustomerOf(actor: ActorContext, given: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
-    // Issue #288 — "walk-in" names the company's walk-in customer, for callers that have not read the list.
     const asked = String(given.customerId ?? given.customer ?? given.party ?? '').trim();
     const walkIn = asked.toLowerCase() === 'walk-in' || customers(companyId).some((party) => party.id === asked && isWalkIn(party))
       ? await this.walkIn(actor)
@@ -2068,6 +2071,16 @@ export class DemoApplication {
     if (walkIn !== null && !['', 'same'].includes(String(input.shipTo ?? '').trim().toLowerCase())) {
       throw invalid('WALK_IN_DELIVERY', 'A walk-in customer takes the goods at the counter. To send them somewhere else, add the customer with their name and address, and choose them instead.');
     }
+    return { walkIn, input };
+  }
+
+  /** Issue #288 — CGST Rule 46(e): from ₹50,000 of taxable value a walk-in cannot be billed. */
+  private static walkInTooLarge(taxable: bigint) {
+    return invalid('WALK_IN_NAME_REQUIRED', `This bill's taxable value is ${formatPaise(taxable)}. From ${formatPaise(WALK_IN_LIMIT)} the law asks for the buyer's name, address and state on the bill (CGST Rule 46(e)). Add the customer with their name and address, and choose them instead of Walk-in.`);
+  }
+
+  async previewSale(actor: ActorContext, given: Record<string, unknown>) {
+    const { walkIn, input } = await this.saleCustomerOf(actor, given);
     const exportSale = this.exportParticulars(input);
     const zeroRated = exportSale === null || !EXPORT_SUPPLIES[exportSale.kind].zeroRated
       ? {}
@@ -2090,9 +2103,7 @@ export class DemoApplication {
       // Issue #288 — CGST Rule 46(e): from ₹50,000 of taxable value an unregistered buyer's name,
       // address and state must be on the bill, so a walk-in cannot be billed that much.
       const taxable = draft.pricing?.totals.taxableValue.minor ?? 0n;
-      if (walkIn !== null && taxable >= WALK_IN_LIMIT) {
-        throw invalid('WALK_IN_NAME_REQUIRED', `This bill's taxable value is ${formatPaise(taxable)}. From ${formatPaise(WALK_IN_LIMIT)} the law asks for the buyer's name, address and state on the bill (CGST Rule 46(e)). Add the customer with their name and address, and choose them instead of Walk-in.`);
-      }
+      if (walkIn !== null && taxable >= WALK_IN_LIMIT) throw DemoApplication.walkInTooLarge(taxable);
       const checked = await this.checkSale(actor, draft);
       // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
       // frozen with exactly what the screen showed rather than with a second reading of the form.
@@ -2142,11 +2153,12 @@ export class DemoApplication {
    * date the bill cannot carry — comes back in `refusals` as data, never as an error. Only a person
    * who may not start a bill at all is refused outright (403), before anything is read.
    */
-  async estimateSale(actor: ActorContext, input: Record<string, unknown>) {
+  async estimateSale(actor: ActorContext, given: Record<string, unknown>) {
     this.companyOf(actor);
     permissionPortFromActor.require(actor, SALES_PERMISSIONS.draft, 'start a bill');
     const refused = (refusals: readonly Refusal[]) => ({ state: 'estimate' as const, ready: false, total: null, totals: null, lines: [], placeOfSupply: null, ewayBill: null, eInvoice: null, dateNotice: null, refusals });
     try {
+      const { walkIn, input } = await this.saleCustomerOf(actor, given);
       const exportSale = this.exportParticulars(input);
       const zeroRated = exportSale === null || !EXPORT_SUPPLIES[exportSale.kind].zeroRated
         ? {}
@@ -2161,6 +2173,10 @@ export class DemoApplication {
       }));
       const pricing = bill.pricing;
       if (pricing === null) return { ...refused(refusals), dateNotice };
+      if (walkIn !== null && pricing.totals.taxableValue.minor >= WALK_IN_LIMIT) {
+        const error = DemoApplication.walkInTooLarge(pricing.totals.taxableValue.minor);
+        refusals.push({ code: error.code, 'en-IN': error.message, 'hi-IN': `Is bill ka taxable value ${formatPaise(pricing.totals.taxableValue.minor)} hai. ${formatPaise(WALK_IN_LIMIT)} se upar kanoon (CGST Rule 46(e)) bill par kharidaar ka naam, pata aur rajya maangta hai. Customer ko naam aur pate ke saath joden, aur Walk-in ki jagah unhe chunen.` });
+      }
       const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
       const delivery = deliveryDetails(this.config.companyId, customer, input);
       const state = currentStates().find((row) => row.code === pricing.placeOfSupplyStateCode)?.name ?? pricing.placeOfSupplyStateCode;
@@ -2186,7 +2202,9 @@ export class DemoApplication {
           stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
           'en-IN': `${state} sale · ${taxes}`,
           'hi-IN': `${state} ki bikri · ${taxes}`,
-          reason: delivery.placeOfSupplyReason,
+          reason: walkIn === null
+            ? delivery.placeOfSupplyReason
+            : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         },
         ewayBill: eway === null ? null : eway.outcome === 'REQUIRED'
           ? { needed: true, 'en-IN': 'Needs an e-way bill before the goods leave', 'hi-IN': 'Maal nikalne se pehle e-way bill chahiye', reason: eway.reason }
