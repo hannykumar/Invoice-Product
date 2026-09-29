@@ -102,6 +102,9 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/suppliers') return json(200, await app.addSupplier(actor, body));
     if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
     if (method === 'POST' && pathname === '/api/items/code') return json(200, app.changeItemCode(actor, body));
+    // Issue #308 — the item's own edit dialog, and what the item picker ranks and prices with.
+    if (method === 'POST' && pathname === '/api/items/edit') return json(200, app.editItem(actor, body));
+    if (method === 'POST' && pathname === '/api/items/selling') return json(200, await app.itemSelling(actor, body));
     // Issue #182 — where the goods go and who carries them: the customer's other addresses, and
     // the transporters this business uses.
     if (method === 'POST' && pathname === '/api/delivery/choices') return json(200, app.deliveryChoices(actor, String(body.customerId ?? '')));

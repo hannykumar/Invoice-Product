@@ -63,6 +63,7 @@ import {
   resolveSupplier,
   suppliers as supplierParties,
   changeItemCode,
+  editItem,
   readCatalogue,
   customerPrint,
   customerView,
@@ -1960,6 +1961,46 @@ export class DemoApplication {
 
   addItem(actor: ActorContext, input: Record<string, unknown>) {
     return createItem(this.companyOf(actor), input, String(actor.userId));
+  }
+
+  /** Issue #308 — the item's own edit dialog: HSN code, barcode, usual price, other name. */
+  editItem(actor: ActorContext, input: Record<string, unknown>) {
+    // The price and code a bill starts from: changed by someone who may make bills, never by a viewer.
+    permissionPortFromActor.require(actor, SALES_PERMISSIONS.draft, 'change an item');
+    return editItem(this.companyOf(actor), input, String(actor.userId));
+  }
+
+  /**
+   * Issue #308 — what the item picker needs from the bills already issued: how many bills each item
+   * went on (to put the most-sold first), the six sold on most bills in the last seven days (the
+   * chips), and, for the customer on the bill, the price each item was last charged to them at — the
+   * same answer the review's "last time you charged them" sentence gives (#11). Cancelled bills and
+   * unissued reviews do not count. Reads only.
+   */
+  async itemSelling(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const customerId = String(input.customerId ?? '').trim();
+    const today = appToday();
+    const weekStart = daysAfter(today, -6);
+    const bills = (await this.salesRepository.list(companyId, { state: 'FINAL' }))
+      .filter((bill) => bill.documentDate <= today)
+      // Newest first; two bills of one day in the order they were numbered.
+      .sort((a, b) => b.documentDate.localeCompare(a.documentDate) || String(b.number).localeCompare(String(a.number)));
+    const sold: Record<string, number> = {};
+    const thisWeek: Record<string, number> = {};
+    const lastPrices: Record<string, { price: number; number: string | null; date: string }> = {};
+    for (const bill of bills) {
+      for (const itemId of new Set(bill.lines.map((line) => line.itemId))) {
+        sold[itemId] = (sold[itemId] ?? 0) + 1;
+        if (bill.documentDate >= weekStart) thisWeek[itemId] = (thisWeek[itemId] ?? 0) + 1;
+      }
+      if (customerId === '' || bill.partyId !== customerId) continue;
+      for (const line of bill.lines) {
+        lastPrices[line.itemId] ??= { price: jsonAmount(line.unitPrice.minor), number: bill.number, date: bill.documentDate };
+      }
+    }
+    const mostSoldThisWeek = Object.entries(thisWeek).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([itemId]) => itemId);
+    return { sold, mostSoldThisWeek, lastPrices };
   }
 
   /** Issue #187 — correct an item's HSN code, e.g. when a bill is held up because it is too short. */
