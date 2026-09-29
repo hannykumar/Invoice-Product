@@ -255,6 +255,8 @@ const MODE_OF_PAYMENT: Readonly<Record<string, string>> = {
   '7': 'Credit, 7 days',
   '30': 'Credit, 30 days',
 };
+/** Issue #288 — how a "paid now" sale was paid, as the bill's mode of payment. */
+const PAID_BY: Readonly<Record<string, string>> = { CASH: 'Cash', UPI: 'UPI', CARD: 'Card' };
 
 /** The party block for a delivery address of the customer being billed. */
 const partyFromAddress = (name: string, address: PartyAddress): RenderableParty =>
@@ -382,7 +384,7 @@ export const deliveryDetails = (
       };
 
   const poReference = str(body.buyerOrderNumber) || null;
-  const paymentTerms = str(body.paymentTerms) || MODE_OF_PAYMENT[str(body.terms)] || null;
+  const paymentTerms = str(body.paymentTerms) || PAID_BY[str(body.paidBy).toUpperCase()] || MODE_OF_PAYMENT[str(body.terms)] || null;
   const referenceNumber = str(body.referenceNumber) || null;
   const referenceDate = str(body.referenceDate);
   const otherReferences = str(body.otherReferences) || null;

@@ -35,10 +35,12 @@ import {
 import {
   DEFAULT_UNITS,
   GST_STATE_CODES,
+  MasterDataError,
   OVERSEAS_PINCODE,
   OVERSEAS_STATE_CODE,
   gstinStateCode,
   normaliseIdentifier,
+  stateOfPincode,
   validateGstin,
   validateHsnOrSac,
   validatePincode,
@@ -51,7 +53,7 @@ import {
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { masterData, mastersContext } from './master-data.ts';
-import { currentStates, turnoverAnswersOf } from './business-details-application.ts';
+import { businessDetailsOf, currentStates, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
@@ -143,6 +145,8 @@ export interface CustomerView {
   readonly phone: string | null;
   /** Issue #235 — the most this customer may owe, in rupees, or null when the business set none. */
   readonly creditLimit: number | null;
+  /** Issue #288 — the built-in walk-in / cash customer of a counter sale. */
+  readonly walkIn: boolean;
 }
 
 /**
@@ -192,6 +196,7 @@ const viewOf = (companyId: CompanyId | string, party: Party): CustomerView => {
     stateName: stateCode === null ? null : overseas ? OUTSIDE_INDIA : STATE_NAMES[stateCode] ?? stateCode,
     phone: party.phones[0] ?? null,
     creditLimit: party.creditLimitPaise === undefined || party.creditLimitPaise === null ? null : Number(party.creditLimitPaise) / 100,
+    walkIn: isWalkIn(party),
   };
 };
 
@@ -233,6 +238,54 @@ export const itemView = (companyId: CompanyId | string, itemId: string): ItemVie
     throw invalid('ITEM_NOT_FOUND', 'That item is not in your item list. Add it first, so the bill can carry its description, code and unit.');
   }
   return itemViewOf(companyId, found);
+};
+
+// ------------------------------------------------------------ issue #288: the walk-in customer
+
+/** The code that marks the one built-in walk-in customer of a company. */
+export const WALK_IN_CODE = 'WALK-IN';
+export const WALK_IN_NAME = 'Walk-in / cash customer';
+/** What the bill prints where a walk-in customer's street would be. */
+const COUNTER_SALE = 'Counter sale';
+
+export const isWalkIn = (party: Pick<Party, 'code'>): boolean => party.code === WALK_IN_CODE;
+
+/**
+ * Issue #288 — the customer of a counter sale: nobody's name, no GST number, and the shop's own state.
+ *
+ * Goods handed over at the counter are supplied where the shop is (IGST Act s.10(1)(c)), so the
+ * walk-in customer's one address is the shop's own town, PIN code and state, printed under "Counter
+ * sale". Everything downstream (the tax, the return, the e-way check) reads that address like any
+ * other customer's, and so counts the sale in the shop's state. CGST Rule 46(e) asks for an
+ * unregistered buyer's name and address only from ₹50,000 of taxable value; the sale refuses a walk-in
+ * above that (see `DemoApplication.previewSale`).
+ *
+ * Made once per company, the first time it is asked for, and kept in step with the town and PIN code
+ * in Business details. Needs Business details, because a bill cannot be issued without them anyway.
+ */
+export const walkInCustomer = (companyId: CompanyId | string): Party => {
+  const us = businessDetailsOf(companyId);
+  if (us === null) {
+    throw invalid('WALK_IN_NEEDS_BUSINESS_ADDRESS', 'Add your shop’s address in Business details first. A counter sale is billed at your shop, so the bill takes its state from there.');
+  }
+  const service = masterData();
+  const ctx = context(companyId);
+  const party = customers(companyId).find(isWalkIn) ?? service.createParty(
+    ctx,
+    { legalName: WALK_IN_NAME, code: WALK_IN_CODE, role: 'customer', gstRegistrationType: 'unregistered' },
+    { idempotencyKey: `walk-in:${String(companyId)}`, acknowledgeSimilar: true },
+  ).record;
+  const address = billingAddressOf(companyId, party.id);
+  if (address === null) {
+    service.addAddress(
+      ctx,
+      { partyId: party.id, label: 'Counter', line1: COUNTER_SALE, city: us.city, stateCode: us.stateCode, pincode: us.pincode, use: 'both', isPrimary: true },
+      { idempotencyKey: `walk-in-address:${String(companyId)}` },
+    );
+  } else if (address.city !== us.city || address.pincode !== us.pincode) {
+    service.correctAddress(ctx, address.id, { city: us.city, pincode: us.pincode }, { idempotencyKey: `walk-in-address:${String(companyId)}:${us.city}:${us.pincode}` });
+  }
+  return party;
 };
 
 /** Everything the Sale, challan and quotation screens need when they open. */
@@ -343,7 +396,8 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
   const pincode = overseas ? OVERSEAS_PINCODE : str(input.pincode);
   require_(validatePincode(pincode), 'CUSTOMER_PINCODE', 'A PIN code has 6 digits.');
 
-  const typedState = str(input.stateCode);
+  // Issue #288 — a customer with no GST number: their state is read from the PIN code when none was chosen.
+  const typedState = str(input.stateCode) || (gstin === '' && !overseas ? stateOfPincode(pincode) ?? '' : '');
   const registeredState = gstin === '' ? '' : gstinStateCode(gstin);
   if (registeredState !== '' && typedState !== '' && typedState !== registeredState) {
     throw invalid(
@@ -366,7 +420,7 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
   const ctx = context(companyId);
   const reference = str(input.reference) || `${legalName.toLowerCase()}:${gstin || pincode}`;
 
-  const created = service.createParty(
+  const create = (acknowledgeSimilar: boolean) => service.createParty(
     ctx,
     {
       legalName,
@@ -375,8 +429,19 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
       ...(phone === '' ? {} : { phones: [phone] }),
       ...(creditLimitPaise === null ? {} : { creditLimitPaise }),
     },
-    { idempotencyKey: `customer:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
+    { idempotencyKey: `customer:${String(companyId)}:${reference}`, acknowledgeSimilar },
   );
+  let created: ReturnType<typeof create>;
+  try {
+    created = create(input.acknowledgeSimilar === true);
+  } catch (error) {
+    // Issue #288 — a name only like the built-in walk-in customer's ("Walk-in Customer") is somebody's
+    // own record, not a second copy of it, so it is not held up by it.
+    const onlyWalkIn = error instanceof MasterDataError && error.code === 'DUPLICATE_BLOCKED'
+      && error.candidates.length > 0 && error.candidates.every((candidate) => candidate.record.code === WALK_IN_CODE);
+    if (!onlyWalkIn) throw error;
+    created = create(true);
+  }
 
   const address = service.addAddress(
     ctx,
