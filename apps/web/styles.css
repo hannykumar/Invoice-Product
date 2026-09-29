@@ -62,6 +62,7 @@
 html { background: var(--canvas); }
 body { margin: 0; color: var(--ink); background: var(--canvas); min-width: 320px; font-size: 1rem; line-height: 1.45; font-variant-numeric: tabular-nums; }
 h1, h2, .metric-card strong, .summary-total strong { font-family: var(--font-display); }
+small { font-size: var(--fs-xs); }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
