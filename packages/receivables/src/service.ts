@@ -45,6 +45,7 @@ import {
   type ChequeState,
   type Direction,
   type PartyPosition,
+  type AdvanceParticulars,
   type Payment,
   type PaymentMode,
 } from './model.ts';
@@ -87,6 +88,8 @@ export interface RecordPaymentCommand {
    * takes is refused: nothing becomes an advance by default.
    */
   readonly advanceToSupplier?: boolean;
+  /** Issue #274 — what the advance is paid against. Kept only when part of the payment is an advance. */
+  readonly advanceParticulars?: AdvanceParticulars;
 }
 
 /** Issue #261 — one advance set against one supplier bill. */
@@ -274,6 +277,7 @@ export class ReceivablesService {
         allocations,
         refundOf,
         ...(advance ? { advanceToSupplier: true } : {}),
+        ...(advance && command.advanceParticulars !== undefined ? { advanceParticulars: command.advanceParticulars } : {}),
         state: 'RECORDED',
         voucherId: posted.voucher.id,
         reversalVoucherId: null,
@@ -618,13 +622,13 @@ export class ReceivablesService {
           idempotencyKey: `advance-used:${command.idempotencyKey}:${payment.id}`,
           type: 'JOURNAL',
           date: command.date,
-          narration: `Advance taken off bill ${command.documentNumber}`,
+          narration: `Being advance adjusted against bill no. ${command.documentNumber}`,
           source: { kind: 'payment', id: payment.id, number: command.documentNumber },
           lines: buildAdvanceUsePosting(partyAccount.id, advancesAccount.id, command.partyId, take, command.documentNumber),
         });
         const next: Payment = {
           ...payment,
-          allocations: [...payment.allocations, { documentId: command.documentId, documentNumber: command.documentNumber, amount: take }],
+          allocations: [...payment.allocations, { documentId: command.documentId, documentNumber: command.documentNumber, amount: take, adjustedFromAdvance: true }],
           version: payment.version + 1,
         };
         await this.#repo.update(next, payment.version);

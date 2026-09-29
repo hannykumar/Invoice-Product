@@ -144,7 +144,7 @@ export const buildSupplierAdvancePosting = (
     ...(againstBills.minor > 0n
       ? [{ accountId: partyAccount, partyId, debit: againstBills, credit: nil(), narration: 'Reduces what we owe' }]
       : []),
-    { accountId: advancesAccount, partyId, debit: advance, credit: nil(), narration: 'Advance paid, to be taken off their next bill' },
+    { accountId: advancesAccount, partyId, debit: advance, credit: nil(), narration: 'Advance paid' },
     { accountId: settlement, partyId: null, debit: nil(), credit: sum([againstBills, advance]), narration },
   ];
 };
@@ -160,8 +160,8 @@ export const buildAdvanceUsePosting = (
   amount: Money,
   billNumber: string,
 ): PostingLineOut[] => [
-  { accountId: partyAccount, partyId, debit: amount, credit: nil(), narration: `Advance taken off bill ${billNumber}` },
-  { accountId: advancesAccount, partyId, debit: nil(), credit: amount, narration: `Advance taken off bill ${billNumber}` },
+  { accountId: partyAccount, partyId, debit: amount, credit: nil(), narration: `Advance adjusted against bill no. ${billNumber}` },
+  { accountId: advancesAccount, partyId, debit: nil(), credit: amount, narration: `Advance adjusted against bill no. ${billNumber}` },
 ];
 
 /** A cheque clearing moves it from "cheques in hand" into the bank. Nothing else changes. */

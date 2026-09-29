@@ -180,7 +180,7 @@ test('paying Shree Ram ₹37,760 against SRS-101 by bank transfer leaves nothing
   assert.equal((await request('GET', '/api/dashboard', {}, owner)).body.supplier.outstanding, 0);
 
   const voucher = await request('POST', '/api/payments/voucher', { paymentId: paid.body.paymentId }, owner);
-  assert.match(voucher.body.html, /<h1>Payment Voucher<\/h1>/);
+  assert.match(voucher.body.html, /<h1>PAYMENT VOUCHER<\/h1>/);
   assert.match(voucher.body.html, /Rupees thirty-?seven thousand seven hundred (and )?sixty only/i);
   assert.ok(voucher.body.html.includes('SRS-101'));
 });

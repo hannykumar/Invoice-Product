@@ -47,6 +47,29 @@ export interface Allocation {
   readonly documentId: string;
   readonly documentNumber: string;
   readonly amount: Money;
+  /**
+   * Issue #274 — set when an advance paid to a supplier was later adjusted against this bill, rather
+   * than the bill being paid by this payment when it was made. The payment voucher prints these as
+   * "Adjusted against bill", and the ones without it as bills settled at the time.
+   */
+  readonly adjustedFromAdvance?: boolean;
+}
+
+/** Issue #274 — a document number and its date, as a voucher prints a reference to it. */
+export interface DocumentReference {
+  readonly number: string;
+  readonly date: IsoDate;
+}
+
+/**
+ * Issue #274 — what an advance to a supplier is paid against, as a payment voucher records it.
+ * `purchaseOrder` null means there is no purchase order: the advance is against goods to be supplied.
+ * `supplierReceiptVoucher` is the receipt voucher the supplier issues on receiving an advance
+ * (CGST Act section 31(3)(d), CGST Rule 50); null when it has not been received or not entered.
+ */
+export interface AdvanceParticulars {
+  readonly purchaseOrder: DocumentReference | null;
+  readonly supplierReceiptVoucher: DocumentReference | null;
 }
 
 export interface Payment {
@@ -77,6 +100,8 @@ export interface Payment {
    * `ReceivablesService.useSupplierAdvance`, which moves it across in the books. Absent means false.
    */
   readonly advanceToSupplier?: boolean;
+  /** Issue #274 — what the advance was paid against. Only on an advance to a supplier. */
+  readonly advanceParticulars?: AdvanceParticulars;
   readonly state: PaymentState;
   readonly voucherId: VoucherId | null;
   /** Set when a cheque bounced or the payment was undone: the entry that reversed it. */

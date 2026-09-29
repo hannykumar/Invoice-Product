@@ -108,6 +108,18 @@ allowed as an advance, **only after the person's own click**.
 - Reports: `AgeingRow.advancesPaid` and `AgeingBody.advancesPaid` on the suppliers' page, beside
   (never subtracted from) what is owed.
 
+### The advance's particulars and voucher (#274)
+
+- `RecordPaymentCommand.advanceParticulars` / `Payment.advanceParticulars` (optional, kept only on a
+  payment with an advance part): `purchaseOrder` (`{ number, date }`, or `null` = against goods to be
+  supplied) and `supplierReceiptVoucher` (`{ number, date }` or `null`) — the receipt voucher the
+  supplier issues on receiving an advance (CGST Act s.31(3)(d), CGST Rule 50).
+- `Allocation.adjustedFromAdvance: true` marks an allocation added by `useSupplierAdvance`, so a
+  voucher can tell a bill it paid when made from a bill its advance was later adjusted against.
+- Ledger narrations: the advance line reads "Advance paid"; the adjustment journal reads "Being
+  advance adjusted against bill no. …". The printed payment voucher is an ordinary accounts voucher,
+  not the reverse-charge payment voucher of CGST Rule 52.
+
 ## Errors
 
 | Code | Meaning |
