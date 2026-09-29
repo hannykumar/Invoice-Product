@@ -219,6 +219,49 @@ export function validatePincodeForState(pincode: string, stateCode: string, fiel
   return fail(field, "PINCODE_STATE_MISMATCH", `PIN code ${pincode.trim()} is not in ${state}. PIN codes in ${state} start with ${prefixes.length === 1 ? prefixes[0] : `${prefixes.slice(0, -1).join(", ")} or ${prefixes[prefixes.length - 1]}`}.`);
 }
 
+/**
+ * Issue #288 — where the first two digits of a PIN code are shared by more than one state, the
+ * first three decide. `null` marks a block genuinely split between two states (Pilibhit and
+ * Pithoragarh are both 262…), where the state is left for the person to choose rather than guessed.
+ */
+const JHARKHAND_BLOCKS = ["814", "815", "816", "822", "825", "826", "827", "828", "829", "831", "832", "833", "834", "835"];
+const PIN_BLOCKS: Readonly<Record<string, string | null>> = Object.freeze({
+  "160": "04",
+  "190": "01", "191": "01", "192": "01", "193": "01", "194": "38",
+  "240": "09", "241": "09", "242": "09", "243": "09", "244": null, "245": "09", "246": null, "247": null, "248": "05", "249": "05",
+  "261": "09", "262": null, "263": "05",
+  "396": null,
+  "403": "30",
+  "605": null, "609": null,
+  "737": "11", "744": "35",
+  "790": "12", "791": "12", "792": "12", "793": "17", "794": "17", "795": "14", "796": "15", "797": "13", "798": "13", "799": "16",
+  ...Object.fromEntries(JHARKHAND_BLOCKS.map((block) => [block, "20"])),
+});
+/** The state most of a shared two-digit region belongs to, once the three-digit blocks above are taken out. */
+const PIN_REGIONS: Readonly<Record<string, string>> = Object.freeze({
+  "16": "03", "24": "09", "26": "09", "39": "24", "40": "27", "49": "22", "50": "36", "53": "37", "60": "33",
+  "67": "32", "68": "32", "73": "19", "74": "19", "78": "18",
+  "80": "10", "81": "10", "82": "10", "83": "10", "84": "10", "85": "10",
+});
+
+/**
+ * Issue #288 — the state a PIN code is in, so a customer's state is filled in the moment their PIN
+ * is typed. Returns `null` for a PIN that is not six digits or whose block two states share; the
+ * person then chooses, and `validatePincodeForState` still checks what they chose.
+ */
+export function stateOfPincode(raw: string): string | null {
+  const pincode = raw.trim();
+  if (!validatePincode(pincode).ok) return null;
+  const block = pincode.slice(0, 3);
+  if (block in PIN_BLOCKS) return PIN_BLOCKS[block] ?? null;
+  const region = pincode.slice(0, 2);
+  if (PIN_REGIONS[region] !== undefined) return PIN_REGIONS[region];
+  const states = Object.entries(PIN_PREFIXES_BY_STATE)
+    .filter(([code, prefixes]) => prefixes.includes(region) && GST_STATE_CODES[code]?.retired !== true)
+    .map(([code]) => code);
+  return states.length === 1 ? states[0]! : null;
+}
+
 export function validateVehicleNumber(raw: string, field = "vehicleNumber"): ValidationResult {
   const value = normaliseIdentifier(raw);
   if (VEHICLE_STATE_SERIES.test(value) || VEHICLE_BH_SERIES.test(value)) return ok;
