@@ -51,31 +51,19 @@ const inOrder = (token, word) => {
   return at >= token.length;
 };
 
-/** At most one letter wrong, missing, extra or swapped against the start of `word` ("saop" → "soap"). */
-const oneSlip = (token, word) => {
-  if (token.length < 3) return false;
-  for (const length of [token.length - 1, token.length, token.length + 1]) {
-    const start = word.slice(0, length);
-    if (start.length < length) continue;
-    const a = token, b = start;
-    // Optimal string alignment distance, stopped as soon as it passes one.
-    const rows = [Array.from({ length: b.length + 1 }, (_, j) => j)];
-    for (let i = 1; i <= a.length; i += 1) {
-      rows[i] = [i];
-      let best = i;
-      for (let j = 1; j <= b.length; j += 1) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        let value = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1, rows[i - 1][j - 1] + cost);
-        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) value = Math.min(value, rows[i - 2][j - 2] + 1);
-        rows[i][j] = value;
-        best = Math.min(best, value);
-      }
-      if (best > 1) break;
-    }
-    if ((rows[a.length]?.[b.length] ?? 2) <= 1) return true;
-  }
-  return false;
+/** True when `a` and `b` differ by at most one letter wrong, missing, extra or swapped. Linear time. */
+const withinOne = (a, b) => {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+  if (i === a.length && i === b.length) return true;
+  const rest = (from, to) => a.slice(from) === b.slice(to);
+  return rest(i + 1, i + 1) || rest(i + 1, i) || rest(i, i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && rest(i + 2, i + 2));
 };
+
+/** One slip against the start of `word` ("saop" → "soap"); only for three letters or more. */
+const oneSlip = (token, word) => token.length >= 3
+  && [token.length - 1, token.length, token.length + 1].some((length) => length <= word.length && withinOne(token, word.slice(0, length)));
 
 /** How well one query word matches the item's words: 3 starts a word, 2 is inside one, 1 is a near miss. */
 const tokenScore = (token, words) => {
@@ -88,18 +76,26 @@ const tokenScore = (token, words) => {
   return best;
 };
 
+/** The query worked out once, not once per item. */
+const queryOf = (query) => {
+  const q = normalise(query);
+  return { q, code: q.replaceAll(" ", ""), tokens: q.split(" ") };
+};
+
 /** How well an item answers the query; 0 means not at all. */
 export function scoreItem(item, query) {
-  const q = normalise(query);
+  const { q, code, tokens } = typeof query === "string" ? queryOf(query) : query;
   if (q === "") return 1;
   const fields = fieldsOf(item);
-  const code = q.replaceAll(" ", "");
   if (fields.codes.includes(code)) return 100;
   if (code.length >= 3 && fields.codes.some((known) => known.startsWith(code))) return 75;
   if (/^\d{2,}$/.test(code) && fields.hsn.startsWith(code)) return 60;
   if (fields.text.startsWith(q)) return 90;
-  const tokens = q.split(" ");
-  const worst = Math.min(...tokens.map((token) => tokenScore(token, fields.words)));
+  let worst = 3;
+  for (const token of tokens) {
+    worst = Math.min(worst, tokenScore(token, fields.words));
+    if (worst === 0) return 0;
+  }
   return [0, 40, 65, 80][worst];
 }
 
@@ -109,8 +105,9 @@ export function scoreItem(item, query) {
  */
 export function searchItems(items, query, { sold = {}, limit = 8 } = {}) {
   const found = [];
+  const prepared = queryOf(query);
   for (const item of items) {
-    const score = scoreItem(item, query);
+    const score = scoreItem(item, prepared);
     if (score > 0) found.push({ item, score, sold: sold[item.id] ?? 0 });
   }
   found.sort((a, b) => b.score - a.score || b.sold - a.sold || a.item.name.localeCompare(b.item.name));
