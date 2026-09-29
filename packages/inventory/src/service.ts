@@ -342,15 +342,19 @@ export class InventoryService {
    * Availability is checked and the hold is taken inside one transaction. That is the whole
    * defence against two tills selling the same thirty boxes, and there is a test that fires
    * twenty bills at once to prove it.
+   *
+   * Issue #306 — with `hold: false` the same check is made and nothing is written: no hold is taken
+   * and no earlier hold is let go. The live total on the Sale screen asks this on every change.
    */
   async reserve(
     actor: ActorContext,
-    command: { documentId: string; documentDate: IsoDate; lines: readonly ReserveLine[] },
+    command: { documentId: string; documentDate: IsoDate; lines: readonly ReserveLine[]; hold?: boolean },
   ): Promise<ReserveResult> {
     this.#permissions.require(actor, INVENTORY_PERMISSIONS.move, 'hold stock for a bill');
+    const hold = command.hold !== false;
     return this.#store.transaction(actor.companyId, async (): Promise<ReserveResult> => {
       // Re-holding for the same document replaces the previous hold rather than stacking on it.
-      const previous = await this.#inventory.reservations.listForDocument(actor.companyId, command.documentId);
+      const previous = hold ? await this.#inventory.reservations.listForDocument(actor.companyId, command.documentId) : [];
       for (const reservation of previous.filter((r) => r.state === 'HELD')) {
         await this.#inventory.reservations.update({
           ...reservation,
@@ -416,6 +420,7 @@ export class InventoryService {
         // locks goods it will never use.
         return { ok: false, shortfalls };
       }
+      if (!hold) return { ok: true, reservations: [] };
       for (const reservation of taken) await this.#inventory.reservations.insert(reservation);
       return { ok: true, reservations: taken };
     });

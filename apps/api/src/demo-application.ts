@@ -3,12 +3,12 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, DomainError, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type SalesInvoice } from '@invoice/sales';
+import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SALES_PERMISSIONS, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type ReservationRequest, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
   copiesFor,
@@ -78,7 +78,7 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
-import { businessDetailsOf, dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
+import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
 import { STATE_NAMES } from '@invoice/transport';
@@ -469,6 +469,15 @@ const daysAfter = (date: string, days: number): string => {
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
+/** Issue #306 — something that would stop a bill, said in both languages, as the live total carries it. */
+interface Refusal {
+  readonly code: string;
+  readonly lineId?: string;
+  readonly itemId?: string | undefined;
+  readonly 'en-IN': string;
+  readonly 'hi-IN': string;
+}
+
 /**
  * Issue #231 — a bill's lines as the e-way bill lists them. Freight and other charges are part of the
  * value of the goods they travel with, so each goods item carries its share (the same share the
@@ -721,14 +730,21 @@ export class DemoApplication {
     // this the sales service was given a stand-in that said yes to everything and moved nothing,
     // so stock never went down and a business could sell steel it did not have.
     const godown = salesInventoryAdapter(shop.inventoryService, { defaultWarehouseId: 'wh-main' });
+    // A service is not kept in a godown, so its lines are never checked against stock or issued.
+    const goodsLines = (request: ReservationRequest) => request.lines.filter((line) =>
+      catalogueItems(request.companyId).find((item) => item.id === line.itemId)?.kind !== 'service');
     const goodsOnly: InventoryPort = {
       ...godown,
-      // A service is not kept in a godown, so its lines are never checked against stock or issued.
       async reserve(actor, request) {
-        const lines = request.lines.filter((line) =>
-          catalogueItems(request.companyId).find((item) => item.id === line.itemId)?.kind !== 'service');
+        const lines = goodsLines(request);
         if (lines.length === 0) return { ok: true, reservationId: request.documentId };
         return godown.reserve(actor, { ...request, lines });
+      },
+      // Issue #306 — the same check for the live total, holding nothing.
+      async check(actor, request) {
+        const lines = goodsLines(request);
+        if (lines.length === 0 || godown.check === undefined) return { ok: true, reservationId: request.documentId };
+        return godown.check(actor, { ...request, lines });
       },
     };
     // Issue #233 — what stops an issued bill being cancelled, read from the modules that hold it.
@@ -2076,6 +2092,82 @@ export class DemoApplication {
   }
 
   /**
+   * Issue #306 — the bill's GST and total while it is being typed, from the same input a review
+   * takes. **Nothing is stored**: no draft, no audit entry, no number, no stock held. The figures come
+   * from `SalesService.estimate`, which runs the very calculator and stock check a review runs, so
+   * `total` here is always the `amount` the review and the issued bill carry.
+   *
+   * Anything that would stop the bill — a customer not chosen yet, a rate missing, goods short, a
+   * date the bill cannot carry — comes back in `refusals` as data, never as an error. Only a person
+   * who may not start a bill at all is refused outright (403), before anything is read.
+   */
+  async estimateSale(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    permissionPortFromActor.require(actor, SALES_PERMISSIONS.draft, 'start a bill');
+    const refused = (refusals: readonly Refusal[]) => ({ state: 'estimate' as const, ready: false, total: null, totals: null, lines: [], placeOfSupply: null, ewayBill: null, eInvoice: null, dateNotice: null, refusals });
+    try {
+      const exportSale = this.exportParticulars(input);
+      const zeroRated = exportSale === null || !EXPORT_SUPPLIES[exportSale.kind].zeroRated
+        ? {}
+        : { zeroRated: EXPORT_SUPPLIES[exportSale.kind].taxPaid ? 'WITH_TAX' as const : 'WITHOUT_TAX' as const };
+      const bill = await this.sales.estimate(actor, { ...this.saleInput(input), ...zeroRated });
+      const dateNotice = await this.saleDateNotice(actor, bill.documentDate);
+      const refusals: Refusal[] = bill.problems.map((problem) => ({
+        code: problem.code,
+        ...(problem.lineId === undefined ? {} : { lineId: problem.lineId, itemId: bill.lines.find((line) => line.lineId === problem.lineId)?.itemId }),
+        'en-IN': problem.message['en-IN'],
+        'hi-IN': problem.message['hi-IN'],
+      }));
+      const pricing = bill.pricing;
+      if (pricing === null) return { ...refused(refusals), dateNotice };
+      const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
+      const delivery = deliveryDetails(this.config.companyId, customer, input);
+      const state = currentStates().find((row) => row.code === pricing.placeOfSupplyStateCode)?.name ?? pricing.placeOfSupplyStateCode;
+      const taxes = pricing.split === 'IGST' ? 'IGST' : pricing.split === 'CGST_UTGST' ? 'CGST + UTGST' : 'CGST + SGST';
+      const eway = this.ewayDecisionOf(bill, delivery);
+      const eInvoice = this.eInvoiceDecisionFor({ ...bill, exportKind: exportSale?.kind });
+      const amounts = (from: { taxableValue: Money; cgst: Money; sgst: Money; utgst: Money; igst: Money; cess: Money; totalTax: Money }) => ({
+        taxableValue: jsonAmount(from.taxableValue.minor), cgst: jsonAmount(from.cgst.minor), sgst: jsonAmount(from.sgst.minor),
+        utgst: jsonAmount(from.utgst.minor), igst: jsonAmount(from.igst.minor), cess: jsonAmount(from.cess.minor), totalTax: jsonAmount(from.totalTax.minor),
+      });
+      return {
+        state: 'estimate' as const,
+        // True when nothing stops the bill: pressing Review would show exactly these figures.
+        ready: refusals.length === 0,
+        total: jsonAmount(pricing.totals.invoiceValue.minor),
+        totals: { ...amounts(pricing.totals), roundOff: jsonAmount(pricing.totals.roundOff.minor), total: jsonAmount(pricing.totals.invoiceValue.minor) },
+        lines: pricing.lines.map((line) => ({
+          lineId: line.lineId, itemId: line.itemId, itemName: line.itemName, kind: line.kind, chargeKind: line.chargeKind,
+          ratePercent: line.ratePercentTimes100 === null ? null : Number(line.ratePercentTimes100) / 100,
+          ...amounts(line), lineTotal: jsonAmount(line.lineTotal.minor),
+        })),
+        placeOfSupply: {
+          stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
+          'en-IN': `${state} sale · ${taxes}`,
+          'hi-IN': `${state} ki bikri · ${taxes}`,
+          reason: delivery.placeOfSupplyReason,
+        },
+        ewayBill: eway === null ? null : eway.outcome === 'REQUIRED'
+          ? { needed: true, 'en-IN': 'Needs an e-way bill before the goods leave', 'hi-IN': 'Maal nikalne se pehle e-way bill chahiye', reason: eway.reason }
+          : { needed: false, 'en-IN': 'No e-way bill needed', 'hi-IN': 'E-way bill ki zaroorat nahin', reason: eway.reason },
+        eInvoice: {
+          needed: eInvoice.needed, askTurnover: eInvoice.askTurnover, message: eInvoice.message,
+          ...(eInvoice.needed === 'YES'
+            ? { 'en-IN': 'Needs a government e-invoice number, sent by itself when you issue the bill', 'hi-IN': 'Sarkari e-invoice number chahiye, bill jaari karte hi apne aap bheja jayega' }
+            : eInvoice.needed === 'NO'
+              ? { 'en-IN': 'No e-invoice needed', 'hi-IN': 'E-invoice ki zaroorat nahin' }
+              : { 'en-IN': 'E-invoice not decided yet: answer the turnover question in Business details', 'hi-IN': 'E-invoice abhi tay nahin: Business details mein turnover ka sawaal bharein' }),
+        },
+        dateNotice,
+        refusals,
+      };
+    } catch (error) {
+      if (!(error instanceof DomainError) || error.kind === 'FORBIDDEN') throw error;
+      return refused([{ code: error.code, 'en-IN': error.message, 'hi-IN': error.details['hi-IN'] ?? error.message }]);
+    }
+  }
+
+  /**
    * Issue #266 — what the date on a new bill means, checked on every review and again at Record.
    *
    *   - **After today: refused.** A tax invoice carries the date it is issued. A bill issued today
@@ -2144,7 +2236,19 @@ export class DemoApplication {
    * consignment's value including tax and the two states, so the reminder and the decision cannot
    * disagree.
    */
-  private async ewayReminder(actor: ActorContext, draft: SalesInvoice, delivery: DeliveryDetails | null) {
+  private async ewayReminder(_actor: ActorContext, draft: SalesInvoice, delivery: DeliveryDetails | null) {
+    const decision = this.ewayDecisionOf(draft, delivery);
+    if (decision === null || decision.outcome !== 'REQUIRED') return null;
+    return {
+      outcome: decision.outcome,
+      message: 'This consignment needs an e-way bill before the vehicle leaves.',
+      reason: decision.reason,
+      ruleId: decision.ruleId,
+    };
+  }
+
+  /** The e-way bill decision itself, or `null` when the rules cannot answer. Issue #306 shows both answers. */
+  private ewayDecisionOf(draft: SalesInvoice, delivery: DeliveryDetails | null) {
     const pricing = draft.pricing;
     if (pricing === null) return null;
     try {
@@ -2168,13 +2272,7 @@ export class DemoApplication {
         vehicleType: 'REGULAR',
         conveyance: 'HIRED_VEHICLE',
       }, { on: draft.documentDate });
-      if (decision.outcome !== 'REQUIRED') return null;
-      return {
-        outcome: decision.outcome,
-        message: 'This consignment needs an e-way bill before the vehicle leaves.',
-        reason: decision.reason,
-        ruleId: decision.ruleId,
-      };
+      return decision.outcome === 'REQUIRED' || decision.outcome === 'NOT_REQUIRED' ? decision : null;
     } catch {
       // The reminder is a courtesy. If the rules cannot answer, the e-way bill screen still can,
       // and a bill is never held back over it.
@@ -4180,7 +4278,7 @@ export class DemoApplication {
    * answer is "we don't know yet" with a pointer to Business details — never a guess either way.
    * It never stops a bill being issued (#210 part 3).
    */
-  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string }): {
+  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined }): {
     readonly needed: 'YES' | 'NO' | 'UNKNOWN';
     readonly message: string;
     readonly askTurnover: boolean;
@@ -4190,7 +4288,7 @@ export class DemoApplication {
   } {
     let gstin: string | null = null;
     try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch { gstin = null; }
-    const recipientKind = this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
+    const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
     const decision = decideApplicability(this.applicabilityOf({ documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
     if (decision.outcome === 'APPLICABLE') {

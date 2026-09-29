@@ -61,6 +61,12 @@ export type ReservationResult =
  */
 export interface InventoryPort {
   reserve(actor: ActorContext, request: ReservationRequest): Promise<ReservationResult>;
+  /**
+   * Issue #306 — the same answer as `reserve`, with nothing held and nothing written. Optional: an
+   * inventory that cannot say leaves the live total without a stock check, and the review still
+   * makes it.
+   */
+  check?(actor: ActorContext, request: ReservationRequest): Promise<ReservationResult>;
   release(actor: ActorContext, documentId: string): Promise<void>;
   issue(actor: ActorContext, documentId: string, documentDate: IsoDate, number: string | null): Promise<void>;
   /** Puts the goods back when a final invoice is cancelled. */

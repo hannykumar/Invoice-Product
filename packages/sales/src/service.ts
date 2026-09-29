@@ -48,7 +48,7 @@ import {
 } from './model.ts';
 import { formatNumber, seriesScope, validateSeries } from './numbering.ts';
 import { DEFAULT_SALES_POLICY, dueDateFor, needsApproval, withinCancellationWindow, type SalesPolicy } from './policy.ts';
-import { noCancellationGuard, type CancellationGuardPort, type ComplianceHookPort, type InventoryPort, type SalesRepository } from './ports.ts';
+import { noCancellationGuard, type CancellationGuardPort, type ComplianceHookPort, type InventoryPort, type ReservationRequest, type SalesRepository, type StockShortfall } from './ports.ts';
 
 const nil = (): Money => zero('INR');
 
@@ -154,7 +154,26 @@ export class SalesService {
     if (existing !== null) return existing;
 
     const input = command.input;
-    const invoice: SalesInvoice = {
+    const invoice = this.#newDraft(actor, input, command.idempotencyKey);
+
+    await this.#store.transaction(actor.companyId, async () => {
+      await this.#repo.insert(invoice);
+    });
+    await this.#audit.record({
+      companyId: actor.companyId,
+      actorId: actor.userId,
+      at: invoice.createdAt,
+      action: 'sales.draft_created',
+      subjectType: 'sales_invoice',
+      subjectId: invoice.id,
+      summary: `Bill started for ${input.lines.length} item${input.lines.length === 1 ? '' : 's'}.`,
+      details: { lines: String(input.lines.length), documentDate: input.documentDate },
+    });
+    return this.#priceInternal(actor, invoice);
+  }
+
+  #newDraft(actor: ActorContext, input: DraftInvoiceInput, idempotencyKey: string): SalesInvoice {
+    return {
       id: this.#newId(),
       companyId: actor.companyId,
       branchId: actor.branchId ?? ('main' as SalesInvoice['branchId']),
@@ -187,24 +206,27 @@ export class SalesService {
       cancelReason: null,
       approvedBy: null,
       approvedAt: null,
-      idempotencyKey: command.idempotencyKey,
+      idempotencyKey,
       version: 1,
     };
+  }
 
-    await this.#store.transaction(actor.companyId, async () => {
-      await this.#repo.insert(invoice);
-    });
-    await this.#audit.record({
-      companyId: actor.companyId,
-      actorId: actor.userId,
-      at: invoice.createdAt,
-      action: 'sales.draft_created',
-      subjectType: 'sales_invoice',
-      subjectId: invoice.id,
-      summary: `Bill started for ${input.lines.length} item${input.lines.length === 1 ? '' : 's'}.`,
-      details: { lines: String(input.lines.length), documentDate: input.documentDate },
-    });
-    return this.#priceInternal(actor, invoice);
+  /**
+   * Issue #306 — what a bill would come to, worked out while it is still being typed. **Nothing is
+   * stored**: no draft, no audit entry, no number, no stock held. The figures come from the very
+   * calculator and stock check a review uses (`#priced`, and the inventory's check without a hold),
+   * so the live total and the reviewed total cannot differ. What would stop the bill (a rate that is
+   * missing, goods that are short) comes back in `problems`, the same way a review records it.
+   */
+  async estimate(actor: ActorContext, input: DraftInvoiceInput): Promise<SalesInvoice> {
+    this.#permissions.require(actor, SALES_PERMISSIONS.draft, 'start a bill');
+    if (input.lines.length === 0) {
+      throw invalid('SALES_NO_LINES', 'A bill needs at least one item.');
+    }
+    const priced = this.#priced(this.#newDraft(actor, input, `estimate:${this.#newId()}`));
+    if (priced.pricing === null || priced.supplyKind === 'SERVICES' || this.#inventory.check === undefined) return priced;
+    const result = await this.#inventory.check(actor, this.#reservationOf(priced));
+    return result.ok ? priced : { ...priced, state: 'NEEDS_INFO', problems: this.#shortProblems(priced, result.shortfalls) };
   }
 
   /** Changes an unfinished bill. Refuses if someone else changed it first. */
@@ -248,9 +270,17 @@ export class SalesService {
   }
 
   async #priceInternal(actor: ActorContext, invoice: SalesInvoice): Promise<SalesInvoice> {
+    const next = this.#priced(invoice);
+    await this.#store.transaction(actor.companyId, async () => {
+      await this.#repo.update(next, invoice.version);
+    });
+    return next;
+  }
+
+  /** The bill with its tax worked out, or with what stops it. Writes nothing. */
+  #priced(invoice: SalesInvoice): SalesInvoice {
     const result = this.#compute(invoice);
-    const next: SalesInvoice =
-      result.status === 'COMPUTED'
+    return result.status === 'COMPUTED'
         ? {
             ...invoice,
             state: invoice.state === 'NEEDS_INFO' ? 'DRAFT' : invoice.state,
@@ -281,10 +311,6 @@ export class SalesService {
             ),
             version: invoice.version + 1,
           };
-    await this.#store.transaction(actor.companyId, async () => {
-      await this.#repo.update(next, invoice.version);
-    });
-    return next;
   }
 
   #compute(invoice: SalesInvoice): ComputeResult {
@@ -401,7 +427,23 @@ export class SalesService {
 
   async #reserve(actor: ActorContext, invoice: SalesInvoice): Promise<SalesInvoice> {
     if (invoice.supplyKind === 'SERVICES') return invoice;
-    const result = await this.#inventory.reserve(actor, {
+    const result = await this.#inventory.reserve(actor, this.#reservationOf(invoice));
+    if (result.ok) return invoice;
+
+    const next: SalesInvoice = {
+      ...invoice,
+      state: 'NEEDS_INFO',
+      problems: this.#shortProblems(invoice, result.shortfalls),
+      version: invoice.version + 1,
+    };
+    await this.#store.transaction(actor.companyId, async () => {
+      await this.#repo.update(next, invoice.version);
+    });
+    return next;
+  }
+
+  #reservationOf(invoice: SalesInvoice): ReservationRequest {
+    return {
       companyId: invoice.companyId,
       documentId: invoice.id,
       documentDate: invoice.documentDate,
@@ -411,13 +453,12 @@ export class SalesService {
         warehouseId: l.warehouseId ?? null,
         quantity: l.quantity,
       })),
-    });
-    if (result.ok) return invoice;
+    };
+  }
 
-    const next: SalesInvoice = {
-      ...invoice,
-      state: 'NEEDS_INFO',
-      problems: result.shortfalls.map(
+  /** One plain sentence per short line, in both languages, with the facts the screen needs. */
+  #shortProblems(invoice: SalesInvoice, shortfalls: readonly StockShortfall[]): InvoiceProblem[] {
+    return shortfalls.map(
         (s): InvoiceProblem => ({
           code: 'STOCK_NOT_ENOUGH',
           lineId: s.lineId,
@@ -439,13 +480,7 @@ export class SalesService {
             shortBy: plain(s.shortfall),
           },
         }),
-      ),
-      version: invoice.version + 1,
-    };
-    await this.#store.transaction(actor.companyId, async () => {
-      await this.#repo.update(next, invoice.version);
-    });
-    return next;
+      );
   }
 
   /**

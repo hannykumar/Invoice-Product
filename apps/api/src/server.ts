@@ -199,6 +199,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/subscription') return json(200, await app.subscriptionAccount(actor, body));
     if (method === 'POST' && pathname === '/api/subscription/plan') return json(200, await app.changeSubscriptionPlan(actor, body));
     if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
+    // Issue #306 — the live GST and total while a bill is typed. Stores nothing.
+    if (method === 'POST' && pathname === '/api/sales/estimate') return json(200, await app.estimateSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     // Issue #233 — cancelling a wrong bill: what it will do, then doing it. Refused with the credit-note
