@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
@@ -81,7 +81,7 @@ import { validatePincodeForState } from '../../../packages/masters/src/validatio
 import { STATE_NAMES } from '@invoice/transport';
 import { ChallanDesk } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
-import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode } from '@invoice/receivables';
+import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode, type AdvanceParticulars, type DocumentReference } from '@invoice/receivables';
 import {
   TradeTermsService,
   noPriceList,
@@ -254,6 +254,58 @@ const advanceChoiceHelp = (supplier: string, openBills: number): string => openB
   : `Whatever is not put against a bill ticked above will be kept as an advance and taken off ${supplier}'s next bill.`;
 
 /**
+ * Issue #274 — a document number with its date, typed on Money paid: both or neither. `label` names
+ * the pair in the refusal, the way the form names it.
+ */
+const typedReference = (numberValue: unknown, dateValue: unknown, label: string, code: string): DocumentReference | null => {
+  const number = String(numberValue ?? '').trim();
+  const dated = String(dateValue ?? '').trim();
+  if (number === '' && dated === '') return null;
+  if (number === '' || dated === '') throw invalid(code, `Enter both the ${label} number and its date, or leave both blank.`);
+  if (number.length > 40) throw invalid(code, `The ${label} number is longer than 40 letters and digits. Check it and enter it again.`);
+  return { number, date: isoDate(dated) };
+};
+
+/**
+ * Issue #274 — what an advance to a supplier is paid against, from the Money paid form. A purchase
+ * order (number and date) when there is one; otherwise the advance is against goods to be supplied.
+ * The supplier's receipt voucher (CGST Act s.31(3)(d), CGST Rule 50) is theirs to issue, so it is
+ * optional here and printed only when it was entered.
+ */
+const advanceParticularsOf = (input: Record<string, unknown>, paidOn: IsoDate): AdvanceParticulars => {
+  const purchaseOrder = typedReference(input.purchaseOrderNumber, input.purchaseOrderDate, 'purchase order', 'ADVANCE_PURCHASE_ORDER_INCOMPLETE');
+  if (purchaseOrder !== null && purchaseOrder.date > paidOn) {
+    throw invalid('ADVANCE_PURCHASE_ORDER_AFTER_PAYMENT', `The purchase order is dated ${formatDate(purchaseOrder.date)}, after this payment on ${formatDate(paidOn)}. An advance against it is paid on or after the order's date. Check both dates.`);
+  }
+  const supplierReceiptVoucher = typedReference(input.supplierReceiptNumber, input.supplierReceiptDate, "supplier's receipt voucher", 'ADVANCE_RECEIPT_VOUCHER_INCOMPLETE');
+  if (supplierReceiptVoucher !== null && supplierReceiptVoucher.date < paidOn) {
+    throw invalid('ADVANCE_RECEIPT_VOUCHER_BEFORE_PAYMENT', `The supplier's receipt voucher is dated ${formatDate(supplierReceiptVoucher.date)}, before this payment on ${formatDate(paidOn)}. They issue it when they receive the money, so it cannot be earlier. Check both dates.`);
+  }
+  return { purchaseOrder, supplierReceiptVoucher };
+};
+
+/** Issue #274 — "purchase order no. PO-17 dated 25 Sep 2026", or "goods to be supplied" without one. */
+const advanceAgainstWords = (particulars: AdvanceParticulars | undefined): string =>
+  particulars?.purchaseOrder
+    ? `purchase order no. ${particulars.purchaseOrder.number} dated ${formatDate(particulars.purchaseOrder.date)}`
+    : 'goods to be supplied';
+
+/**
+ * Issue #274 — the narration of a payment voucher that pays an advance, in the standard form an
+ * Indian accounts book uses: "Being advance paid to … against …". Nothing else is said.
+ */
+const advanceNarration = (input: {
+  readonly party: string; readonly particulars: AdvanceParticulars | undefined;
+  readonly how: string; readonly reference: string | null; readonly bills: readonly string[];
+}): string => {
+  const how = `by ${input.how}${input.reference === null ? '' : `, ref. ${input.reference}`}`;
+  const against = advanceAgainstWords(input.particulars);
+  return input.bills.length === 0
+    ? `Being advance paid to ${input.party} against ${against}, ${how}.`
+    : `Being payment made to ${input.party} against bill no. ${input.bills.join(', ')}, and advance paid against ${against}, ${how}.`;
+};
+
+/**
  * One entry on the screen is one payment, however many times Record is pressed. The screen sends a
  * fresh entry number for each new payment; a caller without one uses the bank's reference.
  */
@@ -307,41 +359,69 @@ const modeWords = (payment: Payment): string => {
 /**
  * A receipt for money received, or a payment voucher for money paid: who, how much in figures and
  * in words, how it was paid, and which bills it settled. Only facts from the books are printed.
+ *
+ * Issue #274 — a payment voucher that pays an advance to a supplier carries the standard fields of
+ * an advance payment and nothing invented: what it is against (the purchase order, or goods to be
+ * supplied), the supplier's receipt voucher when entered, the narration "Being advance paid to …
+ * against …", and, once the advance has been adjusted against their bill, the bill it was adjusted
+ * against. It is our own accounts voucher; it is not the reverse-charge payment voucher of CGST
+ * Rule 52, and the heading does not say it is.
  */
 const paymentVoucherHtml = (input: {
   readonly payment: Payment;
   readonly number: string;
   readonly seller: RenderableParty;
   readonly party: RenderableParty;
-  readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint }[];
+  readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint; adjusted: boolean }[];
 }): string => {
-  const { payment, number, seller, party, bills } = input;
+  const { payment, number, seller, party } = input;
   const receipt = payment.direction === 'RECEIPT';
+  const advance = payment.advanceToSupplier === true;
+  // Bills paid by this payment when it was made, and bills a later bill's entry adjusted the advance against.
+  const bills = input.bills.filter((bill) => !bill.adjusted);
+  const adjusted = input.bills.filter((bill) => bill.adjusted);
   const settled = bills.reduce((total, bill) => total + bill.settled, 0n);
   const onAccount = payment.amount.minor - settled;
+  const adjustedTotal = adjusted.reduce((total, bill) => total + bill.settled, 0n);
+  const printDate = (value: string | null) => (value === null || value === '' ? '' : formatDate(isoDate(value)));
   const block = (title: string, who: RenderableParty) =>
     `<td><strong>${escapeHtml(title)}</strong><br>${escapeHtml(who.name)}${who.addressLines.map((line) => `<br>${escapeHtml(line)}`).join('')}${who.gstin === null ? '' : `<br>GSTIN: ${escapeHtml(who.gstin)}`}${who.stateCode === '' ? '' : `<br>State: ${escapeHtml(who.stateName)} (${escapeHtml(who.stateCode)})`}</td>`;
+  const particulars = payment.advanceParticulars;
   const facts: [string, string][] = [
     [receipt ? 'Receipt number' : 'Voucher number', number],
-    ['Date', payment.date],
+    ['Date', printDate(payment.date)],
     [receipt ? 'Received from' : 'Paid to', party.name],
     ['Amount', formatPaise(payment.amount.minor)],
     ['Amount in words', amountInWords(payment.amount)],
-    ['How it was paid', modeWords(payment)],
+    ['Mode of payment', modeWords(payment)],
     ...(payment.reference === null ? [] : [['Reference', payment.reference] as [string, string]]),
+    ...(advance && bills.length > 0 ? [['Advance', formatPaise(onAccount)] as [string, string]] : []),
+    ...(advance ? [['Against', advanceAgainstWords(particulars).replace(/^./, (c) => c.toUpperCase())] as [string, string]] : []),
+    ...(advance && particulars?.supplierReceiptVoucher
+      ? [["Supplier's receipt voucher", `No. ${particulars.supplierReceiptVoucher.number} dated ${formatDate(particulars.supplierReceiptVoucher.date)}`] as [string, string]]
+      : []),
   ];
-  // Issue #261 — money paid to a supplier before their bill says it is an advance, in those words.
-  const advance = payment.advanceToSupplier === true;
-  const billRows = bills.length === 0
-    ? `<tr><td colspan="4">${advance ? 'No bill yet. Paid as an advance.' : 'Not put against any bill.'}</td></tr>`
-    : bills.map((bill) => `<tr><td>${escapeHtml(bill.number)}</td><td>${escapeHtml(bill.date ?? '')}</td><td>${bill.total === null ? '' : formatPaise(bill.total)}</td><td>${formatPaise(bill.settled)}</td></tr>`).join('');
+  const billRow = (bill: { number: string; date: string | null; total: bigint | null; settled: bigint }) =>
+    `<tr><td>${escapeHtml(bill.number)}</td><td>${escapeHtml(printDate(bill.date))}</td><td>${bill.total === null ? '' : formatPaise(bill.total)}</td><td>${formatPaise(bill.settled)}</td></tr>`;
+  const billTable = advance
+    ? bills.length === 0 ? '' : `<table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${bills.map(billRow).join('')}</table>`
+    : `<table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${bills.length === 0 ? '<tr><td colspan="4">Not put against any bill.</td></tr>' : bills.map(billRow).join('')}</table>`;
+  const adjustedTable = !advance || adjusted.length === 0 ? '' : `<table><tr><th>Adjusted against bill</th><th>Bill date</th><th>Bill amount</th><th>Amount adjusted</th></tr>${adjusted.map(billRow).join('')}</table>
+<p>Unadjusted advance: ${formatPaise(onAccount - adjustedTotal)}</p>`;
+  const narration = advance
+    ? `<p><strong>Narration:</strong> ${escapeHtml(advanceNarration({
+      party: party.name, particulars, how: modeWords(payment).replace(/^([A-Z])(?=[a-z])/, (c) => c.toLowerCase()), reference: payment.reference, bills: bills.map((bill) => bill.number),
+    }))}</p>`
+    : '';
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(number)}</title>
 <style>body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px;text-align:left;vertical-align:top}h1{font-size:20px;margin:0}</style></head><body>
-<h1>${receipt ? 'Receipt' : 'Payment Voucher'}</h1>
+<h1>${receipt ? 'Receipt' : 'PAYMENT VOUCHER'}</h1>
 <table><tr>${block(receipt ? 'Received by' : 'Paid by', seller)}${block(receipt ? 'Received from' : 'Paid to', party)}</tr></table>
 <table>${facts.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('')}</table>
-<table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${billRows}</table>
-${onAccount > 0n ? `<p>${advance ? 'Advance, to be taken off their next bill' : 'On account, not yet put against a bill'}: ${formatPaise(onAccount)}</p>` : ''}
+${billTable}
+${adjustedTable}
+${!advance && onAccount > 0n ? `<p>On account, not yet put against a bill: ${formatPaise(onAccount)}</p>` : ''}
+${narration}
 <p style="margin-top:48px;text-align:right">For ${escapeHtml(seller.name)}<br><br>Authorised signatory</p></body></html>`;
 };
 
@@ -1577,16 +1657,27 @@ export class DemoApplication {
       })
       : [];
     const usedTotal = used.reduce((total, part) => total + part.amount.minor, 0n);
+    // Issue #274 — the adjustment record: which advance voucher was adjusted against this bill, and by how much.
+    const adjustments = await Promise.all(used.map(async (part) => {
+      const payment = await this.payments.payment(actor, part.paymentId);
+      const voucher = payment?.voucherId ? await this.shop.ledger.getVoucher(actor, payment.voucherId) : null;
+      return { paymentId: part.paymentId, voucherNumber: voucher?.number ?? part.paymentId, paidOn: payment?.date ?? '', amount: part.amount.minor };
+    }));
     const dashboard = await state();
     const owe = result.bill.totalPaise - usedTotal;
     return {
       state: 'recorded', deduplicated: result.deduplicated, title: result.deduplicated ? 'Already recorded once' : 'Purchase recorded',
-      message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.' : result.bill.summary,
+      // Issue #274 — with an advance adjusted, what is owed is the bill less the advance, never the whole bill.
+      message: result.deduplicated ? 'The existing bill was returned. Stock and the supplier balance were not doubled.'
+        : usedTotal > 0n ? result.bill.summary.replace(`${formatPaise(result.bill.totalPaise)} is now owed to`, `${formatPaise(result.bill.totalPaise)} − ${formatPaise(usedTotal)} = ${formatPaise(owe)} is now owed to`)
+          : result.bill.summary,
       ...(usedTotal > 0n ? { effects: [
+        ...adjustments.map((a) => `Advance adjusted against bill no. ${result.bill.invoiceNumber}: payment voucher ${a.voucherNumber} dated ${a.paidOn === '' ? '' : formatDate(isoDate(a.paidOn))}, ${formatPaise(a.amount)}.`),
         `Advance taken off this bill: ${formatPaise(result.bill.totalPaise)} − ${formatPaise(usedTotal)} = ${formatPaise(owe)} you owe ${result.bill.supplierName}.`,
         ...(advance !== null && advance.available > usedTotal ? [`${formatPaise(advance.available - usedTotal)} stays as an advance for their next bill.`] : []),
       ] } : {}),
       advanceUsed: jsonAmount(usedTotal), owe: jsonAmount(owe),
+      advanceAdjustments: adjustments.map((a) => ({ paymentId: a.paymentId, voucherNumber: a.voucherNumber, paidOn: a.paidOn, amount: jsonAmount(a.amount) })),
       bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier,
     };
   }
@@ -2781,6 +2872,10 @@ export class DemoApplication {
           `${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} still due on this bill`),
         ...(applied.length > 0 ? [`${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} is kept as an advance.`] : []),
         ...(heldBefore > 0n ? [`Advances already with ${party.name}: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`] : []),
+        // Issue #274 — what the voucher will say it is against, before anything is saved.
+        `Against: ${advanceAgainstWords(plan.particulars)}.`,
+        ...(plan.particulars?.supplierReceiptVoucher ? [`Supplier's receipt voucher: No. ${plan.particulars.supplierReceiptVoucher.number} dated ${formatDate(plan.particulars.supplierReceiptVoucher.date)}.`] : []),
+        `Narration: ${plan.narration ?? ''}`,
         `In your books it is kept under "Advances paid to suppliers", not as money you owe.`,
         'No GST is entered for this advance, and no GST credit is claimed on it. The credit comes with their bill.',
       ],
@@ -2816,6 +2911,8 @@ export class DemoApplication {
       ...(how.cheque === undefined ? {} : { cheque: how.cheque }),
       ...(applied.length === 0 ? {} : { allocations: applied.map(({ position, amount: put }) => ({ documentId: position.document.documentId, documentNumber: position.document.number, amount: money(put) })) }),
       ...(plan.advance > 0n ? { advanceToSupplier: true } : {}),
+      ...(plan.particulars === undefined ? {} : { advanceParticulars: plan.particulars }),
+      ...(plan.narration === undefined ? {} : { narration: plan.narration }),
     });
     // The same request twice is one payment. The same key for a different payment is a mistake, not a retry.
     if (payment.partyId !== party.id || payment.amount.minor !== amount || payment.direction !== direction) {
@@ -2875,7 +2972,7 @@ export class DemoApplication {
       party: this.paymentPartyPrint(companyId, payment.partyId),
       bills: payment.allocations.map((allocation) => {
         const bill = documents.find((d) => d.documentId === allocation.documentId);
-        return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor };
+        return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor, adjusted: allocation.adjustedFromAdvance === true };
       }),
     });
     return { state: 'print' as const, number: voucher?.number ?? payment.id, html };
@@ -2941,8 +3038,13 @@ export class DemoApplication {
           : `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. To pay them before a bill instead, ${tick}.`
         : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills, pay ${formatPaise(covered)}, or ${tick} to keep ${formatPaise(remaining)} as an advance.`);
     }
+    // Issue #274 — what the advance is paid against, and its narration, only when there is an advance.
+    const particulars = direction === 'PAYMENT' && remaining > 0n ? advanceParticularsOf(input, date) : undefined;
+    const narration = particulars === undefined ? undefined : advanceNarration({
+      party: party.name, particulars, how: how.words, reference, bills: applied.map(({ position }) => position.document.number),
+    });
     return {
-      direction, party, amount, date, how, reference, applied, leftOver: remaining,
+      direction, party, amount, date, how, reference, applied, leftOver: remaining, particulars, narration,
       advance: direction === 'PAYMENT' ? remaining : 0n,
       owedBefore: sum(open.map((d) => d.outstanding)).minor,
       key,
