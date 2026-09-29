@@ -21,9 +21,10 @@ export interface SalesInventoryAdapterOptions {
 export const salesInventoryAdapter = (
   service: InventoryService,
   options: SalesInventoryAdapterOptions,
-): InventoryPort => ({
-  async reserve(actor: ActorContext, request: ReservationRequest): Promise<ReservationResult> {
+): InventoryPort => {
+  const reserve = async (actor: ActorContext, request: ReservationRequest, hold: boolean): Promise<ReservationResult> => {
     const result = await service.reserve(actor, {
+      hold,
       documentId: request.documentId,
       documentDate: request.documentDate,
       lines: request.lines.map((line) => ({
@@ -35,26 +36,32 @@ export const salesInventoryAdapter = (
     });
     if (result.ok) return { ok: true, reservationId: request.documentId };
     return { ok: false, shortfalls: result.shortfalls };
-  },
+  };
+  return {
+    reserve: (actor: ActorContext, request: ReservationRequest) => reserve(actor, request, true),
 
-  async release(actor: ActorContext, documentId: string): Promise<void> {
-    await service.release(actor, documentId);
-  },
+    /** Issue #306 — the reservation check with nothing held, for the live total. */
+    check: (actor: ActorContext, request: ReservationRequest) => reserve(actor, request, false),
 
-  async issue(actor: ActorContext, documentId: string, documentDate: IsoDate, number: string | null): Promise<void> {
-    await service.issue(actor, {
-      documentId,
-      documentDate,
-      source: { kind: 'sales_invoice', id: documentId, number },
-    });
-  },
+    async release(actor: ActorContext, documentId: string): Promise<void> {
+      await service.release(actor, documentId);
+    },
 
-  async returnToStock(actor: ActorContext, documentId: string, documentDate: IsoDate, reason: string): Promise<void> {
-    await service.returnToStock(actor, {
-      documentId,
-      documentDate,
-      source: { kind: 'sales_invoice', id: documentId, number: null },
-      reason,
-    });
-  },
-});
+    async issue(actor: ActorContext, documentId: string, documentDate: IsoDate, number: string | null): Promise<void> {
+      await service.issue(actor, {
+        documentId,
+        documentDate,
+        source: { kind: 'sales_invoice', id: documentId, number },
+      });
+    },
+
+    async returnToStock(actor: ActorContext, documentId: string, documentDate: IsoDate, reason: string): Promise<void> {
+      await service.returnToStock(actor, {
+        documentId,
+        documentDate,
+        source: { kind: 'sales_invoice', id: documentId, number: null },
+        reason,
+      });
+    },
+  };
+};

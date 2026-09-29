@@ -102,6 +102,9 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/suppliers') return json(200, await app.addSupplier(actor, body));
     if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
     if (method === 'POST' && pathname === '/api/items/code') return json(200, app.changeItemCode(actor, body));
+    // Issue #308 — the item's own edit dialog, and what the item picker ranks and prices with.
+    if (method === 'POST' && pathname === '/api/items/edit') return json(200, app.editItem(actor, body));
+    if (method === 'POST' && pathname === '/api/items/selling') return json(200, await app.itemSelling(actor, body));
     // Issue #182 — where the goods go and who carries them: the customer's other addresses, and
     // the transporters this business uses.
     if (method === 'POST' && pathname === '/api/delivery/choices') return json(200, app.deliveryChoices(actor, String(body.customerId ?? '')));
@@ -199,6 +202,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'GET' && pathname === '/api/subscription') return json(200, await app.subscriptionAccount(actor, body));
     if (method === 'POST' && pathname === '/api/subscription/plan') return json(200, await app.changeSubscriptionPlan(actor, body));
     if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
+    // Issue #306 — the live GST and total while a bill is typed. Stores nothing.
+    if (method === 'POST' && pathname === '/api/sales/estimate') return json(200, await app.estimateSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
     if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
     // Issue #233 — cancelling a wrong bill: what it will do, then doing it. Refused with the credit-note

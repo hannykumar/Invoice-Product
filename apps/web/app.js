@@ -8,7 +8,7 @@ const copy = {
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
     recentActivity: "Recent activity", recentBody: "Your latest bills and payments", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
-    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Paid now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the total are worked out from each item's GST rate when you press Review sale.", reviewSale: "Review sale", discardDraft: "Discard draft",
+    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Paid now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST", amountCustomerPays: "Customer pays", taxSafety: "GST and the total are worked out as you type, by the same rules the bill uses. Nothing is saved until you record the bill.", roundOff: "Round off", estimateChooseCustomer: "Choose the customer to see the GST: their state decides which GST applies.", estimateChooseItem: "Choose an item to see the total.", editItemButton: "Edit item", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is only looked at here. It is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", purchaseLinesLabel: "Items on this supplier bill", purchaseTaxFromGstin: "Whether this bill carries IGST, or CGST and SGST, is worked out from the supplier's GST number and yours. Nobody is asked which state they are in.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "Tick the bills this money pays. If you tick none, or it is more than the bills, the rest stays on account for this customer.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     navPaid: "Money paid", paidTitle: "Record money paid to a supplier", paidHelp: "Pick the supplier, tick the bills you are paying, and say how you paid.", paidTo: "Paid to", amountPaid: "Amount paid", paidDate: "Date paid", paidMethod: "How did you pay?", chooseSupplierBill: "Bills this pays", chooseSupplierBillHelp: "Tick the supplier's bills this money pays, oldest first. Paying before their bill? Choose the advance below.", advanceChoice: "Record this as an advance to {supplier}", advanceHelpNoBill: "You have no bill from {supplier} yet. This money will be kept as an advance and taken off their next bill.", advanceHelpMore: "Whatever is not put against a bill ticked above will be kept as an advance and taken off {supplier}'s next bill.", advanceAlready: "Advance already with {supplier}: {amount}.", advancePoNumber: "Against purchase order no. (optional)", advancePoDate: "Purchase order date", advancePoHelp: "No purchase order? Leave both blank, and the voucher says the advance is against goods to be supplied.", advanceReceiptNumber: "Supplier's receipt voucher no. (optional)", advanceReceiptDate: "Receipt voucher date", advanceReceiptHelp: "The supplier gives a receipt voucher when they receive an advance. If you have it, enter it and it prints on the payment voucher.", printAdvanceVoucher: "Print the advance voucher", supplierAdvances: "Advances paid to suppliers: {amount}", useAdvanceOnBill: "Take the {amount} advance already paid to {supplier} off this bill", paidSummary: "Payment summary", paidSafety: "This is a draft. It does not reduce what you owe the supplier until it is reviewed and saved.", reviewPaid: "Review payment",
@@ -87,7 +87,7 @@ const copy = {
     addressLabelName: "What to call it", deliveryStateHelp: "Goods sent to another state make this sale count in that state.",
     deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address", saveCorrection: "Save changes",
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
-    saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item",
+    saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item", itemSearchPlaceholder: "Name, code, HSN or scan", scanButton: "Scan", scanTitle: "Scan a barcode with the camera", scanHint: "Hold the barcode in front of the camera. It is read by itself.", cameraRefused: "The camera could not be opened. Allow the camera for this site, or type the barcode in the box.", mostSoldThisWeek: "Sold most this week", newItemFromSearch: "＋ New item", newItemWithCode: "＋ New item with barcode {code}", noItemMatch: "No item matches. Check the spelling, or add it as a new item.", priceLastCharged: "Last charged to them: {amount}, {date}", priceLastCounter: "Last price at the counter: {amount}, {date}", priceUsual: "Usual price", itemBarcode: "Barcode (optional)", itemBarcodeHelp: "Scan it here, or type the digits under the lines. Scanning it on the Sale screen then adds this item.", itemPrice: "Usual selling price (optional)", itemPriceHelp: "A new bill starts at this price, unless this customer was charged a different one last time.", itemOtherName: "Other name (optional)", itemOtherNameHelp: "Another name to find it by, in Hindi or any language — for example साबुन.",
     // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
     walkInCustomer: "Walk-in / cash customer", walkInShort: "Walk-in", walkInChoose: "Walk-in customer", walkInDetail: "Sold at your counter in {state}. No name or address is needed below ₹50,000.", placeOfSupplyCounter: "the goods are handed over at your counter.",
     paidBy: "Paid by", paidCash: "Cash", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Paid now by {mode}: {amount}. Nothing is left to pay on this bill.", saleEffectPartPaid: "Paid now by {mode}: {amount}. {due} is added to the customer's khata.",
@@ -104,7 +104,7 @@ const copy = {
     customerStateHelp: "For a registered customer the state comes from the first two digits of their GST number, and cannot be changed.",
     customerPhone: "Phone (optional)", saveCustomer: "Save customer",
     customerCreditLimit: "Credit limit in ₹ (optional)", customerCreditLimitHelp: "The most this customer may owe you. Leave it empty for no limit: then no bill to them is checked against one.", customerCreditLimitShown: "credit limit {amount}",
-    changeItemCode: "Change HSN code", itemCodeTitle: "Change the item's HSN code", itemCodeCurrent: "{item} carries the code {code} ({digits} digits).", itemCodeNew: "New HSN or SAC code", itemCodeHelp: "Type every digit you have. More digits are always accepted; a shorter code is never padded with zeros.", itemCodeSave: "Save code", itemCodePick: "Choose an item first.", turnoverLegend: "Turnover last year", turnoverQuestion: "What was your business's total turnover last financial year? Count all sales under your PAN across every GST registration in India, including exempt sales and exports, before GST.", turnoverUpTo5: "₹5 crore or less, and never more than ₹5 crore in any year since 2017-18", turnoverUpTo5Earlier: "₹5 crore or less last year, but more than ₹5 crore in some earlier year since 2017-18", turnover5To10: "More than ₹5 crore, but less than ₹10 crore", turnover10Plus: "₹10 crore or more", turnoverUnsure: "Not sure", turnoverWhy: "Answer once. Until you do, we ask for 6 HSN digits, no bill is sent for a government e-invoice number, and each sale review reminds you in one line.", turnoverFor: "This answer is for bills in {year}. It decides how many HSN digits each bill needs, whether a bill needs a government e-invoice number, and whether it must be sent within 30 days.", turnoverAskAgainYES: "Earlier you only told us it was more than ₹5 crore. Please pick one answer above: only a business with ₹10 crore or more has to send each bill for its e-invoice number within 30 days.", turnoverAskAgainNO: "Earlier you only told us it was ₹5 crore or less. Please pick one answer above: a business that went over ₹5 crore in any year since 2017-18 still needs e-invoice numbers.", addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
+    itemCodeTitle: "Edit item", itemCodeCurrent: "{item} carries the code {code} ({digits} digits).", itemCodeNew: "New HSN or SAC code", itemCodeHelp: "Type every digit you have. More digits are always accepted; a shorter code is never padded with zeros.", itemCodeSave: "Save item", itemCodePick: "Choose an item first.", turnoverLegend: "Turnover last year", turnoverQuestion: "What was your business's total turnover last financial year? Count all sales under your PAN across every GST registration in India, including exempt sales and exports, before GST.", turnoverUpTo5: "₹5 crore or less, and never more than ₹5 crore in any year since 2017-18", turnoverUpTo5Earlier: "₹5 crore or less last year, but more than ₹5 crore in some earlier year since 2017-18", turnover5To10: "More than ₹5 crore, but less than ₹10 crore", turnover10Plus: "₹10 crore or more", turnoverUnsure: "Not sure", turnoverWhy: "Answer once. Until you do, we ask for 6 HSN digits, no bill is sent for a government e-invoice number, and each sale review reminds you in one line.", turnoverFor: "This answer is for bills in {year}. It decides how many HSN digits each bill needs, whether a bill needs a government e-invoice number, and whether it must be sent within 30 days.", turnoverAskAgainYES: "Earlier you only told us it was more than ₹5 crore. Please pick one answer above: only a business with ₹10 crore or more has to send each bill for its e-invoice number within 30 days.", turnoverAskAgainNO: "Earlier you only told us it was ₹5 crore or less. Please pick one answer above: a business that went over ₹5 crore in any year since 2017-18 still needs e-invoice numbers.", addItemTitle: "Add an item", addItemHelp: "The bill will carry this description, its code and its unit.",
     itemName: "What it is called on the bill", itemKind: "Goods or a service?", itemGoods: "Goods", itemService: "A service",
     itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits; bills to GST-registered customers need at least 4, and at least 6 above ₹5 crore turnover. A service carries a 6-digit SAC starting 99.",
     itemUnit: "How is it counted?", itemTax: "The GST you charge on it", itemTaxHelp: "This is the rate your business charges. We record it as yours and the bill says so; we never pick one for you.",
@@ -350,7 +350,7 @@ const copy = {
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
     recentActivity: "Abhi ka kaam", recentBody: "Aapke naye bill aur len-den", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
-    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi mil gaya", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "Review sale dabane par har saman ke GST rate se GST aur total nikalta hai.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
+    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi mil gaya", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "GST", amountCustomerPays: "Customer dega", taxSafety: "GST aur total likhte-likhte usi niyam se bante hain jisse bill banta hai. Bill darj karne tak kuch save nahin hota.", roundOff: "Round off", estimateChooseCustomer: "GST dekhne ke liye customer chunen: unka rajya tay karta hai kaunsa GST lagega.", estimateChooseItem: "Total dekhne ke liye saman chunen.", editItemButton: "Item badlein", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf yahan dekhi jati hai. Upload nahin hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", purchaseLinesLabel: "Is supplier bill ki cheezein", purchaseTaxFromGstin: "Is bill par IGST lagega ya CGST aur SGST, yeh supplier ke GST number aur aapke GST number se tay hota hai. Kisi se unka rajya nahin poochha jata.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Jin bills ka yeh paisa hai, unpar tick karein. Koi tick na ho, ya paisa bills se zyada ho, to baaki is customer ke khaate mein alag dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     navPaid: "Diya paisa", paidTitle: "Supplier ko diya paisa darj karen", paidHelp: "Supplier chunen, jin bills ka payment hai unpar tick karein, aur batayen kaise diya.", paidTo: "Kisko diya", amountPaid: "Di gayi rakam", paidDate: "Dene ki tareekh", paidMethod: "Aapne kaise diya?", chooseSupplierBill: "Yeh kin bills ka payment hai", chooseSupplierBillHelp: "Supplier ke jin bills ka yeh paisa hai, unpar tick karein. Bill se pehle de rahe hain? Neeche advance chunen.", advanceChoice: "Ise {supplier} ko advance ke roop mein darj karein", advanceHelpNoBill: "{supplier} ka abhi koi bill nahin hai. Yeh paisa advance rahega aur unke agle bill se kata jayega.", advanceHelpMore: "Jo paisa upar tick kiye bills ke saamne nahin laga, woh advance rahega aur {supplier} ke agle bill se kata jayega.", advanceAlready: "{supplier} ke paas pehle se advance: {amount}.", advancePoNumber: "Kis purchase order ke saamne (number, zaroori nahin)", advancePoDate: "Purchase order ki tareekh", advancePoHelp: "Purchase order nahin hai? Dono khaali chhodein; voucher par likha hoga ki advance aane wale maal (goods to be supplied) ke saamne hai.", advanceReceiptNumber: "Supplier ka receipt voucher number (zaroori nahin)", advanceReceiptDate: "Receipt voucher ki tareekh", advanceReceiptHelp: "Advance milne par supplier receipt voucher deta hai. Aapke paas ho to bharen; yeh payment voucher par chhapega.", printAdvanceVoucher: "Advance voucher print karein", supplierAdvances: "Suppliers ko diya advance: {amount}", useAdvanceOnBill: "{supplier} ko diya {amount} advance is bill se kaatein", paidSummary: "Payment ka saar", paidSafety: "Yeh draft hai. Review aur save hone tak supplier ka baki kam nahi hoga.", reviewPaid: "Payment dekhen",
@@ -426,7 +426,7 @@ const copy = {
     addAddressTitle: "Delivery ka pata joden", addAddressHelp: "Yeh customer jis doosri jagah maal leta hai. Customer par save ho jata hai, agli baar likhna nahin padega.", correctAddress: "Pata sahi karen", correctAddressTitle: "Is customer ka pata ya udhaar seema sahi karen", correctAddressHelp: "Galat gali, shehar ya PIN code theek karen, ya unki udhaar seema tay karen. Pehle jaari hue bill par wahi pata rahega jo tab tha. Rajya waisa hi rahega, kyonki tax usi se tay hota hai.", addressCorrected: "Pata sahi ho gaya", addressStateFixed: "Rajya:",
     addressLabelName: "Ise kya kahen", deliveryStateHelp: "Doosre rajya bheja gaya maal is bikri ko us rajya ki bana deta hai.",
     deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen", saveCorrection: "Badlav save karen",
-    saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
+    saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden", itemSearchPlaceholder: "Naam, code, HSN ya scan", scanButton: "Scan", scanTitle: "Camera se barcode scan karen", scanHint: "Barcode ko camera ke saamne rakhen. Woh apne aap padh liya jayega.", cameraRefused: "Camera nahin khul saka. Is site ko camera ki anumati den, ya barcode box mein likhen.", mostSoldThisWeek: "Is hafte sabse zyada bika", newItemFromSearch: "＋ Naya saman", newItemWithCode: "＋ Barcode {code} ke saath naya saman", noItemMatch: "Koi saman nahin mila. Spelling dekhen, ya naya saman joden.", priceLastCharged: "Pichhli baar inse liya: {amount}, {date}", priceLastCounter: "Counter par pichhla daam: {amount}, {date}", priceUsual: "Aam daam", itemBarcode: "Barcode (zaroori nahin)", itemBarcodeHelp: "Yahan scan karen, ya lakeeron ke neeche ke ank likhen. Phir Bikri screen par scan karte hi yeh saman jud jayega.", itemPrice: "Aam bikri daam (zaroori nahin)", itemPriceHelp: "Naya bill isi daam se shuru hota hai, jab tak is customer se pichhli baar alag daam na liya gaya ho.", itemOtherName: "Dusra naam (zaroori nahin)", itemOtherNameHelp: "Dhoondhne ke liye ek aur naam, Hindi ya kisi bhi bhasha mein — jaise साबुन.",
     // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
     walkInCustomer: "Walk-in / nakad grahak", walkInShort: "walk-in grahak", walkInChoose: "Walk-in grahak", walkInDetail: "{state} mein aapke counter par bikri. ₹50,000 se kam par naam ya pata zaroori nahin.", placeOfSupplyCounter: "maal aapke counter par diya ja raha hai.",
     paidBy: "Kaise mila", paidCash: "Nakad", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Abhi {mode} se {amount} mile. Is bill par kuch baaki nahin.", saleEffectPartPaid: "Abhi {mode} se {amount} mile. {due} customer ke khate mein judega.",
@@ -443,7 +443,7 @@ const copy = {
     customerStateHelp: "Registered customer ka rajya unke GST number ke pehle do ank se aata hai, aur badla nahin ja sakta.",
     customerPhone: "Phone (marzi se)", saveCustomer: "Customer save karen",
     customerCreditLimit: "Udhaar seema ₹ mein (marzi se)", customerCreditLimitHelp: "Yeh customer aapka zyada se zyada kitna baaki rakh sakta hai. Khali chhodein to koi seema nahin, aur unka koi bill seema se nahin jaancha jayega.", customerCreditLimitShown: "udhaar seema {amount}",
-    changeItemCode: "HSN code badlein", itemCodeTitle: "Item ka HSN code badlein", itemCodeCurrent: "{item} ka code {code} hai ({digits} ank).", itemCodeNew: "Naya HSN ya SAC code", itemCodeHelp: "Jitne ank aapke paas hain, sab bharein. Zyada ank hamesha chalte hain; chhote code mein zero nahin joda jata.", itemCodeSave: "Code save karen", itemCodePick: "Pehle item chunen.", turnoverLegend: "Pichhle saal ka turnover", turnoverQuestion: "Pichhle financial year mein aapke business ka kul turnover kitna tha? Aapke PAN par Bharat ke har GST registration ki saari bikri, exempt aur export milakar, GST se pehle.", turnoverUpTo5: "₹5 crore ya usse kam, aur 2017-18 se kisi bhi saal ₹5 crore se zyada nahin", turnoverUpTo5Earlier: "Pichhle saal ₹5 crore ya usse kam, par 2017-18 se kisi pehle saal ₹5 crore se zyada", turnover5To10: "₹5 crore se zyada, par ₹10 crore se kam", turnover10Plus: "₹10 crore ya usse zyada", turnoverUnsure: "Pakka nahin", turnoverWhy: "Ek baar jawab dein. Tab tak hum HSN ke 6 ank maangte hain, koi bill sarkari e-invoice number ke liye nahin bheja jata, aur har bikri ki jaanch ek line mein yaad dilati hai.", turnoverFor: "Yeh jawab {year} ke bills ke liye hai. Isse tay hota hai ki har bill par HSN ke kitne ank chahiye, bill ko sarkari e-invoice number chahiye ya nahin, aur use 30 din ke andar bhejna hai ya nahin.", turnoverAskAgainYES: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore se zyada tha. Upar ek jawab chunen: sirf ₹10 crore ya usse zyada wale business ko har bill 30 din ke andar e-invoice number ke liye bhejna hota hai.", turnoverAskAgainNO: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore ya usse kam tha. Upar ek jawab chunen: jo business 2017-18 se kisi bhi saal ₹5 crore se upar gaya, use ab bhi e-invoice number chahiye.", addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
+    itemCodeTitle: "Item badlein", itemCodeCurrent: "{item} ka code {code} hai ({digits} ank).", itemCodeNew: "Naya HSN ya SAC code", itemCodeHelp: "Jitne ank aapke paas hain, sab bharein. Zyada ank hamesha chalte hain; chhote code mein zero nahin joda jata.", itemCodeSave: "Item save karen", itemCodePick: "Pehle item chunen.", turnoverLegend: "Pichhle saal ka turnover", turnoverQuestion: "Pichhle financial year mein aapke business ka kul turnover kitna tha? Aapke PAN par Bharat ke har GST registration ki saari bikri, exempt aur export milakar, GST se pehle.", turnoverUpTo5: "₹5 crore ya usse kam, aur 2017-18 se kisi bhi saal ₹5 crore se zyada nahin", turnoverUpTo5Earlier: "Pichhle saal ₹5 crore ya usse kam, par 2017-18 se kisi pehle saal ₹5 crore se zyada", turnover5To10: "₹5 crore se zyada, par ₹10 crore se kam", turnover10Plus: "₹10 crore ya usse zyada", turnoverUnsure: "Pakka nahin", turnoverWhy: "Ek baar jawab dein. Tab tak hum HSN ke 6 ank maangte hain, koi bill sarkari e-invoice number ke liye nahin bheja jata, aur har bikri ki jaanch ek line mein yaad dilati hai.", turnoverFor: "Yeh jawab {year} ke bills ke liye hai. Isse tay hota hai ki har bill par HSN ke kitne ank chahiye, bill ko sarkari e-invoice number chahiye ya nahin, aur use 30 din ke andar bhejna hai ya nahin.", turnoverAskAgainYES: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore se zyada tha. Upar ek jawab chunen: sirf ₹10 crore ya usse zyada wale business ko har bill 30 din ke andar e-invoice number ke liye bhejna hota hai.", turnoverAskAgainNO: "Pehle aapne sirf itna bataya tha ki yeh ₹5 crore ya usse kam tha. Upar ek jawab chunen: jo business 2017-18 se kisi bhi saal ₹5 crore se upar gaya, use ab bhi e-invoice number chahiye.", addItemTitle: "Saman joden", addItemHelp: "Bill par yahi vivaran, code aur unit chhapega.",
     itemName: "Bill par iska naam", itemKind: "Maal hai ya seva?", itemGoods: "Maal", itemService: "Seva",
     itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai; GST-registered customer ke bill par kam se kam 4, aur ₹5 crore se zyada turnover par kam se kam 6. Seva ka SAC 6 ank ka, 99 se shuru.",
     itemUnit: "Kaise gina jata hai?", itemTax: "Aap ispar kitna GST lete hain", itemTaxHelp: "Yeh aapke vyapar ka rate hai. Hum ise aapka rate likhte hain aur bill par bhi yahi likha jata hai; hum khud koi rate nahin chunte.",
@@ -1258,6 +1258,8 @@ async function refreshDocumentLists() {
     quietly(loadReturnDocuments),
     quietly(loadReturnNotes),
     quietly(loadReminders),
+    // Issue #308 — the most-sold chips and last prices count the bill just made.
+    quietly(loadSelling),
   ]);
 }
 
@@ -1889,7 +1891,8 @@ function openPurchaseForSale(shortStock) {
       const untouched = lines.length === 1 && (lines[0].querySelector("[data-line-field=rate]")?.value ?? "") === "" ? lines[0] : null;
       const line = untouched ?? addPurchaseLine();
       const picker = line?.querySelector("[data-line-field=item]");
-      if (!picker || ![...picker.options].some((option) => option.value === short.itemId)) return;
+      // Only goods the item list still has; the line's item box then shows its name (#308).
+      if (!picker || itemById(short.itemId) === null) return;
       picker.value = short.itemId;
       // How many came is printed on the supplier's bill; it is typed from there, never guessed.
       const quantity = line.querySelector("[data-line-field=quantity]");
@@ -1941,13 +1944,103 @@ function updateCalculations() {
     return total + quantity * rate;
   }, 0);
   sale.querySelector('[data-calculated="subtotal"]').textContent = money(subtotal);
-  sale.querySelector('[data-calculated="tax"]').textContent = "—";
-  sale.querySelector('[data-calculated="total"]').textContent = "—";
+  // Issue #306 — GST and the total come from the server's own calculator, asked again 250 ms after
+  // the last change; until the first answer, and when nothing can be priced, they stay "—".
+  renderEstimate();
+  scheduleEstimate();
   const payment = Number(document.querySelector('[data-draft="payment"] [name="amount"]').value) || 0;
   document.querySelector("[data-payment-total]").textContent = money(payment);
   const paid = Number(document.querySelector('[data-draft="paid"] [name="amount"]')?.value) || 0;
   const paidTotal = document.querySelector("[data-paid-total]");
   if (paidTotal) paidTotal.textContent = money(paid);
+}
+
+// ------------------------------------------------- issue #306: the live GST and total
+//
+// The same input the Review button sends goes to /api/sales/estimate, which stores nothing and
+// answers with the calculator's own figures, so the total on screen is the total the bill will
+// carry. The browser formats those figures; it never works the tax out for itself.
+
+const ESTIMATE_DELAY_MS = 250;
+let estimateTimer = null;
+let estimateAsked = 0;
+let lastEstimate = null;
+
+function scheduleEstimate() {
+  clearTimeout(estimateTimer);
+  estimateTimer = setTimeout(runEstimate, ESTIMATE_DELAY_MS);
+}
+
+async function runEstimate() {
+  const form = saleForm();
+  if (!form || !state.sessionId) return;
+  const lines = saleLineValues();
+  const asked = ++estimateAsked;
+  if (lines.length === 0) { lastEstimate = null; renderEstimate(); return; }
+  let answer = null;
+  try {
+    answer = await api("/api/sales/estimate", { method: "POST", body: JSON.stringify({ ...draftData(form), lines: JSON.stringify(lines) }) });
+  } catch { answer = null; }
+  // An answer to an older question is never shown over a newer one.
+  if (asked !== estimateAsked) return;
+  lastEstimate = answer;
+  renderEstimate();
+}
+
+/** What an estimate refusal says, in the reader's language; the two everyday ones are hints. */
+function estimateRefusalText(refusal) {
+  if (refusal.code === "CUSTOMER_REQUIRED") return copy[state.locale].estimateChooseCustomer;
+  if (refusal.code === "ITEM_REQUIRED" || refusal.code === "SALES_NO_LINES") return copy[state.locale].estimateChooseItem;
+  // Issue #288 — a walk-in bill from ₹50,000 needs the buyer's name: said in the reader's language.
+  if (refusal.code === "WALK_IN_NAME_REQUIRED" || refusal.code === "WALK_IN_DELIVERY") return copy[state.locale][refusal.code === "WALK_IN_DELIVERY" ? "walkInDelivery" : "walkInNameRequired"];
+  return t(refusal);
+}
+
+function renderEstimate() {
+  // Not saleForm(): this first runs from translate() while the page is still loading.
+  const sale = document.querySelector('[data-draft="sale"]');
+  if (!sale) return;
+  const estimate = lastEstimate;
+  const totals = estimate?.totals ?? null;
+  sale.querySelector('[data-calculated="tax"]').textContent = totals ? money(totals.totalTax) : "—";
+  sale.querySelector('[data-calculated="total"]').textContent = totals ? money(totals.total) : "—";
+  const roundOff = document.querySelector("#sale-round-off");
+  if (roundOff) {
+    roundOff.hidden = !totals || totals.roundOff === 0;
+    roundOff.querySelector('[data-calculated="roundOff"]').textContent = totals ? money(totals.roundOff) : "";
+  }
+  if (totals) {
+    const goods = estimate.lines.filter((line) => line.kind !== "CHARGE").reduce((sum, line) => sum + Math.round(line.taxableValue * 100), 0);
+    sale.querySelector('[data-calculated="subtotal"]').textContent = money(goods / 100);
+  }
+  const notes = document.querySelector("#sale-estimate-notes");
+  if (!notes) return;
+  const rows = [];
+  const note = (words, kind = "") => {
+    const row = document.createElement("li");
+    if (kind) row.className = kind;
+    row.textContent = words;
+    rows.push(row);
+    return row;
+  };
+  if (estimate) {
+    if (estimate.placeOfSupply) note(t(estimate.placeOfSupply));
+    if (estimate.ewayBill) note(t(estimate.ewayBill), estimate.ewayBill.needed ? "warn" : "");
+    if (estimate.eInvoice) note(t(estimate.eInvoice), estimate.eInvoice.needed === "NO" ? "" : "warn");
+    (estimate.refusals || []).forEach((refusal) => {
+      const row = note(estimateRefusalText(refusal), "hold");
+      // Issue #308 — an item held up by its code or rate is fixed in the item's own dialog.
+      if (refusal.itemId && /^(HSN_|RATE_|ITEM_NOT_CLASSIFIED)/.test(refusal.code)) {
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "text-button";
+        edit.textContent = copy[state.locale].editItemButton;
+        edit.addEventListener("click", () => openItemEditor(refusal.itemId));
+        row.append(" ", edit);
+      }
+    });
+  }
+  notes.replaceChildren(...rows);
 }
 
 // A date the business must choose for itself — how long a quoted price holds (#142) — is marked
@@ -6147,6 +6240,8 @@ function showChosenCustomer() {
     delivery.customerId = picker.value;
     delivery.addresses = [];
     if (picker.value !== "") loadDeliveryChoices();
+    // Issue #308 — "last charged to them" is about this customer.
+    loadSelling();
   }
   showPlaceOfSupply();
 }
@@ -6199,6 +6294,7 @@ function showLineUnit(line) {
   const item = itemById(line.querySelector("[data-line-field=item]")?.value ?? "");
   const unit = line.querySelector("[data-line-unit]");
   if (unit) unit.textContent = item === null ? "—" : item.unit;
+  linePickers.get(line)?.show(item);
 }
 
 function addSaleLine() {
@@ -6207,6 +6303,7 @@ function addSaleLine() {
   if (!template || !lines) return null;
   const line = template.content.firstElementChild.cloneNode(true);
   lines.append(line);
+  mountLinePicker(line);
   translate();
   renderPickers();
   updateCalculations();
@@ -6255,6 +6352,8 @@ function addPurchaseLine() {
   if (!template || !lines) return null;
   const line = template.content.firstElementChild.cloneNode(true);
   lines.append(line);
+  // Issue #308 — the same item picker as a sale line.
+  mountLinePicker(line);
   translate();
   renderPickers();
   setLineGstFromItem(line);
@@ -6272,15 +6371,152 @@ function purchaseLineValues() {
   }));
 }
 
-/** What the person typed, line by line: the same lines that are priced, stored and printed. */
+/**
+ * What the person typed, line by line: the same lines that are priced, stored and printed. Issue
+ * #308 — a line with no item chosen (the empty one waiting for the next scan) is left out.
+ */
 function saleLineValues() {
-  return [...document.querySelectorAll("#sale-lines .sale-line")].map((line) => ({
+  return [...document.querySelectorAll("#sale-lines .sale-line")].filter((line) => (line.querySelector("[data-line-field=item]")?.value ?? "") !== "").map((line) => ({
     itemId: line.querySelector("[data-line-field=item]")?.value ?? "",
     quantity: line.querySelector("[data-line-field=quantity]")?.value ?? "",
     unit: itemById(line.querySelector("[data-line-field=item]")?.value ?? "")?.unit ?? "",
     rate: line.querySelector("[data-line-field=rate]")?.value ?? "",
   }));
 }
+
+// ------------------------------------------------- issue #308: find an item fast
+//
+// Each sale line's item box is the shared picker (item-picker.js): search by name, other name,
+// code, HSN or barcode, most-sold first. A scan — into a box, or with no box focused — adds the item,
+// or one more of it when it is already on the bill. The six items on most bills this week sit above
+// the lines as chips. A new line starts at the price this customer was last charged, else the
+// item's usual price, and the person can change it.
+
+/** Bills per item, the week's most-sold, and this customer's last prices, from /api/items/selling. */
+const selling = { sold: {}, mostSoldThisWeek: [], lastPrices: {} };
+const linePickers = new WeakMap();
+const pickerWords = () => ({ newItem: copy[state.locale].newItemFromSearch, newItemCode: copy[state.locale].newItemWithCode, noMatch: copy[state.locale].noItemMatch, scan: copy[state.locale].scanButton, scanTitle: copy[state.locale].scanTitle, scanHint: copy[state.locale].scanHint, scanCancel: copy[state.locale].cancel });
+const cameraRefused = () => showDialog({ title: copy[state.locale].scanTitle, message: copy[state.locale].cameraRefused, effects: [] }, "failed");
+
+async function loadSelling() {
+  if (!state.sessionId) return;
+  const customerId = saleForm()?.elements.namedItem("party")?.value ?? "";
+  try {
+    Object.assign(selling, await api("/api/items/selling", { method: "POST", body: JSON.stringify({ customerId }) }));
+  } catch { return; }
+  renderItemChips();
+}
+
+function renderItemChips() {
+  const box = document.querySelector("#sale-item-chips");
+  if (!box) return;
+  const top = selling.mostSoldThisWeek.map(itemById).filter(Boolean);
+  box.hidden = top.length === 0;
+  box.replaceChildren(...top.map((item) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = `＋ ${item.name}`;
+    chip.addEventListener("click", () => addItemToSale(item));
+    return chip;
+  }));
+}
+
+/** Which bill a line is on: "sale" or "purchase". */
+const flowOf = (line) => (line.closest?.("#purchase-lines") ? "purchase" : "sale");
+
+function mountLinePicker(line) {
+  const input = line.querySelector("[data-item-search]");
+  if (!input || !globalThis.KarobarItemPicker) return;
+  const flow = flowOf(line);
+  linePickers.set(line, globalThis.KarobarItemPicker.createItemPicker({
+    input,
+    items: () => catalogue.items,
+    sold: () => selling.sold,
+    words: pickerWords,
+    onPick: (item) => putItemOnLine(line, item),
+    onScan: (item) => addItemToLines(item, flow, line),
+    onCreate: (typed) => openNewItem(typed, line),
+    onCameraError: cameraRefused,
+  }));
+}
+
+/** The price a new line starts at: last charged to this customer, else the item's usual price. */
+function startingPrice(item) {
+  const last = selling.lastPrices[item.id];
+  // Issue #288 — for the walk-in customer, "last time" is the last counter sale.
+  const counter = catalogue.customers.find((row) => row.id === saleForm()?.elements.namedItem("party")?.value)?.walkIn === true;
+  if (last) return { price: last.price, note: text(counter ? "priceLastCounter" : "priceLastCharged", { amount: money(last.price), date: new Intl.DateTimeFormat(state.locale, { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(`${last.date}T12:00:00+05:30`)) }) };
+  if (item.price !== null && item.price !== undefined) return { price: item.price, note: copy[state.locale].priceUsual };
+  return null;
+}
+
+function setLineItem(line, item) {
+  line.querySelector("[data-line-field=item]").value = item.id;
+  const start = startingPrice(item);
+  const rate = line.querySelector("[data-line-field=rate]");
+  if (start && rate) rate.value = String(start.price);
+  const note = line.querySelector("[data-line-price-note]");
+  if (note) note.textContent = start?.note ?? "";
+  showLineUnit(line);
+  const form = saleForm();
+  if (form) saveDraft(form);
+  updateCalculations();
+}
+
+/**
+ * A supplier bill's line gets its item, the GST rate the business declared for it (the supplier's
+ * bill may say otherwise, and the person changes it there) and its unit. Its price is on the
+ * supplier's bill, so it is never filled in.
+ */
+function choosePurchaseItem(line, item) {
+  line.querySelector("[data-line-field=item]").value = item.id;
+  setLineGstFromItem(line);
+  showLineUnit(line);
+  const form = document.querySelector('[data-draft="purchase"]');
+  if (form) saveDraft(form);
+}
+
+const putItemOnLine = (line, item) => (flowOf(line) === "purchase" ? choosePurchaseItem(line, item) : setLineItem(line, item));
+
+/** A scan or a chip: one more on the line that has the item, else the first empty line, else a new line. */
+function addItemToLines(item, flow, fromLine = null) {
+  const lines = [...document.querySelectorAll(`#${flow}-lines .sale-line`)];
+  const itemOf = (line) => line.querySelector("[data-line-field=item]")?.value ?? "";
+  const same = lines.find((line) => itemOf(line) === item.id);
+  if (same) {
+    const quantity = same.querySelector("[data-line-field=quantity]");
+    quantity.value = String(Math.round(((Number(quantity.value) || 0) + 1) * 1000) / 1000);
+    const form = document.querySelector(`[data-draft="${flow}"]`);
+    if (form) saveDraft(form);
+    updateCalculations();
+    return;
+  }
+  const empty = fromLine && itemOf(fromLine) === "" ? fromLine : lines.find((line) => itemOf(line) === "");
+  putItemOnLine(empty ?? (flow === "purchase" ? addPurchaseLine() : addSaleLine()), item);
+}
+
+const addItemToSale = (item) => addItemToLines(item, "sale");
+
+/** "+ New item" from the picker, or a barcode nobody has: the add-item dialog, with what was typed. */
+function openNewItem(typed, line, flow = "sale") {
+  const target = line ?? [...document.querySelectorAll(`#${flow}-lines .sale-line`)].find((row) => row.querySelector("[data-line-field=item]").value === "") ?? (flow === "purchase" ? addPurchaseLine() : addSaleLine());
+  pickerAwaitingNewRecord = target.querySelector("[data-line-field=item]");
+  const form = document.querySelector("#item-form");
+  form.reset();
+  form.elements.namedItem("name").value = typed.name ?? "";
+  form.elements.namedItem("barcode").value = typed.barcode ?? "";
+  document.querySelector("#item-other-rate").hidden = document.querySelector("#item-tax")?.value !== "other";
+  document.querySelector("#item-dialog")?.showModal();
+}
+
+globalThis.KarobarItemPicker?.listenForScanner(document, (code) => {
+  const flow = state.view;
+  if ((flow !== "sale" && flow !== "purchase") || document.querySelector("dialog[open]")) return;
+  const item = globalThis.KarobarItemPicker.findByCode(catalogue.items, code);
+  if (item) addItemToLines(item, flow);
+  else openNewItem({ name: "", barcode: code }, null, flow);
+});
 
 async function loadCatalogue() {
   try {
@@ -6330,6 +6566,7 @@ async function loadCatalogue() {
   renderPickers();
   // Follow-up to #266 — a draft's item lines come back once there are items to choose from.
   restorePendingLines();
+  loadSelling();
   renderReminderCustomers();
   document.querySelectorAll('form[data-endpoint="payments"]').forEach((form) => loadPaymentBills(form));
 }
@@ -6463,33 +6700,34 @@ document.querySelector("#item-tax")?.addEventListener("change", (event) => {
   document.querySelector("#item-other-rate").hidden = event.target.value !== "other";
 });
 
-// Issue #187 — a bill held up because an item's HSN code is too short asks the person to update
-// the code. This is where they do it, next to the item on the sale line.
-document.addEventListener("click", (event) => {
-  const button = event.target instanceof Element ? event.target.closest("[data-change-code]") : null;
-  if (!button) return;
-  const text = copy[state.locale];
-  const select = button.closest(".sale-line")?.querySelector("[data-item-picker]");
-  const item = catalogue.items.find((row) => row.id === select?.value);
-  const form = document.querySelector("#item-code-form");
-  document.querySelector("#item-code-error").textContent = item ? "" : text.itemCodePick;
+// Issue #187, moved by #308 — an item's HSN code (and its barcode, usual price and other name) is
+// changed in the item's own dialog, not on the sale line. A bill held up by a code opens it from
+// the live total's note. `openItemEditor(itemId)` is for any screen that lists items.
+function openItemEditor(itemId) {
+  const item = itemById(itemId);
   if (!item) return;
+  const form = document.querySelector("#item-edit-form");
   form.elements.namedItem("itemId").value = item.id;
   form.elements.namedItem("hsnSac").value = item.hsnSac;
-  document.querySelector("#item-code-current").textContent = text.itemCodeCurrent
+  form.elements.namedItem("barcode").value = item.barcodes?.[0] ?? "";
+  form.elements.namedItem("price").value = item.price ?? "";
+  form.elements.namedItem("otherName").value = item.aliases?.[0] ?? "";
+  document.querySelector("#item-edit-error").textContent = "";
+  document.querySelector("#item-edit-current").textContent = copy[state.locale].itemCodeCurrent
     .replace("{item}", item.name).replace("{code}", item.hsnSac).replace("{digits}", String(item.hsnSac.length));
-  document.querySelector("#item-code-dialog").showModal();
-});
+  document.querySelector("#item-edit-dialog").showModal();
+}
 
-document.querySelector("#item-code-form")?.addEventListener("submit", async (event) => {
+document.querySelector("#item-edit-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  const error = document.querySelector("#item-code-error");
+  const error = document.querySelector("#item-edit-error");
   error.textContent = "";
   try {
-    const changed = await api("/api/items/code", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    const changed = await api("/api/items/edit", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
     await loadCatalogue();
-    document.querySelector("#item-code-dialog").close();
+    document.querySelector("#item-edit-dialog").close();
+    updateCalculations();
     if (changed.warnings?.length) showDialog({ title: changed.title, message: changed.message, effects: [] }, "recorded");
   } catch (requestError) { error.textContent = requestError.message; }
 });
@@ -6507,6 +6745,8 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
     hsnSac: values.hsnSac,
     unit: values.unit,
     basis: values.basis,
+    // Issue #308 — optional: found by scanning, starts at its usual price, found by another name.
+    barcode: values.barcode, price: values.price, otherName: values.otherName,
     ...(choice === "exempt"
       ? { taxKind: "exempt" }
       : choice === "other"
@@ -6517,9 +6757,12 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
     const created = await api("/api/items", { method: "POST", body: JSON.stringify(body) });
     await loadCatalogue();
     if (pickerAwaitingNewRecord) {
-      pickerAwaitingNewRecord.value = created.item.id;
       const line = pickerAwaitingNewRecord.closest(".sale-line");
-      if (line) { showLineUnit(line); setLineGstFromItem(line); }
+      if (line?.closest("#sale-lines")) setLineItem(line, itemById(created.item.id) ?? created.item);
+      else {
+        pickerAwaitingNewRecord.value = created.item.id;
+        if (line) { showLineUnit(line); setLineGstFromItem(line); }
+      }
     }
     form.reset();
     document.querySelector("#item-dialog").close();

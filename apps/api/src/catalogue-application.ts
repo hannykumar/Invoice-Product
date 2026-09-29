@@ -93,6 +93,34 @@ interface ItemTax {
 }
 
 const itemTaxes = new Map<string, ItemTax>();
+/**
+ * Issue #308 — the price the business usually sells an item at, in paise. A suggestion for a new
+ * line only: the bill carries whatever price is on the line, and last time's price to the same
+ * customer comes first.
+ */
+const itemPrices = new Map<string, bigint>();
+
+/** "250", "1,250.50" → paise. Empty is `null`; anything else is refused rather than guessed. */
+const pricePaise = (value: unknown): bigint | null => {
+  const text = str(value).replace(/,/g, '');
+  if (text === '') return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) throw invalid('ITEM_PRICE', 'Type the selling price in rupees, like 250 or 250.50, or leave it empty.');
+  const [whole = '0', fraction = ''] = text.split('.');
+  return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+};
+
+/**
+ * Issue #308 — a barcode as the scanner types it. Checked against every other item, because one
+ * code that finds two items would put the wrong goods on a bill.
+ */
+const barcodeOf = (companyId: CompanyId | string, value: unknown, exceptItemId?: string): string | null => {
+  const code = str(value).replace(/\s+/g, '');
+  if (code === '') return null;
+  if (!/^[A-Za-z0-9-]{4,48}$/.test(code)) throw invalid('ITEM_BARCODE', 'A barcode is the letters and digits printed under the lines, 4 to 48 of them. Scan it, or type it without spaces.');
+  const other = items(companyId).find((item) => item.id !== exceptItemId && item.barcodes.includes(code));
+  if (other !== undefined) throw invalid('ITEM_BARCODE_TAKEN', `This barcode is already on ${other.name}. One barcode can find only one item.`);
+  return code;
+};
 const declaredRates = new Map<string, InMemoryDeclaredRates>();
 
 const taxKey = (companyId: CompanyId | string, itemId: string): string => `${String(companyId)}:${itemId}`;
@@ -217,6 +245,12 @@ export interface ItemView {
   readonly unit: string;
   readonly taxKind: ItemTaxKind;
   readonly ratePercent: number | null;
+  /** Issue #308 — what the item picker searches besides the name: short code, barcodes, other names (Hindi too). */
+  readonly code: string | null;
+  readonly barcodes: readonly string[];
+  readonly aliases: readonly string[];
+  /** Issue #308 — the usual selling price in rupees, or `null` when none was set. */
+  readonly price: number | null;
 }
 
 const itemViewOf = (companyId: CompanyId | string, item: Item): ItemView => {
@@ -229,6 +263,10 @@ const itemViewOf = (companyId: CompanyId | string, item: Item): ItemView => {
     unit: item.baseUnit,
     taxKind: tax?.kind ?? 'taxable',
     ratePercent: tax?.ratePercentTimes100 === null || tax?.ratePercentTimes100 === undefined ? null : Number(tax.ratePercentTimes100) / 100,
+    code: item.code ?? null,
+    barcodes: item.barcodes,
+    aliases: item.aliases,
+    price: itemPrices.has(taxKey(companyId, item.id)) ? Number(itemPrices.get(taxKey(companyId, item.id))) / 100 : null,
   };
 };
 
@@ -587,12 +625,19 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   }
 
   const basis = str(input.basis) || 'The rate this business charges on this item';
+  // Issue #308 — a barcode, a selling price and another name (in Hindi, say), all optional.
+  const barcode = barcodeOf(companyId, input.barcode);
+  const price = pricePaise(input.price);
+  const otherName = str(input.otherName);
   const service = masterData();
   const ctx = context(companyId);
 
   const created = service.createItem(
     ctx,
-    { name, kind, hsnSac, baseUnit: unit, trackBatches: false, trackSerials: false },
+    {
+      name, kind, hsnSac, baseUnit: unit, trackBatches: false, trackSerials: false,
+      barcodes: barcode === null ? [] : [barcode], aliases: otherName === '' ? [] : [otherName],
+    },
     {
       idempotencyKey: `item:${String(companyId)}:${str(input.reference) || `${name.toLowerCase()}:${hsnSac}`}`,
       acknowledgeSimilar: input.acknowledgeSimilar === true,
@@ -601,6 +646,7 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   );
 
   itemTaxes.set(taxKey(companyId, created.record.id), { kind: kindOfTax, ratePercentTimes100 });
+  if (price !== null) itemPrices.set(taxKey(companyId, created.record.id), price);
   if (ratePercentTimes100 !== null) {
     declaredRatesOf(companyId).declare({
       companyId: String(companyId),
@@ -668,6 +714,40 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
     message: `${updated.record.name} now carries the code ${hsnSac}.${updated.warnings.map((warning) => ` ${warning.message}`).join('')}`,
     warnings: updated.warnings.map((warning) => warning.message),
     item: itemViewOf(companyId, updated.record),
+  };
+};
+
+/**
+ * Issue #308 — the item's own edit dialog: its HSN code (moved here from the sale line), barcode,
+ * usual selling price and other name. The code goes through `changeItemCode`, so the declared rate
+ * follows it exactly as before. Every field is checked before anything is saved.
+ */
+export const editItem = (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
+  const input = (body ?? {}) as Record<string, unknown>;
+  const itemId = str(input.itemId);
+  const current = items(companyId).find((candidate) => candidate.id === itemId);
+  if (current === undefined) throw invalid('ITEM_NOT_FOUND', 'That item is not in your item list.');
+  const barcode = 'barcode' in input ? barcodeOf(companyId, input.barcode, current.id) : undefined;
+  const price = 'price' in input ? pricePaise(input.price) : undefined;
+  const otherName = 'otherName' in input ? str(input.otherName) : undefined;
+  const hsnSac = normaliseIdentifier(str(input.hsnSac || input.hsn));
+  const warnings: string[] = [];
+  if (hsnSac !== '' && hsnSac !== current.hsnSac) warnings.push(...changeItemCode(companyId, { itemId, hsnSac }, declaredBy).warnings);
+  if (barcode !== undefined || otherName !== undefined) {
+    masterData().updateItem(context(companyId), current.id, {
+      ...(barcode === undefined ? {} : { barcodes: barcode === null ? [] : [barcode] }),
+      ...(otherName === undefined ? {} : { aliases: otherName === '' ? [] : [otherName] }),
+    }, { idempotencyKey: `item-edit:${String(companyId)}:${current.id}:${crypto.randomUUID()}` });
+  }
+  if (price === null) itemPrices.delete(taxKey(companyId, current.id));
+  else if (price !== undefined) itemPrices.set(taxKey(companyId, current.id), price);
+  const item = itemView(companyId, current.id);
+  return {
+    state: 'recorded' as const,
+    title: 'Item saved',
+    message: `${item.name} is saved.${warnings.map((warning) => ` ${warning}`).join('')}`,
+    warnings,
+    item,
   };
 };
 
