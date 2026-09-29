@@ -32,6 +32,7 @@ import {
   templateById,
   type TemplateDefinition,
   toInvoiceDocument,
+  upiPaymentLink,
   type InvoiceDocument,
   type Locale,
   type PageFormat,
@@ -74,8 +75,10 @@ import {
   seedCatalogue,
   creditLimitPaiseOf,
   setCustomerCreditLimit,
+  isWalkIn,
+  walkInCustomer,
 } from './catalogue-application.ts';
-import { dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
+import { businessDetailsOf, dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
 import { STATE_NAMES } from '@invoice/transport';
@@ -343,6 +346,30 @@ const paymentHow = (direction: 'RECEIPT' | 'PAYMENT', input: Record<string, unkn
     return { mode: 'CHEQUE', bankAccountCode: direction === 'PAYMENT' ? CURRENT_ACCOUNT : null, words: `cheque No. ${number} dated ${chequeDate}`, cheque: { number, chequeDate } };
   }
   throw invalid('PAYMENT_MODE_INVALID', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
+};
+
+const BALANCE_WILL_INCREASE = 'The customer balance will increase.';
+
+/** Issue #288 — CGST Rule 46(e): from this taxable value an unregistered buyer must be named on the bill. */
+const WALK_IN_LIMIT = 50_000_00n;
+
+/**
+ * Issue #288 — "Paid now": how the customer paid at the counter, and how much, when the bill is
+ * recorded together with its receipt. `null` when the sale does not say (money to come later).
+ * Nothing defaults to cash; an amount left out is the whole bill.
+ */
+const PAID_NOW: Readonly<Record<string, { mode: PaymentMode; bankAccountCode: string | null; words: string }>> = {
+  CASH: { mode: 'CASH', bankAccountCode: null, words: 'cash' },
+  UPI: { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: 'UPI' },
+  CARD: { mode: 'CARD', bankAccountCode: CURRENT_ACCOUNT, words: 'card' },
+};
+type PaidNow = (typeof PAID_NOW)[string] & { readonly amount: bigint | null };
+const paidNowOf = (input: Record<string, unknown>): PaidNow | null => {
+  const chosen = String(input.paidBy ?? '').trim().toUpperCase();
+  if (chosen === '') return null;
+  const how = PAID_NOW[chosen];
+  if (how === undefined) throw invalid('SALE_PAID_BY_INVALID', 'Say how the customer paid at the counter: cash, UPI or card.');
+  return { ...how, amount: String(input.paidAmount ?? '').trim() === '' ? null : paise(input.paidAmount) };
 };
 
 const modeWords = (payment: Payment): string => {
@@ -1889,8 +1916,19 @@ export class DemoApplication {
    * be billed: the master record is written, and the customer's own account is opened in the
    * ledger. Both or neither.
    */
-  catalogue(actor: ActorContext) {
-    return readCatalogue(this.companyOf(actor));
+  async catalogue(actor: ActorContext) {
+    const companyId = this.companyOf(actor);
+    // Issue #288 — the walk-in customer is on the list from the start, once there is a shop address
+    // to bill a counter sale at. Without one, no bill can be issued at all, and the list says nothing.
+    if (businessDetailsOf(companyId) !== null) await this.walkIn(actor);
+    return readCatalogue(companyId);
+  }
+
+  /** Issue #288 — the company's walk-in customer, with its account in the books. */
+  private async walkIn(actor: ActorContext) {
+    const party = walkInCustomer(this.companyOf(actor));
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id, name: party.legalName, kind: 'CUSTOMER' });
+    return party;
   }
 
   async addCustomer(actor: ActorContext, input: Record<string, unknown>) {
@@ -1962,8 +2000,17 @@ export class DemoApplication {
     };
   }
 
-  async previewSale(actor: ActorContext, input: Record<string, unknown>) {
-    this.companyOf(actor);
+  async previewSale(actor: ActorContext, given: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    // Issue #288 — "walk-in" names the company's walk-in customer, for callers that have not read the list.
+    const asked = String(given.customerId ?? given.customer ?? given.party ?? '').trim();
+    const walkIn = asked.toLowerCase() === 'walk-in' || customers(companyId).some((party) => party.id === asked && isWalkIn(party))
+      ? await this.walkIn(actor)
+      : null;
+    const input = walkIn === null ? given : { ...given, customerId: walkIn.id };
+    if (walkIn !== null && !['', 'same'].includes(String(input.shipTo ?? '').trim().toLowerCase())) {
+      throw invalid('WALK_IN_DELIVERY', 'A walk-in customer takes the goods at the counter. To send them somewhere else, add the customer with their name and address, and choose them instead.');
+    }
     const exportSale = this.exportParticulars(input);
     const zeroRated = exportSale === null || !EXPORT_SUPPLIES[exportSale.kind].zeroRated
       ? {}
@@ -1983,16 +2030,29 @@ export class DemoApplication {
       if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
       // Issue #266 — the date the bill will carry, said plainly when it is not today.
       const dateNotice = await this.saleDateNotice(actor, draft.documentDate);
+      // Issue #288 — CGST Rule 46(e): from ₹50,000 of taxable value an unregistered buyer's name,
+      // address and state must be on the bill, so a walk-in cannot be billed that much.
+      const taxable = draft.pricing?.totals.taxableValue.minor ?? 0n;
+      if (walkIn !== null && taxable >= WALK_IN_LIMIT) {
+        throw invalid('WALK_IN_NAME_REQUIRED', `This bill's taxable value is ${formatPaise(taxable)}. From ${formatPaise(WALK_IN_LIMIT)} the law asks for the buyer's name, address and state on the bill (CGST Rule 46(e)). Add the customer with their name and address, and choose them instead of Walk-in.`);
+      }
       const checked = await this.checkSale(actor, draft);
       // Issue #182 — the delivery answers, checked once and kept against this draft, so the bill is
       // frozen with exactly what the screen showed rather than with a second reading of the form.
       const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
       const delivery = deliveryDetails(this.config.companyId, customer, input);
       this.deliveries.set(draft.id, delivery);
+      // Issue #288 — money taken at the counter is recorded with the bill, so the review says so
+      // instead of "the customer balance will increase".
+      const paidNow = this.paidNowOn(input, draft, customer.legalName);
       return {
         ...checked,
+        effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === BALANCE_WILL_INCREASE ? paidNow.sentence : effect)),
+        paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
-        placeOfSupply: delivery.placeOfSupplyReason,
+        placeOfSupply: walkIn === null
+          ? delivery.placeOfSupplyReason
+          : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
           kind: exportSale.kind,
@@ -2166,7 +2226,7 @@ export class DemoApplication {
       })),
     });
 
-    const effects = ['A numbered invoice will be issued.', 'The customer balance will increase.'];
+    const effects = ['A numbered invoice will be issued.', BALANCE_WILL_INCREASE];
     for (const reason of quote.reasons) effects.push(reason['en-IN']);
     for (const line of quote.lines) {
       if (line.price.source !== 'NONE') effects.push(line.price.sentence['en-IN']);
@@ -2209,6 +2269,27 @@ export class DemoApplication {
     };
   }
 
+  /**
+   * Issue #288 — what a "paid now" sale will receive, checked against the bill it comes with. More
+   * than the bill is refused: change is given back in the shop, not kept in the books.
+   */
+  private paidNowOn(input: Record<string, unknown>, draft: SalesInvoice, customer: string) {
+    const paid = paidNowOf(input);
+    if (paid === null) return null;
+    const total = draft.pricing?.totals.invoiceValue.minor ?? 0n;
+    const amount = paid.amount ?? total;
+    if (amount > total) {
+      throw invalid('SALE_PAID_MORE_THAN_BILL', `The bill is ${formatPaise(total)}, but ${formatPaise(amount)} is entered as paid. Enter what the customer paid for this bill, up to ${formatPaise(total)}; any change is given back.`);
+    }
+    const due = total - amount;
+    return {
+      ...paid, amount, due,
+      sentence: due === 0n
+        ? `Paid now by ${paid.words}: ${formatPaise(amount)}. Nothing is left to pay on this bill.`
+        : `Paid now by ${paid.words}: ${formatPaise(amount)}. ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} is added to what ${customer} owes.`,
+    };
+  }
+
   async recordSale(actor: ActorContext, input: Record<string, unknown>) {
     // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
     // In that order, because a bill that failed to post is not a bill, and charging somebody's
@@ -2218,8 +2299,12 @@ export class DemoApplication {
     // is refused without burning an invoice number on the refusal.
     requireIssuable(this.config.companyId);
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
+    // Issue #288 — money taken at the counter needs the right to record money received, checked
+    // before the bill, so nobody is left with a bill whose receipt was refused.
+    const paid = paidNowOf(input);
+    if (paid !== null) permissionPortFromActor.require(actor, 'payments.record', 'record money received');
     const preview = await this.previewSale(actor, input);
-    return this.issueCheckedSale(actor, preview.token, usageDate);
+    return this.issueCheckedSale(actor, preview.token, usageDate, paid);
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
@@ -2273,9 +2358,17 @@ export class DemoApplication {
     return sent;
   }
 
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate) {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null) {
     requireIssuable(this.config.companyId);
-    const final = await this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
+    const finalise = () => this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
+    // Issue #288 — "Paid now": the bill and its receipt in one unit of work. Both vouchers post, or
+    // neither does and no bill number is used. Keyed on the bill, so a second press records neither again.
+    const { final, receipt } = paidNow === null
+      ? { final: await finalise(), receipt: null }
+      : await this.shop.store.transaction(this.companyOf(actor), async () => {
+        const issued = await finalise();
+        return { final: issued, receipt: await this.receiveAtCounter(actor, issued.invoice, paidNow) };
+      });
     this.freezeBillPrint(final.invoice, this.deliveries.get(token) ?? null, this.exportSales.get(token) ?? null);
     await this.subscriptions.recordUsage(actor, {
       meter: 'invoices',
@@ -2293,7 +2386,9 @@ export class DemoApplication {
     return {
       state: 'recorded', deduplicated: final.deduplicated,
       title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded',
-      message: `${final.invoice.number} was issued.`,
+      message: receipt === null
+        ? `${final.invoice.number} was issued.`
+        : `${final.invoice.number} was issued. ${formatPaise(receipt.amount.minor)} received by ${paidNow?.words ?? receipt.mode.toLowerCase()}.`,
       // Said on the screen the moment the bill is issued, so nobody has to go looking for it.
       eInvoice: decision.needed === 'NO'
         ? { expected: false, needed: 'NO' as const, message: null, askTurnover: false }
@@ -2306,6 +2401,49 @@ export class DemoApplication {
       // Issue #240 — whether these goods need an e-way bill, so the screen can offer it in one press.
       // It is never raised here: the goods and the lorry may not be ready yet.
       ewayBill: await this.ewayReminder(actor, final.invoice, this.deliveries.get(token) ?? null),
+      // Issue #307 — what the done screen hands the customer: who they are, what was paid, and what
+      // is still due, with the UPI link for that amount only.
+      ...(await this.saleFinish(actor, final.invoice, receipt)),
+    };
+  }
+
+  /** Issue #288 — the money taken at the counter, received against the bill it came with. */
+  private receiveAtCounter(actor: ActorContext, invoice: SalesInvoice, paid: PaidNow) {
+    const amount = paid.amount ?? invoice.pricing?.totals.invoiceValue.minor ?? 0n;
+    const number = invoice.number ?? '';
+    return this.payments.recordPayment(actor, {
+      idempotencyKey: `web-sale-paid:${invoice.id}`,
+      direction: 'RECEIPT',
+      partyId: invoice.partyId as PartyId,
+      mode: paid.mode,
+      amount: money(amount),
+      date: invoice.documentDate,
+      reference: number,
+      bankAccountCode: paid.bankAccountCode,
+      allocations: [{ documentId: invoice.id, documentNumber: number, amount: money(amount) }],
+      narration: `Received by ${paid.words} at the counter against bill ${number}`,
+    });
+  }
+
+  /**
+   * Issue #307 — the facts the done screen needs after a sale. The browser builds the message; the
+   * amount still due and the UPI link for it come from the books here, never worked out on the screen.
+   */
+  private async saleFinish(actor: ActorContext, invoice: SalesInvoice, receipt: Payment | null) {
+    const companyId = this.companyOf(actor);
+    const view = customerView(companyId, invoice.partyId);
+    const position = await this.payments.position(actor, invoice.partyId as PartyId, invoice.documentDate);
+    const due = position.documents.find((d) => d.document.documentId === invoice.id)?.outstanding.minor
+      ?? invoice.pricing?.totals.invoiceValue.minor ?? 0n;
+    const upiId = upiIdOf(companyId);
+    const payee = sellerPrint(companyId, { name: this.config.name, gstin: this.config.gstin }).seller.name;
+    const voucher = receipt?.voucherId == null ? null : await this.shop.ledger.getVoucher(actor, receipt.voucherId);
+    return {
+      customer: { id: view.id, name: view.name, phone: view.phone, walkIn: view.walkIn },
+      paid: receipt === null ? null : { paymentId: receipt.id, voucherNumber: voucher?.number ?? null, mode: receipt.mode, amount: jsonAmount(receipt.amount.minor) },
+      due: jsonAmount(due),
+      shop: payee,
+      upiLink: upiId === null || due <= 0n ? null : upiPaymentLink(upiId, payee, money(due), invoice.number ?? ''),
     };
   }
 
@@ -2532,8 +2670,13 @@ export class DemoApplication {
     const facts = this.invoicePrints.get(invoiceId);
     if (facts === undefined) throw notFound('API_INVOICE_PRINT_FACTS', 'The issued bill has no stored print snapshot.');
     const locale: Locale = options.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
-    const format: PageFormat = options.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : options.format === 'MOBILE' ? 'MOBILE' : 'A4';
+    // Issue #307 — the 2-inch (58mm) till roll too, for the counter printer.
+    const format: PageFormat = options.format === 'THERMAL_80MM' || options.format === 'THERMAL_58MM' ? options.format : options.format === 'MOBILE' ? 'MOBILE' : 'A4';
     const eInvoiceRecords = (await this.shop.eInvoice.list(actor)).filter((record) => record.documentId === invoice.id);
+    // Issue #288 — money received against this bill (paid at the counter, or later) is printed as
+    // paid, and only what is left is asked for by the UPI square. A cancelled bill has none.
+    const paidOnBill = invoice.state !== 'FINAL' ? 0n : sum((await this.receiptsAgainst(companyId, invoice))
+      .flatMap((payment) => payment.allocations.filter((allocation) => allocation.documentId === invoice.id).map((allocation) => allocation.amount))).minor;
     const acknowledgement = eInvoiceRecords.find((record) => record.status === 'REGISTERED')?.acknowledgement ?? null;
     // Issue #189 — only a bill that is meant to be registered keeps a space for the government's
     // QR. It is meant to be once the business has started registering it, or when the business
@@ -2552,6 +2695,9 @@ export class DemoApplication {
     const transport = facts.document.transport;
     const document: InvoiceDocument = {
       ...facts.document,
+      ...(paidOnBill === 0n ? {} : {
+        totals: { ...facts.document.totals, amountPaid: money(paidOnBill), outstanding: money(facts.document.totals.invoiceValue.minor - paidOnBill) },
+      }),
       eInvoiceExpected,
       cancelled: invoice.state === 'CANCELLED'
         ? { on: invoice.cancelledAt === null ? invoice.documentDate : DemoApplication.indiaDate(invoice.cancelledAt), reason: invoice.cancelReason ?? '' }

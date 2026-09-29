@@ -8,7 +8,7 @@ const copy = {
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
     recentActivity: "Recent activity", recentBody: "Your latest bills and payments", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
-    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Pay now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the total are worked out from each item's GST rate when you press Review sale.", reviewSale: "Review sale", discardDraft: "Discard draft",
+    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Paid now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST after review", amountCustomerPays: "Customer pays after review", taxSafety: "GST and the total are worked out from each item's GST rate when you press Review sale.", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is only looked at here. It is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", purchaseLinesLabel: "Items on this supplier bill", purchaseTaxFromGstin: "Whether this bill carries IGST, or CGST and SGST, is worked out from the supplier's GST number and yours. Nobody is asked which state they are in.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "Tick the bills this money pays. If you tick none, or it is more than the bills, the rest stays on account for this customer.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     navPaid: "Money paid", paidTitle: "Record money paid to a supplier", paidHelp: "Pick the supplier, tick the bills you are paying, and say how you paid.", paidTo: "Paid to", amountPaid: "Amount paid", paidDate: "Date paid", paidMethod: "How did you pay?", chooseSupplierBill: "Bills this pays", chooseSupplierBillHelp: "Tick the supplier's bills this money pays, oldest first. Paying before their bill? Choose the advance below.", advanceChoice: "Record this as an advance to {supplier}", advanceHelpNoBill: "You have no bill from {supplier} yet. This money will be kept as an advance and taken off their next bill.", advanceHelpMore: "Whatever is not put against a bill ticked above will be kept as an advance and taken off {supplier}'s next bill.", advanceAlready: "Advance already with {supplier}: {amount}.", advancePoNumber: "Against purchase order no. (optional)", advancePoDate: "Purchase order date", advancePoHelp: "No purchase order? Leave both blank, and the voucher says the advance is against goods to be supplied.", advanceReceiptNumber: "Supplier's receipt voucher no. (optional)", advanceReceiptDate: "Receipt voucher date", advanceReceiptHelp: "The supplier gives a receipt voucher when they receive an advance. If you have it, enter it and it prints on the payment voucher.", printAdvanceVoucher: "Print the advance voucher", supplierAdvances: "Advances paid to suppliers: {amount}", useAdvanceOnBill: "Take the {amount} advance already paid to {supplier} off this bill", paidSummary: "Payment summary", paidSafety: "This is a draft. It does not reduce what you owe the supplier until it is reviewed and saved.", reviewPaid: "Review payment",
@@ -88,6 +88,14 @@ const copy = {
     deliveryGstinHelp: "Only if this address has its own GST number. Leave it empty if it does not.", saveAddress: "Save address", saveCorrection: "Save changes",
     // Issue #181 — the customers and items the business keeps, and the many lines of one bill.
     saleLinesLabel: "Items on this bill", addLine: "Add another item", removeLine: "Remove", addCustomer: "＋ Add a new customer", addItem: "＋ Add a new item",
+    // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
+    walkInCustomer: "Walk-in / cash customer", walkInShort: "Walk-in", walkInChoose: "Walk-in customer", walkInDetail: "Sold at your counter in {state}. No name or address is needed below ₹50,000.", placeOfSupplyCounter: "the goods are handed over at your counter.",
+    paidBy: "Paid by", paidCash: "Cash", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Paid now by {mode}: {amount}. Nothing is left to pay on this bill.", saleEffectPartPaid: "Paid now by {mode}: {amount}. {due} is added to the customer's khata.",
+    walkInNameRequired: "From ₹50,000 of taxable value the bill must carry the buyer's name, address and state (CGST Rule 46(e)). Add the customer, then choose them.", walkInDelivery: "A walk-in customer takes the goods at the counter. To send them somewhere else, add the customer with their name and address.", addNamedCustomer: "Add the customer's name and address", billPaperThermal58: "Till roll, 58mm",
+    doneTitle: "Bill made", doneWhatsapp: "Send on WhatsApp", donePhoneLabel: "Customer's WhatsApp number", donePhoneHelp: "Type their 10-digit mobile number to open their chat.", donePhoneInvalid: "That is not a 10-digit mobile number. Check it and type it again.", doneUpiIncluded: "The message carries a UPI link for {due}.", doneUpiMissing: "Save your UPI id in Branding to send a pay link with the bill.",
+    donePrinter: "Printer", doneA4: "A4 sheet", done80: "3-inch till roll", done58: "2-inch till roll", donePrint: "Print receipt", doneNewBill: "New bill",
+    doneLinePaid: "{mode} received from {name}. Stock updated.", doneLinePart: "{mode} of {paid} received; {due} added to {names} khata. Stock updated.", doneLineKhata: "Added to {names} khata. Stock updated.", doneModeCASH: "Cash", doneModeUPI: "UPI payment", doneModeCARD: "Card payment",
+    doneMessageBill: "Hello{name}, thank you for shopping at {shop}. Bill {number}: {amount}.", doneMessagePaid: "Paid in full.", doneMessageDue: "Still to pay: {due}.", doneMessageUpi: "Pay by UPI: {link}",
     noCustomersYet: "No customers saved yet", noItemsYet: "No items saved yet", cancel: "Cancel",
     addSupplier: "＋ Add a new supplier", noSuppliersYet: "No suppliers yet", addSupplierTitle: "Add a supplier", addSupplierHelp: "Type their details as they are printed on their bill. Their state is read from their GST number.", supplierLegalName: "Name on their bill", supplierGstinHelp: "The first two digits are their state. It decides whether their bill carries IGST, or CGST and SGST.", saveSupplier: "Save supplier", addCustomerTitle: "Add a customer", addCustomerHelp: "The bill will carry this name, address and GST number, so they have to be right.",
     customerLegalName: "Name the customer is billed under", customerRegistration: "Registered for GST?", customerRegular: "Yes, regular", customerComposition: "Yes, composition", customerUnregistered: "Not registered",
@@ -342,7 +350,7 @@ const copy = {
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
     recentActivity: "Abhi ka kaam", recentBody: "Aapke naye bill aur len-den", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
-    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi payment", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "Review sale dabane par har saman ke GST rate se GST aur total nikalta hai.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
+    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi mil gaya", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "Review ke baad GST", amountCustomerPays: "Review ke baad customer dega", taxSafety: "Review sale dabane par har saman ke GST rate se GST aur total nikalta hai.", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf yahan dekhi jati hai. Upload nahin hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", purchaseLinesLabel: "Is supplier bill ki cheezein", purchaseTaxFromGstin: "Is bill par IGST lagega ya CGST aur SGST, yeh supplier ke GST number aur aapke GST number se tay hota hai. Kisi se unka rajya nahin poochha jata.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Jin bills ka yeh paisa hai, unpar tick karein. Koi tick na ho, ya paisa bills se zyada ho, to baaki is customer ke khaate mein alag dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     navPaid: "Diya paisa", paidTitle: "Supplier ko diya paisa darj karen", paidHelp: "Supplier chunen, jin bills ka payment hai unpar tick karein, aur batayen kaise diya.", paidTo: "Kisko diya", amountPaid: "Di gayi rakam", paidDate: "Dene ki tareekh", paidMethod: "Aapne kaise diya?", chooseSupplierBill: "Yeh kin bills ka payment hai", chooseSupplierBillHelp: "Supplier ke jin bills ka yeh paisa hai, unpar tick karein. Bill se pehle de rahe hain? Neeche advance chunen.", advanceChoice: "Ise {supplier} ko advance ke roop mein darj karein", advanceHelpNoBill: "{supplier} ka abhi koi bill nahin hai. Yeh paisa advance rahega aur unke agle bill se kata jayega.", advanceHelpMore: "Jo paisa upar tick kiye bills ke saamne nahin laga, woh advance rahega aur {supplier} ke agle bill se kata jayega.", advanceAlready: "{supplier} ke paas pehle se advance: {amount}.", advancePoNumber: "Kis purchase order ke saamne (number, zaroori nahin)", advancePoDate: "Purchase order ki tareekh", advancePoHelp: "Purchase order nahin hai? Dono khaali chhodein; voucher par likha hoga ki advance aane wale maal (goods to be supplied) ke saamne hai.", advanceReceiptNumber: "Supplier ka receipt voucher number (zaroori nahin)", advanceReceiptDate: "Receipt voucher ki tareekh", advanceReceiptHelp: "Advance milne par supplier receipt voucher deta hai. Aapke paas ho to bharen; yeh payment voucher par chhapega.", printAdvanceVoucher: "Advance voucher print karein", supplierAdvances: "Suppliers ko diya advance: {amount}", useAdvanceOnBill: "{supplier} ko diya {amount} advance is bill se kaatein", paidSummary: "Payment ka saar", paidSafety: "Yeh draft hai. Review aur save hone tak supplier ka baki kam nahi hoga.", reviewPaid: "Payment dekhen",
@@ -419,6 +427,14 @@ const copy = {
     addressLabelName: "Ise kya kahen", deliveryStateHelp: "Doosre rajya bheja gaya maal is bikri ko us rajya ki bana deta hai.",
     deliveryGstinHelp: "Sirf tab jab is pate ka apna GST number ho. Na ho to khali chhod dein.", saveAddress: "Pata save karen", saveCorrection: "Badlav save karen",
     saleLinesLabel: "Is bill ka saman", addLine: "Ek aur saman joden", removeLine: "Hatayen", addCustomer: "＋ Naya customer joden", addItem: "＋ Naya saman joden",
+    // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
+    walkInCustomer: "Walk-in / nakad grahak", walkInShort: "walk-in grahak", walkInChoose: "Walk-in grahak", walkInDetail: "{state} mein aapke counter par bikri. ₹50,000 se kam par naam ya pata zaroori nahin.", placeOfSupplyCounter: "maal aapke counter par diya ja raha hai.",
+    paidBy: "Kaise mila", paidCash: "Nakad", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Abhi {mode} se {amount} mile. Is bill par kuch baaki nahin.", saleEffectPartPaid: "Abhi {mode} se {amount} mile. {due} customer ke khate mein judega.",
+    walkInNameRequired: "₹50,000 ya usse zyada ki taxable value par bill mein khareedar ka naam, pata aur rajya hona chahiye (CGST Rule 46(e)). Customer ko joden, phir unhein chunein.", walkInDelivery: "Walk-in grahak maal counter par leta hai. Kahin aur bhejna ho to customer ko naam aur pate ke saath joden.", addNamedCustomer: "Customer ka naam aur pata joden", billPaperThermal58: "Chhoti parchi, 58mm",
+    doneTitle: "Bill ban gaya", doneWhatsapp: "WhatsApp par bhejein", donePhoneLabel: "Customer ka WhatsApp number", donePhoneHelp: "Unki chat kholne ke liye 10 ankon ka mobile number likhein.", donePhoneInvalid: "Yeh 10 ankon ka mobile number nahin hai. Dekhkar dobara likhein.", doneUpiIncluded: "Sandesh mein {due} ke liye UPI link hai.", doneUpiMissing: "Bill ke saath payment link bhejne ke liye Branding mein apni UPI id save karein.",
+    donePrinter: "Printer", doneA4: "A4 panna", done80: "3-inch parchi", done58: "2-inch parchi", donePrint: "Receipt print karein", doneNewBill: "Naya bill",
+    doneLinePaid: "{name} se {mode} mil gaya. Stock update ho gaya.", doneLinePart: "{mode} se {paid} mile; {due} {name} ke khate mein jude. Stock update ho gaya.", doneLineKhata: "{name} ke khate mein jud gaya. Stock update ho gaya.", doneModeCASH: "nakad", doneModeUPI: "UPI", doneModeCARD: "card",
+    doneMessageBill: "Namaste{name}, {shop} se khareedne ke liye dhanyavaad. Bill {number}: {amount}.", doneMessagePaid: "Poora bhugtaan mil gaya.", doneMessageDue: "Abhi baaki: {due}.", doneMessageUpi: "UPI se chukayein: {link}",
     noCustomersYet: "Abhi koi customer save nahin hai", noItemsYet: "Abhi koi saman save nahin hai", cancel: "Rehne den",
     addSupplier: "＋ Naya supplier joden", noSuppliersYet: "Abhi koi supplier nahin", addSupplierTitle: "Supplier joden", addSupplierHelp: "Unke bill par jaisa chhapa hai waisa hi bharen. Unka rajya unke GST number se padha jata hai.", supplierLegalName: "Unke bill par naam", supplierGstinHelp: "Pehle do ank unka rajya hain. Isse tay hota hai ki unke bill par IGST lagega ya CGST aur SGST.", saveSupplier: "Supplier save karen", addCustomerTitle: "Customer joden", addCustomerHelp: "Bill par yahi naam, pata aur GST number chhapega, isliye sahi hona chahiye.",
     customerLegalName: "Customer ka bill wala naam", customerRegistration: "GST mein registered hain?", customerRegular: "Haan, regular", customerComposition: "Haan, composition", customerUnregistered: "Registered nahin",
@@ -1594,6 +1610,8 @@ function localizedError(error) {
     API_REFERENCE_REQUIRED: "referenceRequired",
     API_RATE_REQUIRED: "rateRequired",
     PERMISSION_DENIED: "permissionDenied",
+    WALK_IN_NAME_REQUIRED: "walkInNameRequired",
+    WALK_IN_DELIVERY: "walkInDelivery",
   }[error.code];
   return key ? copy[state.locale][key] : copy[state.locale].requestFailed;
 }
@@ -1650,7 +1668,10 @@ function saleReview(result, shown) {
   ].filter(Boolean);
   const warning = notes[0] ?? null;
   // Issue #182 / #239 / #143 — what the law needs of this bill, when it all happens by itself.
+  // Issue #288 — money taken at the counter goes in with the bill, so it is said on the green line.
+  const paid = result.paidNow;
   const fine = [
+    ...(paid ? [text(paid.due > 0 ? "saleEffectPartPaid" : "saleEffectPaid", { mode: copy[state.locale][{ CASH: "paidCash", UPI: "paidUpi", CARD: "paidCard" }[paid.mode]], amount: money(paid.amount), due: money(paid.due) })] : []),
     ...(result.exportSupply ? [result.exportSupply.endorsement] : []),
     ...(result.ewayBill?.outcome === "REQUIRED" ? [text("reviewEwayNeeded")] : []),
     ...(result.eInvoice?.needed === "YES" && !result.eInvoice.lateForPortal ? [text("reviewEinvoiceAuto")] : []),
@@ -1734,6 +1755,7 @@ function showDialog(result, mode) {
   purchase.textContent = copy[state.locale].enterPurchaseBill;
   // The goods the refusal on screen is about, for the button.
   state.saleShortStock = purchase.hidden ? null : result.shortStock;
+  document.querySelector("#review-add-customer").hidden = !(mode === "failed" && result.addCustomer === true);
   // Issue #274 — a purchase bill that took an advance: its voucher, now showing the bill it was adjusted against.
   const advanceVoucher = document.querySelector("#review-advance-voucher");
   const adjusted = mode === "recorded" && Array.isArray(result.advanceAdjustments) ? result.advanceAdjustments : [];
@@ -1768,26 +1790,40 @@ document.querySelector("#review-advance-voucher").addEventListener("click", asyn
   }
 });
 
+// Issue #288 — from the refusal straight to the new-customer form, as a customer with no GST number.
+document.querySelector("#review-add-customer").addEventListener("click", () => {
+  document.querySelector("#review-dialog").close();
+  pickerAwaitingNewRecord = saleCustomerPicker();
+  const registration = document.querySelector('#customer-form [name="registration"]');
+  if (registration) registration.value = "unregistered";
+  showCustomerRegistrationFields();
+  document.querySelector("#customer-dialog")?.showModal();
+});
+
 document.querySelector("#review-eway").addEventListener("click", (event) => {
   const invoiceId = event.currentTarget.dataset.invoice;
   document.querySelector("#review-dialog").close();
   if (invoiceId) openEwayForBill(invoiceId);
 });
 
+async function downloadBillPdf(invoiceId, number) {
+  const response = await fetch(`/api/sales/${encodeURIComponent(invoiceId)}/pdf`, {
+    headers: { authorization: `Bearer ${state.sessionId}` },
+  });
+  if (!response.ok) throw new Error((await response.json()).message || copy[state.locale].requestFailed);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${number.replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 document.querySelector("#review-download").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   button.disabled = true;
   try {
-    const response = await fetch(`/api/sales/${encodeURIComponent(button.dataset.invoice)}/pdf`, {
-      headers: { authorization: `Bearer ${state.sessionId}` },
-    });
-    if (!response.ok) throw new Error((await response.json()).message || copy[state.locale].requestFailed);
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${button.dataset.number.replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    await downloadBillPdf(button.dataset.invoice, button.dataset.number);
   } catch (error) {
     showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
   } finally { button.disabled = false; }
@@ -1813,7 +1849,9 @@ function shortStockOf(error) {
 
 /** The failure dialog for a sale; a short-stock refusal gets the purchase bill button. */
 function showSaleFailure(error) {
-  showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error), shortStock: shortStockOf(error) ?? undefined }, "failed");
+  // Issue #288 — a walk-in cannot be billed ₹50,000 or more, or sent goods: one button to name them.
+  const addCustomer = ["WALK_IN_NAME_REQUIRED", "WALK_IN_DELIVERY"].includes(error?.code);
+  showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error), shortStock: shortStockOf(error) ?? undefined, addCustomer }, "failed");
 }
 
 function saleWaitingForStock() {
@@ -1978,6 +2016,7 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     if (form.dataset.endpoint === "payments") { delete form.dataset.requestId; showChequeFields(form); loadPaymentBills(form); }
   });
 });
+showPaidBy();
 
 // ------------------------------------------------- issue #230: money received and money paid
 //
@@ -3035,7 +3074,7 @@ document.querySelector("#branding-format")?.addEventListener("change", refreshBr
 
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view, button.dataset.section ?? null)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
-document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
+document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); renderPickers(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
 // Issue #241 — on a phone, "More" (and the ☰ at the top) opens the whole grouped menu. Settings is
 // opened with it, so every screen is at most two taps away: "More", then the screen.
 function closeMenu() {
@@ -3191,12 +3230,15 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     const forSale = form.dataset.draft === "purchase" && saleWaitingForStock() !== null;
     if (form.dataset.draft === "purchase") resetPurchaseForm(form);
     if (form.dataset.draft === "sale" && result.invoice) resetSaleForm(form);
-    showDialog(forSale ? purchaseForSaleRecorded(localizeResult(result, form.dataset.draft, "recorded")) : localizeResult(result, form.dataset.draft, "recorded"), "recorded");
+    // Issue #307 — a sale finishes on the done screen; everything else in the recorded box.
+    const saleDone = form.dataset.draft === "sale" && Boolean(result.invoice);
+    if (saleDone) document.querySelector("#review-dialog").close();
+    else showDialog(forSale ? purchaseForSaleRecorded(localizeResult(result, form.dataset.draft, "recorded")) : localizeResult(result, form.dataset.draft, "recorded"), "recorded");
     if (forSale) showPurchaseForSaleNote(true);
     // Issue #230 — the receipt or payment voucher is ready behind the dialog, and the form is empty for the next one.
     if (form.dataset.endpoint === "payments" && result.paymentId) await paymentRecorded(form, result);
-    // Issue #132 — the bill is waiting on the screen behind the dialog, not on a developer's laptop.
-    if (form.dataset.draft === "sale" && result.invoice) await showSaleBill(result.invoice.id);
+    // Issue #132 — the bill is waiting on the screen behind the done screen, not on a developer's laptop.
+    if (saleDone) { await openDoneScreen(result); await showSaleBill(result.invoice.id); }
     await refreshDocumentLists();
   } catch (error) {
     showSaleFailure(error);
@@ -3249,6 +3291,48 @@ async function showSaleBill(invoiceId) {
     document.querySelector("#sale-bill-title").textContent = copy[state.locale].billLoadFailed;
     note.textContent = localizedError(error);
   }
+}
+
+// ------------------------------------------------- issue #307: the done screen
+//
+// After Record, the sale finishes here: WhatsApp with the customer's number and a UPI link for what
+// is still due, the receipt on the remembered paper, and a new bill. The screen itself lives in
+// done-screen.js, so the four-slide sale (#305) shows the same one.
+
+async function openDoneScreen(sale) {
+  const dialog = document.querySelector("#done-screen");
+  if (!dialog) return;
+  const { mountDoneScreen } = await import("./done-screen.js");
+  const words = copy[state.locale];
+  const close = () => dialog.close();
+  const first = mountDoneScreen(dialog, sale, {
+    words, money, storage,
+    onPrint: (format) => printSaleBill(sale.invoice.id, format),
+    onNewBill: () => { close(); openView("sale"); document.querySelector('#sale-lines [data-line-field="item"]')?.focus(); },
+    onDownload: () => downloadBillPdf(sale.invoice.id, sale.invoice.number).catch((error) => { close(); showDialog({ title: words.nothingSaved, message: localizedError(error) }, "failed"); }),
+    onEway: () => { close(); openEwayForBill(sale.invoice.id); },
+    onCancel: () => {
+      close();
+      const cancel = document.querySelector("#sale-bill-cancel");
+      billOnScreen.invoiceId = sale.invoice.id;
+      if (cancel) { cancel.dataset.number = sale.invoice.number; cancel.click(); }
+    },
+  });
+  if (!dialog.open) dialog.showModal();
+  first?.focus();
+}
+
+/** Issue #307 — the bill on the paper chosen on the done screen, printed through the bill's own print path. */
+async function printSaleBill(invoiceId, format) {
+  const paper = document.querySelector("#sale-bill-format");
+  const frame = document.querySelector("#sale-bill-frame");
+  if (!paper || !frame) return;
+  paper.value = format;
+  billOnScreen.paperChosen = true;
+  const loaded = new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+  await showSaleBill(invoiceId);
+  await loaded;
+  document.querySelector("#sale-bill-print")?.click();
 }
 
 // Issue #240 — under the bill: its e-way bill in one press when the goods need one, the number when
@@ -5938,9 +6022,11 @@ function renderPickers() {
     catalogue.customers.forEach((customer) => {
       const option = document.createElement("option");
       option.value = customer.id;
-      option.textContent = customer.gstin === null
-        ? `${customer.name} · ${customer.stateName ?? ""}`
-        : `${customer.name} · ${customer.gstin}`;
+      option.textContent = customer.walkIn
+        ? copy[state.locale].walkInCustomer
+        : customer.gstin === null
+          ? `${customer.name} · ${customer.stateName ?? ""}`
+          : `${customer.name} · ${customer.gstin}`;
       select.append(option);
     });
     const add = document.createElement("option");
@@ -5948,6 +6034,8 @@ function renderPickers() {
     add.textContent = copy[state.locale].addCustomer;
     select.append(add);
     if (chosen !== "" && select.querySelector(`option[value="${CSS.escape(chosen)}"]`)) select.value = chosen;
+    // Issue #288 — a new sale is to the walk-in customer until somebody else is chosen.
+    else if (select === saleCustomerPicker()) select.value = walkInId();
   });
 
   document.querySelectorAll("[data-item-picker]").forEach((select) => {
@@ -6042,9 +6130,15 @@ function showChosenCustomer() {
   const picker = document.querySelector('[data-draft="sale"] [data-customer-picker]');
   if (!detail || !picker) return;
   const customer = catalogue.customers.find((row) => row.id === picker.value) ?? null;
+  // Issue #288 — the walk-in customer has no address of their own to show or correct.
+  const walkIn = customer?.walkIn === true;
+  const correct = document.querySelector("#sale-correct-address");
+  if (correct) correct.hidden = walkIn;
+  const walkInButton = document.querySelector("#sale-walk-in");
+  if (walkInButton) walkInButton.hidden = walkIn || walkInId() === "";
   detail.textContent = customer === null
     ? ""
-    : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin !== null ? ` · ${customer.gstin}` : customer.registration === "overseas" ? "" : ` · ${copy[state.locale].customerUnregistered}`}${customer.creditLimit === null || customer.creditLimit === undefined ? "" : ` · ${text("customerCreditLimitShown", { amount: money(customer.creditLimit) })}`}`;
+    : walkIn ? text("walkInDetail", { state: customer.stateName ?? "" }) : `${[...customer.addressLines, customer.stateName ?? ""].filter(Boolean).join(", ")}${customer.gstin !== null ? ` · ${customer.gstin}` : customer.registration === "overseas" ? "" : ` · ${copy[state.locale].customerUnregistered}`}${customer.creditLimit === null || customer.creditLimit === undefined ? "" : ` · ${text("customerCreditLimitShown", { amount: money(customer.creditLimit) })}`}`;
   showExportFields(customer);
   // Issue #237 — the state this sale counts in follows the customer the moment it changes, however
   // it changed: picked from the list, just added, or cleared after a bill was issued. The other
@@ -6056,6 +6150,30 @@ function showChosenCustomer() {
   }
   showPlaceOfSupply();
 }
+
+/** Issue #288 — the Sale screen's customer picker, and the company's walk-in customer on it. */
+function saleCustomerPicker() {
+  return document.querySelector('[data-draft="sale"] [name="party"]');
+}
+function walkInId() {
+  return catalogue.customers.find((row) => row.walkIn)?.id ?? "";
+}
+
+/** Issue #288 — "Paid now" asks how: cash, UPI or card. Money to come later asks nothing, and sends nothing. */
+function showPaidBy() {
+  const field = document.querySelector("#sale-paid-by-field");
+  if (!field) return;
+  field.hidden = document.querySelector("#sale-terms")?.value !== "now";
+  field.querySelector("select").disabled = field.hidden;
+}
+document.querySelector("#sale-terms")?.addEventListener("change", showPaidBy);
+document.querySelector("#sale-walk-in")?.addEventListener("click", () => {
+  const picker = saleCustomerPicker();
+  if (!picker || walkInId() === "") return;
+  picker.value = walkInId();
+  showChosenCustomer();
+  saveDraft(picker.form);
+});
 
 /**
  * Issue #143 — the export or SEZ box, for the customers it applies to. Which kind of supply it is
@@ -6105,11 +6223,13 @@ function resetSaleForm(form) {
   forgetPendingDraft(form);
   form.reset();
   form.querySelectorAll('input[type="date"]:not([data-no-default])').forEach((field) => { field.value = dateInput(); });
+  // Issue #288 — the next customer at the counter is a walk-in until somebody else is chosen.
   const picker = form.querySelector("[data-customer-picker]");
-  if (picker) picker.value = "";
+  if (picker) picker.value = walkInId();
   document.querySelector("#sale-lines")?.replaceChildren();
   addSaleLine();
   form.querySelectorAll("details").forEach((box) => { if (box.id !== "sale-export") box.open = false; });
+  showPaidBy();
   showChosenCustomer();
   showShipToFields();
   updateCalculations();
@@ -6287,6 +6407,16 @@ function showCustomerRegistrationFields() {
   pincode.querySelector("input").required = !overseas;
 }
 document.querySelector('#customer-form [name="registration"]')?.addEventListener("change", showCustomerRegistrationFields);
+// Issue #288 — the state is filled in from the PIN code. A PIN two states share is left for the person.
+document.querySelector('#customer-form [name="pincode"]')?.addEventListener("input", async (event) => {
+  const pincode = event.target.value.trim();
+  if (!/^[1-9]\d{5}$/.test(pincode)) return;
+  try {
+    const found = await api("/api/pincode/state", { method: "POST", body: JSON.stringify({ pincode }) });
+    const states = document.querySelector("#customer-states");
+    if (found.stateCode && states && event.target.value.trim() === pincode) states.value = found.stateCode;
+  } catch { /* the person can still choose the state */ }
+});
 
 document.querySelector("#customer-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -6444,7 +6574,7 @@ function showPlaceOfSupply() {
     line.textContent = `${copy[state.locale].placeOfSupplyIs} ${billed.stateName ?? ""} (${billed.stateCode ?? ""}) — ${copy[state.locale].placeOfSupplyThirdParty}`;
     return;
   }
-  line.textContent = `${copy[state.locale].placeOfSupplyIs} ${billed.stateName ?? ""} (${billed.stateCode ?? ""}) — ${copy[state.locale].placeOfSupplyBilling}`;
+  line.textContent = `${copy[state.locale].placeOfSupplyIs} ${billed.stateName ?? ""} (${billed.stateCode ?? ""}) — ${copy[state.locale][billed.walkIn ? "placeOfSupplyCounter" : "placeOfSupplyBilling"]}`;
 }
 
 async function loadDeliveryChoices() {

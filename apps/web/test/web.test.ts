@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import vm from "node:vm";
 import { loadWebAsset } from "../server.ts";
@@ -246,11 +247,11 @@ async function functionSource(name: string): Promise<string> {
   return source.slice(start, end + 2);
 }
 
-test("#233: after a recorded sale the form has no customer and one fresh line, and no draft brings the old one back", async () => {
+test("#233/#288: after a recorded sale the form is back to the walk-in customer and one fresh line, and no draft brings the old one back", async () => {
   const script = await read("app.js");
   // The recorded-sale branch clears the form before it shows the bill.
   const recorded = script.slice(script.indexOf('document.querySelector("#review-confirm").addEventListener'), script.indexOf("// ------------------------------------------------- issue #132"));
-  assert.match(recorded, /if \(form\.dataset\.draft === "sale" && result\.invoice\) resetSaleForm\(form\);\s*showDialog\([\s\S]*showSaleBill\(result\.invoice\.id\)/);
+  assert.match(recorded, /if \(form\.dataset\.draft === "sale" && result\.invoice\) resetSaleForm\(form\);[\s\S]*if \(saleDone\) \{ await openDoneScreen\(result\); await showSaleBill\(result\.invoice\.id\); \}/);
   // Each review carries its own key, so Record twice is one bill and the next review a new sale.
   assert.match(script, /input\.requestId = newPaymentRequestId\(\);/);
 
@@ -277,16 +278,18 @@ test("#233: after a recorded sale the form has no customer and one fresh line, a
     addSaleLine: () => { lines.children.push({ id: "fresh" }); calls.push("addSaleLine"); },
     showChosenCustomer: () => calls.push("showChosenCustomer"),
     showShipToFields: () => calls.push("showShipToFields"),
+    showPaidBy: () => calls.push("showPaidBy"),
+    walkInId: () => "walk-in-id",
     updateCalculations: () => calls.push("updateCalculations"),
   };
   vm.runInNewContext(`${await functionSource("resetSaleForm")}\nresetSaleForm(form);`, { ...context, form });
 
-  assert.equal(picker.value, "", "no customer is chosen");
+  assert.equal(picker.value, "walk-in-id", "the walk-in customer is chosen, not Mehta");
   assert.deepEqual(lines.children, [{ id: "fresh" }], "the old 450 KGS line is gone and one fresh line is left");
   assert.equal(date.value, "2026-09-28", "today's date");
   assert.equal(delivery.open, false, "the delivery box is closed again");
   assert.deepEqual(removed, ["karobar.draft.sale"], "the saved draft is gone, so a reload cannot bring the old sale back");
-  assert.ok(calls.includes("showChosenCustomer") && calls.includes("updateCalculations"));
+  assert.ok(calls.includes("showChosenCustomer") && calls.includes("updateCalculations") && calls.includes("showPaidBy"));
 });
 
 test("#233: an issued bill can be cancelled with a reason, and the returns screen can credit the whole bill", async () => {
@@ -689,4 +692,80 @@ test("#262: the refusal dialog, the purchase screen and both languages carry the
   // A recorded supplier bill leaves a fresh Purchase form, so the next one never opens on its figures.
   assert.match(script, /if \(form\.dataset\.draft === "purchase"\) resetPurchaseForm\(form\);/);
   assert.match(await functionSource("resetPurchaseForm"), /form\.reset\(\);[\s\S]*replaceChildren\(\);\s*addPurchaseLine\(\);/);
+});
+
+// ------------------------------------------------------------------ issues #288 and #307
+
+/** The done-screen module, loaded the way the browser loads it. */
+const doneScreen = async () => import(pathToFileURL(resolve(root, "done-screen.js")).href);
+const rupees = (locale: string) => (amount: number) => new Intl.NumberFormat(locale, { style: "currency", currency: "INR", minimumFractionDigits: 2 }).format(amount);
+const cashSale = { invoice: { id: "i1", number: "INV/26-27/000005", amount: 126 }, customer: { name: "Walk-in / cash customer", phone: null, walkIn: true }, paid: { mode: "CASH", amount: 126 }, due: 0, shop: "Sampoorna Traders", upiLink: null };
+const UPI = "upi://pay?pa=sampoorna@okicici&pn=Sampoorna%20Traders&am=26.00&cu=INR&tn=INV%2F26-27%2F000006";
+const partSale = { invoice: { id: "i2", number: "INV/26-27/000006", amount: 126 }, customer: { name: "ABC Traders", phone: "+91 98765 43210", walkIn: false }, paid: { mode: "UPI", amount: 100 }, due: 26, shop: "Sampoorna Traders", upiLink: UPI };
+
+test("#307: the WhatsApp message and its UPI link, in English and Hindi — the link asks for the amount due only, with the bill number", async () => {
+  const { shareMessage, whatsappLink, indianMobile } = await doneScreen();
+  const locales = await localeCopy();
+  const en = locales["en-IN"]!;
+  const hi = locales["hi-IN"]!;
+
+  assert.equal(shareMessage(cashSale, en, rupees("en-IN")), "Hello, thank you for shopping at Sampoorna Traders. Bill INV/26-27/000005: ₹126.00.\nPaid in full.");
+  assert.equal(shareMessage(cashSale, hi, rupees("hi-IN")), "Namaste, Sampoorna Traders se khareedne ke liye dhanyavaad. Bill INV/26-27/000005: ₹126.00.\nPoora bhugtaan mil gaya.");
+  assert.doesNotMatch(shareMessage(cashSale, en, rupees("en-IN")), /upi:/, "nothing is due, so nothing is asked for");
+
+  const english = shareMessage(partSale, en, rupees("en-IN"));
+  assert.equal(english, `Hello ABC Traders, thank you for shopping at Sampoorna Traders. Bill INV/26-27/000006: ₹126.00.\nStill to pay: ₹26.00.\nPay by UPI: ${UPI}`);
+  const hindi = shareMessage(partSale, hi, rupees("hi-IN"));
+  assert.equal(hindi, `Namaste ABC Traders, Sampoorna Traders se khareedne ke liye dhanyavaad. Bill INV/26-27/000006: ₹126.00.\nAbhi baaki: ₹26.00.\nUPI se chukayein: ${UPI}`);
+  for (const message of [english, hindi]) {
+    const link = new URL(/upi:\S+/.exec(message)![0]);
+    assert.equal(link.searchParams.get("am"), "26.00", "the amount still due, never the bill total");
+    assert.equal(link.searchParams.get("tn"), "INV/26-27/000006", "the bill number");
+    assert.equal(link.searchParams.get("pa"), "sampoorna@okicici");
+  }
+
+  // The customer's own number, in WhatsApp's click-to-chat link, with the message as typed.
+  const mobile = indianMobile(partSale.customer.phone);
+  assert.equal(mobile, "9876543210");
+  const chat = new URL(whatsappLink(mobile, hindi));
+  assert.equal(`${chat.origin}${chat.pathname}`, "https://wa.me/919876543210");
+  assert.equal(chat.searchParams.get("text"), hindi);
+  // A number is never guessed from something that is not one.
+  for (const typed of ["", "12345", "5876543210", "98765432101", null]) assert.equal(indianMobile(typed), null, String(typed));
+  assert.equal(indianMobile("098765 43210"), "9876543210");
+});
+
+test("#307: the done screen's one line says where the money went, in English and Hindi", async () => {
+  const { doneLine } = await doneScreen();
+  const locales = await localeCopy();
+  assert.equal(doneLine(cashSale, locales["en-IN"], rupees("en-IN")), "Cash received from Walk-in. Stock updated.");
+  assert.equal(doneLine(cashSale, locales["hi-IN"], rupees("hi-IN")), "walk-in grahak se nakad mil gaya. Stock update ho gaya.");
+  const credit = { ...partSale, paid: null, due: 126 };
+  assert.equal(doneLine(credit, locales["en-IN"], rupees("en-IN")), "Added to ABC Traders’ khata. Stock updated.");
+  assert.equal(doneLine(credit, locales["hi-IN"], rupees("hi-IN")), "ABC Traders ke khate mein jud gaya. Stock update ho gaya.");
+  assert.equal(doneLine(partSale, locales["en-IN"], rupees("en-IN")), "UPI payment of ₹100.00 received; ₹26.00 added to ABC Traders’ khata. Stock updated.");
+});
+
+test("#288/#307: the sale form offers the walk-in customer and paid now by cash, UPI or card; the done screen remembers the printer", async () => {
+  const [html, script, done] = await Promise.all([read("index.html"), read("app.js"), read("done-screen.js")]);
+  const sale = html.slice(html.indexOf('data-draft="sale"'), html.indexOf('id="sale-bill-panel"'));
+  assert.match(sale, /id="sale-walk-in" data-i18n="walkInChoose"/);
+  assert.match(sale, /<select name="terms" id="sale-terms"><option value="now" data-i18n="payNow">/);
+  for (const mode of ["CASH", "UPI", "CARD"]) assert.match(sale, new RegExp(`<select name="paidBy" id="sale-paid-by">[\\s\\S]*<option value="${mode}"`));
+  // "Within 7/30 days" sends no paidBy at all: the box is switched off, so nothing is received.
+  assert.match(await functionSource("showPaidBy"), /field\.querySelector\("select"\)\.disabled = field\.hidden;/);
+  assert.match(html, /<dialog id="done-screen" class="done-screen" aria-labelledby="done-title"><\/dialog>/);
+  assert.match(script, /await import\("\.\/done-screen\.js"\)/);
+  assert.match(done, /export const PRINTER_KEY = "karobar\.printer";/);
+  for (const format of ["A4", "THERMAL_80MM", "THERMAL_58MM"]) assert.match(done, new RegExp(`\\["${format}", "`));
+  assert.match(html, /<option value="THERMAL_58MM" data-i18n="billPaperThermal58">/);
+  // The tick pops once, and not at all for somebody who asked for less motion (the global rule).
+  const css = await read("styles.css");
+  assert.match(css, /\.done-tick \{[^}]*animation: tick-pop [^;]* 1;/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{ \*, \*::before, \*::after \{[^}]*animation: none !important/);
+  // A walk-in refused at ₹50,000 gets one button to name the customer.
+  assert.match(html, /id="review-add-customer" type="button" hidden data-i18n="addNamedCustomer"/);
+  assert.match(script, /\["WALK_IN_NAME_REQUIRED", "WALK_IN_DELIVERY"\]\.includes\(error\?\.code\)/);
+  // The state is filled in from the PIN code.
+  assert.match(script, /"\/api\/pincode\/state"/);
 });

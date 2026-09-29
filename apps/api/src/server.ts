@@ -13,6 +13,7 @@ import { DemoApplication } from './demo-application.ts';
 import { ChallanDesk } from './challan-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from './government-webhooks.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
+import { stateOfPincode } from '../../../packages/masters/src/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
 // shapes the walker recognises, and a secret carried by a class instance or a Map would walk past it.
@@ -77,6 +78,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // not the session's company. Gated by authentication above, like the rest of the app.
     // Issue #237 — the one list of current states, for setting up a business.
     if (method === 'GET' && pathname === '/api/states') return json(200, { states: currentStates() });
+    // Issue #288 — the state a PIN code is in, so the customer form fills it in. Reads nothing of the company.
+    if (method === 'POST' && pathname === '/api/pincode/state') return json(200, { stateCode: stateOfPincode(String(body.pincode ?? '')) });
     if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body, context.companyId));
     if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body, context.companyId));
     // Issue #147 — the mark of a trade: search the picture library, then keep what was picked.
@@ -93,7 +96,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // Issue #181 — the customers and items this business keeps. Every sale, challan and quotation
     // is made out to a record from these two lists, so the bill names the customer and the goods
     // that were actually chosen.
-    if (method === 'GET' && pathname === '/api/catalogue') return json(200, app.catalogue(actor));
+    if (method === 'GET' && pathname === '/api/catalogue') return json(200, await app.catalogue(actor));
     if (method === 'POST' && pathname === '/api/customers') return json(200, await app.addCustomer(actor, body));
     // Issue #228 — the businesses this company buys from, with the GST number that decides the tax.
     if (method === 'POST' && pathname === '/api/suppliers') return json(200, await app.addSupplier(actor, body));
