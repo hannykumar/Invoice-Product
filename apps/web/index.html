@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&amp;family=Mukta:wght@400;500;600;700&amp;display=swap" />
     <link rel="stylesheet" href="/styles.css" />
+    <!-- Issue #308 — the item picker, before app.js, so every screen mounts the same one. -->
+    <script type="module" src="/item-picker.js"></script>
     <script type="module" src="/app.js"></script>
   </head>
   <body>
@@ -144,6 +146,8 @@
                 <!-- Issue #288 — money taken at the counter is recorded with the bill: cash in hand, or the bank for UPI and card. -->
                 <label id="sale-paid-by-field"><span data-i18n="paidBy"></span><select name="paidBy" id="sale-paid-by"><option value="CASH" data-i18n="paidCash"></option><option value="UPI" data-i18n="paidUpi"></option><option value="CARD" data-i18n="paidCard"></option></select></label>
               </div>
+              <!-- Issue #308 — the six items sold on most bills this week: one tap adds one more. -->
+              <div class="item-chips" id="sale-item-chips" role="group" aria-label="Sold most this week" data-i18n-aria="mostSoldThisWeek" hidden></div>
               <div class="sale-lines" id="sale-lines" aria-label="Items on this bill" data-i18n-aria="saleLinesLabel"></div>
               <button type="button" class="secondary-button" id="sale-add-line" data-i18n="addLine"></button>
               <div class="field-grid sale-charges">
@@ -188,7 +192,7 @@
               </details>
               <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
             </article>
-            <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total">—</strong></div><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+            <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-line" id="sale-round-off" hidden><span data-i18n="roundOff"></span><strong data-calculated="roundOff"></strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total" aria-live="polite">—</strong></div><!-- Issue #306 — what the live total found: where the sale counts, e-way bill and e-invoice, and anything that would stop the bill. --><ul class="estimate-notes" id="sale-estimate-notes" aria-live="polite"></ul><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
           <article class="panel bill-panel" id="sale-bill-panel" hidden>
             <div class="panel-heading">
@@ -212,9 +216,10 @@
 
         <template id="sale-line-template">
           <div class="sale-line">
-            <label><span data-i18n="item"></span><select data-line-field="item" data-item-picker required></select><button type="button" class="text-button" data-change-code data-i18n="changeItemCode"></button></label>
+            <!-- Issue #308 — search by name, code, HSN or barcode; the chosen item's id rides in the hidden field. -->
+            <div class="item-picker"><input type="hidden" data-line-field="item" /><label><span data-i18n="item"></span><input data-item-search data-i18n-placeholder="itemSearchPlaceholder" /></label></div>
             <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
-            <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" required /></span></label>
+            <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" required /></span><small data-line-price-note></small></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -1516,6 +1521,9 @@
         <label><span data-i18n="itemTax"></span><select name="taxChoice" id="item-tax"></select><small data-i18n="itemTaxHelp"></small></label>
         <label id="item-other-rate" hidden><span data-i18n="itemOtherRate"></span><input name="otherRate" type="number" min="0" max="100" step="0.01" /></label>
         <label><span data-i18n="itemBasis"></span><input name="basis" /><small data-i18n="itemBasisHelp"></small></label>
+        <label><span data-i18n="itemBarcode"></span><input name="barcode" autocomplete="off" /><small data-i18n="itemBarcodeHelp"></small></label>
+        <label><span data-i18n="itemPrice"></span><span class="input-with-prefix"><span>₹</span><input name="price" type="number" min="0" step="0.01" inputmode="decimal" /></span><small data-i18n="itemPriceHelp"></small></label>
+        <label><span data-i18n="itemOtherName"></span><input name="otherName" /><small data-i18n="itemOtherNameHelp"></small></label>
         <p class="login-error" id="item-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
@@ -1523,13 +1531,17 @@
         </div>
       </form>
     </dialog>
-    <dialog id="item-code-dialog" aria-labelledby="item-code-dialog-title">
-      <h2 id="item-code-dialog-title" data-i18n="itemCodeTitle"></h2>
-      <p id="item-code-current"></p>
-      <form id="item-code-form" class="login-form">
+    <!-- Issue #308 — the item's own edit dialog. "Change HSN code" lives here now, not on the sale line. -->
+    <dialog id="item-edit-dialog" aria-labelledby="item-edit-dialog-title">
+      <h2 id="item-edit-dialog-title" data-i18n="itemCodeTitle"></h2>
+      <p id="item-edit-current"></p>
+      <form id="item-edit-form" class="login-form">
         <input type="hidden" name="itemId" />
         <label><span data-i18n="itemCodeNew"></span><input name="hsnSac" inputmode="numeric" required /><small data-i18n="itemCodeHelp"></small></label>
-        <p class="login-error" id="item-code-error" role="alert"></p>
+        <label><span data-i18n="itemBarcode"></span><input name="barcode" autocomplete="off" /><small data-i18n="itemBarcodeHelp"></small></label>
+        <label><span data-i18n="itemPrice"></span><span class="input-with-prefix"><span>₹</span><input name="price" type="number" min="0" step="0.01" inputmode="decimal" /></span><small data-i18n="itemPriceHelp"></small></label>
+        <label><span data-i18n="itemOtherName"></span><input name="otherName" /><small data-i18n="itemOtherNameHelp"></small></label>
+        <p class="login-error" id="item-edit-error" role="alert"></p>
         <div class="dialog-actions">
           <button class="secondary-button" type="button" data-close-dialog data-i18n="cancel"></button>
           <button class="primary-button" type="submit" data-i18n="itemCodeSave"></button>

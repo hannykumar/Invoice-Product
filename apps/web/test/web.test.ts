@@ -96,7 +96,10 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /customerDocumentsOne/);
   assert.match(script, /copy\[state\.locale\]\.loginInvalid/);
   assert.doesNotMatch(script, /subtotal \* \.05/);
-  assert.match(script, /data-calculated="tax"\]\'\)\.textContent = "—"/);
+  // Issue #306 — GST and the total on the form are the server's estimate, never worked out here.
+  assert.match(script, /\[data-calculated="tax"\]'\)\.textContent = totals \? money\(totals\.totalTax\) : "—"/);
+  assert.match(script, /api\("\/api\/sales\/estimate"/);
+  assert.match(script, /const ESTIMATE_DELAY_MS = 250;/);
   assert.match(script, /localizeResult\(result, form\.dataset\.draft, "preview"\)/);
   assert.match(script, /form\.setAttribute\("aria-busy", String\(busy\)\)/);
   assert.match(script, /cancel\.disabled = mode === "loading"/);
@@ -164,7 +167,10 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // Issue #233 — and it starts with nobody chosen, so a new sale never inherits the last customer.
   assert.match(html, /<select name="party" data-customer-picker data-picker-blank="chooseSaleCustomer" required>/);
   assert.match(html, /id="sale-lines"/);
-  assert.match(html, /data-line-field="item" data-item-picker/);
+  // Issue #308 — the sale line's item is the shared picker; its id rides in a hidden field.
+  assert.match(html, /id="sale-line-template"[\s\S]*?<input type="hidden" data-line-field="item" \/>[\s\S]*?data-item-search/);
+  assert.match(html, /<script type="module" src="\/item-picker\.js"><\/script>\s*<script type="module" src="\/app\.js">/);
+  assert.doesNotMatch(html, /data-change-code/, "the HSN code is changed in the item's own dialog, not on the sale line");
   assert.match(html, /name="freight" type="number" min="0" step="0\.01"/);
   assert.match(html, /name="otherCharges" type="number" min="0" step="0\.01"/);
   // Issue #228 — a supplier bill's lines come from the item list (a service such as inward freight
