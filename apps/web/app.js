@@ -106,7 +106,7 @@ const copy = {
     billPaper: "Paper", billPaperA4: "A4 sheet", billPaperThermal: "Till roll, 80mm", billPaperMobile: "Phone screen", printBill: "Print the bill", printBillCopies: "Print the bill ({copies} copies)",
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
-    liveCompany: "Live company state from {company}.", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Supplier payment posted to the ledger", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
+    liveCompany: "Live company state from {company}.", salesLessReturns: "{billed} billed − {returned} returned by customers", purchasesLessReturns: "{billed} billed − {returned} sent back to suppliers", customerDocumentsOne: "1 open customer document", customerDocumentsMany: "{count} open customer documents", supplierBillsOne: "1 posted supplier bill", supplierBillsMany: "{count} posted supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Supplier payment posted to the ledger", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 open supplier document", supplierDocumentsMany: "{count} open supplier documents", noActivity: "No recorded activity yet.", purchaseActivity: "Purchase and stock posted together", paymentActivity: "Customer receipt posted to the ledger", saleActivity: "Numbered sales invoice issued",
     checking: "Checking this entry…", checkingBody: "The application services are validating the draft.", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "The application could not complete that request.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…", enterPurchaseBill: "Enter the purchase bill", backToSale: "Back to the sale", purchaseForSale: "For the sale you were making: it asks for {required} {unit} of {item}, and {warehouse} has {available} {unit}. Type the quantity printed on the supplier's bill. The goods go into {warehouse}.", purchaseForSaleDone: "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.",
     navAsk: "Ask",
     agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
@@ -435,7 +435,7 @@ const copy = {
     billPaper: "Kagaz", billPaperA4: "A4 panna", billPaperThermal: "Chhoti parchi, 80mm", billPaperMobile: "Phone ki screen", printBill: "Bill print karein", printBillCopies: "Bill print karein ({copies} copy)",
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
-    liveCompany: "{company} ki live company state.", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko bhugtan ledger mein darj hua", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
+    liveCompany: "{company} ki live company state.", salesLessReturns: "{billed} ke bill − {returned} customers ne lautaya", purchasesLessReturns: "{billed} ke bill − {returned} suppliers ko lautaya", customerDocumentsOne: "1 khula customer document", customerDocumentsMany: "{count} khule customer documents", supplierBillsOne: "1 darj supplier bill", supplierBillsMany: "{count} darj supplier bills", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko bhugtan ledger mein darj hua", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 khula supplier document", supplierDocumentsMany: "{count} khule supplier documents", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Kharid aur stock ek saath darj hue", paymentActivity: "Customer receipt ledger mein darj hui", saleActivity: "Number wali sales invoice jaari hui",
     checking: "Entry jaanch rahe hain…", checkingBody: "Application services draft ki jaanch kar rahi hain.", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Application yeh request poori nahin kar saka.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…", enterPurchaseBill: "Purchase bill darj karen", backToSale: "Bikri par wapas jayen", purchaseForSale: "Jo bikri aap bana rahe the: usmein {item} ke {required} {unit} hain, aur {warehouse} mein {available} {unit} hain. Supplier ke bill par chhapi matra likhen. Saman {warehouse} mein jayega.", purchaseForSaleDone: "Saman ab stock mein hai. Bikri par wapas jayen: aapka likha sab wahin hai. Bill jaari karne ke liye use dobara dekhen.",
     navAsk: "Poochein",
     agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
@@ -729,6 +729,7 @@ const REPORT_TEXT = {
   dateCol: { "en-IN": "Date", "hi-IN": "Tareekh" },
   doesNotBalance: { "en-IN": "Does not balance — look below", "hi-IN": "Barabar nahin — neeche dekhein" },
   everythingEarned: { "en-IN": "Everything you earned", "hi-IN": "Jo kuch kamaya" },
+  everythingSpent: { "en-IN": "Everything you spent", "hi-IN": "Jo kuch kharch hua" },
   firstItem: { "en-IN": "First item", "hi-IN": "Pehla item" },
   ratesDeclaredLabel: { "en-IN": "GST rates you declared", "hi-IN": "Aapke bataye GST rate" },
   gstCollected: { "en-IN": "GST you collected", "hi-IN": "Aapne jo GST liya" },
@@ -736,7 +737,7 @@ const REPORT_TEXT = {
   godown: { "en-IN": "Godown", "hi-IN": "Godown" },
   goodsValue: { "en-IN": "Goods value", "hi-IN": "Maal ki keemat" },
   gstCol: { "en-IN": "GST", "hi-IN": "GST" },
-  earnedNote: { "en-IN": "Goods value is what you earned. The GST beside it is collected for the government and owed to them, so it is not part of your income.", "hi-IN": "Maal ki keemat aapki kamai hai. Uske saath ka GST sarkar ke liye vasoola gaya hai aur unhe dena hai, isliye woh aapki aamdani mein nahin ginta." },
+  earnedNote: { "en-IN": "Goods value is what you sold on these bills. Goods customers returned are taken off it under \"What you earned and what you spent\", as net sales. The GST beside it is collected for the government and owed to them, so it is not part of your income.", "hi-IN": "Maal ki keemat in bills par hui bikri hai. Customers ne jo maal lautaya, woh \"Kitna kamaya aur kitna kharch hua\" mein isse ghataya jata hai, net bikri ke roop mein. Uske saath ka GST sarkar ke liye vasoola gaya hai aur unhe dena hai, isliye woh aapki aamdani mein nahin ginta." },
   itemCol: { "en-IN": "Item", "hi-IN": "Item" },
   leftCol: { "en-IN": "Left", "hi-IN": "Bacha" },
   moneyNoBill: { "en-IN": "Money with no bill", "hi-IN": "Bina bill ka paisa" },
@@ -1124,6 +1125,17 @@ function renderDashboard(data) {
   document.querySelector("#metric-attention").textContent = String(data.metrics.needsAttention);
   document.querySelector("#customer-summary").textContent = text(data.customer.documents.length === 1 ? "customerDocumentsOne" : "customerDocumentsMany", { count: data.customer.documents.length });
   document.querySelector("#supplier-summary").textContent = text(data.supplier.documents.length === 1 ? "supplierBillsOne" : "supplierBillsMany", { count: data.supplier.documents.length });
+  // Issue #273 — goods returned are taken off sales and purchases here too, and the subtraction is
+  // written out under the figure so nobody has to work it out.
+  const salesReturned = data.metrics.salesTodayReturned ?? 0;
+  document.querySelector("#sales-summary").textContent = salesReturned > 0
+    ? text("salesLessReturns", { billed: money(data.metrics.salesTodayBilled), returned: money(salesReturned) })
+    : text("salesFromModule");
+  const purchasesReturned = data.metrics.purchasesMonthReturned ?? 0;
+  if (purchasesReturned > 0) {
+    document.querySelector("#supplier-summary").textContent =
+      `${text("purchasesLessReturns", { billed: money(data.metrics.purchasesMonthBilled), returned: money(purchasesReturned) })} · ${document.querySelector("#supplier-summary").textContent}`;
+  }
   // Issue #237 — the goods that need looking at, the least left first, not one fixed item.
   const stockItems = data.stockItems ?? [data.stock];
   document.querySelector("#stock-title").textContent = stockItems.slice(0, 3).map((item) => `${item.name}: ${item.quantity} ${item.unit}`).join(" · ");
@@ -1291,9 +1303,13 @@ function renderReports(data) {
   const pnl = reportCard(t(data.profitAndLoss.title), t(data.profitAndLoss.sentence));
   pnl.append(reportTable(
     [{ label: t(REPORT_TEXT.account) }, { label: t(REPORT_TEXT.amount), numeric: true }],
+    // Issue #273 — goods returned by customers are taken off sales (net sales), and goods sent back
+    // to suppliers off purchases (net purchases), each subtraction written out on its own lines.
     [
-      ...data.profitAndLoss.income.rows.map((r) => [r.name, money(r.amount)]),
-      ...data.profitAndLoss.expenses.rows.map((r) => [r.name, money(r.amount)]),
+      ...data.profitAndLoss.income.lines.map((l) => [t(l.label), money(l.amount)]),
+      [t(REPORT_TEXT.everythingEarned), money(data.profitAndLoss.income.total)],
+      ...data.profitAndLoss.expenses.lines.map((l) => [t(l.label), money(l.amount)]),
+      [t(REPORT_TEXT.everythingSpent), money(data.profitAndLoss.expenses.total)],
     ],
   ));
   pnl.append(drillDetails(t(REPORT_TEXT.everythingEarned), data.profitAndLoss.income.total, data.profitAndLoss.income.drill));

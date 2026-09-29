@@ -100,9 +100,10 @@ export const trialBalanceTable = (body: TrialBalanceBody, locale: Locale = 'en-I
 export const profitAndLossTable = (body: ProfitAndLossBody, locale: Locale = 'en-IN'): ReportTable => ({
   columns: (['group', 'account', 'amount'] as const).map((k) => w(k, locale)),
   rows: [
-    ...body.income.rows.map((r) => [body.income.heading[locale], r.name, amount(r.movement.amount)]),
+    // Issue #273 — returns are shown as a deduction under what they undo, with the net line under it.
+    ...body.income.lines.map((l) => [body.income.heading[locale], l.label[locale], amount(l.amount.amount)]),
     [body.income.heading[locale], w('total', locale), amount(body.income.total.amount)],
-    ...body.expenses.rows.map((r) => [body.expenses.heading[locale], r.name, amount(r.movement.amount)]),
+    ...body.expenses.lines.map((l) => [body.expenses.heading[locale], l.label[locale], amount(l.amount.amount)]),
     [body.expenses.heading[locale], w('total', locale), amount(body.expenses.total.amount)],
     [w('whatIsLeft', locale), w('earnedLessSpent', locale), amount(body.result.amount)],
   ],
