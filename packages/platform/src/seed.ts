@@ -28,6 +28,9 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "assistant.ask",
   "assistant.ask",
   "agent.plan", "agent.approve", "agent.execute",
+  "business.settings.write", "branding.write", "payments.upi.write",
+  "masters.party.write", "masters.item.write", "masters.item.rate.declare",
+  "onboarding.run", "onboarding.finish", "migration.run", "migration.commit", "migration.rollback",
 ];
 
 export const SYNTHETIC_PLATFORM_COMPANIES = [

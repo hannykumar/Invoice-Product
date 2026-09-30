@@ -39,7 +39,7 @@ import {
   type RenderableParty,
   type TemplateSnapshot,
 } from '@invoice/invoice-templates';
-import { brandingOf, upiIdOf } from './branding-application.ts';
+import { brandingOf, saveUpiId, upiIdOf } from './branding-application.ts';
 import { masterData as masterDataService, mastersContext } from './master-data.ts';
 import {
   addShippingAddress,
@@ -79,7 +79,7 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
-import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf, turnoverBandFor } from './business-details-application.ts';
+import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor } from './business-details-application.ts';
 import { eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
@@ -1414,6 +1414,9 @@ export class DemoApplication {
         // Issue #230 — who actually paid, or was paid; not the demo customer for every payment.
         ...payments.map((payment) => ({ id: payment.id, kind: 'payment', direction: payment.direction, title: `${payment.direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${this.partyName(companyId, payment.partyId)} · ${payment.mode.replace('_', ' ')}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
         ...returnNotes.map((note) => ({ id: note.id, kind: 'return', title: `${note.number} · ${note.originalDocument.number}`, amount: jsonAmount(note.totals.total.minor), status: 'Recorded' })),
+        // Issue #280 — a change to where customers pay, so the owner sees it whoever made it.
+        ...this.shop.audit.events.filter((event) => event.action === 'payee.changed' && event.companyId === companyId)
+          .map((event) => ({ id: `payee:${event.at}`, kind: 'payee', title: event.summary, detail: 'If you did not make this change, put it back now and check who can sign in.', amount: null, status: 'Changed' })),
       ].reverse(),
     };
   }
@@ -2122,6 +2125,39 @@ export class DemoApplication {
 
   addShippingAddress(actor: ActorContext, input: Record<string, unknown>) {
     return addShippingAddress(this.companyOf(actor), input);
+  }
+
+  /**
+   * Issue #280 — where customers' money goes. Changing the UPI id or the bank account on the bills is
+   * the classic invoice-fraud path, so every change is kept in the audit trail and shown on Home's
+   * activity, whoever made it.
+   */
+  async saveUpiId(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const before = upiIdOf(companyId);
+    const saved = saveUpiId(companyId, input);
+    await this.recordPayeeChange(actor, 'UPI id', before, saved.upiId);
+    return saved;
+  }
+
+  async saveBusinessDetails(actor: ActorContext, company: { readonly name: string; readonly gstin: string }, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const describe = (bank: { readonly bankName: string; readonly ifsc: string; readonly accountNumber: string } | null) =>
+      bank === null ? null : `${bank.bankName}, ${bank.ifsc}, account ending ${bank.accountNumber.replace(/\s/g, '').slice(-4)}`;
+    const before = describe(readBusinessDetails(companyId, company).bank);
+    const saved = saveBusinessDetails(companyId, company, input);
+    await this.recordPayeeChange(actor, 'bank account', before, describe(saved.bank));
+    return saved;
+  }
+
+  private async recordPayeeChange(actor: ActorContext, what: string, before: string | null, after: string | null) {
+    if (before === after) return;
+    await this.shop.audit.record({
+      companyId: this.companyOf(actor), actorId: actor.userId, at: appClock.now().toISOString(),
+      action: 'payee.changed', subjectType: 'company', subjectId: String(actor.companyId),
+      summary: `The ${what} customers pay into was ${before === null ? `set to ${after}` : after === null ? `removed (it was ${before})` : `changed from ${before} to ${after}`}`,
+      details: { what, before: before ?? '', after: after ?? '' },
+    });
   }
 
   /** Issue #224 — a customer's saved address, for the correction form. */
