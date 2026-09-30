@@ -147,6 +147,8 @@ What must appear:
   - Kept: ₹39,750.50 − ₹27,000.00 = **₹12,750.50**
   - The sentence reads: "You earned ₹39,750.50 and spent ₹27,000.00, so you kept ₹12,750.50."
 - Home's "Sales today": ₹50,150.00 billed − ₹5,310.00 returned by customers = **₹44,840.00**, with that subtraction written under it
+- Home's money card (#310): "Cash in drawer" is the same as Reports' "Cash in hand" line; "UPI and bank in today" is **₹30,000.00** (Mehta's bank transfer in step 7); "To collect" **₹16,678.00**; "To pay" **₹0.00**
+- Home's tasks: no e-way bill task (it was raised in step 6); "1 customer is more than 30 days late" for ABC Traders. Recent bills: Mehta's bill shows **₹14,840.00 due**, not late
 
 ## Paths not yet covered
 

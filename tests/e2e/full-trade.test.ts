@@ -516,5 +516,24 @@ test('Step 12. The books: stock 100 KGS on one line; customers owe ₹1,838 + �
   assertRupees(screen.metrics.salesTodayReturned, '₹5,310.00', 'Home: returned today');
   assertRupees(screen.metrics.salesToday, '₹44,840.00', 'Home: sales today');
 
+  // Issue #310 — Home's money card is the same figures as Reports: sales today as above, cash in
+  // drawer the cash in hand line of the trial balance, to collect and to pay the two dues totals.
+  const card = screen.home.money;
+  assertRupees(card.salesToday.amount, '₹44,840.00', 'Home card: sales today');
+  const cashInHand = (books.trialBalance.rows as any[]).find((row) => row.code === '1110')?.closing ?? 0;
+  assert.equal(paise(card.cashInDrawer.amount), paise(cashInHand), 'Home card: cash in drawer is Reports\' cash in hand');
+  // Mehta paid ₹30,000 by bank transfer in step 7, and Shree Ram was paid by bank in step 8.
+  assertRupees(card.bankInToday.amount, '₹30,000.00', 'Home card: UPI and bank in today');
+  assertRupees(card.toCollect.amount, '₹16,678.00', 'Home card: to collect');
+  assertRupees(card.toPay.amount, '₹0.00', 'Home card: to pay');
+  // The e-way bill was raised in step 6, so no e-way task; ABC Traders' oldest bill is 30+ days late.
+  const tasks = (screen.home.tasks as any[]).map((task) => task.kind);
+  assert.ok(!tasks.includes('EWAY'), `no e-way task once it is raised: ${tasks.join(', ')}`);
+  assert.ok(tasks.includes('LATE_CUSTOMERS'), `ABC Traders is more than 30 days late: ${tasks.join(', ')}`);
+  // Mehta's bill: ₹50,150 billed, ₹14,840 still due and not yet late.
+  const mehtaBill = (screen.home.recentBills as any[]).find((bill) => bill.id === trade.invoiceId);
+  assert.equal(mehtaBill.status, 'DUE');
+  assertRupees(mehtaBill.due, '₹14,840.00', 'Home: Mehta\'s bill still due');
+
   t.diagnostic(`books: stock 100 KGS; owed ${inr(books.dues.receivables.total)} (Home ${inr(screen.metrics.customersOwe)}); suppliers ${inr(books.dues.payables.total)}; Mehta ${(await receivable(MEHTA)).oldestDaysOverdue} days late; net sales ${inr(pnl.netSales)}; ${pnl.sentence['en-IN']}`);
 });
