@@ -1184,19 +1184,20 @@ function activityRow(item) {
   const row = document.createElement("div");
   row.className = "activity-row";
   const icon = document.createElement("span");
-  icon.className = `activity-icon ${item.kind === "purchase" ? "blue" : item.kind === "payment" ? "amber" : "green"}`;
+  icon.className = `activity-icon ${item.kind === "payee" ? "red" : item.kind === "purchase" ? "blue" : item.kind === "payment" ? "amber" : "green"}`;
   icon.setAttribute("aria-hidden", "true");
-  icon.textContent = item.kind === "purchase" ? "↓" : item.kind === "payment" ? "₹" : item.kind === "return" ? "↩" : "✓";
+  icon.textContent = item.kind === "payee" ? "!" : item.kind === "purchase" ? "↓" : item.kind === "payment" ? "₹" : item.kind === "return" ? "↩" : "✓";
   const description = document.createElement("div");
   const title = document.createElement("strong");
   title.textContent = item.title;
   const detail = document.createElement("small");
-  detail.textContent = item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale][item.direction === "PAYMENT" ? "supplierPaymentActivity" : "paymentActivity"] : item.kind === "return" ? copy[state.locale].returnActivity : copy[state.locale].saleActivity;
+  // Issue #280 — a change to where customers pay carries its own sentence and no amount.
+  detail.textContent = item.detail ? item.detail : item.kind === "purchase" ? copy[state.locale].purchaseActivity : item.kind === "payment" ? copy[state.locale][item.direction === "PAYMENT" ? "supplierPaymentActivity" : "paymentActivity"] : item.kind === "return" ? copy[state.locale].returnActivity : copy[state.locale].saleActivity;
   description.append(title, detail);
   const value = document.createElement("div");
   value.className = "activity-value";
   const amount = document.createElement("strong");
-  amount.textContent = money(item.amount);
+  amount.textContent = item.amount === null ? "" : money(item.amount);
   const status = document.createElement("span");
   status.className = "pill done";
   status.textContent = item.status === "Recorded" ? copy[state.locale].recorded : item.status;
