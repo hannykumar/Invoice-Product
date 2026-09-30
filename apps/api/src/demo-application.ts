@@ -1174,7 +1174,9 @@ export class DemoApplication {
           const view = customerView(config.companyId, partyId);
           return {
             name: view.name,
-            gstin: view.gstin ?? '',
+            // Issue #279 — no GST number is `null`, never `''`: a blank one read as registered and
+            // sent every consumer sale to B2B, blocking the whole month.
+            gstin: view.gstin,
             stateCode: view.stateCode ?? config.gstin.slice(0, 2),
             unregisteredConfirmed: view.gstin === null,
           };
