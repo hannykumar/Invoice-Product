@@ -1,14 +1,16 @@
 const copy = {
   "en-IN": {
+    // Issue #305 / #311 — the four-slide sale and the checks inside the bill.
+    slideItems: "What is the customer buying?", slideCustomer: "Who is buying?", slidePayment: "How are they paying?", slideTransport: "How are the goods going?", slideExport: "Export details", slideShipTo: "Where do the goods go?", slideBack: "Back", slideNext: "Next", makeBill: "Make bill", stepOf: "Step {step} of {count}: {title}", newItemButton: "+ New item", chargesSection: "Freight or other charges", customerAll: "All customers", newCustomerQuick: "+ New customer", newCustomerQuickPlaceholder: "Type GST number or mobile", newCustomerQuickGo: "Add", newCustomerQuickHelp: "A GST number fills in their state. Add their name and address once.", deliverElsewhere: "Deliver somewhere else", customerOwes: "owes {amount}", payUdhaar: "Udhaar", payPart: "Part paid", payCheque: "Cheque", payChequeNote: "Cheque: make the bill as Udhaar, then enter the cheque in Money received when it comes.", payToday: "Today", fifteenDays: "Within 15 days", udhaarDays: "Pay within", paidNowAmount: "Paid now", billSummaryLabel: "The bill", transportEwayNote: "With the vehicle number, the e-way bill is raised by itself when you make the bill. Without it, the bill waits on Home until the vehicle is known.", oneLess: "One less", oneMore: "One more", lineFacts: "GST {rate}% · {stock} left", lineFactsGst: "GST {rate}%", checkEwayNeeded: "e-way bill needed — raised after you make the bill", checkEwayNotNeeded: "No e-way bill needed", checkEinvoiceAuto: "e-invoice will be sent by itself", checkEinvoiceNotNeeded: "No e-invoice needed", vehicleFound: "{vehicle} is on the transport department's record.", vehicleNotFound: "The transport department has no vehicle numbered {vehicle}. Check the number before the goods leave.", vehicleNotChecked: "{vehicle} could not be checked just now. The bill can still be made.", doneEwayRaised: "E-way bill {number} raised by itself · valid until {valid}", doneEwayWaiting: "These goods need an e-way bill. It is on Home until the vehicle is known.", doneEwayFailed: "The e-way bill was not raised: {reason} It is on Home to try again.", supplierCheckFine: "GST number active, filing on time", supplierCheckFailed: "The supplier check could not run just now. The bill can still be entered.", purchaseCheckLine: "Purchase check (GSTR-2B): {line}",
     // Issues #312 and #303 — the sale review's two lines, and the #design page.
-    reviewEwayNeeded: "Needs an e-way bill before the goods leave: raise it from the bill in one press.", reviewEinvoiceAuto: "Needs a government e-invoice number: it is sent by itself when you issue the bill.", reviewEinvoiceNotNeeded: "No e-invoice needed.", reviewTurnoverUnknown: "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.", reviewEinvoiceLate: "This bill needs a government e-invoice number, but it is too old for the portal to take it.", designEyebrow: "Owner only", designTitle: "How Karobar looks", designHelp: "Colours, words, buttons, chips, the money card, a bill slide and the bottom bar, in English and Hindi side by side.", designOwnerOnly: "Only the owner of the shop can open this page.", designTheme: "Colours:", designThemeDevice: "Like this device", designThemeLight: "Light", designThemeDark: "Dark", dsLanguage: "English", dsButtons: "Buttons: one marigold main action per screen", dsMakeBill: "Make bill", dsSave: "Save", dsBack: "Back", dsLater: "Do it later", dsChips: "Status chips: colour means status only", dsPaid: "Paid", dsDue: "Due in 7 days", dsLate: "12 days late", dsWalkIn: "Walk-in customer", dsMoneyCard: "The money card (your shop today)", dsToCollect: "To collect from customers", dsSalesToday: "Sales today", dsToPay: "To pay suppliers", dsSlide: "A bill slide: one decision, the total always visible", dsStepItems: "What is being sold?", dsStepCustomer: "Who is buying?", dsStepPayment: "How are they paying?", dsStepDone: "Bill made", dsFineLine: "Karnataka sale · CGST + SGST · no e-way bill needed", dsCustomerPays: "Customer pays", dsNext: "Next", dsAgain: "Start again", dsBottomBar: "The bottom bar on a phone", dsHome: "Home", dsKhata: "Khata", dsBill: "Bill", dsItems: "Items", dsMore: "More",
+    reviewTurnoverUnknown: "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.", reviewEinvoiceLate: "This bill needs a government e-invoice number, but it is too old for the portal to take it.", designEyebrow: "Owner only", designTitle: "How Karobar looks", designHelp: "Colours, words, buttons, chips, the money card, a bill slide and the bottom bar, in English and Hindi side by side.", designOwnerOnly: "Only the owner of the shop can open this page.", designTheme: "Colours:", designThemeDevice: "Like this device", designThemeLight: "Light", designThemeDark: "Dark", dsLanguage: "English", dsButtons: "Buttons: one marigold main action per screen", dsMakeBill: "Make bill", dsSave: "Save", dsBack: "Back", dsLater: "Do it later", dsChips: "Status chips: colour means status only", dsPaid: "Paid", dsDue: "Due in 7 days", dsLate: "12 days late", dsWalkIn: "Walk-in customer", dsMoneyCard: "The money card (your shop today)", dsToCollect: "To collect from customers", dsSalesToday: "Sales today", dsToPay: "To pay suppliers", dsSlide: "A bill slide: one decision, the total always visible", dsStepItems: "What is being sold?", dsStepCustomer: "Who is buying?", dsStepPayment: "How are they paying?", dsStepDone: "Bill made", dsFineLine: "Karnataka sale · CGST + SGST · no e-way bill needed", dsCustomerPays: "Customer pays", dsNext: "Next", dsAgain: "Start again", dsBottomBar: "The bottom bar on a phone", dsHome: "Home", dsKhata: "Khata", dsBill: "Bill", dsItems: "Items", dsMore: "More",
     skip: "Skip to main content", brandSubtitle: "Bills, stock and GST", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Money received", navMoney: "Money", navMore: "More", navStock: "What is in the godown", navGroupBuying: "Buying", navGroupStock: "Stock", navGroupSelling: "Selling", navGroupGst: "GST", navGroupBooks: "Books", navGroupSettings: "Settings", navReturns: "Returns", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Main menu", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft protection is on", draftProtection: "Your unfinished work stays on this device.", companyLocation: "Delhi · Main shop", language: "Language",
     today: "Today", welcome: "Good to see you, Hanny", welcomeBody: "How your shop is doing today.", newSale: "New sale",
     salesToday: "Sales today", salesChange: "12% more than yesterday", customersOwe: "Money customers owe you", fromCustomers: "Across 8 customers", purchasesMonth: "Purchases this month", purchaseCount: "14 supplier bills", needsAttention: "Needs your attention", attentionBody: "1 urgent · 2 to review",
     recentActivity: "Recent activity", recentBody: "Your latest bills and payments", viewAll: "View all", saleIssued: "Sale issued · 11:42 AM", purchaseFrom: "Purchase from Fresh Farms", purchaseSaved: "Waiting for your review · 10:58 AM", paymentFrom: "Payment from Gupta Mart", done: "Done", waiting: "Waiting", recorded: "Recorded",
     yourAttention: "Your attention", attentionHelp: "Clear these before they hold up work", lowStock: "Apple boxes are running low", lowStockBody: "12 boxes remain at the main shop", approvalWaiting: "One sale is waiting", approvalBody: "₹42,800 needs the owner's approval", gstReminder: "GST return is due in 6 days", gstBody: "Review unresolved supplier bills first",
-    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Add the customer and what they are buying. You can review every amount before issuing it.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Paid now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST", amountCustomerPays: "Customer pays", taxSafety: "GST and the total are worked out as you type, by the same rules the bill uses. Nothing is saved until you record the bill.", roundOff: "Round off", estimateChooseCustomer: "Choose the customer to see the GST: their state decides which GST applies.", estimateChooseItem: "Choose an item to see the total.", editItemButton: "Edit item", reviewSale: "Review sale", discardDraft: "Discard draft",
+    stepOne: "Step 1 of 3", saleTitle: "Create a sale", saleHelp: "Items, customer, payment. What the customer pays stays at the bottom.", savedDevice: "Saved on this device", customer: "Customer", date: "Sale date", item: "Item", quantity: "Quantity", rate: "Price of one", freight: "Freight", otherCharges: "Other charges", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "When will they pay?", payNow: "Paid now", sevenDays: "Within 7 days", thirtyDays: "Within 30 days", moreDetails: "Add optional details", reference: "Customer reference", notes: "Notes", saleSummary: "Sale summary", itemTotal: "Items before GST", gstEstimate: "GST", amountCustomerPays: "Customer pays", taxSafety: "GST and the total are worked out as you type, by the same rules the bill uses. Nothing is saved until you record the bill.", roundOff: "Round off", estimateChooseCustomer: "Choose the customer to see the GST: their state decides which GST applies.", estimateChooseItem: "Choose an item to see the total.", editItemButton: "Edit item", reviewSale: "Review sale", discardDraft: "Discard draft",
     purchaseTitle: "Record a purchase", purchaseHelp: "Add the supplier bill. It stays unfinished until you check the extracted details.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill date", billAmount: "Bill amount", uploadBill: "Photo or PDF of the bill", uploadHelp: "The file is only looked at here. It is not uploaded.", beforeSaving: "Before it is saved", checkSupplier: "We will confirm the supplier", checkDuplicate: "We will look for the same bill", checkTax: "You will review every tax amount", purchaseSafety: "Reviewing this draft will not change stock, money owed, or GST.", billAmountHelp: "The total printed on the bill. If it does not match what the lines add up to, we will tell you instead of recording it.", whatYouBought: "What you bought", itemSteel: "TMT Steel Bar 12mm (sold by weight)", itemSoap: "Herbal Bath Soap 100g (sold in boxes)", itemFreight: "Inward freight (a service, no stock)", howMany: "How many", ratePerUnit: "Price of one, before GST", gstRate: "GST rate on the bill", purchaseLinesLabel: "Items on this supplier bill", purchaseTaxFromGstin: "Whether this bill carries IGST, or CGST and SGST, is worked out from the supplier's GST number and yours. Nobody is asked which state they are in.", postingTitle: "What recording it will do", postingStock: "The goods go into your godown", postingBooks: "The purchase, and the GST you can claim back, go into your books", postingOwed: "The amount you owe the supplier is created, with the date it is due", postingTogether: "All three happen together. If any one of them cannot be done, nothing at all is saved.", postingRetrySafe: "If you are not sure it went through, press it again. The same bill is never recorded twice.", reviewPurchase: "Review purchase",
     paymentTitle: "Record money received", paymentHelp: "Record who paid and how much. Choose a bill now or leave it for later.", receivedFrom: "Received from", amountReceived: "Amount received", paymentDate: "Payment date", paymentMethod: "How did they pay?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Choose the sale this pays", chooseLater: "Choose later", chooseBillHelp: "Tick the bills this money pays. If you tick none, or it is more than the bills, the rest stays on account for this customer.", paymentSummary: "Payment summary", paymentSafety: "This is a draft. It does not reduce what the customer owes until it is reviewed and saved.", reviewPayment: "Review payment",
     navPaid: "Money paid", paidTitle: "Record money paid to a supplier", paidHelp: "Pick the supplier, tick the bills you are paying, and say how you paid.", paidTo: "Paid to", amountPaid: "Amount paid", paidDate: "Date paid", paidMethod: "How did you pay?", chooseSupplierBill: "Bills this pays", chooseSupplierBillHelp: "Tick the supplier's bills this money pays, oldest first. Paying before their bill? Choose the advance below.", advanceChoice: "Record this as an advance to {supplier}", advanceHelpNoBill: "You have no bill from {supplier} yet. This money will be kept as an advance and taken off their next bill.", advanceHelpMore: "Whatever is not put against a bill ticked above will be kept as an advance and taken off {supplier}'s next bill.", advanceAlready: "Advance already with {supplier}: {amount}.", advancePoNumber: "Against purchase order no. (optional)", advancePoDate: "Purchase order date", advancePoHelp: "No purchase order? Leave both blank, and the voucher says the advance is against goods to be supplied.", advanceReceiptNumber: "Supplier's receipt voucher no. (optional)", advanceReceiptDate: "Receipt voucher date", advanceReceiptHelp: "The supplier gives a receipt voucher when they receive an advance. If you have it, enter it and it prints on the payment voucher.", printAdvanceVoucher: "Print the advance voucher", supplierAdvances: "Advances paid to suppliers: {amount}", useAdvanceOnBill: "Take the {amount} advance already paid to {supplier} off this bill", paidSummary: "Payment summary", paidSafety: "This is a draft. It does not reduce what you owe the supplier until it is reviewed and saved.", reviewPaid: "Review payment",
@@ -342,7 +344,7 @@ const copy = {
     draftReady: "Your draft is ready to review", keepEditing: "Keep editing", understand: "I understand",
     // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
     mainNavigation: "Main menu", tabHome: "Home", tabKhata: "Khata", tabBill: "Bill", tabItems: "Items", tabMore: "More",
-    billSheetTitle: "Make a new…", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.",
+    billSheetTitle: "Make a new…", otherBills: "Other bills", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.",
     navGroupPeople: "People", navGroupBusiness: "Business settings", navGroupReports: "Reports",
     moreTitle: "More", moreHelp: "Everything else in your shop, in one place.",
     itemsTitle: "Items", itemsHelp: "What you sell and buy, and how much is left in the godown.", itemsAdd: "Add item", itemsEdit: "Change", itemsNone: "No items yet. Add the first thing you sell.",
@@ -353,15 +355,17 @@ const copy = {
     payCash: "Cash", payUpi: "UPI", payCard: "Card", payBank: "Bank", payCheque: "Cheque", payUdhaar: "Udhaar"
   },
   "hi-IN": {
+    // Issue #305 / #311 — the four-slide sale and the checks inside the bill.
+    slideItems: "ग्राहक क्या ख़रीद रहा है?", slideCustomer: "कौन ख़रीद रहा है?", slidePayment: "पैसे कैसे दे रहे हैं?", slideTransport: "माल कैसे जा रहा है?", slideExport: "निर्यात की जानकारी", slideShipTo: "माल कहाँ जाएगा?", slideBack: "पीछे", slideNext: "आगे", makeBill: "बिल बनाइए", stepOf: "{count} में से कदम {step}: {title}", newItemButton: "+ नया सामान", chargesSection: "भाड़ा या दूसरे ख़र्च", customerAll: "सभी ग्राहक", newCustomerQuick: "+ नया ग्राहक", newCustomerQuickPlaceholder: "GST नंबर या मोबाइल लिखें", newCustomerQuickGo: "जोड़ें", newCustomerQuickHelp: "GST नंबर से उनका राज्य भर जाता है। नाम और पता एक बार जोड़ें।", deliverElsewhere: "कहीं और पहुँचाना है", customerOwes: "{amount} बाक़ी", payUdhaar: "उधार", payPart: "कुछ पैसे मिले", payCheque: "चेक", payChequeNote: "चेक: बिल उधार पर बनाइए, और चेक आने पर उसे 'मिला पैसा' में दर्ज करें।", payToday: "आज", fifteenDays: "15 din mein", udhaarDays: "कब तक देंगे", paidNowAmount: "अभी मिले", billSummaryLabel: "बिल", transportEwayNote: "गाड़ी का नंबर हो तो बिल बनते ही ई-वे बिल अपने आप बन जाता है। नंबर न हो तो बिल होम पर रुका रहता है, जब तक गाड़ी पता न चले।", oneLess: "एक कम", oneMore: "एक ज़्यादा", lineFacts: "GST {rate}% · {stock} बचा", lineFactsGst: "GST {rate}%", checkEwayNeeded: "ई-वे बिल चाहिए — बिल बनने के बाद बनेगा", checkEwayNotNeeded: "ई-वे बिल की ज़रूरत नहीं", checkEinvoiceAuto: "ई-इनवॉइस अपने आप भेजा जाएगा", checkEinvoiceNotNeeded: "ई-इनवॉइस की ज़रूरत नहीं", vehicleFound: "{vehicle} परिवहन विभाग के रिकॉर्ड में है।", vehicleNotFound: "परिवहन विभाग के पास {vehicle} नंबर की कोई गाड़ी नहीं है। माल निकलने से पहले नंबर जाँच लें।", vehicleNotChecked: "{vehicle} की जाँच अभी नहीं हो पाई। बिल फिर भी बन सकता है।", doneEwayRaised: "ई-वे बिल {number} अपने आप बन गया · {valid} तक", doneEwayWaiting: "इस माल को ई-वे बिल चाहिए। गाड़ी पता चलने तक यह होम पर रहेगा।", doneEwayFailed: "ई-वे बिल नहीं बना: {reason} यह होम पर है, फिर से कोशिश के लिए।", supplierCheckFine: "GST नंबर चालू है, रिटर्न समय पर", supplierCheckFailed: "सप्लायर की जाँच अभी नहीं हो पाई। बिल फिर भी दर्ज हो सकता है।", purchaseCheckLine: "ख़रीद जाँच (GSTR-2B): {line}",
     // Issues #312 and #303 — the sale review's two lines, and the #design page.
-    reviewEwayNeeded: "Maal nikalne se pehle e-way bill chahiye: bill se ek dabane mein banaiye.", reviewEinvoiceAuto: "Sarkari e-invoice number chahiye: bill jaari karte hi apne aap bheja jata hai.", reviewEinvoiceNotNeeded: "E-invoice ki zaroorat nahin.", reviewTurnoverUnknown: "Abhi pata nahin ki aapko e-invoice chahiye ya nahin: Business details mein nahin likha ki turnover ₹5 crore se upar gaya hai ya nahin. Business details mein ek baar jawab dein. Yeh bill abhi bhi jaari ho sakta hai.", reviewEinvoiceLate: "Is bill ko sarkari e-invoice number chahiye, lekin yeh portal ke liye bahut purana hai.", designEyebrow: "Sirf maalik", designTitle: "Karobar kaisa dikhta hai", designHelp: "Rang, shabd, button, chip, paise ka card, bill ki slide aur neeche ki patti, English aur Hindi ek saath.", designOwnerOnly: "Yeh page sirf dukaan ke maalik khol sakte hain.", designTheme: "Rang:", designThemeDevice: "Is device jaisa", designThemeLight: "Ujala", designThemeDark: "Andhera", dsLanguage: "हिन्दी", dsButtons: "बटन: हर स्क्रीन पर एक ही मुख्य गेंदा-रंग बटन", dsMakeBill: "बिल बनाइए", dsSave: "सेव करें", dsBack: "पीछे", dsLater: "बाद में", dsChips: "स्थिति चिप: रंग सिर्फ़ स्थिति बताता है", dsPaid: "चुकाया", dsDue: "7 दिन में देना है", dsLate: "12 दिन देर", dsWalkIn: "काउंटर ग्राहक", dsMoneyCard: "पैसों का कार्ड (आज आपकी दुकान)", dsToCollect: "ग्राहकों से लेना है", dsSalesToday: "आज की बिक्री", dsToPay: "सप्लायर को देना है", dsSlide: "बिल की स्लाइड: एक फ़ैसला, कुल रकम हमेशा दिखे", dsStepItems: "क्या बिक रहा है?", dsStepCustomer: "कौन ख़रीद रहा है?", dsStepPayment: "पैसे कैसे दे रहे हैं?", dsStepDone: "बिल बन गया", dsFineLine: "कर्नाटक में बिक्री · CGST + SGST · ई-वे बिल की ज़रूरत नहीं", dsCustomerPays: "ग्राहक देगा", dsNext: "आगे", dsAgain: "फिर से", dsBottomBar: "फ़ोन पर नीचे की पट्टी", dsHome: "होम", dsKhata: "खाता", dsBill: "बिल", dsItems: "सामान", dsMore: "और",
+    reviewTurnoverUnknown: "Abhi pata nahin ki aapko e-invoice chahiye ya nahin: Business details mein nahin likha ki turnover ₹5 crore se upar gaya hai ya nahin. Business details mein ek baar jawab dein. Yeh bill abhi bhi jaari ho sakta hai.", reviewEinvoiceLate: "Is bill ko sarkari e-invoice number chahiye, lekin yeh portal ke liye bahut purana hai.", designEyebrow: "Sirf maalik", designTitle: "Karobar kaisa dikhta hai", designHelp: "Rang, shabd, button, chip, paise ka card, bill ki slide aur neeche ki patti, English aur Hindi ek saath.", designOwnerOnly: "Yeh page sirf dukaan ke maalik khol sakte hain.", designTheme: "Rang:", designThemeDevice: "Is device jaisa", designThemeLight: "Ujala", designThemeDark: "Andhera", dsLanguage: "हिन्दी", dsButtons: "बटन: हर स्क्रीन पर एक ही मुख्य गेंदा-रंग बटन", dsMakeBill: "बिल बनाइए", dsSave: "सेव करें", dsBack: "पीछे", dsLater: "बाद में", dsChips: "स्थिति चिप: रंग सिर्फ़ स्थिति बताता है", dsPaid: "चुकाया", dsDue: "7 दिन में देना है", dsLate: "12 दिन देर", dsWalkIn: "काउंटर ग्राहक", dsMoneyCard: "पैसों का कार्ड (आज आपकी दुकान)", dsToCollect: "ग्राहकों से लेना है", dsSalesToday: "आज की बिक्री", dsToPay: "सप्लायर को देना है", dsSlide: "बिल की स्लाइड: एक फ़ैसला, कुल रकम हमेशा दिखे", dsStepItems: "क्या बिक रहा है?", dsStepCustomer: "कौन ख़रीद रहा है?", dsStepPayment: "पैसे कैसे दे रहे हैं?", dsStepDone: "बिल बन गया", dsFineLine: "कर्नाटक में बिक्री · CGST + SGST · ई-वे बिल की ज़रूरत नहीं", dsCustomerPays: "ग्राहक देगा", dsNext: "आगे", dsAgain: "फिर से", dsBottomBar: "फ़ोन पर नीचे की पट्टी", dsHome: "होम", dsKhata: "खाता", dsBill: "बिल", dsItems: "सामान", dsMore: "और",
     skip: "Seedha mukhya hissa kholen", brandSubtitle: "Bill, stock aur GST", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Mila paisa", navMoney: "Paisa", navMore: "Aur", navStock: "Godown mein kya hai", navGroupBuying: "Kharid", navGroupStock: "Stock", navGroupSelling: "Bikri", navGroupGst: "GST", navGroupBooks: "Bahi", navGroupSettings: "Settings", navReturns: "Wapsi", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Mukhya menu", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
     deviceReady: "Draft surakshit hai", draftProtection: "Adhura kaam isi device par rahega.", companyLocation: "Delhi · Mukhya dukaan", language: "Bhasha",
     today: "Aaj", welcome: "Namaste Hanny", welcomeBody: "Aaj aapki dukaan ka haal.", newSale: "Nayi bikri",
     salesToday: "Aaj ki bikri", salesChange: "Kal se 12% zyada", customersOwe: "Customers se lena hai", fromCustomers: "8 customers se", purchasesMonth: "Is mahine ki kharid", purchaseCount: "14 supplier bills", needsAttention: "Dhyan dena hai", attentionBody: "1 zaroori · 2 dekhne hain",
     recentActivity: "Abhi ka kaam", recentBody: "Aapke naye bill aur len-den", viewAll: "Sab dekhen", saleIssued: "Bikri jaari · 11:42 AM", purchaseFrom: "Fresh Farms se kharid", purchaseSaved: "Aapke review ka intezar · 10:58 AM", paymentFrom: "Gupta Mart se payment", done: "Ho gaya", waiting: "Intezar", recorded: "Darj hai",
     yourAttention: "Aapka dhyan", attentionHelp: "Kaam rukne se pehle inhen dekhen", lowStock: "Apple boxes kam ho rahe hain", lowStockBody: "Mukhya dukaan par 12 boxes bache hain", approvalWaiting: "Ek bikri intezar mein hai", approvalBody: "₹42,800 ke liye owner ki manzoori chahiye", gstReminder: "GST return 6 din mein hai", gstBody: "Pehle adhure supplier bills dekhen",
-    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "Customer aur saman joden. Jaari karne se pehle har rakam dekh sakte hain.", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi mil gaya", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "GST", amountCustomerPays: "Customer dega", taxSafety: "GST aur total likhte-likhte usi niyam se bante hain jisse bill banta hai. Bill darj karne tak kuch save nahin hota.", roundOff: "Round off", estimateChooseCustomer: "GST dekhne ke liye customer chunen: unka rajya tay karta hai kaunsa GST lagega.", estimateChooseItem: "Total dekhne ke liye saman chunen.", editItemButton: "Item badlein", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
+    stepOne: "3 mein se kadam 1", saleTitle: "Bikri banayen", saleHelp: "सामान, ग्राहक, पेमेंट। ग्राहक कितना देगा, यह नीचे हमेशा दिखता है।", savedDevice: "Isi device par save", customer: "Customer", date: "Bikri ki tareekh", item: "Saman", quantity: "Matra", rate: "Ek ka daam", freight: "Freight", otherCharges: "Dusre kharche", chargeReview: "{charge} · Taxable {amount} · GST {gst}", paymentTerms: "Payment kab milega?", payNow: "Abhi mil gaya", sevenDays: "7 din mein", thirtyDays: "30 din mein", moreDetails: "Aur jaankari joden", reference: "Customer reference", notes: "Note", saleSummary: "Bikri ka saar", itemTotal: "GST se pehle saman", gstEstimate: "GST", amountCustomerPays: "Customer dega", taxSafety: "GST aur total likhte-likhte usi niyam se bante hain jisse bill banta hai. Bill darj karne tak kuch save nahin hota.", roundOff: "Round off", estimateChooseCustomer: "GST dekhne ke liye customer chunen: unka rajya tay karta hai kaunsa GST lagega.", estimateChooseItem: "Total dekhne ke liye saman chunen.", editItemButton: "Item badlein", reviewSale: "Bikri dekhen", discardDraft: "Draft hata den",
     purchaseTitle: "Kharid darj karen", purchaseHelp: "Supplier bill joden. Details dekhne tak yeh adhura rahega.", supplier: "Supplier", supplierBill: "Supplier bill number", billDate: "Bill ki tareekh", billAmount: "Bill ki rakam", uploadBill: "Bill ka photo ya PDF", uploadHelp: "File sirf yahan dekhi jati hai. Upload nahin hoti.", beforeSaving: "Save hone se pehle", checkSupplier: "Hum supplier pakka karenge", checkDuplicate: "Hum wahi bill dobara hone se rokenge", checkTax: "Aap har tax rakam dekhenge", purchaseSafety: "Is draft ko dekhne se stock, dena paisa ya GST nahi badlega.", billAmountHelp: "Bill par chhapi hui total rakam. Agar yeh lines ke jod se na mile, to hum darj karne ke bajaye aapko bata denge.", whatYouBought: "Aapne kya khareeda", itemSteel: "TMT Steel Bar 12mm (wazan se bikta hai)", itemSoap: "Herbal Bath Soap 100g (box mein bikta hai)", itemFreight: "Andar aane ka bhada (service hai, stock nahi)", howMany: "Kitna", ratePerUnit: "Ek ka daam, GST se pehle", gstRate: "Bill par GST rate", purchaseLinesLabel: "Is supplier bill ki cheezein", purchaseTaxFromGstin: "Is bill par IGST lagega ya CGST aur SGST, yeh supplier ke GST number aur aapke GST number se tay hota hai. Kisi se unka rajya nahin poochha jata.", postingTitle: "Darj karne par kya hoga", postingStock: "Saman aapke godown mein aa jayega", postingBooks: "Kharid, aur jo GST wapas mil sakta hai, aapki bahi mein aa jayegi", postingOwed: "Supplier ko jo dena hai woh ban jayega, tareekh ke saath", postingTogether: "Teenon ek saath hote hain. Ek bhi na ho paya, to kuch bhi save nahi hoga.", postingRetrySafe: "Pakka nahi hai ki hua ya nahi? Dobara dabaiye. Ek hi bill do baar kabhi darj nahi hota.", reviewPurchase: "Kharid dekhen",
     paymentTitle: "Mila paisa darj karen", paymentHelp: "Kisne kitna diya, darj karen. Bill abhi chunen ya baad mein.", receivedFrom: "Kis se mila", amountReceived: "Mili rakam", paymentDate: "Payment ki tareekh", paymentMethod: "Payment kaise hua?", cash: "Cash", bankTransfer: "Bank transfer", cheque: "Cheque", chooseBill: "Yeh kis bikri ka payment hai?", chooseLater: "Baad mein chunen", chooseBillHelp: "Jin bills ka yeh paisa hai, unpar tick karein. Koi tick na ho, ya paisa bills se zyada ho, to baaki is customer ke khaate mein alag dikhega.", paymentSummary: "Payment ka saar", paymentSafety: "Yeh draft hai. Review aur save hone tak customer ka baki paisa kam nahi hoga.", reviewPayment: "Payment dekhen",
     navPaid: "Diya paisa", paidTitle: "Supplier ko diya paisa darj karen", paidHelp: "Supplier chunen, jin bills ka payment hai unpar tick karein, aur batayen kaise diya.", paidTo: "Kisko diya", amountPaid: "Di gayi rakam", paidDate: "Dene ki tareekh", paidMethod: "Aapne kaise diya?", chooseSupplierBill: "Yeh kin bills ka payment hai", chooseSupplierBillHelp: "Supplier ke jin bills ka yeh paisa hai, unpar tick karein. Bill se pehle de rahe hain? Neeche advance chunen.", advanceChoice: "Ise {supplier} ko advance ke roop mein darj karein", advanceHelpNoBill: "{supplier} ka abhi koi bill nahin hai. Yeh paisa advance rahega aur unke agle bill se kata jayega.", advanceHelpMore: "Jo paisa upar tick kiye bills ke saamne nahin laga, woh advance rahega aur {supplier} ke agle bill se kata jayega.", advanceAlready: "{supplier} ke paas pehle se advance: {amount}.", advancePoNumber: "Kis purchase order ke saamne (number, zaroori nahin)", advancePoDate: "Purchase order ki tareekh", advancePoHelp: "Purchase order nahin hai? Dono khaali chhodein; voucher par likha hoga ki advance aane wale maal (goods to be supplied) ke saamne hai.", advanceReceiptNumber: "Supplier ka receipt voucher number (zaroori nahin)", advanceReceiptDate: "Receipt voucher ki tareekh", advanceReceiptHelp: "Advance milne par supplier receipt voucher deta hai. Aapke paas ho to bharen; yeh payment voucher par chhapega.", printAdvanceVoucher: "Advance voucher print karein", supplierAdvances: "Suppliers ko diya advance: {amount}", useAdvanceOnBill: "{supplier} ko diya {amount} advance is bill se kaatein", paidSummary: "Payment ka saar", paidSafety: "Yeh draft hai. Review aur save hone tak supplier ka baki kam nahi hoga.", reviewPaid: "Payment dekhen",
@@ -691,7 +695,7 @@ const copy = {
     draftReady: "Draft review ke liye taiyar hai", keepEditing: "Badlav karen", understand: "Samajh gaya",
     // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
     mainNavigation: "मुख्य मेन्यू", tabHome: "होम", tabKhata: "खाता", tabBill: "बिल", tabItems: "सामान", tabMore: "और",
-    billSheetTitle: "नया बनाइए…", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।",
+    billSheetTitle: "नया बनाइए…", otherBills: "दूसरे बिल", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।",
     navGroupPeople: "लोग", navGroupBusiness: "कारोबार की सेटिंग", navGroupReports: "रिपोर्ट",
     moreTitle: "और", moreHelp: "आपकी दुकान का बाक़ी सब कुछ, एक जगह।",
     itemsTitle: "सामान", itemsHelp: "आप क्या बेचते और ख़रीदते हैं, और गोदाम में कितना बचा है।", itemsAdd: "सामान जोड़िए", itemsEdit: "बदलिए", itemsNone: "अभी कोई सामान नहीं। जो बेचते हैं, पहले वह जोड़िए।",
@@ -915,6 +919,8 @@ function openView(view, section = null) {
   // Issue #240 — back on the bill after raising its e-way bill, the line under it says so.
   // (Guarded: the first view opens while the page is still loading, before the bill state exists.)
   try { if (target === "sale" && billOnScreen.invoiceId) showSaleBillEway(billOnScreen.invoiceId, false); } catch { /* not loaded yet */ }
+  // Issue #305 — back on the sale (from Business details, say), the slide it was on is read again.
+  try { if (target === "sale") saleSlidesShown(); } catch { /* not loaded yet */ }
   if (target === "itc") openItc();
   if (target === "gst-returns") openGstReturns();
   if (target === "bank-feeds") loadBankFeeds();
@@ -1791,9 +1797,10 @@ function saleReview(result, shown) {
   const fine = [
     ...(paid ? [text(paid.due > 0 ? "saleEffectPartPaid" : "saleEffectPaid", { mode: copy[state.locale][{ CASH: "paidCash", UPI: "paidUpi", CARD: "paidCard" }[paid.mode]], amount: money(paid.amount), due: money(paid.due) })] : []),
     ...(result.exportSupply ? [result.exportSupply.endorsement] : []),
-    ...(result.ewayBill?.outcome === "REQUIRED" ? [text("reviewEwayNeeded")] : []),
-    ...(result.eInvoice?.needed === "YES" && !result.eInvoice.lateForPortal ? [text("reviewEinvoiceAuto")] : []),
-    ...(result.eInvoice?.needed === "NO" ? [text("reviewEinvoiceNotNeeded")] : []),
+    // Issue #311 — one line per check, said as what will happen by itself.
+    ...(result.ewayBill?.outcome === "REQUIRED" ? [text("checkEwayNeeded")] : result.ewayNotNeeded ? [text("checkEwayNotNeeded")] : []),
+    ...(result.eInvoice?.needed === "YES" && !result.eInvoice.lateForPortal ? [text("checkEinvoiceAuto")] : []),
+    ...(result.eInvoice?.needed === "NO" ? [text("checkEinvoiceNotNeeded")] : []),
   ];
   return {
     ...shown,
@@ -2081,6 +2088,11 @@ const ESTIMATE_DELAY_MS = 250;
 let estimateTimer = null;
 let estimateAsked = 0;
 let lastEstimate = null;
+// Issue #305 — the sale's slides, once mounted, and the review shown on its Payment slide: the
+// server's answer, the inputs it was for, and its one warning. Declared here because the live total
+// above already draws the bill bar while the page is loading.
+let saleSlides = null;
+const saleReviewState = { result: null, forInput: "", warning: null, timer: null, queue: Promise.resolve() };
 
 function scheduleEstimate() {
   clearTimeout(estimateTimer);
@@ -2125,9 +2137,33 @@ function renderEstimate() {
     roundOff.hidden = !totals || totals.roundOff === 0;
     roundOff.querySelector('[data-calculated="roundOff"]').textContent = totals ? money(totals.roundOff) : "";
   }
+  const charges = totals ? estimate.lines.filter((line) => line.kind === "CHARGE").reduce((sum, line) => sum + Math.round(line.taxableValue * 100), 0) : 0;
   if (totals) {
     const goods = estimate.lines.filter((line) => line.kind !== "CHARGE").reduce((sum, line) => sum + Math.round(line.taxableValue * 100), 0);
     sale.querySelector('[data-calculated="subtotal"]').textContent = money(goods / 100);
+    // Each card's GST, as the calculator charged it (the lines are priced in the order they are sent).
+    const priced = estimate.lines.filter((line) => line.kind !== "CHARGE");
+    [...document.querySelectorAll("#sale-lines .sale-line")]
+      .filter((line) => (line.querySelector("[data-line-field=item]")?.value ?? "") !== "")
+      .forEach((line, index) => { if (priced[index]?.ratePercent != null) setLineFacts(line, priced[index].ratePercent); });
+  }
+  // Issue #305 — the Payment slide's bill summary: the same figures, and freight when there is any.
+  const payTotal = sale.querySelector('[data-calculated="payTotal"]');
+  if (payTotal) payTotal.textContent = totals ? money(totals.total) : "—";
+  const chargesLine = document.querySelector("#sale-charges-line");
+  if (chargesLine) {
+    chargesLine.hidden = charges === 0;
+    chargesLine.querySelector('[data-calculated="charges"]').textContent = money(charges / 100);
+  }
+  // Issue #305 / #311 — the Customer slide: where the sale counts, then one line per check.
+  const checks = document.querySelector("#sale-customer-checks");
+  if (checks) {
+    checks.replaceChildren(...(estimate ? saleCheckLines(estimate) : []).map(([words, kind]) => {
+      const row = document.createElement("li");
+      row.className = kind;
+      row.textContent = words;
+      return row;
+    }));
   }
   const notes = document.querySelector("#sale-estimate-notes");
   if (!notes) return;
@@ -2139,24 +2175,37 @@ function renderEstimate() {
     rows.push(row);
     return row;
   };
-  if (estimate) {
-    if (estimate.placeOfSupply) note(t(estimate.placeOfSupply));
-    if (estimate.ewayBill) note(t(estimate.ewayBill), estimate.ewayBill.needed ? "warn" : "");
-    if (estimate.eInvoice) note(t(estimate.eInvoice), estimate.eInvoice.needed === "NO" ? "" : "warn");
-    (estimate.refusals || []).forEach((refusal) => {
-      const row = note(estimateRefusalText(refusal), "hold");
-      // Issue #308 — an item held up by its code or rate is fixed in the item's own dialog.
-      if (refusal.itemId && /^(HSN_|RATE_|ITEM_NOT_CLASSIFIED)/.test(refusal.code)) {
-        const edit = document.createElement("button");
-        edit.type = "button";
-        edit.className = "text-button";
-        edit.textContent = copy[state.locale].editItemButton;
-        edit.addEventListener("click", () => openItemEditor(refusal.itemId));
-        row.append(" ", edit);
-      }
-    });
-  }
+  // The Items slide lists only what would stop the bill; the checks are said on the next slides.
+  (estimate?.refusals || []).forEach((refusal) => {
+    const row = note(estimateRefusalText(refusal), "hold");
+    // Issue #308 — an item held up by its code or rate is fixed in the item's own dialog.
+    if (refusal.itemId && /^(HSN_|RATE_|ITEM_NOT_CLASSIFIED)/.test(refusal.code)) {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "text-button";
+      edit.textContent = copy[state.locale].editItemButton;
+      edit.addEventListener("click", () => openItemEditor(refusal.itemId));
+      row.append(" ", edit);
+    }
+  });
   notes.replaceChildren(...rows);
+  updateSaleBar();
+}
+
+/**
+ * Issue #305 / #311 — what the live total found, as the Customer slide says it: where the sale counts
+ * (green), then one line per check. Only the server's decisions; nothing is decided here.
+ */
+function saleCheckLines(estimate) {
+  const lines = [];
+  if (estimate.placeOfSupply) lines.push([t(estimate.placeOfSupply), "line-ok"]);
+  if (estimate.ewayBill) lines.push([text(estimate.ewayBill.needed ? "checkEwayNeeded" : "checkEwayNotNeeded"), "line-ok"]);
+  const needed = estimate.eInvoice?.needed;
+  if (needed === "YES") lines.push([text("checkEinvoiceAuto"), "line-ok"]);
+  else if (needed === "NO") lines.push([text("checkEinvoiceNotNeeded"), "line-ok"]);
+  // Not decided yet (the turnover question): said here, and asked once on the Payment slide.
+  else if (estimate.eInvoice) lines.push([t(estimate.eInvoice), "line-warn"]);
+  return lines;
 }
 
 // A date the business must choose for itself — how long a quoted price holds (#142) — is marked
@@ -2174,20 +2223,10 @@ document.querySelectorAll(".draft-form").forEach((form) => {
   form.addEventListener("change", () => saveDraft(form));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    // Issue #305 — a sale is reviewed on its Payment slide and made with Make bill, never submitted.
+    if (form.dataset.draft === "sale") return;
     saveDraft(form);
     const input = draftData(form);
-    // Issue #181 — the lines as they are on the screen go with the request, so what was typed is
-    // what is priced, what is stored and what prints.
-    if (form.dataset.draft === "sale") {
-      input.lines = JSON.stringify(saleLineValues());
-      // Issue #233 — one key per review. Record sends this same review, so pressing it twice issues
-      // one bill; the next review is a new sale with a new key.
-      input.requestId = newPaymentRequestId();
-      // Issue #256 — the review this one replaces. It was never issued, so the server forgets it
-      // instead of keeping it as "a bill waiting".
-      if (form.dataset.saleReview) input.replaces = form.dataset.saleReview;
-      form.dataset.saleReview = input.requestId;
-    }
     // Issue #228 — and a supplier bill's lines, each with the GST rate printed on it.
     if (form.dataset.draft === "purchase") input.lines = JSON.stringify(purchaseLineValues());
     // Issue #230 — the bills ticked, and one entry number per payment so pressing Record twice records once.
@@ -2213,7 +2252,7 @@ document.querySelectorAll(".draft-form").forEach((form) => {
     } finally { setFormBusy(form, false); }
   });
   form.querySelector(".clear-draft").addEventListener("click", () => {
-    if (form.dataset.draft === "sale") { resetSaleForm(form); setDraftStatus(form, "draftCleared"); return; }
+    if (form.dataset.draft === "sale") { resetSaleForm(form); setDraftStatus(form, "draftCleared"); startNewSaleSlides(); return; }
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
     hideDraftDateNote(form);
     forgetPendingDraft(form);
@@ -3284,19 +3323,24 @@ document.querySelector("#branding-format")?.addEventListener("change", refreshBr
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view, button.dataset.section ?? null)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); renderPickers(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
-// Issue #304 — + Bill, from anywhere: the tab, F2 or Alt+N. Sale has the focus, so one more tap (or
-// Enter) opens it. Not over the sign-in or another open box.
+// Issue #304 — + Bill, from anywhere: the tab, F2 or Alt+N open a new sale in one tap. The other bills
+// are on the sheet, opened by "Other bills" on the sale. Not over the sign-in or another open box.
+function openNewSale() {
+  if (document.querySelector("dialog[open]")) return;
+  openView("sale");
+}
 function openBillSheet() {
   const sheet = document.querySelector("#bill-sheet");
   if (!sheet || sheet.open || document.querySelector("dialog[open]")) return;
   sheet.showModal();
   sheet.querySelector(".sheet-main")?.focus();
 }
-document.querySelector("#bill-button").addEventListener("click", openBillSheet);
+document.querySelector("#bill-button").addEventListener("click", openNewSale);
+document.querySelector("#other-bills").addEventListener("click", openBillSheet);
 document.addEventListener("keydown", (event) => {
   if (event.key === "F2" || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyN")) {
     event.preventDefault();
-    openBillSheet();
+    openNewSale();
   }
 });
 document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
@@ -3421,8 +3465,15 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     }
     return;
   }
-  if (!state.pendingForm || !state.pendingInput) return;
-  const button = event.currentTarget;
+  await recordPending(event.currentTarget);
+});
+
+/**
+ * Records the review on screen: Record once in the review box, or Make bill on the sale's last slide
+ * (#305). The review's own key goes with it (#233), so pressing either twice records once.
+ */
+async function recordPending(button) {
+  if (!state.pendingForm || !state.pendingInput) return null;
   button.disabled = true;
   button.textContent = copy[state.locale].recording;
   try {
@@ -3441,17 +3492,28 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     // Issue #307 — a sale finishes on the done screen; everything else in the recorded box.
     const saleDone = form.dataset.draft === "sale" && Boolean(result.invoice);
     if (saleDone) document.querySelector("#review-dialog").close();
-    else showDialog(forSale ? purchaseForSaleRecorded(localizeResult(result, form.dataset.draft, "recorded")) : localizeResult(result, form.dataset.draft, "recorded"), "recorded");
+    else showDialog(withPurchaseCheck(forSale ? purchaseForSaleRecorded(localizeResult(result, form.dataset.draft, "recorded")) : localizeResult(result, form.dataset.draft, "recorded")), "recorded");
     if (forSale) showPurchaseForSaleNote(true);
     // Issue #230 — the receipt or payment voucher is ready behind the dialog, and the form is empty for the next one.
     if (form.dataset.endpoint === "payments" && result.paymentId) await paymentRecorded(form, result);
     // Issue #132 — the bill is waiting on the screen behind the done screen, not on a developer's laptop.
     if (saleDone) { await openDoneScreen(result); await showSaleBill(result.invoice.id); }
     await refreshDocumentLists();
+    return result;
   } catch (error) {
     showSaleFailure(error);
+    return null;
+  } finally {
+    button.disabled = false;
+    updateSaleBar();
   }
-});
+}
+
+/** Issue #311 — a recorded supplier bill says its purchase check (GSTR-2B/IMS) on the bill itself. */
+function withPurchaseCheck(result) {
+  if (!result.purchaseCheck) return result;
+  return { ...result, effects: [...(result.effects || []), text("purchaseCheckLine", { line: t(result.purchaseCheck) })] };
+}
 
 // ------------------------------------------------- issue #132: the bill, on screen and on paper
 //
@@ -3494,7 +3556,8 @@ async function showSaleBill(invoiceId) {
         ? text("printBillCopies", { copies: String(billOnScreen.copies) })
         : copy[state.locale].printBill;
     }
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Issue #305 — the done slide stays in view; the bill waits below it.
+    if (saleSlides?.current() !== "done") panel.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     document.querySelector("#sale-bill-title").textContent = copy[state.locale].billLoadFailed;
     note.textContent = localizedError(error);
@@ -3508,15 +3571,17 @@ async function showSaleBill(invoiceId) {
 // done-screen.js, so the four-slide sale (#305) shows the same one.
 
 async function openDoneScreen(sale) {
-  const dialog = document.querySelector("#done-screen");
+  // Issue #305 — on the sale screen the done screen is the last slide; elsewhere, its own box.
+  const slide = saleSlides && state.view === "sale" ? document.querySelector("#sale-done") : null;
+  const dialog = slide ?? document.querySelector("#done-screen");
   if (!dialog) return;
   const { mountDoneScreen } = await import("./done-screen.js");
   const words = copy[state.locale];
-  const close = () => dialog.close();
+  const close = () => { if (slide === null) dialog.close(); };
   const first = mountDoneScreen(dialog, sale, {
     words, money, storage,
     onPrint: (format) => printSaleBill(sale.invoice.id, format),
-    onNewBill: () => { close(); openView("sale"); document.querySelector('#sale-lines [data-line-field="item"]')?.focus(); },
+    onNewBill: () => { close(); openView("sale"); startNewSaleSlides(); },
     onDownload: () => downloadBillPdf(sale.invoice.id, sale.invoice.number).catch((error) => { close(); showDialog({ title: words.nothingSaved, message: localizedError(error) }, "failed"); }),
     onEway: () => { close(); openEwayForBill(sale.invoice.id); },
     onCancel: () => {
@@ -3526,8 +3591,26 @@ async function openDoneScreen(sale) {
       if (cancel) { cancel.dataset.number = sale.invoice.number; cancel.click(); }
     },
   });
-  if (!dialog.open) dialog.showModal();
+  // Issue #311 — the e-way bill raised by itself (or why it waits on Home), on the finished bill.
+  const eway = doneEwayLine(sale);
+  if (eway) {
+    const line = document.createElement("p");
+    line.className = eway.ok ? "line-ok" : "line-warn";
+    line.textContent = eway.text;
+    dialog.querySelector(".done-line")?.after(line);
+  }
+  if (slide) saleSlides.show("done", { focus: false });
+  else if (!dialog.open) dialog.showModal();
   first?.focus();
+}
+
+/** Issue #311 — one line on the done screen for the e-way bill: raised by itself, waiting, or refused. */
+function doneEwayLine(sale) {
+  const raised = sale.ewayRaised;
+  if (raised?.ewayBillNumber) return { ok: true, text: text("doneEwayRaised", { number: raised.ewayBillNumber, valid: raised.validUntilLabel ?? "" }) };
+  if (sale.ewayBill?.outcome !== "REQUIRED") return null;
+  if (raised) return { ok: false, text: text("doneEwayFailed", { reason: raised.failure?.message ?? raised.message ?? "" }) };
+  return { ok: false, text: text("doneEwayWaiting") };
 }
 
 /** Issue #307 — the bill on the paper chosen on the done screen, printed through the bill's own print path. */
@@ -6205,6 +6288,8 @@ let catalogueLoaded = false;
 /** Issue #182 — the chosen customer's delivery addresses and this business's transporters. */
 const delivery = { transporters: [], addresses: [], customerId: null };
 const saleForm = () => document.querySelector('[data-draft="sale"]');
+/** Issue #311 — which supplier the Purchase screen's supplier check was last run for. */
+const supplierCheck = { for: "" };
 
 const itemById = (id) => catalogue.items.find((item) => item.id === id) ?? null;
 
@@ -6322,6 +6407,31 @@ function showChosenSupplier() {
   detail.textContent = supplier === null
     ? ""
     : `${[...supplier.addressLines, supplier.stateName ? `${supplier.stateName} (${supplier.stateCode})` : ""].filter(Boolean).join(", ")} · ${supplier.gstin ?? ""}`;
+  checkPurchaseSupplier(supplier);
+}
+
+/**
+ * Issue #311 — the supplier check (#19) the moment a supplier is chosen, as one line: "GST number
+ * active, filing on time" when the GST department's light is green and nothing needs attention, else
+ * the check's own first warning (its wording is kept safe by the check itself). Reads only.
+ */
+async function checkPurchaseSupplier(supplier) {
+  const line = document.querySelector("#purchase-supplier-check");
+  if (!line) return;
+  if (!supplier?.gstin) { line.hidden = true; supplierCheck.for = ""; return; }
+  if (supplierCheck.for === supplier.id) return;
+  supplierCheck.for = supplier.id;
+  let result = null;
+  try { result = await api("/api/suppliers/check", { method: "POST", body: JSON.stringify({ gstin: supplier.gstin, party: supplier.name }) }); } catch { result = null; }
+  if (supplierCheck.for !== supplier.id) return;
+  const government = result?.lights?.find((light) => light.scope === "GOVERNMENT");
+  const fine = result !== null && result.level === "INFORMATION" && government?.colour === "GREEN";
+  const worst = result?.warnings?.find((warning) => warning.level === "SERIOUS") ?? result?.warnings?.find((warning) => warning.level === "CAUTION");
+  line.className = fine ? "line-ok" : "line-warn";
+  line.querySelector("span").textContent = fine ? "✓" : "!";
+  line.querySelector("[data-line-text]").textContent = fine ? copy[state.locale].supplierCheckFine
+    : result === null ? copy[state.locale].supplierCheckFailed : (worst?.message ?? result.message);
+  line.hidden = false;
 }
 
 /** A purchase line starts at the rate the business declared for the item; the bill may say otherwise. */
@@ -6360,6 +6470,8 @@ function showChosenCustomer() {
     loadSelling();
   }
   showPlaceOfSupply();
+  // Issue #305 — a customer just added (or picked from the full list) is shown chosen on the slide.
+  if (saleSlides?.current() === "customer") renderSaleCustomerChoices();
 }
 
 /** Issue #288 — the Sale screen's customer picker, and the company's walk-in customer on it. */
@@ -6374,10 +6486,19 @@ function walkInId() {
 function showPaidBy() {
   const field = document.querySelector("#sale-paid-by-field");
   if (!field) return;
-  field.hidden = document.querySelector("#sale-terms")?.value !== "now";
-  field.querySelector("select").disabled = field.hidden;
+  const terms = document.querySelector("#sale-terms")?.value ?? "now";
+  // Issue #305 — the tile says how; only "Part paid" asks again, beside its amount.
+  const way = salePayWay();
+  field.hidden = way !== "PART";
+  // Udhaar sends no paidBy and no amount at all, so nothing is received.
+  field.querySelector("select").disabled = terms !== "now";
+  const amount = document.querySelector('[data-draft="sale"]')?.elements.namedItem("paidAmount");
+  if (amount) amount.disabled = way !== "PART";
+  document.querySelector("#sale-part-paid")?.toggleAttribute("hidden", way !== "PART");
+  document.querySelector("#sale-udhaar-days")?.toggleAttribute("hidden", way !== "UDHAAR");
+  document.querySelectorAll("#sale-pay-tiles [data-pay]").forEach((tile) => tile.setAttribute("aria-pressed", String(tile.dataset.pay === way)));
+  document.querySelectorAll("#sale-udhaar-days [data-days]").forEach((chip) => chip.setAttribute("aria-pressed", String(chip.dataset.days === terms)));
 }
-document.querySelector("#sale-terms")?.addEventListener("change", showPaidBy);
 document.querySelector("#sale-walk-in")?.addEventListener("click", () => {
   const picker = saleCustomerPicker();
   if (!picker || walkInId() === "") return;
@@ -6385,6 +6506,332 @@ document.querySelector("#sale-walk-in")?.addEventListener("click", () => {
   showChosenCustomer();
   saveDraft(picker.form);
 });
+
+// ------------------------------------------------- issue #305: a sale in four slides
+//
+// Items → Customer → Payment → Done, with Transport, Export and Ship to between Payment and Done only
+// when this bill needs them. It is the same form as before, field for field, so the review, the
+// review key (#233), the stock refusal and its purchase hand-off (#229, #262), the e-invoice decision
+// (#239) and the date rules (#266) are exactly the ones every sale already went through. The live
+// total (#306) sits in the bar under every slide; the review runs on the Payment slide, and Make bill
+// records that review.
+
+/** The four main slides are always there; these three only when the bill needs them. */
+const OPTIONAL_SLIDES = {
+  transport: () => lastEstimate?.ewayBill?.needed === true || saleReviewState.result?.ewayBill?.outcome === "REQUIRED" || (saleForm()?.elements.namedItem("vehicleNumber")?.value ?? "") !== "",
+  export: () => document.querySelector("#sale-export")?.hidden === false,
+  shipto: () => saleForm()?.dataset.deliverElsewhere === "yes" || (document.querySelector("#sale-ship-to")?.value ?? "same") !== "same",
+};
+
+/** How the customer pays, as the Payment slide's tiles show it. */
+function salePayWay() {
+  const form = document.querySelector('[data-draft="sale"]'); // not saleForm(): runs while the page loads
+  if (!form) return "CASH";
+  if ((form.elements.namedItem("terms")?.value ?? "now") !== "now") return "UDHAAR";
+  if (form.dataset.payWay === "PART" || (form.elements.namedItem("paidAmount")?.value ?? "") !== "") return "PART";
+  return form.elements.namedItem("paidBy")?.value || "CASH";
+}
+
+/** A tile pressed: the same three fields the form always sent (terms, paidBy, paidAmount), set for it. */
+function chooseSalePayWay(way) {
+  const form = saleForm();
+  if (!form || way === "CHEQUE") return;
+  const terms = form.elements.namedItem("terms");
+  const paidBy = form.elements.namedItem("paidBy");
+  const amount = form.elements.namedItem("paidAmount");
+  form.dataset.payWay = way;
+  if (way === "UDHAAR") {
+    // Thirty days unless another is tapped: the usual credit a shop gives, shown pressed.
+    if (terms.value === "now") terms.value = "30";
+    amount.value = "";
+  } else {
+    terms.value = "now";
+    if (way === "PART") amount.disabled = false;
+    else { paidBy.value = way; amount.value = ""; }
+  }
+  showPaidBy();
+  saveDraft(form);
+  updateCalculations();
+  queueSaleReview();
+  if (way === "PART") amount.focus();
+}
+
+document.querySelector("#sale-pay-tiles")?.addEventListener("click", (event) => {
+  const tile = event.target.closest("[data-pay]");
+  if (tile && !tile.disabled) chooseSalePayWay(tile.dataset.pay);
+});
+document.querySelector("#sale-udhaar-days")?.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-days]");
+  const form = saleForm();
+  if (!chip || !form) return;
+  form.elements.namedItem("terms").value = chip.dataset.days;
+  showPaidBy();
+  saveDraft(form);
+  updateCalculations();
+  queueSaleReview();
+});
+
+/** Customers to tap: Walk-in first, then the ones who owe the most, then the rest, six in all. */
+function renderSaleCustomerChoices() {
+  const box = document.querySelector("#sale-customer-choices");
+  const picker = saleCustomerPicker();
+  if (!box || !picker) return;
+  const owed = new Map();
+  (state.dashboard?.customer?.documents ?? []).forEach((bill) => owed.set(bill.party, (owed.get(bill.party) ?? 0) + Math.round(Number(bill.outstanding) * 100)));
+  const others = catalogue.customers.filter((row) => !row.walkIn)
+    .sort((a, b) => (owed.get(b.name) ?? 0) - (owed.get(a.name) ?? 0) || a.name.localeCompare(b.name));
+  const chosen = catalogue.customers.find((row) => row.id === picker.value);
+  // Drawn again after a choice: the keyboard stays on the customer just chosen, not lost to the page.
+  const hadFocus = box.contains(document.activeElement);
+  queueMicrotask(() => { if (hadFocus) box.querySelector('[aria-pressed="true"]')?.focus(); });
+  const shown = [...catalogue.customers.filter((row) => row.walkIn), ...others.slice(0, 5)];
+  if (chosen && !shown.includes(chosen)) shown.push(chosen);
+  box.replaceChildren(...shown.map((customer) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip customer-choice";
+    button.setAttribute("aria-pressed", String(customer.id === picker.value));
+    const name = document.createElement("span");
+    name.textContent = customer.walkIn ? copy[state.locale].walkInCustomer : customer.name;
+    button.append(name);
+    const owes = owed.get(customer.name) ?? 0;
+    if (!customer.walkIn && owes > 0) {
+      const due = document.createElement("small");
+      due.textContent = text("customerOwes", { amount: money(owes / 100) });
+      button.append(" ", due);
+    }
+    button.addEventListener("click", () => {
+      picker.value = customer.id;
+      showChosenCustomer();
+      saveDraft(picker.form);
+      updateCalculations();
+      renderSaleCustomerChoices();
+    });
+    return button;
+  }));
+}
+
+/** "+ New: type GST number or mobile": the add-customer box, with what was typed already in it. */
+document.querySelector("#sale-new-customer-go")?.addEventListener("click", () => {
+  const typed = document.querySelector("#sale-new-customer")?.value.trim() ?? "";
+  const form = document.querySelector("#customer-form");
+  if (!form) return;
+  form.reset();
+  const compact = typed.replace(/\s/g, "").toUpperCase();
+  const gstin = /^\d{2}[A-Z0-9]{13}$/.test(compact);
+  const mobile = !gstin && /^(\+?91)?[6-9]\d{9}$/.test(compact);
+  form.elements.namedItem("registration").value = gstin ? "regular" : "unregistered";
+  if (gstin) form.elements.namedItem("gstin").value = compact;
+  else if (mobile) form.elements.namedItem("phone").value = compact.slice(-10);
+  else form.elements.namedItem("legalName").value = typed;
+  showCustomerRegistrationFields();
+  pickerAwaitingNewRecord = saleCustomerPicker();
+  document.querySelector("#customer-dialog")?.showModal();
+});
+
+document.querySelector("#sale-new-customer")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); document.querySelector("#sale-new-customer-go")?.click(); }
+});
+
+document.querySelector("#sale-deliver-elsewhere")?.addEventListener("click", (event) => {
+  const form = saleForm();
+  if (!form) return;
+  const on = form.dataset.deliverElsewhere !== "yes";
+  if (on) form.dataset.deliverElsewhere = "yes"; else delete form.dataset.deliverElsewhere;
+  event.currentTarget.setAttribute("aria-pressed", String(on));
+  if (!on) { document.querySelector("#sale-ship-to").value = "same"; showShipToFields(); saveDraft(form); updateCalculations(); }
+  updateSaleBar();
+});
+
+/** The review on the Payment slide, asked again once the owner stops changing it (one at a time). */
+function queueSaleReview(delay = 300) {
+  clearTimeout(saleReviewState.timer);
+  saleReviewState.timer = setTimeout(() => { saleReviewState.queue = saleReviewState.queue.then(reviewSaleOnSlide); }, delay);
+}
+
+/** What a review is for: the form as it is, with its lines. A change makes the review on screen old. */
+const saleReviewKey = (form) => JSON.stringify({ ...draftData(form), lines: saleLineValues() });
+
+/**
+ * Runs the sale review (/api/sales/preview) for the Payment slide. The same request the Review button
+ * used to send: the lines as typed, one key per review (#233), and the review it replaces (#256).
+ * A refusal (goods short, a walk-in over ₹50,000, a date the bill cannot carry) opens the same box
+ * as before, with the same way through ("Enter the purchase bill").
+ */
+async function reviewSaleOnSlide() {
+  const form = saleForm();
+  if (!form || !state.sessionId || saleLineValues().length === 0) return null;
+  const key = saleReviewKey(form);
+  if (saleReviewState.forInput === key && saleReviewState.result) return saleReviewState.result;
+  saveDraft(form);
+  const input = draftData(form);
+  // Issue #181 — the lines as they are on the screen go with the request, so what was typed is
+  // what is priced, what is stored and what prints.
+  input.lines = JSON.stringify(saleLineValues());
+  // Issue #233 — one key per review. Make bill sends this same review, so pressing it twice issues
+  // one bill; the next review is a new sale with a new key.
+  input.requestId = newPaymentRequestId();
+  // Issue #256 — the review this one replaces. It was never issued, so the server forgets it
+  // instead of keeping it as "a bill waiting".
+  if (form.dataset.saleReview) input.replaces = form.dataset.saleReview;
+  form.dataset.saleReview = input.requestId;
+  const box = document.querySelector('[data-slide="payment"]');
+  box?.setAttribute("aria-busy", "true");
+  try {
+    const result = await api("/api/sales/preview", { method: "POST", body: JSON.stringify(input) });
+    state.pendingForm = form;
+    state.pendingInput = input;
+    state.pendingReturnInput = null;
+    saleReviewState.result = result;
+    saleReviewState.forInput = key;
+    renderSaleReview();
+    return result;
+  } catch (error) {
+    saleReviewState.result = null;
+    saleReviewState.forInput = "";
+    state.pendingInput = null;
+    renderSaleReview();
+    showSaleFailure(error);
+    return null;
+  } finally {
+    box?.removeAttribute("aria-busy");
+    updateSaleBar();
+  }
+}
+
+/** The Payment slide's two lines: what the law needs, happening by itself, and at most one warning. */
+function renderSaleReview() {
+  const result = saleReviewState.result;
+  const ok = document.querySelector("#sale-review-ok");
+  const warn = document.querySelector("#sale-review-warning");
+  if (!ok || !warn) return;
+  const shown = result === null ? null : saleReview({ ...result, ewayNotNeeded: lastEstimate?.ewayBill?.needed === false }, localizeResult(result, "sale", "preview"));
+  ok.hidden = !shown?.fine;
+  ok.querySelector("[data-line-text]").textContent = shown?.fine ?? "";
+  warn.hidden = !shown?.warning;
+  warn.querySelector("[data-line-text]").textContent = shown?.warning ?? "";
+  document.querySelector("#sale-review-turnover").hidden = !shown?.askTurnover;
+  saleReviewState.warning = shown?.warning ?? null;
+}
+
+/** The bill bar: Back, what the customer pays, and Next — or Make bill on the last slide. */
+function updateSaleBar() {
+  if (!saleSlides) return;
+  const now = saleSlides.current();
+  const bar = document.querySelector("#sale-bill-bar");
+  if (bar) bar.hidden = now === "done";
+  const back = document.querySelector("#sale-back");
+  if (back) back.hidden = now === "items" || now === "done";
+  const next = document.querySelector("#sale-next");
+  if (next && !next.disabled) next.textContent = copy[state.locale][saleSlides.isLast() ? "makeBill" : "slideNext"];
+}
+
+/** Make bill: the review on screen, recorded — reviewed again first if anything changed since. */
+async function makeSaleBill(button) {
+  const form = saleForm();
+  if (!form) return;
+  button.disabled = true;
+  try {
+    const shownWarning = saleReviewState.warning;
+    clearTimeout(saleReviewState.timer);
+    await saleReviewState.queue;
+    const review = await (saleReviewState.queue = saleReviewState.queue.then(reviewSaleOnSlide));
+    if (review === null) return;
+    // A warning the owner has not seen yet is shown before any bill is made.
+    if (saleReviewState.warning && saleReviewState.warning !== shownWarning) { saleSlides.show("payment"); return; }
+  } finally { button.disabled = false; }
+  await recordPending(button);
+}
+
+async function saleNext(event) {
+  if (!saleSlides) return;
+  if (saleSlides.isLast()) { await makeSaleBill(event.currentTarget); return; }
+  // A bill needs at least one item: back to the search box, which says so.
+  if (saleSlides.current() === "items" && saleLineValues().length === 0) {
+    document.querySelector('#sale-lines [data-item-search]')?.focus();
+    return;
+  }
+  saleSlides.next();
+}
+
+/** Called when the sale screen is opened again: the slide it was on is read again. */
+function saleSlidesShown() {
+  if (!saleSlides) return;
+  if (saleSlides.current() === "payment") { saleReviewState.forInput = ""; queueSaleReview(0); }
+  // + Bill after a finished bill is the next bill, not the last one's done screen.
+  if (saleSlides.current() === "done") startNewSaleSlides();
+}
+
+/** New bill from the done slide: the form is already fresh (#233); back to the first slide. */
+function startNewSaleSlides() {
+  // The last bill's live total and review are not this bill's: no Transport slide until it needs one.
+  lastEstimate = null;
+  saleReviewState.result = null;
+  saleReviewState.forInput = "";
+  renderSaleReview();
+  saleSlides?.show("items");
+  document.querySelector('#sale-lines [data-item-search]')?.focus();
+}
+
+// Issue #311 — the vehicle check (#29) on the number typed in the Transport slide, as one line.
+let vehicleCheckTimer = null;
+async function checkSaleVehicle() {
+  const line = document.querySelector("#sale-vehicle-check");
+  const typed = (saleForm()?.elements.namedItem("vehicleNumber")?.value ?? "").toUpperCase().replace(/[\s-]/g, "");
+  if (!line) return;
+  if (!/^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{4}$/.test(typed)) { line.hidden = true; return; }
+  let found = null;
+  try { found = await api("/api/vehicles/record", { method: "POST", body: JSON.stringify({ vehicle: typed }) }); } catch { found = null; }
+  if ((saleForm()?.elements.namedItem("vehicleNumber")?.value ?? "").toUpperCase().replace(/[\s-]/g, "") !== typed) return;
+  const kind = found?.kind === "FOUND" ? "vehicleFound" : found?.kind === "NOT_FOUND" ? "vehicleNotFound" : "vehicleNotChecked";
+  line.className = kind === "vehicleFound" ? "line-ok" : "line-warn";
+  line.querySelector("span").textContent = kind === "vehicleFound" ? "✓" : "!";
+  line.querySelector("[data-line-text]").textContent = `${text(kind, { vehicle: typed })}${kind === "vehicleFound" && state.locale === "en-IN" && found?.message ? ` ${found.message}` : ""}`;
+  line.hidden = false;
+}
+
+function mountSaleSlides() {
+  const frame = document.querySelector("#sale-frame");
+  if (!frame || !globalThis.KarobarSlides) return;
+  saleSlides = globalThis.KarobarSlides.mountSlides(frame, {
+    wanted: (id) => OPTIONAL_SLIDES[id]?.() ?? false,
+    words: () => copy[state.locale],
+    onShow: (id) => {
+      if (id === "customer") renderSaleCustomerChoices();
+      if (id === "payment") { showPaidBy(); renderSaleReview(); queueSaleReview(0); }
+      if (id === "transport") checkSaleVehicle();
+      updateSaleBar();
+    },
+  });
+  document.querySelector("#sale-next")?.addEventListener("click", saleNext);
+  document.querySelector("#sale-back")?.addEventListener("click", () => saleSlides.back());
+  const form = saleForm();
+  form?.addEventListener("input", (event) => {
+    if (event.target.name === "vehicleNumber") { clearTimeout(vehicleCheckTimer); vehicleCheckTimer = setTimeout(checkSaleVehicle, 500); }
+    if (saleSlides.current() === "payment") queueSaleReview();
+    updateSaleBar();
+  });
+  form?.addEventListener("change", () => { if (saleSlides.current() === "payment") queueSaleReview(); updateSaleBar(); });
+  // Freight typed on a saved draft is shown, not hidden in a closed box.
+  const charges = document.querySelector("#sale-charges");
+  if (charges && form && (form.elements.namedItem("freight").value || form.elements.namedItem("otherCharges").value)) charges.open = true;
+  saleSlides.show("items", { focus: false });
+  showPaidBy();
+}
+
+document.querySelector("#sale-new-item")?.addEventListener("click", () => openNewItem({ name: "" }, null));
+// Issue #305 — the − / + on a line card: one more or one less, never below one (type 0.5 into the box).
+document.querySelector("#sale-lines")?.addEventListener("click", (event) => {
+  const step = event.target.closest("[data-step]");
+  if (!step) return;
+  const quantity = step.closest(".sale-line")?.querySelector("[data-line-field=quantity]");
+  if (!quantity) return;
+  const next = Math.round(((Number(quantity.value) || 0) + Number(step.dataset.step)) * 1000) / 1000;
+  quantity.value = String(Math.max(1, next));
+  saveDraft(saleForm());
+  updateCalculations();
+});
+mountSaleSlides();
 
 /**
  * Issue #143 — the export or SEZ box, for the customers it applies to. Which kind of supply it is
@@ -6411,6 +6858,21 @@ function showLineUnit(line) {
   const unit = line.querySelector("[data-line-unit]");
   if (unit) unit.textContent = item === null ? "—" : item.unit;
   linePickers.get(line)?.show(item);
+  setLineFacts(line, item?.ratePercent ?? null);
+}
+
+/**
+ * Issue #305 — the card says the line's GST and how much is left in the godown (Home's stock). The
+ * rate is the one the live total charged on this line once it has answered, else the item's own.
+ */
+function setLineFacts(line, rate) {
+  const facts = line.querySelector("[data-line-facts]");
+  if (!facts) return;
+  const item = itemById(line.querySelector("[data-line-field=item]")?.value ?? "");
+  const stock = item === null ? undefined : state.dashboard?.stockItems?.find((row) => row.itemId === item.id);
+  facts.textContent = item === null || rate === null ? ""
+    : stock ? text("lineFacts", { rate, stock: `${new Intl.NumberFormat(state.locale, { maximumFractionDigits: 3 }).format(stock.quantity)} ${stock.unit}` })
+      : text("lineFactsGst", { rate });
 }
 
 function addSaleLine() {
@@ -6435,6 +6897,9 @@ function resetSaleForm(form) {
   hideDraftDateNote(form);
   forgetPendingDraft(form);
   form.reset();
+  // Issue #305 — cash again, and delivered at the counter again.
+  delete form.dataset.payWay;
+  delete form.dataset.deliverElsewhere;
   form.querySelectorAll('input[type="date"]:not([data-no-default])').forEach((field) => { field.value = dateInput(); });
   // Issue #288 — the next customer at the counter is a walk-in until somebody else is chosen.
   const picker = form.querySelector("[data-customer-picker]");
@@ -6521,6 +6986,21 @@ async function loadSelling() {
     Object.assign(selling, await api("/api/items/selling", { method: "POST", body: JSON.stringify({ customerId }) }));
   } catch { return; }
   renderItemChips();
+  // Issue #305 — items come first, the customer after: a price the app filled in (and nobody has
+  // changed since) follows the customer to what they were last charged.
+  let moved = false;
+  document.querySelectorAll("#sale-lines .sale-line").forEach((line) => {
+    const rate = line.querySelector("[data-line-field=rate]");
+    const item = itemById(line.querySelector("[data-line-field=item]")?.value ?? "");
+    if (!rate || item === null || rate.dataset.filled !== rate.value) return;
+    const start = startingPrice(item);
+    if (!start) return;
+    rate.value = rate.dataset.filled = String(start.price);
+    const note = line.querySelector("[data-line-price-note]");
+    if (note) note.textContent = start.note;
+    moved = true;
+  });
+  if (moved) { saveDraft(saleForm()); updateCalculations(); }
 }
 
 function renderItemChips() {
@@ -6571,7 +7051,11 @@ function setLineItem(line, item) {
   line.querySelector("[data-line-field=item]").value = item.id;
   const start = startingPrice(item);
   const rate = line.querySelector("[data-line-field=rate]");
-  if (start && rate) rate.value = String(start.price);
+  if (rate) {
+    if (start) rate.value = String(start.price);
+    // What the app put there, so a customer chosen later can move it (#305) until somebody types a price.
+    rate.dataset.filled = rate.value;
+  }
   const note = line.querySelector("[data-line-price-note]");
   if (note) note.textContent = start?.note ?? "";
   showLineUnit(line);
@@ -6723,7 +7207,8 @@ document.addEventListener("change", (event) => {
   }
 });
 
-document.querySelector("#sale-add-line")?.addEventListener("click", () => addSaleLine());
+// Issue #305 — the new line's search box takes the next item straight away.
+document.querySelector("#sale-add-line")?.addEventListener("click", () => addSaleLine()?.querySelector("[data-item-search]")?.focus());
 document.querySelector("#sale-lines")?.addEventListener("click", (event) => {
   if (!event.target.closest("[data-remove-line]")) return;
   // One line is the least a bill can carry, so the last one stays.

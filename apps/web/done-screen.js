@@ -137,7 +137,8 @@ export function mountDoneScreen(container, sale, options) {
   download.addEventListener("click", () => options.onDownload?.());
   more.append(download);
   if (sale.ewayBill?.outcome === "REQUIRED") {
-    const eway = element("button", { type: "button", class: "text-button" }, words.ewayFromBill);
+    // Issue #311 — raised by itself when the vehicle was known: then it is opened, not raised.
+    const eway = element("button", { type: "button", class: "text-button" }, sale.ewayRaised?.ewayBillNumber ? words.ewayOpen : words.ewayFromBill);
     eway.addEventListener("click", () => options.onEway?.());
     more.append(eway);
   }

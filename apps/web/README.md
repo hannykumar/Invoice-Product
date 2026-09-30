@@ -12,7 +12,7 @@ Open `http://127.0.0.1:4173`. No installation beyond the repository's normal `np
 
 1. Resize the window below 760 pixels. The left navigation becomes a bottom navigation bar and every transaction form becomes one column.
 2. Change **English** to **हिन्दी**. Navigation, headings, controls, help text, status wording and screen-reader labels change together.
-3. Open **Sale**, choose a customer, item, quantity and rate. The value before GST updates immediately; GST and the total come from the server when you press **Review sale**, which shows the figures, one green line and at most one warning.
+3. Open **Sale** (#305): four slides, Items → Customer → Payment → Done, moved by **Next** / **Back**, a swipe or ← →. The bar at the bottom shows what the customer pays, from the server, on every slide. The Payment slide shows the bill, one green line (what the law needs, happening by itself) and at most one warning; **Make bill** issues it. Transport, Export and Ship to appear only when the bill needs them; with a vehicle on Transport the e-way bill is raised by itself (#311).
 4. Reload the page. The unfinished sale is restored from this device and the live status announces that recovery.
 5. Open **Purchase** and **Payment**. Confirm each flow explains what will and will not change before review.
 6. Use only the keyboard. Focus remains visible and all fields, navigation items, language selection and review actions are reachable.

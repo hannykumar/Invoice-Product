@@ -33,14 +33,16 @@ What must appear:
 
 What must appear: the state is filled in as **Maharashtra (27)** from the GST number.
 
-### Step 3. Sell (Sale)
+### Step 3. Sell (Sale, in slides, #305)
 
-- Customer: Mehta Construction Supplies. Pay within 30 days.
-- 450 KGS of TMT Steel Bar 12mm at ₹90
-- Freight: ₹2,000
-- Vehicle: `KA01AB1234`
+- Items: 450 KGS of TMT Steel Bar 12mm at ₹90. Freight (under "Freight or other charges"): ₹2,000
+- Customer: Mehta Construction Supplies
+- Payment: Udhaar, within 30 days
+- Transport: vehicle `KA01AB1234`
 
-What must appear on the review:
+"Customer pays ₹50,150.00" is in the bar under every slide from the moment the customer is chosen. The Customer slide says "Maharashtra sale · IGST" and "e-way bill needed — raised after you make the bill".
+
+What must appear on the Payment slide (the review):
 - Goods: 450 × ₹90 = ₹40,500
 - Plus freight: ₹40,500 + ₹2,000 = ₹42,500
 - IGST: 18% of ₹42,500 = ₹7,650
@@ -49,8 +51,9 @@ What must appear on the review:
 - Whether it needs an e-invoice, decided by the app from the customer and the turnover saved in Business details, in one line (#239). Sampoorna has not answered the turnover question, so the line is: "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.", with a button **Answer once in Business details**. (Answered "More than ₹5 crore, but less than ₹10 crore" it would say "This bill needs a government e-invoice number. It is sent by itself when you issue it.")
 - No credit-limit warning, because nobody set a limit for this customer (#235).
 
-After **Record once**:
-- A bill number of **16 characters or fewer**, for example `INV/26-27/000004`.
+After **Make bill** (on the Transport slide):
+- A bill number of **16 characters or fewer**, for example `INV/26-27/000004`, on the done slide.
+- "E-way bill …(a 12-digit number)… raised by itself · valid until …" on the done slide (#311): the bill named the vehicle, so the e-way bill was raised with the bill.
 - The sale form is **empty** again (#233).
 - Stock: 500 − 450 = **50 KGS** (#229).
 - Home screen: the bill is shown under **Mehta Construction Supplies**. "Money customers owe you" is ₹1,838 + ₹50,150 = **₹51,988** (#237).
@@ -75,17 +78,18 @@ Each of these must be on the A4 bill:
 - HSN summary: 72142090, ₹42,500.00, 18%, ₹7,650.00
 - "For Sampoorna Traders", "Authorised Signatory"
 
-### Step 6. E-way bill (from the finished sale, #240)
+### Step 6. E-way bill (raised by itself at Make bill, #240, #311)
 
-Press **Raise e-way bill** in the "Sale recorded" box (or under the bill). Type nothing.
+Open nothing and type nothing: the e-way bill was raised in step 3. To look at it, press **Open the e-way bill** on the done slide or under the bill.
 
 What must appear:
-- The E-way bill screen opens on "INV/26-27/000004 · Mehta Construction Supplies · ₹50,150.00 · needs one", listed first.
-- Already filled in from the bill: our GST number and PIN 560058, Mehta's GST number, Plot 22, MIDC Bhosari, Pune 411026, Maharashtra (27), the steel with HSN 72142090, ₹42,500 + IGST ₹7,650, road, vehicle KA01AB1234. The distance box is empty.
-- The distance line says the portal works it out from PIN 560058 to PIN 411026 (0 is sent), and how long the bill lasts is shown once the portal answers.
+- The E-way bill screen lists "INV/26-27/000004 · Mehta Construction Supplies · ₹50,150.00 · e-way bill …", and nothing "needs one".
+- It was filled from the bill: our GST number and PIN 560058, Mehta's GST number, Plot 22, MIDC Bhosari, Pune 411026, Maharashtra (27), the steel with HSN 72142090, ₹42,500 + IGST ₹7,650, road, vehicle KA01AB1234. The distance box is empty.
+- The distance was left to the portal, from PIN 560058 to PIN 411026 (0 was sent).
 - No complaint about freight (#231).
-- After **Raise the e-way bill**: a 12-digit e-way bill number, and "The portal worked out 840 km from PIN 560058 to PIN 411026: 840 ÷ 200 = 4.2, and part of a day counts as a whole day, so 5 days."
+- A 12-digit e-way bill number, and "The portal worked out 840 km from PIN 560058 to PIN 411026: 840 ÷ 200 = 4.2, and part of a day counts as a whole day, so 5 days."
 - "Valid until" is 5 days after **today**, not a date in the past (#234). "Print for the driver" is offered.
+- Pressing **Raise** again gives the same number, never a second e-way bill.
 - Then type **925** in the distance and press Check: refused, "You typed 925 km, but the portal counts 840 km from PIN 560058 to PIN 411026. It accepts at most 10% more: 840 + 84 = 924 km. …". 924 is accepted.
 
 ### Step 7. Money received (Payment, #230)
@@ -179,3 +183,4 @@ Add one line per run. Never delete old lines.
 | 28 Sep 2026 | `621a779` + #239 | Automated check: steps 1–12 pass and step 3's e-invoice line now runs for real (no longer `todo`); still `todo`: #240. On the screen (`npm run web`), step 3 only: with no turnover answered the review said "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now." with a button that opened the turnover question and came back to the sale, still filled in. After answering "More than ₹5 crore, but less than ₹10 crore" the same review said "This bill needs a government e-invoice number. It is sent by itself when you issue it."; the bill INV/26-27/000004 was sent by itself, and the E-invoice screen listed it as "Sent. The government gave it an e-invoice number." with Cancel, asking nothing. |
 | 28 Sep 2026 | `2ce2c3e` + #240 | Automated check: steps 1–12 pass with **no `todo` left**; step 6 now raises the e-way bill with nothing typed. On the screen (`npm run web`), steps 1–3 and 6: after Record once the "Sale recorded" box offered **Raise e-way bill**; it opened the E-way bill screen on "INV/26-27/000004 · Mehta Construction Supplies · ₹50,150.00 · needs one" (listed first, the three ABC bills "not needed"), with Plot 22, MIDC Bhosari, Pune 411026, Maharashtra (27), vehicle KA01AB1234, both GST numbers, HSN 72142090, ₹42,500 + IGST ₹7,650 filled in and the distance empty ("Worked out by the portal (0 is sent)"). Raise gave 100000000010: "The portal worked out 840 km from PIN 560058 to PIN 411026: 840 ÷ 200 = 4.2, and part of a day counts as a whole day, so 5 days. It is valid until 03/10/2026 23:59:59". 925 km typed was refused ("… It accepts at most 10% more: 840 + 84 = 924 km …"); 924 km accepted. Under the bill the button then read "Open the e-way bill". |
 | 29 Sep 2026 | `f0a40ac` (after #238, #256, #239, #240, #241) | Full run on the screen (in-app browser, fresh `npm run web`), every step through the screens, plus the automated check (16 pass, 0 fail, **0 `todo`**). **All 12 steps pass as written**: SRS-101 ₹32,000 + IGST ₹5,760 = ₹37,760, IGST chosen from the GST numbers; Mehta saved as Maharashtra from the GST number, nobody asked; review ₹42,500 + ₹7,650 = ₹50,150, e-way bill needed, the "We don't know yet whether you need e-invoices" line, no credit warning; INV/26-27/000004 (16 characters), form emptied, Home ₹1,838 + ₹50,150 = ₹51,988 under Mehta; 600 KGS refused ("You have 50 KGS … 600 KGS"); A4 bill carries every listed field, due 29 October 2026, and now the e-way bill number; **Raise e-way bill** from the "Sale recorded" box filled everything (distance empty), 100000000010: "840 km … 840 ÷ 200 = 4.2 … so 5 days", valid until 04/10/2026 23:59:59, print offered (925/924 km not retried on screen: once raised, Check shows the running bill; covered by the automated check); receipt RECEIPT/2026-27/000001 ₹50,150 − ₹30,000 = ₹20,150, only Mehta's bill offered; PAYMENT/2026-27/000001 leaves ₹0 owed to suppliers; CN/26-27/0000001 50 × ₹90 = ₹4,500 + ₹810 = ₹5,310, place of supply Maharashtra (27); SRS-101 agrees with the portal, ₹5,760 safe to claim; September return ₹7,650 − ₹810 = ₹6,840 on sales, ₹5,760 credit, IGST ₹1,080 to pay, books agree, no questions, credit note under Maharashtra (27); Reports: TMT 100 KGS on one line, customers ₹1,838 + ₹14,840 = ₹16,678, suppliers ₹0, Mehta 0 days late, "Nothing on these pages needs a second look". Found outside the steps: a sale draft saved on the device the day before came back with the day before's date (#266). |
+| 30 Sep 2026 | `0a95848` + #305/#311 | Automated check: 16 pass, 0 fail, 0 `todo`; step 6 now reads the e-way bill raised at Make bill (same 12-digit number 100000000010, 840 km, 5 days, valid until 02/10/2026 23:59:59), and pressing Raise again returns the same number. Step 3 also driven through the slides in a browser by keyboard (`apps/web/test/sale-slides.test.ts`): Customer slide "Maharashtra sale · IGST" and "e-way bill needed — raised after you make the bill"; Payment slide ₹40,500 + freight ₹2,000 + IGST ₹7,650 = ₹50,150 with the one turnover warning; Transport slide KA01AB1234 on the transport department's record; done slide "E-way bill … raised by itself". On the screen (`npm run web`, 30 Sep): SRS-101 entered with "GST number active, filing on time" and its purchase check on the recorded bill; Mehta added from "+ New customer" by GST number; INV/26-27/000006 ₹50,150 with e-way bill 100000000010 valid until 05/10/2026, the E-way bill screen never opened; 600 KGS refused on the Payment slide with **Enter the purchase bill** and no number used. |

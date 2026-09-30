@@ -207,8 +207,12 @@ test('Step 3. Sell 450 KGS at ₹90 with ₹2,000 freight: ₹42,500 + IGST ₹7
   assertRupees(recorded.invoice.amount, '₹50,150.00', 'bill total');
   assert.ok(trade.invoiceNumber.length <= 16, `${trade.invoiceNumber} is ${trade.invoiceNumber.length} characters; the government allows 16`);
   assert.match(trade.invoiceNumber, /^INV\/26-27\/\d{6}$/);
-  // The "Sale recorded" dialog knows these goods need an e-way bill, and offers it (#240).
+  // These goods need an e-way bill (#240), and the bill names the vehicle, so it was raised by
+  // itself the moment the bill was made (#311): the owner never opens the E-way bill screen.
   assert.equal(recorded.ewayBill.outcome, 'REQUIRED');
+  assert.equal(recorded.ewayRaised.status, 'ACTIVE');
+  assert.match(recorded.ewayRaised.ewayBillNumber, /^\d{12}$/, 'a 12-digit e-way bill number');
+  trade.ewayBillNumber = recorded.ewayRaised.ewayBillNumber;
 
   // Stock: 500 − 450 = 50 KGS (#229)
   assert.deepEqual((await steelRows()).map((row: any) => row.closing), ['50.000']);
@@ -284,16 +288,16 @@ test('Step 5. The printed A4 bill carries every field the document lists', async
   t.diagnostic(`A4 bill ${trade.invoiceNumber}: all ${wanted.length} listed fields present, due 27 October 2026, vehicle KA01AB1234`);
 });
 
-test('Step 6 (filled from the bill, #240). Choosing the bill fills the parties, Pune 411026, the goods and KA01AB1234; the distance is left to the portal', async (t) => {
-  // The "Sale recorded" dialog offers the e-way bill in one press, because these goods need one.
+test('Step 6 (filled from the bill, #240, raised by itself, #311). The bill\'s e-way bill carries the parties, Pune 411026, the goods and KA01AB1234, with nothing typed', async (t) => {
+  // Home and the E-way bill list show the bill with its e-way bill already raised at Make bill.
   const bills = await ok('GET', '/api/eway/bills');
-  const first = bills.invoices[0];
-  assert.equal(first.id, trade.invoiceId, 'a bill that needs an e-way bill and has none is listed first');
-  assert.deepEqual([first.number, first.customer, paise(first.amount), first.label], [trade.invoiceNumber, MEHTA, rs('₹50,150'), 'needs one']);
+  const row = bills.invoices.find((bill: any) => bill.id === trade.invoiceId);
+  assert.deepEqual([row.number, row.customer, paise(row.amount), row.status, row.label], [trade.invoiceNumber, MEHTA, rs('₹50,150'), 'RAISED', `e-way bill ${trade.ewayBillNumber}`]);
+  assert.equal(bills.invoices.filter((bill: any) => bill.status === 'NEEDED').length, 0, 'no bill is left needing one');
 
-  // Only the bill is chosen: nothing is typed.
+  // Only the bill: nothing is typed. The form it was raised from is the bill's own.
   const opened = await ok('POST', '/api/eway/for-bill', { invoice: trade.invoiceId });
-  assert.equal(opened.raised, null);
+  assert.equal(opened.raised.ewayBillNumber, trade.ewayBillNumber, 'the one raised at Make bill');
   assert.deepEqual(opened.form, {
     invoice: trade.invoiceId, reason: 'SUPPLY', shipToState: '27', shipToAddress: 'Plot 22, MIDC Bhosari',
     shipToPlace: 'Pune', shipToPincode: '411026', distanceKm: '', vehicle: 'KA01AB1234',
@@ -312,20 +316,16 @@ test('Step 6 (filled from the bill, #240). Choosing the bill fills the parties, 
   assertRupees(filled.taxable, '₹42,500.00', 'taxable value on the e-way bill');
   assertRupees(filled.igst, '₹7,650.00', 'IGST on the e-way bill');
   assert.deepEqual([filled.transportMode, filled.vehicle], ['Road', 'KA01AB1234']);
-  // The distance is not typed: 0 goes to the portal, which works it out from 560058 and 411026.
-  // Nothing has ever been sent between these two PIN codes, so no distance is made up here.
-  assert.equal(check.distance.sentKm, 0);
+  // The distance was not typed: 0 went to the portal, which worked it out from 560058 and 411026.
   assert.deepEqual([check.distance.fromPincode, check.distance.toPincode], ['560058', '411026']);
-  assert.equal(check.distance.knownKm, undefined);
-  assert.equal(check.validityDays, null, 'validity is shown once the portal has answered');
-  t.diagnostic(`filled from ${trade.invoiceNumber}: ${filled.to.address}, ${filled.to.place} ${filled.to.pincode}, vehicle ${filled.vehicle}; distance sent 0`);
+  t.diagnostic(`filled from ${trade.invoiceNumber}: ${filled.to.address}, ${filled.to.place} ${filled.to.pincode}, vehicle ${filled.vehicle}; raised ${trade.ewayBillNumber} at Make bill`);
 });
 
-test('Step 6. Raise: the portal works out 840 km from the PIN codes, so valid 5 days (840 ÷ 200 = 4.2, part of a day is a day), until 2 Oct 2026', async (t) => {
-  // What the E-way bill screen sends: the form exactly as it was filled from the bill.
+test('Step 6. Raised by itself: the portal worked out 840 km from the PIN codes, so valid 5 days (840 ÷ 200 = 4.2, part of a day is a day), until 2 Oct 2026', async (t) => {
+  // What the bill's e-way bill is, as the done screen and the E-way bill screen both read it.
   const opened = await ok('POST', '/api/eway/for-bill', { invoice: trade.invoiceId });
-  const raised = await ok('POST', '/api/eway/generate', opened.form);
-  trade.ewayBillNumber = raised.ewayBillNumber;
+  const raised = opened.raised;
+  assert.equal(raised.ewayBillNumber, trade.ewayBillNumber);
   assert.equal(raised.status, 'ACTIVE');
   assert.match(raised.ewayBillNumber, /^\d{12}$/, 'a 12-digit e-way bill number');
   assert.equal(raised.raw.distanceKm, 0, 'the distance sent was 0');
@@ -335,6 +335,8 @@ test('Step 6. Raise: the portal works out 840 km from the PIN codes, so valid 5 
   assert.equal(raised.validUntilLabel, '02/10/2026 23:59:59 (Indian time)');
   assert.equal(raised.validUntil, '2026-10-02T18:30:00.000Z');
   assert.ok(new Date(raised.validUntil) > new Date(`${TODAY}T04:30:00.000Z`), 'valid until is after today, not in the past');
+  // Pressing Raise on the E-way bill screen as well never makes a second one.
+  assert.equal((await ok('POST', '/api/eway/generate', opened.form)).ewayBillNumber, trade.ewayBillNumber);
 
   // Print for the driver.
   const copy = await ok('POST', '/api/eway/print', { invoice: trade.invoiceId });

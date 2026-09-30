@@ -326,10 +326,10 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
   assert.doesNotMatch(html, /class="sidebar"|class="bottom-nav"|class="nav-item|id="menu-button"/);
   assert.doesNotMatch(script, /toggleMenu|closeMenu|#nav-settings/);
 
-  // The bar: a labelled landmark, five tabs in order, + Bill the raised centre that opens the sheet.
+  // The bar: a labelled landmark, five tabs in order, + Bill the raised centre that opens a new sale.
   assert.match(bar, /aria-label="Main" data-i18n-aria="mainNavigation"/);
   assert.deepEqual([...bar.matchAll(/<small data-i18n="([^"]+)"/g)].map((m) => en[m[1]!]), ["Home", "Khata", "Bill", "Items", "More"]);
-  assert.match(bar, /class="tab-main" id="bill-button" aria-haspopup="dialog" aria-controls="bill-sheet" aria-keyshortcuts="F2 Alt\+N"/);
+  assert.match(bar, /class="tab-main" id="bill-button" aria-controls="view-sale" aria-keyshortcuts="F2 Alt\+N"/);
   // Khata opens who owes what in Reports until the khata page (#309) is built.
   assert.match(bar, /data-view="reports" data-section="report-dues"/);
   assert.match(script, /dues\.id = "report-dues"/);
@@ -347,9 +347,16 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
   ]);
   assert.match(sheet, /data-view="sale" autofocus/);
   assert.match(sheet, /aria-describedby="expense-soon"[\s\S]*id="expense-soon" data-i18n="expenseSoon"/);
-  // From anywhere: the tab, F2 and Alt+N all open the sheet; choosing opens the screen and closes it.
-  assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openBillSheet\)/);
-  assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)/);
+  // Any screen reaches a new sale in one tap: the tab, F2 and Alt+N all open the sale itself.
+  assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openNewSale\)/);
+  assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)\) \{\s*event\.preventDefault\(\);\s*openNewSale\(\);/);
+  assert.match(script, /function openNewSale\(\) \{[\s\S]*?openView\("sale"\);/);
+  // The other bills stay one tap away on the sale: "Other bills" opens the sheet; choosing closes it.
+  const saleHeading = section('<section class="view" id="view-sale"', "</form>");
+  assert.match(saleHeading, /id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"/);
+  assert.equal(en.otherBills, "Other bills");
+  assert.equal(locales["hi-IN"]!.otherBills, "दूसरे बिल");
+  assert.match(script, /querySelector\("#other-bills"\)\.addEventListener\("click", openBillSheet\)/);
   assert.match(script, /function openView[\s\S]*?if \(sheet\?\.open\) sheet\.close\(\);/);
 
   // More: every other screen, in five plain groups.
@@ -753,8 +760,11 @@ test("#262: the refusal dialog, the purchase screen and both languages carry the
   assert.match(html, /id="purchase-for-sale-note"[^>]*hidden[\s\S]*?id="purchase-back-to-sale"/);
   assert.equal(locales["en-IN"]!.enterPurchaseBill, "Enter the purchase bill");
   for (const key of ["enterPurchaseBill", "backToSale", "purchaseForSale", "purchaseForSaleDone"]) assert.ok(locales["hi-IN"]![key], key);
-  // The sale's review and its Record both show the refusal with the button.
-  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 2);
+  // The sale's review (the Payment slide, #305), its Record (Make bill) and the other screens' reviews
+  // all show the refusal with the button.
+  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 3);
+  assert.match(await functionSource("reviewSaleOnSlide"), /showSaleFailure\(error\);/);
+  assert.match(await functionSource("recordPending"), /showSaleFailure\(error\);/);
   // A Hindi reader gets the server's Hindi sentence, not "could not complete".
   assert.match(await functionSource("localizedError"), /SALES_STOCK_NOT_ENOUGH"\) return error\.details\?\.\[state\.locale\] \|\| error\.message;/);
   assert.doesNotMatch(script, /negativeOverride|override_negative/, "no way to let a short sale through from the screen");
@@ -819,10 +829,16 @@ test("#288/#307: the sale form offers the walk-in customer and paid now by cash,
   const [html, script, done] = await Promise.all([read("index.html"), read("app.js"), read("done-screen.js")]);
   const sale = html.slice(html.indexOf('data-draft="sale"'), html.indexOf('id="sale-bill-panel"'));
   assert.match(sale, /id="sale-walk-in" data-i18n="walkInChoose"/);
-  assert.match(sale, /<select name="terms" id="sale-terms"><option value="now" data-i18n="payNow">/);
+  // Issue #305 — six tiles set the same fields the form always sent: terms, paidBy and paidAmount.
+  for (const way of ["CASH", "UPI", "CARD", "UDHAAR", "PART", "CHEQUE"]) assert.match(sale, new RegExp(`class="pay-tile" data-pay="${way}"`));
+  assert.match(sale, /<select name="terms" id="sale-terms" hidden aria-hidden="true" tabindex="-1"><option value="now" data-i18n="payNow">/);
+  for (const days of ["0", "7", "15", "30"]) assert.match(sale, new RegExp(`<option value="${days}"[\\s\\S]*data-days="${days}"`));
   for (const mode of ["CASH", "UPI", "CARD"]) assert.match(sale, new RegExp(`<select name="paidBy" id="sale-paid-by">[\\s\\S]*<option value="${mode}"`));
-  // "Within 7/30 days" sends no paidBy at all: the box is switched off, so nothing is received.
-  assert.match(await functionSource("showPaidBy"), /field\.querySelector\("select"\)\.disabled = field\.hidden;/);
+  // Udhaar sends no paidBy and no amount at all: both are switched off, so nothing is received.
+  assert.match(await functionSource("showPaidBy"), /field\.querySelector\("select"\)\.disabled = terms !== "now";/);
+  assert.match(await functionSource("showPaidBy"), /amount\.disabled = way !== "PART";/);
+  // Cheque is not taken on the bill: its tile is off and says where a cheque is entered.
+  assert.match(sale, /data-pay="CHEQUE" aria-pressed="false" aria-describedby="sale-cheque-note" disabled/);
   assert.match(html, /<dialog id="done-screen" class="done-screen" aria-labelledby="done-title"><\/dialog>/);
   assert.match(script, /await import\("\.\/done-screen\.js"\)/);
   assert.match(done, /export const PRINTER_KEY = "karobar\.printer";/);

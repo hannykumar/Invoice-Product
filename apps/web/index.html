@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&amp;family=Mukta:wght@400;500;600;700&amp;display=swap" />
     <link rel="stylesheet" href="/styles.css" />
+    <!-- Issue #305 — the slides of a bill, before app.js like the item picker. -->
+    <script type="module" src="/sale-slides.js"></script>
     <!-- Issue #308 — the item picker, before app.js, so every screen mounts the same one. -->
     <script type="module" src="/item-picker.js"></script>
     <script type="module" src="/app.js"></script>
@@ -26,7 +28,7 @@
         <button type="button" data-view="dashboard"><span aria-hidden="true">⌂</span><small data-i18n="tabHome"></small></button>
         <!-- Until the khata page (#309) exists, Khata opens who owes what, in Reports. -->
         <button type="button" data-view="reports" data-section="report-dues"><span aria-hidden="true">▤</span><small data-i18n="tabKhata"></small></button>
-        <button type="button" class="tab-main" id="bill-button" aria-haspopup="dialog" aria-controls="bill-sheet" aria-keyshortcuts="F2 Alt+N"><span aria-hidden="true">＋</span><small data-i18n="tabBill"></small></button>
+        <button type="button" class="tab-main" id="bill-button" aria-controls="view-sale" aria-keyshortcuts="F2 Alt+N"><span aria-hidden="true">＋</span><small data-i18n="tabBill"></small></button>
         <button type="button" data-view="items"><span aria-hidden="true">▦</span><small data-i18n="tabItems"></small></button>
         <button type="button" data-view="more" id="more-tab"><span aria-hidden="true">☰</span><small data-i18n="tabMore"></small></button>
       </nav>
@@ -121,65 +123,155 @@
         </section>
 
         <section class="view" id="view-sale" aria-labelledby="sale-title">
-          <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <div class="page-heading compact"><div><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span><button type="button" class="secondary-button" id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"></button></div>
           <!-- Issue #266 — said when a draft from an earlier day comes back. -->
           <p class="safety-note draft-date-note" id="sale-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
-          <form class="transaction-layout draft-form" data-draft="sale">
-            <article class="panel form-panel">
-              <div class="field-grid">
-                <label><span data-i18n="customer"></span><select name="party" data-customer-picker data-picker-blank="chooseSaleCustomer" required></select><small id="sale-customer-detail"></small><button type="button" class="text-button" id="sale-walk-in" data-i18n="walkInChoose"></button><button type="button" class="text-button" id="sale-correct-address" data-i18n="correctAddress"></button></label>
-                <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
-                <label><span data-i18n="paymentTerms"></span><select name="terms" id="sale-terms"><option value="now" data-i18n="payNow"></option><option value="7" data-i18n="sevenDays"></option><option value="30" data-i18n="thirtyDays"></option></select></label>
-                <!-- Issue #288 — money taken at the counter is recorded with the bill: cash in hand, or the bank for UPI and card. -->
-                <label id="sale-paid-by-field"><span data-i18n="paidBy"></span><select name="paidBy" id="sale-paid-by"><option value="CASH" data-i18n="paidCash"></option><option value="UPI" data-i18n="paidUpi"></option><option value="CARD" data-i18n="paidCard"></option></select></label>
-              </div>
-              <!-- Issue #308 — the six items sold on most bills this week: one tap adds one more. -->
-              <div class="item-chips" id="sale-item-chips" role="group" aria-label="Sold most this week" data-i18n-aria="mostSoldThisWeek" hidden></div>
-              <div class="sale-lines" id="sale-lines" aria-label="Items on this bill" data-i18n-aria="saleLinesLabel"></div>
-              <button type="button" class="secondary-button" id="sale-add-line" data-i18n="addLine"></button>
-              <div class="field-grid sale-charges">
-                <label><span data-i18n="freight"></span><span class="input-with-prefix"><span>₹</span><input name="freight" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
-                <label><span data-i18n="otherCharges"></span><span class="input-with-prefix"><span>₹</span><input name="otherCharges" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
-              </div>
-              <!-- Issue #182 — where the goods go, who carries them, and what the bill refers back
-                   to. Closed by default, so a counter sale stays as short as it was. -->
-              <details id="sale-delivery">
-                <summary data-i18n="deliveryAndReferences"></summary>
-                <div class="field-grid extra-fields">
+          <form class="draft-form sale-slides" data-draft="sale" novalidate>
+            <!-- Issue #305 — a sale in four slides: Items → Customer → Payment → Done, one decision each,
+                 moved by Next / Back, a swipe or ← →. Transport, Export and Ship to appear between Payment
+                 and Done only when the bill needs them. The total stays in the bar at the bottom. -->
+            <div class="slide-frame" id="sale-frame">
+              <div class="slide-dots" id="sale-dots" aria-hidden="true"></div>
+              <p class="sr-only" id="sale-step" aria-live="polite"></p>
+
+              <section class="slide" data-slide="items" aria-labelledby="sale-slide-items">
+                <h2 class="slide-title" id="sale-slide-items" tabindex="-1" data-i18n="slideItems"></h2>
+                <!-- Issue #308 — the six items sold on most bills this week: one tap adds one more. -->
+                <div class="item-chips" id="sale-item-chips" role="group" aria-label="Sold most this week" data-i18n-aria="mostSoldThisWeek" hidden></div>
+                <div class="sale-lines" id="sale-lines" aria-label="Items on this bill" data-i18n-aria="saleLinesLabel"></div>
+                <div class="slide-actions">
+                  <button type="button" class="secondary-button" id="sale-add-line" data-i18n="addLine"></button>
+                  <button type="button" class="secondary-button" id="sale-new-item" data-i18n="newItemButton"></button>
+                </div>
+                <details id="sale-charges">
+                  <summary data-i18n="chargesSection"></summary>
+                  <div class="field-grid sale-charges">
+                    <label><span data-i18n="freight"></span><span class="input-with-prefix"><span>₹</span><input name="freight" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+                    <label><span data-i18n="otherCharges"></span><span class="input-with-prefix"><span>₹</span><input name="otherCharges" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+                  </div>
+                </details>
+                <!-- Issue #306 — anything the live total found that would stop the bill (goods short, a rate missing). -->
+                <ul class="estimate-notes" id="sale-estimate-notes" aria-live="polite"></ul>
+                <button type="button" class="text-button clear-draft" data-i18n="discardDraft"></button>
+              </section>
+
+              <section class="slide" data-slide="customer" aria-labelledby="sale-slide-customer" hidden>
+                <h2 class="slide-title" id="sale-slide-customer" tabindex="-1" data-i18n="slideCustomer"></h2>
+                <!-- Issue #288 — Walk-in is chosen until somebody else is; recent customers with what they owe. -->
+                <div class="choice-list" id="sale-customer-choices" role="group" aria-labelledby="sale-slide-customer"></div>
+                <div class="field-grid">
+                  <label><span data-i18n="customerAll"></span><select name="party" data-customer-picker data-picker-blank="chooseSaleCustomer" required></select><small id="sale-customer-detail"></small><button type="button" class="text-button" id="sale-walk-in" data-i18n="walkInChoose"></button><button type="button" class="text-button" id="sale-correct-address" data-i18n="correctAddress"></button></label>
+                  <label><span data-i18n="newCustomerQuick"></span><span class="input-with-button"><input id="sale-new-customer" autocapitalize="characters" autocomplete="off" data-i18n-placeholder="newCustomerQuickPlaceholder" /><button type="button" class="secondary-button" id="sale-new-customer-go" data-i18n="newCustomerQuickGo"></button></span><small data-i18n="newCustomerQuickHelp"></small></label>
+                </div>
+                <!-- Issue #305 / #311 — where the sale counts, then one line per check: e-way bill, e-invoice. -->
+                <ul class="check-lines" id="sale-customer-checks" aria-live="polite"></ul>
+                <button type="button" class="text-button" id="sale-deliver-elsewhere" aria-pressed="false" data-i18n="deliverElsewhere"></button>
+              </section>
+
+              <section class="slide" data-slide="payment" aria-labelledby="sale-slide-payment" hidden>
+                <h2 class="slide-title" id="sale-slide-payment" tabindex="-1" data-i18n="slidePayment"></h2>
+                <div class="pay-tiles" id="sale-pay-tiles" role="group" aria-labelledby="sale-slide-payment">
+                  <button type="button" class="pay-tile" data-pay="CASH" aria-pressed="false" data-i18n="paidCash"></button>
+                  <button type="button" class="pay-tile" data-pay="UPI" aria-pressed="false" data-i18n="paidUpi"></button>
+                  <button type="button" class="pay-tile" data-pay="CARD" aria-pressed="false" data-i18n="paidCard"></button>
+                  <button type="button" class="pay-tile" data-pay="UDHAAR" aria-pressed="false" data-i18n="payUdhaar"></button>
+                  <button type="button" class="pay-tile" data-pay="PART" aria-pressed="false" data-i18n="payPart"></button>
+                  <button type="button" class="pay-tile" data-pay="CHEQUE" aria-pressed="false" aria-describedby="sale-cheque-note" disabled data-i18n="payCheque"></button>
+                </div>
+                <!-- Issue #288 — how long for udhaar; "paid now" sends the mode and nothing more. -->
+                <select name="terms" id="sale-terms" hidden aria-hidden="true" tabindex="-1"><option value="now" data-i18n="payNow"></option><option value="0" data-i18n="payToday"></option><option value="7" data-i18n="sevenDays"></option><option value="15" data-i18n="fifteenDays"></option><option value="30" data-i18n="thirtyDays"></option></select>
+                <div class="choice-list" id="sale-udhaar-days" role="group" aria-label="Pay within" data-i18n-aria="udhaarDays" hidden>
+                  <button type="button" class="chip" data-days="0" aria-pressed="false" data-i18n="payToday"></button>
+                  <button type="button" class="chip" data-days="7" aria-pressed="false" data-i18n="sevenDays"></button>
+                  <button type="button" class="chip" data-days="15" aria-pressed="false" data-i18n="fifteenDays"></button>
+                  <button type="button" class="chip" data-days="30" aria-pressed="false" data-i18n="thirtyDays"></button>
+                </div>
+                <div class="field-grid" id="sale-part-paid" hidden>
+                  <label><span data-i18n="paidNowAmount"></span><span class="input-with-prefix"><span>₹</span><input name="paidAmount" type="number" min="0" step="0.01" inputmode="decimal" disabled /></span></label>
+                  <label id="sale-paid-by-field"><span data-i18n="paidBy"></span><select name="paidBy" id="sale-paid-by"><option value="CASH" data-i18n="paidCash"></option><option value="UPI" data-i18n="paidUpi"></option><option value="CARD" data-i18n="paidCard"></option></select></label>
+                </div>
+                <p class="slide-note" id="sale-cheque-note" data-i18n="payChequeNote"></p>
+                <div class="bill-summary" role="group" aria-label="The bill" data-i18n-aria="billSummaryLabel">
+                  <div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div>
+                  <div class="summary-line" id="sale-charges-line" hidden><span data-i18n="chargesSection"></span><strong data-calculated="charges"></strong></div>
+                  <div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div>
+                  <div class="summary-line" id="sale-round-off" hidden><span data-i18n="roundOff"></span><strong data-calculated="roundOff"></strong></div>
+                  <div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="payTotal">—</strong></div>
+                </div>
+                <!-- Issue #312 / #311 — one green line for what the law needs (it happens by itself), and at most one warning. -->
+                <p class="line-ok" id="sale-review-ok" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p>
+                <p class="line-warn" id="sale-review-warning" hidden><span aria-hidden="true">!</span><span><span data-line-text></span> <button class="text-button" type="button" id="sale-review-turnover" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button></span></p>
+                <details id="sale-more">
+                  <summary data-i18n="moreDetails"></summary>
+                  <div class="field-grid extra-fields">
+                    <label><span data-i18n="date"></span><input name="date" type="date" required /></label>
+                    <label><span data-i18n="reference"></span><input name="reference" /></label>
+                    <label><span data-i18n="buyerOrderLabel"></span><input name="buyerOrderNumber" /></label>
+                    <label><span data-i18n="modeOfPaymentLabel"></span><input name="paymentTerms" /><small data-i18n="modeOfPaymentHelp"></small></label>
+                    <label><span data-i18n="termsOfDeliveryLabel"></span><input name="termsOfDelivery" /></label>
+                    <label><span data-i18n="otherReferencesLabel"></span><input name="otherReferences" /></label>
+                    <label><span data-i18n="ewayBillNumberLabel"></span><input name="ewayBillNumber" inputmode="numeric" /><small data-i18n="ewayBillNumberHelp"></small></label>
+                    <label class="full-field"><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label>
+                  </div>
+                </details>
+              </section>
+
+              <!-- Issue #305 / #311 — only for goods that need an e-way bill. With the vehicle number, the
+                   e-way bill is raised by itself when the bill is made; without it, it waits on Home. -->
+              <section class="slide" data-slide="transport" aria-labelledby="sale-slide-transport" hidden>
+                <h2 class="slide-title" id="sale-slide-transport" tabindex="-1" data-i18n="slideTransport"></h2>
+                <div class="field-grid">
+                  <label><span data-i18n="vehicleNumberLabel"></span><input name="vehicleNumber" autocapitalize="characters" autocomplete="off" placeholder="KA01AB1234" /><small data-i18n="vehicleNumberHelp"></small></label>
+                  <label><span data-i18n="transporterLabel"></span><select name="transporterId" id="sale-transporters"></select><button type="button" class="text-button" id="sale-add-transporter" data-i18n="addTransporter"></button></label>
+                  <label><span data-i18n="distanceKm"></span><input name="distanceKm" inputmode="numeric" autocomplete="off" /><small data-i18n="distanceHelp"></small></label>
+                  <label><span data-i18n="lrNumberLabel"></span><input name="lrNumber" /><small data-i18n="lrNumberHelp"></small></label>
+                  <label><span data-i18n="lrDateLabel"></span><input name="lrDate" type="date" data-no-default /></label>
+                </div>
+                <!-- Issue #311 — the vehicle check (#29) runs on the number typed. -->
+                <p class="line-ok" id="sale-vehicle-check" aria-live="polite" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p>
+                <p class="slide-note" data-i18n="transportEwayNote"></p>
+              </section>
+
+              <!-- Issue #143 — only for a customer abroad, in an SEZ, or buying as a deemed export. -->
+              <section class="slide" data-slide="export" aria-labelledby="sale-slide-export" hidden>
+                <h2 class="slide-title" id="sale-slide-export" tabindex="-1" data-i18n="slideExport"></h2>
+                <details id="sale-export" hidden open>
+                  <summary data-i18n="exportSection"></summary>
+                  <div class="field-grid extra-fields">
+                    <p class="safety-note full-field"><span aria-hidden="true">i</span><span id="sale-export-kind"></span></p>
+                    <label data-export-abroad><span data-i18n="underLutLabel"></span><select name="underLut"><option value="yes" data-i18n="underLutYes"></option><option value="no" data-i18n="underLutNo"></option></select></label>
+                    <label data-export-abroad><span data-i18n="exportCountryLabel"></span><input name="exportCountry" autocapitalize="characters" maxlength="2" placeholder="AE" /><small data-i18n="exportCountryHelp"></small></label>
+                    <label data-export-abroad><span data-i18n="exportCurrencyLabel"></span><input name="exportCurrency" autocapitalize="characters" maxlength="3" placeholder="USD" /><small data-i18n="exportCurrencyHelp"></small></label>
+                    <label data-export-abroad><span data-i18n="exchangeRateLabel"></span><input name="exchangeRate" inputmode="decimal" placeholder="83.25" /></label>
+                    <label><span data-i18n="shippingBillNumberLabel"></span><input name="shippingBillNumber" /><small data-i18n="shippingBillHelp"></small></label>
+                    <label><span data-i18n="shippingBillDateLabel"></span><input name="shippingBillDate" type="date" data-no-default /></label>
+                    <label><span data-i18n="portCodeLabel"></span><input name="portCode" autocapitalize="characters" maxlength="6" placeholder="INNSA1" /><small data-i18n="portCodeHelp"></small></label>
+                  </div>
+                </details>
+              </section>
+
+              <!-- Issue #182 — only when "Deliver somewhere else" was tapped. -->
+              <section class="slide" data-slide="shipto" aria-labelledby="sale-slide-shipto" hidden>
+                <h2 class="slide-title" id="sale-slide-shipto" tabindex="-1" data-i18n="slideShipTo"></h2>
+                <div class="field-grid" id="sale-delivery">
                   <label class="full-field"><span data-i18n="shipToWhere"></span><select name="shipTo" id="sale-ship-to"><option value="same" data-i18n="shipToSame"></option><option value="address" data-i18n="shipToAddress"></option><option value="party" data-i18n="shipToParty"></option></select></label>
                   <label id="sale-ship-address-field" hidden><span data-i18n="shipToWhichAddress"></span><select name="shipToAddressId" id="sale-ship-address"></select><button type="button" class="text-button" id="sale-add-address" data-i18n="addDeliveryAddress"></button></label>
                   <label id="sale-ship-party-field" hidden><span data-i18n="shipToWhichParty"></span><select name="shipToPartyId" data-customer-picker></select></label>
-                  <p class="safety-note full-field" id="sale-place-of-supply"><span aria-hidden="true">i</span><span data-i18n="placeOfSupplyPending"></span></p>
-                  <label><span data-i18n="transporterLabel"></span><select name="transporterId" id="sale-transporters"></select><button type="button" class="text-button" id="sale-add-transporter" data-i18n="addTransporter"></button></label>
-                  <label><span data-i18n="vehicleNumberLabel"></span><input name="vehicleNumber" autocapitalize="characters" placeholder="KA01AB1234" /><small data-i18n="vehicleNumberHelp"></small></label>
-                  <label><span data-i18n="lrNumberLabel"></span><input name="lrNumber" /><small data-i18n="lrNumberHelp"></small></label>
-                  <label><span data-i18n="lrDateLabel"></span><input name="lrDate" type="date" data-no-default /></label>
                   <label><span data-i18n="destinationLabel"></span><input name="destination" /><small data-i18n="destinationHelp"></small></label>
-                  <label><span data-i18n="ewayBillNumberLabel"></span><input name="ewayBillNumber" inputmode="numeric" /><small data-i18n="ewayBillNumberHelp"></small></label>
-                  <label><span data-i18n="buyerOrderLabel"></span><input name="buyerOrderNumber" /></label>
-                  <label><span data-i18n="modeOfPaymentLabel"></span><input name="paymentTerms" /><small data-i18n="modeOfPaymentHelp"></small></label>
-                  <label><span data-i18n="termsOfDeliveryLabel"></span><input name="termsOfDelivery" /></label>
-                  <label><span data-i18n="otherReferencesLabel"></span><input name="otherReferences" /></label>
+                  <p class="safety-note full-field" id="sale-place-of-supply"><span aria-hidden="true">i</span><span data-i18n="placeOfSupplyPending"></span></p>
                 </div>
-              </details>
-              <!-- Issue #143 — shown only for a customer abroad, in an SEZ, or buying as a deemed export.
-                   The kind of supply comes from the customer's record; only an export asks about LUT. -->
-              <details id="sale-export" hidden open>
-                <summary data-i18n="exportSection"></summary>
-                <div class="field-grid extra-fields">
-                  <p class="safety-note full-field"><span aria-hidden="true">i</span><span id="sale-export-kind"></span></p>
-                  <label data-export-abroad><span data-i18n="underLutLabel"></span><select name="underLut"><option value="yes" data-i18n="underLutYes"></option><option value="no" data-i18n="underLutNo"></option></select></label>
-                  <label data-export-abroad><span data-i18n="exportCountryLabel"></span><input name="exportCountry" autocapitalize="characters" maxlength="2" placeholder="AE" /><small data-i18n="exportCountryHelp"></small></label>
-                  <label data-export-abroad><span data-i18n="exportCurrencyLabel"></span><input name="exportCurrency" autocapitalize="characters" maxlength="3" placeholder="USD" /><small data-i18n="exportCurrencyHelp"></small></label>
-                  <label data-export-abroad><span data-i18n="exchangeRateLabel"></span><input name="exchangeRate" inputmode="decimal" placeholder="83.25" /></label>
-                  <label><span data-i18n="shippingBillNumberLabel"></span><input name="shippingBillNumber" /><small data-i18n="shippingBillHelp"></small></label>
-                  <label><span data-i18n="shippingBillDateLabel"></span><input name="shippingBillDate" type="date" data-no-default /></label>
-                  <label><span data-i18n="portCodeLabel"></span><input name="portCode" autocapitalize="characters" maxlength="6" placeholder="INNSA1" /><small data-i18n="portCodeHelp"></small></label>
-                </div>
-              </details>
-              <details><summary data-i18n="moreDetails"></summary><div class="field-grid extra-fields"><label><span data-i18n="reference"></span><input name="reference" /></label><label><span data-i18n="notes"></span><textarea name="notes" rows="3"></textarea></label></div></details>
-            </article>
-            <aside class="panel summary-card"><h2 data-i18n="saleSummary"></h2><div class="summary-line"><span data-i18n="itemTotal"></span><strong data-calculated="subtotal">₹0.00</strong></div><div class="summary-line"><span data-i18n="gstEstimate"></span><strong data-calculated="tax">—</strong></div><div class="summary-line" id="sale-round-off" hidden><span data-i18n="roundOff"></span><strong data-calculated="roundOff"></strong></div><div class="summary-total"><span data-i18n="amountCustomerPays"></span><strong data-calculated="total" aria-live="polite">—</strong></div><!-- Issue #306 — what the live total found: where the sale counts, e-way bill and e-invoice, and anything that would stop the bill. --><ul class="estimate-notes" id="sale-estimate-notes" aria-live="polite"></ul><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="taxSafety"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewSale"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
+              </section>
+
+              <!-- Issue #307 — the done screen, as the last slide. -->
+              <section class="slide done-screen" data-slide="done" id="sale-done" aria-labelledby="done-title" hidden></section>
+
+              <!-- Issue #305 — the total never hides: what the customer pays, and the one next step. -->
+              <div class="bill-bar" id="sale-bill-bar">
+                <button type="button" class="secondary-button" id="sale-back" data-i18n="slideBack"></button>
+                <p class="bill-bar-total"><small data-i18n="amountCustomerPays"></small><strong class="amount" data-calculated="total" aria-live="polite">—</strong></p>
+                <button type="button" class="action-button" id="sale-next" data-i18n="slideNext"></button>
+              </div>
+            </div>
           </form>
           <article class="panel bill-panel" id="sale-bill-panel" hidden>
             <div class="panel-heading">
@@ -202,11 +294,13 @@
         </section>
 
         <template id="sale-line-template">
-          <div class="sale-line">
+          <div class="sale-line line-card">
             <!-- Issue #308 — search by name, code, HSN or barcode; the chosen item's id rides in the hidden field. -->
             <div class="item-picker"><input type="hidden" data-line-field="item" /><label><span data-i18n="item"></span><input data-item-search data-i18n-placeholder="itemSearchPlaceholder" /></label></div>
-            <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
-            <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" required /></span><small data-line-price-note></small></label>
+            <!-- Issue #305 — the line as a card: GST and stock left, a − / + stepper, and the number typed straight in (10.5). -->
+            <small class="line-facts" data-line-facts></small>
+            <div class="line-stepper"><button type="button" class="secondary-button" data-step="-1" aria-label="One less" data-i18n-aria="oneLess">−</button><label><span class="sr-only" data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" inputmode="decimal" required /><span data-line-unit>—</span></span></label><button type="button" class="secondary-button" data-step="1" aria-label="One more" data-i18n-aria="oneMore">＋</button></div>
+            <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" inputmode="decimal" required /></span><small data-line-price-note></small></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -238,6 +332,8 @@
                 <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label>
               </div>
+              <!-- Issue #311 — the supplier check (#19) runs when the supplier is chosen: one line. -->
+              <p class="line-ok" id="purchase-supplier-check" aria-live="polite" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p>
               <div class="sale-lines" id="purchase-lines" aria-label="Items on this supplier bill" data-i18n-aria="purchaseLinesLabel"></div>
               <button type="button" class="secondary-button" id="purchase-add-line" data-i18n="addLine"></button>
               <p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseTaxFromGstin"></span></p>
@@ -1421,7 +1517,7 @@
 
     </div>
 
-    <!-- Issue #304 — + Bill. Sale is the default: it has the focus, so Enter or one more tap goes straight in. -->
+    <!-- Issue #304 — the other bills, from "Other bills" on the sale (+ Bill itself opens the sale in one tap). -->
     <dialog id="bill-sheet" class="bill-sheet" aria-labelledby="bill-sheet-title">
       <h2 id="bill-sheet-title" data-i18n="billSheetTitle"></h2>
       <div class="sheet-choices">
