@@ -753,8 +753,11 @@ test("#262: the refusal dialog, the purchase screen and both languages carry the
   assert.match(html, /id="purchase-for-sale-note"[^>]*hidden[\s\S]*?id="purchase-back-to-sale"/);
   assert.equal(locales["en-IN"]!.enterPurchaseBill, "Enter the purchase bill");
   for (const key of ["enterPurchaseBill", "backToSale", "purchaseForSale", "purchaseForSaleDone"]) assert.ok(locales["hi-IN"]![key], key);
-  // The sale's review and its Record both show the refusal with the button.
-  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 2);
+  // The sale's review (the Payment slide, #305), its Record (Make bill) and the other screens' reviews
+  // all show the refusal with the button.
+  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 3);
+  assert.match(await functionSource("reviewSaleOnSlide"), /showSaleFailure\(error\);/);
+  assert.match(await functionSource("recordPending"), /showSaleFailure\(error\);/);
   // A Hindi reader gets the server's Hindi sentence, not "could not complete".
   assert.match(await functionSource("localizedError"), /SALES_STOCK_NOT_ENOUGH"\) return error\.details\?\.\[state\.locale\] \|\| error\.message;/);
   assert.doesNotMatch(script, /negativeOverride|override_negative/, "no way to let a short sale through from the screen");
@@ -819,10 +822,16 @@ test("#288/#307: the sale form offers the walk-in customer and paid now by cash,
   const [html, script, done] = await Promise.all([read("index.html"), read("app.js"), read("done-screen.js")]);
   const sale = html.slice(html.indexOf('data-draft="sale"'), html.indexOf('id="sale-bill-panel"'));
   assert.match(sale, /id="sale-walk-in" data-i18n="walkInChoose"/);
-  assert.match(sale, /<select name="terms" id="sale-terms"><option value="now" data-i18n="payNow">/);
+  // Issue #305 — six tiles set the same fields the form always sent: terms, paidBy and paidAmount.
+  for (const way of ["CASH", "UPI", "CARD", "UDHAAR", "PART", "CHEQUE"]) assert.match(sale, new RegExp(`class="pay-tile" data-pay="${way}"`));
+  assert.match(sale, /<select name="terms" id="sale-terms" hidden aria-hidden="true" tabindex="-1"><option value="now" data-i18n="payNow">/);
+  for (const days of ["0", "7", "15", "30"]) assert.match(sale, new RegExp(`<option value="${days}"[\\s\\S]*data-days="${days}"`));
   for (const mode of ["CASH", "UPI", "CARD"]) assert.match(sale, new RegExp(`<select name="paidBy" id="sale-paid-by">[\\s\\S]*<option value="${mode}"`));
-  // "Within 7/30 days" sends no paidBy at all: the box is switched off, so nothing is received.
-  assert.match(await functionSource("showPaidBy"), /field\.querySelector\("select"\)\.disabled = field\.hidden;/);
+  // Udhaar sends no paidBy and no amount at all: both are switched off, so nothing is received.
+  assert.match(await functionSource("showPaidBy"), /field\.querySelector\("select"\)\.disabled = terms !== "now";/);
+  assert.match(await functionSource("showPaidBy"), /amount\.disabled = way !== "PART";/);
+  // Cheque is not taken on the bill: its tile is off and says where a cheque is entered.
+  assert.match(sale, /data-pay="CHEQUE" aria-pressed="false" aria-describedby="sale-cheque-note" disabled/);
   assert.match(html, /<dialog id="done-screen" class="done-screen" aria-labelledby="done-title"><\/dialog>/);
   assert.match(script, /await import\("\.\/done-screen\.js"\)/);
   assert.match(done, /export const PRINTER_KEY = "karobar\.printer";/);
