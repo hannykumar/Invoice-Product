@@ -1242,7 +1242,8 @@ async function runHomeTask(action, button) {
     try {
       const result = await api(action.post.path, { method: "POST", body: JSON.stringify(action.post.body) });
       await refreshDocumentLists();
-      if (result.title) showDialog({ title: result.title, message: result.message ?? "" }, "recorded");
+      // A retry that still got no number says so, not a green tick.
+      if (result.title) showDialog({ title: result.title, message: result.message ?? "" }, result.status === "FAILED" ? "failed" : "recorded");
     } catch (error) {
       showDialog({ title: copy[state.locale].nothingSaved, message: error.message }, "failed");
     } finally { button.disabled = false; }

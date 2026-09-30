@@ -66,12 +66,39 @@ const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T
 
 // ------------------------------------------------------------------------------------ the tasks
 
-export function ewayTask(bill: { readonly id: string; readonly number: string; readonly customer: string | null }, canAct: boolean): HomeTask {
+/**
+ * A bill that needs an e-way bill and has none. When the last try (at Make bill, or on the E-way bill
+ * screen) got no number because the portal did not answer, the button sends it again as it was sent;
+ * when the portal refused it, or nothing was sent (no vehicle yet), only a person can put it right.
+ */
+export function ewayTask(bill: {
+  readonly id: string; readonly number: string; readonly customer: string | null;
+  readonly failure: { readonly retryable: boolean; readonly distanceKm: number } | null;
+}, canAct: boolean): HomeTask {
   const who = bill.customer ?? '';
+  const open: HomeAction = { label: say('Raise', 'बनाइए'), open: { view: 'eway', bill: bill.id } };
+  if (bill.failure === null) {
+    return {
+      id: `eway:${bill.id}`, kind: 'EWAY', rank: 10,
+      title: say(`${who}: e-way bill needed before the goods leave (${bill.number})`, `${who}: माल निकलने से पहले ई-वे बिल चाहिए (${bill.number})`),
+      action: canAct ? open : null,
+    };
+  }
+  if (!bill.failure.retryable) {
+    return {
+      id: `eway:${bill.id}`, kind: 'EWAY', rank: 10,
+      title: say(`The e-way bill for ${bill.number} could not be made — the government site refused it, so something on it needs correcting`,
+        `${bill.number} का ई-वे बिल नहीं बना — सरकारी साइट ने लौटा दिया, इसमें कुछ ठीक करना है`),
+      action: canAct ? { label: say('Open', 'खोलिए'), open: open.open } : null,
+    };
+  }
+  // The same request the E-way bill screen sends: the bill's own details, and the distance last sent.
+  const body: Record<string, string> = { invoice: bill.id, reason: 'SUPPLY', ...(bill.failure.distanceKm > 0 ? { distanceKm: String(bill.failure.distanceKm) } : {}) };
   return {
     id: `eway:${bill.id}`, kind: 'EWAY', rank: 10,
-    title: say(`${who}: e-way bill needed before the goods leave (${bill.number})`, `${who}: माल निकलने से पहले ई-वे बिल चाहिए (${bill.number})`),
-    action: canAct ? { label: say('Raise', 'बनाइए'), open: { view: 'eway', bill: bill.id } } : null,
+    title: say(`The e-way bill for ${bill.number} could not be made — the government site did not answer`,
+      `${bill.number} का ई-वे बिल नहीं बना — सरकारी साइट ने जवाब नहीं दिया`),
+    action: canAct ? { label: say('Retry', 'फिर भेजिए'), post: { path: '/api/eway/generate', body } } : null,
   };
 }
 
@@ -84,7 +111,9 @@ export function eInvoiceTask(bill: { readonly id: string; readonly number: strin
     ? say(`${bill.number} is waiting for its e-invoice number from the government`, `${bill.number} के ई-इनवॉइस नंबर का सरकार से इंतज़ार है`)
     : unsent
       ? say(`${bill.number} needs an e-invoice number and has not been sent yet`, `${bill.number} को ई-इनवॉइस नंबर चाहिए, अभी भेजा नहीं गया`)
-      : say(`${bill.number}: the government refused the e-invoice`, `${bill.number}: सरकार ने ई-इनवॉइस लौटा दिया`);
+      : bill.canRetry
+        ? say(`The e-invoice for ${bill.number} could not be sent — the government site did not answer`, `${bill.number} का ई-इनवॉइस नहीं गया — सरकारी साइट ने जवाब नहीं दिया`)
+        : say(`${bill.number}: the government refused the e-invoice`, `${bill.number}: सरकार ने ई-इनवॉइस लौटा दिया`);
   const action: HomeAction = waiting
     ? { label: say('Check again', 'फिर देखिए'), post: { path: '/api/einvoices/reconcile', body: { invoice: bill.id } } }
     : unsent || bill.canRetry

@@ -4999,6 +4999,9 @@ export class DemoApplication {
       const record = records.find((candidate) => candidate.movementId === invoice.id && candidate.acknowledgement !== undefined
         && !['CANCELLED', 'REJECTED', 'FAILED'].includes(candidate.status));
       const status = record !== undefined ? 'RAISED' : outcome === 'REQUIRED' ? 'NEEDED' : outcome === 'NOT_REQUIRED' ? 'NOT_NEEDED' : 'ASK';
+      // Issue #311 — a try that got no number (at Make bill, or here): why, whether sending it again
+      // can help, and the distance it sent, so Home can offer the same request again.
+      const failed = status === 'NEEDED' ? records.find((candidate) => candidate.movementId === invoice.id && candidate.status === 'FAILED') : undefined;
       rows.push({
         id: invoice.id,
         number: invoice.number,
@@ -5009,6 +5012,8 @@ export class DemoApplication {
         label: status === 'RAISED' ? `e-way bill ${record?.acknowledgement?.ewayBillNumber ?? ''}`
           : status === 'NEEDED' ? 'needs one'
             : status === 'NOT_NEEDED' ? 'not needed' : 'check it',
+        failure: failed?.failure === undefined ? null
+          : { message: failed.failure.message, retryable: failed.failure.retryable, distanceKm: failed.distanceKm ?? 0 },
       });
     }
     const order: Record<string, number> = { NEEDED: 0, ASK: 1, RAISED: 2, NOT_NEEDED: 3 };
