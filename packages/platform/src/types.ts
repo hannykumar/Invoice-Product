@@ -132,7 +132,21 @@ export type Permission =
   | "gsp.connection.authorise"
   | "gsp.connection.revoke"
   | "gsp.credential.rotate"
-  | "gsp.calls.reconcile";
+  | "gsp.calls.reconcile"
+  // Issue #280. The business's own particulars and look, the UPI id customers pay into (its own
+  // permission: changing it redirects money), the customer/supplier/item lists and the GST rate an
+  // item declares, and setting up or bringing in a business. Every POST route names one.
+  | "business.settings.write"
+  | "branding.write"
+  | "payments.upi.write"
+  | "masters.party.write"
+  | "masters.item.write"
+  | "masters.item.rate.declare"
+  | "onboarding.run"
+  | "onboarding.finish"
+  | "migration.run"
+  | "migration.commit"
+  | "migration.rollback";
 
 export interface RequestContext {
   companyId: Id;

@@ -6,14 +6,16 @@ import { PlatformError, redactSecretText } from '../../../packages/platform/src/
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
 import { chooseMark, searchMarks } from './trade-mark-application.ts';
-import { previewBranding, readBranding, saveBranding, saveUpiId } from './branding-application.ts';
-import { currentStates, readBusinessDetails, saveBusinessDetails } from './business-details-application.ts';
+import { previewBranding, readBranding, saveBranding } from './branding-application.ts';
+import { currentStates, readBusinessDetails } from './business-details-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
 import { DemoApplication } from './demo-application.ts';
 import { ChallanDesk } from './challan-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from './government-webhooks.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { stateOfPincode } from '../../../packages/masters/src/index.ts';
+import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
+import type { Permission } from '../../../packages/platform/src/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
 // shapes the walker recognises, and a secret carried by a class instance or a Map would walk past it.
@@ -47,6 +49,144 @@ export interface WebhookDelivery {
   readonly signature: string;
 }
 
+/**
+ * Issue #280 — what each POST needs, checked before its handler reads the body. `all` must every
+ * one be held; `any` needs one of them (the service then checks the exact one, e.g. a quotation
+ * against a proforma). A POST missing from here is caught by apps/api/test/route-permissions.test.ts.
+ */
+interface Gate { readonly what: string; readonly all: readonly Permission[]; readonly any: readonly Permission[] }
+const need = (what: string, ...all: Permission[]): Gate => ({ what, all, any: [] });
+const needAny = (what: string, ...any: Permission[]): Gate => ({ what, all: [], any });
+const PARTIES = need('add or change customers, suppliers or transporters', 'masters.party.write');
+const ITEMS = need('add or change items and the GST rate on them', 'masters.item.write', 'masters.item.rate.declare');
+const BRANDING = need('change how your bills look', 'branding.write');
+const MIGRATE = need('bring in books from another program', 'migration.run');
+const PRESALE = needAny('make quotations or proforma invoices', 'quotation.issue', 'proforma.issue');
+const ADVANCES = need('record money received or paid', 'payments.record');
+
+export const POST_PERMISSIONS: Readonly<Record<string, Gate>> = {
+  '/api/operations/jobs/replay': need('replay a stuck job', 'queue.replay'),
+  '/api/operations/support-grants': need('give support staff access', 'support.access.grant'),
+  '/api/assistant/ask': need('ask about the books', 'assistant.ask'),
+  '/api/onboarding/preview': need('set up a business', 'onboarding.run'),
+  '/api/onboarding/finish': need('set up a business', 'onboarding.finish'),
+  '/api/trade-marks/search': BRANDING,
+  '/api/trade-marks/choose': BRANDING,
+  '/api/branding': BRANDING,
+  '/api/branding/preview': BRANDING,
+  '/api/branding/upi': need('change the UPI id customers pay into', 'payments.upi.write'),
+  '/api/business-details': need('change your business details', 'business.settings.write'),
+  '/api/customers': PARTIES,
+  '/api/suppliers': PARTIES,
+  '/api/transporters': PARTIES,
+  '/api/shipping-addresses': PARTIES,
+  '/api/customer-address': PARTIES,
+  '/api/customer-address/correct': PARTIES,
+  '/api/items': ITEMS,
+  '/api/items/code': ITEMS,
+  '/api/items/edit': ITEMS,
+  '/api/items/selling': need('start a bill', 'sales.draft.write'),
+  '/api/delivery/choices': needAny('choose where goods go', 'sales.draft.write', 'challan.issue'),
+  '/api/migration/start': MIGRATE,
+  '/api/migration/analyse': MIGRATE,
+  '/api/migration/mapping': MIGRATE,
+  '/api/migration/approve': MIGRATE,
+  '/api/migration/preview': MIGRATE,
+  '/api/migration/commit': need('bring in books from another program', 'migration.commit'),
+  '/api/migration/rollback': need('undo books brought in', 'migration.rollback'),
+  '/api/einvoices/preview': need('see e-invoices', 'einvoice.view'),
+  '/api/einvoices/register': need('register e-invoices', 'einvoice.generate'),
+  '/api/einvoices/reconcile': need('register e-invoices', 'einvoice.generate'),
+  '/api/einvoices/offline': need('register e-invoices', 'einvoice.generate'),
+  '/api/einvoices/cancel': need('cancel e-invoices', 'einvoice.cancel'),
+  '/api/challans/preview': need('issue delivery challans', 'challan.issue'),
+  '/api/challans/issue': need('issue delivery challans', 'challan.issue'),
+  '/api/challans/print': need('issue delivery challans', 'challan.issue'),
+  '/api/challans/eway': need('issue delivery challans', 'challan.issue'),
+  '/api/challans/link-invoice': need('issue delivery challans', 'challan.issue'),
+  '/api/challans/cancel': need('cancel delivery challans', 'challan.cancel'),
+  '/api/presale/preview': PRESALE,
+  '/api/presale/issue': PRESALE,
+  '/api/presale/print': PRESALE,
+  '/api/presale/link-invoice': PRESALE,
+  '/api/presale/convert': need('turn a quotation into a bill', 'quotation.issue', 'sales.draft.write'),
+  '/api/presale/issue-sale': need('issue a bill', 'sales.draft.write', 'sales.finalise'),
+  '/api/presale/cancel': needAny('withdraw quotations or proforma invoices', 'quotation.cancel', 'proforma.cancel'),
+  '/api/presale/advances': ADVANCES,
+  '/api/presale/advance': ADVANCES,
+  '/api/presale/refund-advance': ADVANCES,
+  '/api/presale/voucher': ADVANCES,
+  '/api/eway/preview': need('see e-way bills', 'eway.view'),
+  '/api/eway/for-bill': need('see e-way bills', 'eway.view'),
+  '/api/eway/print': need('see e-way bills', 'eway.view'),
+  '/api/eway/generate': need('make e-way bills', 'eway.generate'),
+  '/api/eway/reconcile': need('make e-way bills', 'eway.generate'),
+  '/api/eway/offline': need('make e-way bills', 'eway.generate'),
+  '/api/eway/vehicle': need('change e-way bills', 'eway.update'),
+  '/api/eway/extend': need('change e-way bills', 'eway.update'),
+  '/api/eway/cancel': need('cancel or reject e-way bills', 'eway.cancel'),
+  '/api/eway/reject': need('cancel or reject e-way bills', 'eway.cancel'),
+  '/api/vehicles/record': need('check vehicles', 'transport.vehicle.check'),
+  '/api/vehicles/check': need('check vehicles', 'transport.vehicle.check'),
+  '/api/vehicles/check/override': need('send a held vehicle anyway', 'transport.vehicle.override'),
+  '/api/suppliers/check': need('check suppliers', 'supplier.risk.view'),
+  '/api/suppliers/check/acknowledge': need('accept a supplier warning', 'supplier.risk.acknowledge'),
+  '/api/purchase-orders': need('record purchase orders', 'purchase.order.write'),
+  '/api/goods-receipts': need('record goods received', 'purchase.receipt.write'),
+  '/api/purchases/match': need('record a supplier bill', 'ledger.post.purchase'),
+  '/api/purchases/match/approve': need('approve a held supplier bill', 'purchase.match.approve'),
+  '/api/purchases/preview': need('record a supplier bill', 'ledger.post.purchase'),
+  '/api/purchases/record': need('record a supplier bill', 'ledger.post.purchase'),
+  '/api/subscription/plan': need('change your plan', 'subscription.manage'),
+  '/api/subscription/pay': need('change your plan', 'subscription.manage'),
+  '/api/sales/estimate': need('start a bill', 'sales.draft.write'),
+  '/api/sales/preview': need('start a bill', 'sales.draft.write'),
+  '/api/sales/record': need('issue a bill', 'sales.draft.write', 'sales.finalise'),
+  '/api/sales/print': need('print bills', 'sales.draft.write'),
+  '/api/sales/cancel/preview': need('cancel a bill', 'sales.cancel'),
+  '/api/sales/cancel': need('cancel a bill', 'sales.cancel'),
+  '/api/payments/preview': need('record money received or paid', 'payments.record'),
+  '/api/payments/record': need('record money received or paid', 'payments.record'),
+  '/api/payments/open-bills': need('record money received or paid', 'payments.record'),
+  '/api/payments/voucher': need('record money received or paid', 'payments.record'),
+  '/api/agent/plan': need('ask the assistant to do something', 'agent.plan'),
+  '/api/agent/approve': need('approve what the assistant will do', 'agent.approve'),
+  '/api/agent/execute': need('let the assistant do something', 'agent.execute'),
+  '/api/reminders': need('see payment reminders', 'collections.reminders.view'),
+  '/api/reminders/send': need('send payment reminders', 'collections.reminders.send'),
+  '/api/reminders/send-all': need('send payment reminders', 'collections.reminders.send'),
+  '/api/reminders/retry': need('send payment reminders', 'collections.reminders.send'),
+  '/api/reminders/stop': need('send payment reminders', 'collections.reminders.send'),
+  '/api/reminders/resume': need('send payment reminders', 'collections.reminders.send'),
+  '/api/reminders/promise': need('record a promise to pay', 'collections.promise.record'),
+  '/api/reminders/dispute': need('handle a disputed bill', 'collections.dispute.manage'),
+  '/api/reminders/dispute/resolve': need('handle a disputed bill', 'collections.dispute.manage'),
+  '/api/bank-feeds/consent': need('connect a bank account', 'bank.feed.manage'),
+  '/api/bank-feeds/consent/complete': need('connect a bank account', 'bank.feed.manage'),
+  '/api/bank-feeds/disconnect': need('connect a bank account', 'bank.feed.manage'),
+  '/api/bank-feeds/sync': need('fetch bank entries', 'bank.feed.sync'),
+  '/api/itc': need('see purchase tax credit', 'itc.view'),
+  '/api/itc/import': need('bring in the government purchase record', 'itc.import'),
+  '/api/itc/typed': need('bring in the government purchase record', 'itc.import'),
+  '/api/itc/decide': need('decide on purchase tax credit', 'itc.decide'),
+  '/api/gst-returns': need('see GST returns', 'gst_returns.view'),
+  '/api/gst-returns/prepare': need('prepare GST returns', 'gst_returns.prepare'),
+  '/api/gst-returns/approve': need('approve GST returns', 'gst_returns.approve'),
+  '/api/gst-returns/reopen': need('reopen GST returns', 'gst_returns.reopen'),
+  '/api/gst-returns/export': need('download GST returns', 'gst_returns.export'),
+  '/api/returns/preview': need('record returns', 'returns.create'),
+  '/api/returns/record': need('record returns', 'returns.create'),
+  '/api/returns/supplier-note': need('record returns', 'returns.create'),
+  '/api/returns/print': need('record returns', 'returns.create'),
+};
+
+const requirePostPermission = (actor: ActorContext, pathname: string): void => {
+  const gate = POST_PERMISSIONS[pathname];
+  if (gate === undefined) return;
+  for (const permission of gate.all) permissionPortFromActor.require(actor, permission, gate.what);
+  if (gate.any.length > 0 && !gate.any.some((permission) => actor.permissions.includes(permission))) permissionPortFromActor.require(actor, gate.any[0]!, gate.what);
+};
+
 export async function handleApi(method: string, pathname: string, body: Record<string, unknown> = {}, authorization?: string, delivery?: WebhookDelivery): Promise<ApiResult> {
   try {
     const runtime = apiRuntime();
@@ -63,6 +203,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     }
     const context = runtime.authenticate(authorization);
     const actor = runtime.actor(context);
+    if (method === 'POST') requirePostPermission(actor, pathname);
     const app = await runtime.application(context);
     if (method === 'GET' && pathname === '/api/session') return json(200, { company: runtime.companySummary(context.companyId), userId: context.actorId, permissions: [...context.permissions] });
     if (method === 'GET' && pathname === '/api/dashboard') return json(200, await app.dashboard(actor));
@@ -92,7 +233,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     // Issue #180 — the business's own name, address, PIN code, phone, PAN and bank, in one place.
     // Every printed document takes its seller block from here, and nothing is issued without an address.
     if (method === 'GET' && pathname === '/api/business-details') return json(200, readBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId)));
-    if (method === 'POST' && pathname === '/api/business-details') return json(200, saveBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId), body));
+    if (method === 'POST' && pathname === '/api/business-details') return json(200, await app.saveBusinessDetails(actor, runtime.companyIdentity(context.companyId), body));
     // Issue #181 — the customers and items this business keeps. Every sale, challan and quotation
     // is made out to a record from these two lists, so the bill names the customer and the goods
     // that were actually chosen.
@@ -113,7 +254,7 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/customer-address') return json(200, app.customerAddress(actor, String(body.customerId ?? '')));
     if (method === 'POST' && pathname === '/api/customer-address/correct') return json(200, app.correctCustomerAddress(actor, body));
     // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
-    if (method === 'POST' && pathname === '/api/branding/upi') return json(200, saveUpiId(context.companyId, body));
+    if (method === 'POST' && pathname === '/api/branding/upi') return json(200, await app.saveUpiId(actor, body));
     if (method === 'POST' && pathname === '/api/branding/preview')
       return json(200, previewBranding(context.companyId, runtime.companySummary(context.companyId).name, body));
     // Issue #37 — bringing a business in from Tally, BUSY or Vyapar. Like setting up a business,
