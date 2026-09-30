@@ -506,6 +506,7 @@ button.money-figure:hover { background: rgba(255, 255, 255, .08); }
   .sale-slides .bill-bar { bottom: calc(64px + env(safe-area-inset-bottom)); padding-inline: .7rem; gap: .5rem; }
   .sale-slides .slide { padding-inline: .8rem; }
   .slide.done-screen { width: 100%; height: auto; border-radius: 0; }
+  #other-bills { justify-self: start; }
 }
 
 /* Issue #304 — the five tabs: a short left rail on a desktop, the bottom bar on a phone. */

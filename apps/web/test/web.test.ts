@@ -326,10 +326,10 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
   assert.doesNotMatch(html, /class="sidebar"|class="bottom-nav"|class="nav-item|id="menu-button"/);
   assert.doesNotMatch(script, /toggleMenu|closeMenu|#nav-settings/);
 
-  // The bar: a labelled landmark, five tabs in order, + Bill the raised centre that opens the sheet.
+  // The bar: a labelled landmark, five tabs in order, + Bill the raised centre that opens a new sale.
   assert.match(bar, /aria-label="Main" data-i18n-aria="mainNavigation"/);
   assert.deepEqual([...bar.matchAll(/<small data-i18n="([^"]+)"/g)].map((m) => en[m[1]!]), ["Home", "Khata", "Bill", "Items", "More"]);
-  assert.match(bar, /class="tab-main" id="bill-button" aria-haspopup="dialog" aria-controls="bill-sheet" aria-keyshortcuts="F2 Alt\+N"/);
+  assert.match(bar, /class="tab-main" id="bill-button" aria-controls="view-sale" aria-keyshortcuts="F2 Alt\+N"/);
   // Khata opens who owes what in Reports until the khata page (#309) is built.
   assert.match(bar, /data-view="reports" data-section="report-dues"/);
   assert.match(script, /dues\.id = "report-dues"/);
@@ -347,9 +347,16 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
   ]);
   assert.match(sheet, /data-view="sale" autofocus/);
   assert.match(sheet, /aria-describedby="expense-soon"[\s\S]*id="expense-soon" data-i18n="expenseSoon"/);
-  // From anywhere: the tab, F2 and Alt+N all open the sheet; choosing opens the screen and closes it.
-  assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openBillSheet\)/);
-  assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)/);
+  // Any screen reaches a new sale in one tap: the tab, F2 and Alt+N all open the sale itself.
+  assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openNewSale\)/);
+  assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)\) \{\s*event\.preventDefault\(\);\s*openNewSale\(\);/);
+  assert.match(script, /function openNewSale\(\) \{[\s\S]*?openView\("sale"\);/);
+  // The other bills stay one tap away on the sale: "Other bills" opens the sheet; choosing closes it.
+  const saleHeading = section('<section class="view" id="view-sale"', "</form>");
+  assert.match(saleHeading, /id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"/);
+  assert.equal(en.otherBills, "Other bills");
+  assert.equal(locales["hi-IN"]!.otherBills, "दूसरे बिल");
+  assert.match(script, /querySelector\("#other-bills"\)\.addEventListener\("click", openBillSheet\)/);
   assert.match(script, /function openView[\s\S]*?if \(sheet\?\.open\) sheet\.close\(\);/);
 
   // More: every other screen, in five plain groups.

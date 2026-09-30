@@ -344,7 +344,7 @@ const copy = {
     draftReady: "Your draft is ready to review", keepEditing: "Keep editing", understand: "I understand",
     // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
     mainNavigation: "Main menu", tabHome: "Home", tabKhata: "Khata", tabBill: "Bill", tabItems: "Items", tabMore: "More",
-    billSheetTitle: "Make a new…", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.",
+    billSheetTitle: "Make a new…", otherBills: "Other bills", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.",
     navGroupPeople: "People", navGroupBusiness: "Business settings", navGroupReports: "Reports",
     moreTitle: "More", moreHelp: "Everything else in your shop, in one place.",
     itemsTitle: "Items", itemsHelp: "What you sell and buy, and how much is left in the godown.", itemsAdd: "Add item", itemsEdit: "Change", itemsNone: "No items yet. Add the first thing you sell.",
@@ -695,7 +695,7 @@ const copy = {
     draftReady: "Draft review ke liye taiyar hai", keepEditing: "Badlav karen", understand: "Samajh gaya",
     // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
     mainNavigation: "मुख्य मेन्यू", tabHome: "होम", tabKhata: "खाता", tabBill: "बिल", tabItems: "सामान", tabMore: "और",
-    billSheetTitle: "नया बनाइए…", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।",
+    billSheetTitle: "नया बनाइए…", otherBills: "दूसरे बिल", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।",
     navGroupPeople: "लोग", navGroupBusiness: "कारोबार की सेटिंग", navGroupReports: "रिपोर्ट",
     moreTitle: "और", moreHelp: "आपकी दुकान का बाक़ी सब कुछ, एक जगह।",
     itemsTitle: "सामान", itemsHelp: "आप क्या बेचते और ख़रीदते हैं, और गोदाम में कितना बचा है।", itemsAdd: "सामान जोड़िए", itemsEdit: "बदलिए", itemsNone: "अभी कोई सामान नहीं। जो बेचते हैं, पहले वह जोड़िए।",
@@ -3323,19 +3323,24 @@ document.querySelector("#branding-format")?.addEventListener("change", refreshBr
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view, button.dataset.section ?? null)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); renderPickers(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
-// Issue #304 — + Bill, from anywhere: the tab, F2 or Alt+N. Sale has the focus, so one more tap (or
-// Enter) opens it. Not over the sign-in or another open box.
+// Issue #304 — + Bill, from anywhere: the tab, F2 or Alt+N open a new sale in one tap. The other bills
+// are on the sheet, opened by "Other bills" on the sale. Not over the sign-in or another open box.
+function openNewSale() {
+  if (document.querySelector("dialog[open]")) return;
+  openView("sale");
+}
 function openBillSheet() {
   const sheet = document.querySelector("#bill-sheet");
   if (!sheet || sheet.open || document.querySelector("dialog[open]")) return;
   sheet.showModal();
   sheet.querySelector(".sheet-main")?.focus();
 }
-document.querySelector("#bill-button").addEventListener("click", openBillSheet);
+document.querySelector("#bill-button").addEventListener("click", openNewSale);
+document.querySelector("#other-bills").addEventListener("click", openBillSheet);
 document.addEventListener("keydown", (event) => {
   if (event.key === "F2" || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyN")) {
     event.preventDefault();
-    openBillSheet();
+    openNewSale();
   }
 });
 document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {

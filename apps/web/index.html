@@ -28,7 +28,7 @@
         <button type="button" data-view="dashboard"><span aria-hidden="true">⌂</span><small data-i18n="tabHome"></small></button>
         <!-- Until the khata page (#309) exists, Khata opens who owes what, in Reports. -->
         <button type="button" data-view="reports" data-section="report-dues"><span aria-hidden="true">▤</span><small data-i18n="tabKhata"></small></button>
-        <button type="button" class="tab-main" id="bill-button" aria-haspopup="dialog" aria-controls="bill-sheet" aria-keyshortcuts="F2 Alt+N"><span aria-hidden="true">＋</span><small data-i18n="tabBill"></small></button>
+        <button type="button" class="tab-main" id="bill-button" aria-controls="view-sale" aria-keyshortcuts="F2 Alt+N"><span aria-hidden="true">＋</span><small data-i18n="tabBill"></small></button>
         <button type="button" data-view="items"><span aria-hidden="true">▦</span><small data-i18n="tabItems"></small></button>
         <button type="button" data-view="more" id="more-tab"><span aria-hidden="true">☰</span><small data-i18n="tabMore"></small></button>
       </nav>
@@ -123,7 +123,7 @@
         </section>
 
         <section class="view" id="view-sale" aria-labelledby="sale-title">
-          <div class="page-heading compact"><div><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span></div>
+          <div class="page-heading compact"><div><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span><button type="button" class="secondary-button" id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"></button></div>
           <!-- Issue #266 — said when a draft from an earlier day comes back. -->
           <p class="safety-note draft-date-note" id="sale-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="draft-form sale-slides" data-draft="sale" novalidate>
@@ -1517,7 +1517,7 @@
 
     </div>
 
-    <!-- Issue #304 — + Bill. Sale is the default: it has the focus, so Enter or one more tap goes straight in. -->
+    <!-- Issue #304 — the other bills, from "Other bills" on the sale (+ Bill itself opens the sale in one tap). -->
     <dialog id="bill-sheet" class="bill-sheet" aria-labelledby="bill-sheet-title">
       <h2 id="bill-sheet-title" data-i18n="billSheetTitle"></h2>
       <div class="sheet-choices">
