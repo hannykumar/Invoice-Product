@@ -5001,7 +5001,7 @@ export class DemoApplication {
       const status = record !== undefined ? 'RAISED' : outcome === 'REQUIRED' ? 'NEEDED' : outcome === 'NOT_REQUIRED' ? 'NOT_NEEDED' : 'ASK';
       // Issue #311 — a try that got no number (at Make bill, or here): why, whether sending it again
       // can help, and the distance it sent, so Home can offer the same request again.
-      const failed = status === 'NEEDED' ? records.find((candidate) => candidate.movementId === invoice.id && candidate.status === 'FAILED') : undefined;
+      const failed = status === 'NEEDED' ? records.findLast((candidate) => candidate.movementId === invoice.id && candidate.status === 'FAILED') : undefined;
       rows.push({
         id: invoice.id,
         number: invoice.number,
