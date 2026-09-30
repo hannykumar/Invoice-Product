@@ -20,71 +20,22 @@
   <body>
     <a class="skip-link" href="#main" data-i18n="skip"></a>
     <div class="app-shell">
-      <aside class="sidebar" id="primary-sidebar" aria-label="Primary navigation" data-i18n-aria="primaryNavigation">
-        <a class="brand" href="#dashboard" aria-label="Karobar home" data-i18n-aria="companyHome">
-          <span class="brand-mark" aria-hidden="true">क</span>
-          <span><strong>Karobar</strong><small data-i18n="brandSubtitle"></small></span>
-        </a>
-        <nav class="nav-list" aria-label="Workspace" data-i18n-aria="workspaceNavigation">
-          <!-- Issue #241 — the menu follows the order of a trade: goods come in, sit in stock, go out, money comes in. -->
-          <button class="nav-item active" data-view="dashboard"><span aria-hidden="true">⌂</span><span data-i18n="navHome"></span></button>
-          <div class="nav-group" role="group" aria-labelledby="nav-group-buying">
-            <p class="nav-group-title" id="nav-group-buying" data-i18n="navGroupBuying"></p>
-            <button class="nav-item" data-view="purchase"><span aria-hidden="true">↓</span><span data-i18n="navPurchase"></span></button>
-            <button class="nav-item" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button>
-            <button class="nav-item" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button>
-            <button class="nav-item" data-view="paid"><span aria-hidden="true">₹</span><span data-i18n="navPaid"></span></button>
-          </div>
-          <div class="nav-group" role="group" aria-labelledby="nav-group-stock">
-            <p class="nav-group-title" id="nav-group-stock" data-i18n="navGroupStock"></p>
-            <button class="nav-item" data-view="reports" data-section="report-stock"><span aria-hidden="true">▦</span><span data-i18n="navStock"></span></button>
-          </div>
-          <div class="nav-group" role="group" aria-labelledby="nav-group-selling">
-            <p class="nav-group-title" id="nav-group-selling" data-i18n="navGroupSelling"></p>
-            <button class="nav-item" data-view="sale"><span aria-hidden="true">＋</span><span data-i18n="navSale"></span></button>
-            <button class="nav-item" data-view="challan"><span aria-hidden="true">⇢</span><span data-i18n="navChallan"></span></button>
-            <button class="nav-item" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button>
-            <button class="nav-item" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button>
-            <button class="nav-item" data-view="payment"><span aria-hidden="true">₹</span><span data-i18n="navPayment"></span></button>
-            <button class="nav-item" data-view="returns"><span aria-hidden="true">↩</span><span data-i18n="navReturns"></span></button>
-            <button class="nav-item" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button>
-          </div>
-          <div class="nav-group" role="group" aria-labelledby="nav-group-gst">
-            <p class="nav-group-title" id="nav-group-gst" data-i18n="navGroupGst"></p>
-            <button class="nav-item" data-view="itc"><span aria-hidden="true">⚖</span><span data-i18n="navItc"></span></button>
-            <button class="nav-item" data-view="gst-returns"><span aria-hidden="true">▦</span><span data-i18n="navGstReturns"></span></button>
-            <button class="nav-item" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button>
-          </div>
-          <div class="nav-group" role="group" aria-labelledby="nav-group-books">
-            <p class="nav-group-title" id="nav-group-books" data-i18n="navGroupBooks"></p>
-            <button class="nav-item" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button>
-            <button class="nav-item" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button>
-            <button class="nav-item" data-view="bank-feeds"><span aria-hidden="true">⇅</span><span data-i18n="navBankFeeds"></span></button>
-            <button class="nav-item" data-view="ask"><span aria-hidden="true">?</span><span data-i18n="navAsk"></span></button>
-          </div>
-          <details class="nav-group nav-settings" id="nav-settings">
-            <summary class="nav-group-title" data-i18n="navGroupSettings"></summary>
-            <button class="nav-item" data-view="business"><span aria-hidden="true">▣</span><span data-i18n="navBusiness"></span></button>
-            <button class="nav-item" data-view="branding"><span aria-hidden="true">◐</span><span data-i18n="navBranding"></span></button>
-            <button class="nav-item" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button>
-            <button class="nav-item" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button>
-            <button class="nav-item" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button>
-            <button class="nav-item" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button>
-            <button class="nav-item" data-view="presale"><span aria-hidden="true">✎</span><span data-i18n="navPresale"></span></button>
-          </details>
-        </nav>
-        <div class="sidebar-note">
-          <span class="status-dot" aria-hidden="true"></span>
-          <div><strong data-i18n="deviceReady"></strong><small data-i18n="draftProtection"></small></div>
-        </div>
-      </aside>
+      <!-- Issue #304 — five tabs instead of 22 menu items: a bottom bar on a phone, a short left rail on
+           a desktop. + Bill opens the sheet of bills (also F2 or Alt+N); More holds every other screen. -->
+      <nav class="tabbar app-tabbar" aria-label="Main" data-i18n-aria="mainNavigation">
+        <button type="button" data-view="dashboard"><span aria-hidden="true">⌂</span><small data-i18n="tabHome"></small></button>
+        <!-- Until the khata page (#309) exists, Khata opens who owes what, in Reports. -->
+        <button type="button" data-view="reports" data-section="report-dues"><span aria-hidden="true">▤</span><small data-i18n="tabKhata"></small></button>
+        <button type="button" class="tab-main" id="bill-button" aria-haspopup="dialog" aria-controls="bill-sheet" aria-keyshortcuts="F2 Alt+N"><span aria-hidden="true">＋</span><small data-i18n="tabBill"></small></button>
+        <button type="button" data-view="items"><span aria-hidden="true">▦</span><small data-i18n="tabItems"></small></button>
+        <button type="button" data-view="more" id="more-tab"><span aria-hidden="true">☰</span><small data-i18n="tabMore"></small></button>
+      </nav>
 
       <header class="topbar">
-        <button class="icon-button mobile-only" id="menu-button" aria-label="Open navigation" data-i18n-aria="menuOpen" aria-expanded="false">☰</button>
-        <div class="company-switcher">
+        <a class="company-switcher" href="#dashboard" aria-label="Karobar home" data-i18n-aria="companyHome">
           <span class="company-avatar" id="company-avatar" aria-hidden="true">ST</span>
           <span><strong id="company-name">Sampoorna Traders</strong><small id="company-location">Bengaluru · Peenya godown</small></span>
-        </div>
+        </a>
         <div class="topbar-actions">
           <label class="language-control">
             <span class="sr-only" data-i18n="language"></span>
@@ -93,7 +44,6 @@
               <option value="hi-IN">हिन्दी</option>
             </select>
           </label>
-          <button class="icon-button" aria-label="Notifications" data-i18n-aria="notifications">●</button>
           <button class="text-button" id="sign-out" type="button" data-i18n="signOut"></button>
           <span class="user-avatar" aria-label="Signed in as Hanny Kumar" data-i18n-aria="signedIn">HK</span>
         </div>
@@ -106,31 +56,68 @@
           <span><strong></strong> <span></span></span>
         </div>
 
+        <!-- Issue #310 — Home: one money card, only the jobs that need the owner, the latest bills. -->
         <section class="view active" id="view-dashboard" aria-labelledby="dashboard-title">
-          <div class="page-heading">
-            <div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" tabindex="-1" data-i18n="welcome"></h1><p id="welcome-body" data-i18n="welcomeBody"></p></div>
-            <button class="action-button" data-open="sale"><span aria-hidden="true">＋</span><span data-i18n="newSale"></span></button>
+          <div class="page-heading"><div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" tabindex="-1" data-i18n="welcome"></h1></div></div>
+          <div class="home-grid">
+            <section class="money-card home-money" aria-labelledby="home-money-title">
+              <h2 id="home-money-title" class="sr-only" data-i18n="homeMoneyTitle"></h2>
+              <div id="home-money-main"></div>
+              <div class="money-card-row" id="home-money-row"></div>
+            </section>
+            <section class="panel home-tasks" aria-labelledby="home-tasks-title">
+              <h2 id="home-tasks-title" data-i18n="homeTasksTitle"></h2>
+              <ul class="task-list" id="home-tasks"></ul>
+              <p class="line-ok" id="home-all-clear" hidden><span aria-hidden="true">✓</span><span data-i18n="homeAllClear"></span></p>
+            </section>
+            <section class="panel home-bills" aria-labelledby="home-bills-title">
+              <div class="panel-heading"><h2 id="home-bills-title" data-i18n="homeRecentBills"></h2><button type="button" class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
+              <ul class="bill-list" id="home-bills"></ul>
+            </section>
           </div>
+        </section>
 
-          <div class="metric-grid" aria-label="Business summary" data-i18n-aria="businessSummary">
-            <article class="metric-card accent-green"><div class="metric-icon" aria-hidden="true">₹</div><p data-i18n="salesToday"></p><strong id="metric-sales">—</strong><small id="sales-summary" class="positive" data-i18n="salesFromModule"></small></article>
-            <article class="metric-card accent-amber"><div class="metric-icon" aria-hidden="true">↗</div><p data-i18n="customersOwe"></p><strong id="metric-receivable">—</strong><small id="customer-summary" data-i18n="openSalesInvoices"></small></article>
-            <article class="metric-card accent-blue"><div class="metric-icon" aria-hidden="true">▣</div><p data-i18n="purchasesMonth"></p><strong id="metric-purchases">—</strong><small id="supplier-summary" data-i18n="postedSupplierBills"></small></article>
-            <article class="metric-card accent-red"><div class="metric-icon" aria-hidden="true">!</div><p data-i18n="needsAttention"></p><strong id="metric-attention">—</strong><small data-i18n="calculatedLive"></small></article>
-          </div>
+        <!-- Issue #304 — the Items tab: every item and what is left of it; add one, change one. -->
+        <section class="view" id="view-items" aria-labelledby="items-title">
+          <div class="page-heading"><div><h1 id="items-title" tabindex="-1" data-i18n="itemsTitle"></h1><p data-i18n="itemsHelp"></p></div><button type="button" class="action-button" id="items-add"><span aria-hidden="true">＋</span> <span data-i18n="itemsAdd"></span></button></div>
+          <article class="panel"><ul class="item-list" id="items-list"></ul></article>
+        </section>
 
-          <div class="dashboard-grid">
-            <article class="panel activity-panel">
-              <div class="panel-heading"><div><h2 data-i18n="recentActivity"></h2><p data-i18n="recentBody"></p></div><button class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
-              <div class="activity-list" id="recent-activity" aria-live="polite"><p class="loading-copy" data-i18n="loadingActivity"></p></div>
-            </article>
-
-            <aside class="panel attention-panel">
-              <div class="panel-heading"><div><h2 data-i18n="yourAttention"></h2><p data-i18n="attentionHelp"></p></div></div>
-              <div class="attention-item"><span class="attention-symbol green" aria-hidden="true">▦</span><span><strong id="stock-title" data-i18n="loadingStock"></strong><small id="stock-detail" data-i18n="readingInventory"></small></span></div>
-              <div class="attention-item"><span class="attention-symbol amber" aria-hidden="true">₹</span><span><strong id="supplier-title" data-i18n="loadingSupplier"></strong><small id="supplier-detail" data-i18n="readingReceivables"></small><small id="supplier-advances" hidden></small></span></div>
-            </aside>
-          </div>
+        <!-- Issue #304 — More: every other screen, grouped in plain words. Every old address still opens its screen. -->
+        <section class="view" id="view-more" aria-labelledby="more-title">
+          <div class="page-heading"><div><h1 id="more-title" tabindex="-1" data-i18n="moreTitle"></h1><p data-i18n="moreHelp"></p></div></div>
+          <nav class="more-groups" aria-labelledby="more-title">
+            <section class="panel more-group" aria-labelledby="more-gst"><h2 id="more-gst" data-i18n="navGroupGst"></h2><ul class="more-list">
+              <li><button type="button" class="more-link" data-view="gst-returns"><span aria-hidden="true">▦</span><span data-i18n="navGstReturns"></span></button></li>
+              <li><button type="button" class="more-link" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button></li>
+              <li><button type="button" class="more-link" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button></li>
+              <li><button type="button" class="more-link" data-view="itc"><span aria-hidden="true">⚖</span><span data-i18n="navItc"></span></button></li>
+              <li><button type="button" class="more-link" data-view="vehicle"><span aria-hidden="true">⚙</span><span data-i18n="navVehicle"></span></button></li>
+            </ul></section>
+            <section class="panel more-group" aria-labelledby="more-stock"><h2 id="more-stock" data-i18n="navGroupStock"></h2><ul class="more-list">
+              <li><button type="button" class="more-link" data-view="reports" data-section="report-stock"><span aria-hidden="true">▦</span><span data-i18n="navStock"></span></button></li>
+              <li><button type="button" class="more-link" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button></li>
+              <li><button type="button" class="more-link" data-view="challan"><span aria-hidden="true">⇢</span><span data-i18n="navChallan"></span></button></li>
+            </ul></section>
+            <section class="panel more-group" aria-labelledby="more-people"><h2 id="more-people" data-i18n="navGroupPeople"></h2><ul class="more-list">
+              <li><button type="button" class="more-link" data-view="reminders"><span aria-hidden="true">⏰</span><span data-i18n="navReminders"></span></button></li>
+              <li><button type="button" class="more-link" data-view="supplier"><span aria-hidden="true">⚑</span><span data-i18n="navSupplier"></span></button></li>
+            </ul></section>
+            <section class="panel more-group" aria-labelledby="more-business"><h2 id="more-business" data-i18n="navGroupBusiness"></h2><ul class="more-list">
+              <li><button type="button" class="more-link" data-view="business"><span aria-hidden="true">▣</span><span data-i18n="navBusiness"></span></button></li>
+              <li><button type="button" class="more-link" data-view="branding"><span aria-hidden="true">◐</span><span data-i18n="navBranding"></span></button></li>
+              <li><button type="button" class="more-link" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button></li>
+              <li><button type="button" class="more-link" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button></li>
+              <li><button type="button" class="more-link" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button></li>
+              <li><button type="button" class="more-link" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button></li>
+            </ul></section>
+            <section class="panel more-group" aria-labelledby="more-reports"><h2 id="more-reports" data-i18n="navGroupReports"></h2><ul class="more-list">
+              <li><button type="button" class="more-link" data-view="reports"><span aria-hidden="true">▤</span><span data-i18n="navReports"></span></button></li>
+              <li><button type="button" class="more-link" data-view="activity"><span aria-hidden="true">◷</span><span data-i18n="navActivity"></span></button></li>
+              <li><button type="button" class="more-link" data-view="bank-feeds"><span aria-hidden="true">⇅</span><span data-i18n="navBankFeeds"></span></button></li>
+              <li><button type="button" class="more-link" data-view="ask"><span aria-hidden="true">?</span><span data-i18n="navAsk"></span></button></li>
+            </ul></section>
+          </nav>
         </section>
 
         <section class="view" id="view-sale" aria-labelledby="sale-title">
@@ -1432,15 +1419,23 @@
         </template>
       </main>
 
-      <nav class="bottom-nav" aria-label="Mobile navigation" data-i18n-aria="mobileNavigation">
-        <button class="active" data-view="dashboard"><span aria-hidden="true">⌂</span><small data-i18n="navHome"></small></button>
-        <button data-view="sale"><span aria-hidden="true">＋</span><small data-i18n="navSale"></small></button>
-        <button data-view="purchase"><span aria-hidden="true">↓</span><small data-i18n="navPurchase"></small></button>
-        <button data-view="payment" data-also-views="paid"><span aria-hidden="true">₹</span><small data-i18n="navMoney"></small></button>
-        <button id="more-button" aria-expanded="false" aria-controls="primary-sidebar"><span aria-hidden="true">☰</span><small data-i18n="navMore"></small></button>
-      </nav>
     </div>
 
+    <!-- Issue #304 — + Bill. Sale is the default: it has the focus, so Enter or one more tap goes straight in. -->
+    <dialog id="bill-sheet" class="bill-sheet" aria-labelledby="bill-sheet-title">
+      <h2 id="bill-sheet-title" data-i18n="billSheetTitle"></h2>
+      <div class="sheet-choices">
+        <button type="button" class="action-button sheet-main" data-view="sale" autofocus><span aria-hidden="true">＋</span> <span data-i18n="navSale"></span></button>
+        <button type="button" class="secondary-button" data-view="purchase"><span aria-hidden="true">↓</span> <span data-i18n="navPurchase"></span></button>
+        <button type="button" class="secondary-button" data-view="payment"><span aria-hidden="true">₹</span> <span data-i18n="navPayment"></span></button>
+        <button type="button" class="secondary-button" data-view="paid"><span aria-hidden="true">₹</span> <span data-i18n="navPaid"></span></button>
+        <button type="button" class="secondary-button" data-view="presale"><span aria-hidden="true">✎</span> <span data-i18n="navQuotation"></span></button>
+        <button type="button" class="secondary-button" data-view="returns"><span aria-hidden="true">↩</span> <span data-i18n="navReturn"></span></button>
+        <button type="button" class="secondary-button" disabled aria-describedby="expense-soon"><span aria-hidden="true">₹</span> <span data-i18n="navExpense"></span></button>
+        <small class="sheet-soon" id="expense-soon" data-i18n="expenseSoon"></small>
+      </div>
+      <button type="button" class="text-button sheet-close" data-close-dialog data-i18n="close"></button>
+    </dialog>
     <dialog id="login-dialog" aria-labelledby="login-title" aria-describedby="login-help" data-static>
       <div class="dialog-icon" aria-hidden="true">क</div>
       <h2 id="login-title" data-i18n="loginTitle"></h2>

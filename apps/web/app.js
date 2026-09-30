@@ -339,7 +339,18 @@ const copy = {
     brandingDesignTitle: "Design and paper", brandingDesignLabel: "Bill design", brandingPaperLabel: "Paper", brandingPaperA4: "A4 sheet", brandingPaperThermal: "Till roll, 80mm", brandingThermalNote: "A till-roll printer has one ink and no grey, so the faint picture is never printed there.",
     brandingPreviewTitle: "A sample bill", brandingPreviewHelp: "Every figure below is made up. This is the real bill printer, so what you see here is what your customer gets.", brandingPreviewFrame: "Sample bill preview", brandingSaved: "Saved. New bills will carry this.", brandingSaving: "Saving…", brandingLoadFailed: "Could not load the preview.",
     brandingUpiTitle: "Take payment by UPI", brandingUpiHelp: "Save your UPI id once. Every bill then prints a square your customer scans with PhonePe, Google Pay or Paytm, with your name, the bill number and the amount still due already filled in. There is no square on a bill that is fully paid, or on small 58mm till-roll paper.", brandingUpiLabel: "Your UPI id", brandingUpiPlaceholder: "yourshop@okicici", brandingUpiSave: "Save UPI id", brandingUpiSaved: "Bills are paid to:", brandingUpiRemove: "Take the UPI id off",
-    draftReady: "Your draft is ready to review", keepEditing: "Keep editing", understand: "I understand"
+    draftReady: "Your draft is ready to review", keepEditing: "Keep editing", understand: "I understand",
+    // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
+    mainNavigation: "Main menu", tabHome: "Home", tabKhata: "Khata", tabBill: "Bill", tabItems: "Items", tabMore: "More",
+    billSheetTitle: "Make a new…", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.",
+    navGroupPeople: "People", navGroupBusiness: "Business settings", navGroupReports: "Reports",
+    moreTitle: "More", moreHelp: "Everything else in your shop, in one place.",
+    itemsTitle: "Items", itemsHelp: "What you sell and buy, and how much is left in the godown.", itemsAdd: "Add item", itemsEdit: "Change", itemsNone: "No items yet. Add the first thing you sell.",
+    itemsLeft: "{quantity} {unit} left", itemsNoneLeft: "None left", itemsService: "Service", itemsLine: "HSN {code} · GST {rate}", itemsExempt: "exempt",
+    homeGreeting: "Namaste, {company}", homeMoneyTitle: "Your money today", homeSalesToday: "Sales today", homeCash: "Cash in drawer", homeBank: "UPI and bank in today", homeToCollect: "To collect", homeToPay: "To pay",
+    homeTasksTitle: "Needs you today", homeAllClear: "All clear for today", homeRecentBills: "Recent bills", homeNoBills: "No bills yet. Press + Bill to make the first one.",
+    homeChipPaid: "Paid", homeChipDue: "{amount} due", homeChipLate: "{amount} · {days} days late", homeChipLateOne: "{amount} · 1 day late",
+    payCash: "Cash", payUpi: "UPI", payCard: "Card", payBank: "Bank", payCheque: "Cheque", payUdhaar: "Udhaar"
   },
   "hi-IN": {
     // Issues #312 and #303 — the sale review's two lines, and the #design page.
@@ -677,7 +688,18 @@ const copy = {
     brandingDesignTitle: "Design aur kagaz", brandingDesignLabel: "Bill ka design", brandingPaperLabel: "Kagaz", brandingPaperA4: "A4 panna", brandingPaperThermal: "Chhoti parchi, 80mm", brandingThermalNote: "Chhoti parchi wale printer mein ek hi ink hoti hai aur grey nahin, isliye halki tasveer wahan kabhi nahin chhapti.",
     brandingPreviewTitle: "Namoone ka bill", brandingPreviewHelp: "Neeche ke sabhi ank banawati hain. Yeh wahi asli bill printer hai, to jo yahan dikh raha hai wahi customer ko milega.", brandingPreviewFrame: "Namoone ke bill ki jhalak", brandingSaved: "Save ho gaya. Naye bill par yeh aayega.", brandingSaving: "Save ho raha hai…", brandingLoadFailed: "Jhalak nahin aa payi.",
     brandingUpiTitle: "UPI se payment lein", brandingUpiHelp: "Apni UPI id ek baar save karein. Phir har bill par ek square chhapega jise customer PhonePe, Google Pay ya Paytm se scan karega, aur aapka naam, bill number aur baaki rakam pehle se bhari hogi. Poora chuka hua bill, ya chhoti 58mm parchi par square nahin chhapta.", brandingUpiLabel: "Aapki UPI id", brandingUpiPlaceholder: "aapkidukaan@okicici", brandingUpiSave: "UPI id save karein", brandingUpiSaved: "Bill ka payment yahan aayega:", brandingUpiRemove: "UPI id hata dein",
-    draftReady: "Draft review ke liye taiyar hai", keepEditing: "Badlav karen", understand: "Samajh gaya"
+    draftReady: "Draft review ke liye taiyar hai", keepEditing: "Badlav karen", understand: "Samajh gaya",
+    // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
+    mainNavigation: "मुख्य मेन्यू", tabHome: "होम", tabKhata: "खाता", tabBill: "बिल", tabItems: "सामान", tabMore: "और",
+    billSheetTitle: "नया बनाइए…", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।",
+    navGroupPeople: "लोग", navGroupBusiness: "कारोबार की सेटिंग", navGroupReports: "रिपोर्ट",
+    moreTitle: "और", moreHelp: "आपकी दुकान का बाक़ी सब कुछ, एक जगह।",
+    itemsTitle: "सामान", itemsHelp: "आप क्या बेचते और ख़रीदते हैं, और गोदाम में कितना बचा है।", itemsAdd: "सामान जोड़िए", itemsEdit: "बदलिए", itemsNone: "अभी कोई सामान नहीं। जो बेचते हैं, पहले वह जोड़िए।",
+    itemsLeft: "{quantity} {unit} बचा", itemsNoneLeft: "ख़त्म", itemsService: "सेवा", itemsLine: "HSN {code} · GST {rate}", itemsExempt: "छूट",
+    homeGreeting: "नमस्ते, {company}", homeMoneyTitle: "आज आपका पैसा", homeSalesToday: "आज की बिक्री", homeCash: "गल्ले में नक़द", homeBank: "आज UPI और बैंक में आया", homeToCollect: "लेना है", homeToPay: "देना है",
+    homeTasksTitle: "आज आपके लिए", homeAllClear: "आज सब ठीक है", homeRecentBills: "हाल के बिल", homeNoBills: "अभी कोई बिल नहीं। पहला बिल बनाने के लिए + बिल दबाइए।",
+    homeChipPaid: "चुकाया", homeChipDue: "{amount} बाक़ी", homeChipLate: "{amount} · {days} दिन देर", homeChipLateOne: "{amount} · 1 दिन देर",
+    payCash: "नक़द", payUpi: "UPI", payCard: "कार्ड", payBank: "बैंक", payCheque: "चेक", payUdhaar: "उधार"
   }
 };
 
@@ -856,9 +878,9 @@ function translate() {
   if (lastAskAnswer !== null) renderAnswer(lastAskAnswer);
 }
 
-// Issue #241 — a menu entry may open one part of a screen ("What is in the godown" is the stock
-// part of Reports), and a phone button may stand for more than one screen ("Money" is both money
-// received and money paid). Only the entry for what is on screen is marked as the current one.
+// Issue #241 — an entry may open one part of a screen ("What is in the godown" is the stock part of
+// Reports). Only the entry for what is on screen is marked as the current one. Issue #304 — of the
+// five tabs, + Bill is current on a bill it opens, and More on any screen no other tab stands for.
 function openView(view, section = null) {
   const target = document.querySelector(`#view-${view}`) ? view : "dashboard";
   state.view = target;
@@ -869,12 +891,17 @@ function openView(view, section = null) {
     element.classList.toggle("active", active);
     if (active) element.setAttribute("aria-current", "page"); else element.removeAttribute("aria-current");
   });
-  // A screen kept under Settings opens that group, so the current entry is never hidden.
-  const settings = document.querySelector("#nav-settings");
-  if (settings?.querySelector(".nav-item.active")) settings.open = true;
+  const bill = document.querySelector("#bill-button");
+  const onBill = [...document.querySelectorAll("#bill-sheet [data-view]")].some((choice) => choice.dataset.view === target);
+  if (onBill) bill?.setAttribute("aria-current", "page"); else bill?.removeAttribute("aria-current");
+  if (!document.querySelector(".app-tabbar [aria-current]")) document.querySelector("#more-tab")?.setAttribute("aria-current", "page");
+  const sheet = document.querySelector("#bill-sheet");
+  if (sheet?.open) sheet.close();
   history.replaceState(null, "", `#${target}`);
-  closeMenu();
   document.querySelector(`#view-${target} h1`)?.focus?.();
+  // Issue #310 — Home is read afresh every time it is opened, so a task done elsewhere is gone.
+  if (target === "dashboard" && state.dashboard) loadDashboard();
+  if (target === "items") renderItems().catch(() => {});
   if (target === "reports") loadReports().then(() => { if (section && state.view === "reports") document.querySelector(`#${section}`)?.scrollIntoView({ block: "start" }); });
   if (target === "migration") startMigration();
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
@@ -1187,60 +1214,146 @@ function activityRow(item) {
   return row;
 }
 
+const el = (tag, className = "", textContent = "") => Object.assign(document.createElement(tag), className ? { className } : {}, textContent ? { textContent } : {});
+const initials = (name) => String(name).split(/\s+/).filter((word) => /\p{L}/u.test(word)).map((word) => word[0]).slice(0, 2).join("").toUpperCase();
+
+/** Issue #310 — a figure on the money card; it opens its list when this person may see that list. */
+function moneyFigure(figure, labelKey, big, note = "") {
+  const box = el(figure.opens ? "button" : "div", `money-figure${big ? " money-main" : ""}`);
+  if (figure.opens) {
+    box.type = "button";
+    box.addEventListener("click", () => openView(figure.opens.view, figure.opens.section ?? null));
+  }
+  box.append(el("small", "", copy[state.locale][labelKey]), el("strong", `amount${big ? " amount-big" : ""}`, money(figure.amount)));
+  if (note) box.append(el("small", "", note));
+  return box;
+}
+
+/** Issue #310 — a task's one button: a screen (on the bill, month or question it is about), or a request. */
+async function runHomeTask(action, button) {
+  if (action.post) {
+    button.disabled = true;
+    try {
+      const result = await api(action.post.path, { method: "POST", body: JSON.stringify(action.post.body) });
+      await refreshDocumentLists();
+      if (result.title) showDialog({ title: result.title, message: result.message ?? "" }, "recorded");
+    } catch (error) {
+      showDialog({ title: copy[state.locale].nothingSaved, message: error.message }, "failed");
+    } finally { button.disabled = false; }
+    return;
+  }
+  const open = action.open;
+  if (open.turnover) { openTurnoverQuestion(); return; }
+  if (open.view === "eway" && open.bill) { openEwayForBill(open.bill); return; }
+  if (open.view === "gst-returns" && open.period) document.querySelector("#gst-period").value = open.period;
+  openView(open.view, open.section ?? null);
+  if (open.view === "einvoice" && open.bill) openEInvoice(open.bill);
+}
+
+const PAID_BY = { CASH: "payCash", UPI: "payUpi", CARD: "payCard", BANK_TRANSFER: "payBank", CHEQUE: "payCheque" };
+
+function homeBillRow(bill) {
+  const words = copy[state.locale];
+  const row = el("button", "bill-row");
+  row.type = "button";
+  row.addEventListener("click", () => { openView("sale"); showSaleBill(bill.id); });
+  const how = bill.paidBy === null ? words.payUdhaar : bill.paidBy.split(" + ").map((mode) => words[PAID_BY[mode]] ?? mode).join(" + ");
+  const who = el("span", "bill-who");
+  who.append(el("strong", "", bill.customer), el("small", "", `${bill.number} · ${how}`));
+  const chip = bill.status === "PAID" ? el("span", "chip paid", words.homeChipPaid)
+    : bill.status === "LATE" ? el("span", "chip late", text(bill.daysLate === 1 ? "homeChipLateOne" : "homeChipLate", { amount: money(bill.due), days: bill.daysLate }))
+      : el("span", "chip due", text("homeChipDue", { amount: money(bill.due) }));
+  const value = el("span", "bill-value");
+  value.append(el("strong", "amount", money(bill.amount)), chip);
+  const avatar = el("span", "bill-avatar", initials(bill.customer));
+  avatar.setAttribute("aria-hidden", "true");
+  row.append(avatar, who, value);
+  return row;
+}
+
 function renderDashboard(data) {
   state.dashboard = data;
   adoptServerToday(data.today);
+  const words = copy[state.locale];
   document.querySelector("#company-name").textContent = data.company.name;
   document.querySelector("#company-location").textContent = data.company.location;
-  document.querySelector("#company-avatar").textContent = data.company.name.split(/\s+/).map((word) => word[0]).slice(0, 2).join("");
-  document.querySelector("#welcome-body").textContent = text("liveCompany", { company: data.company.name });
-  document.querySelector("#metric-sales").textContent = money(data.metrics.salesToday);
-  document.querySelector("#metric-receivable").textContent = money(data.metrics.customersOwe);
-  document.querySelector("#metric-purchases").textContent = money(data.metrics.purchasesMonth);
-  document.querySelector("#metric-attention").textContent = String(data.metrics.needsAttention);
-  document.querySelector("#customer-summary").textContent = text(data.customer.documents.length === 1 ? "customerDocumentsOne" : "customerDocumentsMany", { count: data.customer.documents.length });
-  document.querySelector("#supplier-summary").textContent = text(data.supplier.documents.length === 1 ? "supplierBillsOne" : "supplierBillsMany", { count: data.supplier.documents.length });
-  // Issue #273 — goods returned are taken off sales and purchases here too, and the subtraction is
-  // written out under the figure so nobody has to work it out.
-  const salesReturned = data.metrics.salesTodayReturned ?? 0;
-  document.querySelector("#sales-summary").textContent = salesReturned > 0
-    ? text("salesLessReturns", { billed: money(data.metrics.salesTodayBilled), returned: money(salesReturned) })
-    : text("salesFromModule");
-  const purchasesReturned = data.metrics.purchasesMonthReturned ?? 0;
-  if (purchasesReturned > 0) {
-    document.querySelector("#supplier-summary").textContent =
-      `${text("purchasesLessReturns", { billed: money(data.metrics.purchasesMonthBilled), returned: money(purchasesReturned) })} · ${document.querySelector("#supplier-summary").textContent}`;
-  }
-  // Issue #237 — the goods that need looking at, the least left first, not one fixed item.
-  const stockItems = data.stockItems ?? [data.stock];
-  document.querySelector("#stock-title").textContent = stockItems.slice(0, 3).map((item) => `${item.name}: ${item.quantity} ${item.unit}`).join(" · ");
-  document.querySelector("#stock-detail").textContent = text("stockLeastFirst", { location: data.company.location, count: String(stockItems.filter((item) => item.needsAttention).length) });
-  document.querySelector("#supplier-title").textContent = text("supplierDue", { supplier: data.supplier.name, amount: money(data.supplier.outstanding) });
-  document.querySelector("#supplier-detail").textContent = text(data.supplier.documents.length === 1 ? "supplierDocumentsOne" : "supplierDocumentsMany", { count: data.supplier.documents.length });
-  // Issue #261 — advances paid to suppliers, on their own line, never taken out of what is owed.
-  const advances = document.querySelector("#supplier-advances");
-  if (advances) {
-    advances.hidden = !(data.supplier.advancesPaid > 0);
-    advances.textContent = text("supplierAdvances", { amount: money(data.supplier.advancesPaid ?? 0) });
-  }
+  document.querySelector("#company-avatar").textContent = initials(data.company.name);
+  document.querySelector("#dashboard-title").textContent = text("homeGreeting", { company: data.company.name });
 
-  for (const selector of ["#recent-activity", "#all-activity"]) {
-    const list = document.querySelector(selector);
-    list.replaceChildren();
-    const items = selector === "#recent-activity" ? data.activity.slice(0, 4) : data.activity;
-    if (items.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "loading-copy";
-      empty.textContent = copy[state.locale].noActivity;
-      list.append(empty);
-    } else items.forEach((item) => list.append(activityRow(item)));
-  }
+  // The money card. Issue #273 — sales are net of goods returned, with the subtraction written under.
+  const home = data.home;
+  const returned = data.metrics.salesTodayReturned ?? 0;
+  document.querySelector("#home-money-main").replaceChildren(moneyFigure(home.money.salesToday, "homeSalesToday", true,
+    returned > 0 ? text("salesLessReturns", { billed: money(data.metrics.salesTodayBilled), returned: money(returned) }) : ""));
+  document.querySelector("#home-money-row").replaceChildren(
+    moneyFigure(home.money.cashInDrawer, "homeCash"), moneyFigure(home.money.bankInToday, "homeBank"),
+    moneyFigure(home.money.toCollect, "homeToCollect"), moneyFigure(home.money.toPay, "homeToPay"));
+
+  // Only what needs the owner, most urgent first; nothing to do is one green line.
+  document.querySelector("#home-tasks").replaceChildren(...home.tasks.map((task) => {
+    const item = el("li", "task");
+    const dot = el("span", `task-dot ${task.rank <= 30 ? "late" : "due"}`);
+    dot.setAttribute("aria-hidden", "true");
+    item.append(dot, el("span", "task-text", t(task.title)));
+    if (task.action) {
+      const button = el("button", "secondary-button", t(task.action.label));
+      button.type = "button";
+      button.addEventListener("click", () => runHomeTask(task.action, button));
+      item.append(button);
+    }
+    return item;
+  }));
+  document.querySelector("#home-all-clear").hidden = home.tasks.length > 0;
+
+  const bills = document.querySelector("#home-bills");
+  bills.replaceChildren(...home.recentBills.map((bill) => { const item = el("li"); item.append(homeBillRow(bill)); return item; }));
+  if (home.recentBills.length === 0) bills.append(el("li", "loading-copy", words.homeNoBills));
+
+  const all = document.querySelector("#all-activity");
+  all.replaceChildren(...(data.activity.length === 0 ? [el("p", "loading-copy", words.noActivity)] : data.activity.map(activityRow)));
 
   // Issue #230 — the payment screens list the chosen customer's or supplier's own bills, read afresh.
   document.querySelectorAll('form[data-endpoint="payments"]').forEach((form) => loadPaymentBills(form));
   // Issue #303 — the design page's money card shows these same figures.
   if (state.view === "design" && !document.querySelector("#design-content").hidden) renderDesign();
+  if (state.view === "items") renderItems();
 }
+
+// ------------------------------------------------ issue #304: the Items tab
+//
+// Every item, what it is counted in, its GST, and what is left in the godown (from Home's stock
+// figures). "Change" opens #308's item editor (HSN code, barcode, usual price, other name).
+
+async function renderItems() {
+  if (!catalogueLoaded) await loadCatalogue();
+  const words = copy[state.locale];
+  const stock = new Map((state.dashboard?.stockItems ?? []).map((row) => [row.itemId, row]));
+  const list = document.querySelector("#items-list");
+  list.replaceChildren(...catalogue.items.map((item) => {
+    const row = el("li", "item-row");
+    const about = el("span", "item-about");
+    about.append(el("strong", "", item.name), el("small", "", text("itemsLine", { code: item.hsnSac, rate: item.taxKind === "taxable" ? `${item.ratePercent}%` : words.itemsExempt })));
+    const left = stock.get(item.id);
+    const status = item.kind !== "goods" ? el("span", "chip", words.itemsService)
+      : left && left.quantity <= 0 ? el("span", "chip late", words.itemsNoneLeft)
+        : el("span", "item-left", text("itemsLeft", { quantity: left?.quantity ?? 0, unit: left?.unit || item.unit }));
+    const change = el("button", "secondary-button", words.itemsEdit);
+    change.type = "button";
+    change.setAttribute("aria-label", `${words.itemsEdit}: ${item.name}`);
+    change.addEventListener("click", () => openItemEditor(item.id));
+    row.append(about, status, change);
+    return row;
+  }));
+  if (catalogue.items.length === 0) list.append(el("li", "loading-copy", words.itemsNone));
+}
+
+document.querySelector("#items-add")?.addEventListener("click", () => {
+  pickerAwaitingNewRecord = null;
+  document.querySelector("#item-other-rate").hidden = document.querySelector("#item-tax")?.value !== "other";
+  document.querySelector("#item-dialog").showModal();
+});
+// An item added or changed from here is on the list as soon as its box closes.
+for (const id of ["#item-dialog", "#item-edit-dialog"]) document.querySelector(id)?.addEventListener("close", () => { if (state.view === "items") renderItems(); });
 
 /**
  * Issue #237 — after anything is recorded, issued or cancelled, every list that can show that
@@ -1406,6 +1519,7 @@ function renderReports(data) {
 
   // Trial balance.
   const trial = reportCard(t(data.trialBalance.title), data.trialBalance.balanced ? t(REPORT_TEXT.twoSidesSame) : t(REPORT_TEXT.twoSidesDiffer));
+  trial.id = "report-books"; // Issue #310 — Home's cash in drawer is the cash in hand line here.
   const trialBadge = document.createElement("span");
   trialBadge.className = `pill ${data.trialBalance.balanced ? "done" : "warn"}`;
   trialBadge.textContent = data.trialBalance.balanced ? t(REPORT_TEXT.balanced) : `Off by ${money(data.trialBalance.difference)}`;
@@ -1418,6 +1532,7 @@ function renderReports(data) {
 
   // Sales register.
   const sales = reportCard(t(data.sales.title), t(data.sales.sentence));
+  sales.id = "report-sales"; // Issue #310 — Home's sales today opens here.
   if (data.sales.rows.length > 0) sales.append(reportTable(
     [{ label: t(REPORT_TEXT.dateCol) }, { label: t(REPORT_TEXT.numberCol) }, { label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.goodsValue), numeric: true }, { label: t(REPORT_TEXT.gstCol), numeric: true }, { label: t(REPORT_TEXT.total), numeric: true }],
     data.sales.rows.map((r) => [r.date, r.number, r.party, money(r.taxable), money(r.tax), money(r.total)]),
@@ -1447,6 +1562,7 @@ function renderReports(data) {
 
   // Who owes whom.
   const dues = reportCard(t(data.dues.receivables.title), t(data.dues.receivables.sentence));
+  dues.id = "report-dues"; // Issue #304 — the Khata tab, and Home's to collect and to pay, open here.
   if (data.dues.receivables.rows.length > 0) dues.append(reportTable(
     [{ label: t(REPORT_TEXT.customer) }, { label: t(REPORT_TEXT.stillOwed), numeric: true }, { label: t(REPORT_TEXT.moneyNoBill), numeric: true }, { label: t(REPORT_TEXT.oldestLate), numeric: true }],
     data.dues.receivables.rows.map((r) => [r.party, money(r.outstanding), money(r.onAccount), String(r.oldestDaysOverdue)]),
@@ -3168,22 +3284,21 @@ document.querySelector("#branding-format")?.addEventListener("change", refreshBr
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view, button.dataset.section ?? null)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 document.querySelector("#locale").addEventListener("change", (event) => { state.locale = event.target.value; storage?.setItem("karobar.locale", state.locale); translate(); renderPickers(); loadReturnDocuments(); showSaleBill(billOnScreen.invoiceId); });
-// Issue #241 — on a phone, "More" (and the ☰ at the top) opens the whole grouped menu. Settings is
-// opened with it, so every screen is at most two taps away: "More", then the screen.
-function closeMenu() {
-  document.body.classList.remove("menu-open");
-  for (const id of ["#menu-button", "#more-button"]) document.querySelector(id)?.setAttribute("aria-expanded", "false");
+// Issue #304 — + Bill, from anywhere: the tab, F2 or Alt+N. Sale has the focus, so one more tap (or
+// Enter) opens it. Not over the sign-in or another open box.
+function openBillSheet() {
+  const sheet = document.querySelector("#bill-sheet");
+  if (!sheet || sheet.open || document.querySelector("dialog[open]")) return;
+  sheet.showModal();
+  sheet.querySelector(".sheet-main")?.focus();
 }
-function toggleMenu() {
-  const open = !document.body.classList.contains("menu-open");
-  if (!open) { closeMenu(); return; }
-  document.body.classList.add("menu-open");
-  for (const id of ["#menu-button", "#more-button"]) document.querySelector(id)?.setAttribute("aria-expanded", "true");
-  const settings = document.querySelector("#nav-settings");
-  if (settings) settings.open = true;
-}
-document.querySelector("#menu-button").addEventListener("click", toggleMenu);
-document.querySelector("#more-button").addEventListener("click", toggleMenu);
+document.querySelector("#bill-button").addEventListener("click", openBillSheet);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "F2" || (event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyN")) {
+    event.preventDefault();
+    openBillSheet();
+  }
+});
 document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
   const email = document.querySelector('#login-form [name="email"]');
   email.value = event.target.value.endsWith("11") ? "owner@konkan.example.invalid" : "owner@sampoorna.example.invalid";
@@ -4733,7 +4848,7 @@ async function loadIssuedInvoices() {
 
 // Issue #239 — "Answer once in Business details": opens that one question, and brings the person
 // back to where they were (the sale they were reviewing) once it is saved.
-document.querySelectorAll("[data-open-turnover]").forEach((button) => button.addEventListener("click", () => {
+function openTurnoverQuestion() {
   state.returnAfterTurnover = state.view;
   const dialog = document.querySelector("#review-dialog");
   if (dialog.open) dialog.close("cancel");
@@ -4741,7 +4856,8 @@ document.querySelectorAll("[data-open-turnover]").forEach((button) => button.add
   const fieldset = document.querySelector("#business-turnover");
   fieldset?.scrollIntoView?.({ block: "center" });
   fieldset?.querySelector('[name="turnoverBand"]')?.focus();
-}));
+}
+document.querySelectorAll("[data-open-turnover]").forEach((button) => button.addEventListener("click", openTurnoverQuestion));
 
 
 // ------------------------------------------------ issue #142: quotations and proforma invoices

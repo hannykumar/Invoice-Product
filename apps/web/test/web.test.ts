@@ -79,8 +79,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /authorization: `Bearer \$\{state\.sessionId\}`/);
   assert.match(script, /\/api\/auth\/login/);
   assert.match(script, /karobar\.session/);
-  // Issue #237 — the stock tile names the goods least left first, in this company's own godown.
-  assert.match(script, /text\("stockLeastFirst", \{ location: data\.company\.location,/);
+  // Issue #310 (was #237's stock tile) — goods that need the owner are a Home task, worded by the server.
+  assert.match(script, /home\.tasks\.map\(\(task\) =>/);
   // Issue #237 — after anything is recorded, issued or cancelled, every list is read again.
   assert.match(script, /async function refreshDocumentLists\(\)/);
   for (const loader of ["loadIssuedInvoices", "loadEwayRoad", "loadChallans", "loadReturnDocuments", "loadReturnNotes", "loadReminders"]) {
@@ -197,21 +197,23 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
   // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six;
-  // #303's owner-only design page makes twenty-seven.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 27);
+  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 29);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
   const css = await read("styles.css");
   assert.match(css, /@media \(max-width: 760px\)/);
-  assert.match(css, /\.bottom-nav \{ position: fixed; display: grid/);
+  // Issue #304 — the five tabs are the bottom bar on a phone and a left rail on a desktop.
+  const phone = css.slice(css.lastIndexOf("@media (max-width: 760px)"));
+  assert.match(phone, /\.app-tabbar \{ position: fixed; inset: auto 0 0;[^}]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\n\.app-tabbar \{ grid-row: 1 \/ 3; grid-column: 1; position: sticky;/);
+  assert.match(css, /\.tabbar \.tab-main > span \{[^}]*background: var\(--action\)/, "+ Bill is the raised marigold button");
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(css, /:focus-visible/);
   assert.doesNotMatch(css, /outline:\s*none/);
   assert.doesNotMatch(css, /\.save-state \{ display: none/);
   assert.match(css, /\.topbar-actions \.user-avatar \{ display: none/);
-  assert.match(css, /\.bottom-nav \{[^}]*grid-auto-flow: column; grid-auto-columns: minmax\(68px, 1fr\);[^}]*overflow-x: auto/);
-  assert.match(css, /\.bottom-nav button small \{[^}]*text-overflow: ellipsis/);
 });
 
 test("the local web preview serves the application shell", async () => {
@@ -311,43 +313,97 @@ test("#233: an issued bill can be cancelled with a reason, and the returns scree
   assert.match(script, /workspace\.documentsIssued/);
 });
 
-test("#241: the menu follows a trade — Buying, Stock, Selling, GST, Books, Settings folded — and the phone bar is five buttons", async () => {
+test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22-item menu, and every screen is still reachable", async () => {
   const [html, script, locales] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
-  const sidebar = html.slice(html.indexOf('<nav class="nav-list"'), html.indexOf("</nav>", html.indexOf('<nav class="nav-list"')));
   const en = locales["en-IN"]!;
-  const label = (key: string) => en[key];
-  // Each group, in order, with its entries in order, read off the page as a person would see it.
-  const groups = [...sidebar.matchAll(/<(div|details) class="nav-group[^"]*"[^>]*>([\s\S]*?)<\/\1>/g)].map(([, tag, body]) => ({
-    title: label(/class="nav-group-title"[^>]*data-i18n="([^"]+)"/.exec(body!)![1]!),
-    folded: tag === "details" && !/<details[^>]*\bopen\b/.test(body!),
-    entries: [...body!.matchAll(/<button class="nav-item"[^>]*>.*?data-i18n="([^"]+)"/g)].map((m) => label(m[1]!)),
-  }));
-  assert.deepEqual(groups, [
-    { title: "Buying", folded: false, entries: ["Purchase", "Orders and deliveries", "Supplier check", "Money paid"] },
-    { title: "Stock", folded: false, entries: ["What is in the godown"] },
-    { title: "Selling", folded: false, entries: ["Sale", "Delivery challan", "E-way bill", "Vehicle check", "Money received", "Returns", "Reminders"] },
-    { title: "GST", folded: false, entries: ["Purchase check", "GST returns", "E-invoice"] },
-    { title: "Books", folded: false, entries: ["Reports", "Activity", "Bank feeds", "Ask"] },
-    { title: "Settings", folded: true, entries: ["Business details", "Bill design", "Set up a business", "Bring your data", "Your plan", "Operations", "Quotation / Proforma"] },
+  const section = (start: string, end: string) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
+  const bar = section('<nav class="tabbar app-tabbar"', "</nav>");
+  const sheet = section('<dialog id="bill-sheet"', "</dialog>");
+  const more = section('<section class="view" id="view-more"', "</section>\n\n");
+  const moreAll = html.slice(html.indexOf('<section class="view" id="view-more"'), html.indexOf("</nav>", html.indexOf('<section class="view" id="view-more"')));
+
+  // The old sidebar and phone bar are gone.
+  assert.doesNotMatch(html, /class="sidebar"|class="bottom-nav"|class="nav-item|id="menu-button"/);
+  assert.doesNotMatch(script, /toggleMenu|closeMenu|#nav-settings/);
+
+  // The bar: a labelled landmark, five tabs in order, + Bill the raised centre that opens the sheet.
+  assert.match(bar, /aria-label="Main" data-i18n-aria="mainNavigation"/);
+  assert.deepEqual([...bar.matchAll(/<small data-i18n="([^"]+)"/g)].map((m) => en[m[1]!]), ["Home", "Khata", "Bill", "Items", "More"]);
+  assert.match(bar, /class="tab-main" id="bill-button" aria-haspopup="dialog" aria-controls="bill-sheet" aria-keyshortcuts="F2 Alt\+N"/);
+  // Khata opens who owes what in Reports until the khata page (#309) is built.
+  assert.match(bar, /data-view="reports" data-section="report-dues"/);
+  assert.match(script, /dues\.id = "report-dues"/);
+
+  // + Bill: Sale first, marigold and focused; then the other bills; Expense shown but not yet usable.
+  const choices = [...sheet.matchAll(/<button type="button" class="([^"]+)"([^>]*)>.*?data-i18n="([^"]+)"/g)].map((m) => ({ main: m[1]!.includes("action-button"), view: /data-view="([^"]+)"/.exec(m[2]!)?.[1] ?? null, disabled: /\bdisabled\b/.test(m[2]!), label: en[m[3]!] }));
+  assert.deepEqual(choices, [
+    { main: true, view: "sale", disabled: false, label: "Sale" },
+    { main: false, view: "purchase", disabled: false, label: "Purchase" },
+    { main: false, view: "payment", disabled: false, label: "Money received" },
+    { main: false, view: "paid", disabled: false, label: "Money paid" },
+    { main: false, view: "presale", disabled: false, label: "Quotation" },
+    { main: false, view: "returns", disabled: false, label: "Return" },
+    { main: false, view: null, disabled: true, label: "Expense" },
   ]);
-  assert.match(html, /<details class="nav-group nav-settings" id="nav-settings">/, "Settings starts folded");
-  // No screen was dropped: every screen in the page has a menu entry, except #303's owner-only
-  // design page, which is reached at #design and is not a place a shopkeeper works.
+  assert.match(sheet, /data-view="sale" autofocus/);
+  assert.match(sheet, /aria-describedby="expense-soon"[\s\S]*id="expense-soon" data-i18n="expenseSoon"/);
+  // From anywhere: the tab, F2 and Alt+N all open the sheet; choosing opens the screen and closes it.
+  assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openBillSheet\)/);
+  assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)/);
+  assert.match(script, /function openView[\s\S]*?if \(sheet\?\.open\) sheet\.close\(\);/);
+
+  // More: every other screen, in five plain groups.
+  assert.deepEqual([...moreAll.matchAll(/<h2 id="more-[^"]+" data-i18n="([^"]+)"/g)].map((m) => en[m[1]!]), ["GST", "Stock", "People", "Business settings", "Reports"]);
+
+  // No screen was dropped: every screen is one of the five tabs, a choice on + Bill, or a line on
+  // More — except #303's owner-only design page, which is reached at #design.
   const screens = [...html.matchAll(/<section class="view[^"]*" id="view-([^"]+)"/g)].map((m) => m[1]!).sort();
-  const entries = new Set([...sidebar.matchAll(/data-view="([^"]+)"/g)].map((m) => m[1]!));
-  assert.deepEqual(screens.filter((screen) => !entries.has(screen) && screen !== "design"), []);
-  // The stock report is the stock part of Reports, opened at that part.
-  assert.match(sidebar, /data-view="reports" data-section="report-stock"/);
-  assert.match(script, /stock\.id = "report-stock"/);
-  // Phone: Home, Sale, Purchase, Money, More — More opens the grouped list with Settings unfolded, so every screen is two taps away.
-  const bar = html.slice(html.indexOf('<nav class="bottom-nav"'), html.indexOf("</nav>", html.indexOf('<nav class="bottom-nav"')));
-  assert.deepEqual([...bar.matchAll(/<small data-i18n="([^"]+)"/g)].map((m) => label(m[1]!)), ["Home", "Sale", "Purchase", "Money", "More"]);
-  assert.match(bar, /data-view="payment" data-also-views="paid"/);
-  assert.match(bar, /id="more-button"[^>]*aria-controls="primary-sidebar"/);
-  assert.match(script, /querySelector\("#more-button"\)\.addEventListener\("click", toggleMenu\)/);
-  assert.match(script, /function toggleMenu\(\)[\s\S]*?settings\.open = true/);
-  // Hindi has every new word too.
-  for (const key of ["navGroupBuying", "navGroupStock", "navGroupSelling", "navGroupGst", "navGroupBooks", "navGroupSettings", "navStock", "navMoney", "navMore"]) assert.ok(locales["hi-IN"]![key], key);
+  const reachable = new Set([...`${bar}${sheet}${moreAll}`.matchAll(/data-view="([^"]+)"/g)].map((m) => m[1]!));
+  assert.deepEqual(screens.filter((screen) => !reachable.has(screen) && screen !== "design"), []);
+  assert.ok(screens.length >= 28, "the check must cover the real screens");
+  // And every old address still opens its screen: openView takes any #view-… there is.
+  assert.match(script, /window\.addEventListener\("hashchange", \(\) => openView\(location\.hash\.slice\(1\)\)\)/);
+  assert.match(script, /const target = document\.querySelector\(`#view-\$\{view\}`\) \? view : "dashboard";/);
+  // The tab for what is on screen is marked: + Bill for a bill it opens, More for the rest.
+  assert.match(script, /if \(onBill\) bill\?\.setAttribute\("aria-current", "page"\)/);
+  assert.match(script, /if \(!document\.querySelector\("\.app-tabbar \[aria-current\]"\)\) document\.querySelector\("#more-tab"\)\?\.setAttribute\("aria-current", "page"\)/);
+  assert.ok(more.length > 0);
+
+  // Hindi has every new word, in Devanagari.
+  for (const key of ["mainNavigation", "tabHome", "tabKhata", "tabBill", "tabItems", "tabMore", "billSheetTitle", "navQuotation", "navReturn", "navExpense", "expenseSoon", "navGroupPeople", "navGroupBusiness", "navGroupReports", "moreTitle", "itemsTitle"]) {
+    assert.match(locales["hi-IN"]![key]!, /[ऀ-ॿ]/, key);
+  }
+});
+
+test("#304: the Items tab lists every item with what is left, adds one, and changes one", async () => {
+  const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
+  assert.match(html, /<section class="view" id="view-items" aria-labelledby="items-title">/);
+  assert.match(html, /id="items-add"/);
+  // Add uses the item form every picker uses; Change opens #308's item editor.
+  assert.match(script, /querySelector\("#items-add"\)\?\.addEventListener\("click", \(\) => \{\s*pickerAwaitingNewRecord = null;[\s\S]*?#item-dialog"\)\.showModal\(\)/);
+  assert.match(script, /change\.addEventListener\("click", \(\) => openItemEditor\(item\.id\)\)/);
+  assert.match(script, /for \(const id of \["#item-dialog", "#item-edit-dialog"\]\) document\.querySelector\(id\)\?\.addEventListener\("close"/);
+});
+
+test("#310: Home is one money card, the tasks that need the owner, and the recent bills with a status chip", async () => {
+  const [html, script, locales] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
+  const home = html.slice(html.indexOf('id="view-dashboard"'), html.indexOf('id="view-items"'));
+  assert.match(home, /class="money-card home-money"/);
+  assert.match(home, /id="home-tasks"/);
+  assert.match(home, /<p class="line-ok" id="home-all-clear" hidden>.*data-i18n="homeAllClear"/);
+  assert.match(home, /id="home-bills"/);
+  assert.doesNotMatch(home, /metric-card|attention-panel/, "the four old tiles are gone");
+  assert.equal(locales["en-IN"]!.homeAllClear, "All clear for today");
+  // A figure opens its list only when the server sent where; a task shows its button only when it sent one.
+  assert.match(script, /const box = el\(figure\.opens \? "button" : "div"/);
+  assert.match(script, /if \(task\.action\) \{/);
+  // Done elsewhere, gone here: Home is read again every time it is opened, and after every task.
+  assert.match(script, /if \(target === "dashboard" && state\.dashboard\) loadDashboard\(\);/);
+  assert.match(script, /async function runHomeTask[\s\S]*?await refreshDocumentLists\(\);/);
+  // Chips: status colours only.
+  assert.match(script, /el\("span", "chip paid", words\.homeChipPaid\)/);
+  assert.match(script, /el\("span", "chip late"/);
+  assert.match(script, /el\("span", "chip due"/);
 });
 
 /**
