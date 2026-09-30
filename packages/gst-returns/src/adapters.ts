@@ -167,6 +167,12 @@ export interface CounterpartyFacts {
   readonly unregisteredConfirmed: boolean;
 }
 
+/**
+ * Issue #279 — a blank GST number is no GST number. A caller that handed the buyer's missing number
+ * over as `''` made every consumer sale look registered, so it went to B2B and blocked the month.
+ */
+const gstinOf = (gstin: string | null): string | null => (gstin === null || gstin.trim() === '' ? null : gstin);
+
 export interface SupplierFacts {
   readonly gstin: string;
   readonly stateCode: string;
@@ -263,13 +269,13 @@ export const salesInvoiceToDocument = (
     supplierStateCode: supplier.stateCode,
     partyId: invoice.partyId,
     partyName: counterparty.name,
-    counterpartyGstin: counterparty.gstin,
+    counterpartyGstin: gstinOf(counterparty.gstin),
     counterpartyStateCode: counterparty.stateCode,
     placeOfSupplyStateCode: invoice.placeOfSupplyStateCode,
     reverseCharge: lines.some((line) => line.reverseCharge),
     lines,
     invoiceValue: invoice.pricing.totals.invoiceValue,
-    unregisteredConfirmed: counterparty.gstin !== null || counterparty.unregisteredConfirmed,
+    unregisteredConfirmed: gstinOf(counterparty.gstin) !== null || counterparty.unregisteredConfirmed,
   };
 };
 
@@ -375,7 +381,7 @@ export const returnNoteToDocument = (
     supplierStateCode: supplier.stateCode,
     partyId: note.partyId,
     partyName: counterparty.name,
-    counterpartyGstin: counterparty.gstin,
+    counterpartyGstin: gstinOf(counterparty.gstin),
     counterpartyStateCode: counterparty.stateCode,
     placeOfSupplyStateCode: facts.original?.placeOfSupplyStateCode ?? null,
     reverseCharge: false,
@@ -386,7 +392,7 @@ export const returnNoteToDocument = (
       date: note.originalDocument.date as OutwardDocument['documentDate'],
       ...(facts.original === null ? { missing: true as const } : {}),
     },
-    unregisteredConfirmed: counterparty.gstin !== null || counterparty.unregisteredConfirmed,
+    unregisteredConfirmed: gstinOf(counterparty.gstin) !== null || counterparty.unregisteredConfirmed,
   };
 };
 

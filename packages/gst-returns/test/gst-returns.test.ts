@@ -22,7 +22,7 @@ import { toGstr1Json, toGstr3bJson } from '../src/json-export.ts';
 import { GstReturnService } from '../src/service.ts';
 import {
   InMemoryBookTax, InMemoryInwardTax, InMemoryOutwardSupplies, InMemoryPeriodLocks,
-  InMemoryReturnPreparations, StaticReturnPolicy, SyntheticGspChannel, salesInvoiceToDocument,
+  InMemoryReturnPreparations, StaticReturnPolicy, SyntheticGspChannel, salesInvoiceToDocument, type SalesInvoiceLike,
 } from '../src/adapters.ts';
 import { DEFAULT_RETURN_POLICY } from '../src/ports.ts';
 import {
@@ -671,6 +671,52 @@ test('union-territory tax is folded into the state column, because the form has 
     { gstin: SUNRISE_GSTIN, stateCode: SUNRISE_STATE },
   );
   assert.equal(document.lines[0]?.amounts.sgst.minor, 9_000n);
+});
+
+// Issue #279 — a blank GST number used to count as "registered": every consumer sale went to B2B
+// and blocked the month as a bad GST number.
+const soapBill: SalesInvoiceLike = {
+  id: 'inv-279', companyId: SUNRISE_COMPANY, state: 'FINAL', number: 'INV-279', documentDate: '2026-07-05',
+  partyId: 'walk-in', customerType: 'B2C', placeOfSupplyStateCode: SUNRISE_STATE, voucherId: 'vch-279',
+  pricing: {
+    lines: [{
+      lineId: 'l1', itemId: 'SOAP', itemName: 'Soap', hsnOrSac: '34011190', quantity: quantityFromString('3', 'PCS'),
+      ratePercentTimes100: 500n,
+      taxableValue: { currency: 'INR' as const, minor: 12_000n },
+      cgst: { currency: 'INR' as const, minor: 300n }, sgst: { currency: 'INR' as const, minor: 300n },
+      utgst: { currency: 'INR' as const, minor: 0n }, igst: { currency: 'INR' as const, minor: 0n },
+      cess: { currency: 'INR' as const, minor: 0n },
+      reverseCharge: false, rateBasis: 'BUSINESS_DECLARED' as const,
+    }],
+    totals: { invoiceValue: { currency: 'INR' as const, minor: 12_600n } },
+  },
+};
+
+test('#279: a blank GST number is no GST number, so a consumer sale goes to B2CS and nothing blocks', () => {
+  for (const blank of ['', '   ']) {
+    const document = salesInvoiceToDocument(
+      soapBill,
+      { name: 'Walk-in', gstin: blank, stateCode: SUNRISE_STATE, unregisteredConfirmed: true },
+      { gstin: SUNRISE_GSTIN, stateCode: SUNRISE_STATE },
+    );
+    assert.equal(document.counterpartyGstin, null);
+    const decision = classifyDocument(document, context);
+    assert.equal(decision.outcome === 'CLASSIFIED' && decision.section, 'B2CS');
+    const findings = validateDocuments({ period: SUNRISE_PERIOD, supplierGstin: SUNRISE_GSTIN, supplierStateCode: SUNRISE_STATE, documents: [document] });
+    assert.deepEqual(findings.filter((finding) => finding.severity === 'BLOCKING'), []);
+  }
+});
+
+test('#279: a genuinely wrong GST number on a business bill still blocks the month', () => {
+  const document = salesInvoiceToDocument(
+    soapBill,
+    { name: 'Typo Traders', gstin: '27ABCDE1234', stateCode: SUNRISE_STATE, unregisteredConfirmed: false },
+    { gstin: SUNRISE_GSTIN, stateCode: SUNRISE_STATE },
+  );
+  const decision = classifyDocument(document, context);
+  assert.equal(decision.outcome === 'CLASSIFIED' && decision.section, 'B2B');
+  const findings = validateDocuments({ period: SUNRISE_PERIOD, supplierGstin: SUNRISE_GSTIN, supplierStateCode: SUNRISE_STATE, documents: [document] });
+  assert.equal(findings.find((finding) => finding.code === 'GSTR1_BAD_GSTIN')?.severity, 'BLOCKING');
 });
 
 test('a nil-rated bill is reported as nil-rated, not as an ordinary sale taxed at nothing', () => {
