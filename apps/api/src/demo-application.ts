@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, DomainError, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
@@ -79,7 +79,8 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
-import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf } from './business-details-application.ts';
+import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, requireIssuable, sellerPrint, turnoverAnswersOf, turnoverBandFor } from './business-details-application.ts';
+import { eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
 import { STATE_NAMES } from '@invoice/transport';
@@ -1376,9 +1377,11 @@ export class DemoApplication {
     const salesTodayReturned = returnNotes.filter((note) => note.kind === 'SALES_RETURN' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n);
     const purchasesMonthBilled = purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === month).reduce((total, bill) => total + bill.totalPaise, 0n);
     const purchasesMonthReturned = returnNotes.filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) === month).reduce((total, note) => total + note.totals.total.minor, 0n);
+    const home = await this.home(actor, companyId, today, { sales, payments, receivables, suppliersOwed: sum(supplierOpen.map((d) => d.outstanding)).minor, stockItems, salesToday: salesTodayBilled - salesTodayReturned });
     return {
       today,
       company: { id: companyId, name: this.config.name, location: this.config.location },
+      home,
       metrics: {
         // Issue #273 — sales are net of goods returned by customers, and purchases net of goods
         // sent back to suppliers, as in Reports. What was billed and what came back are published
@@ -1410,6 +1413,74 @@ export class DemoApplication {
         ...payments.map((payment) => ({ id: payment.id, kind: 'payment', direction: payment.direction, title: `${payment.direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${this.partyName(companyId, payment.partyId)} · ${payment.mode.replace('_', ' ')}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
         ...returnNotes.map((note) => ({ id: note.id, kind: 'return', title: `${note.number} · ${note.originalDocument.number}`, amount: jsonAmount(note.totals.total.minor), status: 'Recorded' })),
       ].reverse(),
+    };
+  }
+
+  /**
+   * Issue #310 — the new Home: the money card, the tasks that need the owner (most urgent first),
+   * and the latest bills with Paid / due / Late. See home-application.ts. A task's source is read
+   * only when this person may read it; its button is sent only when they may use it.
+   */
+  private async home(actor: ActorContext, companyId: CompanyId, today: IsoDate, read: {
+    readonly sales: readonly SalesInvoice[];
+    readonly payments: readonly Payment[];
+    readonly receivables: Awaited<ReturnType<typeof ageingBody>>;
+    readonly suppliersOwed: bigint;
+    readonly stockItems: Awaited<ReturnType<DemoApplication['stockNeedingAttention']>>;
+    readonly salesToday: bigint;
+  }) {
+    const may = (permission: string) => actor.permissions.includes(permission);
+    const figures = await moneyCardFigures(this.shop.store, companyId, currentFinancialYear(), today);
+    const reports = ['financial', 'sales', 'purchase', 'stock', 'dues', 'gst', 'exceptions'].every((kind) => may(`reports.view.${kind}`));
+    const opens = (section: string) => (reports ? { view: 'reports', section } : null);
+
+    const tasks: HomeTask[] = [];
+    if (may('eway.view')) {
+      for (const bill of (await this.ewayBillChoices(actor)).invoices) if (bill.status === 'NEEDED') tasks.push(ewayTask(bill, may('eway.generate')));
+    }
+    if (may('einvoice.view')) {
+      for (const bill of (await this.issuedInvoices(actor)).invoices) {
+        const task = eInvoiceTask({ ...bill, number: bill.number ?? '' }, may('einvoice.generate'));
+        if (task !== null) tasks.push(task);
+      }
+    }
+    if (may('gst_returns.view')) {
+      const booksStart = (await this.shop.store.read().settings.get(companyId))?.booksStartDate ?? currentFinancialYear().from;
+      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneReturnMonths(await this.gstReturns.list(actor)), may('gst_returns.prepare')));
+    }
+    // Customers more than 30 days late, while the reminder plan still has something to send them.
+    const late = read.receivables.rows.filter((row) => row.oldestDaysOverdue > 30);
+    const lateIds = new Set(late.map((row) => String(row.partyId)));
+    const stillToRemind = !may('collections.reminders.view')
+      || (await this.collections.plan(actor, today)).candidates.some((candidate) => candidate.decision !== 'SKIP' && lateIds.has(String(candidate.partyId)));
+    const lateTask = stillToRemind ? lateCustomersTask(late.map((row) => ({ outstanding: row.outstanding.minor })), may('collections.reminders.send')) : null;
+    if (lateTask !== null) tasks.push(lateTask);
+    const stock = stockTask(read.stockItems.filter((item) => item.needsAttention), may('ledger.post.purchase'));
+    if (stock !== null) tasks.push(stock);
+    if (turnoverBandFor(companyId, today) === null && eInvoiceExemptionOf(companyId) === 'NONE') tasks.push(turnoverTask(financialYearName(today), may('ledger.setup')));
+    tasks.sort((a, b) => a.rank - b.rank);
+
+    // The latest five bills, newest first, each with what is still owed on it and how it was paid.
+    const owed = new Map(read.receivables.rows.flatMap((row) => row.documents.map((document) => [document.sourceId, document.amount.minor] as const)));
+    const newestFirst = [...read.sales].sort((a, b) => b.documentDate.localeCompare(a.documentDate) || String(b.number).localeCompare(String(a.number)));
+    const recentBills = newestFirst.slice(0, 5).map((invoice) => recentBillRow(
+      { id: invoice.id, number: invoice.number, dueDate: invoice.dueDate, total: invoice.pricing?.totals.invoiceValue.minor ?? 0n },
+      this.invoicePrints.get(invoice.id)?.document.buyer.name ?? this.partyName(companyId, String(invoice.partyId)),
+      owed.get(invoice.id) ?? 0n,
+      read.payments.filter((payment) => payment.direction === 'RECEIPT' && payment.allocations.some((allocation) => allocation.documentId === invoice.id)).map((payment) => payment.mode),
+      today,
+    ));
+
+    return {
+      money: {
+        salesToday: { amount: jsonAmount(read.salesToday), opens: opens('report-sales') },
+        cashInDrawer: { amount: jsonAmount(figures.cashInDrawer), opens: opens('report-books') },
+        bankInToday: { amount: jsonAmount(figures.bankInToday), opens: { view: 'activity' } },
+        toCollect: { amount: jsonAmount(read.receivables.total.amount.minor), opens: opens('report-dues') },
+        toPay: { amount: jsonAmount(read.suppliersOwed), opens: opens('report-dues') },
+      },
+      tasks,
+      recentBills,
     };
   }
 
