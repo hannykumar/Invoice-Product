@@ -1752,7 +1752,7 @@ export class DemoApplication {
     if ('alreadyRecorded' in draft) {
       // Pressing Record twice, or typing the same bill in again, records it once.
       const dashboard = await state();
-      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier };
+      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded) };
     }
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
@@ -1794,7 +1794,30 @@ export class DemoApplication {
       advanceUsed: jsonAmount(usedTotal), owe: jsonAmount(owe),
       advanceAdjustments: adjustments.map((a) => ({ paymentId: a.paymentId, voucherNumber: a.voucherNumber, paidOn: a.paidOn, amount: jsonAmount(a.amount) })),
       bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier,
+      purchaseCheck: await this.purchaseCheckFor(actor, result.bill),
     };
+  }
+
+  /**
+   * Issue #311 — the purchase check (#31, GSTR-2B/IMS) of one supplier bill, on the bill itself: the
+   * line the Purchase check screen shows for it in its month, in both languages. Reads only; `null`
+   * when the month's comparison cannot be read, so the bill is never held up by it.
+   */
+  private async purchaseCheckFor(actor: ActorContext, bill: PurchaseBill) {
+    try {
+      const workspace = await this.shop.itc.workspace(actor, taxPeriodOf(isoDate(bill.invoiceDate)));
+      const line = workspace.lines.find((row) => row.book?.sourceId === bill.id)
+        ?? workspace.lines.find((row) => row.book?.number === bill.invoiceNumber && row.book.supplierPartyId === bill.supplierPartyId);
+      if (line === undefined) return null;
+      return {
+        status: line.status, outcome: line.outcome, portalDataPresent: workspace.portalDataPresent,
+        'en-IN': `${line.statusLabel['en-IN']} — ${line.outcomeLabel['en-IN']}`,
+        'hi-IN': `${line.statusLabel['hi-IN']} — ${line.outcomeLabel['hi-IN']}`,
+        sentence: line.sentence['en-IN'],
+      };
+    } catch {
+      return null;
+    }
   }
 
   /** Issue #237 — the stock of the goods just bought, not whichever item Home puts first. */
@@ -2532,7 +2555,7 @@ export class DemoApplication {
     const paid = paidNowOf(input);
     if (paid !== null) permissionPortFromActor.require(actor, 'payments.record', 'record money received');
     const preview = await this.previewSale(actor, input);
-    return this.issueCheckedSale(actor, preview.token, usageDate, paid);
+    return this.issueCheckedSale(actor, preview.token, usageDate, paid, String(input.distanceKm ?? '').trim());
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
@@ -2586,7 +2609,7 @@ export class DemoApplication {
     return sent;
   }
 
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null) {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null, ewayDistanceKm = '') {
     requireIssuable(this.config.companyId);
     const finalise = () => this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
     // Issue #288 — "Paid now": the bill and its receipt in one unit of work. Both vouchers post, or
@@ -2611,6 +2634,8 @@ export class DemoApplication {
     // consumer or export), the bill's date, and the turnover band and exemption in Business details.
     // It builds no payload, so it cannot fail in a way that touches the bill.
     const decision = this.eInvoiceDecisionFor(final.invoice);
+    const ewayBill = await this.ewayReminder(actor, final.invoice, this.deliveries.get(token) ?? null);
+    const ewayRaised = ewayBill === null ? null : await this.raiseEwayByItself(actor, final.invoice.id, ewayDistanceKm);
     return {
       state: 'recorded', deduplicated: final.deduplicated,
       title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded',
@@ -2627,12 +2652,39 @@ export class DemoApplication {
             : { expected: true, needed: 'YES' as const, askTurnover: false, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' },
       invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
       // Issue #240 — whether these goods need an e-way bill, so the screen can offer it in one press.
-      // It is never raised here: the goods and the lorry may not be ready yet.
-      ewayBill: await this.ewayReminder(actor, final.invoice, this.deliveries.get(token) ?? null),
+      ewayBill,
+      // Issue #311 — and, when the bill names the vehicle, the e-way bill itself, raised by itself.
+      ewayRaised,
       // Issue #307 — what the done screen hands the customer: who they are, what was paid, and what
       // is still due, with the UPI link for that amount only.
       ...(await this.saleFinish(actor, final.invoice, receipt)),
     };
+  }
+
+  /**
+   * Issue #311 — the e-way bill of a bill that needs one, raised the moment the bill is made when the
+   * bill names the vehicle, through the same two steps the E-way bill screen takes (#240): the form
+   * filled from the bill, then the portal. The bill is already issued, so nothing here can undo it.
+   *
+   *   - No vehicle on the bill: nothing is raised (`null`); the bill stays "needs one" on the e-way
+   *     bill list and Home, until the vehicle is known.
+   *   - Raised before (Make bill pressed twice): the same e-way bill, never a second one.
+   *   - The portal refused or was down: the record says so, the bill stays "needs one", and the
+   *     E-way bill screen retries it. Never silent: the reason comes back with the bill.
+   *
+   * ponytail: awaited inline, so a slow portal slows Make bill; start it in the background and let
+   * the done screen poll /api/eway/for-bill if the real portal proves slow.
+   */
+  private async raiseEwayByItself(actor: ActorContext, invoiceId: string, distanceKm: string) {
+    try {
+      const found = await this.ewayBillForBill(actor, { invoice: invoiceId });
+      if (found.raised !== null) return found.raised;
+      if (found.check.outcome !== 'REQUIRED' || found.form.vehicle === '') return null;
+      return await this.generateEwayBill(actor, { ...found.form, ...(distanceKm === '' ? {} : { distanceKm }) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The e-way bill could not be raised.';
+      return { state: 'eway' as const, status: 'NOT_RAISED' as const, ewayBillNumber: null, validUntilLabel: null, message, failure: { message, retryable: true } };
+    }
   }
 
   /** Issue #288 — the money taken at the counter, received against the bill it came with. */

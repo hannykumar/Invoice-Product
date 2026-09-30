@@ -86,11 +86,43 @@ test('the finished sale says it needs an e-way bill, and choosing the bill fills
   assert.equal(opened.body.check.vehicleReady, true, 'the vehicle typed on the sale is the one on the e-way bill');
   assert.equal(bill.toPincode, 411026);
 
-  // The bill leads the picker, with its customer, its total and "needs one".
+  // Issue #311 — the vehicle was on the bill, so the e-way bill was raised by itself at Make bill,
+  // from exactly this form, and the picker lists the bill with it.
+  assert.equal(sold.ewayRaised.status, 'ACTIVE');
+  assert.match(sold.ewayRaised.ewayBillNumber, /^\d{12}$/);
+  assert.equal(opened.body.raised.ewayBillNumber, sold.ewayRaised.ewayBillNumber);
   const choices = await request('GET', '/api/eway/bills', {}, session);
   const row = choices.body.invoices.find((candidate: any) => candidate.id === sold.invoice.id);
-  assert.deepEqual([row.customer, row.label], [PUNE.legalName, 'needs one']);
+  assert.deepEqual([row.customer, row.status, row.label], [PUNE.legalName, 'RAISED', `e-way bill ${sold.ewayRaised.ewayBillNumber}`]);
+});
+
+test('#311: with no vehicle on the bill nothing is raised, and the bill leads the picker as "needs one" for Home', async () => {
+  const session = await signIn();
+  const sold = await sell(session, PUNE, 'eway-311-no-vehicle', '1000');
+  assert.equal(sold.ewayBill.outcome, 'REQUIRED');
+  assert.equal(sold.ewayRaised, null, 'no vehicle, so nothing is sent to the portal');
+  const choices = await request('GET', '/api/eway/bills', {}, session);
+  const row = choices.body.invoices.find((candidate: any) => candidate.id === sold.invoice.id);
+  assert.deepEqual([row.customer, row.status, row.label], [PUNE.legalName, 'NEEDED', 'needs one']);
   assert.equal(choices.body.invoices.findIndex((candidate: any) => candidate.status !== 'NEEDED') > choices.body.invoices.findIndex((candidate: any) => candidate.id === sold.invoice.id), true);
+});
+
+test('#311: Make bill pressed twice raises one e-way bill, and a portal refusal comes back with the bill instead of being lost', async () => {
+  const session = await signIn();
+  const customerId = await ensure(session, '/api/customers', PUNE, 'customers', 'customer', PUNE.legalName);
+  const itemId = await ensure(session, '/api/items', GRANULES, 'items', 'item', GRANULES.name);
+  const sale = { customerId, lines: [{ itemId, quantity: '1000', rate: '60' }], date: '2026-09-28', terms: '30', reference: 'eway-311-twice', requestId: 'eway-311-twice', vehicleNumber: 'KA01AB1234' };
+  const first = await request('POST', '/api/sales/record', sale, session);
+  const second = await request('POST', '/api/sales/record', sale, session);
+  assert.equal(second.body.deduplicated, true);
+  assert.equal(second.body.ewayRaised.ewayBillNumber, first.body.ewayRaised.ewayBillNumber, 'one e-way bill, not two');
+
+  // A distance the portal cannot accept: the bill stands, the reason comes back, and it still "needs one".
+  const refused = await sell(session, PUNE, 'eway-311-refused', '1000', { vehicleNumber: 'KA01AB1234', distanceKm: '8.4e2' });
+  assert.equal(refused.ewayRaised.status, 'NOT_RAISED');
+  assert.ok(refused.ewayRaised.message.length > 0, 'the reason is said, never silent');
+  const row = (await request('GET', '/api/eway/bills', {}, session)).body.invoices.find((candidate: any) => candidate.id === refused.invoice.id);
+  assert.equal(row.status, 'NEEDED');
 });
 
 test('a bill under the limit is not offered: it says why', async () => {
