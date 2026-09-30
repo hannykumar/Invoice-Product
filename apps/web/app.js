@@ -1,7 +1,7 @@
 const copy = {
   "en-IN": {
     // Issue #305 / #311 — the four-slide sale and the checks inside the bill.
-    slideItems: "What is the customer buying?", slideCustomer: "Who is buying?", slidePayment: "How are they paying?", slideTransport: "How are the goods going?", slideExport: "Export details", slideShipTo: "Where do the goods go?", slideBack: "Back", slideNext: "Next", makeBill: "Make bill", stepOf: "Step {step} of {count}: {title}", newItemButton: "+ New item", chargesSection: "Freight or other charges", customerAll: "All customers", newCustomerQuick: "+ New customer", newCustomerQuickPlaceholder: "Type GST number or mobile", newCustomerQuickGo: "Add", newCustomerQuickHelp: "A GST number fills in their state. Add their name and address once.", deliverElsewhere: "Deliver somewhere else", customerOwes: "owes {amount}", payUdhaar: "Udhaar", payPart: "Part paid", payCheque: "Cheque", payChequeNote: "Cheque: make the bill as Udhaar, then enter the cheque in Money received when it comes.", payToday: "Today", fifteenDays: "Within 15 days", udhaarDays: "Pay within", paidNowAmount: "Paid now", billSummaryLabel: "The bill", distanceLabel: "Distance (km)", distanceHelp: "Leave it empty: the portal works it out from the two PIN codes.", transportEwayNote: "With the vehicle number, the e-way bill is raised by itself when you make the bill. Without it, the bill waits on Home until the vehicle is known.", oneLess: "One less", oneMore: "One more", lineFacts: "GST {rate}% · {stock} left", lineFactsGst: "GST {rate}%", checkEwayNeeded: "e-way bill needed — raised after you make the bill", checkEwayNotNeeded: "No e-way bill needed", checkEinvoiceAuto: "e-invoice will be sent by itself", checkEinvoiceNotNeeded: "No e-invoice needed", vehicleFound: "{vehicle} is on the transport department's record.", vehicleNotFound: "The transport department has no vehicle numbered {vehicle}. Check the number before the goods leave.", vehicleNotChecked: "{vehicle} could not be checked just now. The bill can still be made.", doneEwayRaised: "E-way bill {number} raised by itself · valid until {valid}", doneEwayWaiting: "These goods need an e-way bill. It is on Home until the vehicle is known.", doneEwayFailed: "The e-way bill was not raised: {reason} It is on Home to try again.", supplierCheckFine: "GST number active, filing on time", supplierCheckFailed: "The supplier check could not run just now. The bill can still be entered.", purchaseCheckLine: "Purchase check (GSTR-2B): {line}",
+    slideItems: "What is the customer buying?", slideCustomer: "Who is buying?", slidePayment: "How are they paying?", slideTransport: "How are the goods going?", slideExport: "Export details", slideShipTo: "Where do the goods go?", slideBack: "Back", slideNext: "Next", makeBill: "Make bill", stepOf: "Step {step} of {count}: {title}", newItemButton: "+ New item", chargesSection: "Freight or other charges", customerAll: "All customers", newCustomerQuick: "+ New customer", newCustomerQuickPlaceholder: "Type GST number or mobile", newCustomerQuickGo: "Add", newCustomerQuickHelp: "A GST number fills in their state. Add their name and address once.", deliverElsewhere: "Deliver somewhere else", customerOwes: "owes {amount}", payUdhaar: "Udhaar", payPart: "Part paid", payCheque: "Cheque", payChequeNote: "Cheque: make the bill as Udhaar, then enter the cheque in Money received when it comes.", payToday: "Today", fifteenDays: "Within 15 days", udhaarDays: "Pay within", paidNowAmount: "Paid now", billSummaryLabel: "The bill", transportEwayNote: "With the vehicle number, the e-way bill is raised by itself when you make the bill. Without it, the bill waits on Home until the vehicle is known.", oneLess: "One less", oneMore: "One more", lineFacts: "GST {rate}% · {stock} left", lineFactsGst: "GST {rate}%", checkEwayNeeded: "e-way bill needed — raised after you make the bill", checkEwayNotNeeded: "No e-way bill needed", checkEinvoiceAuto: "e-invoice will be sent by itself", checkEinvoiceNotNeeded: "No e-invoice needed", vehicleFound: "{vehicle} is on the transport department's record.", vehicleNotFound: "The transport department has no vehicle numbered {vehicle}. Check the number before the goods leave.", vehicleNotChecked: "{vehicle} could not be checked just now. The bill can still be made.", doneEwayRaised: "E-way bill {number} raised by itself · valid until {valid}", doneEwayWaiting: "These goods need an e-way bill. It is on Home until the vehicle is known.", doneEwayFailed: "The e-way bill was not raised: {reason} It is on Home to try again.", supplierCheckFine: "GST number active, filing on time", supplierCheckFailed: "The supplier check could not run just now. The bill can still be entered.", purchaseCheckLine: "Purchase check (GSTR-2B): {line}",
     // Issues #312 and #303 — the sale review's two lines, and the #design page.
     reviewTurnoverUnknown: "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.", reviewEinvoiceLate: "This bill needs a government e-invoice number, but it is too old for the portal to take it.", designEyebrow: "Owner only", designTitle: "How Karobar looks", designHelp: "Colours, words, buttons, chips, the money card, a bill slide and the bottom bar, in English and Hindi side by side.", designOwnerOnly: "Only the owner of the shop can open this page.", designTheme: "Colours:", designThemeDevice: "Like this device", designThemeLight: "Light", designThemeDark: "Dark", dsLanguage: "English", dsButtons: "Buttons: one marigold main action per screen", dsMakeBill: "Make bill", dsSave: "Save", dsBack: "Back", dsLater: "Do it later", dsChips: "Status chips: colour means status only", dsPaid: "Paid", dsDue: "Due in 7 days", dsLate: "12 days late", dsWalkIn: "Walk-in customer", dsMoneyCard: "The money card (your shop today)", dsToCollect: "To collect from customers", dsSalesToday: "Sales today", dsToPay: "To pay suppliers", dsSlide: "A bill slide: one decision, the total always visible", dsStepItems: "What is being sold?", dsStepCustomer: "Who is buying?", dsStepPayment: "How are they paying?", dsStepDone: "Bill made", dsFineLine: "Karnataka sale · CGST + SGST · no e-way bill needed", dsCustomerPays: "Customer pays", dsNext: "Next", dsAgain: "Start again", dsBottomBar: "The bottom bar on a phone", dsHome: "Home", dsKhata: "Khata", dsBill: "Bill", dsItems: "Items", dsMore: "More",
     skip: "Skip to main content", brandSubtitle: "Bills, stock and GST", navHome: "Home", navSale: "Sale", navPurchase: "Purchase", navPayment: "Money received", navMoney: "Money", navMore: "More", navStock: "What is in the godown", navGroupBuying: "Buying", navGroupStock: "Stock", navGroupSelling: "Selling", navGroupGst: "GST", navGroupBooks: "Books", navGroupSettings: "Settings", navReturns: "Returns", navActivity: "Activity", navReports: "Reports", navSetup: "Set up a business", primaryNavigation: "Primary navigation", companyHome: "Karobar home", workspaceNavigation: "Main menu", menuOpen: "Open navigation", notifications: "Notifications", signedIn: "Signed in as Hanny Kumar", businessSummary: "Business summary", mobileNavigation: "Mobile navigation",
@@ -356,7 +356,7 @@ const copy = {
   },
   "hi-IN": {
     // Issue #305 / #311 — the four-slide sale and the checks inside the bill.
-    slideItems: "ग्राहक क्या ख़रीद रहा है?", slideCustomer: "कौन ख़रीद रहा है?", slidePayment: "पैसे कैसे दे रहे हैं?", slideTransport: "माल कैसे जा रहा है?", slideExport: "निर्यात की जानकारी", slideShipTo: "माल कहाँ जाएगा?", slideBack: "पीछे", slideNext: "आगे", makeBill: "बिल बनाइए", stepOf: "{count} में से कदम {step}: {title}", newItemButton: "+ नया सामान", chargesSection: "भाड़ा या दूसरे ख़र्च", customerAll: "सभी ग्राहक", newCustomerQuick: "+ नया ग्राहक", newCustomerQuickPlaceholder: "GST नंबर या मोबाइल लिखें", newCustomerQuickGo: "जोड़ें", newCustomerQuickHelp: "GST नंबर से उनका राज्य भर जाता है। नाम और पता एक बार जोड़ें।", deliverElsewhere: "कहीं और पहुँचाना है", customerOwes: "{amount} बाक़ी", payUdhaar: "उधार", payPart: "कुछ पैसे मिले", payCheque: "चेक", payChequeNote: "चेक: बिल उधार पर बनाइए, और चेक आने पर उसे 'मिला पैसा' में दर्ज करें।", payToday: "आज", fifteenDays: "15 din mein", udhaarDays: "कब तक देंगे", paidNowAmount: "अभी मिले", billSummaryLabel: "बिल", distanceLabel: "दूरी (किमी)", distanceHelp: "ख़ाली छोड़ें: पोर्टल दोनों पिन कोड से दूरी निकाल लेता है।", transportEwayNote: "गाड़ी का नंबर हो तो बिल बनते ही ई-वे बिल अपने आप बन जाता है। नंबर न हो तो बिल होम पर रुका रहता है, जब तक गाड़ी पता न चले।", oneLess: "एक कम", oneMore: "एक ज़्यादा", lineFacts: "GST {rate}% · {stock} बचा", lineFactsGst: "GST {rate}%", checkEwayNeeded: "ई-वे बिल चाहिए — बिल बनने के बाद बनेगा", checkEwayNotNeeded: "ई-वे बिल की ज़रूरत नहीं", checkEinvoiceAuto: "ई-इनवॉइस अपने आप भेजा जाएगा", checkEinvoiceNotNeeded: "ई-इनवॉइस की ज़रूरत नहीं", vehicleFound: "{vehicle} परिवहन विभाग के रिकॉर्ड में है।", vehicleNotFound: "परिवहन विभाग के पास {vehicle} नंबर की कोई गाड़ी नहीं है। माल निकलने से पहले नंबर जाँच लें।", vehicleNotChecked: "{vehicle} की जाँच अभी नहीं हो पाई। बिल फिर भी बन सकता है।", doneEwayRaised: "ई-वे बिल {number} अपने आप बन गया · {valid} तक", doneEwayWaiting: "इस माल को ई-वे बिल चाहिए। गाड़ी पता चलने तक यह होम पर रहेगा।", doneEwayFailed: "ई-वे बिल नहीं बना: {reason} यह होम पर है, फिर से कोशिश के लिए।", supplierCheckFine: "GST नंबर चालू है, रिटर्न समय पर", supplierCheckFailed: "सप्लायर की जाँच अभी नहीं हो पाई। बिल फिर भी दर्ज हो सकता है।", purchaseCheckLine: "ख़रीद जाँच (GSTR-2B): {line}",
+    slideItems: "ग्राहक क्या ख़रीद रहा है?", slideCustomer: "कौन ख़रीद रहा है?", slidePayment: "पैसे कैसे दे रहे हैं?", slideTransport: "माल कैसे जा रहा है?", slideExport: "निर्यात की जानकारी", slideShipTo: "माल कहाँ जाएगा?", slideBack: "पीछे", slideNext: "आगे", makeBill: "बिल बनाइए", stepOf: "{count} में से कदम {step}: {title}", newItemButton: "+ नया सामान", chargesSection: "भाड़ा या दूसरे ख़र्च", customerAll: "सभी ग्राहक", newCustomerQuick: "+ नया ग्राहक", newCustomerQuickPlaceholder: "GST नंबर या मोबाइल लिखें", newCustomerQuickGo: "जोड़ें", newCustomerQuickHelp: "GST नंबर से उनका राज्य भर जाता है। नाम और पता एक बार जोड़ें।", deliverElsewhere: "कहीं और पहुँचाना है", customerOwes: "{amount} बाक़ी", payUdhaar: "उधार", payPart: "कुछ पैसे मिले", payCheque: "चेक", payChequeNote: "चेक: बिल उधार पर बनाइए, और चेक आने पर उसे 'मिला पैसा' में दर्ज करें।", payToday: "आज", fifteenDays: "15 din mein", udhaarDays: "कब तक देंगे", paidNowAmount: "अभी मिले", billSummaryLabel: "बिल", transportEwayNote: "गाड़ी का नंबर हो तो बिल बनते ही ई-वे बिल अपने आप बन जाता है। नंबर न हो तो बिल होम पर रुका रहता है, जब तक गाड़ी पता न चले।", oneLess: "एक कम", oneMore: "एक ज़्यादा", lineFacts: "GST {rate}% · {stock} बचा", lineFactsGst: "GST {rate}%", checkEwayNeeded: "ई-वे बिल चाहिए — बिल बनने के बाद बनेगा", checkEwayNotNeeded: "ई-वे बिल की ज़रूरत नहीं", checkEinvoiceAuto: "ई-इनवॉइस अपने आप भेजा जाएगा", checkEinvoiceNotNeeded: "ई-इनवॉइस की ज़रूरत नहीं", vehicleFound: "{vehicle} परिवहन विभाग के रिकॉर्ड में है।", vehicleNotFound: "परिवहन विभाग के पास {vehicle} नंबर की कोई गाड़ी नहीं है। माल निकलने से पहले नंबर जाँच लें।", vehicleNotChecked: "{vehicle} की जाँच अभी नहीं हो पाई। बिल फिर भी बन सकता है।", doneEwayRaised: "ई-वे बिल {number} अपने आप बन गया · {valid} तक", doneEwayWaiting: "इस माल को ई-वे बिल चाहिए। गाड़ी पता चलने तक यह होम पर रहेगा।", doneEwayFailed: "ई-वे बिल नहीं बना: {reason} यह होम पर है, फिर से कोशिश के लिए।", supplierCheckFine: "GST नंबर चालू है, रिटर्न समय पर", supplierCheckFailed: "सप्लायर की जाँच अभी नहीं हो पाई। बिल फिर भी दर्ज हो सकता है।", purchaseCheckLine: "ख़रीद जाँच (GSTR-2B): {line}",
     // Issues #312 and #303 — the sale review's two lines, and the #design page.
     reviewTurnoverUnknown: "Abhi pata nahin ki aapko e-invoice chahiye ya nahin: Business details mein nahin likha ki turnover ₹5 crore se upar gaya hai ya nahin. Business details mein ek baar jawab dein. Yeh bill abhi bhi jaari ho sakta hai.", reviewEinvoiceLate: "Is bill ko sarkari e-invoice number chahiye, lekin yeh portal ke liye bahut purana hai.", designEyebrow: "Sirf maalik", designTitle: "Karobar kaisa dikhta hai", designHelp: "Rang, shabd, button, chip, paise ka card, bill ki slide aur neeche ki patti, English aur Hindi ek saath.", designOwnerOnly: "Yeh page sirf dukaan ke maalik khol sakte hain.", designTheme: "Rang:", designThemeDevice: "Is device jaisa", designThemeLight: "Ujala", designThemeDark: "Andhera", dsLanguage: "हिन्दी", dsButtons: "बटन: हर स्क्रीन पर एक ही मुख्य गेंदा-रंग बटन", dsMakeBill: "बिल बनाइए", dsSave: "सेव करें", dsBack: "पीछे", dsLater: "बाद में", dsChips: "स्थिति चिप: रंग सिर्फ़ स्थिति बताता है", dsPaid: "चुकाया", dsDue: "7 दिन में देना है", dsLate: "12 दिन देर", dsWalkIn: "काउंटर ग्राहक", dsMoneyCard: "पैसों का कार्ड (आज आपकी दुकान)", dsToCollect: "ग्राहकों से लेना है", dsSalesToday: "आज की बिक्री", dsToPay: "सप्लायर को देना है", dsSlide: "बिल की स्लाइड: एक फ़ैसला, कुल रकम हमेशा दिखे", dsStepItems: "क्या बिक रहा है?", dsStepCustomer: "कौन ख़रीद रहा है?", dsStepPayment: "पैसे कैसे दे रहे हैं?", dsStepDone: "बिल बन गया", dsFineLine: "कर्नाटक में बिक्री · CGST + SGST · ई-वे बिल की ज़रूरत नहीं", dsCustomerPays: "ग्राहक देगा", dsNext: "आगे", dsAgain: "फिर से", dsBottomBar: "फ़ोन पर नीचे की पट्टी", dsHome: "होम", dsKhata: "खाता", dsBill: "बिल", dsItems: "सामान", dsMore: "और",
     skip: "Seedha mukhya hissa kholen", brandSubtitle: "Bill, stock aur GST", navHome: "Ghar", navSale: "Bikri", navPurchase: "Kharid", navPayment: "Mila paisa", navMoney: "Paisa", navMore: "Aur", navStock: "Godown mein kya hai", navGroupBuying: "Kharid", navGroupStock: "Stock", navGroupSelling: "Bikri", navGroupGst: "GST", navGroupBooks: "Bahi", navGroupSettings: "Settings", navReturns: "Wapsi", navActivity: "Kaam", navReports: "Report", navSetup: "Business set up karein", primaryNavigation: "Mukhya navigation", companyHome: "Karobar ghar", workspaceNavigation: "Mukhya menu", menuOpen: "Navigation kholen", notifications: "Suchnaen", signedIn: "Hanny Kumar ke roop mein sign in", businessSummary: "Business ka saar", mobileNavigation: "Mobile navigation",
@@ -6465,6 +6465,8 @@ function showChosenCustomer() {
     loadSelling();
   }
   showPlaceOfSupply();
+  // Issue #305 — a customer just added (or picked from the full list) is shown chosen on the slide.
+  if (saleSlides?.current() === "customer") renderSaleCustomerChoices();
 }
 
 /** Issue #288 — the Sale screen's customer picker, and the company's walk-in customer on it. */
@@ -6545,6 +6547,7 @@ function chooseSalePayWay(way) {
   showPaidBy();
   saveDraft(form);
   updateCalculations();
+  queueSaleReview();
   if (way === "PART") amount.focus();
 }
 
@@ -6560,6 +6563,7 @@ document.querySelector("#sale-udhaar-days")?.addEventListener("click", (event) =
   showPaidBy();
   saveDraft(form);
   updateCalculations();
+  queueSaleReview();
 });
 
 /** Customers to tap: Walk-in first, then the ones who owe the most, then the rest, six in all. */
@@ -6572,6 +6576,9 @@ function renderSaleCustomerChoices() {
   const others = catalogue.customers.filter((row) => !row.walkIn)
     .sort((a, b) => (owed.get(b.name) ?? 0) - (owed.get(a.name) ?? 0) || a.name.localeCompare(b.name));
   const chosen = catalogue.customers.find((row) => row.id === picker.value);
+  // Drawn again after a choice: the keyboard stays on the customer just chosen, not lost to the page.
+  const hadFocus = box.contains(document.activeElement);
+  queueMicrotask(() => { if (hadFocus) box.querySelector('[aria-pressed="true"]')?.focus(); });
   const shown = [...catalogue.customers.filter((row) => row.walkIn), ...others.slice(0, 5)];
   if (chosen && !shown.includes(chosen)) shown.push(chosen);
   box.replaceChildren(...shown.map((customer) => {
@@ -6586,7 +6593,7 @@ function renderSaleCustomerChoices() {
     if (!customer.walkIn && owes > 0) {
       const due = document.createElement("small");
       due.textContent = text("customerOwes", { amount: money(owes / 100) });
-      button.append(due);
+      button.append(" ", due);
     }
     button.addEventListener("click", () => {
       picker.value = customer.id;
@@ -6615,6 +6622,10 @@ document.querySelector("#sale-new-customer-go")?.addEventListener("click", () =>
   showCustomerRegistrationFields();
   pickerAwaitingNewRecord = saleCustomerPicker();
   document.querySelector("#customer-dialog")?.showModal();
+});
+
+document.querySelector("#sale-new-customer")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); document.querySelector("#sale-new-customer-go")?.click(); }
 });
 
 document.querySelector("#sale-deliver-elsewhere")?.addEventListener("click", (event) => {
@@ -6748,6 +6759,8 @@ function saleSlidesShown() {
 
 /** New bill from the done slide: the form is already fresh (#233); back to the first slide. */
 function startNewSaleSlides() {
+  // The last bill's live total and review are not this bill's: no Transport slide until it needs one.
+  lastEstimate = null;
   saleReviewState.result = null;
   saleReviewState.forInput = "";
   renderSaleReview();
@@ -6968,6 +6981,21 @@ async function loadSelling() {
     Object.assign(selling, await api("/api/items/selling", { method: "POST", body: JSON.stringify({ customerId }) }));
   } catch { return; }
   renderItemChips();
+  // Issue #305 — items come first, the customer after: a price the app filled in (and nobody has
+  // changed since) follows the customer to what they were last charged.
+  let moved = false;
+  document.querySelectorAll("#sale-lines .sale-line").forEach((line) => {
+    const rate = line.querySelector("[data-line-field=rate]");
+    const item = itemById(line.querySelector("[data-line-field=item]")?.value ?? "");
+    if (!rate || item === null || rate.dataset.filled !== rate.value) return;
+    const start = startingPrice(item);
+    if (!start) return;
+    rate.value = rate.dataset.filled = String(start.price);
+    const note = line.querySelector("[data-line-price-note]");
+    if (note) note.textContent = start.note;
+    moved = true;
+  });
+  if (moved) { saveDraft(saleForm()); updateCalculations(); }
 }
 
 function renderItemChips() {
@@ -7018,7 +7046,11 @@ function setLineItem(line, item) {
   line.querySelector("[data-line-field=item]").value = item.id;
   const start = startingPrice(item);
   const rate = line.querySelector("[data-line-field=rate]");
-  if (start && rate) rate.value = String(start.price);
+  if (rate) {
+    if (start) rate.value = String(start.price);
+    // What the app put there, so a customer chosen later can move it (#305) until somebody types a price.
+    rate.dataset.filled = rate.value;
+  }
   const note = line.querySelector("[data-line-price-note]");
   if (note) note.textContent = start?.note ?? "";
   showLineUnit(line);
