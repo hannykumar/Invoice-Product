@@ -468,19 +468,6 @@ button.money-figure:hover { background: rgba(255, 255, 255, .08); }
   .item-row > .secondary-button { grid-column: 1 / -1; justify-self: start; }
 }
 
-/* Issue #304 — the five tabs: a short left rail on a desktop, the bottom bar on a phone. */
-.app-tabbar { grid-row: 1 / 3; grid-column: 1; position: sticky; top: 0; height: 100vh; z-index: 20; grid-template-columns: 1fr; grid-auto-rows: min-content; align-content: start; align-items: stretch; gap: .35rem; padding: 1rem .45rem; border-width: 0 1px 0 0; border-radius: 0; box-shadow: none; }
-.app-tabbar button { min-height: 64px; border-radius: var(--radius-field); }
-.app-tabbar button:hover { background: var(--surface-2); }
-.app-tabbar button[aria-current="page"]:not(.tab-main) { background: var(--brand-tint); }
-.app-tabbar .tab-main > span { margin-top: 0; }
-@media (max-width: 760px) {
-  .app-tabbar { position: fixed; inset: auto 0 0; height: auto; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; gap: 0; padding: 14px 0 env(safe-area-inset-bottom); border-width: 1px 0 0; border-radius: var(--radius) var(--radius) 0 0; box-shadow: var(--shadow); }
-  .app-tabbar button { min-height: var(--tap); }
-  .app-tabbar button[aria-current="page"]:not(.tab-main) { background: transparent; }
-  .app-tabbar .tab-main > span { margin-top: -28px; }
-}
-
 /* Issue #305 — the sale in slides. One decision per slide, the bill bar under every one of them,
    thumb-sized tiles and steppers, and the same pieces as #303: .slide, .slide-dots, .bill-bar,
    .chip, .line-ok / .line-warn, .action-button. */
@@ -519,4 +506,17 @@ button.money-figure:hover { background: rgba(255, 255, 255, .08); }
   .sale-slides .bill-bar { bottom: calc(64px + env(safe-area-inset-bottom)); padding-inline: .7rem; gap: .5rem; }
   .sale-slides .slide { padding-inline: .8rem; }
   .slide.done-screen { width: 100%; height: auto; border-radius: 0; }
+}
+
+/* Issue #304 — the five tabs: a short left rail on a desktop, the bottom bar on a phone. */
+.app-tabbar { grid-row: 1 / 3; grid-column: 1; position: sticky; top: 0; height: 100vh; z-index: 20; grid-template-columns: 1fr; grid-auto-rows: min-content; align-content: start; align-items: stretch; gap: .35rem; padding: 1rem .45rem; border-width: 0 1px 0 0; border-radius: 0; box-shadow: none; }
+.app-tabbar button { min-height: 64px; border-radius: var(--radius-field); }
+.app-tabbar button:hover { background: var(--surface-2); }
+.app-tabbar button[aria-current="page"]:not(.tab-main) { background: var(--brand-tint); }
+.app-tabbar .tab-main > span { margin-top: 0; }
+@media (max-width: 760px) {
+  .app-tabbar { position: fixed; inset: auto 0 0; height: auto; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: end; gap: 0; padding: 14px 0 env(safe-area-inset-bottom); border-width: 1px 0 0; border-radius: var(--radius) var(--radius) 0 0; box-shadow: var(--shadow); }
+  .app-tabbar button { min-height: var(--tap); }
+  .app-tabbar button[aria-current="page"]:not(.tab-main) { background: transparent; }
+  .app-tabbar .tab-main > span { margin-top: -28px; }
 }
