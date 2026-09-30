@@ -491,7 +491,7 @@ button.money-figure:hover { background: rgba(255, 255, 255, .08); }
 .bill-summary { border-top: 1px solid var(--line); }
 .line-card { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto; }
 .line-card .item-picker, .line-card .line-facts { grid-column: 1 / -1; }
-@media (max-width: 520px) { .line-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .line-card [data-remove-line] { grid-column: 1 / -1; justify-self: start; padding-bottom: 0; } }
+@media (max-width: 520px) { .line-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .line-card [data-remove-line] { grid-column: 1 / -1; justify-self: start; padding-bottom: 0; } .line-card .line-stepper { grid-column: 1 / -1; } }
 .line-facts { grid-column: 1 / -1; margin-top: -.3rem; color: var(--muted); font-size: var(--fs-xs); }
 .line-facts:empty { display: none; }
 .line-stepper { display: grid; grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap); gap: .35rem; align-items: end; }
