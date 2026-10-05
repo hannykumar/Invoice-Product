@@ -232,6 +232,19 @@ test('a note against a bill from an earlier month is pointed out without blockin
   assert.equal(found.severity, 'INFORMATION');
 });
 
+test('issue #285 — a zero-rated export under LUT is not "tax missing"; an export with tax still is', () => {
+  const zeroTax = INV_001.lines.map((l) => ({ ...l, amounts: { ...l.amounts, cgst: { currency: 'INR' as const, minor: 0n }, sgst: { currency: 'INR' as const, minor: 0n }, igst: { currency: 'INR' as const, minor: 0n } } }));
+  const export_ = (treatment: OutwardDocument['treatment']): OutwardDocument => ({
+    ...INV_001, number: `EXP-${treatment}`, treatment, counterpartyGstin: null, placeOfSupplyStateCode: '96', lines: zeroTax,
+  });
+  const codes = (treatment: OutwardDocument['treatment']) => validateDocuments({
+    period: SUNRISE_PERIOD, supplierGstin: SUNRISE_GSTIN, supplierStateCode: SUNRISE_STATE, documents: [export_(treatment)],
+  }).map((finding) => finding.code);
+  assert.ok(!codes('EXPORT_WITHOUT_TAX').includes('GSTR1_TAX_DOES_NOT_MATCH_RATE'));
+  assert.ok(!codes('SEZ_WITHOUT_TAX').includes('GSTR1_TAX_DOES_NOT_MATCH_RATE'));
+  assert.ok(codes('EXPORT_WITH_TAX').includes('GSTR1_TAX_DOES_NOT_MATCH_RATE'), 'an export on payment of IGST must carry it');
+});
+
 // ------------------------------------------------------- never guessing
 
 test('a customer with no GST number that nobody confirmed becomes a question, not a B2C sale', () => {
