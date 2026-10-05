@@ -85,7 +85,27 @@ export const governmentPeriod = (period: TaxPeriod): string => {
  * A `DEBIT_NOTE` raises what the customer owes and a `CREDIT_NOTE` lowers it; on the return they
  * sit in the same table with opposite signs, which is why they share a shape here.
  */
-export type OutwardDocumentKind = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'ADVANCE_RECEIPT' | 'REFUND_VOUCHER';
+export type OutwardDocumentKind = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'ADVANCE_RECEIPT' | 'REFUND_VOUCHER' | 'ADVANCE_ADJUSTED';
+
+/**
+ * Issue #286 — every kind of numbered paper the documents-issued table (GSTR-1 table 13) counts.
+ * Besides the documents that carry tax onto the return, a business issues receipt vouchers for
+ * goods advances (no tax), and delivery challans; their numbers are counted all the same.
+ * `ADVANCE_ADJUSTED` is not a paper of its own and is never counted.
+ */
+export type DocumentSeriesKind =
+  | Exclude<OutwardDocumentKind, 'ADVANCE_ADJUSTED'>
+  | 'DELIVERY_CHALLAN_JOB_WORK'
+  | 'DELIVERY_CHALLAN_APPROVAL'
+  | 'DELIVERY_CHALLAN_LIQUID_GAS'
+  | 'DELIVERY_CHALLAN_OTHER';
+
+/** A numbered paper for table 13 only: issued, or issued and then cancelled. */
+export interface NumberedDocument {
+  readonly kind: DocumentSeriesKind;
+  readonly number: string;
+  readonly cancelled: boolean;
+}
 
 /**
  * How the supply is treated, as the form asks it.
@@ -180,6 +200,8 @@ export interface OutwardDocument {
   readonly lines: readonly OutwardLine[];
   /** Bill total including tax. The B2CL test in the form is on this figure, not on the taxable value. */
   readonly invoiceValue: Money;
+  /** Issue #286 — on an export, the shipping bill the GSTR-1 export table (6A) carries. */
+  readonly shippingBill?: { readonly number: string; readonly date: IsoDate; readonly portCode: string };
   /** Set on a credit or debit note: the bill it adjusts. */
   readonly originalDocument?: {
     readonly number: string;
@@ -281,6 +303,7 @@ export type Gstr1SectionId =
   | 'HSN'
   | 'DOCS'
   | 'AT'
+  | 'TXPD'
   | 'B2BA'
   | 'B2CLA'
   | 'B2CSA'
@@ -298,6 +321,7 @@ export const GSTR1_SECTION_NAMES: Readonly<Record<Gstr1SectionId, Bilingual>> = 
   HSN: { 'en-IN': 'Summary by goods and services code', 'hi-IN': 'Saaman aur service code ka summary' },
   DOCS: { 'en-IN': 'Bill numbers used this month', 'hi-IN': 'Is mahine ke bill number' },
   AT: { 'en-IN': 'Advances received', 'hi-IN': 'Pehle mila paisa' },
+  TXPD: { 'en-IN': 'Advances from earlier months used against bills', 'hi-IN': 'Pichhle mahine ke advance jo bill me lage' },
   B2BA: { 'en-IN': 'Corrections to business sales already filed', 'hi-IN': 'Pehle bheji business bikri ke sudhaar' },
   B2CLA: { 'en-IN': 'Corrections to large consumer sales already filed', 'hi-IN': 'Pehle bheji badi bikri ke sudhaar' },
   B2CSA: { 'en-IN': 'Corrections to everyday sales already filed', 'hi-IN': 'Pehle bheji rozana bikri ke sudhaar' },
@@ -322,6 +346,8 @@ export interface Gstr1Row {
   readonly invoiceValue: Money | null;
   readonly amounts: TaxAmounts;
   readonly amendmentOf?: { readonly period: TaxPeriod; readonly number: string; readonly date: IsoDate; readonly reason: string };
+  /** Issue #286 — an export's shipping bill, when it is known. */
+  readonly shippingBill?: { readonly number: string; readonly date: IsoDate; readonly portCode: string };
   readonly sources: readonly SourceRef[];
 }
 
@@ -337,6 +363,11 @@ export interface Gstr1Section {
 
 /** A row of the HSN summary: one code, one rate, added up. */
 export interface HsnRow {
+  /**
+   * Issue #286 — since the January 2025 tax period the portal splits table 12 into a tab for sales
+   * to registered businesses and one for everything else (consumers, exports).
+   */
+  readonly supplyTo: 'B2B' | 'B2C';
   readonly hsnOrSac: string;
   readonly description: string;
   readonly unit: string | null;
@@ -348,7 +379,7 @@ export interface HsnRow {
 
 /** A row of the document-series table: which numbers were used, and how many were cancelled. */
 export interface DocumentSeriesRow {
-  readonly kind: OutwardDocumentKind;
+  readonly kind: DocumentSeriesKind;
   readonly from: string;
   readonly to: string;
   readonly total: number;
@@ -484,6 +515,8 @@ export interface BookSnapshot {
    * missing number in the series is what a hidden sale looks like. Absent on older snapshots.
    */
   readonly cancelledNumbers?: readonly { readonly kind: OutwardDocument['kind']; readonly number: string }[];
+  /** Issue #286 — other numbered papers for table 13 (goods receipt vouchers, challans). */
+  readonly otherNumbers?: readonly NumberedDocument[];
 }
 
 export interface ReturnApproval {

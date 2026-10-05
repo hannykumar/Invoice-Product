@@ -636,10 +636,16 @@ export const linkageFor = (
 
   const isCreditNote = (line: ReconciliationLine): boolean => (line.book?.kind ?? line.portal?.kind) === 'CREDIT_NOTE';
 
-  const allOtherItc = bucket((line) => !isCreditNote(line) && line.book?.reverseCharge !== true && line.book?.imported !== true);
-  const reverseChargeItc = bucket((line) => !isCreditNote(line) && line.book?.reverseCharge === true);
-  const importItc = bucket((line) => !isCreditNote(line) && line.book?.imported === true);
-  const reversedItc = bucket(isCreditNote);
+  // Issue #286 — a supplier's credit note reduces the credit in the same box its bill was claimed
+  // in, as GSTR-2B nets it into 4(A)(5) (or 4(A)(3) under reverse charge). Putting it in 4(B) as well
+  // as 2B's net figure reduced it twice, or disagreed with 2B. 4(B) is kept for real reversals —
+  // Rule 42/43 and section 17(5) — which this module does not post, so it is empty here.
+  const net = (predicate: (line: ReconciliationLine) => boolean): TaxAmounts =>
+    subtract(bucket((line) => !isCreditNote(line) && predicate(line)), bucket((line) => isCreditNote(line) && predicate(line)));
+  const allOtherItc = net((line) => line.book?.reverseCharge !== true && line.book?.imported !== true);
+  const reverseChargeItc = net((line) => line.book?.reverseCharge === true);
+  const importItc = net((line) => line.book?.imported === true);
+  const reversedItc = emptyAmounts();
 
   // Issue #249 — the books hand over every unclaimed document up to this month (so late credit can
   // be taken, #222), but tax owed under reverse charge and the value of untaxed purchases belong to

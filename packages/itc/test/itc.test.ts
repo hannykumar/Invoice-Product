@@ -530,8 +530,9 @@ test('the credit side of GSTR-3B is built from these decisions and nothing else'
   const linkage = workspace.returnLinkage;
 
   // ₹18,000 steel + ₹7,200 packaging. Nothing for the paint, the paper or the car.
-  assert.equal(totalTaxOf(linkage.allOtherItc).minor, 2_520_000n);
-  assert.equal(totalTaxOf(linkage.reversedItc).minor, 180_000n);
+  // Issue #286 — the ₹1,800 credit note comes off 4(A)(5), as GSTR-2B nets it; 4(B) stays empty.
+  assert.equal(totalTaxOf(linkage.allOtherItc).minor, 2_340_000n);
+  assert.equal(totalTaxOf(linkage.reversedItc).minor, 0n);
   assert.equal(totalTaxOf(workspace.claimable).minor, 2_340_000n);
   assert.equal(totalTaxOf(workspace.heldBack).minor, 1_620_000n);
   assert.match(linkage.caution['en-IN'], /deliberately not in this figure/);
@@ -547,8 +548,8 @@ test('the return workspace reads the reconciliation through #30\'s own port', as
   });
   const ordinary = gstr3b.credit.find((line) => line.boxId === '4A(5)');
   const givenBack = gstr3b.credit.find((line) => line.boxId === '4B');
-  assert.equal(totalTaxOf(ordinary?.amounts ?? inward.allOtherItc).minor, 2_520_000n);
-  assert.equal(totalTaxOf(givenBack?.amounts ?? inward.reversedItc).minor, 180_000n);
+  assert.equal(totalTaxOf(ordinary?.amounts ?? inward.allOtherItc).minor, 2_340_000n);
+  assert.equal(totalTaxOf(givenBack?.amounts ?? inward.reversedItc).minor, 0n);
 });
 
 test("#19's GSTR-2B signal answers about one bill, and says nothing when we have not looked", async () => {

@@ -157,6 +157,8 @@ export interface SalesInvoiceLike {
   } | null;
   /** Set where the seller marked the bill as an export, an SEZ supply or a deemed export. */
   readonly supplyTreatment?: SupplyTreatment;
+  /** Issue #286 — an export's shipping bill, for GSTR-1 table 6A. */
+  readonly shippingBill?: { readonly number: string; readonly date: string; readonly portCode: string };
 }
 
 export interface CounterpartyFacts {
@@ -276,6 +278,9 @@ export const salesInvoiceToDocument = (
     lines,
     invoiceValue: invoice.pricing.totals.invoiceValue,
     unregisteredConfirmed: gstinOf(counterparty.gstin) !== null || counterparty.unregisteredConfirmed,
+    ...(invoice.shippingBill === undefined ? {} : {
+      shippingBill: { ...invoice.shippingBill, date: invoice.shippingBill.date as OutwardDocument['documentDate'] },
+    }),
   };
 };
 
