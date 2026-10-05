@@ -75,6 +75,8 @@ export interface EInvoiceDocument {
   readonly countryCode?: string;
   /** Issue #143 — the same shipping bill the printed bill carries, when it is known. */
   readonly shippingBill?: { readonly number: string; readonly date: IsoDate; readonly portCode: string };
+  /** Issue #284 — on a credit or debit note, the bill(s) it adjusts (the schema's PrecDocDtls). */
+  readonly precedingDocuments?: readonly { readonly number: string; readonly date: IsoDate }[];
 }
 
 /** Paise to the rupee string the schema expects. Exact: no float ever touches this. */
@@ -255,6 +257,14 @@ export const buildEInvoicePayload = (document: EInvoiceDocument, options: Payloa
       SellerDtls: party(supplier),
       BuyerDtls: { ...party(recipient), Pos: document.placeOfSupplyStateCode },
       ...(document.shipTo === undefined ? {} : { ShipDtls: party(document.shipTo) }),
+      ...(document.precedingDocuments === undefined || document.precedingDocuments.length === 0 ? {} : {
+        RefDtls: {
+          PrecDocDtls: document.precedingDocuments.map((preceding) => ({
+            InvNo: preceding.number,
+            InvDt: preceding.date.split("-").reverse().join("/"),
+          })),
+        },
+      }),
       ItemList: document.lines.map(item),
       ValDtls: {
         AssVal: toRupees(document.totalTaxableValuePaise),

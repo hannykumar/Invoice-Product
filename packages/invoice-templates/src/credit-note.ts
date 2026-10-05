@@ -90,9 +90,23 @@ export interface CreditNoteDocument {
   readonly amountInWordsText: string;
   readonly logoDataUri: string | null;
   readonly signatureDataUri: string | null;
+  /**
+   * Issue #284 — a credit note to a registered buyer, from a business that must e-invoice, is
+   * registered with the government like a bill, and prints its IRN and signed QR the same way.
+   * Absent (or null) for a note that needs none or has not come back yet.
+   */
+  readonly eInvoice?: NoteEInvoice | null;
 }
 
 /** The facts the note takes from the original bill as it was printed. */
+export interface NoteEInvoice {
+  readonly irn: string;
+  readonly ackNumber: string;
+  readonly ackDate: string;
+  /** Drawn from the government's own signed string. */
+  readonly qrSvg: string;
+}
+
 export interface NoteOriginal {
   readonly counterparty: RenderableParty;
   readonly deliveryAddress?: RenderableParty | null;
@@ -194,6 +208,22 @@ const signatureCell = (doc: CreditNoteDocument, format: PageFormat, locale: Loca
     <div class="sign-line">${escapeHtml(t('authorisedSignatory', locale))}</div>
   </td>`;
 
+/** Issue #284 — the IRN, acknowledgement and signed QR, as on an e-invoiced bill. */
+const eInvoiceBoxed = (doc: CreditNoteDocument, locale: Locale): string => {
+  const e = doc.eInvoice;
+  if (e == null) return '';
+  return `<table class="grid einvoice">
+    <tr>
+      <td>
+        <div><span class="cap">${escapeHtml(t('irn', locale))}</span> <span style="word-break:break-all">${escapeHtml(e.irn)}</span></div>
+        <div><span class="cap">${escapeHtml(t('ackNumber', locale))}</span> ${escapeHtml(e.ackNumber)}</div>
+        <div><span class="cap">${escapeHtml(t('ackDate', locale))}</span> ${escapeHtml(e.ackDate)}</div>
+      </td>
+      <td class="qr-cell" style="width:30mm"><div class="qr-slot">${e.qrSvg}</div></td>
+    </tr>
+  </table>`;
+};
+
 /** The whole boxed note, for A4 and the phone screen. */
 export const renderCreditNoteBoxed = (
   doc: CreditNoteDocument,
@@ -257,6 +287,7 @@ export const renderCreditNoteBoxed = (
     </tr>
     ${partiesRow}
   </table>
+  ${eInvoiceBoxed(doc, locale)}
   <table class="grid items">
     <thead><tr>${headings
       .map((h) => `<th${h.num === true ? ' class="num"' : ''} style="width:${((h.share / totalShare) * 100).toFixed(2)}%">${escapeHtml(h.label)}</th>`)
@@ -295,6 +326,9 @@ export const renderCreditNoteNarrow = (doc: CreditNoteDocument, locale: Locale):
   )}</div>`}
   ${doc.placeOfSupplyStateCode === null ? '' : `<div><span class="k">${escapeHtml(t('placeOfSupply', locale))}:</span> ${placeOfSupply(doc)}</div>`}
   <div><span class="k">${escapeHtml(t('noteReason', locale))}:</span> ${escapeHtml(doc.reason)}</div>
+  ${doc.eInvoice == null ? '' : `<div><span class="k">${escapeHtml(t('irn', locale))}:</span> <span style="word-break:break-all">${escapeHtml(doc.eInvoice.irn)}</span></div>
+  <div><span class="k">${escapeHtml(t('ackNumber', locale))}:</span> ${escapeHtml(doc.eInvoice.ackNumber)} · ${escapeHtml(doc.eInvoice.ackDate)}</div>
+  <div class="qr-slot" style="margin:2mm auto">${doc.eInvoice.qrSvg}</div>`}
   <div class="items-narrow">${doc.lines
     .map(
       (l) => `<div class="tline">
