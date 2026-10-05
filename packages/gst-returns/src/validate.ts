@@ -101,6 +101,9 @@ const checkSplit = (document: OutwardDocument, supplierStateCode: string): Retur
 
 /** The tax on a line should be its rate times its taxable value, within a rupee. */
 const checkArithmetic = (document: OutwardDocument): ReturnFinding[] => {
+  // Issue #285 — an export or SEZ supply under LUT is zero-rated: the rate is reported, the tax is
+  // nil by law (IGST Act s.16), so a missing tax there is not missing. Exports with tax still check.
+  if (NO_TAX.includes(document.treatment)) return [];
   const found: ReturnFinding[] = [];
   for (const line of document.lines) {
     if (line.ratePercentTimes100 === null) continue;
