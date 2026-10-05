@@ -96,11 +96,17 @@ test('#236: ₹5 to ₹10 crore needs an e-invoice with no deadline; ₹10 crore
 test('#236: a ₹10 crore business is not sent a bill the portal will refuse, and is told what to do', async () => {
   const session = await signIn();
   await saveTurnoverBand(session, '10_CRORE_AND_ABOVE');
+  // Issue #284 — such a bill is now refused at issue, before a number is used.
+  const refusedAtIssue = await sell(session, await fullCodeItem(session), '2026-08-01');
+  assert.notEqual(refusedAtIssue.status, 200);
+  assert.equal(refusedAtIssue.body.code, 'SALE_EINVOICE_TOO_LATE');
+  assert.match(refusedAtIssue.body.message, /portal would refuse it/);
+
+  // A bill issued before the turnover was answered (so not sent), judged once it says ₹10 crore.
+  await saveTurnoverBand(session, 'UNKNOWN');
   const old = await sell(session, await fullCodeItem(session), '2026-08-01');
   assert.equal(old.status, 200, JSON.stringify(old.body));
-  assert.equal(old.body.eInvoice.expected, true);
-  assert.match(old.body.eInvoice.message, /cannot be sent/);
-  assert.match(old.body.eInvoice.message, /portal will now refuse it/);
+  await saveTurnoverBand(session, '10_CRORE_AND_ABOVE');
 
   const preview = await request('POST', '/api/einvoices/preview', { invoice: old.body.invoice.id }, session);
   assert.equal(preview.body.ready, false);

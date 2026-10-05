@@ -2660,9 +2660,12 @@ export class DemoApplication {
     const decision = this.eInvoiceDecisionFor(draft);
     if (decision.needed !== 'YES' || decision.lateForPortal !== true) return;
     if (discard) await this.discardReview(actor, draft.idempotencyKey, 'too old for the e-invoice portal').catch(() => undefined);
+    // Written for a bill that does not exist yet: nothing to cancel, so the sentence says so.
+    const deadline = reportingDeadline(draft.documentDate, this.turnoverFactsOn(draft.documentDate).lastYearTurnover ?? {}, appToday());
+    const lastDay = deadline.kind === 'LIMIT' ? ` The last day the government accepts it was ${formatClaimDate(isoDate(String(deadline.lastDay)))}.` : '';
     throw notAllowed(
       'SALE_EINVOICE_TOO_LATE',
-      `${decision.message} Nothing was issued and no bill number was used. Date it today, ${formatClaimDate(appToday())}, and it is sent the moment you make the bill.`,
+      `This bill needs a government e-invoice number, but it is dated ${formatClaimDate(draft.documentDate)}, more than 30 days ago, so the government's portal would refuse it.${lastDay} Without that number it is not a valid tax invoice and your customer cannot claim GST credit on it. Nothing was issued and no bill number was used. Date it today, ${formatClaimDate(appToday())}, and it is sent the moment you make the bill.`,
       { details: { today: appToday() } },
     );
   }

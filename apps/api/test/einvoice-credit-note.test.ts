@@ -130,7 +130,8 @@ test('a bill that needs an IRN but is past the 30-day limit is refused, and no n
   const late = await sell(session, customerId, itemId, '2026-08-20', 'late-284');
   assert.notEqual(late.status, 200);
   assert.equal(late.body.code, 'SALE_EINVOICE_TOO_LATE');
-  assert.match(late.body.message, /more than 30 days old/);
+  assert.match(late.body.message, /dated 20 August 2026, more than 30 days ago/);
+  assert.doesNotMatch(late.body.message, /cancel this bill/, 'there is no bill to cancel');
   assert.match(late.body.message, /no bill number was used/);
   assert.equal(late.body.details?.today, '2026-09-28', 'the way through: date it today');
 
