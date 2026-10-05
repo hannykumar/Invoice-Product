@@ -6,7 +6,7 @@
 // computes IRNs with the published formula so the verification in `irn.ts` is exercised for real
 // rather than against a rubber stamp.
 
-import type { CompanyId } from "@invoice/kernel";
+import { writeIndianTimestamp, type CompanyId } from "@invoice/kernel";
 import type { TransactionParticipant } from "@invoice/ledger";
 import {
   ConnectorError, type ConnectorGateway, type ConnectorRequest,
@@ -227,7 +227,9 @@ export class SyntheticIrp {
     }
 
     const now = this.#now();
-    const ackDate = `${String(now.getUTCDate()).padStart(2, "0")}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${now.getUTCFullYear()} ${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}:${String(now.getUTCSeconds()).padStart(2, "0")}`;
+    // Issue #283 — the real IRP writes Indian time in this shape; writing UTC printed 05:00 on a
+    // bill issued at 10:30 in India.
+    const ackDate = writeIndianTimestamp(now, "YYYY-MM-DD");
     const ack: IrpAcknowledgement = {
       irn,
       ackNumber: `1120${String(this.#sequence).padStart(8, "0")}`,

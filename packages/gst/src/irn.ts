@@ -16,6 +16,7 @@
 // structural checks — which never depend on the formula — in force.
 
 import { createHash } from "node:crypto";
+import { readIndianTimestamp } from "@invoice/kernel";
 import type { EInvoiceDocumentType, IrpAcknowledgement } from "./einvoice-types.ts";
 
 /** The government's short codes for the three reportable documents. */
@@ -123,17 +124,12 @@ const explain = (problems: readonly AcknowledgementProblem[]): string => {
 };
 
 /**
- * The portal writes acknowledgement dates as "DD/MM/YYYY HH:mm:ss", which `new Date()` reads as
- * an American date or not at all. Parsed explicitly rather than hopefully.
+ * The portal writes the acknowledgement date as Indian wall-clock time with no zone — live
+ * WhiteBooks sends "2026-09-29 20:12:51", the documented shape is "29/09/2026 20:12:51". Issue
+ * #283: this read the first with the server's own zone and the second as UTC, so the 24-hour
+ * cancel window ended 5½ hours after the government's did.
  */
-export const readAckDate = (raw: string): Date => {
-  const indian = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(raw.trim());
-  if (indian !== null) {
-    const [, day, month, year, hour, minute, second = "00"] = indian;
-    return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
-  }
-  return new Date(raw);
-};
+export const readAckDate = (raw: string): Date => readIndianTimestamp(raw);
 
 /** The moment the government stops accepting a cancellation for this acknowledgement. */
 export const cancellableUntil = (ackDate: string, windowHours: number): string => {

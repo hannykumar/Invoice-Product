@@ -14,7 +14,7 @@ import { DomainError, fixedClock } from "@invoice/kernel";
 import { INVOICE_NUMBER_MAX_LENGTH } from "@invoice/sales";
 import { decideApplicability, thresholdOn, TURNOVER_THRESHOLDS } from "../src/applicability.ts";
 import { buildEInvoicePayload, toOfflineJson, toRupees } from "../src/payload.ts";
-import { checkAcknowledgement, computeIrn, financialYearOf, readAckDate } from "../src/irn.ts";
+import { cancellableUntil, checkAcknowledgement, computeIrn, financialYearOf, readAckDate } from "../src/irn.ts";
 import { DEFAULT_EINVOICE_POLICY } from "../src/einvoice-types.ts";
 import { exactTurnover, reportingDeadline } from "../src/reporting-window.ts";
 import { EInvoiceService } from "../src/einvoice-service.ts";
@@ -169,9 +169,18 @@ test("structural checks still run when the hash check is switched off", () => {
   assert.ok(check.problems.includes("IRN_MALFORMED"));
 });
 
-test("the portal's Indian-format acknowledgement date is read correctly", () => {
-  const parsed = readAckDate("21/08/2026 14:35:09");
-  assert.equal(parsed.toISOString(), "2026-08-21T14:35:09.000Z");
+test("the portal's acknowledgement date is Indian time, in either shape it is written", () => {
+  // Issue #283 — 14:35 in India is 09:05 UTC. Both shapes, and a twelve-hour clock, agree.
+  assert.equal(readAckDate("21/08/2026 14:35:09").toISOString(), "2026-08-21T09:05:09.000Z");
+  assert.equal(readAckDate("2026-08-21 14:35:09").toISOString(), "2026-08-21T09:05:09.000Z");
+  assert.equal(readAckDate("21/08/2026 02:35:09 PM").toISOString(), "2026-08-21T09:05:09.000Z");
+  // A value that does carry a zone is an instant, not a wall clock.
+  assert.equal(readAckDate("2026-08-21T09:05:09.000Z").toISOString(), "2026-08-21T09:05:09.000Z");
+});
+
+test("the 24-hour cancel window ends 24 hours after the Indian acknowledgement time (issue #283)", () => {
+  // Reproduced on the WhiteBooks sandbox: registered at 14:42:49 UTC, AckDt "2026-09-29 20:12:51".
+  assert.equal(cancellableUntil("2026-09-29 20:12:51", 24), "2026-09-30T14:42:51.000Z");
 });
 
 // --------------------------------------------------------------------- the payload
@@ -369,7 +378,7 @@ test("the acknowledgement is stored exactly as it arrived", async () => {
   const desk = makeEInvoiceDesk();
   const record = await desk.service.register(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
   const ack = record.acknowledgement!;
-  assert.match(ack.ackDate, /^\d{2}\/\d{2}\/\d{4}/, "kept in the portal's own format");
+  assert.match(ack.ackDate, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/, "kept in the portal's own format");
   assert.ok(ack.ackNumber.length > 0);
   assert.ok(ack.providerRequestId.length > 0, "the provider's request id is kept for a dispute");
   assert.ok(ack.receivedAt.length > 0);
@@ -405,6 +414,14 @@ test("preview lists what is missing without sending anything", async () => {
 });
 
 // ------------------------------------------- cancellation, deadlines, reconciliation
+
+test("the synthetic IRP stamps the acknowledgement in Indian time, as the real one does (issue #283)", async () => {
+  // 05:00 UTC is 10:30 in India: the time the shopkeeper issued the bill.
+  const desk = makeEInvoiceDesk({ now: "2026-09-29T05:00:00.000Z" });
+  const record = await desk.service.register(desk.actor, { document: invoiceDocument(), applicability: aboveThreshold() });
+  assert.equal(record.acknowledgement?.ackDate, "2026-09-29 10:30:00");
+  assert.equal(record.cancellableUntil, "2026-09-30T05:00:00.000Z");
+});
 
 test("an e-invoice can be cancelled inside the government's window, with a reason", async () => {
   const desk = makeEInvoiceDesk();
