@@ -4618,6 +4618,8 @@ export class DemoApplication {
       ackDate: record.acknowledgement?.ackDate ?? null,
       signedQrCode: record.acknowledgement?.signedQrCode ?? null,
       cancellableUntil: record.cancellableUntil ?? null,
+      // Issue #283 — the deadline in Indian time, not a UTC stamp the owner has to convert.
+      cancellableUntilLabel: record.cancellableUntil === undefined ? null : describeExpiry(record.cancellableUntil),
       reportableUntil: record.reportableUntil ?? null,
       reportableUntilLabel: record.reportableUntil === undefined ? null : readableDate(record.reportableUntil),
       failure: record.failure ?? null,

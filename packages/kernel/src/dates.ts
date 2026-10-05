@@ -74,3 +74,40 @@ export const indiaDateOf = (at: Date | string | number): IsoDate =>
 
 /** Today's date in India by the given clock. */
 export const indiaToday = (clock: Clock): IsoDate => indiaDateOf(clock.now());
+
+/** India is UTC+05:30 all year, with no summer time. */
+const INDIA_OFFSET_MS = 330 * 60_000;
+
+/**
+ * Issue #283 — a timestamp written by a government portal (e-invoice IRP, e-way bill), which is
+ * always a wall-clock time in India even though it carries no zone. Both portals use two shapes —
+ * "29/09/2026 20:12:51" and "2026-09-29 20:12:51" — on a 24- or 12-hour clock ("11:59:00 PM").
+ * Reading either as UTC, or as the server's own zone, moved the 24-hour cancel window by 5½ hours.
+ * A string that does carry a zone ("…Z", "+05:30") is an instant and is read as one.
+ */
+export const readIndianTimestamp = (raw: string): Date => {
+  const text = raw.trim();
+  const shape =
+    /^(?:(\d{2})\/(\d{2})\/(\d{4})|(\d{4})-(\d{2})-(\d{2}))[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:\s*([AaPp])\.?[Mm]\.?)?$/.exec(text);
+  if (shape === null) return new Date(text);
+  const [, d1, m1, y1, y2, m2, d2, rawHour, minute, second = '00', meridiem] = shape;
+  const [year, month, day] = y1 !== undefined ? [y1, m1, d1] : [y2, m2, d2];
+  let hour = Number(rawHour);
+  if (meridiem !== undefined) {
+    // Midnight is 12 AM and noon is 12 PM: the only two the arithmetic gets wrong if left alone.
+    const afternoon = meridiem.toLowerCase() === 'p';
+    hour = afternoon ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
+  }
+  return new Date(Date.parse(`${year}-${month}-${day}T${String(hour).padStart(2, '0')}:${minute}:${second}Z`) - INDIA_OFFSET_MS);
+};
+
+/** An instant as Indian wall-clock time, in the given portal shape. */
+export const writeIndianTimestamp = (at: Date, shape: 'DD/MM/YYYY' | 'YYYY-MM-DD' = 'DD/MM/YYYY'): string => {
+  const indian = new Date(at.getTime() + INDIA_OFFSET_MS);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  const day = pad(indian.getUTCDate());
+  const month = pad(indian.getUTCMonth() + 1);
+  const year = indian.getUTCFullYear();
+  const time = `${pad(indian.getUTCHours())}:${pad(indian.getUTCMinutes())}:${pad(indian.getUTCSeconds())}`;
+  return shape === 'YYYY-MM-DD' ? `${year}-${month}-${day} ${time}` : `${day}/${month}/${year} ${time}`;
+};

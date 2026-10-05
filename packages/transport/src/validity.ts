@@ -15,6 +15,7 @@
 // the server is in UTC" silently moves every expiry five and a half hours, which at midnight is a
 // whole day.
 
+import { readIndianTimestamp, writeIndianTimestamp } from "@invoice/kernel";
 import type { EwayBillPolicy, VehicleType } from "./types.ts";
 
 /** IST is UTC+5:30, with no daylight saving, ever. */
@@ -23,36 +24,13 @@ const MINUTE = 60_000;
 const HOUR = 3_600_000;
 
 /**
- * Reads the timestamps the portal writes, "DD/MM/YYYY HH:mm:ss" in Indian time.
- *
- * Kept here rather than shared with the e-invoice module: the two portals happen to use the same
- * shape today, and tying them together would mean one changing its format breaks the other.
+ * The e-way bill portal writes Indian wall-clock time with no zone. Issue #283 moved the reading
+ * into the kernel so the e-invoice module reads its acknowledgement time the same way.
  */
-export const readPortalTimestamp = (raw: string): Date => {
-  // The live NIC portal answers on a twelve-hour clock — "15/09/2026 11:59:00 PM" — while the
-  // documented shape is twenty-four hour. Both are read here, because reading only the documented
-  // one printed "valid until NaN/NaN/NaN" to a driver holding the consignment.
-  const indian = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp])\.?[Mm]\.?)?$/.exec(raw.trim());
-  if (indian !== null) {
-    const [, day, month, year, rawHour, minute, second = "00", meridiem] = indian;
-    let hour = Number(rawHour);
-    if (meridiem !== undefined) {
-      // Midnight is 12 AM and noon is 12 PM: the only two the arithmetic gets wrong if left alone.
-      const afternoon = meridiem.toLowerCase() === "p";
-      hour = afternoon ? (hour === 12 ? 12 : hour + 12) : (hour === 12 ? 0 : hour);
-    }
-    // The portal's wall clock is Indian, so it is read as Indian and stored as an instant.
-    return new Date(Date.parse(`${year}-${month}-${day}T${String(hour).padStart(2, "0")}:${minute}:${second}Z`) - IST_OFFSET_MINUTES * MINUTE);
-  }
-  return new Date(raw);
-};
+export const readPortalTimestamp = (raw: string): Date => readIndianTimestamp(raw);
 
 /** An instant as the portal writes it. */
-export const writePortalTimestamp = (at: Date): string => {
-  const indian = new Date(at.getTime() + IST_OFFSET_MINUTES * MINUTE);
-  const pad = (value: number): string => String(value).padStart(2, "0");
-  return `${pad(indian.getUTCDate())}/${pad(indian.getUTCMonth() + 1)}/${indian.getUTCFullYear()} ${pad(indian.getUTCHours())}:${pad(indian.getUTCMinutes())}:${pad(indian.getUTCSeconds())}`;
-};
+export const writePortalTimestamp = (at: Date): string => writeIndianTimestamp(at, "DD/MM/YYYY");
 
 /**
  * Days of validity for a distance.
