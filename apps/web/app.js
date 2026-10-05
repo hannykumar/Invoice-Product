@@ -93,7 +93,7 @@ const copy = {
     // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
     walkInCustomer: "Walk-in / cash customer", walkInShort: "Walk-in", walkInChoose: "Walk-in customer", walkInDetail: "Sold at your counter in {state}. No name or address is needed below ₹50,000.", placeOfSupplyCounter: "the goods are handed over at your counter.",
     paidBy: "Paid by", paidCash: "Cash", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Paid now by {mode}: {amount}. Nothing is left to pay on this bill.", saleEffectPartPaid: "Paid now by {mode}: {amount}. {due} is added to the customer's khata.",
-    walkInNameRequired: "From ₹50,000 of taxable value the bill must carry the buyer's name, address and state (CGST Rule 46(e)). Add the customer, then choose them.", walkInDelivery: "A walk-in customer takes the goods at the counter. To send them somewhere else, add the customer with their name and address.", addNamedCustomer: "Add the customer's name and address", billPaperThermal58: "Till roll, 58mm",
+    walkInNameRequired: "From ₹50,000 of taxable value the bill must carry the buyer's name, address and state (CGST Rule 46(e)). Add the customer, then choose them.", walkInDelivery: "A walk-in customer takes the goods at the counter. To send them somewhere else, add the customer with their name and address.", addNamedCustomer: "Add the customer's name and address", dateItToday: "Date it today instead", billPaperThermal58: "Till roll, 58mm",
     doneTitle: "Bill made", doneWhatsapp: "Send on WhatsApp", donePhoneLabel: "Customer's WhatsApp number", donePhoneHelp: "Type their 10-digit mobile number to open their chat.", donePhoneInvalid: "That is not a 10-digit mobile number. Check it and type it again.", doneUpiIncluded: "The message carries a UPI link for {due}.", doneUpiMissing: "Save your UPI id in Branding to send a pay link with the bill.",
     donePrinter: "Printer", doneA4: "A4 sheet", done80: "3-inch till roll", done58: "2-inch till roll", donePrint: "Print receipt", doneNewBill: "New bill",
     doneLinePaid: "{mode} received from {name}. Stock updated.", doneLinePart: "{mode} of {paid} received; {due} added to {names} khata. Stock updated.", doneLineKhata: "Added to {names} khata. Stock updated.", doneModeCASH: "Cash", doneModeUPI: "UPI payment", doneModeCARD: "Card payment",
@@ -445,7 +445,7 @@ const copy = {
     // Issues #288 and #307 — the walk-in customer, money taken at the counter, and the done screen.
     walkInCustomer: "Walk-in / nakad grahak", walkInShort: "walk-in grahak", walkInChoose: "Walk-in grahak", walkInDetail: "{state} mein aapke counter par bikri. ₹50,000 se kam par naam ya pata zaroori nahin.", placeOfSupplyCounter: "maal aapke counter par diya ja raha hai.",
     paidBy: "Kaise mila", paidCash: "Nakad", paidUpi: "UPI", paidCard: "Card", saleEffectPaid: "Abhi {mode} se {amount} mile. Is bill par kuch baaki nahin.", saleEffectPartPaid: "Abhi {mode} se {amount} mile. {due} customer ke khate mein judega.",
-    walkInNameRequired: "₹50,000 ya usse zyada ki taxable value par bill mein khareedar ka naam, pata aur rajya hona chahiye (CGST Rule 46(e)). Customer ko joden, phir unhein chunein.", walkInDelivery: "Walk-in grahak maal counter par leta hai. Kahin aur bhejna ho to customer ko naam aur pate ke saath joden.", addNamedCustomer: "Customer ka naam aur pata joden", billPaperThermal58: "Chhoti parchi, 58mm",
+    walkInNameRequired: "₹50,000 ya usse zyada ki taxable value par bill mein khareedar ka naam, pata aur rajya hona chahiye (CGST Rule 46(e)). Customer ko joden, phir unhein chunein.", walkInDelivery: "Walk-in grahak maal counter par leta hai. Kahin aur bhejna ho to customer ko naam aur pate ke saath joden.", addNamedCustomer: "Customer ka naam aur pata joden", dateItToday: "Aaj ki taarikh daalen", billPaperThermal58: "Chhoti parchi, 58mm",
     doneTitle: "Bill ban gaya", doneWhatsapp: "WhatsApp par bhejein", donePhoneLabel: "Customer ka WhatsApp number", donePhoneHelp: "Unki chat kholne ke liye 10 ankon ka mobile number likhein.", donePhoneInvalid: "Yeh 10 ankon ka mobile number nahin hai. Dekhkar dobara likhein.", doneUpiIncluded: "Sandesh mein {due} ke liye UPI link hai.", doneUpiMissing: "Bill ke saath payment link bhejne ke liye Branding mein apni UPI id save karein.",
     donePrinter: "Printer", doneA4: "A4 panna", done80: "3-inch parchi", done58: "2-inch parchi", donePrint: "Receipt print karein", doneNewBill: "Naya bill",
     doneLinePaid: "{name} se {mode} mil gaya. Stock update ho gaya.", doneLinePart: "{mode} se {paid} mile; {due} {name} ke khate mein jude. Stock update ho gaya.", doneLineKhata: "{name} ke khate mein jud gaya. Stock update ho gaya.", doneModeCASH: "nakad", doneModeUPI: "UPI", doneModeCARD: "card",
@@ -1728,7 +1728,7 @@ function localizedError(error) {
   if (state.locale === "en-IN") return error.message || copy[state.locale].requestFailed;
   // Issue #266 — why a bill's date was refused names the dates, so the server's sentence is shown
   // rather than a general "could not complete".
-  if (["SALE_DATE_AFTER_TODAY", "SALE_DATE_MONTH_CLOSED"].includes(error.code) && error.message) return error.message;
+  if (["SALE_DATE_AFTER_TODAY", "SALE_DATE_MONTH_CLOSED", "SALE_EINVOICE_TOO_LATE"].includes(error.code) && error.message) return error.message;
   // Issue #262 — a sale stopped for short stock says why, and what to do, in the reader's language.
   if (error.code === "SALES_STOCK_NOT_ENOUGH") return error.details?.[state.locale] || error.message;
   const key = {
@@ -1883,6 +1883,9 @@ function showDialog(result, mode) {
   // The goods the refusal on screen is about, for the button.
   state.saleShortStock = purchase.hidden ? null : result.shortStock;
   document.querySelector("#review-add-customer").hidden = !(mode === "failed" && result.addCustomer === true);
+  const dateToday = document.querySelector("#review-date-today");
+  dateToday.hidden = !(mode === "failed" && typeof result.dateToday === "string");
+  dateToday.dataset.today = result.dateToday ?? "";
   // Issue #274 — a purchase bill that took an advance: its voucher, now showing the bill it was adjusted against.
   const advanceVoucher = document.querySelector("#review-advance-voucher");
   const adjusted = mode === "recorded" && Array.isArray(result.advanceAdjustments) ? result.advanceAdjustments : [];
@@ -1925,6 +1928,16 @@ document.querySelector("#review-add-customer").addEventListener("click", () => {
   if (registration) registration.value = "unregistered";
   showCustomerRegistrationFields();
   document.querySelector("#customer-dialog")?.showModal();
+});
+
+document.querySelector("#review-date-today").addEventListener("click", (event) => {
+  const today = event.currentTarget.dataset.today;
+  const field = document.querySelector('[data-draft="sale"] input[name="date"]');
+  document.querySelector("#review-dialog").close();
+  if (!field || !today) return;
+  field.value = today;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.dispatchEvent(new Event("change", { bubbles: true }));
 });
 
 document.querySelector("#review-eway").addEventListener("click", (event) => {
@@ -1978,7 +1991,9 @@ function shortStockOf(error) {
 function showSaleFailure(error) {
   // Issue #288 — a walk-in cannot be billed ₹50,000 or more, or sent goods: one button to name them.
   const addCustomer = ["WALK_IN_NAME_REQUIRED", "WALK_IN_DELIVERY"].includes(error?.code);
-  showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error), shortStock: shortStockOf(error) ?? undefined, addCustomer }, "failed");
+  // Issue #284 — a bill too old for the e-invoice portal: one button to date it today.
+  const dateToday = error?.code === "SALE_EINVOICE_TOO_LATE" ? (error.details?.today || dateInput()) : undefined;
+  showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error), shortStock: shortStockOf(error) ?? undefined, addCustomer, dateToday }, "failed");
 }
 
 function saleWaitingForStock() {

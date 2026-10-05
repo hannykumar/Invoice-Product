@@ -192,7 +192,7 @@ import type {
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
-  InMemoryReturnNoteRepository, ReturnService, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
+  InMemoryReturnNoteRepository, ReturnService, isChargeLine, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
 } from '../../../packages/returns/src/index.ts';
 import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
@@ -2593,6 +2593,8 @@ export class DemoApplication {
     const paid = paidNowOf(input);
     if (paid !== null) permissionPortFromActor.require(actor, 'payments.record', 'record money received');
     const preview = await this.previewSale(actor, input);
+    // Issue #284 — refused here first, so the review this request made is not left behind as a draft.
+    await this.refuseIfTooLateForPortal(actor, preview.token, true);
     return this.issueCheckedSale(actor, preview.token, usageDate, paid, String(input.distanceKm ?? '').trim());
   }
 
@@ -2647,8 +2649,27 @@ export class DemoApplication {
     return sent;
   }
 
+  /**
+   * Issue #284 — a bill that must carry an e-invoice number, dated past the portal's 30-day limit,
+   * can never get one, so it would never be a valid tax invoice. It is refused before a number is
+   * used, with the same sentence the review shows and the way through: date it today.
+   */
+  private async refuseIfTooLateForPortal(actor: ActorContext, token: string, discard: boolean): Promise<void> {
+    const draft = await this.salesRepository.findById(this.companyOf(actor), token);
+    if (draft === null) return;
+    const decision = this.eInvoiceDecisionFor(draft);
+    if (decision.needed !== 'YES' || decision.lateForPortal !== true) return;
+    if (discard) await this.discardReview(actor, draft.idempotencyKey, 'too old for the e-invoice portal').catch(() => undefined);
+    throw notAllowed(
+      'SALE_EINVOICE_TOO_LATE',
+      `${decision.message} Nothing was issued and no bill number was used. Date it today, ${formatClaimDate(appToday())}, and it is sent the moment you make the bill.`,
+      { details: { today: appToday() } },
+    );
+  }
+
   private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null, ewayDistanceKm = '') {
     requireIssuable(this.config.companyId);
+    await this.refuseIfTooLateForPortal(actor, token, false);
     const finalise = () => this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
     // Issue #288 — "Paid now": the bill and its receipt in one unit of work. Both vouchers post, or
     // neither does and no bill number is used. Keyed on the bill, so a second press records neither again.
@@ -3987,11 +4008,28 @@ export class DemoApplication {
       ? await this.returns.postSales(actor, command.command)
       : await this.returns.postPurchase(actor, command.command);
     await this.freezeNotePrint(result.note);
+    // Issue #284 — a credit note to a registered buyer is reported like a bill: sent by itself,
+    // never awaited, and only when the rules say this note needs an e-invoice number.
+    const eInvoice = result.note.kind === 'SALES_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
+    if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
     return {
       state: 'recorded', deduplicated: result.deduplicated,
       title: result.deduplicated ? 'Return already recorded once' : 'Return recorded',
-      message: result.note.summary, note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor) },
+      message: eInvoice?.needed === 'YES'
+        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? eInvoice.message.replace('This bill', 'This credit note') : 'This credit note has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.'}`
+        : result.note.summary,
+      note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor) },
     };
+  }
+
+  /** Issue #284 — whether a sales credit note needs an e-invoice number, decided like its bill's. */
+  private async noteEInvoiceDecision(actor: ActorContext, note: ReturnNote) {
+    const bill = await this.salesRepository.findById(this.companyOf(actor), note.originalDocument.id);
+    if (bill === null) return null;
+    return this.eInvoiceDecisionFor({
+      id: bill.id, partyId: bill.partyId, customerType: bill.customerType,
+      documentDate: note.documentDate, documentType: 'CREDIT_NOTE',
+    });
   }
 
   /**
@@ -4071,8 +4109,23 @@ export class DemoApplication {
   async notePrint(actor: ActorContext, noteId: string, options: { readonly pdf?: boolean; readonly format?: unknown; readonly locale?: unknown } = {}) {
     const note = await this.returnNotes.findById(this.companyOf(actor), noteId);
     if (note === null) throw notFound('API_NOTE_NOT_FOUND', 'No credit or debit note was found.');
-    const facts = this.notePrints.get(note.id);
-    if (facts === undefined) throw notFound('API_NOTE_PRINT_FACTS', 'This note was recorded before notes could be printed, so it has no stored page.');
+    const frozen = this.notePrints.get(note.id);
+    if (frozen === undefined) throw notFound('API_NOTE_PRINT_FACTS', 'This note was recorded before notes could be printed, so it has no stored page.');
+    // Issue #284 — the government's IRN and signed QR, once registered, printed as on a bill.
+    const record = await this.shop.eInvoice.forDocument(actor, note.id).catch(() => null);
+    const acknowledgement = record?.status === 'REGISTERED' ? record.acknowledgement ?? null : null;
+    const facts = acknowledgement === null ? frozen : {
+      ...frozen,
+      document: {
+        ...frozen.document,
+        eInvoice: {
+          irn: acknowledgement.irn,
+          ackNumber: acknowledgement.ackNumber,
+          ackDate: acknowledgement.ackDate,
+          qrSvg: qrSvg(acknowledgement.signedQrCode, `IRN ${acknowledgement.irn}`),
+        },
+      },
+    };
     const locale: Locale = options.locale === 'hi-IN' ? 'hi-IN' : 'en-IN';
     const format: PageFormat = options.format === 'THERMAL_80MM' ? 'THERMAL_80MM' : options.format === 'MOBILE' ? 'MOBILE' : 'A4';
     return {
@@ -4344,7 +4397,12 @@ export class DemoApplication {
   private async eInvoiceDocumentFor(actor: ActorContext, invoiceId: string): Promise<EInvoiceDocument> {
     const companyId = this.companyOf(actor);
     const invoice = await this.salesRepository.findById(companyId, invoiceId);
-    if (invoice === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    if (invoice === null) {
+      // Issue #284 — a credit note is reported to the government exactly as a bill is.
+      const note = await this.returnNotes.findById(companyId, invoiceId);
+      if (note !== null && note.kind === 'SALES_RETURN') return this.noteEInvoiceDocument(actor, note);
+      throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    }
     if (invoice.state !== 'FINAL' || invoice.number === null) {
       throw invalid('API_INVOICE_NOT_FINAL', 'This bill has not been issued yet, so there is nothing to report to the government.');
     }
@@ -4423,6 +4481,65 @@ export class DemoApplication {
   }
 
   /**
+   * Issue #284 — a credit note for goods a registered buyer returned, as the government's CRN.
+   *
+   * The seller, the buyer, the place of supply and the buyer kind are the original bill's, because
+   * the note adjusts that bill; the lines and amounts are the note's own. Freight and other charges
+   * the note gives back go inside the first goods line, as they do on a bill (#231), because the
+   * portal takes no item without a goods code.
+   */
+  private async noteEInvoiceDocument(actor: ActorContext, note: ReturnNote): Promise<EInvoiceDocument> {
+    const bill = await this.eInvoiceDocumentFor(actor, note.originalDocument.id);
+    const goods = note.lines.filter((line) => !isChargeLine(line));
+    const charges = note.lines.filter((line) => isChargeLine(line));
+    const extra = (pick: (line: ReturnNote['lines'][number]) => bigint) => charges.reduce((total, line) => total + pick(line), 0n);
+    const lines: EInvoiceLine[] = goods.map((line, index) => {
+      const first = index === 0;
+      const taxable = line.amounts.taxableValue.minor + (first ? extra((charge) => charge.amounts.taxableValue.minor) : 0n);
+      const cgst = line.amounts.cgst.minor + (first ? extra((charge) => charge.amounts.cgst.minor) : 0n);
+      const sgst = line.amounts.sgst.minor + line.amounts.utgst.minor + (first ? extra((charge) => charge.amounts.sgst.minor + charge.amounts.utgst.minor) : 0n);
+      const igst = line.amounts.igst.minor + (first ? extra((charge) => charge.amounts.igst.minor) : 0n);
+      const cess = line.amounts.cess.minor + (first ? extra((charge) => charge.amounts.cess.minor) : 0n);
+      return {
+        lineNumber: index + 1,
+        description: line.description,
+        isService: line.supplyKind === 'SERVICES',
+        hsnOrSac: line.hsnOrSac ?? '',
+        quantity: (Number(line.quantity.scaled) / 1_000_000).toString(),
+        unit: line.quantity.unit,
+        unitPricePaise: line.unitPrice?.minor ?? 0n,
+        grossAmountPaise: taxable,
+        discountPaise: 0n,
+        taxableValuePaise: taxable,
+        gstRatePercentTimes100: line.ratePercentTimes100 ?? 0n,
+        cgstPaise: cgst,
+        sgstPaise: sgst,
+        igstPaise: igst,
+        cessPaise: cess,
+        lineTotalPaise: taxable + cgst + sgst + igst + cess,
+      };
+    });
+    const totals = note.totals;
+    const taxes = totals.taxableValue.minor + totals.cgst.minor + totals.sgst.minor + totals.utgst.minor + totals.igst.minor + totals.cess.minor;
+    return {
+      ...bill,
+      documentId: note.id,
+      documentType: 'CREDIT_NOTE',
+      documentNumber: note.number,
+      documentDate: note.documentDate,
+      lines,
+      totalTaxableValuePaise: totals.taxableValue.minor,
+      totalCgstPaise: totals.cgst.minor,
+      totalSgstPaise: totals.sgst.minor + totals.utgst.minor,
+      totalIgstPaise: totals.igst.minor,
+      totalCessPaise: totals.cess.minor,
+      roundOffPaise: totals.total.minor - taxes,
+      invoiceValuePaise: totals.total.minor,
+      precedingDocuments: [{ number: note.originalDocument.number, date: note.originalDocument.date }],
+    };
+  }
+
+  /**
    * The turnover facts this product actually holds: the band the business picked in Business
    * details for the bill's financial year. Never a figure typed on the E-invoice screen (#236) —
    * one saved answer, read everywhere, so the screens cannot disagree.
@@ -4468,16 +4585,17 @@ export class DemoApplication {
    */
   private applicabilityFor(document: EInvoiceDocument) {
     return this.applicabilityOf({
+      documentType: document.documentType,
       documentDate: document.documentDate,
       recipientKind: document.recipientKind,
       recipientGstin: document.recipient.gstin,
     });
   }
 
-  private applicabilityOf(bill: { readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null }) {
+  private applicabilityOf(bill: { readonly documentType?: EInvoiceDocument['documentType'] | undefined; readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null }) {
     const exemption = eInvoiceExemptionOf(this.config.companyId);
     return {
-      documentType: 'INVOICE' as const,
+      documentType: bill.documentType ?? 'INVOICE' as const,
       documentDate: bill.documentDate,
       recipientKind: bill.recipientKind,
       ...(bill.recipientGstin === null || bill.recipientGstin === '' || bill.recipientGstin === 'URP' ? {} : { recipientGstin: bill.recipientGstin }),
@@ -4498,7 +4616,7 @@ export class DemoApplication {
    * answer is "we don't know yet" with a pointer to Business details — never a guess either way.
    * It never stops a bill being issued (#210 part 3).
    */
-  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined }): {
+  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined; readonly documentType?: EInvoiceDocument['documentType'] }): {
     readonly needed: 'YES' | 'NO' | 'UNKNOWN';
     readonly message: string;
     readonly askTurnover: boolean;
@@ -4509,7 +4627,7 @@ export class DemoApplication {
     let gstin: string | null = null;
     try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch { gstin = null; }
     const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
-    const decision = decideApplicability(this.applicabilityOf({ documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
+    const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
     if (decision.outcome === 'APPLICABLE') {
       const deadline = reportingDeadline(bill.documentDate, this.turnoverFactsOn(bill.documentDate).lastYearTurnover ?? {}, appToday());
@@ -4577,8 +4695,50 @@ export class DemoApplication {
           canRetry: status === 'FAILED' && record?.failure?.retryable === true && decision.needed === 'YES',
           canCancel: status === 'REGISTERED' && (record?.cancellableUntil === undefined || record.cancellableUntil > now),
         };
-      }),
+      }).concat(await this.creditNoteEInvoiceRows(actor, invoices, records, now)),
     };
+  }
+
+  /**
+   * Issue #284 — the credit notes for goods customers returned, on the same list as the bills they
+   * adjust, because a note to a registered buyer needs its own e-invoice number. Only notes that
+   * need one are listed: a note to a consumer has nothing to send, and listing it would only add noise.
+   */
+  private async creditNoteEInvoiceRows(
+    actor: ActorContext,
+    invoices: readonly { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C' }[],
+    records: readonly EInvoiceRecord[],
+    now: string,
+  ) {
+    const notes = (await this.returnNotes.list(this.companyOf(actor))).filter((note) => note.kind === 'SALES_RETURN');
+    return notes.flatMap((note) => {
+      const bill = invoices.find((invoice) => invoice.id === note.originalDocument.id);
+      if (bill === undefined) return [];
+      const decision = this.eInvoiceDecisionFor({ id: bill.id, partyId: bill.partyId, customerType: bill.customerType, documentDate: note.documentDate, documentType: 'CREDIT_NOTE' });
+      if (decision.needed !== 'YES') return [];
+      const record = records.find((candidate) => candidate.documentId === note.id);
+      let customer: string | null = null;
+      try { customer = customerView(this.config.companyId, bill.partyId).name; } catch { customer = null; }
+      const status = record?.status ?? 'NOT_SENT';
+      return [{
+        id: note.id,
+        number: note.number,
+        date: note.documentDate,
+        customer,
+        amount: jsonAmount(note.totals.total.minor),
+        kind: 'CREDIT_NOTE' as const,
+        against: note.originalDocument.number,
+        eInvoiceStatus: status,
+        needed: decision.needed,
+        decision: decision.lateForPortal === true
+          ? decision.message.replace('This bill', 'This credit note')
+          : `This credit note against ${note.originalDocument.number} needs a government e-invoice number.`,
+        askTurnover: false,
+        statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
+        canRetry: status === 'FAILED' && record?.failure?.retryable === true,
+        canCancel: status === 'REGISTERED' && (record?.cancellableUntil === undefined || record.cancellableUntil > now),
+      }];
+    });
   }
 
   /** Issue #239 — where a bill stands with the government, in one plain line. */
