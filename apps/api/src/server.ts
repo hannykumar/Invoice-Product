@@ -104,6 +104,7 @@ export const POST_PERMISSIONS: Readonly<Record<string, Gate>> = {
   '/api/challans/print': need('issue delivery challans', 'challan.issue'),
   '/api/challans/eway': need('issue delivery challans', 'challan.issue'),
   '/api/challans/link-invoice': need('issue delivery challans', 'challan.issue'),
+  '/api/challans/bill': need('make bills', 'sales.finalise'),
   '/api/challans/cancel': need('cancel delivery challans', 'challan.cancel'),
   '/api/presale/preview': PRESALE,
   '/api/presale/issue': PRESALE,
@@ -284,6 +285,8 @@ export async function handleApi(method: string, pathname: string, body: Record<s
     if (method === 'POST' && pathname === '/api/challans/eway') return json(200, await app.challans.attachEwayBill(actor, body));
     if (method === 'POST' && pathname === '/api/challans/link-invoice') return json(200, await app.challans.linkInvoice(actor, body));
     if (method === 'POST' && pathname === '/api/challans/cancel') return json(200, await app.challans.cancel(actor, body));
+    // Issue #290 — bill the goods a challan sent, from the challan itself.
+    if (method === 'POST' && pathname === '/api/challans/bill') return json(200, await app.billChallan(actor, body));
     // Issue #142 — quotations and proforma invoices: the papers sent before a sale. None of these posts
     // anything; a quotation becomes a sale only through the ordinary sale, as a draft first.
     if (method === 'GET' && pathname === '/api/presale') return json(200, await app.presale.list(actor));

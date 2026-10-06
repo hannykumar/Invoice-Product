@@ -761,8 +761,8 @@ test("#262: the refusal dialog, the purchase screen and both languages carry the
   assert.equal(locales["en-IN"]!.enterPurchaseBill, "Enter the purchase bill");
   for (const key of ["enterPurchaseBill", "backToSale", "purchaseForSale", "purchaseForSaleDone"]) assert.ok(locales["hi-IN"]![key], key);
   // The sale's review (the Payment slide, #305), its Record (Make bill) and the other screens' reviews
-  // all show the refusal with the button.
-  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 3);
+  // all show the refusal with the button — and, #290, so does billing a delivery challan.
+  assert.equal((script.match(/showSaleFailure\(error\);/g) ?? []).length, 4);
   assert.match(await functionSource("reviewSaleOnSlide"), /showSaleFailure\(error\);/);
   assert.match(await functionSource("recordPending"), /showSaleFailure\(error\);/);
   // A Hindi reader gets the server's Hindi sentence, not "could not complete".

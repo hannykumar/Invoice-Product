@@ -264,7 +264,7 @@ const copy = {
     checkChallan: "Check this challan", challanSafety: "Checking saves nothing and uses no number. The number is given only when you issue it.",
     issueChallan: "Issue the challan", challansIssued: "Challans issued", challansIssuedHelp: "Newest first. Open one to print it, add its e-way bill, link the invoice that followed, or cancel it.",
     noChallans: "No challan has been issued yet.", openChallan: "Open", printChallan: "Print all three copies",
-    linkInvoiceTitle: "The tax invoice raised after delivery", linkInvoiceHelp: "Only for goods that were sold. Pick the invoice; we check it is for the same customer, dated after the challan, and bills the same goods.", linkInvoice: "Link this invoice",
+    billChallanTitle: "Make the bill for these goods", billChallanHelp: "Bills exactly the goods on this challan, takes them out of stock once and links the bill to the challan.", billChallanBy: "Goods on approval: bill them by {date} (six months from when they left).", billChallan: "Make the bill", linkInvoiceTitle: "The tax invoice raised after delivery", linkInvoiceHelp: "Only for goods that were sold. Pick the invoice; we check it is for the same customer, dated after the challan, and bills the same goods.", linkInvoice: "Link this invoice",
     challanEwayTitle: "E-way bill number", challanEwayHelp: "Type it in if it was raised somewhere else. One raised on the e-way bill screen lands here by itself.", ewayBillNumberLabel: "E-way bill number (12 digits)", transporterName: "Transporter", recordEwayNumber: "Put it on the challan",
     printEway: "Print for the driver", printEwaySend: "Send to printer", printEwayPdf: "Download PDF",
     cancelChallanTitle: "Cancel this challan", cancelChallanHelp: "Only if the goods never moved on it. The number stays used, so the series has no gap.", cancelChallanReason: "Why is it being cancelled?", ewayCancelledOnPortal: "Its e-way bill has been cancelled on the portal", cancelChallan: "Cancel the challan",
@@ -615,7 +615,7 @@ const copy = {
     checkChallan: "Challan jaanchen", challanSafety: "Jaanchne se kuch save nahin hota aur koi number nahin lagta. Number sirf challan banane par milta hai.",
     issueChallan: "Challan banayen", challansIssued: "Bane hue challan", challansIssuedHelp: "Naye pehle. Kholkar print karein, e-way bill joden, baad wala invoice joden, ya radd karein.",
     noChallans: "Abhi koi challan nahin bana.", openChallan: "Kholen", printChallan: "Teeno copy print karein",
-    linkInvoiceTitle: "Delivery ke baad bana tax invoice", linkInvoiceHelp: "Sirf beche gaye maal ke liye. Invoice chunein; hum dekhenge ki woh usi customer ka hai, challan ke baad ka hai, aur wahi maal bill karta hai.", linkInvoice: "Yeh invoice joden",
+    billChallanTitle: "In saaman ka bill banayein", billChallanHelp: "Is challan ke saaman ka hi bill banta hai, stock se ek baar nikalta hai, aur bill challan se jud jata hai.", billChallanBy: "Approval par bheja saaman: {date} tak bill banayein (nikalne ke chhah mahine).", billChallan: "Bill banayein", linkInvoiceTitle: "Delivery ke baad bana tax invoice", linkInvoiceHelp: "Sirf beche gaye maal ke liye. Invoice chunein; hum dekhenge ki woh usi customer ka hai, challan ke baad ka hai, aur wahi maal bill karta hai.", linkInvoice: "Yeh invoice joden",
     challanEwayTitle: "E-way bill number", challanEwayHelp: "Agar kahin aur bana hai to yahan likhein. E-way bill wali screen se bana number yahan apne aap aa jata hai.", ewayBillNumberLabel: "E-way bill number (12 ank)", transporterName: "Transporter", recordEwayNumber: "Challan par joden",
     printEway: "Driver ke liye print karein", printEwaySend: "Printer par bhejein", printEwayPdf: "PDF download karein",
     cancelChallanTitle: "Yeh challan radd karein", cancelChallanHelp: "Sirf tab jab maal is par gaya hi nahin. Number istemal hua hi maana jayega, taaki ginti mein khali jagah na rahe.", cancelChallanReason: "Radd kyon kar rahe hain?", ewayCancelledOnPortal: "Iska e-way bill portal par radd ho chuka hai", cancelChallan: "Challan radd karein",
@@ -5287,6 +5287,8 @@ function renderChallanCheck(result) {
     detail.append(detailRow("Value of the goods", money(result.value)));
     if (result.showsTax) detail.append(detailRow("Tax shown on the challan", money(result.tax), "Shown because the law asks for it on a sale challan. It is charged on the invoice, not on this paper."));
     if (result.placeOfSupply) detail.append(detailRow("Place of supply", result.placeOfSupply, result.interState ? "The goods cross a state border, so the challan must show it." : undefined));
+    // Issue #290 — the same e-way bill answer a sale review gives.
+    if (result.ewayBill) detail.append(detailRow("E-way bill", result.ewayBill.message, result.ewayBill.reason));
   }
   document.querySelector("#challan-issue").hidden = result.state === "problems";
 }
@@ -5295,7 +5297,7 @@ document.querySelector("#challan-issue")?.addEventListener("click", async () => 
   try {
     const result = await api("/api/challans/issue", { method: "POST", body: JSON.stringify(challanInput()) });
     document.querySelector("#challan-panel").hidden = true;
-    showDialog({ title: result.title, message: result.message }, "recorded");
+    showDialog({ title: result.title, message: result.message, effects: result.ewayBill ? [`${result.ewayBill.message} Raise it on the E-way bill screen, or type its number below.`] : undefined }, "recorded");
     await refreshDocumentLists();
     await openChallan(result.challan.id);
   } catch (error) {
@@ -5337,6 +5339,11 @@ async function openChallan(id) {
   document.querySelector("#challan-frame").srcdoc = printed.html;
   const open = challan.state === "ISSUED";
   document.querySelector("#challan-link-form").hidden = !(open && challan.invoiceFollows);
+  // Issue #290 — billing from the challan, with the six-month date for goods on approval.
+  document.querySelector("#challan-bill-panel").hidden = !(open && challan.invoiceFollows);
+  document.querySelector("#challan-bill-help").textContent = challan.billBy
+    ? `${copy[state.locale].billChallanHelp} ${text("billChallanBy", { date: longDate(challan.billBy) })}`
+    : copy[state.locale].billChallanHelp;
   document.querySelector("#challan-eway-form").hidden = !open;
   document.querySelector("#challan-cancel-form").hidden = !open;
   if (open && challan.invoiceFollows) {
@@ -5371,6 +5378,22 @@ const challanAction = (selector, path, failureTitle) => submitStep(selector, asy
 });
 
 challanAction("#challan-link-form", "/api/challans/link-invoice", "The invoice was not linked");
+
+document.querySelector("#challan-bill")?.addEventListener("click", async (event) => {
+  if (!challanState.open) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await api("/api/challans/bill", { method: "POST", body: JSON.stringify({ challan: challanState.open.id }) });
+    showDialog({ title: `Bill made: ${result.invoice.number}`, message: result.message, effects: result.effects }, "recorded");
+    await refreshDocumentLists();
+    await openChallan(challanState.open.id);
+  } catch (error) {
+    showSaleFailure(error);
+  } finally {
+    button.disabled = false;
+  }
+});
 challanAction("#challan-eway-form", "/api/challans/eway", "The e-way bill was not recorded");
 challanAction("#challan-cancel-form", "/api/challans/cancel", "The challan was not cancelled");
 

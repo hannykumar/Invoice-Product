@@ -80,11 +80,12 @@ import {
   walkInCustomer,
 } from './catalogue-application.ts';
 import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor } from './business-details-application.ts';
-import { eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
+import { approvalChallanTask, eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
-import { STATE_NAMES } from '@invoice/transport';
-import { ChallanDesk } from './challan-application.ts';
+import { STATE_NAMES, consignmentFromChallan } from '@invoice/transport';
+import { challanReason } from '@invoice/sales';
+import { ChallanDesk, type ChallanFacts, type ChallanHooks } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
 import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode, type AdvanceParticulars, type DocumentReference } from '@invoice/receivables';
 import {
@@ -1363,6 +1364,8 @@ export class DemoApplication {
 
     const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale, exportSales);
     app.cancelGuard = cancellationGuard;
+    // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
+    challans.hooks = app.challanHooks();
     app.returnMonths = gstPreparations;
     await app.seed();
     return app;
@@ -1542,6 +1545,10 @@ export class DemoApplication {
     const stock = stockTask(read.stockItems.filter((item) => item.needsAttention), may('ledger.post.purchase'));
     if (stock !== null) tasks.push(stock);
     if (turnoverBandFor(companyId, today) === null && eInvoiceExemptionOf(companyId) === 'NONE') tasks.push(turnoverTask(financialYearName(today), may('ledger.setup')));
+    // Issue #290 — goods on approval must be billed within six months of leaving.
+    if (may('challan.issue')) {
+      for (const due of await this.challans.approvalsDue(actor, today)) tasks.push(approvalChallanTask(due, may('sales.finalise')));
+    }
     tasks.sort((a, b) => a.rank - b.rank);
 
     // The latest five bills, newest first, each with what is still owed on it and how it was paid.
@@ -2517,6 +2524,80 @@ export class DemoApplication {
     };
   }
 
+  /** Issue #290 — what the challan desk needs: the godown's stock and the e-way bill rules. */
+  challanHooks(): ChallanHooks {
+    const goodsLines = (challan: ChallanFacts) => challan.lines
+      .filter((line) => itemView(this.config.companyId, line.itemId).kind === 'goods')
+      .map((line) => ({ lineId: line.lineId, itemId: line.itemId, warehouseId: line.warehouseId ?? 'wh-main', quantity: line.quantity }));
+    const inventory = this.shop.inventoryService;
+    return {
+      check: async (actor, challan) => {
+        const result = await inventory.reserve(actor, { documentId: challan.id ?? 'challan-check', documentDate: challan.documentDate, lines: goodsLines(challan), hold: false });
+        if (result.ok) return null;
+        return result.shortfalls
+          .map((short) => `You have ${short.available} ${short.unit} of ${short.itemName} in ${short.warehouseName}, and this challan sends ${short.required} ${short.unit}. Goods have to be in the godown to leave on a challan.`)
+          .join(' ');
+      },
+      hold: async (actor, challan) => {
+        const lines = goodsLines(challan);
+        if (lines.length === 0) return;
+        // Out until billed or cancelled: no timer puts goods that have left back on sale.
+        await inventory.reserve(actor, { documentId: challan.id, documentDate: challan.documentDate, lines, holdUntil: '9999-12-31T00:00:00.000Z' });
+      },
+      release: async (actor, challanId) => { await inventory.release(actor, challanId); },
+      eway: (challan) => {
+        try {
+          const decision = decideEwayApplicability({
+            movementId: challan.id ?? 'challan-check',
+            reason: challanReason(challan.reason).movementReason,
+            consignor: dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin }),
+            billTo: this.movementParty(String(challan.partyId)),
+            documents: [consignmentFromChallan({ ...challan, id: challan.id ?? 'challan-check', number: challan.number ?? 'DC (not yet numbered)' })],
+            transportMode: 'ROAD',
+            vehicleType: 'REGULAR',
+            conveyance: 'HIRED_VEHICLE',
+          }, { on: challan.documentDate });
+          return decision.outcome === 'REQUIRED' || decision.outcome === 'NOT_REQUIRED'
+            ? { outcome: decision.outcome, reason: decision.reason, ruleId: decision.ruleId }
+            : null;
+        } catch {
+          return null;
+        }
+      },
+    };
+  }
+
+  /**
+   * Issue #290 — bills the goods on a challan: the challan's hold is let go, the bill is made for
+   * exactly its goods (which takes them out of stock once), and the bill is linked to the challan.
+   * If the bill cannot be made, the goods are held again and nothing else changes.
+   */
+  async billChallan(actor: ActorContext, input: Record<string, unknown>) {
+    const challan = await this.challans.get(actor, String(input.challan ?? ''));
+    if (challan.state !== 'ISSUED') {
+      throw invalid('CHALLAN_NOT_OPEN', `${challan.number} is ${challan.state === 'CANCELLED' ? 'cancelled' : 'already billed'}, so there is nothing to bill.`);
+    }
+    if (!challanReason(challan.reason).invoiceFollows) {
+      throw invalid('CHALLAN_NOT_A_SUPPLY', `${challan.number} moved goods that are not being sold (${challanReason(challan.reason).label}), so no bill follows it.`);
+    }
+    await this.challans.hooks.release(actor, challan.id);
+    let recorded;
+    try {
+      recorded = await this.recordSale(actor, {
+        customerId: String(challan.partyId),
+        lines: challan.lines.map((line) => ({ itemId: line.itemId, quantity: (Number(line.quantity.scaled) / 1_000_000).toString(), rate: (Number(line.unitPrice.minor) / 100).toString() })),
+        date: String(input.date ?? '') || appToday(),
+        terms: String(input.terms ?? '30'),
+        reference: String(input.reference ?? '') || `challan-bill:${challan.id}`,
+      });
+    } catch (error) {
+      await this.challans.hooks.hold(actor, challan);
+      throw error;
+    }
+    const linked = await this.challans.linkInvoice(actor, { challan: challan.id, invoice: recorded.invoice.id });
+    return { ...recorded, message: `${recorded.message} ${linked.message}`, challan: linked.challan, effects: linked.effects };
+  }
+
   /** The e-way bill decision itself, or `null` when the rules cannot answer. Issue #306 shows both answers. */
   private ewayDecisionOf(draft: SalesInvoice, delivery: DeliveryDetails | null) {
     const pricing = draft.pricing;
@@ -2565,7 +2646,10 @@ export class DemoApplication {
       // Issue #262 — the refusal also carries the Hindi sentence and, for each short line, the goods
       // and the godown, so the screen can open the purchase bill for exactly those goods. The sale
       // itself stays stopped: there is no override and stock never goes below nothing.
-      throw notAllowed('SALES_STOCK_NOT_ENOUGH', short.map((problem) => problem.message['en-IN']).join(' '), {
+      // Issue #290 — goods out on a challan are not available; say where they are.
+      const out = (await Promise.all([...new Set(draft.lines.map((line) => line.itemId))].map((itemId) => this.challans.outOnChallans(actor, itemId)))).flat();
+      const onChallans = out.length === 0 ? '' : ` ${out.map((entry) => `${entry.quantity} ${entry.unit} ${out.length === 1 ? 'is' : 'are'} out on ${entry.number}`).join(', ')}, not counted as available. To bill goods already sent, open the challan and press Make the bill.`;
+      throw notAllowed('SALES_STOCK_NOT_ENOUGH', short.map((problem) => problem.message['en-IN']).join(' ') + onChallans, {
         messageId: 'stock.not_enough',
         details: {
           'hi-IN': short.map((problem) => problem.message['hi-IN']).join(' '),
