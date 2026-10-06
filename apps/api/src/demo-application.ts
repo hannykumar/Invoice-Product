@@ -1278,6 +1278,8 @@ export class DemoApplication {
             return returnNoteToDocument(note, customerOn(String(note.partyId)), supplier, {
               original: original === null ? null : {
                 placeOfSupplyStateCode: original.pricing?.placeOfSupplyStateCode ?? original.placeOfSupplyStateCode,
+                // Issue #325 — so a consumer note is listed where its bill was.
+                ...(original.pricing === null ? {} : { invoiceValue: original.pricing.totals.invoiceValue }),
               },
               hsnByItem,
             });

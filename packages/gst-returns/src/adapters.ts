@@ -328,6 +328,8 @@ export interface ReturnNoteLike {
  */
 export interface NoteOriginalFacts {
   readonly placeOfSupplyStateCode: string | null;
+  /** Issue #325 — the bill's own total, which decides whether a consumer note is CDNUR or B2CS. */
+  readonly invoiceValue?: Money;
 }
 
 /**
@@ -396,6 +398,7 @@ export const returnNoteToDocument = (
       number: note.originalDocument.number,
       date: note.originalDocument.date as OutwardDocument['documentDate'],
       ...(facts.original === null ? { missing: true as const } : {}),
+      ...(facts.original?.invoiceValue === undefined ? {} : { invoiceValue: facts.original.invoiceValue }),
     },
     unregisteredConfirmed: gstinOf(counterparty.gstin) !== null || counterparty.unregisteredConfirmed,
   };

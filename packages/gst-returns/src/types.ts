@@ -209,6 +209,11 @@ export interface OutwardDocument {
     /** Present when the original was itself reported on an earlier return. */
     readonly reportedInPeriod?: TaxPeriod;
     /**
+     * Issue #325 — the original bill's total. A note to a consumer is listed (CDNUR) when its bill
+     * was large enough to be listed (B2CL), however small the note itself is.
+     */
+    readonly invoiceValue?: Money;
+    /**
      * Issue #232 — the bill the note corrects could not be found. The note takes its place of
      * supply from that bill, so without it the state is unknown and the return asks.
      */
