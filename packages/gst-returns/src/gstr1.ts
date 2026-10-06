@@ -18,7 +18,7 @@
  */
 import { formatINR, zero } from '@invoice/kernel';
 import { apportionChargesToHsn } from '@invoice/gst-calc';
-import { classifyDocument, isNote, sourceRefOf, stateNameOf, type ClassifyContext } from './classify.ts';
+import { classifyDocument, isExport, isNote, sourceRefOf, stateNameOf, type ClassifyContext } from './classify.ts';
 import {
   GSTR1_SECTION_NAMES,
   addAmounts,
@@ -29,7 +29,9 @@ import {
   sumAmounts,
   totalTaxOf,
   type Bilingual,
+  type DocumentSeriesKind,
   type DocumentSeriesRow,
+  type NumberedDocument,
   type Gstr1Return,
   type Gstr1Row,
   type Gstr1Section,
@@ -42,8 +44,11 @@ import {
   type TaxPeriod,
 } from './types.ts';
 
+/** Money received before a supply, and its later use: reported in table 11, never in table 12. */
+const ADVANCE_KINDS: readonly OutwardDocument['kind'][] = ['ADVANCE_RECEIPT', 'REFUND_VOUCHER', 'ADVANCE_ADJUSTED'];
+
 /** Tables where each bill is listed on its own; everything else is a summary. */
-const LISTED: readonly Gstr1SectionId[] = ['B2B', 'B2CL', 'CDNR', 'CDNUR', 'EXP', 'AT', 'B2BA', 'B2CLA', 'CDNRA', 'CDNURA'];
+const LISTED: readonly Gstr1SectionId[] = ['B2B', 'B2CL', 'CDNR', 'CDNUR', 'EXP', 'AT', 'TXPD', 'B2BA', 'B2CLA', 'CDNRA', 'CDNURA'];
 
 /**
  * The order the sections appear on screen and in the file.
@@ -52,7 +57,7 @@ const LISTED: readonly Gstr1SectionId[] = ['B2B', 'B2CL', 'CDNR', 'CDNUR', 'EXP'
  * portal is reading the two side by side.
  */
 export const SECTION_ORDER: readonly Gstr1SectionId[] = [
-  'B2B', 'B2CL', 'B2CS', 'CDNR', 'CDNUR', 'EXP', 'NIL', 'AT',
+  'B2B', 'B2CL', 'B2CS', 'CDNR', 'CDNUR', 'EXP', 'NIL', 'AT', 'TXPD',
   'B2BA', 'B2CLA', 'B2CSA', 'CDNRA', 'CDNURA',
 ];
 
@@ -62,6 +67,8 @@ export interface Gstr1BuildInput {
   readonly documents: readonly OutwardDocument[];
   /** Numbers that were issued and then cancelled, for the document-series table. */
   readonly cancelledNumbers?: readonly { readonly kind: OutwardDocument['kind']; readonly number: string }[];
+  /** Issue #286 — other numbered papers table 13 counts: goods receipt vouchers, delivery challans. */
+  readonly otherNumbers?: readonly NumberedDocument[];
 }
 
 export interface Gstr1BuildResult {
@@ -80,7 +87,7 @@ export interface Gstr1BuildResult {
  * has to remember which way a note points.
  */
 const signedAmounts = (document: OutwardDocument, amounts: TaxAmounts): TaxAmounts =>
-  document.kind === 'CREDIT_NOTE' || document.kind === 'REFUND_VOUCHER' ? negateAmounts(amounts) : amounts;
+  document.kind === 'CREDIT_NOTE' || document.kind === 'REFUND_VOUCHER' || document.kind === 'ADVANCE_ADJUSTED' ? negateAmounts(amounts) : amounts;
 
 const lineAmountsByRate = (document: OutwardDocument): Map<string, { rate: bigint | null; amounts: TaxAmounts }> => {
   const byRate = new Map<string, { rate: bigint | null; amounts: TaxAmounts }>();
@@ -109,6 +116,7 @@ const rowsForListed = (document: OutwardDocument, section: Gstr1SectionId): Gstr
     invoiceValue: document.invoiceValue,
     amounts: signedAmounts(document, entry.amounts),
     ...(document.amends === undefined ? {} : { amendmentOf: document.amends }),
+    ...(document.shippingBill === undefined ? {} : { shippingBill: document.shippingBill }),
     sources: [source],
   }));
 };
@@ -188,6 +196,10 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
   const withoutCode = new Set<string>();
 
   for (const document of documents) {
+    // Issue #286 — advances are money, not a supply of goods or services yet; table 12 counts the
+    // bill when it comes.
+    if (ADVANCE_KINDS.includes(document.kind)) continue;
+    const supplyTo: HsnRow['supplyTo'] = document.counterpartyGstin !== null && !isExport(document.treatment) ? 'B2B' : 'B2C';
     const source = sourceRefOf(document);
     // Issue #188 — freight and other charges have no code of their own. They are shared into the
     // goods codes they travelled with, by the same function the printed bill's summary uses, so the
@@ -216,7 +228,7 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
       // description. It adds value and tax, never quantity.
       const line = (part.goods ?? part.source).line;
       const rateKey = part.ratePercentTimes100 === null ? 'none' : part.ratePercentTimes100.toString();
-      const key = `${part.hsnOrSac}|${rateKey}|${line.unit ?? ''}`;
+      const key = `${supplyTo}|${part.hsnOrSac}|${rateKey}|${line.unit ?? ''}`;
       const amounts = signedAmounts(document, {
         taxableValue: part.taxableValue,
         cgst: part.cgst,
@@ -231,6 +243,7 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
           quantity: quantity.value * (document.kind === 'CREDIT_NOTE' ? -1n : 1n),
           scale: quantity.scale,
           row: {
+            supplyTo,
             hsnOrSac: part.hsnOrSac,
             description: line.description,
             unit: line.unit,
@@ -278,7 +291,7 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
   return {
     rows: [...rows.values()]
       .map((entry) => ({ ...entry.row, quantity: formatQuantity(entry.quantity, entry.scale) }))
-      .sort((a, b) => a.hsnOrSac.localeCompare(b.hsnOrSac) || Number((a.ratePercentTimes100 ?? 0n) - (b.ratePercentTimes100 ?? 0n))),
+      .sort((a, b) => a.supplyTo.localeCompare(b.supplyTo) || a.hsnOrSac.localeCompare(b.hsnOrSac) || Number((a.ratePercentTimes100 ?? 0n) - (b.ratePercentTimes100 ?? 0n))),
     findings,
   };
 };
@@ -313,20 +326,35 @@ const formatQuantity = (value: bigint, scale: number): string => {
  */
 const buildDocumentSeries = (
   documents: readonly OutwardDocument[],
-  cancelled: readonly { kind: OutwardDocument['kind']; number: string }[],
+  cancelledDocuments: readonly { kind: OutwardDocument['kind']; number: string }[],
+  otherNumbers: readonly NumberedDocument[] = [],
 ): DocumentSeriesRow[] => {
-  const byKind = new Map<OutwardDocument['kind'], string[]>();
+  const byKind = new Map<DocumentSeriesKind, string[]>();
+  const add = (kind: DocumentSeriesKind, number: string) => {
+    const numbers = byKind.get(kind) ?? [];
+    // One number is counted once, however many sources mention it.
+    if (!numbers.includes(number)) byKind.set(kind, [...numbers, number]);
+  };
+  const cancelled: { kind: DocumentSeriesKind; number: string }[] = [];
   for (const document of documents) {
-    byKind.set(document.kind, [...(byKind.get(document.kind) ?? []), document.number]);
+    // Issue #286 — an advance used against a bill is not a paper of its own.
+    if (document.kind === 'ADVANCE_ADJUSTED') continue;
+    add(document.kind, document.number);
   }
-  for (const entry of cancelled) {
-    byKind.set(entry.kind, [...(byKind.get(entry.kind) ?? []), entry.number]);
+  for (const entry of cancelledDocuments) {
+    if (entry.kind === 'ADVANCE_ADJUSTED') continue;
+    add(entry.kind, entry.number);
+    cancelled.push({ kind: entry.kind, number: entry.number });
+  }
+  for (const entry of otherNumbers) {
+    add(entry.kind, entry.number);
+    if (entry.cancelled) cancelled.push({ kind: entry.kind, number: entry.number });
   }
 
   return [...byKind.entries()]
     .map(([kind, numbers]) => {
       const sorted = [...numbers].sort();
-      const cancelledHere = cancelled.filter((c) => c.kind === kind).length;
+      const cancelledHere = new Set(cancelled.filter((c) => c.kind === kind).map((c) => c.number)).size;
       return {
         kind,
         from: sorted[0] as string,
@@ -418,7 +446,7 @@ export const buildGstr1 = (input: Gstr1BuildInput, context: ClassifyContext): Gs
       gstin: input.gstin,
       sections,
       hsn: hsn.rows,
-      documents: buildDocumentSeries(placed, input.cancelledNumbers ?? []),
+      documents: buildDocumentSeries(placed, input.cancelledNumbers ?? [], input.otherNumbers ?? []),
       totals,
       documentCount: placed.length,
       sentence: {

@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
@@ -202,7 +202,7 @@ import { formatClaimDate } from '../../../packages/itc/src/deadline.ts';
 import {
   GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInputBookTaxPort, ledgerInwardTaxPort,
   formatTaxPeriod, returnNoteToDocument, salesInvoiceToDocument, taxPeriod, taxPeriodOf, totalTaxOf,
-  type OutwardDocument, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
+  type OutwardDocument, type OutwardLine, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
 
@@ -1164,6 +1164,62 @@ export class DemoApplication {
     // that the return agrees with the books is a real comparison of two sources and not a number
     // compared with itself. There is no `government` port, which is the point: this shop has no
     // licensed intermediary, and everything except the last button still works.
+    /**
+     * Issue #286 — advances for services carry GST when the money arrives (#165), and GSTR-1 reports
+     * them in table 11: 11A for an advance received this month and not billed in the same month
+     * (less any refund voucher), 11B for an advance from an earlier month used against this month's
+     * bill. Goods advances carry no GST and are only counted in table 13 (`otherNumbersFor`).
+     */
+    const advanceDocumentsFor = async (
+      companyId: CompanyId,
+      period: string,
+      supplier: { gstin: string; stateCode: string },
+      customerOn: (partyId: string) => { name: string; gstin: string | null; stateCode: string },
+    ): Promise<OutwardDocument[]> => {
+      const inPeriod = (date: string) => taxPeriodOf(date as IsoDate) === period;
+      const documents: OutwardDocument[] = [];
+      for (const advance of await advanceRepository.list(companyId)) {
+        const tax = advance.tax;
+        if (tax === null) continue;
+        const party = customerOn(String(advance.partyId));
+        const of = (part: Money): OutwardLine[] => tax.lines.map((line, index) => {
+          const scale = (value: Money) => mulDiv(value, part.minor, advance.amount.minor);
+          return {
+            lineId: `advance-rate-${index + 1}`, itemId: 'advance', description: advance.description, hsnOrSac: null,
+            supplyKind: advance.supplyKind, unit: null, quantity: null, ratePercentTimes100: line.ratePercentTimes100,
+            amounts: {
+              taxableValue: scale(line.taxableValue), cgst: scale(line.cgst),
+              sgst: money(scale(line.sgst).minor + scale(line.utgst).minor), igst: scale(line.igst), cess: scale(line.cess),
+            },
+            rateBasis: null, reverseCharge: line.reverseCharge,
+          };
+        });
+        const base = {
+          companyId: advance.companyId, treatment: 'REGULAR' as const,
+          supplierGstin: supplier.gstin, supplierStateCode: supplier.stateCode,
+          partyId: String(advance.partyId), partyName: party.name, counterpartyGstin: party.gstin,
+          counterpartyStateCode: party.stateCode, placeOfSupplyStateCode: advance.placeOfSupplyStateCode,
+          reverseCharge: false, unregisteredConfirmed: true,
+        };
+        // 11A — what of the advance was not billed in the month it arrived.
+        if (inPeriod(advance.date)) {
+          const billedSameMonth = advance.application !== null && inPeriod(advance.application.invoiceDate) ? advance.application.amount.minor : 0n;
+          const open = money(advance.amount.minor - billedSameMonth);
+          if (open.minor > 0n) {
+            documents.push({ ...base, sourceKind: 'receipt_voucher', sourceId: advance.id, voucherId: advance.taxVoucherId, kind: 'ADVANCE_RECEIPT', number: advance.number, documentDate: advance.date, lines: of(open), invoiceValue: open });
+          }
+        }
+        // 11A, less — a refund voucher takes back the tax paid on what is refunded.
+        if (advance.refund !== null && inPeriod(advance.refund.date)) {
+          documents.push({ ...base, sourceKind: 'refund_voucher', sourceId: `${advance.id}:refund`, voucherId: advance.refund.voucherId, kind: 'REFUND_VOUCHER', number: advance.refund.number, documentDate: advance.refund.date, lines: of(advance.refund.amount), invoiceValue: advance.refund.amount });
+        }
+        // 11B — an advance from an earlier month, used against a bill dated this month.
+        if (advance.application !== null && inPeriod(advance.application.invoiceDate) && !inPeriod(advance.date)) {
+          documents.push({ ...base, sourceKind: 'advance_adjustment', sourceId: `${advance.id}:applied`, voucherId: advance.application.voucherId, kind: 'ADVANCE_ADJUSTED', number: `${advance.number} → ${advance.application.invoiceNumber}`, documentDate: advance.application.invoiceDate, lines: of(advance.application.amount), invoiceValue: advance.application.amount });
+        }
+      }
+      return documents;
+    };
     const exportSales = new Map<string, ExportParticulars>();
     const outwardSupplies: OutwardSupplyPort = {
       async documentsFor(companyId, period): Promise<readonly OutwardDocument[]> {
@@ -1204,6 +1260,8 @@ export class DemoApplication {
             },
             // Issue #143 — the return's treatment comes from the same row the bill printed.
             ...(exportSales.has(invoice.id) ? { supplyTreatment: EXPORT_SUPPLIES[exportSales.get(invoice.id)!.kind].returnTreatment } : {}),
+            // Issue #286 — and its shipping bill, for the exports table of the upload file.
+            ...(exportSales.get(invoice.id)?.shippingBill === undefined ? {} : { shippingBill: exportSales.get(invoice.id)!.shippingBill! }),
           },
           customerOn(String(invoice.partyId)),
           supplier,
@@ -1223,7 +1281,28 @@ export class DemoApplication {
               hsnByItem,
             });
           }));
-        return [...documents, ...notes];
+        return [...documents, ...notes, ...await advanceDocumentsFor(companyId, period, supplier, customerOn)];
+      },
+      // Issue #286 — papers table 13 counts that carry nothing onto the return: receipt and refund
+      // vouchers for goods advances (no GST is due on those), and delivery challans.
+      async otherNumbersFor(companyId, period) {
+        const inPeriod = (date: string) => taxPeriodOf(date as IsoDate) === period;
+        const goodsAdvances = (await advanceRepository.list(companyId)).filter((advance) => advance.tax === null);
+        const challans = (await challanRepository.list(companyId)).filter((challan) => inPeriod(challan.documentDate));
+        return [
+          ...goodsAdvances.filter((advance) => inPeriod(advance.date))
+            .map((advance) => ({ kind: 'ADVANCE_RECEIPT' as const, number: advance.number, cancelled: false })),
+          ...goodsAdvances.filter((advance) => advance.refund !== null && inPeriod(advance.refund.date))
+            .map((advance) => ({ kind: 'REFUND_VOUCHER' as const, number: advance.refund!.number, cancelled: false })),
+          ...challans.map((challan) => ({
+            kind: challan.reason === 'JOB_WORK' ? 'DELIVERY_CHALLAN_JOB_WORK' as const
+              : challan.reason === 'SUPPLY_ON_APPROVAL' ? 'DELIVERY_CHALLAN_APPROVAL' as const
+                : challan.reason === 'LIQUID_GAS' ? 'DELIVERY_CHALLAN_LIQUID_GAS' as const
+                  : 'DELIVERY_CHALLAN_OTHER' as const,
+            number: challan.number,
+            cancelled: challan.state === 'CANCELLED',
+          })),
+        ];
       },
       // Issue #233 — a bill issued in this month and then cancelled is not a sale, but its number
       // was used, so the documents-issued table (GSTR-1 table 13) counts it as cancelled.
@@ -3667,6 +3746,8 @@ export class DemoApplication {
       // Issue #231 — the code-wise summary (GSTR-1 table 12), so what it reports under each goods
       // code can be read back and compared with the printed bills.
       hsn: workspace.gstr1.hsn.map((row) => ({
+        // Issue #286 — which tab of table 12 the row belongs to.
+        supplyTo: row.supplyTo,
         hsn: row.hsnOrSac,
         description: row.description,
         unit: row.unit,

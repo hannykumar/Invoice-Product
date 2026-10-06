@@ -37,7 +37,7 @@ import {
 } from './types.ts';
 
 /** The tables an ordinary document can land in, before amendments are considered. */
-type BaseSection = Extract<Gstr1SectionId, 'B2B' | 'B2CL' | 'B2CS' | 'CDNR' | 'CDNUR' | 'EXP' | 'NIL' | 'AT'>;
+type BaseSection = Extract<Gstr1SectionId, 'B2B' | 'B2CL' | 'B2CS' | 'CDNR' | 'CDNUR' | 'EXP' | 'NIL' | 'AT' | 'TXPD'>;
 
 /** Each base table's amendment table, where the form has one. */
 const AMENDMENT_OF: Partial<Record<BaseSection, Gstr1SectionId>> = {
@@ -260,6 +260,13 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
   const warnings: ReturnFinding[] = [];
   const registered = document.counterpartyGstin !== null;
   const interState = isInterState(document);
+
+  if (document.kind === 'ADVANCE_ADJUSTED') {
+    return classified('TXPD', document, reason(
+      'Tax paid on an advance in an earlier month, now set against the bill it paid for.',
+      'Pichhle mahine ke advance par diya tax, ab us bill ke against laga.',
+    ), warnings);
+  }
 
   if (document.kind === 'ADVANCE_RECEIPT' || document.kind === 'REFUND_VOUCHER') {
     return classified('AT', document, reason(

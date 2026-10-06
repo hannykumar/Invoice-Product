@@ -477,21 +477,25 @@ export class GstReturnService {
     const cancelled = [...((await this.#outward.cancelledNumbersFor?.(actor.companyId, period)) ?? [])]
       .sort((a, b) => a.kind.localeCompare(b.kind) || a.number.localeCompare(b.number));
     const sorted = [...documents].sort((a, b) => a.sourceKind.localeCompare(b.sourceKind) || a.sourceId.localeCompare(b.sourceId));
+    // Issue #286 — goods receipt vouchers and delivery challans, counted in table 13 only.
+    const otherNumbers = [...((await this.#outward.otherNumbersFor?.(actor.companyId, period)) ?? [])]
+      .sort((a, b) => a.kind.localeCompare(b.kind) || a.number.localeCompare(b.number));
     return {
       period,
       takenAt: this.#clock.now().toISOString(),
       takenBy: actor.userId,
       documentCount: sorted.length,
-      fingerprint: fingerprintOf(sorted, inward, cancelled),
+      fingerprint: fingerprintOf(sorted, inward, cancelled, otherNumbers),
       documents: sorted,
       inward,
       cancelledNumbers: cancelled,
+      ...(otherNumbers.length === 0 ? {} : { otherNumbers }),
     };
   }
 
   #buildFrom(snapshot: BookSnapshot, input: WorkspaceInput): { gstr1: Gstr1Return; gstr3b: Gstr3bReturn; build: Gstr1BuildResult } {
     const build = buildGstr1(
-      { period: snapshot.period, gstin: input.gstin, documents: snapshot.documents, cancelledNumbers: snapshot.cancelledNumbers ?? [] },
+      { period: snapshot.period, gstin: input.gstin, documents: snapshot.documents, cancelledNumbers: snapshot.cancelledNumbers ?? [], otherNumbers: snapshot.otherNumbers ?? [] },
       { thresholds: this.#thresholds, mode: 'development' },
     );
     const gstr3b = buildGstr3b({
@@ -515,7 +519,7 @@ export class GstReturnService {
     drift: DriftReport | null,
   ): Promise<ReturnWorkspace> {
     const build = buildGstr1(
-      { period: snapshot.period, gstin: input.gstin, documents: snapshot.documents, cancelledNumbers: snapshot.cancelledNumbers ?? [] },
+      { period: snapshot.period, gstin: input.gstin, documents: snapshot.documents, cancelledNumbers: snapshot.cancelledNumbers ?? [], otherNumbers: snapshot.otherNumbers ?? [] },
       { thresholds: this.#thresholds, mode: policy.mode },
     );
     const placed = snapshot.documents.filter(
@@ -734,6 +738,7 @@ const fingerprintOf = (
   documents: readonly OutwardDocument[],
   inward: { readonly contributions: readonly SourceRef[] },
   cancelled: readonly { readonly kind: string; readonly number: string }[] = [],
+  otherNumbers: readonly { readonly kind: string; readonly number: string; readonly cancelled: boolean }[] = [],
 ): string => {
   const hash = createHash('sha256');
   for (const document of documents) hash.update(documentFingerprint(document)).update('\n');
@@ -743,6 +748,8 @@ const fingerprintOf = (
   // Issue #233 — a number cancelled after approval changes the documents-issued table, so it is
   // drift like any other. Nothing is hashed when nothing was cancelled, so older fingerprints hold.
   for (const entry of cancelled) hash.update(`cancelled:${entry.kind}:${entry.number}`).update('\n');
+  // Issue #286 — likewise for the other numbered papers; nothing is hashed when there are none.
+  for (const entry of otherNumbers) hash.update(`other:${entry.kind}:${entry.number}:${entry.cancelled}`).update('\n');
   return hash.digest('hex');
 };
 

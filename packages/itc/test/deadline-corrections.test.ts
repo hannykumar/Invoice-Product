@@ -95,7 +95,8 @@ test('an old credit note still gives its credit back, instead of being barred an
   assert.notEqual(line.outcome, 'TIME_BARRED', 'a credit note is never time-barred');
   assert.equal(line.lastClaimDate, null, 'and it carries no claim deadline to show');
   // ₹3,600 goes back to the government. Before the fix this was ₹0, and the return kept the money.
-  assert.equal(totalTaxOf(workspace.returnLinkage.reversedItc).minor, 3_600_00n);
+  // Issue #286 — given back by reducing 4(A)(5), as GSTR-2B does, not through 4(B).
+  assert.equal(totalTaxOf(workspace.returnLinkage.allOtherItc).minor, -3_600_00n);
   assert.equal(totalTaxOf(workspace.claimable).minor, -3_600_00n);
 });
 

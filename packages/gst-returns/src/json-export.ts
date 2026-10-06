@@ -21,7 +21,7 @@
  */
 import { invalid } from '@invoice/kernel';
 import type { Money } from '@invoice/kernel';
-import { governmentPeriod, type Gstr1Return, type Gstr1Row, type Gstr3bReturn, type TaxAmounts, type TaxPeriod } from './types.ts';
+import { governmentPeriod, type DocumentSeriesKind, type Gstr1Return, type Gstr1Row, type Gstr3bReturn, type HsnRow, type TaxAmounts, type TaxPeriod } from './types.ts';
 
 /** The portal reads rupees with two decimals, not paise. Exact conversion, never floating point. */
 const rupees = (amount: Money): number => {
@@ -193,6 +193,73 @@ export const toGstr1Json = (gstr1: Gstr1Return): Record<string, unknown> => {
     });
   }
 
+  // Issue #286 — table 6A, exports: with payment of IGST (WPAY) or under LUT/bond (WOPAY).
+  const exp = [...groupByDocument(sectionRows(gstr1, 'EXP')).values()];
+  if (exp.length > 0) {
+    const byType = new Map<'WPAY' | 'WOPAY', Gstr1Row[][]>();
+    for (const invoice of exp) {
+      const type = (invoice[0] as Gstr1Row).treatment === 'EXPORT_WITH_TAX' ? 'WPAY' : 'WOPAY';
+      byType.set(type, [...(byType.get(type) ?? []), invoice]);
+    }
+    file['exp'] = [...byType.entries()].map(([expTyp, invoices]) => ({
+      exp_typ: expTyp,
+      inv: invoices.map((rows) => {
+        const first = rows[0] as Gstr1Row;
+        return {
+          inum: requireValue(first.documentNumber, 'a bill number', 'an export'),
+          idt: portalDate(requireValue(first.documentDate, 'a bill date', `bill ${first.documentNumber}`)),
+          val: rupees(requireValue(first.invoiceValue, 'the bill total', `bill ${first.documentNumber}`)),
+          // The shipping bill may follow the invoice; the portal accepts it added later.
+          ...(first.shippingBill === undefined ? {} : {
+            sbpcode: first.shippingBill.portCode,
+            sbnum: first.shippingBill.number,
+            sbdt: portalDate(first.shippingBill.date),
+          }),
+          itms: rows.map((row) => ({
+            txval: rupees(row.amounts.taxableValue),
+            rt: rate(row.ratePercentTimes100),
+            iamt: rupees(row.amounts.igst),
+            csamt: rupees(row.amounts.cess),
+          })),
+        };
+      }),
+    }));
+  }
+
+  // Issue #286 — table 11A (advances received, net of refunds) and 11B (advances used this month).
+  const supplierState = gstr1.gstin.slice(0, 2);
+  const advances = (id: 'AT' | 'TXPD'): Record<string, unknown>[] => {
+    const byPlace = new Map<string, Map<string, { rate: bigint | null; amounts: TaxAmounts }>>();
+    for (const row of sectionRows(gstr1, id)) {
+      const pos = requireValue(row.placeOfSupplyStateCode, 'the place of supply', `advance ${row.documentNumber}`);
+      const rates = byPlace.get(pos) ?? new Map();
+      const key = row.ratePercentTimes100 === null ? 'none' : row.ratePercentTimes100.toString();
+      const existing = rates.get(key);
+      rates.set(key, { rate: row.ratePercentTimes100, amounts: existing === undefined ? row.amounts : addTax(existing.amounts, row.amounts) });
+      byPlace.set(pos, rates);
+    }
+    return [...byPlace.entries()].map(([pos, rates]) => ({
+      pos,
+      sply_ty: pos === supplierState ? 'INTRA' : 'INTER',
+      itms: [...rates.values()].map((entry) => {
+        // 11B rows are held as negatives (they reduce what is owed); the portal wants them positive.
+        const amounts = id === 'TXPD' ? absoluteTax(entry.amounts) : entry.amounts;
+        return {
+          rt: rate(entry.rate),
+          ad_amt: rupees(amounts.taxableValue),
+          iamt: rupees(amounts.igst),
+          camt: rupees(amounts.cgst),
+          samt: rupees(amounts.sgst),
+          csamt: rupees(amounts.cess),
+        };
+      }),
+    }));
+  };
+  const at = advances('AT');
+  if (at.length > 0) file['at'] = at;
+  const txpd = advances('TXPD');
+  if (txpd.length > 0) file['txpd'] = txpd;
+
   const nil = sectionRows(gstr1, 'NIL');
   if (nil.length > 0) {
     file['nil'] = {
@@ -206,27 +273,37 @@ export const toGstr1Json = (gstr1: Gstr1Return): Record<string, unknown> => {
   }
 
   if (gstr1.hsn.length > 0) {
-    file['hsn'] = {
-      data: gstr1.hsn.map((row, index) => ({
+    // Issue #286 — from the January 2025 tax period table 12 has a B2B tab and a B2C tab, each
+    // numbered from 1. A services code (SAC, 99…) has no quantity: UQC "NA", quantity 0.
+    const hsnRows = (rows: readonly HsnRow[]) => rows.map((row, index) => {
+      const service = isServiceCode(row.hsnOrSac);
+      return {
         num: index + 1,
         hsn_sc: row.hsnOrSac,
         desc: row.description,
-        uqc: row.unit ?? 'OTH',
-        qty: Number(row.quantity ?? '0'),
+        uqc: service ? 'NA' : row.unit ?? 'OTH',
+        qty: service ? 0 : Number(row.quantity ?? '0'),
         rt: rate(row.ratePercentTimes100),
         txval: rupees(row.amounts.taxableValue),
         iamt: rupees(row.amounts.igst),
         camt: rupees(row.amounts.cgst),
         samt: rupees(row.amounts.sgst),
         csamt: rupees(row.amounts.cess),
-      })),
+      };
+    });
+    const b2bHsn = gstr1.hsn.filter((row) => row.supplyTo === 'B2B');
+    const b2cHsn = gstr1.hsn.filter((row) => row.supplyTo === 'B2C');
+    file['hsn'] = {
+      ...(b2bHsn.length === 0 ? {} : { hsn_b2b: hsnRows(b2bHsn) }),
+      ...(b2cHsn.length === 0 ? {} : { hsn_b2c: hsnRows(b2cHsn) }),
     };
   }
 
   if (gstr1.documents.length > 0) {
     file['doc_issue'] = {
-      doc_det: gstr1.documents.map((series, index) => ({
-        doc_num: index + 1,
+      // Issue #286 — `doc_num` is the portal's fixed code for the kind of paper, not a counter.
+      doc_det: gstr1.documents.map((series) => ({
+        doc_num: DOCUMENT_CODES[series.kind],
         doc_typ: documentTypeName(series.kind),
         docs: [{ num: 1, from: series.from, to: series.to, totnum: series.total, cancel: series.cancelled, net_issue: series.issued }],
       })),
@@ -264,14 +341,50 @@ const nilSupplyType = (row: Gstr1Row): string => {
   return `${interState ? 'INTER' : 'INTRA'}${registered ? 'B2B' : 'B2C'}`;
 };
 
-const documentTypeName = (kind: Gstr1Row['documentKind'] | 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'ADVANCE_RECEIPT' | 'REFUND_VOUCHER'): string => {
+/**
+ * GSTR-1 table 13's fixed codes. 2, 3 and 7 (inward invoices from unregistered persons, revised
+ * invoices, payment vouchers) are papers this product does not issue.
+ */
+const DOCUMENT_CODES: Readonly<Record<DocumentSeriesKind, number>> = {
+  INVOICE: 1,
+  DEBIT_NOTE: 4,
+  CREDIT_NOTE: 5,
+  ADVANCE_RECEIPT: 6,
+  REFUND_VOUCHER: 8,
+  DELIVERY_CHALLAN_JOB_WORK: 9,
+  DELIVERY_CHALLAN_APPROVAL: 10,
+  DELIVERY_CHALLAN_LIQUID_GAS: 11,
+  DELIVERY_CHALLAN_OTHER: 12,
+};
+
+const documentTypeName = (kind: DocumentSeriesKind): string => {
   switch (kind) {
     case 'CREDIT_NOTE': return 'Credit Note';
     case 'DEBIT_NOTE': return 'Debit Note';
     case 'ADVANCE_RECEIPT': return 'Receipt Voucher';
     case 'REFUND_VOUCHER': return 'Refund Voucher';
+    case 'DELIVERY_CHALLAN_JOB_WORK': return 'Delivery Challan for job work';
+    case 'DELIVERY_CHALLAN_APPROVAL': return 'Delivery Challan for supply on approval';
+    case 'DELIVERY_CHALLAN_LIQUID_GAS': return 'Delivery Challan in case of liquid gas';
+    case 'DELIVERY_CHALLAN_OTHER': return 'Delivery Challan in case other than by way of supply (excluding at S no. 9 to 11)';
     default: return 'Invoices for outward supply';
   }
+};
+
+/** Services codes (SAC) are the 99 chapter. */
+const isServiceCode = (code: string): boolean => code.startsWith('99');
+
+const addTax = (a: TaxAmounts, b: TaxAmounts): TaxAmounts => ({
+  taxableValue: { currency: 'INR', minor: a.taxableValue.minor + b.taxableValue.minor },
+  cgst: { currency: 'INR', minor: a.cgst.minor + b.cgst.minor },
+  sgst: { currency: 'INR', minor: a.sgst.minor + b.sgst.minor },
+  igst: { currency: 'INR', minor: a.igst.minor + b.igst.minor },
+  cess: { currency: 'INR', minor: a.cess.minor + b.cess.minor },
+});
+
+const absoluteTax = (amounts: TaxAmounts): TaxAmounts => {
+  const absolute = (value: Money): Money => ({ currency: 'INR', minor: value.minor < 0n ? -value.minor : value.minor });
+  return { taxableValue: absolute(amounts.taxableValue), cgst: absolute(amounts.cgst), sgst: absolute(amounts.sgst), igst: absolute(amounts.igst), cess: absolute(amounts.cess) };
 };
 
 /**
@@ -314,7 +427,13 @@ export const toGstr3bJson = (gstr3b: Gstr3bReturn): Record<string, unknown> => {
       osup_zero: supply(box('3.1(b)')),
       osup_nil_exmp: { txval: rupees(box('3.1(c)').taxableValue) },
       isup_rev: supply(box('3.1(d)')),
-      osup_nongst: { txval: 0 },
+      osup_nongst: { txval: rupees(box('3.1(e)').taxableValue) },
+    },
+    // Issue #286 — table 3.1.1, supplies through an e-commerce operator under section 9(5). This
+    // product sells through none, so both rows are written as nothing rather than left out.
+    eco_dtls: {
+      eco_sup: { txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 },
+      eco_reg_sup: { txval: 0 },
     },
     inter_sup: {
       unreg_details: gstr3b.interStateToUnregistered.map((entry) => ({
@@ -333,7 +452,12 @@ export const toGstr3bJson = (gstr3b: Gstr3bReturn): Record<string, unknown> => {
       itc_net: itc(creditBox('4C')),
     },
     inward_sup: {
-      isup_details: [{ ty: 'GST', inter: 0, intra: rupees(gstr3b.exemptInwardValue) }],
+      // Issue #286 — table 5 has two rows. Purchases outside GST are not recorded separately here,
+      // so the NONGST row is written as nothing, not left out.
+      isup_details: [
+        { ty: 'GST', inter: 0, intra: rupees(gstr3b.exemptInwardValue) },
+        { ty: 'NONGST', inter: 0, intra: 0 },
+      ],
     },
   };
 };

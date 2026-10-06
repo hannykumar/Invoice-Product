@@ -87,8 +87,9 @@ test('the supplier\'s bill in 2B and no credit note yet: ₹576 comes off this m
     note.sentence,
     'You sent 50 KGS back to Shree Ram Steels Private Limited against bill SRS-101. ₹576.00 of credit comes off this month. Ask them for their credit note.',
   );
-  assert.equal(workspace.returnLinkage.allOtherItc, 5760);
-  assert.equal(workspace.returnLinkage.reversedItc, 576);
+  // Issue #286 — the ₹576 comes off 4(A)(5), as GSTR-2B nets it, not through 4(B).
+  assert.equal(workspace.returnLinkage.allOtherItc, 5184);
+  assert.equal(workspace.returnLinkage.reversedItc, 0);
 
   const gst = await application.gstReturnWorkspace(actor, { period: MONTH });
   const igst: any = gst.gstr3b.heads.find((head: any) => head.head === 'IGST');

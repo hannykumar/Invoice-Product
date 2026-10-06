@@ -14,6 +14,7 @@ import type { CompanyId, IsoDate } from '@invoice/kernel';
 import type { BookTaxTotals } from './reconcile.ts';
 import type {
   InwardTaxSummary,
+  NumberedDocument,
   OutwardDocument,
   ReturnPreparation,
   TaxPeriod,
@@ -37,6 +38,11 @@ export interface OutwardSupplyPort {
     companyId: CompanyId,
     period: TaxPeriod,
   ): Promise<readonly { readonly kind: OutwardDocument['kind']; readonly number: string }[]>;
+  /**
+   * Issue #286 — numbered papers that carry nothing onto the return but are counted in GSTR-1 table
+   * 13: receipt vouchers for goods advances, and delivery challans. Optional; absent counts none.
+   */
+  otherNumbersFor?(companyId: CompanyId, period: TaxPeriod): Promise<readonly NumberedDocument[]>;
 }
 
 /**

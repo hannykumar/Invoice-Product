@@ -64,10 +64,11 @@ test('a bill claimed in April and goods sent back in May: ₹576 comes off May, 
   await service.claimPeriod(owner, APRIL);
   const may = await service.workspace(owner, MAY);
   assert.equal(totalTaxOf(may.claimable).minor, -57_600n, 'April took ₹5,760; May gives ₹576 back');
-  assert.equal(totalTaxOf(may.returnLinkage.reversedItc).minor, 57_600n);
+  // Issue #286 — it comes off 4(A)(5), as GSTR-2B nets it.
+  assert.equal(totalTaxOf(may.returnLinkage.allOtherItc).minor, -57_600n);
   await service.claimPeriod(owner, MAY);
   const june = await service.workspace(owner, taxPeriod('2026-06'));
-  assert.equal(totalTaxOf(june.returnLinkage.reversedItc).minor, 0n, 'reduced once, not again in June');
+  assert.equal(totalTaxOf(june.returnLinkage.allOtherItc).minor, 0n, 'reduced once, not again in June');
 });
 
 test('the return waits with a bill whose credit is held back, and follows it onto the return', async () => {

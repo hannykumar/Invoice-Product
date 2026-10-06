@@ -57,8 +57,10 @@ const line = (
   sources: readonly SourceRef[],
 ): Gstr3bLine => ({ boxId, label: { 'en-IN': english, 'hi-IN': hindi }, amounts, sources });
 
+// Issue #286 — an advance used against this month's bill was already taxed when it arrived, so it
+// comes off what is owed now (the bill itself is counted in full).
 const signed = (document: OutwardDocument, amounts: TaxAmounts): TaxAmounts =>
-  document.kind === 'CREDIT_NOTE' || document.kind === 'REFUND_VOUCHER' ? negateAmounts(amounts) : amounts;
+  document.kind === 'CREDIT_NOTE' || document.kind === 'REFUND_VOUCHER' || document.kind === 'ADVANCE_ADJUSTED' ? negateAmounts(amounts) : amounts;
 
 const documentAmounts = (document: OutwardDocument): TaxAmounts =>
   signed(document, sumAmounts(document.lines.map((l) => l.amounts)));
@@ -74,10 +76,12 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
   let taxable = emptyAmounts();
   let zeroRated = emptyAmounts();
   let nilExempt = emptyAmounts();
+  let nonGst = emptyAmounts();
   let reverseChargeOutward = emptyAmounts();
   const taxableSources: SourceRef[] = [];
   const zeroRatedSources: SourceRef[] = [];
   const nilExemptSources: SourceRef[] = [];
+  const nonGstSources: SourceRef[] = [];
   const reverseChargeSources: SourceRef[] = [];
 
   /** Table 3.2: of the consumer sales, how much went to each other state. */
@@ -87,7 +91,11 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
     const amounts = documentAmounts(document);
     const source = sourceRefOf(document);
 
-    if (carriesNoTax(document.treatment)) {
+    if (document.treatment === 'NON_GST') {
+      // Issue #286 — outside GST altogether is its own line, 3.1(e), not part of nil and exempt.
+      nonGst = addAmounts(nonGst, amounts);
+      nonGstSources.push(source);
+    } else if (carriesNoTax(document.treatment)) {
       nilExempt = addAmounts(nilExempt, amounts);
       nilExemptSources.push(source);
     } else if (isExport(document.treatment) || document.treatment === 'SEZ_WITH_TAX' || document.treatment === 'SEZ_WITHOUT_TAX') {
@@ -118,9 +126,12 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
   const outward: Gstr3bLine[] = [
     line('3.1(a)', 'Ordinary sales you charged GST on', 'Aam bikri jis par aapne GST liya', taxable, taxableSources),
     line('3.1(b)', 'Sales outside India and to special economic zones', 'India ke bahar aur special economic zone ki bikri', zeroRated, zeroRatedSources),
-    line('3.1(c)', 'Sales that carried no GST', 'Bina GST wali bikri', nilExempt, nilExemptSources),
+    line('3.1(c)', 'Sales that carried no GST (nil-rated or exempt)', 'Bina GST wali bikri (nil ya exempt)', nilExempt, nilExemptSources),
     line('3.1(d)', 'Purchases where you owe the tax yourself', 'Kharid jis par tax aapko hi bharna hai', input.inward.reverseChargeLiability, input.inward.contributions),
-    line('3.1(e)', 'Sales where the buyer pays the tax', 'Bikri jis par tax buyer bharega', reverseChargeOutward, reverseChargeSources),
+    // Issue #286 — 3.1(e) on the form is supplies outside GST altogether. It had been labelled
+    // "the buyer pays the tax", which is a different thing with no box of its own in 3.1.
+    line('3.1(e)', 'Sales outside GST altogether', 'GST ke bahar ki bikri', nonGst, nonGstSources),
+    line('RCM-OUT', 'Sales where the buyer pays the tax (for your record: the buyer reports this tax, not you)', 'Bikri jis par tax buyer bharega (aapke record ke liye: yeh tax buyer report karta hai)', reverseChargeOutward, reverseChargeSources),
   ];
 
   const availableItc = sumAmounts([input.inward.allOtherItc, input.inward.reverseChargeItc, input.inward.importItc]);
