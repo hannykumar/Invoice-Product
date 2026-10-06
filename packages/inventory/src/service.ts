@@ -348,7 +348,15 @@ export class InventoryService {
    */
   async reserve(
     actor: ActorContext,
-    command: { documentId: string; documentDate: IsoDate; lines: readonly ReserveLine[]; hold?: boolean },
+    command: {
+      documentId: string; documentDate: IsoDate; lines: readonly ReserveLine[]; hold?: boolean;
+      /**
+       * Issue #290 — when the hold ends. A draft bill's hold lapses after `reservationMinutes`; goods
+       * that left on a delivery challan are out until the challan is billed or cancelled, so a
+       * challan passes a far-off date rather than letting a timer put them back on sale.
+       */
+      holdUntil?: string;
+    },
   ): Promise<ReserveResult> {
     this.#permissions.require(actor, INVENTORY_PERMISSIONS.move, 'hold stock for a bill');
     const hold = command.hold !== false;
@@ -410,7 +418,7 @@ export class InventoryService {
           state: 'HELD',
           createdBy: actor.userId,
           createdAt: at.toISOString(),
-          expiresAt: new Date(at.getTime() + this.#policy.reservationMinutes * 60_000).toISOString(),
+          expiresAt: command.holdUntil ?? new Date(at.getTime() + this.#policy.reservationMinutes * 60_000).toISOString(),
           settledAt: null,
         });
       }

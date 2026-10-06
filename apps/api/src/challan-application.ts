@@ -49,6 +49,38 @@ export interface ChallanDeskConfig {
   readonly gstin: string;
 }
 
+/**
+ * Issue #290 — what the challan desk needs from the rest of the shop. Set once the shop is built;
+ * the defaults keep a challan desk working on its own, as the older tests build it.
+ */
+/** A challan before it has a number (the preview), or after. */
+export type ChallanFacts = Pick<DeliveryChallan, 'lines' | 'partyId' | 'documentDate' | 'deliveryStateCode' | 'reason'> & { readonly id?: string; readonly number?: string };
+
+export interface ChallanHooks {
+  /** `null` when every line is in the godown, or the refusal sentence when one is short. */
+  check(actor: ActorContext, challan: ChallanFacts): Promise<string | null>;
+  /** Holds the challan's goods so nothing else can sell them, until it is billed or cancelled. */
+  hold(actor: ActorContext, challan: DeliveryChallan): Promise<void>;
+  release(actor: ActorContext, challanId: string): Promise<void>;
+  /** Whether the movement needs an e-way bill, by the same rules a sale is judged on. */
+  eway(challan: ChallanFacts): { readonly outcome: 'REQUIRED' | 'NOT_REQUIRED'; readonly reason: string; readonly ruleId: string } | null;
+}
+
+const NO_HOOKS: ChallanHooks = {
+  async check() { return null; },
+  async hold() {},
+  async release() {},
+  eway() { return null; },
+};
+
+/** Supply on approval must be billed within six months of the goods leaving (CGST s.31(7)). */
+const APPROVAL_MONTHS = 6;
+const addMonths = (date: string, months: number): string => {
+  const at = new Date(`${date}T00:00:00Z`);
+  at.setUTCMonth(at.getUTCMonth() + months);
+  return at.toISOString().slice(0, 10);
+};
+
 /** What is frozen onto a challan when it is issued, besides the challan itself. */
 interface PrintFacts {
   readonly consignee: RenderableParty;
@@ -60,6 +92,7 @@ export class ChallanDesk {
   readonly #config: ChallanDeskConfig;
   readonly #service: ChallanService;
   readonly #facts = new Map<string, PrintFacts>();
+  hooks: ChallanHooks = NO_HOOKS;
 
   constructor(config: ChallanDeskConfig, service: ChallanService) {
     this.#config = config;
@@ -132,8 +165,26 @@ export class ChallanDesk {
       };
     }
     const c = working.challan;
+    // Issue #290 — the goods have to be in the godown to leave on a challan.
+    const short = await this.hooks.check(actor, c);
+    if (short !== null) {
+      return {
+        state: 'problems' as const,
+        title: 'This challan cannot be issued yet',
+        message: 'Everything stopping it is listed below. Nothing was saved and no number was used.',
+        problems: [{ code: 'CHALLAN_STOCK_NOT_ENOUGH', message: short }],
+      };
+    }
+    const eway = this.hooks.eway(c);
     return {
       state: 'preview' as const,
+      // Issue #290 — Rule 138 applies to goods moving on a challan as much as on a bill.
+      ewayBill: eway === null ? null : {
+        needed: eway.outcome === 'REQUIRED',
+        message: eway.outcome === 'REQUIRED' ? 'This consignment needs an e-way bill before the vehicle leaves.' : 'No e-way bill is needed for this consignment.',
+        reason: eway.reason,
+        ruleId: eway.ruleId,
+      },
       title: rule.showsTax ? 'Challan checked — tax will show on it' : 'Challan checked — no tax on it',
       // Two different provisions, named separately: the one that allows this movement on a challan,
       // and Rule 55(1)(vii), which decides whether the tax prints on it.
@@ -161,10 +212,18 @@ export class ChallanDesk {
     // Issue #180 — checked first, so a challan number is never spent on a refusal.
     requireIssuable(this.#config.companyId);
     const consignee = this.#consigneeBlock(input);
+    // Issue #290 — refused before a number is used when the goods are not there to send.
+    const checked = await this.#service.preview(actor, this.#input(input));
+    if (checked.ok) {
+      const short = await this.hooks.check(actor, checked.challan);
+      if (short !== null) throw invalid('CHALLAN_STOCK_NOT_ENOUGH', short);
+    }
     const challan = await this.#service.issue(actor, {
       idempotencyKey: `web-challan:${String(input.reference || crypto.randomUUID())}`,
       input: this.#input(input),
     });
+    // Held from the moment it is issued: the goods are out, so nobody else may sell them.
+    if (challan.state === 'ISSUED') await this.hooks.hold(actor, challan);
     if (!this.#facts.has(challan.id)) {
       const template = templateById('india-standard');
       if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
@@ -174,7 +233,14 @@ export class ChallanDesk {
         snapshot: captureSnapshot(template, 'en-IN', challan.createdAt.slice(0, 10)),
       });
     }
-    return { state: 'recorded' as const, title: 'Challan issued', message: `${challan.number} was issued. The goods may move on it.`, challan: this.#json(challan) };
+    const eway = challan.state === 'ISSUED' ? this.hooks.eway(challan) : null;
+    return {
+      state: 'recorded' as const, title: 'Challan issued',
+      message: `${challan.number} was issued. The goods may move on it, and they are kept off sale until it is billed or cancelled.`,
+      challan: this.#json(challan),
+      // Issue #290 — offered on the spot, as on a bill (#240).
+      ewayBill: eway?.outcome === 'REQUIRED' ? { needed: true, message: 'This consignment needs an e-way bill before the vehicle leaves.', reason: eway.reason } : null,
+    };
   }
 
   async list(actor: ActorContext) {
@@ -198,7 +264,37 @@ export class ChallanDesk {
       ewayBill: c.ewayBill === null ? null : { number: c.ewayBill.number, vehicle: c.ewayBill.vehicleNumber, source: c.ewayBill.source },
       invoice: c.invoice === null ? null : { number: c.invoice.invoiceNumber, date: c.invoice.invoiceDate, differences: c.invoice.differences },
       cancelReason: c.cancelReason,
+      // Issue #290 — goods sent on approval have to be billed within six months of leaving.
+      billBy: c.reason === 'SUPPLY_ON_APPROVAL' && c.state === 'ISSUED' ? addMonths(c.documentDate, APPROVAL_MONTHS) : null,
+      lines: c.lines.map((l) => ({ itemId: l.itemId, item: l.itemName, quantity: (Number(l.quantity.scaled) / 1_000_000).toString(), unit: l.quantity.unit, rate: jsonAmount(l.unitPrice.minor) })),
+      partyId: String(c.partyId),
     };
+  }
+
+  /**
+   * Issue #290 — issued challans still holding goods of this item, for the sale refusal to name.
+   * Billed and cancelled challans hold nothing.
+   */
+  async outOnChallans(actor: ActorContext, itemId: string): Promise<{ number: string; quantity: string; unit: string; partyId: string }[]> {
+    return (await this.#service.list(actor, { state: 'ISSUED' }))
+      .flatMap((c) => c.lines.filter((l) => l.itemId === itemId).map((l) => ({
+        number: c.number, quantity: (Number(l.quantity.scaled) / 1_000_000).toString(), unit: l.quantity.unit, partyId: String(c.partyId),
+      })));
+  }
+
+  /** Issue #290 — approval challans whose six months end within `days`, or have ended. */
+  async approvalsDue(actor: ActorContext, today: string, days = 30) {
+    const soon = new Date(`${today}T00:00:00Z`);
+    soon.setUTCDate(soon.getUTCDate() + days);
+    const horizon = soon.toISOString().slice(0, 10);
+    return (await this.#service.list(actor, { state: 'ISSUED' }))
+      .filter((c) => c.reason === 'SUPPLY_ON_APPROVAL' && addMonths(c.documentDate, APPROVAL_MONTHS) <= horizon)
+      .map((c) => ({ id: c.id, number: c.number, billBy: addMonths(c.documentDate, APPROVAL_MONTHS), overdue: addMonths(c.documentDate, APPROVAL_MONTHS) < today }));
+  }
+
+  /** Issue #290 — the challan itself, for billing it. */
+  async get(actor: ActorContext, id: string): Promise<DeliveryChallan> {
+    return this.#require(actor, id);
   }
 
   async #require(actor: ActorContext, id: string): Promise<DeliveryChallan> {
@@ -258,6 +354,8 @@ export class ChallanDesk {
 
   async linkInvoice(actor: ActorContext, input: Record<string, unknown>) {
     const challan = await this.#service.linkInvoice(actor, { challanId: String(input.challan ?? ''), invoiceId: String(input.invoice ?? '') });
+    // Issue #290 — the bill took the goods out of stock itself, so the challan stops holding them.
+    await this.hooks.release(actor, challan.id);
     const differences = challan.invoice?.differences ?? [];
     return {
       state: 'recorded' as const,
@@ -274,6 +372,8 @@ export class ChallanDesk {
       reason: String(input.reason ?? ''),
       ewayBillCancelledOnPortal: input.ewayBillCancelledOnPortal === true || input.ewayBillCancelledOnPortal === 'yes',
     });
+    // Issue #290 — a cancelled challan sent nothing, so its goods are on sale again.
+    await this.hooks.release(actor, challan.id);
     return { state: 'recorded' as const, title: 'Challan cancelled', message: `${challan.number} is cancelled. Its number stays used, so the series has no gap.`, challan: this.#json(challan) };
   }
 

@@ -37,7 +37,7 @@ export type HomeAction =
 
 export interface HomeTask {
   readonly id: string;
-  readonly kind: 'EWAY' | 'EINVOICE' | 'GST_RETURN' | 'LATE_CUSTOMERS' | 'STOCK' | 'TURNOVER';
+  readonly kind: 'EWAY' | 'EINVOICE' | 'GST_RETURN' | 'LATE_CUSTOMERS' | 'STOCK' | 'TURNOVER' | 'CHALLAN';
   /** Lower is more urgent; Home lists them in this order. */
   readonly rank: number;
   readonly title: Bilingual;
@@ -207,6 +207,23 @@ export function stockTask(low: readonly { readonly itemId: string; readonly name
       : say(`${left(first, 'en-IN')}, and ${more} more ${more === 1 ? 'item' : 'items'} running low`, `${left(first, 'hi-IN')}, और ${more} सामान कम`),
     // One item: its purchase bill. Several: the item list, where every stock figure is.
     action: canAct ? { label: say('Order', 'मँगाइए'), open: { view: more === 0 ? 'purchase' : 'items' } } : null,
+  };
+}
+
+/**
+ * Issue #290 — goods sent on approval must be billed within six months of leaving (CGST s.31(7)).
+ * Said a month ahead, and every day after the date passes.
+ */
+export function approvalChallanTask(challan: { readonly id: string; readonly number: string; readonly billBy: string; readonly overdue: boolean }, canAct: boolean): HomeTask {
+  const [y, m, d] = challan.billBy.split('-');
+  const date = `${Number(d)}/${Number(m)}/${y}`;
+  return {
+    id: `challan-approval:${challan.id}`, kind: 'CHALLAN', rank: challan.overdue ? 15 : 35,
+    title: challan.overdue
+      ? say(`Goods sent on approval on ${challan.number} had to be billed by ${date}. Make the bill now, or record that they came back`,
+        `${challan.number} पर अप्रूवल पर भेजे माल का बिल ${date} तक बनना था। अभी बिल बनाइए, या लिखिए कि माल वापस आ गया`)
+      : say(`Goods sent on approval on ${challan.number} must be billed by ${date}`, `${challan.number} पर अप्रूवल पर भेजे माल का बिल ${date} तक बनाना है`),
+    action: canAct ? { label: say('Open', 'खोलिए'), open: { view: 'challan' } } : null,
   };
 }
 

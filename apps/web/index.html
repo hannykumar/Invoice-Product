@@ -618,6 +618,11 @@
               <div><h2 id="challan-print-title">—</h2></div>
               <button type="button" class="primary-button" id="challan-print" data-i18n="printChallan"></button>
             </div>
+            <!-- Issue #290 — bill the goods a challan sent, straight from the challan. -->
+            <div id="challan-bill-panel" class="form-panel" hidden>
+              <h2 data-i18n="billChallanTitle"></h2><p id="challan-bill-help"></p>
+              <button type="button" class="primary-button wide" id="challan-bill" data-i18n="billChallan"></button>
+            </div>
             <form id="challan-link-form" class="form-panel" hidden>
               <h2 data-i18n="linkInvoiceTitle"></h2><p data-i18n="linkInvoiceHelp"></p>
               <div class="field-grid"><label class="full-field"><span data-i18n="whichBill"></span><select name="invoice" id="challan-invoices" required></select></label></div>
