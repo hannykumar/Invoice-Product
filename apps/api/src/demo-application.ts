@@ -54,7 +54,7 @@ import {
   type DeliveryDetails,
 } from './delivery-application.ts';
 import {
-  billingAddressOf,
+  billingAddressOf, suppliers,
   catalogueTaxReader,
   customers,
   createCustomer,
@@ -4216,24 +4216,40 @@ export class DemoApplication {
     const bill = note.kind === 'SALES_RETURN' ? this.invoicePrints.get(note.originalDocument.id) : undefined;
     const original = bill !== undefined
       ? noteOriginalFromInvoice(bill.document)
-      : { counterparty: await this.notePartyPrint(note), placeOfSupplyStateCode: null, placeOfSupplyStateName: null };
+      : await this.noteOriginalFromPurchase(note);
     this.notePrints.set(note.id, {
       document: toCreditNoteDocument(note, original, { seller: us.seller, logoDataUri: branding.logoDataUri, signatureDataUri: us.signatureDataUri }),
       snapshot: brandedSnapshot(template, 'en-IN', String(note.documentDate), branding),
     });
   }
 
-  /** The other party when there is no frozen bill to copy it from: a supplier, or an old bill. */
-  private async notePartyPrint(note: ReturnNote): Promise<RenderableParty> {
+  /**
+   * The other party when there is no frozen bill to copy it from: a supplier, or an old bill.
+   *
+   * Issue #291 — Rule 53(1A) asks a debit note for the supplier's name, address and GSTIN. Since
+   * #228 the supplier is a master-data record with its billing address and GSTIN, so they are read
+   * from there. The place of supply is the original purchase bill's: the goods were delivered to our
+   * own registered state, wherever the supplier sits.
+   */
+  private async noteOriginalFromPurchase(note: ReturnNote): Promise<{ counterparty: RenderableParty; placeOfSupplyStateCode: string | null; placeOfSupplyStateName: string | null }> {
     try {
-      return customerPrint(this.config.companyId, String(note.partyId));
+      return { counterparty: customerPrint(this.config.companyId, String(note.partyId)), placeOfSupplyStateCode: null, placeOfSupplyStateName: null };
     } catch {
-      // A supplier: the name as it stands on their bill. Their address and GSTIN are printed once the
-      // supplier record carries them; nothing is invented in the meantime.
       const bill = note.kind === 'PURCHASE_RETURN' ? await this.shop.bills.findById(note.companyId, note.originalDocument.id) : null;
-      // The state is known only when the supplier's bill was inside our own state.
-      const state = bill?.tax.intraState === true ? this.config.gstin.slice(0, 2) : '';
-      return { name: bill?.supplierName ?? String(note.partyId), addressLines: [], gstin: null, stateCode: state, stateName: state === '' ? '' : STATE_NAMES[state] ?? state };
+      const supplierId = String(bill?.supplierPartyId ?? note.partyId);
+      const address = billingAddressOf(this.config.companyId, supplierId);
+      const ours = this.config.gstin.slice(0, 2);
+      const supplierState = address?.stateCode ?? (bill?.tax.intraState === true ? ours : '');
+      const counterparty: RenderableParty = {
+        name: bill?.supplierName ?? suppliers(this.config.companyId).find((party) => party.id === supplierId)?.legalName ?? supplierId,
+        addressLines: address === null ? [] : [address.line1, ...(address.line2 === undefined ? [] : [address.line2]), `${address.city} ${address.pincode}`.trim()].filter((line) => line !== ''),
+        gstin: address?.gstin ?? null,
+        stateCode: supplierState,
+        stateName: supplierState === '' ? '' : STATE_NAMES[supplierState] ?? supplierState,
+      };
+      return bill === null
+        ? { counterparty, placeOfSupplyStateCode: null, placeOfSupplyStateName: null }
+        : { counterparty, placeOfSupplyStateCode: ours, placeOfSupplyStateName: STATE_NAMES[ours] ?? ours };
     }
   }
 

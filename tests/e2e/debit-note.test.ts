@@ -44,3 +44,22 @@ test('a purchase return prints as a Debit Note against the supplier invoice', as
   assert.match(visible, /Total Debited ₹7,552\.00/);
   assert.ok(!visible.includes('()'), 'no empty state brackets for a supplier whose state is not known');
 });
+
+test('issue #291 — the debit note carries the supplier\'s address, GSTIN and the place of supply', async () => {
+  const shop = await makeBusiness();
+  const { bill } = await shop.posting.post(shop.actor, purchase({ id: 'dn291-buy', sourceDocumentId: 'dn291-src' }), 'dn291:purchase');
+  const { note } = await shop.returns.postPurchase(shop.actor, {
+    idempotencyKey: 'dn291:return', originalBillId: bill.id, documentDate: isoDate('2026-08-30'),
+    reason: 'Rusted',
+    lines: [{ originalLineId: '1', quantity: quantityFromString('100', 'KGS'), disposition: 'ACCEPTED', warehouseId: 'wh-main' }],
+  });
+  const document = toCreditNoteDocument(note, {
+    counterparty: { name: 'Shree Ram Steels Private Limited', addressLines: ['Plot 7, MIDC Taloja', 'Navi Mumbai 410208'], gstin: '27AAECS5678D1Z4', stateCode: '27', stateName: 'Maharashtra' },
+    placeOfSupplyStateCode: '29',
+    placeOfSupplyStateName: 'Karnataka',
+  }, { seller: { name: 'Bengaluru Steel Traders', addressLines: ['14, Rajajinagar Industrial Estate'], gstin: '29AAAAA0000A1ZY', stateCode: '29', stateName: 'Karnataka' } });
+  const visible = text(renderCreditNote(document, captureSnapshot(templateById('india-standard') as TemplateDefinition, 'en-IN', '2026-08-30'), { format: 'A4', locale: 'en-IN' }));
+  assert.ok(visible.includes('Plot 7, MIDC Taloja') && visible.includes('Navi Mumbai 410208'), 'the address');
+  assert.ok(visible.includes('27AAECS5678D1Z4'), 'the GSTIN');
+  assert.match(visible, /Place of Supply Karnataka \(29\)/i, 'the place of supply');
+});
