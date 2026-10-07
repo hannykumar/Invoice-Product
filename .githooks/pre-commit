@@ -1,0 +1,9 @@
+#!/bin/sh
+# Blocks a commit that adds a secret (#351). Installed by `npm install` (core.hooksPath).
+# CI runs the same scan, so a commit made without gitleaks is still caught before merge.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed, so this commit was not checked for secrets." >&2
+  echo "pre-commit: install it (brew install gitleaks) — CI will check it either way." >&2
+  exit 0
+fi
+exec gitleaks git --pre-commit --staged --redact --no-banner .
