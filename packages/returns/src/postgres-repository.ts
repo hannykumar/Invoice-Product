@@ -29,36 +29,36 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
 
   constructor(store: PostgresLedgerStore) { this.#store = store; }
 
-  insert(note: ReturnNote): Promise<void> {
-    return this.#store.withSql(note.companyId, async (sql) => {
-      try {
-        await sql.query(
-          `INSERT INTO return_notes (id, company_id, kind, number, document_date, original_document_id, original_document_number,
-             original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status, created_by, created_at,
-             idempotency_key, summary, supplier_credit_note_number, supplier_credit_note_date)
-           VALUES (${placeholders(1, 27)})`,
-          [note.id, note.companyId, note.kind, note.number, note.documentDate, note.originalDocument.id, note.originalDocument.number,
-            note.originalDocument.date, note.partyId, note.reason, ...amountValues(note.totals), note.voucherId, note.complianceStatus,
-            note.createdBy, note.createdAt, note.idempotencyKey, note.summary,
-            note.supplierCreditNote?.number ?? null, note.supplierCreditNote?.date ?? null],
-        );
-      } catch (error) {
-        if ((error as { code?: string }).code === '23505') throw conflict('RETURN_NOTE_DUPLICATE', 'This return note has already been recorded.');
-        throw error;
-      }
-      for (const line of note.lines) {
-        await sql.query(
-          `INSERT INTO return_note_lines (return_note_id, company_id, original_line_id, item_id, description, supply_kind, quantity_micro,
-             quantity_unit, disposition, warehouse_id, batch_id, serial_numbers, replacement_serial_numbers, ${amountColumns},
-             hsn_or_sac, rate_percent_times100, unit_price_paise)
-           VALUES (${placeholders(1, 25)})`,
-          [note.id, note.companyId, line.originalLineId, line.itemId, line.description, line.supplyKind, line.quantity.scaled.toString(),
-            line.quantity.unit, line.disposition, line.warehouseId, line.batchId, JSON.stringify(line.serialNumbers),
-            JSON.stringify(line.replacementSerialNumbers), ...amountValues(line.amounts), line.hsnOrSac,
-            line.ratePercentTimes100?.toString() ?? null, line.unitPrice?.minor.toString() ?? null],
-        );
-      }
-    });
+  async insert(note: ReturnNote): Promise<void> {
+    // Issue #363 — saved in the transaction that posts the voucher, never in one of its own.
+    const sql = this.#store.writeSql(note.companyId);
+    try {
+      await sql.query(
+        `INSERT INTO return_notes (id, company_id, kind, number, document_date, original_document_id, original_document_number,
+           original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status, created_by, created_at,
+           idempotency_key, summary, supplier_credit_note_number, supplier_credit_note_date)
+         VALUES (${placeholders(1, 27)})`,
+        [note.id, note.companyId, note.kind, note.number, note.documentDate, note.originalDocument.id, note.originalDocument.number,
+          note.originalDocument.date, note.partyId, note.reason, ...amountValues(note.totals), note.voucherId, note.complianceStatus,
+          note.createdBy, note.createdAt, note.idempotencyKey, note.summary,
+          note.supplierCreditNote?.number ?? null, note.supplierCreditNote?.date ?? null],
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') throw conflict('RETURN_NOTE_DUPLICATE', 'This return note has already been recorded.');
+      throw error;
+    }
+    for (const line of note.lines) {
+      await sql.query(
+        `INSERT INTO return_note_lines (return_note_id, company_id, original_line_id, item_id, description, supply_kind, quantity_micro,
+           quantity_unit, disposition, warehouse_id, batch_id, serial_numbers, replacement_serial_numbers, ${amountColumns},
+           hsn_or_sac, rate_percent_times100, unit_price_paise)
+         VALUES (${placeholders(1, 25)})`,
+        [note.id, note.companyId, line.originalLineId, line.itemId, line.description, line.supplyKind, line.quantity.scaled.toString(),
+          line.quantity.unit, line.disposition, line.warehouseId, line.batchId, JSON.stringify(line.serialNumbers),
+          JSON.stringify(line.replacementSerialNumbers), ...amountValues(line.amounts), line.hsnOrSac,
+          line.ratePercentTimes100?.toString() ?? null, line.unitPrice?.minor.toString() ?? null],
+      );
+    }
   }
 
   async findById(companyId: CompanyId, id: string): Promise<ReturnNote | null> {

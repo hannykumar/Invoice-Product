@@ -75,10 +75,14 @@ export function createDatabase(connectionString = process.env.DATABASE_URL ?? "p
   const run = async <T>(companyId: string | undefined, asUnit: boolean, work: (open: Open | undefined, sql: SqlExecutor) => Promise<T>): Promise<T> => {
     const client: PoolClient = await pool.connect();
     let finished = false;
+    // One connection runs one statement at a time, so reads started together wait their turn.
+    let queue: Promise<unknown> = Promise.resolve();
     const sql: SqlExecutor = {
       async query(text, values) {
         if (finished) throw new PlatformError("UNIT_OF_WORK_ABORTED", "This transaction has already finished, so its connection can no longer be used.");
-        return client.query(text, values as unknown[]);
+        const result = queue.then(() => client.query(text, values as unknown[]));
+        queue = result.catch(() => undefined);
+        return result;
       },
     };
     let broken = false;
