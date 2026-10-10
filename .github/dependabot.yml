@@ -1,5 +1,6 @@
-# Dependency updates (#351). Security updates arrive as soon as an advisory is published;
-# version updates weekly, grouped so they do not swamp the review queue.
+# Version updates (#351): weekly, minor and patch grouped so they do not swamp the review queue;
+# a major version always arrives as its own pull request. Security updates are a separate
+# repository setting ("Dependabot security updates"), not this file.
 version: 2
 updates:
   - package-ecosystem: npm
