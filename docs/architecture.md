@@ -15,15 +15,19 @@ how big it gets. Each decision D1–D13 has its own record in [`docs/decisions/`
   background — sending reminders, making PDFs, retrying government uploads — so the counter never
   waits.
 - **There is one database.** It holds the books, the list of background jobs and the login limits.
-- **Bills are shared on WhatsApp from your own phone**, as today. Our servers do not send your
-  customers' numbers abroad.
+- **Bills and reminders go out on WhatsApp, email and SMS**, as planned. The companies that
+  deliver them see only the message they deliver, and you agree to that first.
+- **Everything in the product plan stays in.** These choices are about the machinery, and none
+  of them removes a feature.
 - **Crash reports go to a service in Europe** with reference numbers only — never names, phone
   numbers or bills.
 - **Nothing you see in the shop changes.** Billing, stock and GST work exactly as before.
 
 **Scope of this document.** These decisions change how Karobar is built underneath, not what it does
-for the shopkeeper. The eight rules, the supported scope and the out-of-scope list in
-[`docs/product/00-principles-and-scope.md`](product/00-principles-and-scope.md) are unchanged.
+for the shopkeeper. The product is defined by the three handbooks
+([GPT 1](gpt1-handbook.md), [GPT 2](gpt2-handbook.md), [GPT 3](gpt3-handbook.md)), `CLAUDE.md` and
+[`docs/product/`](product/00-principles-and-scope.md); nothing here narrows it. A box marked
+"waits for" is built and switches on when the named contract or account exists.
 **Who chose:** the owner did not evaluate the technical choices. The agent chose each on the
 recommendation in #339; any of them is revisited when a reason appears (§9).
 
@@ -46,18 +50,20 @@ flowchart LR
     end
     supa["Supabase Auth<br/>Mumbai ap-south-1<br/>phone OTP + email"]:::vendor
     sms["SMS provider<br/>DLT-registered"]:::vendor
-    mail["Email provider<br/>India-hosted"]:::vendor
-    gsp["GSP / IRP<br/>launch: offline JSON uploaded by user<br/>WhiteBooks adapter in sandbox"]:::vendor
-    ocr["OCR provider<br/>India · not chosen (mock)"]:::vendor
+    mail["Email provider<br/>India preferred"]:::vendor
+    gsp["GSP / IRP<br/>e-invoice · e-way · returns<br/>live when contract #51 is signed"]:::vendor
+    bankfeed["Bank-feed partner<br/>live feeds · waits for a signed partner"]:::vendor
+    ocr["OCR provider<br/>not chosen yet (mock)"]:::vendor
     rzp["Razorpay<br/>Phase 4 · webhooks"]:::vendor
   end
 
-  subgraph OUT["OUTSIDE INDIA (ids only)"]
+  subgraph OUT["OUTSIDE INDIA"]
     sentry["Sentry EU<br/>errors · ids only"]:::vendor
+    wab["WhatsApp Business provider<br/>send and receive · consent + agreement<br/>waits for the business account"]:::vendor
+    ai["Speech / language provider<br/>voice and assistants · not chosen yet"]:::vendor
   end
 
   bank["Bank statement file<br/>uploaded by user"]
-  wa["WhatsApp click-to-chat<br/>from the user's own phone"]
 
   user --> web
   user -->|"HTTPS + session cookie"| api
@@ -65,13 +71,16 @@ flowchart LR
   user -. "sign-in" .-> supa
   supa -->|"SMS hook"| sms
   bank --> user
-  user --> wa
   api --> bouncer --> pg
   worker --> bouncer
   api --> spaces
   worker --> spaces
   worker --> mail
   worker --> gsp
+  worker --> bankfeed
+  worker --> wab
+  wab -->|"signed webhook"| api
+  api --> ai
   worker --> ocr
   api -->|"verify token (JWKS)"| supa
   rzp -->|"signed webhook"| api
@@ -82,7 +91,8 @@ flowchart LR
 ```
 
 A dashed border marks an outside vendor. Everything in the **INDIA** box keeps its data in India.
-Sentry is the only service outside India, and it receives ids only (D13).
+Outside India, Sentry receives ids only; the WhatsApp and speech providers receive only the
+message they must handle, with consent and an agreement (D13).
 
 ## 2. What each box is, and why it is there
 
@@ -96,11 +106,12 @@ Sentry is the only service outside India, and it receives ids only (D13).
 | **Spaces** | File storage for supplier bills, statements and logos. The browser uploads and downloads through short-lived signed links after a permission check. |
 | **Supabase Auth (Mumbai)** | The login service. Sends and checks the OTP and gives the browser a signed token, which our server checks once and swaps for its own session. We store no passwords. |
 | **SMS provider (DLT)** | Delivers the OTP text. Indian rules require the sender and template to be DLT-registered (an owner action). |
-| **Email provider (India)** | Sends bills and reminders by email. In India because emails carry business data. |
-| **GSP / IRP** | The government's e-invoice, e-way and return systems. At launch the user downloads our JSON and uploads it on the portal. The WhiteBooks adapter is sandbox-only until #50 picks a GSP. |
-| **Banks** | No live connection. The user uploads a statement (PDF, Excel or CSV); we read it and match it to the books. |
-| **WhatsApp** | A click-to-chat link that opens WhatsApp on the user's own phone with the bill's message and link. Our servers send nothing to WhatsApp. |
-| **OCR provider** | Reads photos of supplier bills. Must run in India; none chosen yet, a mock stands in. |
+| **Email provider** | Sends bills and reminders by email. India-hosted preferred. |
+| **GSP / IRP** | The licensed gateway to the government's e-invoice, e-way bill and return systems. Built; the sandbox is being wired in (#210) and production switches on when the contract (#51) is signed. Downloading the JSON and uploading it on the portal works meanwhile. |
+| **Bank-feed partner** | Brings in bank transactions automatically, with the business's consent. Built; switches on when a partner is signed. Uploading a statement (PDF, Excel, CSV) works meanwhile. |
+| **WhatsApp Business provider** | Sends bills and reminders and receives supplier bills on WhatsApp. Built behind the messaging adapter; switches on when the business account is approved. The share-from-your-own-phone link works meanwhile. |
+| **Speech / language provider** | Turns speech into text and helps the assistants understand a question. Not chosen yet. It may never decide money or law. |
+| **OCR provider** | Reads photos of supplier bills. None chosen yet; a mock stands in. |
 | **Sentry (EU)** | Collects crash reports. Receives ids and error codes only. |
 | **Razorpay** | Takes subscription payments (Phase 4). Tells us about payments through signed webhooks. |
 
@@ -117,7 +128,7 @@ Sentry is the only service outside India, and it receives ids only (D13).
 | Jobs | Our queue in Postgres (D5) | Redis + BullMQ | A second datastore, and it cannot share a transaction with the bill. |
 | Validation | Zod at the boundary (D4) | Our own validator | More code to own; Zod is small and well known. |
 | Rate limits | Postgres counters (D6) | Redis | One store is enough at ~100 req/s. |
-| Login | Supabase Auth, Mumbai (D1) | Clerk | US-only hosting breaks D13. |
+| Login | Supabase Auth, Mumbai (D1) | Clerk | US-only hosting; the identity store is ours to keep in India (D13). |
 | Hosting | DigitalOcean BLR1 (D3) | AWS Mumbai | More IAM, networking and bill-watching for a small team. |
 | Errors | Sentry EU, ids only (D7) | Self-hosted GlitchTip | One more server to run. |
 | Payments | Razorpay (D9) | Cashfree | Both work; Razorpay's subscription webhooks are better documented. |
@@ -177,6 +188,7 @@ log redaction, privacy export/delete, recovery), and the CLIs `gsp-selection`, `
 | Errors and logs | `console` only | JSON logs with request ids; Sentry EU, ids only | #357, #358 (D7) |
 | Hosting | A laptop | DigitalOcean BLR1, staging and production | #356 (D3) |
 | Payments | Mock | Razorpay, verified webhooks | #346 (D9) |
+| Outside providers (WhatsApp, email, SMS, OCR, speech, GSP, bank feeds, vehicle records) | Built behind adapters; synthetic or sandbox providers at runtime | Real provider behind the same adapter as each contract or account is in place | #51, #210, owner actions |
 
 ---
 
@@ -228,6 +240,7 @@ At 1,000 companies, ~100 req/s festival peak, ~110 GB database and ~275 GB files
 | Email (India) | 50k–400k mails | 10–40 | 850–3,400 |
 | Sentry Team | EU region | 26–40 | 2,200–3,400 |
 | Razorpay | ~2% per payment + GST on the fee; no monthly fee | variable | variable |
+| WhatsApp Business, OCR, speech, GSP, bank feeds | Priced per message, page, call or contract; quotes needed when each is signed | not estimated | not estimated |
 | Domain and TLS | Domain ~₹1,000/year; TLS free | ~1 | ~100 |
 | **Total (excluding Razorpay)** | | **≈ 330–735** | **≈ 28,000–62,500** |
 

@@ -13,6 +13,8 @@
   `packages/*` domain modules, `ops/*` service code and CLIs, `tools/*` scripts.
 - One PostgreSQL database for books, jobs and rate limits; files in private object storage.
 - Hosting DigitalOcean BLR1; login Supabase Auth (Mumbai); errors Sentry EU with ids only;
-  payments Razorpay. Data stays in India; foreign vendors receive ids only.
+  payments Razorpay. What we store stays in India (see decision 0013 for providers).
+- The product is defined by `docs/gpt1-handbook.md`, `docs/gpt2-handbook.md`, `docs/gpt3-handbook.md`,
+  `CLAUDE.md` and `docs/product/`. Architecture and decision records may not narrow it.
 - Architecture: `docs/architecture.md`. Decisions: `docs/decisions/` — read before adding a
   dependency, a vendor or a datastore; a new choice is a new decision record.

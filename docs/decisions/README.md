@@ -4,9 +4,9 @@ One file per decision: Context, Decision, Alternatives, Consequences. A decision
 new record that supersedes the old one, never by editing an accepted record.
 
 **Every record here changes how Karobar is built underneath, not what it does for the
-shopkeeper.** The eight rules, the supported scope and the out-of-scope list in
-[`docs/product/00-principles-and-scope.md`](../product/00-principles-and-scope.md) are unchanged
-by all of them. A decision that would change the product's behaviour or scope is not taken here;
+shopkeeper.** The product is defined by the three handbooks ([GPT 1](../gpt1-handbook.md),
+[GPT 2](../gpt2-handbook.md), [GPT 3](../gpt3-handbook.md)), `CLAUDE.md` and
+[`docs/product/`](../product/00-principles-and-scope.md); none of these records may narrow it. A decision that would change the product's behaviour or scope is not taken here;
 it is raised on #362.
 
 **Who chose.** D8 and D10 are business answers from the owner. Every other record was **chosen by
@@ -28,7 +28,7 @@ reason.
 | D10 | [0010](0010-retention.md) | 8 years from the end of the financial year (legal to confirm) | #352 |
 | D11 | [0011](0011-pen-test.md) | External pen test before the first paying customer | #362 gate |
 | D12 | [0012](0012-offline-billing-and-sync.md) | Device ids, a number series per device, stock allowances per device; build later | #365, #367, #317 |
-| D13 | [0013](0013-data-residency.md) | Books, files, backups and identity in India; foreign vendors get ids only | #352, all vendors |
+| D13 | [0013](0013-data-residency.md) | What we store stays in India; a provider that must process a message or document to do its job is allowed with consent and an agreement; other tools get ids only | #352, #55 |
 
 The unit-of-work decision (one business action = one transaction, transactional outbox) is
 recorded with #363, not here.

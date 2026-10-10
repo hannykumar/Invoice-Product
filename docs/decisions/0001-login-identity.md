@@ -9,8 +9,8 @@
 
 Users are hard-coded in `apps/api/src/runtime.ts` with unsalted SHA-256 passwords. Shopkeepers
 sign in with a phone number; CAs often with email. Phone OTP, email verification, recovery,
-lockout and MFA are exactly what should not be hand-written. D13 requires that personal data —
-and an identity store is nothing but phone numbers and emails — stays in India.
+lockout and MFA are exactly what should not be hand-written. D13 keeps what we store — and the
+identity store is something we keep — in India.
 
 Vendor facts checked on 7 Oct 2026:
 
@@ -43,7 +43,7 @@ Vendor facts checked on 7 Oct 2026:
   and MFA. Kept as the **exit path**.
 - **AWS Cognito, Mumbai.** India region, but awkward to customise and ties us to AWS while hosting
   is on DigitalOcean (D3).
-- **Clerk / Auth0 public cloud.** Best developer experience; data outside India breaks D13.
+- **Clerk / Auth0 public cloud.** Best developer experience; the identity store would sit outside India, against D13 rule 1.
 
 ## Consequences
 
@@ -55,3 +55,12 @@ Vendor facts checked on 7 Oct 2026:
   self-host Supabase's open-source auth server (GoTrue) in BLR1 — same API, no code change.
 - Exit path: export users (Supabase is Postgres underneath) to own accounts.
 - Cost: Supabase Pro ≈ US$25/month plus SMS at about ₹0.15–0.25 per OTP (estimate).
+
+## Checked against the handbooks (10 Oct 2026)
+
+Handbook #3 asks for secure login, session management and recovery, roles and granular
+permissions, invitations, deactivation, access review, and **company and branch** tenancy. This
+record changes only who checks the phone number or email. Memberships, roles, permissions,
+**branch-level access** (`user_branch_access`, `Member.branchIds`), invitations and revocation
+stay in `packages/platform` exactly as built. Handbook #8 and #40 forbid storing portal or bank
+passwords; nothing here stores any password.

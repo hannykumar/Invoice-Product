@@ -10,7 +10,7 @@
 The API logs with `console.log`, has no request id and no error tracker. Sentry stores data only
 in the US or the EU (Frankfurt), never India
 ([Sentry data location](https://www.sentry.help/en/articles/13965013-where-are-your-data-servers-located)).
-D13 allows foreign vendors ids only.
+D13 gives a tool that does not need customer data ids only.
 
 ## Decision
 
@@ -32,3 +32,10 @@ D13 allows foreign vendors ids only.
 - An error reaches the tracker with a readable stack but no names, phone numbers, GSTINs or
   amounts. Debugging uses the ids to look up the record in our own database.
 - Cost: Sentry Team ≈ US$26/month.
+
+## Checked against the handbooks (10 Oct 2026)
+
+Handbook #41 asks for structured logs, metrics, traces, health checks, queue and dead-letter
+visibility, and support access by consent; every issue says "without logging secrets". This
+record adds an error tracker and a log format underneath; the Operations screen, support grants
+and status page from #41 are unchanged.

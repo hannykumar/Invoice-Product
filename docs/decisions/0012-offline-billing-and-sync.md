@@ -71,3 +71,16 @@ reconnect, shown as tasks on Home.
 - Offline GST calculation needs the domain packages to run in the browser; that is #317's work.
 - Revisit if pilot counters find allowances too small; the fallback is "online only for
   stock-tracked items", never negative stock.
+
+## Checked against the handbooks (10 Oct 2026)
+
+- #9 numbers bills "by company/branch/financial year": a device series is one more series of the
+  same kind, checked by the same code. Online numbering is unchanged.
+- #12 and the handbooks' rule list allow negative stock only with an authorised override; the
+  owner later removed the override (#262). The allowance design satisfies both: stock cannot go
+  negative at all.
+- #38 asks for "offline-friendly draft protection where practical": already built (unfinished
+  forms are kept on the device) and unaffected.
+- #26 and #27 require that a retry never creates a second IRN or e-way bill: queued government
+  calls carry the document's idempotency key.
+- Nothing here removes or delays a handbook feature; #317 adds one.
