@@ -97,7 +97,7 @@ jobs:
           {
             echo '### Coverage of packages/*/src'
             echo '```'
-            grep -E 'file +\| line %|all files' coverage.txt | sed 's/^. //'
+            grep -E 'file +\| line %|all files' coverage.txt | sed -E 's/^[^a-z]*//'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

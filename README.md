@@ -1,5 +1,7 @@
 # Invoice Product
 
+[![CI](https://github.com/hannykumar/Invoice-Product/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hannykumar/Invoice-Product/actions/workflows/ci.yml?query=branch%3Amain)
+
 A standalone, India-first accounting, inventory, GST-compliance and business-operations product
 for MSMEs. It is meant to replace an ordinary billing tool, not to plug into one.
 
