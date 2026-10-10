@@ -36,6 +36,12 @@ manager, object store, database backup tool or independent security audit.
 
 1. Production runs with TLS at every network boundary and encrypted PostgreSQL/object-store disks.
 2. Application database roles are not owners and cannot bypass row-level security.
+   Since #368 this is a database fact: migrations run as the owner, and the server connects as a
+   login that is only a member of `invoice_app` (no `DELETE` on financial or audit tables, no
+   `TRUNCATE`, no ownership, `NOBYPASSRLS`). Create the login once per environment with
+   `CREATE ROLE <login> LOGIN PASSWORD '<from the secret manager>' IN ROLE invoice_app;` and put
+   that login, never the owner, in the server's `DATABASE_URL`. See
+   `docs/contracts/database-immutability-v1.md`.
 3. Every request gets company and actor identity from the authenticated session, never request data.
    Production persistence uses `tenantTransaction(companyId, work)`, which sets the transaction-local
    PostgreSQL tenant context consumed by row-level security policies.
