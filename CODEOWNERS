@@ -11,3 +11,9 @@
 /packages/gst/ @hannykumar
 /packages/transport/ @hannykumar
 
+
+# The checks themselves: CI, the commit hook and the secret-scan allowlist (#351)
+/.github/ @hannykumar
+/.githooks/ @hannykumar
+/.gitleaksignore @hannykumar
+/.gitattributes @hannykumar

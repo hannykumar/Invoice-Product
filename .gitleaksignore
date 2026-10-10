@@ -1,0 +1,10 @@
+# Reviewed false positives from the full-history scan (#351). Add a line only after a person has
+# confirmed the match is not a real secret — never to silence a real one.
+# CI reads this file from the branch a pull request merges into, so a new line takes effect only
+# after it has merged: add it in a small pull request of its own, then update the blocked one.
+# A fake Razorpay key the redactor test must reject
+9c5c1546a818a21412017d5b477fa88587d12b88:ops/vendor-onboarding/test/vendor-onboarding.test.ts:generic-api-key:64
+# Error-code names ENCRYPTION_KEY_UNAVAILABLE / ENCRYPTION_KEY_MUST_BE_32_BYTES
+05801206450ff0433f67df5630db5e621741c5b1:ops/security/src/recovery.ts:generic-api-key:123
+# The session-secret placeholder in .env.example
+3641f3f4e7f6f3548ceb4f5cad5ed8127f1f8627:.env.example:generic-api-key:4
