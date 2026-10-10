@@ -1,14 +1,21 @@
-import { createDatabase, type SqlExecutor } from "./database.ts";
+import { createDatabase, type SqlExecutor, type TransactionalExecutor } from "./database.ts";
 import { migrations } from "./migration-definitions.ts";
 import { validateMigrationRegistry } from "./migration-ids.ts";
 
 export async function migrate(executor: SqlExecutor): Promise<string[]> {
   validateMigrationRegistry(migrations);
-  await executor.query("CREATE TABLE IF NOT EXISTS schema_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-  const applied = new Set((await executor.query("SELECT id FROM schema_migrations")).rows.map((row) => String(row.id)));
-  const executed: string[] = [];
-  for (const migration of migrations) if (!applied.has(migration.id)) { await executor.query(migration.up); await executor.query("INSERT INTO schema_migrations (id) VALUES ($1)", [migration.id]); executed.push(migration.id); }
-  return executed;
+  const apply = async (sql: SqlExecutor): Promise<string[]> => {
+    await sql.query("CREATE TABLE IF NOT EXISTS schema_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
+    const applied = new Set((await sql.query("SELECT id FROM schema_migrations")).rows.map((row) => String(row.id)));
+    const executed: string[] = [];
+    for (const migration of migrations) if (!applied.has(migration.id)) { await sql.query(migration.up); await sql.query("INSERT INTO schema_migrations (id) VALUES ($1)", [migration.id]); executed.push(migration.id); }
+    return executed;
+  };
+  // Issue #363 — two servers (or two test files) starting at once must not both apply a migration.
+  // On a real database the run is one transaction behind a lock: the second waits, then finds nothing to do.
+  const transactional = executor as Partial<TransactionalExecutor>;
+  if (typeof transactional.transaction !== "function") return apply(executor);
+  return transactional.transaction(async (sql) => { await sql.query("SELECT pg_advisory_xact_lock(363, 1)"); return apply(sql); });
 }
 export async function rollback(executor: SqlExecutor): Promise<string | null> {
   validateMigrationRegistry(migrations);
