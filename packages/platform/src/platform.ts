@@ -3,8 +3,8 @@ import { PlatformError } from "./types.ts";
 import type { AuditEvent, ApprovalPolicy, CommandRecord, CommandStatus, ExceptionItem, Id, Permission, RequestContext } from "./types.ts";
 import { redactSecrets } from "./credentials.ts";
 
-const riskRank = { low: 0, medium: 1, high: 2 } as const;
-const transitions: Readonly<Record<CommandStatus, readonly CommandStatus[]>> = {
+export const riskRank = { low: 0, medium: 1, high: 2 } as const;
+export const transitions: Readonly<Record<CommandStatus, readonly CommandStatus[]>> = {
   draft: ["submitted", "cancelled"], submitted: ["approved", "rejected", "cancelled"],
   approved: ["finalised", "failed", "cancelled"], rejected: [], finalised: [], failed: ["submitted", "cancelled"], cancelled: [],
 };
@@ -13,8 +13,8 @@ const redactValue = (value: unknown): unknown => {
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, /credential|authorization|cookie|secret|password|token|pin|private.?key|session|raw|content|document|attachment|pdf|bank.?statement/i.test(key) ? "[REDACTED]" : redactValue(item)]));
   return value;
 };
-const redact = (value: Record<string, unknown>): Record<string, unknown> => redactValue(value) as Record<string, unknown>;
-const canonicalJson = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => typeof item === "bigint" ? { $bigint: item.toString() } : item);
+export const redact = (value: Record<string, unknown>): Record<string, unknown> => redactValue(value) as Record<string, unknown>;
+export const canonicalJson = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => typeof item === "bigint" ? { $bigint: item.toString() } : item);
 const clone = <T>(value: T): T => structuredClone(value);
 const freeze = <T>(value: T): T => {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {

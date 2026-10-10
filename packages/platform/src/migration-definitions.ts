@@ -115,6 +115,24 @@ const platformMigrations: readonly Migration[] = [{
       WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
   `,
   down: `DROP TABLE IF EXISTS outbox_messages;`,
+}, {
+  // Issue #364 — the order things were written in, kept by the database. Two audit events or two
+  // comments saved in one transaction share a timestamp, so the timestamp alone cannot order them.
+  id: "20261010T133137619Z_platform_cca2b2c00eb5_platform_core_ordering",
+  up: `
+    ALTER TABLE audit_events ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    CREATE UNIQUE INDEX audit_events_company_seq_idx ON audit_events(company_id, seq);
+    ALTER TABLE exception_comments ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    CREATE INDEX exception_comments_exception_seq_idx ON exception_comments(exception_id, seq);
+    CREATE INDEX sessions_user_idx ON sessions(user_id);
+  `,
+  down: `
+    DROP INDEX IF EXISTS sessions_user_idx;
+    DROP INDEX IF EXISTS exception_comments_exception_seq_idx;
+    ALTER TABLE exception_comments DROP COLUMN IF EXISTS seq;
+    DROP INDEX IF EXISTS audit_events_company_seq_idx;
+    ALTER TABLE audit_events DROP COLUMN IF EXISTS seq;
+  `,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
