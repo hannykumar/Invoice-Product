@@ -1,9 +1,12 @@
 # System design
 
 Who uses Karobar, what it must do, how well it must do it, how big it gets in year one, and what
-it will not do. Written for issue #338 from an interview with the owner on 7 Oct 2026. Product
-rules and workflows are not repeated here; they live in [`docs/product/`](product/README.md) and
-[`CLAUDE.md`](../CLAUDE.md). How the system is built is in `docs/architecture.md` (#339). Each
+it will not do. Written for issue #338 from an interview with the owner on 7 Oct 2026. **What the
+product is** was defined before any work started, in three Delivery Handbooks covering 55 issues:
+[`gpt1-handbook.md`](gpt1-handbook.md), [`gpt2-handbook.md`](gpt2-handbook.md) and
+[`gpt3-handbook.md`](gpt3-handbook.md), together with [`docs/product/`](product/README.md) and
+[`CLAUDE.md`](../CLAUDE.md). Those are the source of scope and are not repeated here. **Everything
+in the 55 issues is in scope**; §10 shows where each one stands. How the system is built is in `docs/architecture.md` (#339). Each
 owner decision is recorded as an ADR in `docs/decisions/`.
 
 Owner decisions recorded here: **D8** (year-one scale and uptime) and **D10** (retention, pending
@@ -13,10 +16,11 @@ legal confirmation).
 the product, how many shops in year one, how long records are kept. Technical choices (login
 provider, hosting, queues, encryption, numbering) were **chosen by the agent on the
 recommendation**; the owner did not evaluate them technically and they are to be revisited if a
-reason appears. Nothing here changes what the product does for the shopkeeper: the eight rules,
-the supported scope and the out-of-scope list in
+reason appears. Nothing here changes what the product does for the shopkeeper: the handbooks, the eight
+rules, the supported scope and the out-of-scope list in
 [`00-principles-and-scope.md`](product/00-principles-and-scope.md) stand exactly as written. This
-document only says how the product is run as a service underneath.
+document only says how the product is run as a service underneath, and it may not narrow the
+product. Where a feature is built but waiting on something, it says what it waits for.
 
 ---
 
@@ -61,7 +65,7 @@ into each client company, usually as Accountant. What makes it work for them:
   at once (`packages/platform/src/auth.ts` already revokes on removal);
 - the company is chosen in the session, never sent by the browser (rule 6).
 
-A CA-paid "practice" plan is out of scope at launch (§8).
+A CA-paid "practice" plan appears in no handbook and is not planned (§8).
 
 ---
 
@@ -70,7 +74,7 @@ A CA-paid "practice" plan is out of scope at launch (§8).
 ```
 login (person) ──< membership (role) >── company ──< branch ──< warehouse
                                             │            └── number series (per branch, per FY)
-                                            └── subscription (one per company)
+                                            └── covered by its owner's subscription (plan sets how many companies)
 ```
 
 - **Company is the isolation boundary.** Every tenant row carries `company_id NOT NULL`, every
@@ -80,42 +84,37 @@ login (person) ──< membership (role) >── company ──< branch ──< 
 - **The active company comes from the session.** Switching company is a server call that checks
   membership and rewrites the session's company; the browser never supplies a company id that the
   server trusts.
-- **Branches** live inside a company: own invoice number series, own godowns, same books. A role
-  applies to the whole company at launch; restricting a user to one branch is out of scope (§8).
-- **One subscription per company** (owner's choice). A person who owns three companies pays for
-  three. *Conflict to resolve:* `packages/subscriptions` today meters `companies` per plan, which
-  implies one subscription covering several companies (§9, Q1).
+- **Branches** live inside a company: own invoice number series, own godowns, same books. A member is
+  given access to **named branches** (handbook #3, least privilege): `user_branch_access` and
+  `Member.branchIds` already exist, the session carries one active branch, and a request for a
+  branch the member was not given is refused. #342 keeps this.
+- **Subscriptions follow handbook #42 as built:** a plan sets how many companies it covers (Free 1,
+  Starter 2, Growth 10) along with invoices, storage and usage. Every plan gets every safety
+  check; limits are on how much, never on what the product will tell you.
 - **Devices** (for offline billing, D12) belong to a company and a branch, are registered by an
   Owner or Admin, and get their own number series. See the D12 ADR.
 
 ---
 
-## 4. Core workflows at launch
+## 4. Core workflows, and what each is waiting for
 
-All five core workflows must be live for the first paying customer, on real persisted data. Step
-by step detail and owning modules are in [`docs/product/02-workflows.md`](product/02-workflows.md);
-this table is the launch cut.
+Every workflow in the handbooks is in scope. Step-by-step detail and owning modules are in
+[`docs/product/02-workflows.md`](product/02-workflows.md). One thing holds all of them back
+today: **the running app keeps data in memory**, so nothing survives a restart until #340 lands.
+Beyond that, the table says what is built and what a part is still waiting for.
 
-| Workflow | Live at launch | Not at launch |
+| Workflow | Built and working | Built, and waiting for |
 | --- | --- | --- |
-| **Sell** | Quotation → bill → PDF → share by the user's own WhatsApp (the existing `wa.me` link) or email; credit notes; returns; branch series | Offline billing (decided in D12, built later under #317) |
-| **Buy** | Inbox (upload, camera, email; WhatsApp intake once a WhatsApp provider is chosen), OCR draft with confidence, validation, duplicate block, PO/GRN matching, posting, debit notes | — |
-| **Pay / collect** | Receipts and payments in every mode, allocation, cheques, advances, reminders by email or a WhatsApp share link the user taps, bank statement import (CSV/PDF/XLSX) and reconciliation | Live bank feeds (account aggregator / bank APIs); initiating payments (never) |
-| **GST return** | GSTR-1 and GSTR-3B prepared from the books, GSTR-2B/IMS import and ITC reconciliation, **manual JSON export** for upload to the portal | Live filing through a GSP |
-| **Stock** | Movements, transfers, adjustments with reasons, batches, valuation, no negative stock | — |
+| **Sell** (#9, #10, #11, #13, #14) | Quotation → bill → PDF; credit notes and returns; branch number series; price and credit checks; typing or speaking a sale in Hindi, English or Hinglish; sharing by email or WhatsApp | **Sending automatically on WhatsApp and email:** built behind the messaging adapter; switches on when a WhatsApp provider and an email provider account are opened (owner action: business verification with Meta). Until then the "share on WhatsApp" tap from the user's own phone works. **Speech-to-text:** waits for a speech provider to be chosen. **Offline billing:** decided in D12, built under #317 |
+| **Buy** (#15–#19) | Inbox by upload, camera, email and WhatsApp; reading the bill with a confidence per field; validation and duplicate block; order / goods-received matching; posting; supplier warnings; debit notes | **Reading bills (OCR)** and **WhatsApp intake:** built behind adapters; switch on when an OCR provider and the WhatsApp provider are chosen. **Live GST-number checks:** wait for the GSP contract (#51) |
+| **Pay / collect** (#20–#24) | Receipts and payments in every mode, allocation, cheques, advances; reminders with opt-out and quiet hours; bank statement import (CSV, PDF, Excel) and reconciliation; live bank feeds with consent, sync and disconnect | **Live bank feeds:** built; switch on when a bank-feed partner is signed (owner action, following #52). Statement upload works meanwhile, as #52 says: launch does not wait for live feeds |
+| **GST** (#25–#33) | GST calculation; e-invoice and e-way bill with offline JSON; GSTR-1 and GSTR-3B; GSTR-2B/IMS reconciliation; compliance calendar; GSP onboarding and filing | **Live IRN, e-way bill and return filing:** built; the sandbox is being wired in under #210; production switches on when the GSP contract (#51) is signed — an owner action. Offline JSON upload works meanwhile |
+| **Stock and transport** (#12, #28, #29, #45) | Movements, transfers, adjustments, batches, valuation, no negative stock; transport details and vehicle suitability; returns | **Vehicle-record lookup:** built; switches on when authorised access to vehicle records is granted (#53) |
+| **Help and assistants** (#34, #46, #47) | Plain-language screens; the knowledge assistant answering from the company's own data and sourced rules; the action agent with preview and approval | **Free-form questions:** the assistant works from rules and tables today; a language-model provider, if added, sits behind the existing port and may never decide money or law |
 
-**Government integrations** (e-invoice IRN, e-way bill, returns) launch on **offline JSON**: the
-product builds the government JSON and the user uploads it on the portal, then records the IRN or
-e-way number back. Live GSP calls switch on behind the existing adapter (`connector-v1`) once #50
-has chosen a GSP; the WhiteBooks sandbox adapter already exists and stays a sandbox until then.
-
-**Messaging:** bills and reminders are shared from the user's own WhatsApp through the click-to-chat
-link the app already builds (`apps/web/done-screen.js`), or by email from an India-hosted
-provider; SMS only for login OTP. All behind `notification-v1`. Sending automatically through the
-WhatsApp Business API was asked for in the interview, but that service is run by Meta outside
-India, so customers' phone numbers and bills would leave India — against the residency rule
-(D13). The safer, simpler option is taken for launch; the Business API is a later business
-decision, flagged on #362, and slots in behind the same adapter without changing any screen.
+**Messaging.** Bills, reminders and alerts go out in-app, by email, by SMS and by WhatsApp, all
+behind `notification-v1` (#14, #23, #39). A provider that has to handle a message to deliver it
+is allowed, with the customer's consent and a processing agreement (D13).
 
 ---
 
@@ -137,7 +136,8 @@ add:
    downloaded through short-lived signed URLs after a permission check, keyed by company.
 6. **Background work** (sending messages, reminders, e-invoice retries, expiry watches, OCR) in a
    separate worker process, from a Postgres-backed queue; every job idempotent (D5).
-7. **Subscriptions** per company, monthly or yearly, with a 14-day trial; Razorpay later (D9,
+7. **Subscriptions** as built in #42 (free plan, paid plans with a 14-day trial, grace period);
+   taking payment through Razorpay later (D9,
    #346); a lapsed company becomes **read-only with full export**, never locked out of its own
    books.
 8. **Privacy rights** (DPDP Act 2023): data export, correction, and deletion of personal data
@@ -191,20 +191,22 @@ add:
 
 | Data | Sensitivity | Where it may go |
 | --- | --- | --- |
-| Books, invoices, vouchers, stock | Confidential business data | India only (D13) |
+| Books, invoices, vouchers, stock | Confidential business data | Stored in India; a single document may go to the provider that delivers or reads it (D13) |
 | Bank account numbers, PAN | Personal / financial | India only, encrypted per field |
 | GSP, bank and vendor credentials | Secret | India only, encrypted, never logged |
-| Phone numbers, emails, names, addresses of users and parties | Personal data (DPDP) | India only (D13) |
+| Phone numbers, emails, names, addresses of users and parties | Personal data (DPDP) | Stored in India; passed to a messaging or document provider only to do the job the user asked for (D13) |
 | GSTIN | Public identifier, but with bank details it is sensitive | India only when joined to anything else |
 | Session ids, request ids, company/user ids | Internal identifiers | May go to foreign vendors (Sentry EU) |
 
 ### 6.5 Data residency (D13)
 
-Books, documents, backups, sessions and the identity store stay in an **India region**. A vendor
-outside India receives **ids only** — never names, phone numbers, GSTIN with bank details or
-invoice contents. There is no exception at launch: a bill shared over WhatsApp leaves from the
-user's own phone, not from our servers, and email goes through an India-hosted provider. Reading supplier bills (OCR) sends the bill's contents to
-the reader, so the OCR provider must run in India too; none is chosen yet (only a mock exists). The D13 ADR lists every vendor and what it receives.
+Books, documents, backups, sessions and the identity store stay in an **India region**. A
+provider that has to process a message or a document to do its job — WhatsApp, SMS, email,
+reading a supplier bill (OCR), speech-to-text, the GSP — **is allowed**, behind the existing
+adapter, with the user's consent (#55) and a data-processing agreement, and receives only what
+that job needs. Tools that do not need customer data to work (error tracking, monitoring) get ids
+only. **This rule can never remove a feature**; it only says what a provider must sign and what
+it may receive. The D13 record lists every provider and what it receives.
 
 ### 6.6 Retention (D10 — owner's instruction, legal to confirm)
 
@@ -222,8 +224,12 @@ the reader, so the OCR provider must run in India too; none is chosen yet (only 
 
 ### 6.7 Devices and language
 
-Responsive web app for a phone (375 px) and a shop PC; English and Hindi. No native app at launch.
-Offline billing is decided (D12) but built later (#317); it cannot let stock go negative (rule 3).
+Every core workflow works on a phone (375 px) and on a shop PC (#38). Hindi and English are
+built; **other regional languages are in scope** — the translation-key design is extensible and
+each language is added by writing its translations (#10, #13, #38). Native mobile apps are **not
+ruled out**: handbook #38 starts with the responsive web app, and the owner has a separate
+mobile-app workstream; nothing in this design or the decision records blocks one. Offline billing
+is decided (D12) and built under #317; it cannot let stock go negative (rule 3).
 
 ---
 
@@ -336,26 +342,20 @@ worker at festival peak.
 
 ## 8. Out of scope
 
-For launch and year one. Building any of these needs a new owner decision. Product-level
-exclusions in [`00-principles-and-scope.md` §5](product/00-principles-and-scope.md) (exports, SEZ,
+Only things that appear in **no handbook** are listed here. Everything in the 55 handbook issues
+is in scope (§10). The product-level exclusions in
+[`00-principles-and-scope.md` §5](product/00-principles-and-scope.md) (exports, SEZ,
 multi-currency, payroll, TDS/TCS, moving money, lending, forecasting, legal advice, Tally live
-sync) still apply.
+sync) and each issue's own non-goals in the handbooks still apply; they are not repeated.
 
-- **Live GSP filing and live IRN/e-way calls** — offline JSON at launch; live after #50.
-- **Live bank feeds** — statement upload only.
-- **Offline billing** — decided now (D12), built later (#317).
-- **Native mobile apps** — responsive web only.
-- **Languages beyond English and Hindi.**
-- **A CA practice plan** — a CA paying for or creating client companies; multi-company dashboards
-  for CAs beyond the company switcher.
-- **Branch-restricted roles** — a role applies to the whole company.
-- **Per-user pricing, freemium-forever tier changes, marketplace, reseller or white-label plans.**
-- **Multi-region, active-active, or uptime above 99.5%.**
-- **Single sign-on (Google Workspace, SAML) and enterprise features.**
-- **Public API, webhooks for customers, third-party app integrations.**
-- **Redis, Kafka, Kubernetes, microservices** — one modular monolith, one Postgres (see #339).
-- **Analytics warehouse and BI exports** beyond the built-in reports and CSV.
-- **AI deciding anything** — unchanged: AI reads and drafts, never posts (principle §3).
+- **A CA practice plan** — a CA paying for or creating client companies.
+- **Per-user pricing, marketplace, reseller or white-label plans.**
+- **More than one hosting region, or uptime above 99.5%**, in year one.
+- **Single sign-on (Google Workspace, SAML).**
+- **A public API or webhooks for customers' own software.**
+- **An analytics warehouse** beyond the built-in reports and exports.
+- **Extra infrastructure we do not need yet** — Redis, Kafka, Kubernetes, microservices. This is
+  an engineering choice (#339), not a limit on the product.
 
 ---
 
@@ -363,11 +363,76 @@ sync) still apply.
 
 | # | Question | Blocks |
 | --- | --- | --- |
-| Q1 | Billing is per company, but `packages/subscriptions` meters `companies` per plan (Starter 2, Growth 10) as if one subscription covers several companies. Which wins? | #346 |
-| Q2 | The shipped `free` plan (₹0, 50 invoices/month) exists; the interview chose trial → paid. Keep the free plan at launch? | #346 |
+| Q1 | Are the plan prices already in the product (Free, Starter ₹499, Growth ₹1,499 a month) the ones to launch with? Handbook #42 leaves final prices to you. Default: yes. | #346 |
 | Q3 | Confirm RPO ≤ 5 min and RTO ≤ 4 h. | #355, #357 |
 | Q4 | Confirm log 30 days, error events 90 days, monthly snapshots 12 months. | #352, #357 |
 | Q5 | Legal confirmation of the 8-year retention and of the deletion-during-retention rule. | #352, #55 |
-| Q6 | Do you want bills and reminders sent automatically on WhatsApp later? It means a monthly WhatsApp bill and customers' numbers going to Meta abroad. Default: no — the shopkeeper taps "share on WhatsApp" as today. | messaging adapter |
+| Q6 | Automatic WhatsApp sending needs a WhatsApp Business account in the company's name (Meta checks the business) and a provider with a monthly bill. Who opens it, and when? Until then the shopkeeper's own "share on WhatsApp" tap works. | #14, #23 going live |
 | Q7 | SMS OTP: who registers the TRAI DLT entity, sender id and templates? | D1, #342 |
 | Q8 | Should counter staff need the owner's OK before changing stock counts by hand? Default: yes, above ₹5,000 of stock value, and the owner can change the amount. | #342 role matrix |
+
+---
+
+## 10. The 55 handbook issues and where each stands
+
+So that anyone can see nothing was dropped. **Built** means the issue is closed and its tests
+are in the repository. Two things apply to every row and are not repeated: the running app still
+keeps data in memory (fixed by #340), and sign-in is still the demo one (fixed by #342).
+
+| # | What | Stands |
+| --- | --- | --- |
+| 1 | Product specification, workflows, glossary | Built |
+| 2 | Repository, development setup, CI | Built |
+| 3 | Companies, branches, users, permissions | Built, including branch-level access; real sign-in waits for #342 |
+| 4 | Double-entry ledger | Built |
+| 5 | Master data | Built |
+| 6 | Approvals, audit history, idempotent commands | Built; stored in memory until #364 |
+| 7 | Rules engine | Built |
+| 8 | Connector contracts | Built |
+| 9 | Sales invoice lifecycle | Built |
+| 10 | Voice and text assistant | Built; speech-to-text waits for a provider |
+| 11 | Pricing, discounts, credit | Built |
+| 12 | Inventory, reservations, no negative stock | Built |
+| 13 | Fancy Invoice designer and PDFs | Built |
+| 14 | Invoice delivery and tracking | Built; automatic email and WhatsApp wait for provider accounts (owner action) |
+| 15 | Purchase inbox with OCR | Built; OCR and WhatsApp intake wait for providers |
+| 16 | Supplier invoice validation, duplicates | Built |
+| 17 | Purchase posting | Built |
+| 18 | Purchase orders, goods receipt, matching | Built |
+| 19 | Supplier risk warnings | Built; live GST-number status waits for #51 |
+| 20 | Receivables, payables, allocation | Built |
+| 21 | Bank statement import | Built |
+| 22 | Bank reconciliation | Built |
+| 23 | Payment reminders | Built; WhatsApp and email sending wait for provider accounts |
+| 24 | Live bank feeds | Built; waits for a signed bank-feed partner (owner action) |
+| 25 | GST calculation | Built |
+| 26 | E-invoice and IRN | Built; offline JSON works; live calls wait for #210 and the GSP contract #51 |
+| 27 | E-way bill | Built; offline JSON works; live calls wait for #51 |
+| 28 | Transport and vehicle suitability | Built |
+| 29 | Vehicle-record verification | Built; waits for authorised access (#53) |
+| 30 | GSTR-1 and GSTR-3B | Built; export works; live filing waits for #51 |
+| 31 | IMS / GSTR-2B and ITC | Built; file import works; live download waits for #51 |
+| 32 | Compliance calendar and alerts | Built |
+| 33 | GSP/IRP onboarding and production operations | Built; waits for #51 |
+| 34 | Knowledge assistant | Built |
+| 35 | Reports | Built |
+| 36 | Onboarding and opening balances | Built |
+| 37 | Excel/CSV migration | Built |
+| 38 | Multilingual, mobile-responsive foundations | Built for Hindi and English; more languages are added by translation |
+| 39 | Notification infrastructure | Built; SMS and WhatsApp wait for provider accounts |
+| 40 | Security, privacy, backup, recovery | Built as a module; wiring into the running app is #352 |
+| 41 | Monitoring, support, operations | Built; production monitoring is #357–#359 |
+| 42 | Subscriptions and usage | Built; taking payments waits for #346 |
+| 43 | Golden test dataset | Built |
+| 44 | End-to-end and failure testing | Built |
+| 45 | Returns and adjustments | Built |
+| 46 | Zero-training user experience | Built |
+| 47 | AI action agent | Built |
+| 48 | Release gates | Built |
+| 49 | Company incorporation and vendor documents | Done |
+| 50 | GSP/IRP comparison and sandbox | Done |
+| 51 | GSP/IRP production contract | **Open — owner action** |
+| 52 | Bank-feed route and sandbox | Done; signing a partner is the next owner action |
+| 53 | Vehicle-data access application | Done; waiting for the grant |
+| 54 | Compliance-source register | Built |
+| 55 | Privacy notice, terms, consent, pilot agreement | **Open** — needed before production data; lists every provider in D13 |
