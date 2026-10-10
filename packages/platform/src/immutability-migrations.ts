@@ -157,6 +157,19 @@ export const immutabilityMigrations: readonly Migration[] = [{
     END;
     $$;
 
+    -- Ending a session, and accepting or withdrawing an invitation, are final: once the date is set it is not cleared or moved.
+    CREATE FUNCTION platform_refuse() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+    BEGIN
+      RAISE EXCEPTION '%', TG_ARGV[0] USING ERRCODE = 'restrict_violation', TABLE = TG_TABLE_NAME;
+    END;
+    $$;
+    CREATE TRIGGER sessions_revocation_final BEFORE UPDATE ON sessions FOR EACH ROW
+      WHEN (OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at)
+      EXECUTE FUNCTION platform_refuse('A session that was ended cannot be brought back.');
+    CREATE TRIGGER invitations_decision_final BEFORE UPDATE ON invitations FOR EACH ROW
+      WHEN ((OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at) OR (OLD.accepted_at IS NOT NULL AND NEW.accepted_at IS DISTINCT FROM OLD.accepted_at))
+      EXECUTE FUNCTION platform_refuse('An invitation that was used or withdrawn cannot be opened again.');
+
     -- The ledger's own trigger functions (#4) named their tables without a schema and had no search
     -- path, so a temporary "voucher" or "journal_line" could stand in for the real one.
     ALTER FUNCTION ledger_voucher_immutable() SET search_path = pg_catalog, public, pg_temp;
@@ -234,6 +247,9 @@ ${PLATFORM_RLS.map((table) => `
 ${[...FROZEN.map(([table]) => table), ...FROZEN_WITH_PARENT.map(([child]) => child)].map((table) => `
     DROP TRIGGER IF EXISTS ${table}_no_truncate ON ${table};
     DROP TRIGGER IF EXISTS ${table}_frozen ON ${table};`).join("")}
+    DROP TRIGGER IF EXISTS invitations_decision_final ON invitations;
+    DROP TRIGGER IF EXISTS sessions_revocation_final ON sessions;
+    DROP FUNCTION IF EXISTS platform_refuse();
     ALTER TABLE sessions DROP COLUMN IF EXISTS token_hash;
     ALTER TABLE audit_events DROP COLUMN IF EXISTS recorded_at;
     ALTER FUNCTION ledger_voucher_balanced() RESET search_path;

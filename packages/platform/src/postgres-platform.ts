@@ -240,10 +240,12 @@ export class PostgresAuthenticationService {
     return this.#access.context(session.companyId, session.branchId, session.userId, session.id);
   }
 
+  /** Ends a session, named either by its token or by the `sessionId` a request context carries. */
   async revokeSession(sessionId: Id): Promise<void> {
-    const row = (await this.#db.query("SELECT company_id FROM sessions WHERE token_hash = $1", [digest(sessionId)])).rows[0];
+    const storedId = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sessionId) ? sessionId : null;
+    const row = (await this.#db.query("SELECT id, company_id FROM sessions WHERE token_hash = $1 OR id = $2::uuid", [digest(sessionId), storedId])).rows[0];
     if (row === undefined) return;
-    await this.#db.unitOfWork(String(row.company_id), async ({ sql }) => { await sql.query("UPDATE sessions SET revoked_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL", [digest(sessionId), at(this.#now())]); });
+    await this.#db.unitOfWork(String(row.company_id), async ({ sql }) => { await sql.query("UPDATE sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL", [row.id, at(this.#now())]); });
   }
 
   /** Access and every open session end together, in one transaction. */

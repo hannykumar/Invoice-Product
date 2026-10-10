@@ -369,8 +369,13 @@ test("the database holds no usable session, and the application cannot extend on
   await assert.rejects(app.query("UPDATE sessions SET token_hash = 'known' WHERE user_id = $1", [userId]), refused(NO_PRIVILEGE));
   await assert.rejects(app.query("UPDATE users SET email = 'attacker@example.invalid' WHERE id = $1", [userId]), refused(NO_PRIVILEGE));
   await assert.rejects(app.query("UPDATE invitations SET expires_at = now() + interval '10 years', token_hash = 'known'"), refused(NO_PRIVILEGE));
+  // Signing out with what the request context carries (the stored id, not the token) ends the session, for good.
+  const second = await auth.createSession(companyId, branchId, userId);
+  await auth.revokeSession((await auth.authenticate(second.id)).sessionId);
+  await assert.rejects(Promise.resolve().then(() => auth.authenticate(second.id)), refused("SESSION_EXPIRED"));
   await auth.revokeSession(session.id);
-  await assert.rejects(app.query("UPDATE sessions SET revoked_at = NULL, expires_at = now() + interval '1 day' WHERE user_id = $1", [userId]), refused(NO_PRIVILEGE));
+  await assert.rejects(app.query("UPDATE sessions SET revoked_at = NULL WHERE user_id = $1", [userId]), refused(FROZEN), "an ended session cannot be brought back");
+  await assert.rejects(app.query("UPDATE sessions SET revoked_at = now() + interval '1 day' WHERE user_id = $1", [userId]), refused(FROZEN));
 });
 
 test("row-level security covers every platform table: nothing without a company, one company with one", { skip }, async () => {
