@@ -367,7 +367,12 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
     };
   }
 
-  const large = document.invoiceValue.minor > lookup.threshold.aboveValue.minor;
+  // Issue #325 — a note follows its bill: judged on the bill's total when that is known, not on
+  // the note's own (a ₹5,000 note against a ₹1,18,944 B2CL bill is CDNUR, not B2CS).
+  const judgedValue = NOTES.includes(document.kind) && document.originalDocument?.invoiceValue !== undefined
+    ? document.originalDocument.invoiceValue
+    : document.invoiceValue;
+  const large = judgedValue.minor > lookup.threshold.aboveValue.minor;
 
   if (lookup.basis === 'BUSINESS_DECLARED') {
     warnings.push(finding(
