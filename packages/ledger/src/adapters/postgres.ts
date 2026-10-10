@@ -9,7 +9,6 @@
  * `transaction`, it gets that transaction's connection, so a note and the voucher it posts commit
  * or roll back together. This file never imports `pg`; the caller hands in a database.
  */
-import { AsyncLocalStorage } from 'node:async_hooks';
 import { conflict, money, type CompanyId, type IsoDate, type UserId } from '@invoice/kernel';
 import type { Account } from '../domain/account.ts';
 import type { FiscalPeriod } from '../domain/period.ts';
@@ -23,6 +22,8 @@ export interface Sql {
 /** What `createDatabase()` in `packages/platform/src/database.ts` returns. */
 export interface SqlDatabase extends Sql {
   tenantTransaction<T>(companyId: string, work: (sql: Sql) => Promise<T>): Promise<T>;
+  unitOfWork<T>(companyId: string, work: (open: { sql: Sql }) => Promise<T>): Promise<T>;
+  requireUnitOfWork(companyId: string): { sql: Sql };
 }
 
 type Row = Record<string, unknown>;
@@ -228,46 +229,24 @@ const unitOfWork = (sql: Sql): UnitOfWork => {
 
 export class PostgresLedgerStore implements LedgerStore {
   readonly #db: SqlDatabase;
-  readonly #current = new AsyncLocalStorage<{ companyId: string; sql: Sql; active: boolean }>();
-  #savepoints = 0;
 
   constructor(db: SqlDatabase) { this.#db = db; }
 
-  async transaction<T>(companyId: CompanyId, work: (uow: UnitOfWork) => Promise<T>): Promise<T> {
-    // Issue #229 — called again from inside an open transaction for the same company (a sale that
-    // issues stock and books its value), the work joins it under a savepoint instead of taking a
-    // second connection, which would wait for the advisory lock the first one holds.
-    const open = this.#current.getStore();
-    if (open !== undefined && open.active && open.companyId === companyId) {
-      const savepoint = `sp_${(this.#savepoints += 1)}`;
-      await open.sql.query(`SAVEPOINT ${savepoint}`);
-      try {
-        const result = await work(unitOfWork(open.sql));
-        await open.sql.query(`RELEASE SAVEPOINT ${savepoint}`);
-        return result;
-      } catch (error) {
-        await open.sql.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
-        throw error;
-      }
-    }
-    return this.#db.tenantTransaction(companyId, async (sql) => {
-      // One command at a time per company, as the in-memory store does; released at commit or rollback.
-      await sql.query('SELECT pg_advisory_xact_lock(hashtext($1))', [companyId]);
-      const context = { companyId: companyId as string, sql, active: true };
-      try {
-        return await this.#current.run(context, () => work(unitOfWork(sql)));
-      } finally {
-        context.active = false;
-      }
-    });
+  /**
+   * Issue #363 — the platform's unit of work: one transaction per action, one action at a time per
+   * company, and a call from inside an open one joins it under a savepoint (issue #229).
+   */
+  transaction<T>(companyId: CompanyId, work: (uow: UnitOfWork) => Promise<T>): Promise<T> {
+    return this.#db.unitOfWork(companyId, (open) => work(unitOfWork(open.sql)));
   }
 
   read(): UnitOfWork { return unitOfWork(this.#db); }
 
-  /** Runs `work` on the open transaction for this company, or in a short one of its own. */
+  /** For reads: runs `work` on the open transaction for this company, or in a short one of its own. */
   withSql<T>(companyId: CompanyId, work: (sql: Sql) => Promise<T>): Promise<T> {
-    const open = this.#current.getStore();
-    if (open !== undefined && open.active && open.companyId === companyId) return work(open.sql);
     return this.#db.tenantTransaction(companyId, work);
   }
+
+  /** For writes: the open transaction's connection. Throws when the caller opened none. */
+  writeSql(companyId: CompanyId): Sql { return this.#db.requireUnitOfWork(companyId).sql; }
 }
