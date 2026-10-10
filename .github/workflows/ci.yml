@@ -8,10 +8,16 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch or pull request replaces the run before it. Runs on main finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   secrets:
     # Scans every commit for secrets (#351). Reviewed false positives live in .gitleaksignore.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GITLEAKS_VERSION: 8.30.1
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
@@ -29,6 +35,7 @@ jobs:
 
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # A real PostgreSQL for the database tests (issue #201). Synthetic data only.
     services:
       db:
@@ -55,3 +62,37 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run verify
+
+  coverage:
+    # How much of packages/* its own tests exercise (#354). Fails below the floor in package.json.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage | tee coverage.txt
+      - name: Put the totals on the run's summary page
+        if: always()
+        run: |
+          {
+            echo '### Coverage of packages/*/src'
+            echo '```'
+            grep -E 'file +\| line %|all files' coverage.txt | sed 's/^. //'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  container:
+    # Builds the production image (#356). Until #356 adds a Dockerfile there is nothing to build,
+    # and the job says so rather than passing silently.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - if: hashFiles('Dockerfile') != ''
+        run: docker build --tag invoice-product:ci .
+      - if: hashFiles('Dockerfile') == ''
+        run: echo "::warning title=No container built::There is no Dockerfile yet (issue 356), so this job built nothing."
