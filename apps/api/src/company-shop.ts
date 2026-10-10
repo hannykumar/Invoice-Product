@@ -59,7 +59,7 @@ import {
   mastersVehicleAdapter,
 } from '../../../packages/transport/src/suitability-adapters.ts';
 import type { Vehicle } from '../../../packages/masters/src/types.ts';
-import { billingAddressOf, items as catalogueItems, type CatalogueSeed } from './catalogue-application.ts';
+import { billingAddressOf, items as catalogueItems, suppliers, type CatalogueSeed } from './catalogue-application.ts';
 import { businessDetailsOf, turnoverAnswerForYear } from './business-details-application.ts';
 
 // Read once when the application starts. An absent file keeps local development synthetic.
@@ -298,6 +298,11 @@ export async function createCompanyShop(seed: CompanySeed) {
   const gstinOfParty = (partyId: string): string | null =>
     billingAddressOf(seed.companyId, partyId)?.gstin
       ?? (partyId === seed.supplierId && seed.supplierGstin !== undefined ? seed.supplierGstin : null);
+  // A seller registered for nothing but exempt supplies (s.23(1)(a)) sells exempt goods: Table 5.
+  const registrationOfParty = (partyId: string): string | null => {
+    const party = suppliers(seed.companyId).find((candidate) => candidate.id === partyId);
+    return party === undefined ? null : party.gstRegistrationType === 'unregistered' && party.unregisteredBasis === 'EXEMPT_ONLY' ? 'exempt_only' : party.gstRegistrationType;
+  };
   const itc = new ItcReconciliationService({
     books: {
       async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
@@ -316,7 +321,13 @@ export async function createCompanyShop(seed: CompanySeed) {
                 ineligibleItcPaise: bill.tax.ineligibleItcPaise, reverseCharge: bill.tax.reverseCharge,
               },
             },
-            { gstin: gstinOfParty(bill.supplierPartyId) },
+            // Issue #289 — a seller who is not registered sells taxable goods without GST; that is not
+            // a Table 5 supply (composition, exempt, nil-rated or non-GST).
+            {
+              gstin: gstinOfParty(bill.supplierPartyId),
+              ...(registrationOfParty(bill.supplierPartyId) === 'unregistered' ? { inTable5: false } : {}),
+              ...(['unregistered', 'exempt_only', 'composition'].includes(registrationOfParty(bill.supplierPartyId) ?? '') ? { outsideGstr2b: true as const } : {}),
+            },
           ));
         // Issue #249 — every return of goods to a supplier, as a credit note linked to its bill, from
         // the month of the return. It used to be left out, so the credit stayed at the full bill.

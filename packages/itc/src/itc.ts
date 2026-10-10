@@ -660,7 +660,7 @@ export const linkageFor = (
   const exemptInwardValue: Money = {
     currency: 'INR',
     minor: monthBooks
-      .filter((book) => !book.reversed && book.kind === 'INVOICE' && totalTaxOf(book.amounts).minor === 0n)
+      .filter((book) => !book.reversed && book.kind === 'INVOICE' && totalTaxOf(book.amounts).minor === 0n && book.inTable5 !== false)
       .reduce((total, book) => total + book.amounts.taxableValue.minor, 0n),
   };
 

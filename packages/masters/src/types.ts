@@ -36,6 +36,18 @@ export type PartyRole = "customer" | "supplier" | "both";
  */
 export type GstRegistrationType = "regular" | "composition" | "unregistered" | "sez_with_payment" | "sez_without_payment" | "overseas" | "deemed_export" | "uin";
 
+/**
+ * Issue #289 — why a party has no GST registration, in the words of the law. A seller may lawfully
+ * trade unregistered only on one of these grounds; the app records which one the business was told.
+ *
+ *  - `BELOW_THRESHOLD`: aggregate turnover within the limit of CGST s.22(1) — ₹20 lakh, or ₹40 lakh
+ *    for goods-only suppliers under Notification 10/2019-Central Tax (₹20 lakh in the states that
+ *    did not opt in).
+ *  - `AGRICULTURIST`: s.23(1)(b), to the extent of supply of produce out of cultivation of land.
+ *  - `EXEMPT_ONLY`: s.23(1)(a), exclusively supplies not liable to tax or wholly exempt.
+ */
+export type UnregisteredBasis = "BELOW_THRESHOLD" | "AGRICULTURIST" | "EXEMPT_ONLY";
+
 export interface Party {
   readonly id: Id;
   readonly companyId: Id;
@@ -46,6 +58,8 @@ export interface Party {
   readonly tradeName?: string;
   readonly role: PartyRole;
   readonly gstRegistrationType: GstRegistrationType;
+  /** Issue #289 — set only when `gstRegistrationType` is `unregistered`. */
+  readonly unregisteredBasis?: UnregisteredBasis;
   readonly pan?: string;
   readonly phones: readonly string[];
   readonly emails: readonly string[];
