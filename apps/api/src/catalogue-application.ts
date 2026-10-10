@@ -48,6 +48,7 @@ import {
   type GstRegistrationType,
   type Item,
   type Party,
+  type UnregisteredBasis,
   type PartyAddress,
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
@@ -523,6 +524,14 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   const legalName = str(input.legalName || input.name);
   if (legalName.length < 2) throw invalid('SUPPLIER_NAME', 'Type the name the supplier bills you under.');
 
+  // Issue #289 — three kinds of supplier the law allows: registered (GSTIN, may charge GST),
+  // composition (GSTIN, may not charge GST — CGST s.10(4)) and not registered (no GSTIN — s.22, s.23).
+  const registration = str(input.registration) || 'regular';
+  if (registration !== 'regular' && registration !== 'composition' && registration !== 'unregistered') {
+    throw invalid('SUPPLIER_REGISTRATION', 'Choose whether the supplier is registered for GST, a composition dealer, or not registered.');
+  }
+  if (registration === 'unregistered') return createUnregisteredSupplier(companyId, input, legalName);
+
   const gstin = normaliseIdentifier(str(input.gstin));
   if (gstin === '') throw invalid('SUPPLIER_GSTIN_REQUIRED', 'Type the supplier’s GST number. It is on every bill they give you, and it decides which GST you can claim back.');
   require_(validateGstin(gstin), 'SUPPLIER_GSTIN', 'That is not a GST number.');
@@ -560,7 +569,7 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   const reference = str(input.reference) || `${legalName.toLowerCase()}:${gstin}`;
   const created = service.createParty(
     ctx,
-    { legalName, role: 'supplier', gstRegistrationType: 'regular', ...(phone === '' ? {} : { phones: [phone] }) },
+    { legalName, role: 'supplier', gstRegistrationType: registration, ...(phone === '' ? {} : { phones: [phone] }) },
     { idempotencyKey: `supplier:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
   );
   service.addAddress(
@@ -582,7 +591,65 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   return {
     state: 'recorded' as const,
     title: 'Supplier added',
-    message: `${created.record.legalName} is in your supplier list, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) as their GST number says.`,
+    message: registration === 'composition'
+      ? `${created.record.legalName} is in your supplier list as a composition dealer, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}). A composition dealer may not charge GST (CGST s.10(4)), so their bills carry none and no GST credit comes from them.`
+      : `${created.record.legalName} is in your supplier list, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) as their GST number says.`,
+    supplier: viewOf(companyId, created.record),
+  };
+};
+
+const UNREGISTERED_BASES: Readonly<Record<string, { readonly basis: UnregisteredBasis; readonly words: string }>> = {
+  BELOW_THRESHOLD: { basis: 'BELOW_THRESHOLD', words: 'their turnover is below the limit for registration (CGST s.22)' },
+  AGRICULTURIST: { basis: 'AGRICULTURIST', words: 'they are a farmer selling their own produce (CGST s.23(1)(b))' },
+  EXEMPT_ONLY: { basis: 'EXEMPT_ONLY', words: 'they sell only goods or services that are exempt from GST (CGST s.23(1)(a))' },
+};
+
+/**
+ * Issue #289 — a supplier with no GST registration. Lawful on the grounds of s.22 and s.23, and
+ * their bill is a lawful bill; but they may not charge GST (s.32(1)) and no credit can be taken on
+ * it (s.16(2)(a) needs a tax invoice from a registered supplier). The ground is recorded because the
+ * law treats them differently: a farmer's raw cotton, for one, is under reverse charge.
+ */
+const createUnregisteredSupplier = (companyId: CompanyId | string, input: Record<string, unknown>, legalName: string) => {
+  if (str(input.gstin) !== '') {
+    throw invalid('SUPPLIER_UNREGISTERED_HAS_GSTIN', 'This supplier has a GST number, so they are registered. Choose "Registered" and type the number.');
+  }
+  const ground = UNREGISTERED_BASES[str(input.unregisteredBasis)];
+  if (ground === undefined) {
+    throw invalid('SUPPLIER_UNREGISTERED_BASIS', 'Choose why the supplier is not registered: their turnover is below the limit, they are a farmer selling their own produce, or they sell only exempt goods or services. Only these let a business trade without GST registration.');
+  }
+  const line1 = str(input.line1 || input.address1);
+  if (line1 === '') throw invalid('SUPPLIER_ADDRESS1', 'Type the first line of the supplier’s address, as it is on their bill.');
+  const city = str(input.city);
+  if (city === '') throw invalid('SUPPLIER_CITY', 'Type the town or city the supplier is in.');
+  const pincode = str(input.pincode);
+  require_(validatePincode(pincode), 'SUPPLIER_PINCODE', 'A PIN code has 6 digits.');
+  const stateCode = str(input.stateCode) || stateOfPincode(pincode) || '';
+  if (GST_STATE_CODES[stateCode] === undefined) throw invalid('SUPPLIER_STATE', 'Choose the state the supplier is in. With no GST number, their state is not known otherwise, and it decides IGST against CGST and SGST.');
+  require_(validatePincodeForState(pincode, stateCode), 'SUPPLIER_PINCODE_STATE', 'That PIN code is not in the supplier’s state.');
+
+  const service = masterData();
+  const ctx = context(companyId);
+  const phone = str(input.phone);
+  const reference = str(input.reference) || `${legalName.toLowerCase()}:${pincode}:unregistered`;
+  const created = service.createParty(
+    ctx,
+    { legalName, role: 'supplier', gstRegistrationType: 'unregistered', unregisteredBasis: ground.basis, ...(phone === '' ? {} : { phones: [phone] }) },
+    { idempotencyKey: `supplier:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
+  );
+  service.addAddress(
+    ctx,
+    {
+      partyId: created.record.id, label: 'Billing', line1,
+      ...(str(input.line2 || input.address2) === '' ? {} : { line2: str(input.line2 || input.address2) }),
+      city, stateCode, pincode, use: 'both', isPrimary: true,
+    },
+    { idempotencyKey: `supplier-address:${String(companyId)}:${created.record.id}` },
+  );
+  return {
+    state: 'recorded' as const,
+    title: 'Supplier added',
+    message: `${created.record.legalName} is in your supplier list with no GST number, because ${ground.words}. Their bills carry no GST (CGST s.32(1)) and give no GST credit (s.16(2)(a)).`,
     supplier: viewOf(companyId, created.record),
   };
 };

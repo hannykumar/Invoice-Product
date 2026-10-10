@@ -258,8 +258,10 @@ export interface PostedBillLike {
 
 export const purchaseBillToBookDocument = (
   bill: PostedBillLike,
-  supplier: { readonly gstin: string | null; readonly imported?: boolean; readonly kind?: BookPurchaseDocument['kind'] },
+  supplier: { readonly gstin: string | null; readonly imported?: boolean; readonly kind?: BookPurchaseDocument['kind']; readonly inTable5?: boolean; readonly outsideGstr2b?: true },
 ): BookPurchaseDocument => ({
+  ...(supplier.inTable5 === undefined ? {} : { inTable5: supplier.inTable5 }),
+  ...(supplier.outsideGstr2b === undefined ? {} : { outsideGstr2b: supplier.outsideGstr2b }),
   sourceKind: 'purchase_bill',
   sourceId: bill.id,
   companyId: bill.companyId as CompanyId,

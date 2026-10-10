@@ -294,11 +294,14 @@ function checkTaxSplit(input: ValidatePurchaseInput, supplierGstin: string | und
   if (input.taxSplit === undefined) {
     return { basis: "SELF_CONSISTENCY_ONLY", explanation: "The tax rules were not available, so the tax on this bill was only checked against its own figures." };
   }
-  if (supplierGstin === undefined || buyerStateCode === undefined || documentDate === undefined) {
+  // Issue #289 — a supplier with no GST registration has no GSTIN to read a state from; the state of
+  // their saved address is where they supply from (the same fact the GSTIN would have carried).
+  const supplierStateCode = supplierGstin !== undefined ? gstinStateCode(supplierGstin) : input.supplierAddress?.stateCode;
+  if (supplierStateCode === undefined || buyerStateCode === undefined || documentDate === undefined) {
     return {
       basis: "SELF_CONSISTENCY_ONLY",
       missingFacts: [
-        ...(supplierGstin === undefined ? ["supply.supplierStateCode"] : []),
+        ...(supplierStateCode === undefined ? ["supply.supplierStateCode"] : []),
         ...(buyerStateCode === undefined ? ["supply.placeOfSupplyStateCode"] : []),
         ...(documentDate === undefined ? ["document.date"] : []),
       ],
@@ -306,7 +309,7 @@ function checkTaxSplit(input: ValidatePurchaseInput, supplierGstin: string | und
     };
   }
   const answer = input.taxSplit.splitFor({
-    supplierStateCode: gstinStateCode(supplierGstin),
+    supplierStateCode,
     placeOfSupplyStateCode: buyerStateCode,
     documentDate,
   });
