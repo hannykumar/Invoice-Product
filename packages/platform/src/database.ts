@@ -45,7 +45,15 @@ export const outsideUnitOfWork = <T>(work: () => T): T => current.exit(work);
 
 const json = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => typeof item === "bigint" ? item.toString() : item);
 
-export function createDatabase(connectionString = process.env.DATABASE_URL ?? "postgresql://invoice:invoice@localhost:5432/invoice"): TransactionalExecutor {
+/** The local development database of `docker compose up db`. Never a fallback in production (issue #368). */
+const LOCAL_DEVELOPMENT_URL = "postgresql://invoice:invoice@localhost:5432/invoice";
+
+export function createDatabase(connectionString = process.env.DATABASE_URL): TransactionalExecutor {
+  if (connectionString === undefined || connectionString.trim() === "") {
+    // A production server with no database configured must stop, not quietly keep a shop's books in a developer database.
+    if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is not set. The server will not start without its database in production.");
+    connectionString = LOCAL_DEVELOPMENT_URL;
+  }
   // A stuck pool or a held lock fails loudly instead of hanging (ADR 0363 §1).
   const pool = new Pool({ connectionString, max: 5, connectionTimeoutMillis: 15_000, lock_timeout: 15_000 });
   const self = {};
