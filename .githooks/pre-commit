@@ -6,4 +6,5 @@ if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: install it (brew install gitleaks) — CI will check it either way." >&2
   exit 0
 fi
-exec gitleaks git --pre-commit --staged --redact --no-banner .
+# --verbose names the file, line and rule; --redact keeps the value itself off the screen.
+exec gitleaks git --pre-commit --staged --redact --verbose --ignore-gitleaks-allow --no-banner .

@@ -24,8 +24,24 @@ jobs:
           curl -sSfL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
           tar -xzf gitleaks.tar.gz gitleaks
-      # Every commit reachable from this build, back to the first.
-      - run: ./gitleaks git --redact --no-banner .
+      # A pull request cannot switch its own scan off: the list of reviewed false positives is
+      # the one already on the branch it merges into, and the rules are gitleaks' defaults.
+      - name: Use the allowlist from the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          if [ -e .gitleaks.toml ]; then
+            echo "::error::.gitleaks.toml is not allowed: the scan uses gitleaks' default rules."
+            exit 1
+          fi
+          # The very first pull request (the one adding the file) has no base copy to use.
+          if git cat-file -e "$BASE:.gitleaksignore" 2>/dev/null; then
+            git show "$BASE:.gitleaksignore" > .gitleaksignore
+          fi
+      # Every commit reachable from this build, back to the first; no other branch.
+      # --text reads files git would call binary; --ignore-gitleaks-allow ignores inline opt-outs.
+      - run: ./gitleaks git --redact --no-banner --verbose --ignore-gitleaks-allow --log-opts="--text HEAD" .
 
   verify:
     runs-on: ubuntu-latest
