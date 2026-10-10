@@ -24,7 +24,9 @@ import { DEFAULT_SALES_POLICY } from '../src/policy.ts';
 import type { ComplianceHookPort, InventoryPort, SalesRepository } from '../src/ports.ts';
 import { SalesService } from '../src/service.ts';
 
+/** One statement batch, so one transaction: the lock makes test files that start together take turns creating the tables. */
 export const PILOT_TABLES = `
+  SELECT pg_advisory_xact_lock(363, 2);
   CREATE TABLE IF NOT EXISTS uow_pilot_sales_invoices (
     id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), idempotency_key text NOT NULL,
     number text, state text NOT NULL, version integer NOT NULL, body jsonb NOT NULL,
