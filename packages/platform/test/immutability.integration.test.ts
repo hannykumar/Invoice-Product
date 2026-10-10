@@ -225,6 +225,181 @@ test("the lifecycle still works: status moves, reversals and cancellations are a
   await run("UPDATE goods_receipts SET state = 'CANCELLED', cancelled_reason = 'Wrong supplier.', summary = 'Cancelled.' WHERE id = $1", [receipt]);
 });
 
+// The independent review of this change found each of the following routes open. Each is now a test.
+
+test("a finished ledger entry cannot be taken back to a draft and rewritten, nor its lines moved to another entry", { skip }, async () => {
+  const { ids, shop, sale } = await shopWithPostedRecords();
+  const run = (text: string, values: unknown[] = []) => inCompany(app, ids.companyId, text, values);
+  await assert.rejects(run("UPDATE voucher SET state = 'DRAFT' WHERE id = $1", [sale.voucherId]), refused(FROZEN));
+  for (const column of ["narration = 'rewritten'", "document_date = '2025-01-01'", "idempotency_key = 'another'", "source_number = 'INV/0'", "created_at = now() - interval '1 year'", "branch_id = gen_random_uuid()"]) {
+    await assert.rejects(run(`UPDATE voucher SET ${column} WHERE id = $1`, [sale.voucherId]), (error: unknown) => refused(FROZEN)(error) || /cannot be changed/.test(String(error)), column);
+  }
+  // A second finished entry to try to swap lines with.
+  const second = await shop.recordSale("r2");
+  await assert.rejects(run("UPDATE journal_line SET voucher_id = $2 WHERE voucher_id = $1", [sale.voucherId, second.voucherId]), (error: unknown) => refused(FROZEN)(error) || /cannot be changed/.test(String(error)));
+  await assert.rejects(run("UPDATE journal_line SET debit_minor = debit_minor + 1 WHERE voucher_id = $1 AND debit_minor > 0", [sale.voucherId]), (error: unknown) => refused(FROZEN)(error) || /cannot be changed/.test(String(error)));
+  // Adding lines to a finished entry is caught when the transaction ends: its totals cannot change, so it no longer balances.
+  await assert.rejects(app.unitOfWork(ids.companyId, async ({ sql }) => {
+    await sql.query(
+      `INSERT INTO journal_line (id, company_id, voucher_id, line_no, account_id, debit_minor, credit_minor)
+       SELECT gen_random_uuid(), company_id, voucher_id, line_no + 100, account_id, credit_minor, debit_minor FROM journal_line WHERE voucher_id = $1`, [sale.voucherId]);
+  }), /does not balance/);
+  // The one legitimate change still works: marking it reversed, with the entry that reversed it.
+  await run("UPDATE voucher SET state = 'REVERSED', reversed_by_voucher_id = $2, reason = 'entered twice' WHERE id = $1", [sale.voucherId, second.voucherId]);
+  await assert.rejects(run("UPDATE voucher SET state = 'FINAL' WHERE id = $1", [sale.voucherId]), refused(FROZEN, "23514"));
+  const lines = (await owner.query("SELECT count(*)::int AS n, sum(debit_minor)::text AS debit FROM journal_line WHERE voucher_id = $1", [sale.voucherId])).rows[0];
+  assert.deepEqual(lines, { n: 5, debit: "118000" });
+});
+
+test("a finished record cannot be moved back to an earlier status to be edited there", { skip }, async () => {
+  const { ids, sale, billId } = await shopWithPostedRecords();
+  const run = (text: string, values: unknown[] = []) => inCompany(app, ids.companyId, text, values);
+  const backwards = async (table: string, id: string, column: string, from: string, to: string) =>
+    assert.rejects(run(`UPDATE ${table} SET ${column} = '${to}' WHERE id = $1 AND ${column} = '${from}'`, [id]).then((result) => { assert.equal((result as { rowCount?: number }).rowCount, 1, `${table} was not ${from}`); }), refused(FROZEN), `${table}: ${from} to ${to}`);
+
+  // Purchase bill: a reversal is not undone.
+  await run("UPDATE purchase_bills SET state = 'REVERSED', reversed_by_voucher_id = $2, reversal_reason = 'entered twice' WHERE id = $1", [billId, sale.voucherId]);
+  await backwards("purchase_bills", billId, "state", "REVERSED", "POSTED");
+
+  // E-invoice: registered or cancelled never goes back to pending or failed.
+  const einvoice = crypto.randomUUID();
+  await run(
+    `INSERT INTO e_invoices (id, company_id, document_id, document_number, document_date, document_type, supplier_gstin, financial_year, status, applicability, message, created_by, idempotency_key, irn, ack_number, ack_date, signed_qr_code)
+     VALUES ($1, $2, $3, 'INV/26-27/000001', '2026-04-10', 'INVOICE', '07AAAAA0000A1Z4', '2026-27', 'REGISTERED', '{}', 'Registered.', $4, $5, $6, '112010000001', '2026-04-10 11:04:00', 'signed-qr')`,
+    [einvoice, ids.companyId, sale.invoice.id, ids.userId, `einvoice:${einvoice}`, "a".repeat(64)],
+  );
+  for (const to of ["PENDING", "FAILED", "NOT_APPLICABLE"]) await backwards("e_invoices", einvoice, "status", "REGISTERED", to);
+
+  // E-way bill: once it has a government number it never goes back to pending or "not required".
+  const eway = crypto.randomUUID();
+  await run(
+    `INSERT INTO eway_bills (id, company_id, movement_id, document_number, document_date, status, applicability, consignment_value_paise, from_state_code, to_state_code, message, created_by, idempotency_key, eway_bill_number, valid_until)
+     VALUES ($1, $2, $3, 'INV/26-27/000001', '2026-04-10', 'ACTIVE', '{}', 118000, '07', '06', 'Active.', $4, $5, '331001234567', now() + interval '1 day')`,
+    [eway, ids.companyId, sale.invoice.id, ids.userId, `eway:${eway}`],
+  );
+  for (const to of ["PENDING", "NOT_REQUIRED"]) await backwards("eway_bills", eway, "status", "ACTIVE", to);
+  await assert.rejects(run("UPDATE eway_bills SET eway_bill_number = '999999999999', consignment_value_paise = 1 WHERE id = $1", [eway]), refused(FROZEN));
+  await run("UPDATE eway_bills SET vehicle_legs = '[{\"vehicle\":\"DL01AB1234\"}]', valid_until = now() + interval '2 days', updated_at = now() WHERE id = $1", [eway]);
+
+  // Goods receipt: confirmed never goes back to draft, and its lines cannot be moved to a draft receipt to be edited.
+  const [receipt, draft, item, warehouse] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+  await owner.query("INSERT INTO master_records (id, company_id, kind) VALUES ($1, $3, 'item'), ($2, $3, 'warehouse')", [item, warehouse, ids.companyId]);
+  for (const [id, number, state] of [[receipt, "GRN/001", "DRAFT"], [draft, "GRN/002", "DRAFT"]]) {
+    await run("INSERT INTO goods_receipts (id, company_id, receipt_number, supplier_party_id, supplier_name, receipt_date, state, summary, created_by) VALUES ($1, $2, $3, $4, 'Synthetic Supplier', '2026-04-10', $5, 'Received.', $6)", [id, ids.companyId, number, ids.partyId, state, ids.userId]);
+  }
+  await run("INSERT INTO goods_receipt_lines (receipt_id, line_number, company_id, item_id, description, warehouse_id, received_quantity_micro, accepted_quantity_micro, quantity_unit, rate_paise) VALUES ($1, 1, $2, $3, 'Plastic crates', $4, 10000000, 10000000, 'PCS', 10000)", [receipt, ids.companyId, item, warehouse]);
+  await run("UPDATE goods_receipts SET state = 'CONFIRMED', confirmed_by = $2, confirmed_at = now() WHERE id = $1", [receipt, ids.userId]);
+  await backwards("goods_receipts", receipt, "state", "CONFIRMED", "DRAFT");
+  await assert.rejects(run("UPDATE goods_receipt_lines SET receipt_id = $2 WHERE receipt_id = $1", [receipt, draft]), refused(FROZEN), "a line cannot leave a confirmed receipt");
+  await run("INSERT INTO goods_receipt_lines (receipt_id, line_number, company_id, item_id, description, warehouse_id, received_quantity_micro, accepted_quantity_micro, quantity_unit, rate_paise) VALUES ($1, 7, $2, $3, 'Extra crates', $4, 1000000, 1000000, 'PCS', 10000)", [draft, ids.companyId, item, warehouse]);
+  await assert.rejects(run("UPDATE goods_receipt_lines SET receipt_id = $2 WHERE receipt_id = $1", [draft, receipt]), refused(FROZEN), "a line cannot be moved into a confirmed receipt");
+
+  // GST return: an approved return can be reopened; a filed one cannot, and its figures are fixed.
+  const [reopened, filed] = [crypto.randomUUID(), crypto.randomUUID()];
+  for (const [id, period, state] of [[reopened, "2026-04", "APPROVED"], [filed, "2026-05", "FILED"]]) {
+    await run("INSERT INTO gst_return_preparations (id, company_id, gstin, period, return_type, state, snapshot, fingerprint, document_count, created_by, idempotency_key, version) VALUES ($1, $2, '07AAAAA0000A1Z4', $3, 'GSTR1', $4, '{\"total\":118000}', 'f1', 1, $5, $6, 1)", [id, ids.companyId, period, state, ids.userId, `gst:${id}`]);
+  }
+  await assert.rejects(run("UPDATE gst_return_preparations SET snapshot = '{\"total\":1}' WHERE id = $1", [reopened]), refused(FROZEN));
+  await run("UPDATE gst_return_preparations SET state = 'DRAFT', exported_at = NULL, version = version + 1 WHERE id = $1", [reopened]);
+  await run("UPDATE gst_return_preparations SET snapshot = '{\"total\":120000}', fingerprint = 'f2' WHERE id = $1", [reopened]);
+  for (const to of ["DRAFT", "NEEDS_ATTENTION", "APPROVED", "SUBMITTING"]) await backwards("gst_return_preparations", filed, "state", "FILED", to);
+  await assert.rejects(run("UPDATE gst_return_preparations SET snapshot = '{\"total\":1}' WHERE id = $1", [filed]), refused(FROZEN));
+
+  // Our own invoice for the plan: never back to a draft; paying a failed one is allowed.
+  const invoice = crypto.randomUUID();
+  await run("INSERT INTO subscription_service_invoices (id, company_id, plan_id, period, net_paise, gst_paise, total_paise, state, issued_on, due_on) VALUES ($1, $2, 'starter', '2026-04', 100000, 18000, 118000, 'ISSUED', '2026-04-01', '2026-04-15')", [invoice, ids.companyId]);
+  await backwards("subscription_service_invoices", invoice, "state", "ISSUED", "DRAFT");
+  await run("UPDATE subscription_service_invoices SET state = 'FAILED', failure_reason = 'The bank declined it.' WHERE id = $1", [invoice]);
+  await assert.rejects(run("UPDATE subscription_service_invoices SET total_paise = 1 WHERE id = $1", [invoice]), refused(FROZEN));
+  await run("UPDATE subscription_service_invoices SET state = 'PAID', paid_on = '2026-04-03', failure_reason = NULL WHERE id = $1", [invoice]);
+  await backwards("subscription_service_invoices", invoice, "state", "PAID", "DRAFT");
+});
+
+test("a command's status only moves the way the approval flow allows, in the database too", { skip }, async () => {
+  const { companyId, branchId } = await appHarness.company();
+  const userId = await appHarness.user();
+  await appHarness.access.grant({ companyId, userId, branchIds: new Set([branchId]), active: true, permissions: new Set(["approval.decide"]) });
+  const context = await appHarness.access.context(companyId, branchId, userId, crypto.randomUUID());
+  const command = await appHarness.commands.create(context, { action: "sale.finalise", risk: "medium", idempotencyKey: "k", payload: {} });
+  await appHarness.commands.transition(context, command.id, "submitted");
+  await appHarness.commands.transition(context, command.id, "rejected");
+  for (const status of ["approved", "finalised", "draft"]) {
+    await assert.rejects(inCompany(app, companyId, "UPDATE command_records SET status = $2 WHERE id = $1", [command.id, status]), refused(FROZEN), `rejected to ${status}`);
+  }
+  await assert.rejects(inCompany(app, companyId, "UPDATE command_records SET amount_paise = 1, payload = '{}' WHERE id = $1", [command.id]), refused(FROZEN));
+});
+
+test("a temporary table with a real table's name cannot stand in for it", { skip }, async () => {
+  const { ids, sale } = await shopWithPostedRecords();
+  await assert.rejects(app.query("CREATE TEMP TABLE voucher (id uuid, state text)"), refused(NO_PRIVILEGE), "the application role cannot create temporary tables at all");
+  // Even for a role that can (the owner), the triggers look at the real tables.
+  await assert.rejects(owner.transaction(async (sql) => {
+    await sql.query("CREATE TEMP TABLE voucher (id uuid, state text) ON COMMIT DROP");
+    await sql.query("CREATE TEMP TABLE journal_line (voucher_id uuid, debit_minor bigint, credit_minor bigint) ON COMMIT DROP");
+    await sql.query("INSERT INTO pg_temp.voucher VALUES ($1, 'DRAFT')", [sale.voucherId]);
+    await sql.query("UPDATE public.journal_line SET debit_minor = debit_minor + 1 WHERE voucher_id = $1 AND debit_minor > 0", [sale.voucherId]);
+  }), (error: unknown) => refused(FROZEN)(error) || /cannot be changed/.test(String(error)));
+  assert.equal((await owner.query("SELECT sum(debit_minor)::text AS debit FROM journal_line WHERE voucher_id = $1", [sale.voucherId])).rows[0]?.debit, "118000");
+  assert.ok(ids.companyId);
+});
+
+test("the audit trail cannot be re-ordered or back-dated by the application, and its arrival time is the database's", { skip }, async () => {
+  const { ids } = await shopWithPostedRecords();
+  const insert = (columns: string, values: string) => inCompany(app, ids.companyId, `INSERT INTO audit_events (id, company_id, actor_id, action, correlation_id${columns}) ${values}`, [ids.companyId, ids.userId]);
+  await assert.rejects(insert(", seq", "OVERRIDING SYSTEM VALUE VALUES (gen_random_uuid(), $1, $2, 'forged', 'x', -5)"), refused(NO_PRIVILEGE));
+  await assert.rejects(insert(", recorded_at", "VALUES (gen_random_uuid(), $1, $2, 'forged', 'x', '2020-01-01')"), refused(NO_PRIVILEGE));
+  // An event may carry the time the action happened (a module's own clock); the database also keeps when it arrived.
+  await insert(", occurred_at", "VALUES (gen_random_uuid(), $1, $2, 'test.event', 'x', '2020-01-01')");
+  const row = (await owner.query("SELECT recorded_at > now() - interval '1 minute' AS fresh, seq > 0 AS ordered FROM audit_events WHERE company_id = $1 AND action = 'test.event'", [ids.companyId])).rows[0];
+  assert.deepEqual(row, { fresh: true, ordered: true });
+});
+
+test("the database holds no usable session, and the application cannot extend one or change who a person signs in as", { skip }, async () => {
+  const { companyId, branchId } = await appHarness.company();
+  const userId = await appHarness.user();
+  await appHarness.access.grant({ companyId, userId, branchIds: new Set([branchId]), active: true, permissions: new Set() });
+  const auth = appHarness.auth();
+  const session = await auth.createSession(companyId, branchId, userId, 1000);
+  const stored = (await owner.query("SELECT id::text AS id, token_hash FROM sessions WHERE user_id = $1", [userId])).rows[0] as { id: string; token_hash: string };
+  assert.notEqual(stored.id, session.id, "the token is not the row's id");
+  assert.notEqual(stored.token_hash, session.id);
+  await assert.rejects(Promise.resolve(auth.authenticate(stored.id)), refused("SESSION_EXPIRED"), "what is in the table does not open a session");
+  assert.equal((await auth.authenticate(session.id)).actorId, userId);
+  await assert.rejects(app.query("UPDATE sessions SET expires_at = now() + interval '10 years' WHERE user_id = $1", [userId]), refused(NO_PRIVILEGE));
+  await assert.rejects(app.query("UPDATE sessions SET token_hash = 'known' WHERE user_id = $1", [userId]), refused(NO_PRIVILEGE));
+  await assert.rejects(app.query("UPDATE users SET email = 'attacker@example.invalid' WHERE id = $1", [userId]), refused(NO_PRIVILEGE));
+  await assert.rejects(app.query("UPDATE invitations SET expires_at = now() + interval '10 years', token_hash = 'known'"), refused(NO_PRIVILEGE));
+  await auth.revokeSession(session.id);
+  await assert.rejects(app.query("UPDATE sessions SET revoked_at = NULL, expires_at = now() + interval '1 day' WHERE user_id = $1", [userId]), refused(NO_PRIVILEGE));
+});
+
+test("row-level security covers every platform table: nothing without a company, one company with one", { skip }, async () => {
+  const a = await shopWithPostedRecords();
+  const { companyId, branchId } = await appHarness.company();
+  const userId = await appHarness.user();
+  await appHarness.access.grant({ companyId, userId, branchIds: new Set([branchId]), active: true, permissions: new Set(["approval.decide"]) });
+  const context = await appHarness.access.context(companyId, branchId, userId, crypto.randomUUID());
+  await appHarness.commands.create(context, { action: "sale.finalise", risk: "low", idempotencyKey: "k", payload: {} });
+  const held = await appHarness.exceptions.create(context, "Missing GST rate", ["page-1"]);
+  await appHarness.exceptions.comment(context, held.id, "Asked the supplier.");
+  for (const table of ["audit_events", "command_records", "idempotency_keys", "exception_items", "exception_comments", "memberships", "user_branch_access", "outbox_messages", "approval_policies"]) {
+    assert.equal((await app.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0]?.n, 0, `${table}: nothing without a company`);
+    assert.equal((await inCompany<{ rows: { n: number }[] }>(app, a.ids.companyId, `SELECT count(*)::int AS n FROM ${table} t WHERE NOT EXISTS (SELECT FROM (SELECT $1::uuid AS id) me WHERE to_jsonb(t) ->> 'company_id' IS NULL OR to_jsonb(t) ->> 'company_id' = me.id::text)`, [a.ids.companyId])).rows[0]?.n, 0, `${table}: only this company's rows`);
+    if (table !== "approval_policies") assert.ok(Number((await inCompany<{ rows: { n: number }[] }>(app, table === "outbox_messages" ? a.ids.companyId : companyId, `SELECT count(*)::int AS n FROM ${table}`)).rows[0]?.n) > 0, `${table}: its own rows are visible`);
+  }
+  // A comment cannot be attached to another company's exception.
+  await assert.rejects(inCompany(app, a.ids.companyId, "INSERT INTO exception_comments (id, exception_id, actor_id, body) VALUES (gen_random_uuid(), $1, $2, 'forged')", [held.id, a.ids.userId]), refused(NO_PRIVILEGE));
+});
+
+test("a server outside development refuses to run as a database account that could override the rules", { skip }, async () => {
+  const { assertLeastPrivilege } = await import("../src/database.ts");
+  await assert.rejects(assertLeastPrivilege(owner, "production"), /can override its safety rules/);
+  await assert.rejects(assertLeastPrivilege(owner, "staging"), /can override its safety rules/);
+  await assertLeastPrivilege(app, "production");
+  await assertLeastPrivilege(owner, "development");
+  await assertLeastPrivilege(owner, undefined);
+});
+
 // Everything #364's platform core does, done as the application role under row-level security.
 platformContract("postgres as the application role", () => appHarness, skip);
 
@@ -263,6 +438,12 @@ test("a production server refuses to start without its database instead of falli
     assert.throws(() => createDatabase(), /DATABASE_URL is not set/);
     process.env.DATABASE_URL = "  ";
     assert.throws(() => createDatabase(), /DATABASE_URL is not set/);
+    for (const environment of ["Production", "prod", "production ", "staging", "PRODUCTION"]) {
+      process.env.NODE_ENV = environment;
+      delete process.env.DATABASE_URL;
+      assert.throws(() => createDatabase(), /DATABASE_URL is not set/, environment);
+      assert.throws(() => createDatabase(""), /DATABASE_URL is not set/, environment);
+    }
     process.env.NODE_ENV = "development";
     delete process.env.DATABASE_URL;
     await createDatabase().close(); // development keeps its local default; no connection is opened until first use

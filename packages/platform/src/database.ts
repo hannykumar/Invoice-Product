@@ -50,8 +50,10 @@ const LOCAL_DEVELOPMENT_URL = "postgresql://invoice:invoice@localhost:5432/invoi
 
 export function createDatabase(connectionString = process.env.DATABASE_URL): TransactionalExecutor {
   if (connectionString === undefined || connectionString.trim() === "") {
-    // A production server with no database configured must stop, not quietly keep a shop's books in a developer database.
-    if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is not set. The server will not start without its database in production.");
+    // Only a developer's machine or a test run may fall back. Anything that names another environment
+    // ("production", "Production", "prod", "staging") must stop, not quietly keep a shop's books in a developer database.
+    const environment = (process.env.NODE_ENV ?? "").trim().toLowerCase();
+    if (!["", "development", "test"].includes(environment)) throw new Error("DATABASE_URL is not set. The server will not start without its database outside development.");
     connectionString = LOCAL_DEVELOPMENT_URL;
   }
   // A stuck pool or a held lock fails loudly instead of hanging (ADR 0363 §1).
@@ -158,4 +160,23 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
     },
     close: () => pool.end(),
   };
+}
+
+/**
+ * Issue #368 — call once when a server starts. Outside development it refuses a connection that
+ * could ignore the database's own rules: a superuser, a role that bypasses row-level security, or
+ * the owner of the tables (who could switch their triggers off). Migrations use the owner; the
+ * server must not.
+ */
+export async function assertLeastPrivilege(db: SqlExecutor, environment = process.env.NODE_ENV): Promise<void> {
+  if (["", "development", "test"].includes((environment ?? "").trim().toLowerCase())) return;
+  const row = (await db.query(
+    `SELECT current_user AS name,
+            (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user) AS privileged,
+            EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                     WHERE n.nspname = 'public' AND pg_get_userbyid(c.relowner) = current_user) AS owner`,
+  )).rows[0];
+  if (row?.privileged === true || row?.owner === true) {
+    throw new Error(`The server is connected to the database as "${String(row.name)}", which can override its safety rules. Connect as a login that is only a member of invoice_app.`);
+  }
 }
