@@ -118,6 +118,8 @@ import { formatQuantity } from '../../../packages/masters/src/units.ts';
 import type { ApprovedPurchase, ApprovedPurchaseLine, PurchaseBill, PurchasePostingPreview } from '../../../packages/purchasing/src/posting-types.ts';
 import { validatePurchase } from '../../../packages/purchasing/src/validate.ts';
 import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adapter.ts';
+import { reverseChargeEntryFor } from '../../../packages/purchasing/src/reverse-charge-notified.ts';
+import type { Party } from '../../../packages/masters/src/types.ts';
 import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
 import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/src/validation.ts';
@@ -1783,7 +1785,13 @@ export class DemoApplication {
     const lines = approved.lines.map((line, index) =>
       `${line.description}: ${formatQuantity(line.quantity)} × ${formatPaise(line.ratePaise)} = ${formatPaise(line.taxableValuePaise)}, ${head} ${line.gstRateBasisPoints / 100}% = ${formatPaise(lineTaxes[index] ?? 0n)}`);
     const claimable = preview.tax.cgstPaise + preview.tax.sgstPaise + preview.tax.igstPaise + preview.tax.cessPaise;
-    const why = intra
+    // Issue #289 — a supplier who may not charge GST: the bill carries none, whatever the states.
+    const registration = resolveSupplier(this.companyOf(actor), approved.supplierPartyId).gstRegistrationType;
+    const why = registration === 'unregistered'
+      ? `The supplier is not registered for GST, so their bill carries no GST (CGST s.32(1)) and none can be claimed back (s.16(2)(a)).`
+      : registration === 'composition'
+        ? `The supplier is a composition dealer, so their bill carries no GST (CGST s.10(4)) and none can be claimed back (s.17(5)(e)).`
+        : intra
       ? `The supplier is in ${STATE_NAMES[supplierState] ?? supplierState} (${supplierState}), the same state as your godown, so the bill carries CGST and SGST.`
       : `The supplier is in ${STATE_NAMES[supplierState] ?? supplierState} (${supplierState}) and your godown is in ${STATE_NAMES[godownState] ?? godownState} (${godownState}), so the bill carries IGST.`;
     const sumLine = lineTaxes.length > 1
@@ -5922,19 +5930,24 @@ export class DemoApplication {
   > {
     const companyId = this.companyOf(actor);
     const supplier = resolveSupplier(companyId, String(input.supplierId ?? input.supplier ?? input.party ?? ''));
-    const supplierGstin = billingAddressOf(companyId, supplier.id)?.gstin;
-    if (supplierGstin === undefined) {
+    const supplierAddress = billingAddressOf(companyId, supplier.id);
+    const supplierGstin = supplierAddress?.gstin;
+    // Issue #289 — only a supplier the law lets trade unregistered (s.22, s.23) may have no GSTIN.
+    const unregistered = supplier.gstRegistrationType === 'unregistered';
+    if (supplierGstin === undefined && !unregistered) {
       throw invalid('SUPPLIER_GSTIN_MISSING', `${supplier.legalName} has no GST number saved. It decides which GST is on their bill and whether you can claim it, so add it to their record first.`);
     }
     const reference = String(input.reference ?? '').trim();
     if (!reference) throw invalid('API_REFERENCE_REQUIRED', 'Enter the supplier bill number.');
     const date = isoDate(String(input.date ?? ''));
-    const lines = this.purchaseLines(companyId, input);
+    const noGst = unregistered || supplier.gstRegistrationType === 'composition';
+    const lines = this.purchaseLines(companyId, input, noGst ? supplier : null);
+    if (unregistered) this.refuseReverseCharge(supplier, lines, date);
     const typedTotal = String(input.amount ?? '').trim() === '' ? null : paise(input.amount);
     const linesTotal = lines.reduce((total, line) => total + line.taxableValuePaise + taxOn(line.taxableValuePaise, line.gstRateBasisPoints), 0n);
     const total = typedTotal ?? linesTotal;
     const godownState = gstinStateCode(this.config.gstin);
-    const supplierState = gstinStateCode(supplierGstin);
+    const supplierState = supplierGstin === undefined ? supplierAddress?.stateCode ?? '' : gstinStateCode(supplierGstin);
 
     // The same supplier's bill number twice in one financial year is the same bill: a supplier
     // numbers each bill once a year. Typed again exactly, it is a retry and is recorded once; with
@@ -5942,8 +5955,9 @@ export class DemoApplication {
     const posted = (await this.shop.bills.list(companyId)).filter((bill) => bill.state === 'POSTED');
     const gstinOf = (partyId: string) => billingAddressOf(companyId, partyId)?.gstin ?? (partyId === this.config.supplierId ? this.config.supplierGstin : undefined);
     const year = financialYearOf(date);
+    // With no GSTIN to compare, the same supplier record is the same seller.
     const sameNumber = posted.find((bill) =>
-      normaliseIdentifier(gstinOf(bill.supplierPartyId) ?? '') === normaliseIdentifier(supplierGstin)
+      (supplierGstin === undefined ? bill.supplierPartyId === supplier.id : normaliseIdentifier(gstinOf(bill.supplierPartyId) ?? '') === normaliseIdentifier(supplierGstin))
       && normaliseInvoiceNumber(bill.invoiceNumber) === normaliseInvoiceNumber(reference)
       && financialYearOf(bill.invoiceDate) === year);
     if (sameNumber !== undefined) {
@@ -5965,7 +5979,7 @@ export class DemoApplication {
         companyId,
         documentId: `web-document:${draftId}`,
         source: 'manual',
-        supplierGstin: typed(supplierGstin),
+        ...(supplierGstin === undefined ? {} : { supplierGstin: typed(supplierGstin) }),
         supplierName: typed(supplier.legalName),
         buyerGstin: typed(this.config.gstin),
         invoiceNumber: typed(reference),
@@ -6033,7 +6047,28 @@ export class DemoApplication {
    * Issue #228 — the lines of a supplier bill, each an item from the item list with its own
    * quantity, price and GST rate. One line is the old single-item shape; many come as `lines`.
    */
-  private purchaseLines(companyId: CompanyId, input: Record<string, unknown>): ApprovedPurchaseLine[] {
+  /**
+   * Issue #289 — a purchase from an unregistered seller that the notifications put under reverse
+   * charge (the buyer pays its GST). Recording it as a plain purchase would leave that GST unpaid,
+   * so it is held back, with the notification named, until reverse charge can be recorded.
+   */
+  private refuseReverseCharge(supplier: Party, lines: readonly ApprovedPurchaseLine[], date: IsoDate): void {
+    for (const line of lines) {
+      const entry = reverseChargeEntryFor({
+        hsnSac: line.hsnSac, on: date,
+        supplier: { registered: false, agriculturist: supplier.unregisteredBasis === 'AGRICULTURIST', bodyCorporate: false },
+        recipientIsComposition: false,
+      });
+      if (entry === null) continue;
+      throw notAllowed('PURCHASE_REVERSE_CHARGE', [
+        `${line.description} (HSN/SAC ${line.hsnSac}) from ${supplier.legalName} is under reverse charge: you, the buyer, pay its GST — Notification ${entry.notification}, S.No. ${entry.serialNumber} (${entry.description}), in force from ${formatDate(isoDate(entry.effectiveFrom))}.`,
+        ...(entry.askFirst === undefined ? [] : [entry.askFirst]),
+        'Recording reverse charge, and the self-invoice you must issue within 30 days (CGST s.31(3)(f), Rule 47A), is not in the app yet, so nothing was recorded rather than recording it without the GST you owe.',
+      ].join(' '), { details: { notification: entry.notification, serialNumber: entry.serialNumber } });
+    }
+  }
+
+  private purchaseLines(companyId: CompanyId, input: Record<string, unknown>, noGstSupplier: Party | null = null): ApprovedPurchaseLine[] {
     const raw = input.lines;
     const parsed: unknown = typeof raw === 'string' && raw.trim() !== '' ? JSON.parse(raw) : raw;
     const rows: Record<string, unknown>[] = Array.isArray(parsed) && parsed.length > 0
@@ -6051,7 +6086,14 @@ export class DemoApplication {
       const rate = paise(row.rate);
       const typedGst = String(row.gst ?? row.gstRate ?? '').trim();
       const declared = itemView(companyId, item.id);
-      const gstBasisPoints = typedGst === ''
+      // Issue #289 — a seller who is not registered may not charge GST (CGST s.32(1)); nor may a
+      // composition dealer (s.10(4)). Their bill carries none, so nothing is assumed from the item.
+      if (noGstSupplier !== null && typedGst !== '' && Number(typedGst) !== 0) {
+        throw invalid('PURCHASE_GST_NOT_ALLOWED', noGstSupplier.gstRegistrationType === 'composition'
+          ? `${label}: ${noGstSupplier.legalName} is a composition dealer. A composition dealer may not collect GST (CGST s.10(4)) and issues a bill of supply, so there is no GST on this bill and none can be claimed (s.17(5)(e)). Leave GST at 0. If their bill shows GST, ask them about it before paying it.`
+          : `${label}: ${noGstSupplier.legalName} is not registered for GST. A seller who is not registered may not collect GST (CGST s.32(1)), and no credit can be claimed on their bill (s.16(2)(a)). Leave GST at 0. If their bill shows GST, ask them for their GST number, or about why it is there, before paying it.`);
+      }
+      const gstBasisPoints = noGstSupplier !== null ? 0 : typedGst === ''
         ? declared.ratePercent === null ? 0 : Math.round(declared.ratePercent * 100)
         : Number(typedGst);
       if (!Number.isInteger(gstBasisPoints) || gstBasisPoints < 0 || gstBasisPoints > 10_000) {
