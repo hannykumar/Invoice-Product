@@ -245,6 +245,28 @@ test('issue #285 — a zero-rated export under LUT is not "tax missing"; an expo
   assert.ok(codes('EXPORT_WITH_TAX').includes('GSTR1_TAX_DOES_NOT_MATCH_RATE'), 'an export on payment of IGST must carry it');
 });
 
+test('issue #325 — a small credit note against a large B2CL bill is listed in CDNUR, as its bill was', () => {
+  const inr = (rupees: number) => ({ currency: 'INR' as const, minor: BigInt(Math.round(rupees * 100)) });
+  // ₹5,000 back on a ₹1,18,944 bill to a consumer in Tamil Nadu (33), sold from another state.
+  const note: OutwardDocument = {
+    ...CN_001,
+    sourceId: 'cn-325', number: 'CN-325', partyName: 'Chennai walk-in buyer',
+    counterpartyGstin: null, counterpartyStateCode: '33', placeOfSupplyStateCode: '33',
+    supplierStateCode: SUNRISE_STATE,
+    lines: CN_001.lines.map((l) => ({ ...l, amounts: { taxableValue: inr(4_237.29), cgst: inr(0), sgst: inr(0), igst: inr(762.71), cess: inr(0) } })),
+    invoiceValue: inr(5_000),
+    originalDocument: { number: 'INV-325', date: isoDate('2026-07-05') as OutwardDocument['documentDate'], invoiceValue: inr(118_944) },
+    unregisteredConfirmed: true,
+  };
+  const decision = classifyDocument(note, context);
+  assert.equal(decision.outcome, 'CLASSIFIED', decision.findings.map((f) => f.code).join(', '));
+  assert.equal(decision.outcome === 'CLASSIFIED' ? decision.section : null, 'CDNUR');
+  // Without the bill's total, it can only be judged on its own value, as before.
+  const { invoiceValue: _ignored, ...withoutValue } = note.originalDocument!;
+  const unknown = classifyDocument({ ...note, originalDocument: withoutValue }, context);
+  assert.equal(unknown.outcome === 'CLASSIFIED' ? unknown.section : null, 'B2CS');
+});
+
 // ------------------------------------------------------- never guessing
 
 test('a customer with no GST number that nobody confirmed becomes a question, not a B2C sale', () => {

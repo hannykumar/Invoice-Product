@@ -83,8 +83,12 @@ export interface GovernmentRegistration {
 }
 
 /**
- * Issues #26 and #27. Called after the invoice is already safe in the books, because the books
- * must not wait for a government service — see message `gov.service_unavailable` in issue #46.
+ * Issues #26 and #27. The books must not wait for a government service — see message
+ * `gov.service_unavailable` in issue #46.
+ *
+ * Issue #363 — `onInvoiceFinalised` runs inside the bill's transaction, so its request is saved
+ * with the bill or not at all. An implementation must therefore only queue the request (the
+ * transactional outbox, docs/contracts/unit-of-work-v1.md); it must never call out from here.
  */
 export interface ComplianceHookPort {
   onInvoiceFinalised(invoice: SalesInvoice): Promise<readonly GovernmentRegistration[]>;
