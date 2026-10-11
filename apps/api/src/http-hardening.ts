@@ -64,31 +64,49 @@ export class BodyTooLarge extends Error {
 
 /**
  * Reads the body, and stops as soon as it passes `limit`: a declared length that is too big is
- * refused before a byte is read, and a body sent without one is cut off at the limit.
+ * refused before a byte is read, and a body sent without one stops being collected at the limit.
+ * The stream is paused rather than destroyed, so the connection stays open long enough for the
+ * 413 to reach the client; the response then closes it.
  */
-export const readLimitedBody = async (request: IncomingMessage, limit: number): Promise<Buffer> => {
+export const readLimitedBody = (request: IncomingMessage, limit: number): Promise<Buffer> => {
   const declared = Number(request.headers['content-length']);
-  if (Number.isFinite(declared) && declared > limit) throw new BodyTooLarge(limit);
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) throw new BodyTooLarge(limit);
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks);
+  if (Number.isFinite(declared) && declared > limit) return Promise.reject(new BodyTooLarge(limit));
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const stop = () => { request.off('data', onData); request.off('end', onEnd); request.off('error', onError); };
+    const onData = (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limit) { stop(); request.pause(); reject(new BodyTooLarge(limit)); return; }
+      chunks.push(chunk);
+    };
+    const onEnd = () => { stop(); resolve(Buffer.concat(chunks)); };
+    const onError = (error: Error) => { stop(); reject(error); };
+    request.on('data', onData);
+    request.on('end', onEnd);
+    request.on('error', onError);
+  });
 };
+
+/**
+ * Routes another server may post to: they prove themselves with a signature over the body, not
+ * with a browser's `Origin`. Today only the government callback (#389 tracks its verifier).
+ */
+const SIGNED_CALLBACKS: readonly RegExp[] = [/^\/api\/webhooks\/government\/[^/]+$/];
+export const isSignedCallback = (pathname: string): boolean => SIGNED_CALLBACKS.some((route) => route.test(pathname));
 
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * Sites other than this one that may post to the API, as full origins (`https://app.example.in`),
- * comma separated. Empty by default: the page and the API are served from the same host.
+ * The addresses the page is served from, as full origins (`https://karobar.in`), comma separated.
+ * Set it wherever a proxy sits in front of the app (#356): a proxy usually rewrites `Host`, and the
+ * page's own writes would otherwise look cross-site. Matched on scheme and host together, so a
+ * plain-http page on the same host does not pass for the https one. Read once at start-up.
  */
-const extraOrigins = (): ReadonlySet<string> => new Set(
-  (process.env.KAROBAR_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter((origin) => origin !== ''),
+const parseOrigins = (value: string | undefined): ReadonlySet<string> => new Set(
+  (value ?? '').split(',').map((origin) => origin.trim().replace(/\/+$/, '')).filter((origin) => origin !== ''),
 );
+const PUBLIC_ORIGINS = parseOrigins(process.env.KAROBAR_PUBLIC_ORIGINS);
 
 /**
  * True when a state-changing request came from another website. A browser always sends `Origin`
@@ -96,14 +114,17 @@ const extraOrigins = (): ReadonlySet<string> => new Set(
  * from a browser page (a script, a test, the command line) and carries its own bearer token, so it
  * is let through. `Origin: null` (a sandboxed frame, a file on disk) is refused.
  *
+ * With `KAROBAR_PUBLIC_ORIGINS` set, `Origin` must be one of them. Without it (local development,
+ * no proxy), the `Origin` host must be the `Host` the request was sent to.
+ *
  * The session today is a bearer token the page adds itself, which another site cannot read; this
  * check is what keeps state-changing routes safe once #342 moves the session into a cookie.
  */
-export const isCrossSiteWrite = (method: string, headers: IncomingHttpHeaders): boolean => {
+export const isCrossSiteWrite = (method: string, headers: IncomingHttpHeaders, publicOrigins: ReadonlySet<string> = PUBLIC_ORIGINS): boolean => {
   if (SAFE_METHODS.has(method.toUpperCase())) return false;
   const origin = headers.origin;
   if (typeof origin === 'string' && origin !== '') {
-    if (extraOrigins().has(origin)) return false;
+    if (publicOrigins.size > 0) return !publicOrigins.has(origin);
     let host: string;
     try { host = new URL(origin).host; } catch { return true; }
     return host === '' || host !== headers.host;
@@ -112,10 +133,10 @@ export const isCrossSiteWrite = (method: string, headers: IncomingHttpHeaders): 
 };
 
 /**
- * Slow clients cannot hold a connection open for ever. A request must finish arriving within
- * thirty seconds and its headers within ten.
+ * Slow clients cannot hold a connection open for ever. Headers must arrive within ten seconds; the
+ * whole request within two minutes, which still lets a 5 MB file finish over a slow mobile link.
  */
-export const REQUEST_TIMEOUT_MS = 30_000;
+export const REQUEST_TIMEOUT_MS = 120_000;
 export const HEADERS_TIMEOUT_MS = 10_000;
 
 export const applyTimeouts = <T extends Server>(server: T): T => {

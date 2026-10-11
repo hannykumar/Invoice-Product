@@ -31,9 +31,9 @@ export async function loadWebAsset(pathname: string): Promise<WebAsset> {
 
 // Issue #349: the same headers and time limits as the API, on the page and every file it loads.
 export const webServer = applyTimeouts(createServer(async (request, response) => {
-  applySecurityHeaders(response);
   const url = new URL(request.url ?? "/", "http://localhost");
   if (url.pathname.startsWith('/api/')) return serveApi(request, response);
+  applySecurityHeaders(response);
   const asset = await loadWebAsset(url.pathname);
   response.writeHead(asset.status, { "content-type": asset.contentType, "cache-control": "no-store" });
   response.end(asset.body);

@@ -9,7 +9,7 @@ import { request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { apiServer } from '../src/server.ts';
 import {
-  CONTENT_SECURITY_POLICY, HEADERS_TIMEOUT_MS, isCrossSiteWrite, MAX_FILE_BODY_BYTES, MAX_JSON_BODY_BYTES,
+  CONTENT_SECURITY_POLICY, HEADERS_TIMEOUT_MS, isCrossSiteWrite, isSignedCallback, MAX_FILE_BODY_BYTES, MAX_JSON_BODY_BYTES,
   REQUEST_TIMEOUT_MS, SECURITY_HEADERS,
 } from '../src/http-hardening.ts';
 
@@ -73,9 +73,11 @@ test('a 10 MB POST is refused with 413 in the usual error shape, and the server 
   assert.match(String(reply.message), /too much to send at once \(more than 1 MB\)/);
   assert.equal(declared.headers['content-security-policy'], CONTENT_SECURITY_POLICY);
 
-  // Sent in chunks with no declared length, it is cut off at the limit all the same.
+  // Sent in chunks with no declared length, it is cut off at the limit all the same, and the
+  // client still gets the 413 and its message rather than a dropped connection.
   const chunked = await send('POST', '/api/sales/preview', { 'content-type': 'application/json', 'transfer-encoding': 'chunked' }, tenMegabytes);
   assert.equal(chunked.status, 413);
+  assert.equal((JSON.parse(chunked.body) as Record<string, unknown>).code, 'REQUEST_TOO_LARGE');
 
   assert.equal((await send('GET', '/api/status')).status, 200);
 });
@@ -129,6 +131,18 @@ test('cross-site detection, case by case', () => {
   assert.equal(isCrossSiteWrite('POST', { origin: 'not a url', host: 'karobar.in' }), true);
   assert.equal(isCrossSiteWrite('POST', { host: 'karobar.in', 'sec-fetch-site': 'same-site' }), false);
   assert.equal(isCrossSiteWrite('POST', { host: 'karobar.in' }), false);
+});
+
+test('behind a proxy, the public address decides, scheme and host together', () => {
+  const publicOrigins = new Set(['https://karobar.in']);
+  // A proxy that rewrites Host no longer turns the page's own writes into refusals.
+  assert.equal(isCrossSiteWrite('POST', { origin: 'https://karobar.in', host: '127.0.0.1:4173' }, publicOrigins), false);
+  // A plain-http page on the same host is not the https site.
+  assert.equal(isCrossSiteWrite('POST', { origin: 'http://karobar.in', host: 'karobar.in' }, publicOrigins), true);
+  assert.equal(isCrossSiteWrite('POST', { origin: 'https://evil.example', host: 'karobar.in' }, publicOrigins), true);
+  assert.equal(isSignedCallback('/api/webhooks/government/irp'), true);
+  assert.equal(isSignedCallback('/api/webhooks/government/irp/extra'), false);
+  assert.equal(isSignedCallback('/api/sales/record'), false);
 });
 
 test('slow clients are cut off: request and header time limits are set', () => {

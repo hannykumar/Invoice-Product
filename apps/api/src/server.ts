@@ -15,7 +15,7 @@ import { isGovernmentConnector, receiveGovernmentWebhook } from './government-we
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { stateOfPincode } from '../../../packages/masters/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
-import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, readLimitedBody } from './http-hardening.ts';
+import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
 import type { Permission } from '../../../packages/platform/src/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
@@ -458,15 +458,12 @@ const send = (response: ServerResponse, result: ApiResult): void => {
   response.end(result.body);
 };
 
-/** The one route another site may post to: it proves itself with a signature, not a browser. */
-const GOVERNMENT_WEBHOOK = /^\/api\/webhooks\/government\/[^/]+$/;
-
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
   applySecurityHeaders(response);
   const url = new URL(request.url ?? '/', 'http://localhost');
   const method = request.method ?? 'GET';
   // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
-  if (!GOVERNMENT_WEBHOOK.test(url.pathname) && isCrossSiteWrite(method, request.headers)) {
+  if (!isSignedCallback(url.pathname) && isCrossSiteWrite(method, request.headers)) {
     return send(response, json(403, { state: 'failed', title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' }));
   }
   let body: Record<string, unknown> = {};
