@@ -62,6 +62,17 @@ does.
 | `gst_return_submissions` | `ACCEPTED` | nothing | — |
 | `subscription_service_invoices` | `ISSUED`, `PAID`, `FAILED` | `paid_on`, `provider_reference`, `failure_reason` | to `PAID`, to `FAILED`; never back to `DRAFT` |
 | `supplier_risk_assessments`, `supplier_risk_acknowledgements` | always | nothing | — |
+| `sales_invoices` (#365) | `FINAL`, `CANCELLED` | the cancellation fields, `updated_at`, `version` | `FINAL>CANCELLED` |
+| `sales_invoice_lines` | parent bill frozen | nothing | — |
+| `presale_documents` | always | the sale link, the bill link, the cancellation fields, `updated_at`, `version` | `ISSUED>CONVERTED`, `ISSUED>INVOICED`, `ISSUED>CANCELLED` |
+| `delivery_challans` | always | the e-way bill fields, the bill link, the cancellation fields, `updated_at`, `version` | `ISSUED>INVOICED`, `ISSUED>CANCELLED` |
+| `presale_document_lines`, `delivery_challan_lines` | always | nothing | — |
+| `stock_movements`, `cheque_events`, `advance_tax_lines`, `advance_applications`, `refund_vouchers` | always | nothing | — |
+| `stock_reservations` | `CONSUMED`, `RELEASED`, `EXPIRED` | nothing | — |
+| `payments` | always | `allocated_paise` (the database's own figure), `cheque_state`, the reversal fields, `updated_at`, `version` | `RECORDED>REVERSED` |
+| `payment_allocations` | always | `released_at` (once), `updated_at` | — |
+| `document_settlements` | always | `allocated_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
+| `advance_receipts` | always | `updated_at`, `version` | — |
 
 Each row was checked against the module's service and repository before it was frozen. The list
 lives in one place, `FROZEN` in `immutability-migrations.ts`.
@@ -91,8 +102,8 @@ lanes: `master_versions`, `master_snapshots`, `master_merges`, `bank_statement_t
 `bank_feed_transactions`, `subscription_payment_events`, `subscription_usage_events`,
 `notification_delivery_events`, `collection_communications`, `compliance_alerts`,
 `privacy_consents`, `restore_drills`, `status_incident_updates`, `government_calls` (freezable
-once its outcome is settled). Sales bills, payments, allocations and stock movements have no
-tables until #365.
+once its outcome is settled). `stock_balances` is not frozen because it is not a record: it is the
+sum of `stock_movements`, written only by the database (see [`sales-schema-v1`](./sales-schema-v1.md)).
 
 ### Known limits (decided, not overlooked)
 
