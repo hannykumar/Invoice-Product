@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import vm from "node:vm";
-import { loadWebAsset } from "../server.ts";
+import type { AddressInfo } from "node:net";
+import { loadWebAsset, webServer } from "../server.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (name: string) => readFile(resolve(root, name), "utf8");
@@ -222,6 +223,43 @@ test("the local web preview serves the application shell", async () => {
   assert.match(asset.contentType, /text\/html/);
   assert.match(asset.body.toString("utf8"), /id="view-dashboard"/);
   assert.equal((await loadWebAsset("/../../private-file")).status, 403);
+});
+
+test("#360: scripts and styles are named by their content and cached for a year; the shell and the API are not", async () => {
+  const shell = await loadWebAsset("/");
+  assert.equal(shell.cacheControl, "no-cache");
+  const html = shell.body.toString("utf8");
+  const names = [...html.matchAll(/(?:src|href)="(\/[\w-]+\.[0-9a-f]{12}\.(?:js|css))"/g)].map((match) => match[1]!);
+  assert.deepEqual(names.map((name) => name.replace(/\.[0-9a-f]{12}/, "")).sort(), ["/app.js", "/item-picker.js", "/sale-slides.js", "/styles.css"]);
+  for (const name of names) {
+    const asset = await loadWebAsset(name);
+    assert.equal(asset.cacheControl, "public, max-age=31536000, immutable", name);
+    assert.deepEqual(asset.body, await readFile(resolve(root, name.replace(/^\/(.+)\.[0-9a-f]{12}/, "$1"))));
+    assert.match(asset.contentType, /javascript|css/);
+  }
+  // A page from the previous deploy asks for a hash that no longer exists: today's file, revalidated.
+  const stale = await loadWebAsset("/app.000000000000.js");
+  assert.equal(stale.cacheControl, "no-cache");
+  assert.deepEqual(stale.body, await readFile(resolve(root, "app.js")));
+  assert.equal((await loadWebAsset("/done-screen.js")).cacheControl, "no-cache");
+  assert.equal((await loadWebAsset("/../../private-file")).cacheControl, "no-store");
+
+  await new Promise<void>((done) => webServer.listen(0, "127.0.0.1", done));
+  try {
+    const base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
+    const first = await fetch(`${base}/styles.css`);
+    const etag = first.headers.get("etag")!;
+    assert.equal(first.headers.get("cache-control"), "no-cache");
+    const again = await fetch(`${base}/styles.css`, { headers: { "if-none-match": etag } });
+    assert.equal(again.status, 304);
+    assert.equal(await again.text(), "");
+    assert.equal((await fetch(`${base}/styles.css`, { headers: { "if-none-match": `"x", W/${etag}` } })).status, 304);
+    // Anything behind sign-in is never kept by a browser, proxy or CDN.
+    const api = await fetch(`${base}/api/session`);
+    assert.equal(api.headers.get("cache-control"), "no-store");
+  } finally {
+    await new Promise<void>((done) => webServer.close(() => done()));
+  }
 });
 
 test("#230: money received picks a customer and money paid picks a supplier, never a typed name", async () => {
