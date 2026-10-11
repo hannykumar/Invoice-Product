@@ -9,6 +9,13 @@ Read it, then read `docs/gpt3-handbook.md` — the handbook is the authoritative
 for every GPT 3 issue, and the GitHub issue text is authoritative alongside it. Where they
 disagree, raise it rather than choosing silently.
 
+## Stack, commands and rules
+
+These live in `AGENTS.md` so every agent reads one copy. Stack changes need the owner's approval;
+decisions are recorded in `docs/decisions/`.
+
+@AGENTS.md
+
 ## Who owns what
 
 | Agent | Lane | Issues |
