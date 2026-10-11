@@ -10,8 +10,8 @@ High when either is High and the other is at least Medium; otherwise Medium or L
 the demo server as it runs on `main`: in-memory state, loopback-only (`127.0.0.1`), demo users,
 every government, bank, messaging and vehicle provider mocked. *At launch* means the same code
 reachable from the internet (#356). Gaps are rated for launch, because that is the risk this
-programme exists to remove. Every High gap names the issue that closes it; "to be filed (#348)"
-means the release review files it as its own issue and this table is then updated with the number.
+programme exists to remove. Every gap names the issue that closes it. Gaps that no issue owned were filed by the first release
+security review (#348, recorded in `docs/security/reviews/`) as #389–#406.
 
 ## 1. Assets
 
@@ -95,12 +95,12 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | H3 | Password guessing on sign-in; unsalted SHA-256; default demo passwords with no environment guard; the owner's demo password prefilled in the sign-in form (`apps/web/index.html:1547`) (A07/A02) | High | High | Constant-time compare | A real identity provider; no built-in users | **High** | #342 |
 | H4 | No rate limits on sign-in, government calls, PDF generation, reminders, the webhook (A04) | High | High | — | Per-user and per-company limits, spending caps | **High** | #350 |
 | H5 | A read-only viewer reads invoice PDFs and previews, notes, purchases, challans, quotations, PAN and bank details through GET routes with no permission check (A01) | Medium | Medium | Tenant check in each service | Permission on every GET | Medium | #327, #343 |
-| H6 | GET routes that write: `/api/catalogue` opens an account; `/api/operations` seeds data before its permission check (A04) | Low | Low | — | GET is read-only | Low | to be filed (#348) |
+| H6 | GET routes that write: `/api/catalogue` opens an account; `/api/operations` seeds data before its permission check (A04) | Low | Low | — | GET is read-only | Low | #395 |
 | H7 | Internal error text reaches the client; surprises answer 400, not 500; a JSON body of `null` returns a TypeError message (A05/A09) | Medium | Low | No stack traces; secrets redacted | One error shape, plain 500 | Medium | #344 |
 | H8 | Session token in `localStorage` is stolen by any XSS; no sign-out route (A07) | Low | High | No `innerHTML` from data | HttpOnly cookie, sign-out | **High** | #342 (+ #349 CSP) |
 | H9 | CSRF once the session is a cookie (A01) | Low today, High after #342 | High | Bearer header | `SameSite` cookie + Origin/Host check on every non-GET | **High** | #349 (Origin check), #342 (cookie) |
-| H10 | A retry creates a second document when the client sends no idempotency key: the server invents one (`randomUUID()`, `Date.now()`, or an empty key) (A04/A08) | Medium | High | Idempotency on every command | Refuse a write that has no client key | **High** | to be filed (#348) |
-| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked | Allow-list of served files | Medium | to be filed (#348) |
+| H10 | A retry creates a second document when the client sends no idempotency key: the server invents one (`randomUUID()`, `Date.now()`, or an empty key) (A04/A08) | Medium | High | Idempotency on every command | Refuse a write that has no client key | **High** | #392 |
+| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked | Allow-list of served files | Medium | #393 |
 | H12 | Cross-company access on any route (A01) | Low | High | Session tenancy, `companyOf` | Generated 401 / 403 / 404 tests for every route; RLS in use | **High** | #343, #340 |
 
 ### 4.2 File uploads — logos, signatures, migration files, ITC files
@@ -128,7 +128,7 @@ payment webhook is routed yet (#346).
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; the call log is empty until #51 | HMAC over the raw bytes with a per-provider secret from the vault, constant-time compare, timestamp window, schema check, and a refusal to start with the test verifier outside development | **High** | to be filed (#348) |
+| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; the call log is empty until #51 | HMAC over the raw bytes with a per-provider secret from the vault, constant-time compare, timestamp window, schema check, and a refusal to start with the test verifier outside development | **High** | #389 |
 | W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | In-memory dedup | Durable unique `(kind, eventId)` — the SQL index exists but the app does not use it | Medium | same issue as W1 |
 | W3 | Forged subscription "paid" event (A08) | — | High | Not routed | Signed webhook as the only source of truth | **High** | #346 |
 
@@ -140,9 +140,9 @@ routed, because the person who sends a bill is a stranger by design.
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| I1 | A stranger who knows a shop's public GSTIN pushes a forged e-invoice JSON into that shop's inbox at confidence 1, whichever alias it was sent to: the buyer GSTIN printed in the file picks the company (`routing.ts:58`) (A01/A08) | High once routed | High | Nothing posts without approval | The channel binding decides the company; unsigned JSON gets no special confidence; the IRN signature is verified | **High** | to be filed (#348) |
-| I2 | `providerMessageId` dedup is global, so a reused id returns another company's document and draft (`inbox.ts:117`); `assignCompany` and `retry` take no tenant and clear quarantine and review flags (A01) | Medium once routed | High | — | Dedup keyed by company; tenant and permission on every inbox command | **High** | same issue as I1 |
-| I3 | A malicious file passes screening: size, hash and scan verdict are declared by the caller, `unscanned` passes, and the PDF active-content check is a regex over the first 8 KB (A04/A08) | Medium once routed | Medium | Type allow-list, magic bytes, extension deny-list | Measure size and hash on the server, require a scan verdict, parse PDFs, page and pixel limits | Medium | to be filed (#348) |
+| I1 | A stranger who knows a shop's public GSTIN pushes a forged e-invoice JSON into that shop's inbox at confidence 1, whichever alias it was sent to: the buyer GSTIN printed in the file picks the company (`routing.ts:58`) (A01/A08) | High once routed | High | Nothing posts without approval | The channel binding decides the company; unsigned JSON gets no special confidence; the IRN signature is verified | **High** | #400 |
+| I2 | `providerMessageId` dedup is global, so a reused id returns another company's document and draft (`inbox.ts:117`); `assignCompany` and `retry` take no tenant and clear quarantine and review flags (A01) | Medium once routed | High | — | Dedup keyed by company; tenant and permission on every inbox command | **High** | #400, #406 |
+| I3 | A malicious file passes screening: size, hash and scan verdict are declared by the caller, `unscanned` passes, and the PDF active-content check is a regex over the first 8 KB (A04/A08) | Medium once routed | Medium | Type allow-list, magic bytes, extension deny-list | Measure size and hash on the server, require a scan verdict, parse PDFs, page and pixel limits | Medium | #401 |
 | I4 | The sender address is self-asserted and recorded as the audit actor (A09) | High | Low | — | Provider-verified sender; a system actor in the audit | Low | same issue as I3 |
 
 ### 4.5 CSV and Excel import, and exports
@@ -153,9 +153,9 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF` | Neutralise such cells | Medium | to be filed (#348) |
-| M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | — | Body limit, row limit | Medium | #349 + to be filed (#348) |
-| M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session | Per-company slots | Low | to be filed (#348) |
+| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF` | Neutralise such cells | Medium | #394 |
+| M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | — | Body limit, row limit | Medium | #349 + #396 |
+| M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session | Per-company slots | Low | #396 |
 | M4 | XLSX zip bomb, or a bank-statement PDF bomb, once those parsers are routed (A04/A06) | Low | Medium | Not routed | Size, sheet, page and row limits before parsing | Low | — |
 | E1 | GST return and offline JSON exports leak another company's data (A01) | Low | High | Permission and `actor.companyId` in the service | — | Low | — |
 | E2 | Header injection through a PDF filename (A03) | Low | Low | Filenames sanitised | — | Low | — |
@@ -169,8 +169,8 @@ blocked.
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | An escaping miss in any template becomes same-origin XSS: the bill frames have no `sandbox` and share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked) | `sandbox` on every bill frame; the #349 CSP is inherited by `srcdoc` and blocks inline script | Medium | #349 (CSP) + to be filed (#348) |
-| P2 | One Chromium per PDF request: repeated GETs exhaust the server; JavaScript is on in the renderer (A04) | Medium | Medium | Network blocked | A shared browser, JavaScript off, a rate limit | Medium | #350 + to be filed (#348) |
+| P1 | An escaping miss in any template becomes same-origin XSS: the bill frames have no `sandbox` and share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked) | `sandbox` on every bill frame; the #349 CSP is inherited by `srcdoc` and blocks inline script | Medium | #349 (CSP) + #399 |
+| P2 | One Chromium per PDF request: repeated GETs exhaust the server; JavaScript is on in the renderer (A04) | Medium | Medium | Network blocked | A shared browser, JavaScript off, a rate limit | Medium | #350 + #398 |
 
 ### 4.7 Voice and text assistant, action agent — prompt injection
 
@@ -201,19 +201,19 @@ or a recipient. The deterministic layer validates the draft and a person approve
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| A1 | One person plans, approves and executes in one click; a bare "remind" chases every overdue customer (A04) | Medium | Medium | Preview, fingerprint, permission per step | The count shown and a cap, or a second approver for bulk sends | Medium | to be filed (#348) |
-| A2 | "Why is this bill blocked?" reads any invoice, and stock as `setupActor`, past the asker's sales and stock permissions (`demo-application.ts:979-988`) (A01) | Medium | Medium | `assistant.ask`, tenant | Read as the asker | Medium | to be filed (#348) |
+| A1 | One person plans, approves and executes in one click; a bare "remind" chases every overdue customer (A04) | Medium | Medium | Preview, fingerprint, permission per step | The count shown and a cap, or a second approver for bulk sends | Medium | accepted: designed flow (#348 review) |
+| A2 | "Why is this bill blocked?" reads any invoice, and stock as `setupActor`, past the asker's sales and stock permissions (`demo-application.ts:979-988`) (A01) | Medium | Medium | `assistant.ask`, tenant | Read as the asker | Medium | #397 |
 | A3 | Instructions hidden in OCR text, a WhatsApp or email body, a voice transcript, or a supplier or item name steer an action (A03) | Low (no model) | High | Deterministic parsers, allow-listed intents, human approval | The rule above, enforced by a test when a model is wired | Medium | #316 must carry it |
-| A4 | A stored party or item name containing "guaranteed" or "you must" makes assistant answers fail (A04) | Low | Low | — | Check the sentence template, not the data | Low | to be filed (#348) |
-| A5 | "Today" for the agent and for reminders comes from the client, so bills look overdue early and wording escalates (A04) | Medium | Low | — | Server clock | Low | to be filed (#348) |
-| A6 | Agent audit records and prepared cancellations live in the agent's own stores, not the company audit (A09) | Medium | Low | — | One audit trail | Low | to be filed (#348) |
+| A4 | A stored party or item name containing "guaranteed" or "you must" makes assistant answers fail (A04) | Low | Low | — | Check the sentence template, not the data | Low | #405 |
+| A5 | "Today" for the agent and for reminders comes from the client, so bills look overdue early and wording escalates (A04) | Medium | Low | — | Server clock | Low | #403 |
+| A6 | Agent audit records and prepared cancellations live in the agent's own stores, not the company audit (A09) | Medium | Low | — | One audit trail | Low | #404 |
 
 ### 4.8 Outbound adapters and secrets
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | O1 | SSRF through a user-supplied URL (A10) | Low | High | No user-controlled outbound URL; government hosts allow-listed | The #348 review checks every new `fetch` | Low | — |
-| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Synthetic provider | Allow-listed redirect; `state` bound to the session | Medium | to be filed (#348) |
+| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Synthetic provider | Allow-listed redirect; `state` bound to the session | Medium | #402 |
 | O3 | One WhiteBooks credential and GSTIN shared by every company (A01/A02) | High at launch | High | Sandbox only; production hard-off | A per-company credential in a vault | **High** | #210 |
 | O4 | Secrets committed, or leaked through a dependency (A06) | Medium | High | `.env` gitignored, mode 0600 | gitleaks, Dependabot | **High** | #351 |
 | O5 | Personal data in logs (A09) | Medium | Medium | Recursive redaction | Structured logs with a request id | Medium | #357, #352 |
@@ -225,12 +225,12 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | H1 body limit and timeouts, H2 headers, H9 Origin check, U1 | #349 |
 | H3, H8 sign-in, passwords, cookie session | #342 |
 | H4 rate limits | #350 |
-| H10 idempotency key invented by the server | to be filed (#348) |
+| H10 idempotency key invented by the server | #392 |
 | H12 cross-company tests for every route | #343 |
 | U1, U3 uploads | #341 |
-| W1 forgeable government webhook | to be filed (#348) |
+| W1 forgeable government webhook | #389 |
 | W3 payment webhook | #346 |
-| I1, I2 intake tenant routing | to be filed (#348) |
+| I1, I2 intake tenant routing | #400, #406 |
 | O3 shared government credential | #210 |
 | O4 secrets and dependencies | #351 |
 
