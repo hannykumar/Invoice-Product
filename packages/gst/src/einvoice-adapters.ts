@@ -6,7 +6,7 @@
 // computes IRNs with the published formula so the verification in `irn.ts` is exercised for real
 // rather than against a rubber stamp.
 
-import { writeIndianTimestamp, type CompanyId } from "@invoice/kernel";
+import { conflict, writeIndianTimestamp, type CompanyId } from "@invoice/kernel";
 import type { TransactionParticipant } from "@invoice/ledger";
 import {
   ConnectorError, type ConnectorGateway, type ConnectorRequest,
@@ -17,7 +17,7 @@ import type {
   CancelReasonCode, EInvoicePolicy, EInvoiceRecord, IrpAcknowledgement,
 } from "./einvoice-types.ts";
 import type {
-  EInvoicePolicyPort, EInvoiceRepository, IrpCancelOutcome, IrpFetchOutcome, IrpGenerateOutcome,
+  EInvoicePage, EInvoicePolicyPort, EInvoiceRepository, IrpCancelOutcome, IrpFetchOutcome, IrpGenerateOutcome,
   IrpPort,
 } from "./einvoice-ports.ts";
 import type { EInvoiceDocument } from "./payload.ts";
@@ -269,17 +269,34 @@ export class SyntheticIrp {
 
 // --------------------------------------------------------------------------- storage
 
+/** Issue #366 — the same refusal from memory and from the database's unique indexes. */
+export const duplicateEInvoice = () =>
+  conflict("EINVOICE_DUPLICATE", "This bill already has an e-invoice record, so a second one was not started.");
+
 export class InMemoryEInvoiceStore implements EInvoiceRepository, TransactionParticipant {
   #rows: EInvoiceRecord[] = [];
 
   snapshot(): unknown { return [...this.#rows]; }
   restore(taken: unknown): void { this.#rows = [...(taken as EInvoiceRecord[])]; }
 
-  async insert(record: EInvoiceRecord): Promise<void> { this.#rows.push(Object.freeze(record)); }
+  async insert(record: EInvoiceRecord): Promise<void> {
+    this.#refuseClash(record, true);
+    this.#rows.push(Object.freeze(record));
+  }
 
   async update(record: EInvoiceRecord): Promise<void> {
     const index = this.#rows.findIndex((row) => row.companyId === record.companyId && row.id === record.id);
-    if (index >= 0) this.#rows[index] = Object.freeze(record);
+    if (index < 0) return;
+    this.#refuseClash(record, false);
+    this.#rows[index] = Object.freeze(record);
+  }
+
+  /** Issue #366 — what the database's unique indexes refuse: one record per sales document, one per IRN. */
+  #refuseClash(record: EInvoiceRecord, isNew: boolean): void {
+    const irn = record.acknowledgement?.irn;
+    const clash = this.#rows.some((row) => (isNew && row.id === record.id) || (row.id !== record.id && row.companyId === record.companyId
+      && (row.documentId === record.documentId || (irn !== undefined && row.acknowledgement?.irn === irn))));
+    if (clash) throw duplicateEInvoice();
   }
 
   async findById(companyId: CompanyId, id: Id): Promise<EInvoiceRecord | null> {
@@ -294,20 +311,31 @@ export class InMemoryEInvoiceStore implements EInvoiceRepository, TransactionPar
     return this.#rows.find((row) => row.companyId === companyId && row.acknowledgement?.irn === irn) ?? null;
   }
 
-  async list(companyId: CompanyId): Promise<EInvoiceRecord[]> {
-    return this.#rows.filter((row) => row.companyId === companyId);
+  async list(companyId: CompanyId, page?: EInvoicePage): Promise<EInvoiceRecord[]> {
+    return this.#page(companyId, page, () => true);
   }
 
-  async listCancellable(companyId: CompanyId, now: string): Promise<EInvoiceRecord[]> {
-    return this.#rows.filter((row) => row.companyId === companyId && row.status === "REGISTERED"
+  async listCancellable(companyId: CompanyId, now: string, page?: EInvoicePage): Promise<EInvoiceRecord[]> {
+    return this.#page(companyId, page, (row) => row.status === "REGISTERED"
       && row.cancellableUntil !== undefined && row.cancellableUntil > now);
   }
 
-  async listPendingReport(companyId: CompanyId, on: IsoDate): Promise<EInvoiceRecord[]> {
-    return this.#rows.filter((row) => row.companyId === companyId
-      && (row.status === "PENDING" || row.status === "FAILED")
+  async listPendingReport(companyId: CompanyId, on: IsoDate, page?: EInvoicePage): Promise<EInvoiceRecord[]> {
+    return this.#page(companyId, page, (row) => (row.status === "PENDING" || row.status === "FAILED")
       && row.applicability.outcome === "APPLICABLE"
       && (row.reportableUntil === undefined || row.reportableUntil >= on));
+  }
+
+  /** Without a page: everything, in the order it was saved. With one: oldest first, after the cursor row. */
+  #page(companyId: CompanyId, page: EInvoicePage | undefined, keep: (row: EInvoiceRecord) => boolean): EInvoiceRecord[] {
+    const mine = this.#rows.filter((row) => row.companyId === companyId);
+    if (page === undefined) return mine.filter(keep);
+    const key = (row: EInvoiceRecord): string => `${row.createdAt}|${row.id}`;
+    const cursor = page.after === undefined ? undefined : mine.find((row) => row.id === page.after);
+    if (page.after !== undefined && cursor === undefined) return [];
+    return mine.filter((row) => keep(row) && (cursor === undefined || key(row) > key(cursor)))
+      .sort((left, right) => (key(left) < key(right) ? -1 : 1))
+      .slice(0, page.limit);
   }
 }
 
