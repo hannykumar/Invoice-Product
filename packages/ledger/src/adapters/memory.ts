@@ -280,8 +280,15 @@ export const permissionPortFromActor: PermissionPort = {
 };
 
 /** GPT 2 issue #6 mock: keeps every event so tests can assert what was recorded. */
-export class InMemoryAuditPort implements AuditPort {
+export class InMemoryAuditPort implements AuditPort, TransactionParticipant {
   readonly events: AuditEvent[] = [];
+  /** Issue #363 — joined to a store, a rolled-back action leaves no audit record behind. */
+  snapshot(): unknown {
+    return this.events.length;
+  }
+  restore(taken: unknown): void {
+    this.events.length = taken as number;
+  }
   async record(event: AuditEvent): Promise<void> {
     this.events.push(event);
   }
