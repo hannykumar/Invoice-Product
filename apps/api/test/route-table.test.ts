@@ -11,6 +11,7 @@ import test from 'node:test';
 import { handleApi, ROUTES, serveApi } from '../src/server.ts';
 import { DemoApplication } from '../src/demo-application.ts';
 import { PAGE_LIMIT_MAX } from '../src/routes/route.ts';
+import { PdfRenderingError } from '../../../packages/invoice-templates/src/pdf.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 const COMPANY_B = '00000000-0000-4000-8000-000000000011';
@@ -46,11 +47,18 @@ test('#344: garbage JSON sent to any route over HTTP is a clean 400 in the one e
       assertFailureShape(body, Object.fromEntries(response.headers));
       assert.equal(body.code, 'INVALID_INPUT');
     }
-    // A request id a proxy already gave is carried through, so its log lines join up.
-    const traced = await fetch(`${base}/api/nowhere`, { headers: { 'x-request-id': 'edge-0001-trace' } });
+    // The id is always our own: one a caller chose could collide with another request's in the log.
+    const traced = await fetch(`${base}/api/nowhere`, { headers: { 'x-request-id': 'support-ticket-1234' } });
     assert.equal(traced.status, 404);
-    assert.equal(traced.headers.get('x-request-id'), 'edge-0001-trace');
-    assert.equal((await traced.json() as Record<string, any>).requestId, 'edge-0001-trace');
+    assert.notEqual(traced.headers.get('x-request-id'), 'support-ticket-1234');
+    assert.equal((await traced.json() as Record<string, any>).requestId, traced.headers.get('x-request-id'));
+    // A path the URL parser rejects is a 404, not a crashed server.
+    const { request } = await import('node:http');
+    const status = await new Promise<number>((resolve, reject) => {
+      const raw = request({ host: '127.0.0.1', port: (server.address() as AddressInfo).port, path: '//', method: 'GET' }, (response) => { response.resume(); resolve(response.statusCode ?? 0); });
+      raw.on('error', reject); raw.end();
+    });
+    assert.equal(status, 404);
   } finally {
     server.close();
   }
@@ -65,6 +73,10 @@ test('#344: a body that is not an object, or a list where one value belongs, is 
     assertFailureShape(body, result.headers);
     assert.equal(body.code, 'INVALID_INPUT');
   }
+  // A list sent as JSON text that is not JSON is the caller's mistake, not a fault on our side.
+  const badText = await handleApi('POST', '/api/sales/preview', { customerId: 'sampoorna:party:customer', date: '2026-08-29', lines: '[{not json' }, owner);
+  assert.equal(badText.status, 400);
+  assert.equal(parse(badText).code, 'INVALID_INPUT');
   const wrongType = await handleApi('POST', '/api/sales/cancel/preview', { invoice: { id: 'x' }, reason: ['a', 'b'] }, owner);
   assert.equal(wrongType.status, 400);
   const body = parse(wrongType);
@@ -91,8 +103,23 @@ test('#344: a thrown TypeError is a generic 500 with the request id; its message
   assert.ok(logged[0]!.includes(body.requestId), 'the log line carries the same request id');
 });
 
+test('#344: a PDF the browser engine could not make is a 500; where Chrome lives stays in the log', async (context) => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const logged: string[] = [];
+  context.mock.method(console, 'error', (line: string) => { logged.push(line); });
+  context.mock.method(DemoApplication.prototype, 'invoicePrint', async () => { throw new PdfRenderingError(new Error('Could not find Chrome (cache path /root/.cache/puppeteer)')); });
+  const result = await handleApi('GET', '/api/sales/any-bill/pdf', {}, owner);
+  assert.equal(result.status, 500);
+  assert.doesNotMatch(String(result.body), /Chrome|puppeteer/);
+  assert.match(logged.join('\n'), /Could not find Chrome/);
+});
+
 test('#344: a plain Error the product throws on purpose still tells the shopkeeper what went wrong', async (context) => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  // The kernel's parsers answer a date typed in a form they cannot read with a RangeError: the caller's to fix.
+  const badDate = await handleApi('POST', '/api/sales/preview', { customerId: 'sampoorna:party:customer', date: '31-02-2026' }, owner);
+  assert.equal(badDate.status, 400);
+  assert.match(parse(badDate).message, /is not a date/);
   context.mock.method(DemoApplication.prototype, 'dashboard', () => { throw new Error('This bill has no rate for the item.'); });
   const result = await handleApi('GET', '/api/dashboard', {}, owner);
   assert.equal(result.status, 400);

@@ -74,8 +74,9 @@ Postgres (#340/#366) it becomes a keyset cursor, and the wire format stays the s
 
 ## Replies and errors
 
-Every reply carries an `x-request-id` header. A request id a proxy already set (8–64 of
-`A-Z a-z 0-9 . _ : -`) is kept; otherwise a new one is made. Every failure has one shape:
+Every reply carries an `x-request-id` header with an id the server makes. An `x-request-id` the
+caller sends is not reused, because a chosen id could collide with another request's in the log.
+Every failure has one shape:
 
 ```json
 { "state": "failed", "title": "Nothing was saved", "code": "INVALID_INPUT",
@@ -103,10 +104,12 @@ to the caller.
 
 "Meant for the screen" means a `DomainError` or `PlatformError` (mapped by kind), one of the product's
 own error classes listed in `server.ts` (`MasterDataError`, `UnitConversionError`, `InboxError`,
-`ConnectorError`, `CurrencyMismatchError`, `UnitMismatchError`), or a plain `Error` with no `code`.
+`ConnectorError`, `CurrencyMismatchError`, `UnitMismatchError`), a `RangeError` (what the kernel's
+parsers throw for a date, amount, quantity or tax period they cannot read), a `SyntaxError` (a list
+sent as JSON text that is not JSON; answered with a fixed message), or a plain `Error` with no `code`.
 About 88 throw sites in `packages/*` still use a plain `Error` to speak to the shopkeeper, so it
 keeps its 400 and its message. Moving them to `DomainError` is follow-up work. Anything else
-(`TypeError`, `RangeError`, a file or database error) is a 500.
+(`TypeError`, a file or database error, a PDF the browser engine could not produce) is a 500.
 
 ## Adding a route
 

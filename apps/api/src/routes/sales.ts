@@ -3,9 +3,8 @@
  * proforma invoices, delivery challans, and returns with their credit and debit notes.
  */
 import { ChallanDesk } from '../challan-application.ts';
-import { anything, fields, get, need, needAny, nothing, list, post, replyPdf, signedIn, text, type Route } from './route.ts';
+import { anything, fields, get, need, needAny, nothing, list, post, replyPdf, text, READ, type Route } from './route.ts';
 
-const READ = signedIn('any signed-in member may read this; the service checks what they may see (#343 tightens it)');
 const DRAFT = need('start a bill', 'sales.draft.write');
 const CHALLANS = need('issue delivery challans', 'challan.issue');
 const PRESALE = needAny('make quotations or proforma invoices', 'quotation.issue', 'proforma.issue');

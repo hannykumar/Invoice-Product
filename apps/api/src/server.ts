@@ -25,14 +25,6 @@ export { ROUTES } from './routes/index.ts';
 export const jsonResponse = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: redactSecretText(JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) ?? '') });
 const json = jsonResponse;
 
-/**
- * Issue #280 — what each gated POST needs, read off the route table. Kept for the callers that
- * looked it up by path before the table existed (#344); `ROUTES` is the source.
- */
-export const POST_PERMISSIONS: Readonly<Record<string, Omit<Gate, 'kind'>>> = Object.fromEntries(
-  ROUTES.flatMap((route) => route.method === 'POST' && route.access.kind === 'gate' ? [[route.path, route.access]] : []),
-);
-
 const requirePermission = (actor: ActorContext, gate: Gate): void => {
   for (const permission of gate.all) permissionPortFromActor.require(actor, permission, gate.what);
   if (gate.any.length > 0 && !gate.any.some((permission) => actor.permissions.includes(permission))) permissionPortFromActor.require(actor, gate.any[0]!, gate.what);
@@ -41,12 +33,14 @@ const requirePermission = (actor: ActorContext, gate: Gate): void => {
 /**
  * Errors the product raises on purpose to tell the shopkeeper what went wrong: their message is
  * written for the screen. A plain `Error` with no `code` is one too — about 88 throw sites in
- * packages/* speak to the shopkeeper that way (migrating them to DomainError is a follow-up).
- * Anything else — a TypeError, a RangeError, a file or database error — is a fault on our side.
+ * packages/* speak to the shopkeeper that way (migrating them to DomainError is a follow-up). So is a
+ * RangeError: the kernel's parsers raise it for a date, amount, quantity or tax period that was typed
+ * in a form they cannot read ("31-02-2026" is not a real date), which is the caller's to correct.
+ * Anything else — a TypeError, a file or database error, a PDF not produced — is a fault on our side.
  */
 const SPOKEN_TO_THE_SHOPKEEPER = [MasterDataError, UnitConversionError, InboxError, ConnectorError, CurrencyMismatchError, UnitMismatchError];
 const isMeantForTheScreen = (error: unknown): error is Error =>
-  error instanceof Error && ((error.constructor === Error && !('code' in error)) || SPOKEN_TO_THE_SHOPKEEPER.some((kind) => error instanceof kind));
+  error instanceof Error && ((error.constructor === Error && !('code' in error)) || error instanceof RangeError || SPOKEN_TO_THE_SHOPKEEPER.some((kind) => error instanceof kind));
 
 /** The status a known error answers with, or `undefined` for a fault on our side. */
 const statusOf = (error: unknown): number | undefined => {
@@ -54,6 +48,8 @@ const statusOf = (error: unknown): number | undefined => {
   // A provider that signed its callback wrongly is told so, and told nothing else.
   if (error instanceof WebhookNotAuthenticated) return 401;
   if (error instanceof ZodError) return 400;
+  // A field the service reads as JSON text (`lines`, `bills`) that is not JSON: the caller's mistake.
+  if (error instanceof SyntaxError) return 400;
   if (error instanceof DomainError) {
     if (error.kind === 'FORBIDDEN') return 403;
     if (error.kind === 'NOT_FOUND') return 404;
@@ -90,7 +86,7 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
   const status = statusOf(error);
   if (status === undefined) {
     // The detail goes to the log, never to the caller (#357 turns this into the structured logger).
-    console.error(redactSecretText(JSON.stringify({ level: 'error', requestId, route: routeName, error: error instanceof Error ? error.name : typeof error, message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined })));
+    console.error(redactSecretText(JSON.stringify({ level: 'error', requestId, route: routeName, error: error instanceof Error ? error.name : typeof error, message: error instanceof Error ? error.message : String(error), cause: error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined, stack: error instanceof Error ? error.stack : undefined })));
     return failure(500, requestId, {
       title: 'Something went wrong',
       code: 'INTERNAL',
@@ -98,6 +94,7 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
     });
   }
   if (error instanceof ZodError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: invalidInputMessage(error) });
+  if (error instanceof SyntaxError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because a list that was sent as text is not valid JSON.' });
   const known = error as Error;
   return failure(status, requestId, {
     title: error instanceof AuthenticationError ? 'Sign in required' : 'Nothing was saved',
@@ -110,19 +107,16 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
 
 const isPublic = (route: Route): route is PublicRoute => route.access.kind === 'public';
 
-const REQUEST_ID = /^[A-Za-z0-9._:-]{8,64}$/;
-/** A request id a proxy in front of us already gave, if it is one we can safely echo; otherwise a fresh one. */
-export const requestIdOf = (given: unknown): string => typeof given === 'string' && REQUEST_ID.test(given) ? given : randomUUID();
-
 /**
  * Issue #344 — serve one API call from the route table: match the route, sign the caller in, check
  * the permission (before reading the input, #280), validate the input, run the handler.
  * `pathname` may carry a `?query`; a GET's input is its query, merged over `body` for in-process callers.
  */
 export async function handleApi(method: string, pathname: string, body: unknown = {}, authorization?: string, delivery?: WebhookDelivery, requestId: string = randomUUID()): Promise<ApiResult> {
-  const url = new URL(pathname, 'http://localhost');
-  const found = matchRoute(method, url.pathname);
-  if (found === undefined) return failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
+  // A path the URL parser rejects (`//`, a stray space) names nothing that could exist.
+  const url = URL.parse(pathname, 'http://localhost');
+  const found = url === null ? undefined : matchRoute(method, url.pathname);
+  if (url === null || found === undefined) return failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
   const { route, params } = found;
   try {
     const runtime = apiRuntime();
@@ -166,7 +160,8 @@ const send = (response: ServerResponse, result: ApiResult): void => {
 };
 
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  const requestId = requestIdOf(request.headers['x-request-id']);
+  // Always our own id: one a caller chose could collide with another request's in the log.
+  const requestId = randomUUID();
   let read: { parsed: unknown; raw: string };
   try { read = await readBody(request); }
   catch { return send(response, failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' })); }

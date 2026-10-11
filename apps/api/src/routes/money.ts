@@ -2,9 +2,8 @@
  * Issue #344 — the business's plan (#42), the assistant that does things (#47), payment reminders
  * (#23) and bank feeds.
  */
-import { anything, fields, get, need, nothing, list, post, signedIn, text, type Route } from './route.ts';
+import { anything, fields, get, need, nothing, list, post, text, READ, type Route } from './route.ts';
 
-const READ = signedIn('any signed-in member may read this; the service checks what they may see (#343 tightens it)');
 const PLAN = need('change your plan', 'subscription.manage');
 const SEND = need('send payment reminders', 'collections.reminders.send');
 const DISPUTES = need('handle a disputed bill', 'collections.dispute.manage');

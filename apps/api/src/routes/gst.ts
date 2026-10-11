@@ -3,9 +3,8 @@
  * (#28), purchase tax credit against the government's record (#31) and GST returns (#30).
  */
 import { DemoApplication } from '../demo-application.ts';
-import { anything, fields, get, need, nothing, list, post, replyPdf, signedIn, text, type Route } from './route.ts';
+import { anything, fields, get, need, nothing, list, post, replyPdf, text, READ, type Route } from './route.ts';
 
-const READ = signedIn('any signed-in member may read this; the service checks what they may see (#343 tightens it)');
 const EINVOICE = need('register e-invoices', 'einvoice.generate');
 const EWAY_VIEW = need('see e-way bills', 'eway.view');
 const EWAY_MAKE = need('make e-way bills', 'eway.generate');

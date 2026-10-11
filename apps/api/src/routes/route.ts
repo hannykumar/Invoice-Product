@@ -35,6 +35,8 @@ export const need = (what: string, ...all: Permission[]): Gate => ({ kind: 'gate
 export const needAny = (what: string, ...any: Permission[]): Gate => ({ kind: 'gate', what, all: [], any });
 export const publicRoute = (reason: string): Public => ({ kind: 'public', reason });
 export const signedIn = (reason: string): SignedIn => ({ kind: 'signedIn', reason });
+/** Today's rule for every read. #343 replaces it route by route with the permission each one needs. */
+export const READ = signedIn('any signed-in member may read this; the service checks what they may see (#343 tightens it)');
 
 /** What every handler is given. `params` are the `:name` parts of the path, already decoded. */
 export interface PublicCall<I> {

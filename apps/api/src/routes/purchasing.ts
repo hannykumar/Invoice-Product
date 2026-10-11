@@ -3,9 +3,8 @@
  * comparison with the bill (#18), and recording the supplier's bill (#17).
  */
 import { DemoApplication } from '../demo-application.ts';
-import { anything, fields, get, need, nothing, post, signedIn, text, type Route } from './route.ts';
+import { anything, fields, get, need, nothing, post, text, READ, type Route } from './route.ts';
 
-const READ = signedIn('any signed-in member may read this; the service checks what they may see (#343 tightens it)');
 const RECORD_BILL = need('record a supplier bill', 'ledger.post.purchase');
 
 const supplierCheck = fields({ gstin: text, party: text, stateCode: anything, reference: anything, date: anything, refresh: anything, modelHint: anything, reason: text });

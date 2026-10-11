@@ -10,9 +10,8 @@ import { previewBranding, readBranding, saveBranding } from '../branding-applica
 import { currentStates, readBusinessDetails } from '../business-details-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from '../migration-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
-import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, signedIn, text, type Route } from './route.ts';
+import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, signedIn, text, READ, type Route } from './route.ts';
 
-const READ = signedIn('any signed-in member may read this; the service checks what they may see (#343 tightens it)');
 const PARTIES = need('add or change customers, suppliers or transporters', 'masters.party.write');
 const ITEMS = need('add or change items and the GST rate on them', 'masters.item.write', 'masters.item.rate.declare');
 const BRANDING = need('change how your bills look', 'branding.write');

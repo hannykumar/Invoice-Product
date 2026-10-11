@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { handleApi, POST_PERMISSIONS, ROUTES } from '../src/server.ts';
+import { handleApi, ROUTES } from '../src/server.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 
@@ -43,10 +43,7 @@ test('#344: every route declares who may call it, and only the allow-listed POST
   }
   const paths = POSTS.map((route) => route.path);
   for (const allowed of ALLOWED) assert.ok(paths.includes(allowed), `${allowed} is allow-listed but is no longer a route`);
-  for (const gated of Object.keys(POST_PERMISSIONS)) {
-    assert.ok(paths.includes(gated), `${gated} has a permission but is no longer a route`);
-    assert.ok(!ALLOWED.has(gated), `${gated} is both allow-listed and gated`);
-  }
+  for (const route of POSTS) if (route.access.kind === 'gate') assert.ok(!ALLOWED.has(route.path), `${route.path} is both allow-listed and gated`);
   const ungated = POSTS.filter((route) => route.access.kind !== 'gate' && !ALLOWED.has(route.path)).map((route) => route.path);
   assert.deepEqual(ungated, [], 'these POST routes have no permission and are not allow-listed');
 });
