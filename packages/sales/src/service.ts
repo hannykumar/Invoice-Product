@@ -600,30 +600,32 @@ export class SalesService {
         await this.#inventory.issue(actor, final.id, final.documentDate, number);
       }
       await this.#repo.update(final, priced.version);
-      return { final, voucher: posted.voucher, deduplicated: posted.deduplicated };
+      // Issue #363 — the audit records and the government request are part of the same unit of
+      // work as the bill: a crash or a rollback leaves none of them behind. The compliance hook
+      // only queues its request here (it runs with the transaction open); the request itself is
+      // sent after the commit, so the books never wait for a government service and a failure
+      // there never unmakes the bill (issue #46, `gov.service_unavailable`).
+      if (!posted.deduplicated) await this.#ledger.recordPosted(actor, posted.voucher);
+      await this.#audit.record({
+        companyId: actor.companyId,
+        actorId: actor.userId,
+        at,
+        action: 'sales.invoice_finalised',
+        subjectType: 'sales_invoice',
+        subjectId: final.id,
+        summary: `Bill ${final.number} issued for ${formatINR(pricing.totals.invoiceValue)}.`,
+        details: {
+          number: final.number ?? '',
+          value: toDecimalString(pricing.totals.invoiceValue),
+          voucherId: posted.voucher.id,
+          placeOfSupply: pricing.placeOfSupplyStateCode,
+          split: pricing.split,
+        },
+      });
+      const registrations = await this.#compliance.onInvoiceFinalised(final);
+      return { final, voucher: posted.voucher, deduplicated: posted.deduplicated, registrations };
     });
-
-    await this.#ledger.recordPosted(actor, outcome.voucher);
-    await this.#audit.record({
-      companyId: actor.companyId,
-      actorId: actor.userId,
-      at,
-      action: 'sales.invoice_finalised',
-      subjectType: 'sales_invoice',
-      subjectId: outcome.final.id,
-      summary: `Bill ${outcome.final.number} issued for ${formatINR(pricing.totals.invoiceValue)}.`,
-      details: {
-        number: outcome.final.number ?? '',
-        value: toDecimalString(pricing.totals.invoiceValue),
-        voucherId: outcome.voucher.id,
-        placeOfSupply: pricing.placeOfSupplyStateCode,
-        split: pricing.split,
-      },
-    });
-
-    // The books and the stock are already safe. The government comes after, and a failure there
-    // never unmakes the bill — it shows as a retryable state (issue #46, `gov.service_unavailable`).
-    const registrations = await this.#compliance.onInvoiceFinalised(outcome.final);
+    const registrations = outcome.registrations;
 
     return {
       invoice: outcome.final,

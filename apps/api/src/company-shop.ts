@@ -194,6 +194,7 @@ export async function createCompanyShop(seed: CompanySeed) {
   const returnNotes = new InMemoryReturnNoteRepository();
   store.join(inventory).join(bills).join(orders).join(receipts).join(approvals).join(returnNotes);
   const audit = new InMemoryAuditPort();
+  store.join(audit);
   // Issue #234 — the real clock (tests pin it through app-clock.ts). It used to be frozen at
   // 29 Aug 2026, so an e-way bill raised in September was "valid until" a day in August.
   const clock = appClock;

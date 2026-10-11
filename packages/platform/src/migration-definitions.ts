@@ -22,6 +22,7 @@ import { vehicleRecordMigrations } from "../../transport/src/vehicle-record-migr
 import { securityMigrations } from "../../../ops/security/src/migrations.ts";
 import { operationsMigrations } from "../../../ops/operations/src/migrations.ts";
 import { notificationMigrations } from "./notification-migrations.ts";
+import { immutabilityMigrations } from "./immutability-migrations.ts";
 
 const platformMigrations: readonly Migration[] = [{
   id: "0001_platform_foundation",
@@ -85,8 +86,56 @@ const platformMigrations: readonly Migration[] = [{
   id: "20260829T011306950Z_platform_44b9a0b0746b_bank_import_status",
   up: `ALTER TABLE bank_statement_imports ADD COLUMN status text; UPDATE bank_statement_imports SET status = CASE WHEN jsonb_array_length(review_reasons) > 0 THEN 'needs-review' ELSE 'ready' END; ALTER TABLE bank_statement_imports ALTER COLUMN status SET NOT NULL; ALTER TABLE bank_statement_imports ADD CONSTRAINT bank_statement_imports_status_check CHECK (status IN ('ready', 'needs-review'));`,
   down: `ALTER TABLE bank_statement_imports DROP COLUMN status;`,
+}, {
+  // Issue #363 — the transactional outbox. Rows are written inside the action's unit of work, so a
+  // rolled-back bill never reaches the government, WhatsApp or email. See ADR 0363.
+  id: "20261007T135804017Z_platform_e5d2182441c6_transactional_outbox",
+  up: `
+    CREATE TABLE outbox_messages (
+      id uuid PRIMARY KEY,
+      company_id uuid NOT NULL REFERENCES companies(id),
+      topic text NOT NULL CHECK (topic <> ''),
+      dedupe_key text NOT NULL CHECK (dedupe_key <> ''),
+      payload jsonb NOT NULL,
+      attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+      available_at timestamptz NOT NULL DEFAULT now(),
+      claim_token uuid,
+      sent_at timestamptz,
+      dead_at timestamptz,
+      last_error text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT outbox_messages_dedupe UNIQUE (company_id, topic, dedupe_key),
+      CONSTRAINT outbox_messages_sent_or_dead CHECK (sent_at IS NULL OR dead_at IS NULL)
+    );
+    CREATE INDEX outbox_messages_due_idx ON outbox_messages (company_id, available_at) WHERE sent_at IS NULL AND dead_at IS NULL;
+    ALTER TABLE outbox_messages ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE outbox_messages FORCE ROW LEVEL SECURITY;
+    CREATE POLICY outbox_messages_tenant ON outbox_messages
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+  `,
+  down: `DROP TABLE IF EXISTS outbox_messages;`,
+}, {
+  // Issue #364 — the order things were written in, kept by the database. Two audit events or two
+  // comments saved in one transaction share a timestamp, so the timestamp alone cannot order them.
+  id: "20261010T133137619Z_platform_cca2b2c00eb5_platform_core_ordering",
+  up: `
+    ALTER TABLE audit_events ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    CREATE UNIQUE INDEX audit_events_company_seq_idx ON audit_events(company_id, seq);
+    ALTER TABLE exception_comments ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    CREATE INDEX exception_comments_exception_seq_idx ON exception_comments(exception_id, seq);
+    CREATE INDEX sessions_user_idx ON sessions(user_id);
+  `,
+  down: `
+    DROP INDEX IF EXISTS sessions_user_idx;
+    DROP INDEX IF EXISTS exception_comments_exception_seq_idx;
+    ALTER TABLE exception_comments DROP COLUMN IF EXISTS seq;
+    DROP INDEX IF EXISTS audit_events_company_seq_idx;
+    ALTER TABLE audit_events DROP COLUMN IF EXISTS seq;
+  `,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...immutabilityMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );
