@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ZodError } from 'zod';
-import { DomainError } from '@invoice/kernel';
+import { DomainError, UnreadableValue } from '@invoice/kernel';
 import { CurrencyMismatchError } from '../../../packages/kernel/src/money.ts';
 import { UnitMismatchError } from '../../../packages/kernel/src/quantity.ts';
 import { PlatformError, redactSecretText } from '../../../packages/platform/src/index.ts';
@@ -15,8 +15,8 @@ import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { annotate, inRequest, log } from './log.ts';
-import { reportError, useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
-import { apiErrorReporter, installErrorReporting } from './error-reporting.ts';
+import { reportError } from '../../../packages/platform/src/error-reporting.ts';
+import { installErrorReporting } from './error-reporting.ts';
 import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
@@ -26,9 +26,6 @@ export { ROUTES } from './routes/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
 // shapes the walker recognises, and a secret carried by a class instance or a Map would walk past it.
-// Issue #358 — what this module's callers catch and carry on from is reported, with the request it was in.
-useErrorReporter(apiErrorReporter());
-
 export const jsonResponse = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: redactSecretText(JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) ?? '') });
 const json = jsonResponse;
 
@@ -40,14 +37,15 @@ const requirePermission = (actor: ActorContext, gate: Gate): void => {
 /**
  * Errors the product raises on purpose to tell the shopkeeper what went wrong: their message is
  * written for the screen. A plain `Error` with no `code` is one too — about 88 throw sites in
- * packages/* speak to the shopkeeper that way (migrating them to DomainError is a follow-up). So is a
- * RangeError: the kernel's parsers raise it for a date, amount, quantity or tax period that was typed
- * in a form they cannot read ("31-02-2026" is not a real date), which is the caller's to correct.
- * Anything else — a TypeError, a file or database error, a PDF not produced — is a fault on our side.
+ * packages/* speak to the shopkeeper that way (migrating them to DomainError is a follow-up). So is
+ * UnreadableValue: the kernel's parsers raise it for a date, amount, quantity or tax period typed in
+ * a form they cannot read ("31-02-2026" is not a real date), which is the caller's to correct.
+ * Anything else — a TypeError, any other RangeError, a file or database error, a PDF not produced —
+ * is a fault on our side.
  */
-const SPOKEN_TO_THE_SHOPKEEPER = [MasterDataError, UnitConversionError, InboxError, ConnectorError, CurrencyMismatchError, UnitMismatchError];
+const SPOKEN_TO_THE_SHOPKEEPER = [UnreadableValue, MasterDataError, UnitConversionError, InboxError, ConnectorError, CurrencyMismatchError, UnitMismatchError];
 const isMeantForTheScreen = (error: unknown): error is Error =>
-  error instanceof Error && ((error.constructor === Error && !('code' in error)) || error instanceof RangeError || SPOKEN_TO_THE_SHOPKEEPER.some((kind) => error instanceof kind));
+  error instanceof Error && ((error.constructor === Error && !('code' in error)) || SPOKEN_TO_THE_SHOPKEEPER.some((kind) => error instanceof kind));
 
 /** The status a known error answers with, or `undefined` for a fault on our side. */
 const statusOf = (error: unknown): number | undefined => {
@@ -55,7 +53,7 @@ const statusOf = (error: unknown): number | undefined => {
   // A provider that signed its callback wrongly is told so, and told nothing else.
   if (error instanceof WebhookNotAuthenticated) return 401;
   if (error instanceof ZodError) return 400;
-  // A field the service reads as JSON text (`lines`, `bills`) that is not JSON: the caller's mistake.
+  // Text the service had to read as JSON (`lines`, `bills`) or as a whole number, and could not.
   if (error instanceof SyntaxError) return 400;
   if (error instanceof DomainError) {
     if (error.kind === 'FORBIDDEN') return 403;
@@ -101,7 +99,7 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
     });
   }
   if (error instanceof ZodError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: invalidInputMessage(error) });
-  if (error instanceof SyntaxError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because a list that was sent as text is not valid JSON.' });
+  if (error instanceof SyntaxError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because a number or a list that was sent could not be read. Check what was typed and try again.' });
   const known = error as Error;
   return failure(status, requestId, {
     title: error instanceof AuthenticationError ? 'Sign in required' : 'Nothing was saved',
@@ -178,16 +176,23 @@ export async function serveApi(request: IncomingMessage, response: ServerRespons
   const requestId = randomUUID();
   const started = performance.now();
   const method = request.method ?? 'GET';
-  const pathname = (request.url ?? '/').split('?')[0]!;
+  // Parsed once, here: the cross-site check, the body limit and the router must all see the same
+  // path. A raw path such as `/api/webhooks/government/x\..\..\sales\record` normalises to
+  // another route entirely, so checking the raw text and routing the parsed one would let it past.
+  const url = URL.parse(request.url ?? '/', 'http://localhost');
+  const pathname = url?.pathname ?? '/';
   await inRequest(requestId, async () => {
-    const result = await answer(request, response, method, pathname, requestId);
+    const result = url === null
+      ? failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' })
+      : await answer(request, response, method, url, requestId);
     send(response, result);
     // One line per request. The query string is left out: it can carry what a person typed.
     log.info('request', { method, path: pathname, status: result.status, duration_ms: Math.round(performance.now() - started) });
   });
 }
 
-const answer = async (request: IncomingMessage, response: ServerResponse, method: string, pathname: string, requestId: string): Promise<ApiResult> => {
+const answer = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {
+  const { pathname } = url;
   // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
   if (!isSignedCallback(pathname) && isCrossSiteWrite(method, request.headers)) {
     return failure(403, requestId, { title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' });
@@ -203,8 +208,8 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
     return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' });
   }
   const signature = request.headers['x-provider-signature'];
-  // The whole URL, query included: a GET's input is its query.
-  return handleApi(method, request.url ?? '/', read.parsed, request.headers.authorization, {
+  // The parsed path, and the query with it: a GET's input is its query.
+  return handleApi(method, `${pathname}${url.search}`, read.parsed, request.headers.authorization, {
     rawBody: read.raw,
     signature: typeof signature === 'string' ? signature : '',
   }, requestId);

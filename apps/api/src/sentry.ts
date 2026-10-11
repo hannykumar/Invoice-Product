@@ -71,9 +71,13 @@ const idOf = (value: unknown): string | undefined => typeof value === 'string' &
 export const sentryEvent = (report: ErrorReport, config: Pick<SentryConfig, 'environment' | 'release'>, eventId: string) => {
   const error = report.error instanceof Error ? report.error : new Error(String(report.error));
   const { company_id: companyId, user_id: userId, request_id: requestId, route, ...rest } = report.context;
-  // The request id and the route pattern are ours, not the caller's; anything else is scrubbed.
-  const tags: Record<string, string> = { where: report.where, ...(idOf(requestId) === undefined ? {} : { request_id: idOf(requestId)! }), ...(idOf(route) === undefined ? {} : { route: idOf(route)! }) };
-  for (const [key, value] of Object.entries(rest)) if (value !== undefined) tags[key] = scrubMessage(String(value)).slice(0, 200);
+  // Ids (`…_id`) and the route pattern pass as they are, so the record can be found from the report;
+  // any other label is scrubbed in case a caller put something a person typed in it.
+  const tags: Record<string, string> = { where: report.where };
+  for (const [key, value] of Object.entries({ request_id: requestId, route, ...rest })) {
+    if (value === undefined || value === '') continue;
+    tags[key] = (key === 'route' || key.endsWith('_id') ? String(value) : scrubMessage(String(value))).slice(0, 200);
+  }
   return {
     event_id: eventId,
     timestamp: Date.now() / 1000,

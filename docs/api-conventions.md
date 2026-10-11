@@ -69,10 +69,15 @@ whole response, and the dispatcher returns one page of the array under `key`:
 - `?cursor=` is the `nextCursor` from the previous page. It is opaque: do not build one.
 - `nextCursor` is present only while there is more.
 
-The cursor is currently an offset over in-memory arrays, marked `ponytail:`. Once the lists come from
-Postgres (#340/#366) it becomes a keyset cursor, and the wire format stays the same.
+The cursor is currently an offset over in-memory arrays, marked `ponytail:`. A document added or
+removed between two pages can therefore repeat or skip one item at the boundary. Once the lists come
+from Postgres (#340/#366) it becomes a keyset cursor, and the wire format stays the same. The web app
+reads a whole list with `apiList`, 500 at a time.
 
 ## Replies and errors
+
+Every request is parsed once, at the edge: the cross-site check, the body limit and the router all
+see the same normalised path.
 
 Every reply carries an `x-request-id` header with an id the server makes. An `x-request-id` the
 caller sends is not reused, because a chosen id could collide with another request's in the log.
@@ -104,12 +109,14 @@ to the caller.
 
 "Meant for the screen" means a `DomainError` or `PlatformError` (mapped by kind), one of the product's
 own error classes listed in `server.ts` (`MasterDataError`, `UnitConversionError`, `InboxError`,
-`ConnectorError`, `CurrencyMismatchError`, `UnitMismatchError`), a `RangeError` (what the kernel's
-parsers throw for a date, amount, quantity or tax period they cannot read), a `SyntaxError` (a list
-sent as JSON text that is not JSON; answered with a fixed message), or a plain `Error` with no `code`.
+`ConnectorError`, `CurrencyMismatchError`, `UnitMismatchError`), the kernel's `UnreadableValue` (a
+date, amount, quantity or tax period typed in a form the parsers cannot read), a `SyntaxError` (text
+the service had to read as JSON or as a whole number, and could not; answered with a fixed message),
+or a plain `Error` with no `code`.
 About 88 throw sites in `packages/*` still use a plain `Error` to speak to the shopkeeper, so it
 keeps its 400 and its message. Moving them to `DomainError` is follow-up work. Anything else
-(`TypeError`, a file or database error, a PDF the browser engine could not produce) is a 500.
+(`TypeError`, any other `RangeError`, a file or database error, a PDF the browser engine could not
+produce) is a 500, and is reported (#358).
 
 ## Adding a route
 

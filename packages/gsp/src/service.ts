@@ -36,7 +36,7 @@ import {
   type GstinAuthorisation,
   type ProviderCall,
 } from './types.ts';
-import { reportError } from '../../platform/src/error-reporting.ts';
+import { reportUnexpected } from '../../platform/src/error-reporting.ts';
 
 export interface GovernmentAccessDeps {
   readonly authorisations: AuthorisationRepository;
@@ -403,7 +403,7 @@ export class GovernmentAccessService {
       if (outcome.kind === 'UNAVAILABLE') providerTold = 'not yet — the provider did not answer';
     } catch (error) {
       // Revoking here stands whatever the provider says; that it could not be told is reported.
-      reportError('gsp.revoke', error);
+      reportUnexpected('gsp.revoke', error);
       providerTold = 'not yet — the provider did not answer';
     }
 

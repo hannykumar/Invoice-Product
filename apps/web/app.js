@@ -1187,6 +1187,8 @@ async function api(path, options = {}) {
  * follows `nextCursor` until the last page and hands back the response with every item under `key`.
  */
 async function apiList(path, key) {
+  // The largest page the server gives, so a long list is read in as few calls as possible.
+  path = `${path}${path.includes("?") ? "&" : "?"}limit=500`;
   const first = await api(path);
   const items = [...first[key]];
   for (let cursor = first.nextCursor; cursor !== undefined; ) {

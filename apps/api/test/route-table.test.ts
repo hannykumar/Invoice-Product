@@ -12,6 +12,8 @@ import { handleApi, ROUTES, serveApi } from '../src/server.ts';
 import { DemoApplication } from '../src/demo-application.ts';
 import { PAGE_LIMIT_MAX } from '../src/routes/route.ts';
 import { captureLog } from '../src/log.ts';
+import { apiErrorReporter } from '../src/error-reporting.ts';
+import { useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
 import { PdfRenderingError } from '../../../packages/invoice-templates/src/pdf.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
@@ -61,6 +63,16 @@ test('#344: garbage JSON sent to any route over HTTP is a clean 400 in the one e
       raw.on('error', reject); raw.end();
     });
     assert.equal(status, 404);
+    // A path that looks like the signed webhook but normalises to another route is still checked as
+    // that route: a write from another website is refused, never routed past the check.
+    const smuggled = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const raw = request({ host: '127.0.0.1', port: (server.address() as AddressInfo).port, path: '/api/webhooks/government/x\\..\\..\\..\\sales\\record', method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/json' } }, (response) => {
+        let text = ''; response.on('data', (chunk) => { text += chunk; }); response.on('end', () => resolve({ status: response.statusCode ?? 0, body: text }));
+      });
+      raw.on('error', reject); raw.end('{}');
+    });
+    assert.equal(smuggled.status, 403);
+    assert.equal(JSON.parse(smuggled.body).code, 'CROSS_SITE_REQUEST');
   } finally {
     server.close();
   }
@@ -91,6 +103,7 @@ test('#344: a thrown TypeError is a generic 500 with the request id; its message
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const logged: string[] = [];
   context.after(captureLog((_level, line) => { logged.push(line); }));
+  context.after(useErrorReporter(apiErrorReporter({})));
   context.mock.method(DemoApplication.prototype, 'dashboard', () => { throw new TypeError("Cannot read properties of undefined (reading 'internalSecretShape')"); });
   const result = await handleApi('GET', '/api/dashboard', {}, owner);
   assert.equal(result.status, 500);
@@ -109,6 +122,7 @@ test('#344: a PDF the browser engine could not make is a 500; where Chrome lives
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const logged: string[] = [];
   context.after(captureLog((_level, line) => { logged.push(line); }));
+  context.after(useErrorReporter(apiErrorReporter({})));
   context.mock.method(DemoApplication.prototype, 'invoicePrint', async () => { throw new PdfRenderingError(new Error('Could not find Chrome (cache path /root/.cache/puppeteer)')); });
   const result = await handleApi('GET', '/api/sales/any-bill/pdf', {}, owner);
   assert.equal(result.status, 500);
@@ -122,6 +136,11 @@ test('#344: a plain Error the product throws on purpose still tells the shopkeep
   const badDate = await handleApi('POST', '/api/sales/preview', { customerId: 'sampoorna:party:customer', date: '31-02-2026' }, owner);
   assert.equal(badDate.status, 400);
   assert.match(parse(badDate).message, /is not a date/);
+  // Any other RangeError is a fault in our own code: a plain 500, not a developer's sentence on screen.
+  context.mock.method(DemoApplication.prototype, 'reports', () => { throw new RangeError('divideRound: denominator must not be zero'); });
+  const internal = await handleApi('GET', '/api/reports', {}, owner);
+  assert.equal(internal.status, 500);
+  assert.doesNotMatch(String(internal.body), /divideRound/);
   context.mock.method(DemoApplication.prototype, 'dashboard', () => { throw new Error('This bill has no rate for the item.'); });
   const result = await handleApi('GET', '/api/dashboard', {}, owner);
   assert.equal(result.status, 400);

@@ -8,7 +8,9 @@
  * error tracker (ADR 0007). Until a host installs one, reports go to stderr as one JSON line, so a
  * package used on its own (a demo, a test) is not silent either.
  */
+import { DomainError } from "@invoice/kernel";
 import { redactSecretText } from "./credentials.ts";
+import { ConnectorError } from "./connectors.ts";
 
 /** Ids and short labels only: never names, phone numbers, GST numbers or amounts (ADR 0007). */
 export type ReportContext = Readonly<Record<string, string | number | boolean | undefined>>;
@@ -38,6 +40,17 @@ export const reportError = (where: string, error: unknown, context: ReportContex
   } catch (failure) {
     try { stderrReporter.report({ where: "error-reporting.report", error: failure, context: { reporting: where } }); } catch { /* stderr itself is gone; nothing is left to tell */ }
   }
+};
+
+/**
+ * For a catch that carries on: reports `error` unless it is an outcome the product already shows.
+ * A refusal the services meant (DomainError) and a provider that did not answer (ConnectorError)
+ * are on the record the shopkeeper sees, and an ordinary outage must not flood the tracker.
+ * Anything else is a fault in our own code, and is reported.
+ */
+export const reportUnexpected = (where: string, error: unknown, context: ReportContext = {}): void => {
+  if (error instanceof DomainError || error instanceof ConnectorError) return;
+  reportError(where, error, context);
 };
 
 /** Installs the host's reporter. Returns the function that puts the previous one back. */

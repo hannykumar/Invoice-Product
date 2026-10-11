@@ -11,6 +11,8 @@ import test from 'node:test';
 import { serveApi } from '../src/server.ts';
 import { DemoApplication } from '../src/demo-application.ts';
 import { captureLog, inRequest, log } from '../src/log.ts';
+import { apiErrorReporter } from '../src/error-reporting.ts';
+import { useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 const PASSWORD = 'karobar-demo';
@@ -26,6 +28,7 @@ test('#357: the request id in the response header finds every line of that reque
   const lines: Record<string, any>[] = [];
   const raw: string[] = [];
   context.after(captureLog((_level, line) => { raw.push(line); lines.push(JSON.parse(line)); }));
+  context.after(useErrorReporter(apiErrorReporter({})));
   const { server, base } = await listen();
   context.after(() => server.close());
 

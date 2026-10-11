@@ -8,8 +8,7 @@ import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from '
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { reportError } from '../../../packages/platform/src/error-reporting.ts';
-import { ConnectorError } from '../../../packages/platform/src/connectors.ts';
+import { reportError, reportUnexpected } from '../../../packages/platform/src/error-reporting.ts';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SALES_PERMISSIONS, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type ReservationRequest, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
@@ -605,16 +604,6 @@ class DemoReminderOutbox implements NotificationTransport {
     this.messages.unshift({ channel: notification.channel, to: notification.recipientId, subject: rendered.subject, body: rendered.body, at: new Date(notification.scheduledAt).toISOString() });
   }
 }
-
-/**
- * Issue #358 — for the places below that catch and carry on. A refusal the services meant
- * (DomainError) and a provider that did not answer (ConnectorError) are already on the record the
- * shopkeeper sees; anything else is a fault in our own code, and is reported rather than lost.
- */
-const reportUnexpected = (where: string, error: unknown): void => {
-  if (error instanceof DomainError || error instanceof ConnectorError) return;
-  reportError(where, error);
-};
 
 export class DemoApplication {
   private readonly config: CompanySeed;

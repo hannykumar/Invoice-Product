@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PlatformError } from "./types.ts";
 import type { Id, Permission, RequestContext } from "./types.ts";
-import { reportError } from "./error-reporting.ts";
+import { reportUnexpected } from "./error-reporting.ts";
 
 export type NotificationChannel = "in_app" | "email" | "whatsapp" | "sms";
 export type NotificationStatus = "scheduled" | "delivered" | "failed" | "suppressed";
@@ -189,7 +189,7 @@ export class NotificationService {
         processed.push(delivered);
       } catch (error) {
         // The notification is marked failed and can be retried; why it failed goes to the error report.
-        reportError("notifications.deliver", error, { notification_id: item.id });
+        reportUnexpected("notifications.deliver", error, { notification_id: item.id });
         const failed = Object.freeze({ ...item, status: "failed" as const, attempts: item.attempts + 1, lastError: "Delivery could not be completed. Retry is available." });
         this.#notifications.set(item.id, failed);
         this.record(context.actorId, failed, "failed", failed.lastError);

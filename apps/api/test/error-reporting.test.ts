@@ -96,7 +96,7 @@ test('#358: the tracker is sent ids, the kind of error and a scrubbed message â€
   const fakeFetch = (async (url: string, init: RequestInit) => { sent.push({ url, init }); return new Response('{}', { status: 200 }); }) as unknown as typeof fetch;
   const reporter = sentryReporter({ dsn: EU_DSN, environment: 'staging', release: 'abc123', fetch: fakeFetch });
   const error = new RangeError('"ABC Traders" (29BBBBB1111B1ZJ) owes â‚¹1,18,000 to owner@shop.example.invalid, PAN AAAPZ1234C');
-  reporter.report({ where: 'api.request', error, context: { request_id: 'b1f0c9e2-0000-4000-8000-000000000001', route: 'POST /api/sales/record', company_id: COMPANY_A, user_id: 'user-9' } });
+  reporter.report({ where: 'api.request', error, context: { request_id: 'b1f0c9e2-0000-4000-8000-000000000001', route: 'POST /api/sales/record', company_id: COMPANY_A, user_id: 'user-9', delivery_id: '3f2a9c1e-77', note: 'sent to 9800000000' } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(sent.length, 1);
   assert.equal(sent[0]!.url, 'https://o4501.ingest.de.sentry.io/api/4507/envelope/');
@@ -109,6 +109,8 @@ test('#358: the tracker is sent ids, the kind of error and a scrubbed message â€
   assert.equal(event.release, 'abc123');
   assert.equal(event.tags.request_id, 'b1f0c9e2-0000-4000-8000-000000000001');
   assert.equal(event.tags.route, 'POST /api/sales/record');
+  assert.equal(event.tags.delivery_id, '3f2a9c1e-77', 'an id is kept whole, so the record can be found');
+  assert.equal(event.tags.note, 'sent to #', 'any other label is scrubbed');
   assert.deepEqual(event.user, { id: 'user-9' });
   assert.deepEqual(event.contexts, { company: { id: COMPANY_A } });
   assert.equal(event.exception.values[0].type, 'RangeError');
