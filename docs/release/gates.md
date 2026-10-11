@@ -65,6 +65,11 @@ Before a build is released:
    for a user to discover.
 4. Rule changes since the last release have a source and an effective date, and the compliance
    register (#54) shows the reviewer.
+5. **Security review run, findings linked (#348).** A session or reviewer that did not write the
+   release's code runs `/security-review-release` (`.claude/commands/security-review-release.md`)
+   on the release commit. Every finding is filed as its own issue (labels `saas-readiness`,
+   `security`), and the review is recorded in `docs/security/reviews/` with the commit it covered
+   and the issue for each finding. An open High finding stops the release.
 
 ## Rolling back
 
