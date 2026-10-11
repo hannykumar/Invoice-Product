@@ -218,26 +218,34 @@ export class PostgresAuthenticationService {
     });
   }
 
+  /**
+   * The returned `id` is the session's token: it is given to the person once and never stored.
+   * The database keeps only its hash (issue #368), so reading the table yields no usable session.
+   */
   async createSession(companyId: Id, branchId: Id, userId: Id, ttlMs = 8 * 60 * 60 * 1000): Promise<Session> {
+    const token = randomUUID();
     const { rows } = await this.#db.unitOfWork(companyId, ({ sql }) => sql.query(
-      "INSERT INTO sessions (id, company_id, branch_id, user_id, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-      [randomUUID(), companyId, branchId, userId, at(this.#now() + ttlMs)],
+      "INSERT INTO sessions (id, token_hash, company_id, branch_id, user_id, expires_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [randomUUID(), digest(token), companyId, branchId, userId, at(this.#now() + ttlMs)],
     ));
-    return toSession(rows[0] as Row);
+    return { ...toSession(rows[0] as Row), id: token };
   }
 
   async authenticate(sessionId: Id): Promise<RequestContext> {
     // The company comes from the stored session, never from the caller (rule 6).
-    const row = /^[0-9a-f-]{36}$/i.test(sessionId) ? (await this.#db.query("SELECT * FROM sessions WHERE id = $1", [sessionId])).rows[0] : undefined;
+    const row = (await this.#db.query("SELECT * FROM sessions WHERE token_hash = $1", [digest(sessionId)])).rows[0];
     const session = row === undefined ? undefined : toSession(row);
     if (!session || session.revokedAt !== undefined || session.expiresAt <= this.#now()) throw new PlatformError("SESSION_EXPIRED", "SESSION_EXPIRED: Sign in again.");
+    // The context carries the stored row's id, which identifies the session without being able to open it.
     return this.#access.context(session.companyId, session.branchId, session.userId, session.id);
   }
 
+  /** Ends a session, named either by its token or by the `sessionId` a request context carries. */
   async revokeSession(sessionId: Id): Promise<void> {
-    const row = (await this.#db.query("SELECT company_id FROM sessions WHERE id = $1", [sessionId])).rows[0];
+    const storedId = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sessionId) ? sessionId : null;
+    const row = (await this.#db.query("SELECT id, company_id FROM sessions WHERE token_hash = $1 OR id = $2::uuid", [digest(sessionId), storedId])).rows[0];
     if (row === undefined) return;
-    await this.#db.unitOfWork(String(row.company_id), async ({ sql }) => { await sql.query("UPDATE sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL", [sessionId, at(this.#now())]); });
+    await this.#db.unitOfWork(String(row.company_id), async ({ sql }) => { await sql.query("UPDATE sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL", [row.id, at(this.#now())]); });
   }
 
   /** Access and every open session end together, in one transaction. */

@@ -28,6 +28,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 
 | [`platform-command`](./platform-command-v1.md) | 1.0.0 | GPT 2 (#6) | GPT 1, GPT 3 | Published |
 | [`unit-of-work`](./unit-of-work-v1.md) | 1.0.0 | GPT 2 (#363) | Every module that writes to PostgreSQL (#364–#368, #340, #345) | Published |
+| [`database-immutability`](./database-immutability-v1.md) | 1.0.0 | GPT 2 (#368) | Every lane that owns a document table (#365, #366), #340, hosting | Published |
 | [`connector`](./connector-v1.md) | 1.0.0 | GPT 2 (#8) | GPT 1, GPT 3 | Published |
 | [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
 | [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
