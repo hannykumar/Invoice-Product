@@ -47,9 +47,12 @@ Each of these was checked in the code. They are why the gaps below are gaps and 
 - **Tenancy comes from the session.** `runtime.authenticate` builds the `RequestContext`; no route
   takes a company id from the request except sign-in. `DemoApplication.companyOf` refuses an actor
   from another company. The webhook resolves the company from our own call log, not the payload.
-- **Every POST has a declared permission.** `POST_PERMISSIONS` in `apps/api/src/server.ts` is
-  checked before the handler, and `apps/api/test/route-permissions.test.ts` fails when a new POST
-  is missing from it (#280).
+- **Every POST but three has a declared permission.** `POST_PERMISSIONS` in
+  `apps/api/src/server.ts` is checked before the handler, and
+  `apps/api/test/route-permissions.test.ts` fails when a new POST is missing from it (#280). The
+  three without one are sign-in, the signed government callback (W1) and the public PIN-code table;
+  `requirePostPermission` lets any path it does not know through, so that test is what keeps the
+  list complete.
 - **AI never posts.** There is no language-model call anywhere in the repository. The assistant,
   the action agent, voice parsing and OCR extraction are deterministic parsers that produce drafts.
   The ledger is reached only through the services a person uses (§4.7).
@@ -97,11 +100,11 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | H5 | A read-only viewer reads invoice PDFs and previews, notes, purchases, challans, quotations, PAN and bank details through GET routes with no permission check (A01) | Medium | Medium | Tenant check in each service | Permission on every GET | Medium | #327, #343 |
 | H6 | GET routes that write: `/api/catalogue` opens an account; `/api/operations` seeds data before its permission check (A04) | Low | Low | — | GET is read-only | Low | #395 |
 | H7 | Internal error text reaches the client; surprises answer 400, not 500; a JSON body of `null` returns a TypeError message (A05/A09) | Medium | Low | No stack traces; secrets redacted | One error shape, plain 500 | Medium | #344 |
-| H8 | Session token in `localStorage` is stolen by any XSS; no sign-out route (A07) | Low | High | No `innerHTML` from data | HttpOnly cookie, sign-out | **High** | #342 (+ #349 CSP) |
+| H8 | Session token in `localStorage` is stolen by any XSS; no sign-out route (A07) | Low | High | No `innerHTML` from data | HttpOnly cookie, sign-out | Medium | #342 (+ #349 CSP) |
 | H9 | CSRF once the session is a cookie (A01) | Low today, High after #342 | High | Bearer header | `SameSite` cookie + Origin/Host check on every non-GET | **High** | #349 (Origin check), #342 (cookie) |
 | H10 | A retry creates a second document when the client sends no idempotency key: the server invents one (`randomUUID()`, `Date.now()`, or an empty key) (A04/A08) | Medium | High | Idempotency on every command | Refuse a write that has no client key | **High** | #392 |
 | H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked | Allow-list of served files | Medium | #393 |
-| H12 | Cross-company access on any route (A01) | Low | High | Session tenancy, `companyOf` | Generated 401 / 403 / 404 tests for every route; RLS in use | **High** | #343, #340 |
+| H12 | Cross-company access on any route (A01) | Low | High | Session tenancy, `companyOf` | Generated 401 / 403 / 404 tests for every route; RLS in use | Medium | #343, #340 |
 
 ### 4.2 File uploads — logos, signatures, migration files, ITC files
 
@@ -223,10 +226,10 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | Gap | Issue |
 | --- | --- |
 | H1 body limit and timeouts, H2 headers, H9 Origin check, U1 | #349 |
-| H3, H8 sign-in, passwords, cookie session | #342 |
+| H3 sign-in and passwords; H8 cookie session (Medium, listed as a launch blocker) | #342 (+ #349 CSP for H8) |
 | H4 rate limits | #350 |
 | H10 idempotency key invented by the server | #392 |
-| H12 cross-company tests for every route | #343 |
+| H12 cross-company tests for every route (Medium, listed as a launch blocker) | #343 |
 | U1, U3 uploads | #341 |
 | W1 forgeable government webhook | #389 |
 | W3 payment webhook | #346 |
