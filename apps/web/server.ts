@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveApi } from "../api/src/server.ts";
+import { applySecurityHeaders, applyTimeouts } from "../api/src/http-hardening.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 // `PORT` is honoured too, so a tool that assigns a free port can start this without a clash.
@@ -28,13 +29,15 @@ export async function loadWebAsset(pathname: string): Promise<WebAsset> {
   }
 }
 
-export const webServer = createServer(async (request, response) => {
+// Issue #349: the same headers and time limits as the API, on the page and every file it loads.
+export const webServer = applyTimeouts(createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
   if (url.pathname.startsWith('/api/')) return serveApi(request, response);
+  applySecurityHeaders(response);
   const asset = await loadWebAsset(url.pathname);
   response.writeHead(asset.status, { "content-type": asset.contentType, "cache-control": "no-store" });
   response.end(asset.body);
-});
+}));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   webServer.listen(port, "127.0.0.1", () => console.log(`Karobar web preview: http://127.0.0.1:${port}`));
