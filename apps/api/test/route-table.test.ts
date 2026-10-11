@@ -11,6 +11,7 @@ import test from 'node:test';
 import { handleApi, ROUTES, serveApi } from '../src/server.ts';
 import { DemoApplication } from '../src/demo-application.ts';
 import { PAGE_LIMIT_MAX } from '../src/routes/route.ts';
+import { captureLog } from '../src/log.ts';
 import { PdfRenderingError } from '../../../packages/invoice-templates/src/pdf.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
@@ -33,7 +34,8 @@ const assertFailureShape = (body: Record<string, any>, headers: Readonly<Record<
   assert.doesNotMatch(JSON.stringify(body), /\bat [\w.<>]+ \(|node:internal|\.ts:\d+/, 'no stack trace reaches the caller');
 };
 
-test('#344: garbage JSON sent to any route over HTTP is a clean 400 in the one error shape', async () => {
+test('#344: garbage JSON sent to any route over HTTP is a clean 400 in the one error shape', async (context) => {
+  context.after(captureLog(() => {})); // one access line per request: not this test's subject
   const server = createServer(serveApi);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -88,7 +90,7 @@ test('#344: a body that is not an object, or a list where one value belongs, is 
 test('#344: a thrown TypeError is a generic 500 with the request id; its message stays in the log', async (context) => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const logged: string[] = [];
-  context.mock.method(console, 'error', (line: string) => { logged.push(line); });
+  context.after(captureLog((_level, line) => { logged.push(line); }));
   context.mock.method(DemoApplication.prototype, 'dashboard', () => { throw new TypeError("Cannot read properties of undefined (reading 'internalSecretShape')"); });
   const result = await handleApi('GET', '/api/dashboard', {}, owner);
   assert.equal(result.status, 500);
@@ -106,7 +108,7 @@ test('#344: a thrown TypeError is a generic 500 with the request id; its message
 test('#344: a PDF the browser engine could not make is a 500; where Chrome lives stays in the log', async (context) => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const logged: string[] = [];
-  context.mock.method(console, 'error', (line: string) => { logged.push(line); });
+  context.after(captureLog((_level, line) => { logged.push(line); }));
   context.mock.method(DemoApplication.prototype, 'invoicePrint', async () => { throw new PdfRenderingError(new Error('Could not find Chrome (cache path /root/.cache/puppeteer)')); });
   const result = await handleApi('GET', '/api/sales/any-bill/pdf', {}, owner);
   assert.equal(result.status, 500);

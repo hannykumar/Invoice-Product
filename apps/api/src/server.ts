@@ -14,6 +14,7 @@ import { InboxError } from '../../../packages/purchasing/src/inbox.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
+import { annotate, errorFields, inRequest, log } from './log.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
 
@@ -85,8 +86,8 @@ const withRequestId = (result: ApiResult, requestId: string): ApiResult => ({ ..
 const failureOf = (error: unknown, requestId: string, routeName: string): ApiResult => {
   const status = statusOf(error);
   if (status === undefined) {
-    // The detail goes to the log, never to the caller (#357 turns this into the structured logger).
-    console.error(redactSecretText(JSON.stringify({ level: 'error', requestId, route: routeName, error: error instanceof Error ? error.name : typeof error, message: error instanceof Error ? error.message : String(error), cause: error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined, stack: error instanceof Error ? error.stack : undefined })));
+    // The detail goes to the log, under the same request id, and never to the caller.
+    log.error('The request failed on our side', { route: routeName, ...errorFields(error) });
     return failure(500, requestId, {
       title: 'Something went wrong',
       code: 'INTERNAL',
@@ -112,12 +113,17 @@ const isPublic = (route: Route): route is PublicRoute => route.access.kind === '
  * the permission (before reading the input, #280), validate the input, run the handler.
  * `pathname` may carry a `?query`; a GET's input is its query, merged over `body` for in-process callers.
  */
-export async function handleApi(method: string, pathname: string, body: unknown = {}, authorization?: string, delivery?: WebhookDelivery, requestId: string = randomUUID()): Promise<ApiResult> {
+export function handleApi(method: string, pathname: string, body: unknown = {}, authorization?: string, delivery?: WebhookDelivery, requestId: string = randomUUID()): Promise<ApiResult> {
+  return inRequest(requestId, () => dispatch(method, pathname, body, authorization, delivery, requestId));
+}
+
+async function dispatch(method: string, pathname: string, body: unknown, authorization: string | undefined, delivery: WebhookDelivery | undefined, requestId: string): Promise<ApiResult> {
   // A path the URL parser rejects (`//`, a stray space) names nothing that could exist.
   const url = URL.parse(pathname, 'http://localhost');
   const found = url === null ? undefined : matchRoute(method, url.pathname);
   if (url === null || found === undefined) return failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
   const { route, params } = found;
+  annotate({ route: `${route.method} ${route.path}` });
   try {
     const runtime = apiRuntime();
     const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
@@ -126,6 +132,7 @@ export async function handleApi(method: string, pathname: string, body: unknown 
       reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery });
     } else {
       const context = runtime.authenticate(authorization);
+      annotate({ company_id: context.companyId, user_id: context.actorId });
       const actor = runtime.actor(context);
       if (route.access.kind === 'gate') requirePermission(actor, route.access);
       const input = await route.input.parseAsync(raw);
@@ -162,24 +169,31 @@ const send = (response: ServerResponse, result: ApiResult): void => {
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
   // Always our own id: one a caller chose could collide with another request's in the log.
   const requestId = randomUUID();
-  let read: { parsed: unknown; raw: string };
-  try { read = await readBody(request); }
-  catch { return send(response, failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' })); }
-  const signature = request.headers['x-provider-signature'];
-  send(response, await handleApi(request.method ?? 'GET', request.url ?? '/', read.parsed, request.headers.authorization, {
-    rawBody: read.raw,
-    signature: typeof signature === 'string' ? signature : '',
-  }, requestId));
+  const started = performance.now();
+  await inRequest(requestId, async () => {
+    let read: { parsed: unknown; raw: string } | undefined;
+    try { read = await readBody(request); } catch { read = undefined; }
+    const signature = request.headers['x-provider-signature'];
+    const result = read === undefined
+      ? failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' })
+      : await handleApi(request.method ?? 'GET', request.url ?? '/', read.parsed, request.headers.authorization, {
+        rawBody: read.raw,
+        signature: typeof signature === 'string' ? signature : '',
+      }, requestId);
+    send(response, result);
+    // One line per request. The query string is left out: it can carry what a person typed.
+    log.info('request', { method: request.method, path: (request.url ?? '/').split('?')[0], status: result.status, duration_ms: Math.round(performance.now() - started) });
+  });
 }
 
 export const apiServer = createServer(serveApi);
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.API_PORT ?? 4172);
-  apiServer.listen(port, '127.0.0.1', () => console.log(`Karobar API: http://127.0.0.1:${port}`));
+  apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
   const recurringTimer = setInterval(() => {
-    void apiRuntime().runRecurringWork().catch(() => console.error('Recurring work tick failed; its queue state is available to operators.'));
+    void apiRuntime().runRecurringWork().catch((error: unknown) => log.error('Recurring work tick failed; its queue state is available to operators', errorFields(error)));
   }, 60_000);
   recurringTimer.unref();
 }

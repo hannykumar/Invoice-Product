@@ -8,6 +8,7 @@ import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from '
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
+import { errorFields, log } from './log.ts';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SALES_PERMISSIONS, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type ReservationRequest, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
@@ -2796,7 +2797,7 @@ export class DemoApplication {
       await this.shop.eInvoice.register(actor, { document, applicability });
     })().catch((error: unknown) => {
       // Nothing here may reach the bill. The record itself carries the failure and the retry.
-      console.error('The e-invoice for a bill could not be sent; it stays on the E-invoice screen.', error instanceof Error ? error.message : error);
+      log.error('The e-invoice for a bill could not be sent; it stays on the E-invoice screen', errorFields(error));
     });
   }
 

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveApi } from "../api/src/server.ts";
+import { log } from "../api/src/log.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 // `PORT` is honoured too, so a tool that assigns a free port can start this without a clash.
@@ -37,5 +38,5 @@ export const webServer = createServer(async (request, response) => {
 });
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  webServer.listen(port, "127.0.0.1", () => console.log(`Karobar web preview: http://127.0.0.1:${port}`));
+  webServer.listen(port, "127.0.0.1", () => log.info("The web preview is listening", { url: `http://127.0.0.1:${port}` }));
 }
