@@ -31,6 +31,9 @@ export const annotate = (known: { readonly route?: string; readonly company_id?:
   if (current !== undefined) Object.assign(current, known);
 };
 
+/** The request this code is running in, as the ids every line carries; empty outside a request. */
+export const requestScope = (): Readonly<Scope> | Record<string, never> => scope.getStore() ?? {};
+
 /** The least level written. Debug is never written in production, whatever LOG_LEVEL says. */
 const threshold = (): number => {
   const production = process.env.NODE_ENV === 'production';

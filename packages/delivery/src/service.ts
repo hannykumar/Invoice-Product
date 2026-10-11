@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { reportError } from '../../platform/src/error-reporting.ts';
 
 export type DeliveryChannel = 'email' | 'whatsapp' | 'sms';
 export type DeliveryStatus = 'queued' | 'sent' | 'delivered' | 'bounced' | 'failed';
@@ -120,7 +121,9 @@ export class InvoiceDeliveryService {
       this.#deliveries.set(id, sent);
       this.record(context.actorId, sent, 'sent', outcome.providerMessageId);
       return sent;
-    } catch {
+    } catch (error) {
+      // The person sees a plain "could not be completed"; the provider's reason goes to the error report.
+      reportError('delivery.send', error, { delivery_id: id, channel: delivery.channel });
       const failed = Object.freeze({ ...delivery, status: 'failed' as const, attempts: delivery.attempts + 1, lastError: 'Delivery could not be completed. Retry is available.' });
       this.#deliveries.set(id, failed);
       this.record(context.actorId, failed, 'failed', failed.lastError);

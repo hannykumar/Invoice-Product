@@ -8,7 +8,8 @@ import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from '
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
-import { errorFields, log } from './log.ts';
+import { reportError } from '../../../packages/platform/src/error-reporting.ts';
+import { ConnectorError } from '../../../packages/platform/src/connectors.ts';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SALES_PERMISSIONS, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type ReservationRequest, type SalesInvoice } from '@invoice/sales';
 import {
   brandedSnapshot,
@@ -604,6 +605,16 @@ class DemoReminderOutbox implements NotificationTransport {
     this.messages.unshift({ channel: notification.channel, to: notification.recipientId, subject: rendered.subject, body: rendered.body, at: new Date(notification.scheduledAt).toISOString() });
   }
 }
+
+/**
+ * Issue #358 — for the places below that catch and carry on. A refusal the services meant
+ * (DomainError) and a provider that did not answer (ConnectorError) are already on the record the
+ * shopkeeper sees; anything else is a fault in our own code, and is reported rather than lost.
+ */
+const reportUnexpected = (where: string, error: unknown): void => {
+  if (error instanceof DomainError || error instanceof ConnectorError) return;
+  reportError(where, error);
+};
 
 export class DemoApplication {
   private readonly config: CompanySeed;
@@ -1917,7 +1928,9 @@ export class DemoApplication {
         'hi-IN': `${line.statusLabel['hi-IN']} — ${line.outcomeLabel['hi-IN']}`,
         sentence: line.sentence['en-IN'],
       };
-    } catch {
+    } catch (error) {
+      // The bill is never held up by its purchase check; why the month could not be read is reported.
+      reportUnexpected('api.purchaseCheck', error);
       return null;
     }
   }
@@ -2367,7 +2380,7 @@ export class DemoApplication {
       // from the person's point of view, so nothing of it is kept: no draft for Reports to call
       // "a bill waiting". It never had a number, so the number series is untouched.
       // The refusal is what the person needs to read, so a failure to tidy up never replaces it.
-      await this.discardReview(actor, draft.idempotencyKey, 'the app refused the review').catch(() => undefined);
+      await this.discardReview(actor, draft.idempotencyKey, 'the app refused the review').catch((tidy: unknown) => reportError('api.discardReview', tidy));
       throw error;
     }
   }
@@ -2571,7 +2584,9 @@ export class DemoApplication {
           return decision.outcome === 'REQUIRED' || decision.outcome === 'NOT_REQUIRED'
             ? { outcome: decision.outcome, reason: decision.reason, ruleId: decision.ruleId }
             : null;
-        } catch {
+        } catch (error) {
+          // The challan is still issued; the e-way bill screen decides again. A fault here is ours.
+          reportUnexpected('api.challanEwayDecision', error);
           return null;
         }
       },
@@ -2635,9 +2650,10 @@ export class DemoApplication {
         conveyance: 'HIRED_VEHICLE',
       }, { on: draft.documentDate });
       return decision.outcome === 'REQUIRED' || decision.outcome === 'NOT_REQUIRED' ? decision : null;
-    } catch {
+    } catch (error) {
       // The reminder is a courtesy. If the rules cannot answer, the e-way bill screen still can,
-      // and a bill is never held back over it.
+      // and a bill is never held back over it. Why they could not answer is still worth knowing.
+      reportUnexpected('api.saleEwayReminder', error);
       return null;
     }
   }
@@ -2796,8 +2812,9 @@ export class DemoApplication {
       if (decideApplicability(applicability).outcome !== 'APPLICABLE') return;
       await this.shop.eInvoice.register(actor, { document, applicability });
     })().catch((error: unknown) => {
-      // Nothing here may reach the bill. The record itself carries the failure and the retry.
-      log.error('The e-invoice for a bill could not be sent; it stays on the E-invoice screen', errorFields(error));
+      // Nothing here may reach the bill. The record itself carries the failure and the retry; a
+      // fault of our own (not the portal being down) is reported as well.
+      reportUnexpected('api.einvoiceAutoSend', error);
     });
   }
 
@@ -2816,8 +2833,9 @@ export class DemoApplication {
         const document = await this.eInvoiceDocumentFor(actor, record.documentId);
         await this.shop.eInvoice.register(actor, { document, applicability: this.applicabilityFor(document) });
         sent += 1;
-      } catch {
+      } catch (error) {
         // Still down, or the bill has changed. It stays on the list and is tried again next time.
+        reportUnexpected('api.einvoiceRetry', error);
       }
     }
     return sent;
@@ -2833,7 +2851,7 @@ export class DemoApplication {
     if (draft === null) return;
     const decision = this.eInvoiceDecisionFor(draft);
     if (decision.needed !== 'YES' || decision.lateForPortal !== true) return;
-    if (discard) await this.discardReview(actor, draft.idempotencyKey, 'too old for the e-invoice portal').catch(() => undefined);
+    if (discard) await this.discardReview(actor, draft.idempotencyKey, 'too old for the e-invoice portal').catch((tidy: unknown) => reportError('api.discardReview', tidy));
     // Written for a bill that does not exist yet: nothing to cancel, so the sentence says so.
     const deadline = reportingDeadline(draft.documentDate, this.turnoverFactsOn(draft.documentDate).lastYearTurnover ?? {}, appToday());
     const lastDay = deadline.kind === 'LIMIT' ? ` The last day the government accepts it was ${formatClaimDate(isoDate(String(deadline.lastDay)))}.` : '';
@@ -4246,6 +4264,7 @@ export class DemoApplication {
     try {
       return { counterparty: customerPrint(this.config.companyId, String(note.partyId)), placeOfSupplyStateCode: null, placeOfSupplyStateName: null };
     } catch {
+      // Not a customer: the note was against a purchase, so the counterparty is the supplier, read below.
       const bill = note.kind === 'PURCHASE_RETURN' ? await this.shop.bills.findById(note.companyId, note.originalDocument.id) : null;
       const supplierId = String(bill?.supplierPartyId ?? note.partyId);
       const address = billingAddressOf(this.config.companyId, supplierId);
@@ -4307,7 +4326,8 @@ export class DemoApplication {
     const frozen = this.notePrints.get(note.id);
     if (frozen === undefined) throw notFound('API_NOTE_PRINT_FACTS', 'This note was recorded before notes could be printed, so it has no stored page.');
     // Issue #284 — the government's IRN and signed QR, once registered, printed as on a bill.
-    const record = await this.shop.eInvoice.forDocument(actor, note.id).catch(() => null);
+    // The note prints without the IRN block rather than not at all; why the record was unreadable is reported.
+    const record = await this.shop.eInvoice.forDocument(actor, note.id).catch((error: unknown) => { reportUnexpected('api.notePrintIrn', error); return null; });
     const acknowledgement = record?.status === 'REGISTERED' ? record.acknowledgement ?? null : null;
     const facts = acknowledgement === null ? frozen : {
       ...frozen,
@@ -4820,7 +4840,8 @@ export class DemoApplication {
     readonly lateForPortal?: boolean;
   } {
     let gstin: string | null = null;
-    try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch { gstin = null; }
+    // A party that is no longer a customer (merged, or a supplier's note) has no GSTIN to read here.
+    try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch (error) { reportUnexpected('api.einvoiceRecipient', error); gstin = null; }
     const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
     const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
@@ -4868,7 +4889,7 @@ export class DemoApplication {
         const record = records.find((candidate) => candidate.documentId === invoice.id);
         const decision = this.eInvoiceDecisionFor(invoice);
         let customer: string | null = null;
-        try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch { customer = null; }
+        try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch (error) { reportUnexpected('api.listCustomerName', error); customer = null; }
         const status = record?.status ?? 'NOT_SENT';
         return {
           id: invoice.id,
@@ -4913,7 +4934,7 @@ export class DemoApplication {
       if (decision.needed !== 'YES') return [];
       const record = records.find((candidate) => candidate.documentId === note.id);
       let customer: string | null = null;
-      try { customer = customerView(this.config.companyId, bill.partyId).name; } catch { customer = null; }
+      try { customer = customerView(this.config.companyId, bill.partyId).name; } catch (error) { reportUnexpected('api.listCustomerName', error); customer = null; }
       const status = record?.status ?? 'NOT_SENT';
       return [{
         id: note.id,
@@ -5383,12 +5404,12 @@ export class DemoApplication {
     for (const invoice of invoices) {
       if (invoice.number === null) continue;
       let customer: string | null = null;
-      try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch { customer = null; }
+      try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch (error) { reportUnexpected('api.listCustomerName', error); customer = null; }
       let outcome: string = 'CANNOT_DECIDE';
       try {
         const movement = await this.movementFor(actor, invoice.id, { reason: 'SUPPLY' });
         outcome = decideEwayApplicability(movement).outcome;
-      } catch { /* the check itself says what is wrong once the bill is chosen */ }
+      } catch (error) { reportUnexpected('api.ewayChoiceOutcome', error); /* the check itself says what is wrong once the bill is chosen */ }
       const record = records.find((candidate) => candidate.movementId === invoice.id && candidate.acknowledgement !== undefined
         && !['CANCELLED', 'REJECTED', 'FAILED'].includes(candidate.status));
       const status = record !== undefined ? 'RAISED' : outcome === 'REQUIRED' ? 'NEEDED' : outcome === 'NOT_REQUIRED' ? 'NOT_NEEDED' : 'ASK';

@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 150 routes in `apps/api/src/server.ts`, and the static web server
+### 4.1 HTTP API — 151 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -255,6 +255,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/operations` | service |
 | POST | `/api/operations/jobs/replay` | `queue.replay` |
 | POST | `/api/operations/support-grants` | `support.access.grant` |
+| POST | `/api/operations/error-check` | `queue.replay` |
 | GET | `/api/assistant/examples` | service |
 | POST | `/api/assistant/ask` | `assistant.ask` |
 | GET | `/api/states` | service |

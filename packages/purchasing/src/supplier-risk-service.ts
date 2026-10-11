@@ -18,6 +18,7 @@ import type {
   RiskPolicyPort, SupplierHistoryPort,
 } from "./supplier-risk-ports.ts";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
+import { reportError } from "../../platform/src/error-reporting.ts";
 
 /** Seeing a supplier's government record is its own permission: it is data about someone else. */
 export const SUPPLIER_RISK_VIEW_PERMISSION = "supplier.risk.view";
@@ -101,7 +102,9 @@ export class SupplierRiskService {
         gstr2b = (await this.#gstr2b.signalFor(actor.companyId, {
           supplierGstin: input.gstin, invoiceNumber: input.invoiceNumber, invoiceDate: input.invoiceDate,
         })) ?? undefined;
-      } catch {
+      } catch (error) {
+        // The assessment then says the government's purchase record could not be read; why is reported.
+        reportError("supplierRisk.gstr2bSignal", error);
         gstr2b = undefined;
       }
     }

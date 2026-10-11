@@ -38,7 +38,7 @@ test('#357: the request id in the response header finds every line of that reque
   const requestId = reports.headers.get('x-request-id')!;
 
   const mine = lines.filter((line) => line.request_id === requestId);
-  assert.deepEqual(mine.map((line) => [line.level, line.message]), [['error', 'The request failed on our side'], ['info', 'request']]);
+  assert.deepEqual(mine.map((line) => [line.level, line.message]), [['error', 'An error was reported'], ['info', 'request']]);
   for (const line of mine) {
     assert.equal(line.company_id, COMPANY_A);
     assert.equal(typeof line.user_id, 'string');

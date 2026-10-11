@@ -14,7 +14,9 @@ import { InboxError } from '../../../packages/purchasing/src/inbox.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
-import { annotate, errorFields, inRequest, log } from './log.ts';
+import { annotate, inRequest, log } from './log.ts';
+import { reportError, useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
+import { apiErrorReporter, installErrorReporting } from './error-reporting.ts';
 import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
@@ -24,6 +26,9 @@ export { ROUTES } from './routes/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
 // shapes the walker recognises, and a secret carried by a class instance or a Map would walk past it.
+// Issue #358 — what this module's callers catch and carry on from is reported, with the request it was in.
+useErrorReporter(apiErrorReporter());
+
 export const jsonResponse = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: redactSecretText(JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) ?? '') });
 const json = jsonResponse;
 
@@ -87,8 +92,8 @@ const withRequestId = (result: ApiResult, requestId: string): ApiResult => ({ ..
 const failureOf = (error: unknown, requestId: string, routeName: string): ApiResult => {
   const status = statusOf(error);
   if (status === undefined) {
-    // The detail goes to the log, under the same request id, and never to the caller.
-    log.error('The request failed on our side', { route: routeName, ...errorFields(error) });
+    // The detail goes to the log and the error tracker, under the same request id, never to the caller.
+    reportError('api.request', error, { route: routeName });
     return failure(500, requestId, {
       title: 'Something went wrong',
       code: 'INTERNAL',
@@ -208,11 +213,13 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
 export const apiServer = applyTimeouts(createServer(serveApi));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installErrorReporting();
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
   const recurringTimer = setInterval(() => {
-    void apiRuntime().runRecurringWork().catch((error: unknown) => log.error('Recurring work tick failed; its queue state is available to operators', errorFields(error)));
+    // Each job's own failure is kept in its queue state for operators; this is the tick itself failing.
+    void apiRuntime().runRecurringWork().catch((error: unknown) => reportError('api.recurringTick', error));
   }, 60_000);
   recurringTimer.unref();
 }

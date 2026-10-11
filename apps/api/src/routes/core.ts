@@ -48,6 +48,12 @@ export const CORE_ROUTES: readonly Route[] = [
   get('/api/operations', { access: READ, input: nothing }, ({ runtime, context }) => runtime.operationsWorkspace(context)),
   post('/api/operations/jobs/replay', { access: need('replay a stuck job', 'queue.replay'), input: fields({ jobId: text }) },
     ({ runtime, context, input }) => runtime.replayOperationalJob(context, input)),
+  // Issue #358 — proves a fault reaches the error tracker: throws on purpose, in staging only. Anywhere
+  // else it is not there at all. Operators only, like replaying a job.
+  post('/api/operations/error-check', { access: need('check that errors reach the error tracker', 'queue.replay'), input: nothing }, ({ requestId }) => {
+    if (process.env.NODE_ENV !== 'staging') return replyJson(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.', requestId });
+    throw new TypeError(`Error-tracker check, request ${requestId}: this error was thrown on purpose.`);
+  }),
   post('/api/operations/support-grants', { access: need('give support staff access', 'support.access.grant'), input: fields({ supportActorId: text, reason: text, durationMinutes: text, scopes: anything }) },
     ({ runtime, context, input }) => runtime.grantSupportAccess(context, input)),
 

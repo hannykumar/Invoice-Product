@@ -905,7 +905,8 @@ function openView(view, section = null) {
   document.querySelector(`#view-${target} h1`)?.focus?.();
   // Issue #310 — Home is read afresh every time it is opened, so a task done elsewhere is gone.
   if (target === "dashboard" && state.dashboard) loadDashboard();
-  if (target === "items") renderItems().catch(() => {});
+  // Issue #358 — the screen keeps what it showed; the reason is not lost.
+  if (target === "items") renderItems().catch((error) => console.error("The items list could not be read again.", error));
   if (target === "reports") loadReports().then(() => { if (section && state.view === "reports") document.querySelector(`#${section}`)?.scrollIntoView({ block: "start" }); });
   if (target === "migration") startMigration();
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
@@ -1386,7 +1387,8 @@ for (const id of ["#item-dialog", "#item-edit-dialog"]) document.querySelector(i
  * read; one failing does not stop the others.
  */
 async function refreshDocumentLists() {
-  const quietly = (load) => Promise.resolve().then(load).catch(() => {});
+  // Issue #358 — one list failing leaves the others, and says why in the console instead of nothing.
+  const quietly = (load) => Promise.resolve().then(load).catch((error) => console.error(`${load.name} could not refresh its list.`, error));
   await Promise.all([
     quietly(loadDashboard),
     quietly(loadIssuedInvoices),
