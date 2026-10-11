@@ -6,6 +6,7 @@
  * Two figures are kept by the database and cannot be written by the application:
  *  - `payments.allocated_paise` — how much of a payment bills have used; never more than the payment.
  *  - `document_settlements.allocated_paise` — how much of a bill has been paid; never more than the bill.
+ *    (`credited_paise`, what credit notes took off the bill, is kept the same way from `return_notes`.)
  * A trigger on `payment_allocations` moves both in the statement that records the allocation, and
  * the two CHECKs do the refusing. A bill's `status` is computed from those figures, so a part
  * payment can never mark a bill paid.
@@ -74,7 +75,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       UNIQUE (company_id, id),
       UNIQUE (company_id, idempotency_key),
       CONSTRAINT payments_allocated_within_amount CHECK (allocated_paise BETWEEN 0 AND amount_paise),
-      CONSTRAINT payments_cheque_whole CHECK ((mode = 'CHEQUE') = (cheque_number IS NOT NULL) AND num_nulls(cheque_number, cheque_date, cheque_state) IN (0, 3) AND (cheque_number IS NOT NULL OR cheque_bank_name IS NULL)),
+      CONSTRAINT payments_cheque_whole CHECK ((mode <> 'CHEQUE' OR cheque_number IS NOT NULL) AND num_nulls(cheque_number, cheque_date, cheque_state) IN (0, 3) AND (cheque_number IS NOT NULL OR cheque_bank_name IS NULL)),
       CONSTRAINT payments_supplier_advance_is_paid_out CHECK (NOT advance_to_supplier OR direction = 'PAYMENT'),
       CONSTRAINT payments_advance_particulars_whole CHECK (num_nulls(advance_purchase_order_number, advance_purchase_order_date) IN (0, 2)
         AND num_nulls(advance_supplier_receipt_number, advance_supplier_receipt_date) IN (0, 2)
@@ -90,6 +91,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
     CREATE INDEX payments_list_idx ON payments(company_id, payment_date DESC, id);
     CREATE INDEX payments_party_idx ON payments(company_id, party_id, payment_date DESC);
     -- Foreign keys.
+    CREATE INDEX payments_branch_idx ON payments(company_id, branch_id) WHERE branch_id IS NOT NULL;
     CREATE INDEX payments_refund_of_idx ON payments(company_id, refund_of) WHERE refund_of IS NOT NULL;
     CREATE INDEX payments_voucher_idx ON payments(company_id, voucher_id) WHERE voucher_id IS NOT NULL;
     CREATE INDEX payments_reversal_voucher_idx ON payments(company_id, reversal_voucher_id) WHERE reversal_voucher_id IS NOT NULL;
@@ -132,24 +134,53 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       value_paise bigint NOT NULL CHECK (value_paise >= 0),
       -- Kept by the database from payment_allocations.
       allocated_paise bigint NOT NULL DEFAULT 0,
-      -- The bill was cancelled: nothing is owed on it any more.
+      -- Taken off the bill by credit notes. Kept by the database from return_notes.
+      credited_paise bigint NOT NULL DEFAULT 0 CHECK (credited_paise >= 0),
+      -- The bill was cancelled: nothing is owed on it any more. Money already applied to it stays
+      -- on its payments, as it does today.
       cancelled boolean NOT NULL DEFAULT false,
       status text NOT NULL GENERATED ALWAYS AS (CASE
         WHEN cancelled THEN 'CANCELLED'
-        WHEN allocated_paise = value_paise THEN 'SETTLED'
+        WHEN allocated_paise >= value_paise - credited_paise THEN 'SETTLED'
         WHEN allocated_paise > 0 THEN 'PARTLY_PAID'
         ELSE 'OPEN' END) STORED,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE (company_id, document_kind, document_id),
       CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise BETWEEN 0 AND value_paise),
-      CONSTRAINT document_settlements_cancelled_holds_no_money CHECK (NOT cancelled OR allocated_paise = 0),
       FOREIGN KEY (company_id, party_id) REFERENCES master_records(company_id, id)
     );
     -- What one party still owes or is owed (statement, ageing, collections #23), and what is overdue.
     CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
     CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
     CREATE INDEX document_settlements_party_idx ON document_settlements(company_id, party_id);
+
+    -- The row for a sales bill is only as good as the bill it describes: it must be an issued bill
+    -- of this company, for exactly the bill's value.
+    CREATE FUNCTION document_settlement_matches_bill() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+    BEGIN
+      IF NEW.document_kind = 'SALES_INVOICE' AND NOT EXISTS (
+        SELECT FROM sales_invoices b WHERE b.company_id = NEW.company_id AND b.id::text = NEW.document_id AND b.state = 'FINAL'
+          AND b.invoice_value_paise = NEW.value_paise AND b.party_id = NEW.party_id) THEN
+        RAISE EXCEPTION 'This is not an issued bill of that value for that customer.'
+          USING ERRCODE = 'foreign_key_violation', TABLE = 'document_settlements', CONSTRAINT = 'document_settlements_matches_bill';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER document_settlements_matches_bill BEFORE INSERT ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION document_settlement_matches_bill();
+
+    -- A credit note against a sales bill takes its value off what the bill is owed.
+    CREATE FUNCTION credit_note_reduces_bill() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+    BEGIN
+      UPDATE document_settlements SET credited_paise = credited_paise + NEW.total_paise, updated_at = now()
+        WHERE company_id = NEW.company_id AND document_kind = 'SALES_INVOICE' AND document_id = NEW.original_document_id;
+      RETURN NULL;
+    END;
+    $$;
+    CREATE TRIGGER return_notes_reduce_bill AFTER INSERT ON return_notes
+      FOR EACH ROW WHEN (NEW.kind = 'SALES_RETURN') EXECUTE FUNCTION credit_note_reduces_bill();
 
     -- What a payment settled, and by how much. A bounced cheque or an undone payment releases its
     -- allocations; they are never deleted, so what was once settled can still be seen.
@@ -183,7 +214,12 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       IF TG_OP = 'INSERT' AND NEW.released_at IS NOT NULL THEN
         RAISE EXCEPTION 'An allocation is recorded first and released later.' USING ERRCODE = 'check_violation', TABLE = 'payment_allocations';
       END IF;
-      UPDATE payments SET allocated_paise = allocated_paise + change WHERE company_id = NEW.company_id AND id = NEW.payment_id;
+      UPDATE payments SET allocated_paise = allocated_paise + change WHERE company_id = NEW.company_id AND id = NEW.payment_id
+        AND (TG_OP <> 'INSERT' OR state = 'RECORDED');
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'A payment that was undone settles nothing.'
+          USING ERRCODE = 'check_violation', TABLE = 'payment_allocations', CONSTRAINT = 'payment_allocations_payment_is_live';
+      END IF;
       UPDATE document_settlements SET allocated_paise = allocated_paise + change, updated_at = now()
         WHERE company_id = NEW.company_id AND document_kind = NEW.document_kind AND document_id = NEW.document_id;
       GET DIAGNOSTICS settled = ROW_COUNT;
@@ -247,6 +283,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
     );
     CREATE INDEX advance_receipts_list_idx ON advance_receipts(company_id, receipt_date DESC, id);
     -- Foreign keys, and "the advances against this proforma".
+    CREATE INDEX advance_receipts_branch_idx ON advance_receipts(company_id, branch_id) WHERE branch_id IS NOT NULL;
     CREATE INDEX advance_receipts_proforma_idx ON advance_receipts(company_id, proforma_id);
     CREATE INDEX advance_receipts_party_idx ON advance_receipts(company_id, party_id, receipt_date DESC);
     CREATE INDEX advance_receipts_payment_idx ON advance_receipts(company_id, payment_id);
@@ -276,7 +313,8 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       invoice_id uuid NOT NULL,
       invoice_number text NOT NULL,
       invoice_date date NOT NULL,
-      amount_paise bigint NOT NULL CHECK (amount_paise > 0),
+      -- Nothing, when the bill had already been covered by an earlier advance on the same proforma.
+      amount_paise bigint NOT NULL CHECK (amount_paise >= 0),
       -- The tax paid on that part of the advance, now set off against the bill's own tax.
       ${heads('set_off_')}
       voucher_id uuid,
@@ -351,7 +389,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
     ${frozen('advance_applications')}
     ${frozen('refund_vouchers')}
     CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
-      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,cancelled,status,updated_at', '');
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,cancelled,status,updated_at', '');
     CREATE TRIGGER document_settlements_no_truncate BEFORE TRUNCATE ON document_settlements
       FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
     ${linesAddUp('advance_receipts', 'advance_tax_lines', 'advance_id', '', '*', 'true')}
@@ -372,6 +410,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
   `,
   down: `
     DROP TABLE IF EXISTS refund_vouchers, advance_applications, advance_tax_lines, advance_receipts, payment_allocations, document_settlements, cheque_events, payments;
-    DROP FUNCTION IF EXISTS advance_not_overused(), payment_allocation_moves_balances();
+    DROP TRIGGER IF EXISTS return_notes_reduce_bill ON return_notes;
+    DROP FUNCTION IF EXISTS advance_not_overused(), payment_allocation_moves_balances(), credit_note_reduces_bill(), document_settlement_matches_bill();
   `,
 }]);

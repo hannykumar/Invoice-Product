@@ -59,7 +59,8 @@ export const inventoryMigrations: readonly Migration[] = Object.freeze([{
       -- A movement is undone once.
       UNIQUE (company_id, reverses_movement_id),
       CONSTRAINT stock_movements_direction_of_kind CHECK ((direction = 'IN') = (kind IN (${list(KINDS_IN)}))),
-      CONSTRAINT stock_movements_reversal_names_what CHECK ((kind IN ('REVERSAL_IN','REVERSAL_OUT')) = (reverses_movement_id IS NOT NULL)),
+      -- One way only: undoing an imported opening stock is a REVERSAL_OUT that names no single movement (#37).
+      CONSTRAINT stock_movements_only_a_reversal_undoes CHECK (reverses_movement_id IS NULL OR kind IN ('REVERSAL_IN','REVERSAL_OUT')),
       CONSTRAINT stock_movements_reversal_says_why CHECK (reverses_movement_id IS NULL OR COALESCE(length(trim(reason)), 0) > 0),
       FOREIGN KEY (company_id, reverses_movement_id) REFERENCES stock_movements(company_id, id),
       ${PLACE_KEYS}
@@ -101,7 +102,9 @@ export const inventoryMigrations: readonly Migration[] = Object.freeze([{
         INSERT INTO stock_balances (company_id, item_id, warehouse_id, batch_id, unit_code, on_hand_micro)
           VALUES (NEW.company_id, NEW.item_id, NEW.warehouse_id, NEW.batch_id, NEW.unit_code, NEW.quantity_micro)
           ON CONFLICT ON CONSTRAINT stock_balances_place_key
-          DO UPDATE SET on_hand_micro = stock_balances.on_hand_micro + EXCLUDED.on_hand_micro, updated_at = now()
+          -- An empty stock may be counted in a new unit: a corrected base unit must not strand the item.
+          DO UPDATE SET on_hand_micro = stock_balances.on_hand_micro + EXCLUDED.on_hand_micro, updated_at = now(),
+            unit_code = CASE WHEN stock_balances.on_hand_micro = 0 THEN EXCLUDED.unit_code ELSE stock_balances.unit_code END
           RETURNING unit_code INTO balance_unit;
       ELSE
         -- Not an upsert: PostgreSQL checks the row it would insert before it looks for the existing
@@ -147,6 +150,7 @@ export const inventoryMigrations: readonly Migration[] = Object.freeze([{
     CREATE INDEX stock_reservations_held_idx ON stock_reservations(company_id, item_id, warehouse_id, batch_id) WHERE state = 'HELD';
     -- A bill's own holds, to release or use them.
     CREATE INDEX stock_reservations_document_idx ON stock_reservations(company_id, document_id);
+    CREATE INDEX stock_reservations_item_idx ON stock_reservations(company_id, item_id);
     CREATE INDEX stock_reservations_warehouse_idx ON stock_reservations(company_id, warehouse_id);
     CREATE INDEX stock_reservations_batch_idx ON stock_reservations(company_id, batch_id) WHERE batch_id IS NOT NULL;
 

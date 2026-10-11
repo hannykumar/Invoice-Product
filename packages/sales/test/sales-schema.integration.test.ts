@@ -66,6 +66,8 @@ const newShop = async () => {
   await owner.query("INSERT INTO master_records (id, company_id, kind) VALUES ($1, $4, 'party'), ($2, $4, 'item'), ($3, $4, 'warehouse')", [ids.partyId, itemId, warehouseId, ids.companyId]);
   /** One transaction as the application, for this company. Deferred checks run when it ends. */
   const run = <T>(work: (sql: SqlExecutor) => Promise<T>) => app.tenantTransaction(ids.companyId, work);
+  /** The same as the owner of the tables: the rules bind whoever asks. */
+  const asOwner = (text: string, values: unknown[] = []) => owner.tenantTransaction(ids.companyId, (sql) => sql.query(text, values));
   const one = async (text: string, values: unknown[] = []) => (await run((sql) => sql.query(text, values))).rows[0] as Record<string, unknown>;
 
   const billRow = (id: string, over: Record<string, unknown> = {}) => ({
@@ -108,7 +110,7 @@ const newShop = async () => {
   };
   const allocation = (paymentId: string, billId: string, amount: number) => ({ company_id: ids.companyId, payment_id: paymentId, document_kind: 'SALES_INVOICE', document_id: billId, document_number: 'INV', amount_paise: amount });
   const onHand = async () => Number((await one('SELECT COALESCE(sum(on_hand_micro), 0)::bigint AS n FROM stock_balances WHERE company_id = $1 AND item_id = $2', [ids.companyId, itemId])).n);
-  return { ids, itemId, warehouseId, vouchers: [first.voucherId, second.voucherId], run, one, billRow, lineRow, PRICED, issued, issueBill, movement, payment, allocation, onHand };
+  return { ids, itemId, warehouseId, asOwner, vouchers: [first.voucherId, second.voucherId], run, one, billRow, lineRow, PRICED, issued, issueBill, movement, payment, allocation, onHand };
 };
 
 test('the three migrations of #365 run up, down and up again on a database of their own', { skip }, async () => {
@@ -189,8 +191,8 @@ test('an issued bill cannot be changed, deleted, moved back to a draft or given 
   await assert.rejects(change("UPDATE sales_invoices SET document_date = '2026-04-11' WHERE id = $1"), refused(FROZEN));
   await assert.rejects(change("UPDATE sales_invoices SET state = 'DRAFT', number = NULL, financial_year = NULL WHERE id = $1"), refused(FROZEN));
   await assert.rejects(change('DELETE FROM sales_invoices WHERE id = $1'), refused(NO_PRIVILEGE));
-  await assert.rejects(owner.query('DELETE FROM sales_invoices WHERE id = $1', [bill]), refused(FROZEN, FOREIGN_KEY));
-  await assert.rejects(owner.query('DELETE FROM sales_invoice_lines WHERE invoice_id = $1', [bill]), refused(FROZEN));
+  await assert.rejects(shop.asOwner('DELETE FROM sales_invoices WHERE id = $1', [bill]), refused(FROZEN, FOREIGN_KEY));
+  await assert.rejects(shop.asOwner('DELETE FROM sales_invoice_lines WHERE invoice_id = $1', [bill]), refused(FROZEN));
   await assert.rejects(change('UPDATE sales_invoice_lines SET quantity_micro = 1 WHERE invoice_id = $1'), refused(FROZEN));
   await assert.rejects(owner.query('TRUNCATE sales_invoices CASCADE'), refused(FROZEN));
   // A line slipped in later, even one worth nothing, no longer adds up.
@@ -257,9 +259,9 @@ test('stock is the sum of its movements, kept by the database, and never goes be
   const sold = shop.movement('SALE_OUT', 1_000_000);
   await shop.run((sql) => insert(sql, 'stock_movements', sold));
   await assert.rejects(shop.run((sql) => sql.query('UPDATE stock_movements SET quantity_micro = 1 WHERE id = $1', [sold.id])), refused(FROZEN));
-  await assert.rejects(owner.query('DELETE FROM stock_movements WHERE id = $1', [sold.id]), refused(FROZEN));
+  await assert.rejects(shop.asOwner('DELETE FROM stock_movements WHERE id = $1', [sold.id]), refused(FROZEN));
   await assert.rejects(shop.run((sql) => insert(sql, 'stock_movements', sold)), refused(UNIQUE), 'a retry lands once');
-  await assert.rejects(shop.run((sql) => insert(sql, 'stock_movements', shop.movement('REVERSAL_IN', 1_000_000))), refused(CHECK), 'a reversal names what it undoes');
+  await assert.rejects(shop.run((sql) => insert(sql, 'stock_movements', shop.movement('ADJUSTMENT_IN', 1_000_000, { reverses_movement_id: sold.id, reason: 'No.' }))), refused(CHECK), 'only a reversal undoes a movement');
   await assert.rejects(shop.run((sql) => insert(sql, 'stock_movements', shop.movement('REVERSAL_IN', 1_000_000, { reverses_movement_id: sold.id }))), refused(CHECK), 'and says why');
   await shop.run((sql) => insert(sql, 'stock_movements', shop.movement('REVERSAL_IN', 1_000_000, { reverses_movement_id: sold.id, reason: 'Bill cancelled.' })));
   await assert.rejects(shop.run((sql) => insert(sql, 'stock_movements', shop.movement('REVERSAL_IN', 1_000_000, { reverses_movement_id: sold.id, reason: 'Again.' }))), refused(UNIQUE));
@@ -300,8 +302,8 @@ test('a payment never settles more than itself or more than the bill, and a part
   assert.equal(Number((await shop.one('SELECT allocated_paise FROM payments WHERE id = $1', [large.id])).allocated_paise), rest);
 
   // A payment's figures are fixed; it can be reversed with a reason, and its allocations released, not deleted.
-  await assert.rejects(owner.query('UPDATE payments SET amount_paise = 1 WHERE id = $1', [large.id]), refused(FROZEN, CHECK));
-  await assert.rejects(owner.query('DELETE FROM payment_allocations WHERE payment_id = $1', [large.id]), refused(FROZEN));
+  await assert.rejects(shop.asOwner('UPDATE payments SET amount_paise = 1 WHERE id = $1', [large.id]), refused(FROZEN, CHECK));
+  await assert.rejects(shop.asOwner('DELETE FROM payment_allocations WHERE payment_id = $1', [large.id]), refused(FROZEN));
   await assert.rejects(shop.run((sql) => sql.query("UPDATE payments SET state = 'REVERSED' WHERE id = $1", [large.id])), refused(CHECK));
   await shop.run(async (sql) => {
     await sql.query("UPDATE payments SET state = 'REVERSED', reversal_reason = 'Entered twice.', version = version + 1 WHERE id = $1", [large.id]);
@@ -311,8 +313,11 @@ test('a payment never settles more than itself or more than the bill, and a part
   await assert.rejects(shop.run((sql) => sql.query('UPDATE payment_allocations SET released_at = NULL WHERE payment_id = $1', [large.id])), refused(FROZEN));
   await assert.rejects(shop.run((sql) => sql.query("UPDATE payments SET state = 'RECORDED' WHERE id = $1", [large.id])), refused(FROZEN));
 
-  // A cancelled bill holds no money.
-  await assert.rejects(shop.run((sql) => sql.query('UPDATE document_settlements SET cancelled = true WHERE document_id = $1', [bill])), refused(CHECK));
+  await assert.rejects(shop.run((sql) => insert(sql, 'payment_allocations', shop.allocation(large.id, bill, 100))), refused(CHECK), 'a payment that was undone settles nothing');
+
+  // A cancelled bill is owed nothing; money already applied to it stays on its payment, as it does today.
+  await shop.run((sql) => sql.query('UPDATE document_settlements SET cancelled = true WHERE document_id = $1', [bill]));
+  assert.deepEqual(await status(), { status: 'CANCELLED', allocated: 10_000 });
 
   // A cheque is a cheque in full, and its history is only ever added to.
   await assert.rejects(shop.run((sql) => insert(sql, 'payments', shop.payment(5_000, { mode: 'CHEQUE' }))), refused(CHECK));
@@ -388,4 +393,96 @@ test('a credit note cannot take back more than the bill sold on a line, less wha
   const both = await Promise.allSettled([note('CN/26-27/000003', 1_000_000), note('CN/26-27/000004', 1_000_000)]);
   assert.deepEqual(both.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
   assert.equal(Number((await shop.one("SELECT sum(quantity_micro) AS n FROM return_note_lines WHERE company_id = $1 AND original_line_id = 'l1'", [shop.ids.companyId])).n), 3_000_000);
+});
+
+test('findings of the independent review of #365, each as a test', { skip }, async () => {
+  const shop = await newShop();
+
+  // A draft is saved as it was typed, even when it is wrong; it cannot be issued like that.
+  const draft = crypto.randomUUID();
+  await shop.run(async (sql) => {
+    await insert(sql, 'sales_invoices', shop.billRow(draft, { due_date: '2026-04-01' }));
+    await insert(sql, 'sales_invoice_lines', shop.lineRow('invoice_id', draft, { quantity_micro: -5_000_000 }));
+  });
+  const issue = (id: string, number: string) => (sql: SqlExecutor) => sql.query(
+    `UPDATE sales_invoices SET state = 'FINAL', number = $2, financial_year = '2026-27', voucher_id = $3, finalised_by = $4, finalised_at = now(),
+       pricing = '{}', line_count = 1, taxable_value_paise = 30000, cgst_paise = 2700, sgst_paise = 2700, utgst_paise = 0, igst_paise = 0, cess_paise = 0,
+       total_tax_paise = 5400, reverse_charge_tax_paise = 0, round_off_paise = 0, invoice_value_paise = 35400 WHERE id = $1`, [id, number, shop.vouchers[0], shop.ids.userId]);
+  await assert.rejects(shop.run(issue(draft, 'INV/26-27/000001')), refused(CHECK), 'a line of minus five is never issued');
+
+  // The race the review reproduced: a line is changed by one connection while another issues the bill.
+  // Whichever order they land in, an issued bill whose lines do not add up never exists.
+  for (let round = 0; round < 5; round += 1) {
+    const id = crypto.randomUUID();
+    await shop.run(async (sql) => { await insert(sql, 'sales_invoices', shop.billRow(id)); await insert(sql, 'sales_invoice_lines', shop.lineRow('invoice_id', id)); });
+    await Promise.allSettled([
+      shop.run(async (sql) => { await issue(id, `RACE/${round}`)(sql); await sql.query('SELECT pg_sleep(0.05)'); }),
+      shop.run(async (sql) => { await sql.query('UPDATE sales_invoice_lines SET taxable_value_paise = 1 WHERE invoice_id = $1', [id]); await sql.query('SELECT pg_sleep(0.05)'); }),
+    ]);
+    const after = await shop.one('SELECT b.state, b.taxable_value_paise::int AS header, l.taxable_value_paise::int AS line FROM sales_invoices b JOIN sales_invoice_lines l ON l.invoice_id = b.id WHERE b.id = $1', [id]);
+    assert.ok(after.state === 'DRAFT' || after.header === after.line, `round ${round}: ${JSON.stringify(after)}`);
+  }
+
+  // The tax on a reverse-charge line is not in the bill's total, and the check knows it.
+  const reverse = crypto.randomUUID();
+  const noTax = { cgst_paise: 0, sgst_paise: 0, total_tax_paise: 0, invoice_value_paise: 30_000, reverse_charge_tax_paise: 5_400 };
+  await shop.run(async (sql) => {
+    await insert(sql, 'sales_invoices', shop.billRow(reverse, { ...shop.issued('INV/26-27/000002'), ...noTax }));
+    await insert(sql, 'sales_invoice_lines', shop.lineRow('invoice_id', reverse, { reverse_charge: true }));
+  });
+  await assert.rejects(shop.run(async (sql) => {
+    const id = crypto.randomUUID();
+    await insert(sql, 'sales_invoices', shop.billRow(id, { ...shop.issued('INV/26-27/000003'), ...noTax }));
+    await insert(sql, 'sales_invoice_lines', shop.lineRow('invoice_id', id));
+  }), refused(CHECK), 'the same line without reverse charge bills tax the header does not carry');
+
+  // A settlement row is only written for an issued bill, for its own value and customer.
+  const settlement = (documentId: string, value: number) => ({ id: crypto.randomUUID(), company_id: shop.ids.companyId, document_kind: 'SALES_INVOICE', document_id: documentId, document_number: 'X', party_id: shop.ids.partyId, side: 'RECEIVABLE', document_date: '2026-04-10', value_paise: value });
+  await assert.rejects(shop.run((sql) => insert(sql, 'document_settlements', settlement(draft, 35_400))), refused(FOREIGN_KEY), 'not for a draft');
+  await assert.rejects(shop.run((sql) => insert(sql, 'document_settlements', settlement(reverse, 1))), refused(FOREIGN_KEY), 'not for another value');
+
+  // A credit note takes its value off what the bill is owed: ₹354.00 less ₹118.00 is settled by ₹236.00.
+  const bill = await shop.issueBill('INV/26-27/000004');
+  const creditNote = (original: string, lineId: string) => shop.run(async (sql) => {
+    const id = crypto.randomUUID();
+    await insert(sql, 'return_notes', { id, company_id: shop.ids.companyId, kind: 'SALES_RETURN', number: `CN/${id.slice(0, 8)}`, document_date: '2026-04-12', original_document_id: original, original_document_number: 'INV/26-27/000004', original_document_date: '2026-04-10', party_id: shop.ids.partyId, reason: 'Damaged.', taxable_value_paise: 10_000, total_paise: 11_800, voucher_id: shop.vouchers[1], compliance_status: 'NOT_APPLICABLE', created_by: shop.ids.userId, idempotency_key: `return:${id}`, summary: 'Credit note.' });
+    await insert(sql, 'return_note_lines', { return_note_id: id, company_id: shop.ids.companyId, original_line_id: lineId, item_id: shop.itemId, description: 'Plastic crate', supply_kind: 'GOODS', quantity_micro: 1_000_000, quantity_unit: 'PCS', disposition: 'ACCEPTED', warehouse_id: shop.warehouseId, taxable_value_paise: 10_000, total_paise: 11_800 });
+  });
+  await creditNote(bill, 'l1');
+  const paid = shop.payment(23_600);
+  await shop.run(async (sql) => { await insert(sql, 'payments', paid); await insert(sql, 'payment_allocations', shop.allocation(paid.id, bill, 23_600)); });
+  assert.deepEqual(await shop.one('SELECT status, credited_paise::int AS credited FROM document_settlements WHERE document_id = $1', [bill]), { status: 'SETTLED', credited: 11_800 });
+  await assert.rejects(shop.run((sql) => sql.query('UPDATE document_settlements SET credited_paise = 0 WHERE document_id = $1', [bill])), refused(NO_PRIVILEGE));
+  await assert.rejects(creditNote(bill, 'no-such-line'), refused(CHECK), 'a line that is not on the bill');
+  // A bill that is not in sales_invoices (made before the app moved to PostgreSQL) is left to the returns service.
+  await creditNote(crypto.randomUUID(), 'l1');
+  await creditNote('legacy-bill-17', 'l1');
+
+  // Undoing imported opening stock: a reversal that names no single movement (#37).
+  await shop.run((sql) => insert(sql, 'stock_movements', shop.movement('OPENING', 4_000_000)));
+  await shop.run((sql) => insert(sql, 'stock_movements', shop.movement('REVERSAL_OUT', 4_000_000, { reason: 'Import undone.' })));
+  // An empty stock may be counted in a corrected unit.
+  await shop.run((sql) => insert(sql, 'stock_movements', shop.movement('PURCHASE_IN', 2_000_000, { unit_code: 'BOX', entered_unit_code: 'BOX' })));
+  assert.equal((await shop.one('SELECT unit_code FROM stock_balances WHERE company_id = $1', [shop.ids.companyId])).unit_code, 'BOX');
+
+  // An advance on services carries its tax, one row for each rate, adding up to the voucher; and a
+  // second advance on the same proforma may be applied for nothing when the first covered the bill.
+  const proforma = crypto.randomUUID();
+  await shop.run(async (sql) => {
+    await insert(sql, 'presale_documents', shop.billRow(proforma, { ...shop.PRICED, state: 'ISSUED', kind: 'PROFORMA', number: 'PI/26-27/0000009', financial_year: '2026-27', supply_kind: 'SERVICES', purpose: 'Advance for a service', idempotency_key: `presale:${proforma}` }));
+    await insert(sql, 'presale_document_lines', shop.lineRow('document_id', proforma));
+  });
+  const advance = async (number: string, taxLines: number) => {
+    const [id, money] = [crypto.randomUUID(), shop.payment(11_800)];
+    await shop.run(async (sql) => {
+      await insert(sql, 'payments', money);
+      await insert(sql, 'advance_receipts', { id, company_id: shop.ids.companyId, number, financial_year: '2026-27', receipt_date: '2026-04-11', proforma_id: proforma, proforma_number: 'PI/26-27/0000009', party_id: shop.ids.partyId, supply_kind: 'SERVICES', place_of_supply_state_code: '07', description: 'Design work', amount_paise: 11_800, line_count: 1, taxable_value_paise: 10_000, cgst_paise: 900, sgst_paise: 900, utgst_paise: 0, igst_paise: 0, cess_paise: 0, total_tax_paise: 1_800, payment_id: money.id, recorded_by: shop.ids.userId, recorded_at: '2026-04-11T10:00:00Z', idempotency_key: `advance:${id}`, version: 0 });
+      for (let n = 1; n <= taxLines; n += 1) await insert(sql, 'advance_tax_lines', { company_id: shop.ids.companyId, advance_id: id, line_no: n, rate_bp: 1800, taxable_value_paise: 10_000, cgst_paise: 900, sgst_paise: 900 });
+    });
+    return id;
+  };
+  await assert.rejects(advance('RV/26-27/00007', 0), refused(CHECK), 'the tax rows are missing');
+  await assert.rejects(advance('RV/26-27/00007', 2), refused(CHECK), 'the tax rows come to twice the voucher');
+  const second = await advance('RV/26-27/00008', 1);
+  await shop.run((sql) => insert(sql, 'advance_applications', { company_id: shop.ids.companyId, advance_id: second, invoice_id: bill, invoice_number: 'INV/26-27/000004', invoice_date: '2026-04-10', amount_paise: 0, applied_by: shop.ids.userId, applied_at: '2026-04-12T10:00:00Z' }));
 });

@@ -54,7 +54,12 @@ const saleParticularsChecks = (table: string): string => `
       FOREIGN KEY (company_id, party_id) REFERENCES master_records(company_id, id),`;
 
 /** One line of a bill, quotation or proforma: what the person typed, and what the calculator made of it. */
-const saleLines = (table: string, parent: string, foreignKey: string): string => `
+/**
+ * `strict` is for documents that are issued the moment they are written. A draft bill's lines are
+ * saved as typed, even when wrong (the service marks the bill NEEDS_INFO); `ISSUED_LINE` below is
+ * what they must satisfy once the bill is issued.
+ */
+const saleLines = (table: string, parent: string, foreignKey: string, strict: boolean): string => `
     CREATE TABLE ${table} (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id uuid NOT NULL REFERENCES companies(id),
@@ -66,19 +71,19 @@ const saleLines = (table: string, parent: string, foreignKey: string): string =>
       charge_kind text CHECK (charge_kind IN ('FREIGHT','OTHER')),
       item_id uuid,
       warehouse_id uuid,
-      quantity_micro bigint NOT NULL CHECK (quantity_micro > 0),
+      quantity_micro bigint NOT NULL${strict ? ' CHECK (quantity_micro > 0)' : ''},
       unit_code text NOT NULL CHECK (unit_code <> ''),
-      unit_price_paise bigint NOT NULL CHECK (unit_price_paise >= 0),
+      unit_price_paise bigint NOT NULL${strict ? ' CHECK (unit_price_paise >= 0)' : ''},
       price_basis text CHECK (price_basis IN ('EXCLUSIVE','INCLUSIVE')),
       discount_kind text CHECK (discount_kind IN ('PERCENT','AMOUNT')),
-      discount_bp bigint CHECK (discount_bp BETWEEN 0 AND 10000),
-      discount_paise bigint CHECK (discount_paise >= 0),
+      discount_bp bigint${strict ? ' CHECK (discount_bp BETWEEN 0 AND 10000)' : ''},
+      discount_paise bigint${strict ? ' CHECK (discount_paise >= 0)' : ''},
       note text,
       -- Filled in when the document is priced; always present once it is issued.
       item_name text,
       hsn_or_sac text,
       rate_bp bigint CHECK (rate_bp BETWEEN 0 AND 10000),
-      taxable_value_paise bigint CHECK (taxable_value_paise >= 0),
+      taxable_value_paise bigint${strict ? ' CHECK (taxable_value_paise >= 0)' : ''},
       ${headColumns(false)}
       reverse_charge boolean NOT NULL DEFAULT false,
       created_at timestamptz NOT NULL DEFAULT now(),
@@ -99,11 +104,14 @@ const saleLines = (table: string, parent: string, foreignKey: string): string =>
     CREATE INDEX ${table}_item_idx ON ${table}(company_id, item_id) WHERE item_id IS NOT NULL;
     CREATE INDEX ${table}_warehouse_idx ON ${table}(company_id, warehouse_id) WHERE warehouse_id IS NOT NULL;`;
 
+const ISSUED_LINE = 'quantity_micro > 0 AND unit_price_paise >= 0 AND taxable_value_paise >= 0 AND COALESCE(discount_bp, 0) BETWEEN 0 AND 10000 AND COALESCE(discount_paise, 0) >= 0';
+
 /** The list screens: newest first, by customer, and by state. `id` breaks ties so paging by key is stable. */
 const listIndexes = (table: string): string => `
     CREATE INDEX ${table}_list_idx ON ${table}(company_id, document_date DESC, id);
     CREATE INDEX ${table}_party_idx ON ${table}(company_id, party_id, document_date DESC);
-    CREATE INDEX ${table}_state_idx ON ${table}(company_id, state, document_date DESC);`;
+    CREATE INDEX ${table}_state_idx ON ${table}(company_id, state, document_date DESC);
+    CREATE INDEX ${table}_branch_idx ON ${table}(company_id, branch_id) WHERE branch_id IS NOT NULL;`;
 
 const frozen = (table: string, statusColumn: string, when: string, mayChange: string, moves: string): string => `
     CREATE TRIGGER ${table}_frozen BEFORE UPDATE OR DELETE ON ${table}
@@ -118,11 +126,11 @@ const frozenWithParent = (table: string, foreignKey: string, parent: string, whe
       FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();`;
 
 /** Checked when the transaction ends, so a document and its lines can be written in any order. */
-export const linesAddUp = (header: string, lines: string, foreignKey: string, statusColumn: string, when: string, billable: string): string => `
+export const linesAddUp = (header: string, lines: string, foreignKey: string, statusColumn: string, when: string, billable: string, everyLine = 'true'): string => `
     CREATE CONSTRAINT TRIGGER ${header}_lines_add_up AFTER INSERT OR UPDATE ON ${header}
-      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION document_lines_add_up('${lines}', '${foreignKey}', '${header}', '${statusColumn}', '${when}', '${billable}');
-    CREATE CONSTRAINT TRIGGER ${lines}_add_up AFTER INSERT ON ${lines}
-      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION document_lines_add_up('${lines}', '${foreignKey}', '${header}', '${statusColumn}', '${when}', '${billable}');`;
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION document_lines_add_up('${lines}', '${foreignKey}', '${header}', '${statusColumn}', '${when}', '${billable}', '${everyLine}');
+    CREATE CONSTRAINT TRIGGER ${lines}_add_up AFTER INSERT OR UPDATE ON ${lines}
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION document_lines_add_up('${lines}', '${foreignKey}', '${header}', '${statusColumn}', '${when}', '${billable}', '${everyLine}');`;
 
 const INVOICE_LINK = `
       invoice_id uuid,
@@ -154,7 +162,11 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
     -- a line added later to a finished document, but the totals are frozen, so the lines must still
     -- add up to them when the transaction ends. Arguments: lines table, its foreign key, header
     -- table, status column ('' = none), statuses in which the document is finished ('*' = always),
-    -- and which lines' tax is billed (the tax on a reverse-charge line is not in the document's total).
+    -- which lines' tax is billed (the tax on a reverse-charge line is not in the document's total),
+    -- and what must be true of every line of a finished document.
+    -- The header is read FOR SHARE: a line changed by another transaction while the document was
+    -- being issued waits for that to finish and is then checked against the issued document, so
+    -- the rule does not depend on our own per-company lock.
     CREATE FUNCTION document_lines_add_up() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
     DECLARE
       header_id uuid := CASE WHEN TG_TABLE_NAME = TG_ARGV[2] THEN (to_jsonb(NEW) ->> 'id')::uuid ELSE (to_jsonb(NEW) ->> TG_ARGV[1])::uuid END;
@@ -165,16 +177,21 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
       found_lines integer;
       found_taxable bigint;
       found_tax bigint;
+      wrong_lines integer;
     BEGIN
-      EXECUTE format('SELECT %s, line_count, COALESCE(taxable_value_paise, 0), COALESCE(total_tax_paise, 0) FROM %I.%I WHERE id = $1',
+      EXECUTE format('SELECT %s, line_count, COALESCE(taxable_value_paise, 0), COALESCE(total_tax_paise, 0) FROM %I.%I WHERE id = $1 FOR SHARE',
         CASE WHEN TG_ARGV[3] = '' THEN 'NULL::text' ELSE format('%I::text', TG_ARGV[3]) END, TG_TABLE_SCHEMA, TG_ARGV[2])
         INTO status, expected_lines, expected_taxable, expected_tax USING header_id;
       -- No header: an unissued draft that was discarded in this same transaction.
       IF expected_lines IS NULL THEN RETURN NULL; END IF;
       IF TG_ARGV[4] <> '*' AND NOT COALESCE(status = ANY (string_to_array(TG_ARGV[4], ',')), true) THEN RETURN NULL; END IF;
-      EXECUTE format('SELECT count(*), COALESCE(sum(taxable_value_paise), 0), COALESCE(sum(${HEADS_SUM}) FILTER (WHERE %s), 0) FROM %I.%I WHERE %I = $1',
-        TG_ARGV[5], TG_TABLE_SCHEMA, TG_ARGV[0], TG_ARGV[1])
-        INTO found_lines, found_taxable, found_tax USING header_id;
+      EXECUTE format('SELECT count(*), COALESCE(sum(taxable_value_paise), 0), COALESCE(sum(${HEADS_SUM}) FILTER (WHERE %s), 0), count(*) FILTER (WHERE (%s) IS NOT TRUE) FROM %I.%I WHERE %I = $1',
+        TG_ARGV[5], TG_ARGV[6], TG_TABLE_SCHEMA, TG_ARGV[0], TG_ARGV[1])
+        INTO found_lines, found_taxable, found_tax, wrong_lines USING header_id;
+      IF wrong_lines > 0 THEN
+        RAISE EXCEPTION 'A finished record has % line(s) with a quantity or an amount that cannot be.', wrong_lines
+          USING ERRCODE = 'check_violation', TABLE = TG_ARGV[0], CONSTRAINT = TG_ARGV[0] || '_issued_line';
+      END IF;
       IF found_lines <> expected_lines OR found_taxable <> expected_taxable OR found_tax <> expected_tax THEN
         RAISE EXCEPTION 'The lines of this record do not add up to its totals: % lines, % taxable and % tax, against % lines, % and %.',
           found_lines, found_taxable, found_tax, expected_lines, expected_taxable, expected_tax
@@ -213,7 +230,6 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
       UNIQUE (company_id, id),
       UNIQUE (company_id, number),
       UNIQUE (company_id, idempotency_key),
-      CONSTRAINT sales_invoices_due_after_date CHECK (due_date >= document_date),
       CONSTRAINT sales_invoices_number_when_issued CHECK ((state IN ('FINAL','CANCELLED')) = (number IS NOT NULL) AND (number IS NULL) = (financial_year IS NULL)),
       CONSTRAINT sales_invoices_issued_is_complete CHECK (state NOT IN ('FINAL','CANCELLED')
         OR num_nulls(voucher_id, finalised_by, finalised_at, pricing) = 0),
@@ -228,7 +244,7 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
     -- Foreign keys: from an entry in the books back to its bill.
     CREATE INDEX sales_invoices_voucher_idx ON sales_invoices(company_id, voucher_id) WHERE voucher_id IS NOT NULL;
     CREATE INDEX sales_invoices_cancellation_voucher_idx ON sales_invoices(company_id, cancellation_voucher_id) WHERE cancellation_voucher_id IS NOT NULL;
-    ${saleLines('sales_invoice_lines', 'sales_invoices', 'invoice_id')}
+    ${saleLines('sales_invoice_lines', 'sales_invoices', 'invoice_id', false)}
 
     CREATE TABLE presale_documents (
       id uuid PRIMARY KEY,
@@ -275,7 +291,7 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
     -- Foreign key, and "which proforma did this bill close".
     CREATE INDEX presale_documents_invoice_idx ON presale_documents(company_id, invoice_id) WHERE invoice_id IS NOT NULL;
     CREATE INDEX presale_documents_converted_idx ON presale_documents(company_id, converted_invoice_id) WHERE converted_invoice_id IS NOT NULL;
-    ${saleLines('presale_document_lines', 'presale_documents', 'document_id')}
+    ${saleLines('presale_document_lines', 'presale_documents', 'document_id', true)}
 
     CREATE TABLE delivery_challans (
       id uuid PRIMARY KEY,
@@ -378,7 +394,13 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
       END IF;
       SELECT quantity_micro INTO sold FROM sales_invoice_lines
         WHERE company_id = NEW.company_id AND invoice_id = original::uuid AND line_id = NEW.original_line_id FOR UPDATE;
-      IF sold IS NULL THEN RETURN NEW; END IF;
+      IF sold IS NULL THEN
+        IF EXISTS (SELECT FROM sales_invoices WHERE company_id = NEW.company_id AND id = original::uuid) THEN
+          RAISE EXCEPTION 'This credit note names a line that is not on the bill.'
+            USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+        END IF;
+        RETURN NEW;
+      END IF;
       SELECT COALESCE(sum(l.quantity_micro), 0) INTO taken_back FROM return_note_lines l JOIN return_notes n ON n.id = l.return_note_id
         WHERE l.company_id = NEW.company_id AND n.kind = 'SALES_RETURN' AND n.original_document_id = original AND l.original_line_id = NEW.original_line_id;
       IF taken_back + NEW.quantity_micro > sold THEN
@@ -399,7 +421,7 @@ export const salesMigrations: readonly Migration[] = Object.freeze([{
     ${frozen('presale_document_lines', '', '*', '', '')}
     ${frozen('delivery_challans', 'state', '*', 'eway_bill_number,eway_bill_date,eway_bill_transporter,eway_bill_vehicle_number,eway_bill_source,eway_bill_recorded_by,eway_bill_recorded_at,invoice_id,invoice_number,invoice_date,linked_by,linked_at,link_differences,cancelled_by,cancelled_at,cancel_reason,updated_at,version', 'ISSUED>INVOICED,ISSUED>CANCELLED')}
     ${frozen('delivery_challan_lines', '', '*', '', '')}
-    ${linesAddUp('sales_invoices', 'sales_invoice_lines', 'invoice_id', 'state', 'FINAL,CANCELLED', 'NOT reverse_charge')}
+    ${linesAddUp('sales_invoices', 'sales_invoice_lines', 'invoice_id', 'state', 'FINAL,CANCELLED', 'NOT reverse_charge', ISSUED_LINE)}
     ${linesAddUp('presale_documents', 'presale_document_lines', 'document_id', '', '*', 'NOT reverse_charge')}
     ${linesAddUp('delivery_challans', 'delivery_challan_lines', 'challan_id', '', '*', 'true')}
 
