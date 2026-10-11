@@ -15,6 +15,7 @@ import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError } from './runtime.ts';
 import { annotate, errorFields, inRequest, log } from './log.ts';
+import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
 
@@ -151,13 +152,13 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
 /**
  * The body, kept twice: parsed for every ordinary route, and raw for the one that verifies a
  * signature over it. Re-serialising a parsed object produces a different string, which would fail
- * to verify against a signature that was perfectly correct.
+ * to verify against a signature that was perfectly correct. Issue #349: never more than the
+ * route's limit (`bodyLimitFor`), so one large POST cannot fill the server's memory.
  */
-const readBody = async (request: IncomingMessage): Promise<{ parsed: unknown; raw: string }> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) chunks.push(Buffer.from(chunk));
-  if (chunks.length === 0) return { parsed: {}, raw: '' };
-  const raw = Buffer.concat(chunks).toString('utf8');
+const readBody = async (request: IncomingMessage, limit: number): Promise<{ parsed: unknown; raw: string }> => {
+  const bytes = await readLimitedBody(request, limit);
+  if (bytes.length === 0) return { parsed: {}, raw: '' };
+  const raw = bytes.toString('utf8');
   return { parsed: JSON.parse(raw) as unknown, raw };
 };
 
@@ -167,26 +168,44 @@ const send = (response: ServerResponse, result: ApiResult): void => {
 };
 
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  applySecurityHeaders(response);
   // Always our own id: one a caller chose could collide with another request's in the log.
   const requestId = randomUUID();
   const started = performance.now();
+  const method = request.method ?? 'GET';
+  const pathname = (request.url ?? '/').split('?')[0]!;
   await inRequest(requestId, async () => {
-    let read: { parsed: unknown; raw: string } | undefined;
-    try { read = await readBody(request); } catch { read = undefined; }
-    const signature = request.headers['x-provider-signature'];
-    const result = read === undefined
-      ? failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' })
-      : await handleApi(request.method ?? 'GET', request.url ?? '/', read.parsed, request.headers.authorization, {
-        rawBody: read.raw,
-        signature: typeof signature === 'string' ? signature : '',
-      }, requestId);
+    const result = await answer(request, response, method, pathname, requestId);
     send(response, result);
     // One line per request. The query string is left out: it can carry what a person typed.
-    log.info('request', { method: request.method, path: (request.url ?? '/').split('?')[0], status: result.status, duration_ms: Math.round(performance.now() - started) });
+    log.info('request', { method, path: pathname, status: result.status, duration_ms: Math.round(performance.now() - started) });
   });
 }
 
-export const apiServer = createServer(serveApi);
+const answer = async (request: IncomingMessage, response: ServerResponse, method: string, pathname: string, requestId: string): Promise<ApiResult> => {
+  // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
+  if (!isSignedCallback(pathname) && isCrossSiteWrite(method, request.headers)) {
+    return failure(403, requestId, { title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' });
+  }
+  let read: { parsed: unknown; raw: string };
+  try { read = await readBody(request, bodyLimitFor(pathname)); }
+  catch (error) {
+    if (error instanceof BodyTooLarge) {
+      // The rest of the upload is not read; closing the connection stops the client sending it.
+      response.setHeader('connection', 'close');
+      return failure(413, requestId, { title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: `That is too much to send at once (more than ${Math.round(error.limit / (1024 * 1024))} MB). If you were adding a picture or a file, use a smaller one.` });
+    }
+    return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' });
+  }
+  const signature = request.headers['x-provider-signature'];
+  // The whole URL, query included: a GET's input is its query.
+  return handleApi(method, request.url ?? '/', read.parsed, request.headers.authorization, {
+    rawBody: read.raw,
+    signature: typeof signature === 'string' ? signature : '',
+  }, requestId);
+}
+
+export const apiServer = applyTimeouts(createServer(serveApi));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.API_PORT ?? 4172);
