@@ -15,6 +15,7 @@ import { isGovernmentConnector, receiveGovernmentWebhook } from './government-we
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { stateOfPincode } from '../../../packages/masters/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
+import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
 import type { Permission } from '../../../packages/platform/src/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
@@ -442,32 +443,49 @@ export async function handleApi(method: string, pathname: string, body: Record<s
 /**
  * The body, kept twice: parsed for every ordinary route, and raw for the one that verifies a
  * signature over it. Re-serialising a parsed object produces a different string, which would fail
- * to verify against a signature that was perfectly correct.
+ * to verify against a signature that was perfectly correct. Issue #349: never more than the
+ * route's limit (`bodyLimitFor`), so one large POST cannot fill the server's memory.
  */
-const readBody = async (request: IncomingMessage): Promise<{ parsed: Record<string, unknown>; raw: string }> => {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) chunks.push(Buffer.from(chunk));
-  if (chunks.length === 0) return { parsed: {}, raw: '' };
-  const raw = Buffer.concat(chunks).toString('utf8');
+const readBody = async (request: IncomingMessage, limit: number): Promise<{ parsed: Record<string, unknown>; raw: string }> => {
+  const bytes = await readLimitedBody(request, limit);
+  if (bytes.length === 0) return { parsed: {}, raw: '' };
+  const raw = bytes.toString('utf8');
   return { parsed: JSON.parse(raw) as Record<string, unknown>, raw };
 };
 
+const send = (response: ServerResponse, result: ApiResult): void => {
+  response.writeHead(result.status, result.headers);
+  response.end(result.body);
+};
+
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  applySecurityHeaders(response);
   const url = new URL(request.url ?? '/', 'http://localhost');
+  const method = request.method ?? 'GET';
+  // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
+  if (!isSignedCallback(url.pathname) && isCrossSiteWrite(method, request.headers)) {
+    return send(response, json(403, { state: 'failed', title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' }));
+  }
   let body: Record<string, unknown> = {};
   let raw = '';
-  try { const read = await readBody(request); body = read.parsed; raw = read.raw; }
-  catch { const result = json(400, { state: 'failed', title: 'Nothing was saved', message: 'The request body is not valid JSON.' }); response.writeHead(result.status, result.headers); response.end(result.body); return; }
+  try { const read = await readBody(request, bodyLimitFor(url.pathname)); body = read.parsed; raw = read.raw; }
+  catch (error) {
+    if (error instanceof BodyTooLarge) {
+      // The rest of the upload is not read; closing the connection stops the client sending it.
+      response.setHeader('connection', 'close');
+      return send(response, json(413, { state: 'failed', title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: `That is too much to send at once (more than ${Math.round(error.limit / (1024 * 1024))} MB). If you were adding a picture or a file, use a smaller one.` }));
+    }
+    return send(response, json(400, { state: 'failed', title: 'Nothing was saved', message: 'The request body is not valid JSON.' }));
+  }
   const signature = request.headers['x-provider-signature'];
-  const result = await handleApi(request.method ?? 'GET', url.pathname, body, request.headers.authorization, {
+  const result = await handleApi(method, url.pathname, body, request.headers.authorization, {
     rawBody: raw,
     signature: typeof signature === 'string' ? signature : '',
   });
-  response.writeHead(result.status, result.headers);
-  response.end(result.body);
+  send(response, result);
 }
 
-export const apiServer = createServer(serveApi);
+export const apiServer = applyTimeouts(createServer(serveApi));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.API_PORT ?? 4172);
