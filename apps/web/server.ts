@@ -4,6 +4,8 @@ import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveApi } from "../api/src/server.ts";
 import { applySecurityHeaders, applyTimeouts } from "../api/src/http-hardening.ts";
+import { log } from "../api/src/log.ts";
+import { installErrorReporting } from "../api/src/error-reporting.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 // `PORT` is honoured too, so a tool that assigns a free port can start this without a clash.
@@ -25,6 +27,7 @@ export async function loadWebAsset(pathname: string): Promise<WebAsset> {
   try {
     return { status: 200, contentType: types[extname(path)] ?? "application/octet-stream", body: await readFile(path) };
   } catch {
+    // Not one of the app's files: the address is a screen inside the app, which index.html opens.
     return { status: 200, contentType: types[".html"]!, body: await readFile(resolve(root, "index.html")) };
   }
 }
@@ -40,5 +43,6 @@ export const webServer = applyTimeouts(createServer(async (request, response) =>
 }));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  webServer.listen(port, "127.0.0.1", () => console.log(`Karobar web preview: http://127.0.0.1:${port}`));
+  installErrorReporting();
+  webServer.listen(port, "127.0.0.1", () => log.info("The web preview is listening", { url: `http://127.0.0.1:${port}` }));
 }
