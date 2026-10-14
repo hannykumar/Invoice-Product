@@ -116,10 +116,10 @@ application may not do that at all). Each named rule sets the `constraint` field
   `SELECT sales_discard_draft($1, $2)` (`lines_only` true to replace lines, false to discard the
   bill). It returns false, and removes nothing, for an issued bill or another company's bill.
 - **Stock.** Insert the movement; the balance moves itself. A refused movement
-  (`constraint = 'stock_balances_never_negative'`) is "not enough stock". To decide what can be
-  sold, lock the balance rows first (`SELECT … FROM stock_balances … ORDER BY item_id,
-  warehouse_id, batch_id FOR UPDATE`) and subtract the `HELD` reservations whose `expires_at`
-  has not passed. A hold lapses by the clock, so what is held is never stored as a figure.
+  (`constraint = 'stock_balances_never_negative'`) is "not enough stock". What can be sold is
+  decided by the inventory service as today: the movements less the `HELD` reservations (a hold
+  stays HELD until `expireStaleReservations` moves it on). Inside one company the unit of work's
+  lock already serialises this; #367 decides whether the balance rows are also locked.
 - **Settlements.** When a sales bill is issued, insert its `document_settlements` row in the same
   unit of work (`value_paise` = the bill's value). When it is cancelled, set `cancelled = true`;
   money already applied to it stays on its payments, as it does today.
