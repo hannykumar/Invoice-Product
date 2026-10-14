@@ -69,3 +69,11 @@ export const conflict = (code: string, message: string, extra: Partial<DomainErr
 
 export const missingFact = (code: string, message: string, extra: Partial<DomainErrorOptions> = {}): DomainError =>
   new DomainError({ kind: 'MISSING_FACT', code, message, ...extra });
+
+/**
+ * Issue #358 — a value typed in a form the parsers cannot read ("31-02-2026" as a date, "12,5" as
+ * an amount). It is the caller's to correct, so the API answers 400 with this message. A RangeError
+ * is a RangeError still, so code that catches one is unchanged; any other RangeError (a zero
+ * denominator, a share of nothing) is a fault in our own code and is reported as one.
+ */
+export class UnreadableValue extends RangeError {}
