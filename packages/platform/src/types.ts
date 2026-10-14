@@ -193,9 +193,10 @@ export interface ApprovalPolicy {
 export interface ExceptionItem { id: Id; companyId: Id; status: "open" | "resolved" | "dismissed"; summary: string; evidence: readonly string[]; comments: readonly { actorId: Id; body: string; createdAt: string }[]; }
 
 export class PlatformError extends Error {
-  public readonly code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED" | "SESSION_EXPIRED" | "NO_UNIT_OF_WORK" | "UNIT_OF_WORK_ABORTED";
+  public readonly code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED" | "SESSION_EXPIRED" | "NO_UNIT_OF_WORK" | "UNIT_OF_WORK_ABORTED" | "TRY_AGAIN";
   constructor(
-    code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED" | "SESSION_EXPIRED" | "NO_UNIT_OF_WORK" | "UNIT_OF_WORK_ABORTED",
+    code: "FORBIDDEN" | "TENANT_ISOLATION" | "INVALID_TRANSITION" | "APPROVAL_REQUIRED" | "IDEMPOTENCY_CONFLICT" | "NOT_FOUND" | "SESSION_REVOKED" | "SESSION_EXPIRED" | "NO_UNIT_OF_WORK" | "UNIT_OF_WORK_ABORTED" | "TRY_AGAIN",
     message: string,
-  ) { super(message); this.code = code; }
+    options?: { cause?: unknown },
+  ) { super(message, options); this.code = code; }
 }

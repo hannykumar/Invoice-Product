@@ -39,6 +39,8 @@ interface Open { db: object; uow: UnitOfWork; closed: boolean; savepoints: numbe
 const current = new AsyncLocalStorage<Open>();
 /** First key of the two-key advisory lock, so the company lock cannot collide with anyone else's. */
 const COMPANY_WRITE_LOCK = 363;
+/** lock_not_available (lock_timeout), deadlock_detected, serialization_failure. */
+const TRY_AGAIN = new Set(["55P03", "40P01", "40001"]);
 
 /** Runs `work` as if no unit of work were open: the outbox relay must never join a caller's transaction. */
 export const outsideUnitOfWork = <T>(work: () => T): T => current.exit(work);
@@ -129,6 +131,12 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
     } catch (error) {
       finished = true;
       try { await client.query("ROLLBACK"); } catch { broken = true; }
+      // Issue #367 — a lock not obtained in time, a deadlock or a serialisation failure is not the
+      // shopkeeper's mistake and nothing was saved. Say so plainly; the caller retries with the same
+      // idempotency key (ADR 0363: the platform never re-runs an action itself).
+      if (asUnit && TRY_AGAIN.has(String((error as { code?: unknown }).code))) {
+        throw new PlatformError("TRY_AGAIN", "Too many people were saving in this shop at the same moment, so nothing was saved. Please try again.", { cause: error });
+      }
       throw error;
     } finally {
       // A connection whose rollback failed is discarded rather than handed to the next request.

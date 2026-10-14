@@ -15,7 +15,7 @@
  *  - **A final bill is never edited.** Cancellation posts a reversal; after the window closes the
  *    correction is a credit note.
  */
-import { indiaDateOf } from '@invoice/kernel';
+import { DomainError, indiaDateOf } from '@invoice/kernel';
 import {
   conflict,
   financialYearOf,
@@ -156,9 +156,18 @@ export class SalesService {
     const input = command.input;
     const invoice = this.#newDraft(actor, input, command.idempotencyKey);
 
-    await this.#store.transaction(actor.companyId, async () => {
-      await this.#repo.insert(invoice);
-    });
+    try {
+      await this.#store.transaction(actor.companyId, async () => {
+        await this.#repo.insert(invoice);
+      });
+    } catch (error) {
+      // Issue #367 — the same request arriving twice at once: both looked, neither found, one saved.
+      // The other is answered with the bill that was saved, exactly as a later retry would be.
+      if (!(error instanceof DomainError && error.code === 'SALES_DUPLICATE_INVOICE')) throw error;
+      const saved = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
+      if (saved === null) throw error;
+      return saved;
+    }
     await this.#audit.record({
       companyId: actor.companyId,
       actorId: actor.userId,
