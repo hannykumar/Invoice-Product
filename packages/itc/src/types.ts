@@ -128,6 +128,18 @@ export interface BookPurchaseDocument {
   /** The bill was reversed in our books after posting. */
   readonly reversed: boolean;
   /**
+   * Issue #289 — `false` when a bill with no GST is not one GSTR-3B Table 5 counts. Table 5 is for
+   * inward supplies from composition suppliers, exempt and nil-rated supplies, and non-GST supplies;
+   * a taxable item bought from a seller who is not registered is none of those. Absent: judged on
+   * its tax alone, as before.
+   */
+  readonly inTable5?: boolean;
+  /**
+   * Issue #289 — the supplier files nothing that reaches GSTR-2B (not registered, or a composition
+   * dealer), so this document is never compared with the government's statement.
+   */
+  readonly outsideGstr2b?: true;
+  /**
    * Issue #249 — goods we sent back to the supplier, handed over as a `CREDIT_NOTE`: the bill the
    * return corrects. The credit on that bill comes down by this document's tax from the month of the
    * return, whether or not the supplier's own note has reached the government's record yet.
