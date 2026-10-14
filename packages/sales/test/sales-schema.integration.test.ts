@@ -60,8 +60,9 @@ const insert = (sql: SqlExecutor, table: string, row: Record<string, unknown>) =
 const newShop = async () => {
   const ids = { companyId: crypto.randomUUID(), userId: crypto.randomUUID(), partyId: crypto.randomUUID() };
   const shop = pilot.makePilot(app, ids);
-  await shop.setUp();
-  const [first, second] = [await shop.recordSale('v1'), await shop.recordSale('v2')];
+  // Only the books and two posted entries: since #366 a recorded sale writes these very tables, which would fill the scene this test sets itself.
+  await shop.setUpBooks();
+  const [first, second] = [await shop.postEntry('v1'), await shop.postEntry('v2')];
   const [itemId, warehouseId] = [crypto.randomUUID(), crypto.randomUUID()];
   await owner.query("INSERT INTO master_records (id, company_id, kind) VALUES ($1, $4, 'party'), ($2, $4, 'item'), ($3, $4, 'warehouse')", [ids.partyId, itemId, warehouseId, ids.companyId]);
   /** One transaction as the application, for this company. Deferred checks run when it ends. */
