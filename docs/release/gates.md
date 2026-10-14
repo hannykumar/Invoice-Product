@@ -65,6 +65,14 @@ Before a build is released:
    for a user to discover.
 4. Rule changes since the last release have a source and an effective date, and the compliance
    register (#54) shows the reviewer.
+5. **Security review run, findings linked (#348).** A fresh session or reviewer agent that did not
+   write the release's code runs `/security-review-release` (`.claude/commands/security-review-release.md`)
+   on the release commit. Every finding is filed as its own issue (labels `saas-readiness`,
+   `security`), and the review is recorded in `docs/security/reviews/` with the commit it covered
+   and the issue for each finding, and each finding is rated High, Medium or Low. Against the
+   severity policy above: an open **High** finding is Critical and stops the release; an open
+   **Medium** finding is Major and ships only with the owner's recorded decision; Low is tracked.
+   This item is a checklist step, not yet an automated gate.
 
 ## Rolling back
 
