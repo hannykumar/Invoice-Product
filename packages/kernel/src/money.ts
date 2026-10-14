@@ -8,6 +8,7 @@
  * See docs/product/00-principles-and-scope.md, assumption A3.
  */
 import { divideRound, DEFAULT_ROUNDING, type RoundingMode } from './rounding.ts';
+import { UnreadableValue } from './errors.ts';
 
 /** Only the rupee is supported at first release (assumption A1). */
 export type Currency = 'INR';
@@ -45,13 +46,13 @@ const DECIMAL = /^(-)?(\d+)(?:\.(\d+))?$/;
  */
 export const fromDecimalString = (value: string, currency: Currency = 'INR'): Money => {
   const match = DECIMAL.exec(value.trim());
-  if (match === null) throw new RangeError(`"${value}" is not an exact decimal amount`);
+  if (match === null) throw new UnreadableValue(`"${value}" is not an exact decimal amount`);
   const scale = MINOR_UNITS[currency];
   const sign = match[1] === '-' ? -1n : 1n;
   const whole = BigInt(match[2] as string);
   const fractionText = match[3] ?? '';
   if (fractionText.length > scale) {
-    throw new RangeError(`"${value}" has more than ${scale} decimal places, which ${currency} cannot represent exactly`);
+    throw new UnreadableValue(`"${value}" has more than ${scale} decimal places, which ${currency} cannot represent exactly`);
   }
   const fraction = BigInt(fractionText.padEnd(scale, '0') === '' ? '0' : fractionText.padEnd(scale, '0'));
   return money(sign * (whole * 10n ** BigInt(scale) + fraction), currency);

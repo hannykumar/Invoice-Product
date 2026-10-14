@@ -24,6 +24,7 @@
  *      rather than quietly showing different numbers than the ones that were approved.
  */
 import type { CompanyId, IsoDate, Money, UserId } from '@invoice/kernel';
+import { UnreadableValue } from '@invoice/kernel';
 
 /** English and the romanised Hindi this product prints beside it, as everywhere else. */
 export interface Bilingual {
@@ -44,7 +45,7 @@ export type TaxPeriod = string & { readonly __taxPeriod: unique symbol };
 const PERIOD = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 export const taxPeriod = (value: string): TaxPeriod => {
-  if (!PERIOD.test(value)) throw new RangeError(`"${value}" is not a tax period in YYYY-MM form`);
+  if (!PERIOD.test(value)) throw new UnreadableValue(`"${value}" is not a tax period in YYYY-MM form`);
   return value as TaxPeriod;
 };
 
