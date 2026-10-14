@@ -7,12 +7,27 @@ import type { Locale } from './document.ts';
 import type { EwayBillRecord, Movement } from '@invoice/transport';
 
 /**
+ * The browser engine could not make the PDF: a fault on our side, not something the shopkeeper did
+ * or can fix. Its own message (paths, versions) is kept as the cause, for the log only (#344).
+ */
+export class PdfRenderingError extends Error {
+  constructor(cause: unknown) {
+    super('The PDF could not be produced.', { cause });
+    this.name = 'PdfRenderingError';
+  }
+}
+
+/**
  * One page through the browser engine, with the network cut off.
  *
  * Every printed document comes through here, so a bill, a note, a challan and the driver's e-way
  * bill are the same kind of file, and nothing any of them renders can reach out to the network.
  */
 async function pdfOf(html: string): Promise<Buffer> {
+  try { return await renderPdf(html); } catch (error) { throw new PdfRenderingError(error); }
+}
+
+async function renderPdf(html: string): Promise<Buffer> {
   // GitHub runners disable Chromium's user-namespace sandbox; the runner itself is isolated.
   const browser = await puppeteer.launch({ headless: true, args: process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : [] });
   try {
