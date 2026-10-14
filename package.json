@@ -74,6 +74,6 @@
     "@tabler/icons": "^3.49.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.5",
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   }
 }
