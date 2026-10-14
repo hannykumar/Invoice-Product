@@ -905,7 +905,8 @@ function openView(view, section = null) {
   document.querySelector(`#view-${target} h1`)?.focus?.();
   // Issue #310 — Home is read afresh every time it is opened, so a task done elsewhere is gone.
   if (target === "dashboard" && state.dashboard) loadDashboard();
-  if (target === "items") renderItems().catch(() => {});
+  // Issue #358 — the screen keeps what it showed; the reason is not lost.
+  if (target === "items") renderItems().catch((error) => console.error("The items list could not be read again.", error));
   if (target === "reports") loadReports().then(() => { if (section && state.view === "reports") document.querySelector(`#${section}`)?.scrollIntoView({ block: "start" }); });
   if (target === "migration") startMigration();
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
@@ -1181,6 +1182,24 @@ async function api(path, options = {}) {
   return payload;
 }
 
+/**
+ * Issue #344 — a list route answers one page at a time. The screens show the whole list, so this
+ * follows `nextCursor` until the last page and hands back the response with every item under `key`.
+ */
+async function apiList(path, key) {
+  // The largest page the server gives, so a long list is read in as few calls as possible.
+  path = `${path}${path.includes("?") ? "&" : "?"}limit=500`;
+  const first = await api(path);
+  const items = [...first[key]];
+  for (let cursor = first.nextCursor; cursor !== undefined; ) {
+    const page = await api(`${path}${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}`);
+    items.push(...page[key]);
+    cursor = page.nextCursor;
+  }
+  const { nextCursor: _last, ...rest } = first;
+  return { ...rest, [key]: items };
+}
+
 function showLogin() {
   const dialog = document.querySelector("#login-dialog");
   if (!dialog.open) dialog.showModal();
@@ -1370,7 +1389,8 @@ for (const id of ["#item-dialog", "#item-edit-dialog"]) document.querySelector(i
  * read; one failing does not stop the others.
  */
 async function refreshDocumentLists() {
-  const quietly = (load) => Promise.resolve().then(load).catch(() => {});
+  // Issue #358 — one list failing leaves the others, and says why in the console instead of nothing.
+  const quietly = (load) => Promise.resolve().then(load).catch((error) => console.error(`${load.name} could not refresh its list.`, error));
   await Promise.all([
     quietly(loadDashboard),
     quietly(loadIssuedInvoices),
@@ -3870,7 +3890,7 @@ async function loadReturnNotes() {
   const list = document.querySelector("#note-list");
   if (!list || !state.sessionId) return;
   try {
-    const { notes } = await api("/api/returns/notes");
+    const { notes } = await apiList("/api/returns/notes", "notes");
     document.querySelector("#note-list-panel").hidden = notes.length === 0;
     list.replaceChildren(...notes.map((note) => {
       const row = document.createElement("li");
@@ -3960,7 +3980,7 @@ async function loadReturnDocuments() {
   const select = document.querySelector("#return-document");
   if (!select || !state.sessionId) return;
   try {
-    const result = await api("/api/returns/documents");
+    const result = await apiList("/api/returns/documents", "documents");
     state.returnDocuments = result.documents;
     const selected = select.value;
     select.replaceChildren();
@@ -4941,7 +4961,7 @@ function renderEInvoiceList(invoices) {
 
 async function loadIssuedInvoices() {
   try {
-    const { invoices } = await api("/api/einvoices/invoices");
+    const { invoices } = await apiList("/api/einvoices/invoices", "invoices");
     renderEInvoiceList(invoices);
   } catch { /* the list is a convenience; the rest of the page still works */ }
 }
@@ -5058,7 +5078,7 @@ function presaleStatus(entry) {
 async function loadPresale() {
   const list = document.querySelector("#presale-list");
   if (!list) return;
-  const { documents } = await api("/api/presale");
+  const { documents } = await apiList("/api/presale", "documents");
   presaleState.list = documents;
   list.replaceChildren(...(documents.length === 0 ? [simpleRow(copy[state.locale].presaleNone, "")] : documents.map((entry) => {
     const row = detailRow(
@@ -5102,7 +5122,7 @@ async function openPresaleDocument(id) {
   });
   if (!quotation) await loadAdvances(entry);
   if (open && !quotation) {
-    const { invoices } = await api("/api/einvoices/invoices");
+    const { invoices } = await apiList("/api/einvoices/invoices", "invoices");
     document.querySelector("#presale-invoices").replaceChildren(...invoices.map((invoice) => Object.assign(document.createElement("option"), {
       value: invoice.id,
       textContent: `${invoice.number} · ${invoice.date} · ${money(invoice.amount)}`,
@@ -5308,7 +5328,7 @@ document.querySelector("#challan-issue")?.addEventListener("click", async () => 
 async function loadChallans() {
   const list = document.querySelector("#challan-list");
   if (!list) return;
-  const { challans } = await api("/api/challans");
+  const { challans } = await apiList("/api/challans", "challans");
   challanState.list = challans;
   list.replaceChildren(...(challans.length === 0 ? [simpleRow(copy[state.locale].noChallans, "")] : challans.map((challan) => {
     const row = detailRow(
@@ -5347,7 +5367,7 @@ async function openChallan(id) {
   document.querySelector("#challan-eway-form").hidden = !open;
   document.querySelector("#challan-cancel-form").hidden = !open;
   if (open && challan.invoiceFollows) {
-    const { invoices } = await api("/api/einvoices/invoices");
+    const { invoices } = await apiList("/api/einvoices/invoices", "invoices");
     document.querySelector("#challan-invoices").replaceChildren(...invoices.map((invoice) => {
       const option = document.createElement("option");
       option.value = invoice.id;
@@ -5656,7 +5676,7 @@ async function loadEwayRoad() {
     // lists are fetched before the picker is touched, so two loads racing cannot interleave rows.
     // Issue #240 — each bill with its customer, its total and whether it needs an e-way bill; the ones
     // that need one and have none come first.
-    const [{ invoices }, { challans }] = await Promise.all([api("/api/eway/bills"), api("/api/challans/movable")]);
+    const [{ invoices }, { challans }] = await Promise.all([apiList("/api/eway/bills", "invoices"), apiList("/api/challans/movable", "challans")]);
     const chosen = select.value;
     const make = (value, label, kind) => { const entry = document.createElement("option"); entry.value = value; entry.textContent = label; entry.dataset.kind = kind; return entry; };
     select.replaceChildren(
@@ -5668,7 +5688,7 @@ async function loadEwayRoad() {
     // Issue #240 — the chosen bill fills the form by itself; nobody retypes what the bill says.
     if (select.selectedOptions[0]?.dataset.kind === "invoice" && ewayChoice.filledFor !== select.value) await fillEwayFromBill(select.value);
 
-    const { consignments } = await api("/api/eway/on-the-road");
+    const { consignments } = await apiList("/api/eway/on-the-road", "consignments");
     list.replaceChildren();
     if (consignments.length === 0) {
       list.append(detailRow("Nothing is on the road", "No consignment has a running e-way bill right now."));
@@ -5927,7 +5947,7 @@ async function loadVehiclesHeld() {
   const select = document.querySelector("#vehicle-invoices");
   if (!list || !select) return;
   try {
-    const { invoices } = await api("/api/einvoices/invoices");
+    const { invoices } = await apiList("/api/einvoices/invoices", "invoices");
     const chosen = select.value;
     select.replaceChildren();
     invoices.forEach((invoice) => {
@@ -5938,7 +5958,7 @@ async function loadVehiclesHeld() {
     });
     if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
 
-    const { held } = await api("/api/vehicles/held");
+    const { held } = await apiList("/api/vehicles/held", "held");
     list.replaceChildren();
     if (held.length === 0) {
       list.append(detailRow("Nothing is held back", "No movement is waiting on a vehicle problem right now."));

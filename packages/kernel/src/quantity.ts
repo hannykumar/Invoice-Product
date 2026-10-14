@@ -5,6 +5,7 @@
  * money is: 0.1 kg + 0.2 kg must be exactly 0.3 kg, and a stock ledger that drifts is a stock
  * ledger that eventually blocks a legitimate sale or allows an impossible one.
  */
+import { UnreadableValue } from './errors.ts';
 export const QUANTITY_SCALE = 6;
 const FACTOR = 10n ** BigInt(QUANTITY_SCALE);
 
@@ -31,10 +32,10 @@ const DECIMAL = /^(-)?(\d+)(?:\.(\d+))?$/;
 
 export const quantityFromString = (value: string, unit: string): Quantity => {
   const match = DECIMAL.exec(value.trim());
-  if (match === null) throw new RangeError(`"${value}" is not an exact quantity`);
+  if (match === null) throw new UnreadableValue(`"${value}" is not an exact quantity`);
   const fractionText = match[3] ?? '';
   if (fractionText.length > QUANTITY_SCALE) {
-    throw new RangeError(`"${value}" has more than ${QUANTITY_SCALE} decimal places; quantities are never rounded silently`);
+    throw new UnreadableValue(`"${value}" has more than ${QUANTITY_SCALE} decimal places; quantities are never rounded silently`);
   }
   const sign = match[1] === '-' ? -1n : 1n;
   const whole = BigInt(match[2] as string);
