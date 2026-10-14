@@ -5,17 +5,18 @@
  * tax period and which version of a rule applies. System timestamps are a separate thing and are
  * always UTC instants; they never stand in for a document date.
  */
+import { UnreadableValue } from './errors.ts';
 export type IsoDate = string & { readonly __isoDate: unique symbol };
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export const isoDate = (value: string): IsoDate => {
   const match = ISO.exec(value);
-  if (match === null) throw new RangeError(`"${value}" is not a date in YYYY-MM-DD form`);
+  if (match === null) throw new UnreadableValue(`"${value}" is not a date in YYYY-MM-DD form`);
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
   const asUtc = new Date(Date.UTC(year, month - 1, day));
   if (asUtc.getUTCFullYear() !== year || asUtc.getUTCMonth() !== month - 1 || asUtc.getUTCDate() !== day) {
-    throw new RangeError(`"${value}" is not a real date`);
+    throw new UnreadableValue(`"${value}" is not a real date`);
   }
   return value as IsoDate;
 };

@@ -1,4 +1,11 @@
 const sensitiveKey = /(?:authorization|cookie|credential|secret|password|passphrase|token|pin|private.?key|session|raw|content|document|attachment|pdf|bank.?statement)/i;
+/**
+ * Issue #357 — personal and payee data, matched on the whole key so that `company` (which contains
+ * "pan") and `phoneVerified` are left alone. PAN, the bank account, IFSC and UPI id are where a
+ * customer's money goes; phone, email, Aadhaar and a signature identify a person.
+ */
+const personalKey = /^(?:pan(?:_?(?:no|number))?|(?:bank_?)?account_?(?:no|number)|bank_?account|ifsc(?:_?code)?|upi(?:_?id)?|(?:phone|mobile)(?:_?(?:no|number))?|e_?mail(?:_?address)?|aadhaa?r(?:_?(?:no|number))?|signature\w*)$/i;
+const emailAddress = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const bearerToken = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi;
 const connectionPassword = /(:\/\/[^:/\s]+:)[^@/\s]+@/g;
 
@@ -6,9 +13,9 @@ export type SafeLogValue = null | boolean | number | string | readonly SafeLogVa
 export interface SafeLogEvent { readonly level: "debug" | "info" | "warn" | "error"; readonly message: string; readonly fields: Readonly<Record<string, SafeLogValue>>; }
 
 export function redactForLog(value: unknown, key = ""): SafeLogValue {
-  if (sensitiveKey.test(key)) return "[REDACTED]";
+  if (sensitiveKey.test(key) || personalKey.test(key)) return "[REDACTED]";
   if (value === null || typeof value === "boolean" || typeof value === "number") return value;
-  if (typeof value === "string") return redactSecretText(value).replace(bearerToken, "Bearer [REDACTED]").replace(connectionPassword, "$1[REDACTED]@");
+  if (typeof value === "string") return redactSecretText(value).replace(bearerToken, "Bearer [REDACTED]").replace(connectionPassword, "$1[REDACTED]@").replace(emailAddress, "[EMAIL]");
   if (typeof value === "bigint") return value.toString();
   if (Array.isArray(value)) return value.map((item) => redactForLog(item));
   if (value instanceof Error) return { name: value.name, message: redactForLog(value.message) };

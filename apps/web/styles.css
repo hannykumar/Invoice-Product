@@ -302,7 +302,7 @@ dialog { border: 0; border-radius: var(--radius); background: var(--surface); co
 #customer-dialog label, #item-dialog label, #item-edit-dialog label { display: grid; gap: .35rem; font-size: var(--fs-xs); font-weight: 700; color: var(--label); }
 #customer-dialog input, #customer-dialog select, #item-dialog input, #item-dialog select, #item-edit-dialog input { border: 1px solid var(--field-line); border-radius: var(--radius-field); min-height: var(--tap); padding: .5rem .7rem; background: var(--surface); color: var(--ink); font-weight: 500; }
 #customer-dialog small, #item-dialog small, #item-edit-dialog small { font-weight: 500; color: var(--muted); line-height: 1.4; }
-#customer-dialog label[hidden], #item-dialog label[hidden], #item-edit-dialog label[hidden] { display: none; }
+#customer-dialog label[hidden], #new-supplier-dialog label[hidden], #item-dialog label[hidden], #item-edit-dialog label[hidden] { display: none; }
 #item-dialog .input-with-prefix input, #item-edit-dialog .input-with-prefix input { border: 0; }
 /* Issue #308 — the item picker: a search box with its list of matches under it. */
 .item-picker { position: relative; min-width: 0; }
