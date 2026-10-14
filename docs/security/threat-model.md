@@ -47,9 +47,9 @@ Each of these was checked in the code. They are why the gaps below are gaps and 
 - **Tenancy comes from the session.** `runtime.authenticate` builds the `RequestContext`; no route
   takes a company id from the request except sign-in. `DemoApplication.companyOf` refuses an actor
   from another company. The webhook resolves the company from our own call log, not the payload.
-- **Every POST but three has a declared permission.** `POST_PERMISSIONS` in
-  `apps/api/src/server.ts` is checked before the handler, and
-  `apps/api/test/route-permissions.test.ts` fails when a new POST is missing from it (#280). The
+- **Every POST but three has a declared permission.** Each route's `access` in the route table
+  (`apps/api/src/routes/`, #344) is checked before its input is read, and
+  `apps/api/test/route-permissions.test.ts` fails when a new POST has no permission (#280). The
   three without one are sign-in, the signed government callback (W1) and the public PIN-code table;
   `requirePostPermission` lets any path it does not know through, so that test is what keeps the
   list complete.
@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 150 routes in `apps/api/src/server.ts`, and the static web server
+### 4.1 HTTP API — 151 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -240,8 +240,8 @@ or a recipient. The deterministic layer validates the draft and a person approve
 ## Appendix A — every API route
 
 Generated from `apps/api/src/server.ts`. `apps/api/test/threat-model-coverage.test.ts` fails when a
-route is added there and not here. *Gate* is the `POST_PERMISSIONS` entry checked before the
-handler; `service` means the route has no gate in `server.ts` and relies on the service (H5); `—`
+route is added there and not here. *Gate* is the route's `access` in the route table, checked before
+the handler; `service` means the route has no gate in the table and relies on the service (H5); `—`
 means no permission by design (sign-in, the signed webhook, the public PIN-code table).
 
 | Method | Path | Gate |
@@ -255,6 +255,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/operations` | service |
 | POST | `/api/operations/jobs/replay` | `queue.replay` |
 | POST | `/api/operations/support-grants` | `support.access.grant` |
+| POST | `/api/operations/error-check` | `queue.replay` |
 | GET | `/api/assistant/examples` | service |
 | POST | `/api/assistant/ask` | `assistant.ask` |
 | GET | `/api/states` | service |

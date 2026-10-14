@@ -1,34 +1,60 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DomainError } from '@invoice/kernel';
+import { ZodError } from 'zod';
+import { DomainError, UnreadableValue } from '@invoice/kernel';
+import { CurrencyMismatchError } from '../../../packages/kernel/src/money.ts';
+import { UnitMismatchError } from '../../../packages/kernel/src/quantity.ts';
 import { PlatformError, redactSecretText } from '../../../packages/platform/src/index.ts';
-import { apiRuntime, AuthenticationError } from './runtime.ts';
-import { finishOnboarding, previewOnboarding } from './onboarding-application.ts';
-import { chooseMark, searchMarks } from './trade-mark-application.ts';
-import { previewBranding, readBranding, saveBranding } from './branding-application.ts';
-import { currentStates, readBusinessDetails } from './business-details-application.ts';
-import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from './migration-application.ts';
-import { DemoApplication } from './demo-application.ts';
-import { ChallanDesk } from './challan-application.ts';
-import { isGovernmentConnector, receiveGovernmentWebhook } from './government-webhooks.ts';
+import { ConnectorError } from '../../../packages/platform/src/connectors.ts';
+import { MasterDataError } from '../../../packages/masters/src/masters.ts';
+import { UnitConversionError } from '../../../packages/masters/src/units.ts';
+import { InboxError } from '../../../packages/purchasing/src/inbox.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
-import { stateOfPincode } from '../../../packages/masters/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
+import { apiRuntime, AuthenticationError } from './runtime.ts';
+import { annotate, inRequest, log } from './log.ts';
+import { reportError } from '../../../packages/platform/src/error-reporting.ts';
+import { installErrorReporting } from './error-reporting.ts';
 import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
-import type { Permission } from '../../../packages/platform/src/index.ts';
+import { matchRoute, ROUTES } from './routes/index.ts';
+import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
+
+export type { ApiResult, WebhookDelivery } from './routes/route.ts';
+export { ROUTES } from './routes/index.ts';
 
 // Redaction happens on the finished text, not on the object: walking the object can only reach the
 // shapes the walker recognises, and a secret carried by a class instance or a Map would walk past it.
 export const jsonResponse = (status: number, body: unknown) => ({ status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, body: redactSecretText(JSON.stringify(body, (_key, value) => typeof value === 'bigint' ? value.toString() : value) ?? '') });
 const json = jsonResponse;
 
-export interface ApiResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly body: string | Buffer; }
+const requirePermission = (actor: ActorContext, gate: Gate): void => {
+  for (const permission of gate.all) permissionPortFromActor.require(actor, permission, gate.what);
+  if (gate.any.length > 0 && !gate.any.some((permission) => actor.permissions.includes(permission))) permissionPortFromActor.require(actor, gate.any[0]!, gate.what);
+};
 
-const statusOf = (error: unknown): number => {
+/**
+ * Errors the product raises on purpose to tell the shopkeeper what went wrong: their message is
+ * written for the screen. A plain `Error` with no `code` is one too — about 88 throw sites in
+ * packages/* speak to the shopkeeper that way (migrating them to DomainError is a follow-up). So is
+ * UnreadableValue: the kernel's parsers raise it for a date, amount, quantity or tax period typed in
+ * a form they cannot read ("31-02-2026" is not a real date), which is the caller's to correct.
+ * Anything else — a TypeError, any other RangeError, a file or database error, a PDF not produced —
+ * is a fault on our side.
+ */
+const SPOKEN_TO_THE_SHOPKEEPER = [UnreadableValue, MasterDataError, UnitConversionError, InboxError, ConnectorError, CurrencyMismatchError, UnitMismatchError];
+const isMeantForTheScreen = (error: unknown): error is Error =>
+  error instanceof Error && ((error.constructor === Error && !('code' in error)) || SPOKEN_TO_THE_SHOPKEEPER.some((kind) => error instanceof kind));
+
+/** The status a known error answers with, or `undefined` for a fault on our side. */
+const statusOf = (error: unknown): number | undefined => {
   if (error instanceof AuthenticationError) return 401;
   // A provider that signed its callback wrongly is told so, and told nothing else.
   if (error instanceof WebhookNotAuthenticated) return 401;
+  if (error instanceof ZodError) return 400;
+  // Text the service had to read as JSON (`lines`, `bills`) or as a whole number, and could not.
+  if (error instanceof SyntaxError) return 400;
   if (error instanceof DomainError) {
     if (error.kind === 'FORBIDDEN') return 403;
     if (error.kind === 'NOT_FOUND') return 404;
@@ -41,402 +67,88 @@ const statusOf = (error: unknown): number => {
     if (error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED') return 401;
     return 409;
   }
-  return 400;
+  if (isMeantForTheScreen(error)) return 400;
+  return undefined;
 };
 
-export interface WebhookDelivery {
-  /** The bytes exactly as they arrived: a signature is over what was sent, not over its meaning. */
-  readonly rawBody: string;
-  readonly signature: string;
-}
+/** "lines.0.rate" → "lines → 1 → rate", so the message names the field the way a person counts. */
+const fieldName = (path: readonly (string | number)[]): string => path.length === 0 ? 'the request' : path.map((part) => typeof part === 'number' ? String(part + 1) : part).join(' → ');
+const invalidInputMessage = (error: ZodError): string => {
+  const problems = error.issues.slice(0, 5).map((issue) => {
+    if (issue.path.length === 0 && issue.code === 'invalid_type') return 'the request should be a set of named fields';
+    return `${fieldName(issue.path)} ${issue.code === 'invalid_type' || issue.code === 'invalid_union' ? 'should be a single value, not a list or a group' : issue.message.toLowerCase()}`;
+  });
+  return `Nothing was saved, because part of what was sent could not be read: ${problems.join('; ')}.`;
+};
+
+/** Issue #344 — the one error shape every route answers with. */
+export const failure = (status: number, requestId: string, fields: { title: string; message: string; code?: string | undefined; details?: unknown }) =>
+  withRequestId(json(status, { state: 'failed', ...fields, requestId }), requestId);
+
+const withRequestId = (result: ApiResult, requestId: string): ApiResult => ({ ...result, headers: { ...result.headers, 'x-request-id': requestId } });
+
+const failureOf = (error: unknown, requestId: string, routeName: string): ApiResult => {
+  const status = statusOf(error);
+  if (status === undefined) {
+    // The detail goes to the log and the error tracker, under the same request id, never to the caller.
+    reportError('api.request', error, { route: routeName });
+    return failure(500, requestId, {
+      title: 'Something went wrong',
+      code: 'INTERNAL',
+      message: `Something went wrong on our side. Nothing was saved. Quote ${requestId} if you contact us.`,
+    });
+  }
+  if (error instanceof ZodError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: invalidInputMessage(error) });
+  if (error instanceof SyntaxError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because a number or a list that was sent could not be read. Check what was typed and try again.' });
+  const known = error as Error;
+  return failure(status, requestId, {
+    title: error instanceof AuthenticationError ? 'Sign in required' : 'Nothing was saved',
+    code: error instanceof DomainError || error instanceof PlatformError ? error.code : undefined,
+    message: known.message,
+    // Issue #262 — the facts behind a refusal (never secrets: errors are logged), for the screen.
+    ...(error instanceof DomainError && Object.keys(error.details).length > 0 ? { details: error.details } : {}),
+  });
+};
+
+const isPublic = (route: Route): route is PublicRoute => route.access.kind === 'public';
 
 /**
- * Issue #280 — what each POST needs, checked before its handler reads the body. `all` must every
- * one be held; `any` needs one of them (the service then checks the exact one, e.g. a quotation
- * against a proforma). A POST missing from here is caught by apps/api/test/route-permissions.test.ts.
+ * Issue #344 — serve one API call from the route table: match the route, sign the caller in, check
+ * the permission (before reading the input, #280), validate the input, run the handler.
+ * `pathname` may carry a `?query`; a GET's input is its query, merged over `body` for in-process callers.
  */
-interface Gate { readonly what: string; readonly all: readonly Permission[]; readonly any: readonly Permission[] }
-const need = (what: string, ...all: Permission[]): Gate => ({ what, all, any: [] });
-const needAny = (what: string, ...any: Permission[]): Gate => ({ what, all: [], any });
-const PARTIES = need('add or change customers, suppliers or transporters', 'masters.party.write');
-const ITEMS = need('add or change items and the GST rate on them', 'masters.item.write', 'masters.item.rate.declare');
-const BRANDING = need('change how your bills look', 'branding.write');
-const MIGRATE = need('bring in books from another program', 'migration.run');
-const PRESALE = needAny('make quotations or proforma invoices', 'quotation.issue', 'proforma.issue');
-const ADVANCES = need('record money received or paid', 'payments.record');
+export function handleApi(method: string, pathname: string, body: unknown = {}, authorization?: string, delivery?: WebhookDelivery, requestId: string = randomUUID()): Promise<ApiResult> {
+  return inRequest(requestId, () => dispatch(method, pathname, body, authorization, delivery, requestId));
+}
 
-export const POST_PERMISSIONS: Readonly<Record<string, Gate>> = {
-  '/api/operations/jobs/replay': need('replay a stuck job', 'queue.replay'),
-  '/api/operations/support-grants': need('give support staff access', 'support.access.grant'),
-  '/api/assistant/ask': need('ask about the books', 'assistant.ask'),
-  '/api/onboarding/preview': need('set up a business', 'onboarding.run'),
-  '/api/onboarding/finish': need('set up a business', 'onboarding.finish'),
-  '/api/trade-marks/search': BRANDING,
-  '/api/trade-marks/choose': BRANDING,
-  '/api/branding': BRANDING,
-  '/api/branding/preview': BRANDING,
-  '/api/branding/upi': need('change the UPI id customers pay into', 'payments.upi.write'),
-  '/api/business-details': need('change your business details', 'business.settings.write'),
-  '/api/customers': PARTIES,
-  '/api/suppliers': PARTIES,
-  '/api/transporters': PARTIES,
-  '/api/shipping-addresses': PARTIES,
-  '/api/customer-address': PARTIES,
-  '/api/customer-address/correct': PARTIES,
-  '/api/items': ITEMS,
-  '/api/items/code': ITEMS,
-  '/api/items/edit': ITEMS,
-  '/api/items/selling': need('start a bill', 'sales.draft.write'),
-  '/api/delivery/choices': needAny('choose where goods go', 'sales.draft.write', 'challan.issue'),
-  '/api/migration/start': MIGRATE,
-  '/api/migration/analyse': MIGRATE,
-  '/api/migration/mapping': MIGRATE,
-  '/api/migration/approve': MIGRATE,
-  '/api/migration/preview': MIGRATE,
-  '/api/migration/commit': need('bring in books from another program', 'migration.commit'),
-  '/api/migration/rollback': need('undo books brought in', 'migration.rollback'),
-  '/api/einvoices/preview': need('see e-invoices', 'einvoice.view'),
-  '/api/einvoices/register': need('register e-invoices', 'einvoice.generate'),
-  '/api/einvoices/reconcile': need('register e-invoices', 'einvoice.generate'),
-  '/api/einvoices/offline': need('register e-invoices', 'einvoice.generate'),
-  '/api/einvoices/cancel': need('cancel e-invoices', 'einvoice.cancel'),
-  '/api/challans/preview': need('issue delivery challans', 'challan.issue'),
-  '/api/challans/issue': need('issue delivery challans', 'challan.issue'),
-  '/api/challans/print': need('issue delivery challans', 'challan.issue'),
-  '/api/challans/eway': need('issue delivery challans', 'challan.issue'),
-  '/api/challans/link-invoice': need('issue delivery challans', 'challan.issue'),
-  '/api/challans/bill': need('make bills', 'sales.finalise'),
-  '/api/challans/cancel': need('cancel delivery challans', 'challan.cancel'),
-  '/api/presale/preview': PRESALE,
-  '/api/presale/issue': PRESALE,
-  '/api/presale/print': PRESALE,
-  '/api/presale/link-invoice': PRESALE,
-  '/api/presale/convert': need('turn a quotation into a bill', 'quotation.issue', 'sales.draft.write'),
-  '/api/presale/issue-sale': need('issue a bill', 'sales.draft.write', 'sales.finalise'),
-  '/api/presale/cancel': needAny('withdraw quotations or proforma invoices', 'quotation.cancel', 'proforma.cancel'),
-  '/api/presale/advances': ADVANCES,
-  '/api/presale/advance': ADVANCES,
-  '/api/presale/refund-advance': ADVANCES,
-  '/api/presale/voucher': ADVANCES,
-  '/api/eway/preview': need('see e-way bills', 'eway.view'),
-  '/api/eway/for-bill': need('see e-way bills', 'eway.view'),
-  '/api/eway/print': need('see e-way bills', 'eway.view'),
-  '/api/eway/generate': need('make e-way bills', 'eway.generate'),
-  '/api/eway/reconcile': need('make e-way bills', 'eway.generate'),
-  '/api/eway/offline': need('make e-way bills', 'eway.generate'),
-  '/api/eway/vehicle': need('change e-way bills', 'eway.update'),
-  '/api/eway/extend': need('change e-way bills', 'eway.update'),
-  '/api/eway/cancel': need('cancel or reject e-way bills', 'eway.cancel'),
-  '/api/eway/reject': need('cancel or reject e-way bills', 'eway.cancel'),
-  '/api/vehicles/record': need('check vehicles', 'transport.vehicle.check'),
-  '/api/vehicles/check': need('check vehicles', 'transport.vehicle.check'),
-  '/api/vehicles/check/override': need('send a held vehicle anyway', 'transport.vehicle.override'),
-  '/api/suppliers/check': need('check suppliers', 'supplier.risk.view'),
-  '/api/suppliers/check/acknowledge': need('accept a supplier warning', 'supplier.risk.acknowledge'),
-  '/api/purchase-orders': need('record purchase orders', 'purchase.order.write'),
-  '/api/goods-receipts': need('record goods received', 'purchase.receipt.write'),
-  '/api/purchases/match': need('record a supplier bill', 'ledger.post.purchase'),
-  '/api/purchases/match/approve': need('approve a held supplier bill', 'purchase.match.approve'),
-  '/api/purchases/preview': need('record a supplier bill', 'ledger.post.purchase'),
-  '/api/purchases/record': need('record a supplier bill', 'ledger.post.purchase'),
-  '/api/subscription/plan': need('change your plan', 'subscription.manage'),
-  '/api/subscription/pay': need('change your plan', 'subscription.manage'),
-  '/api/sales/estimate': need('start a bill', 'sales.draft.write'),
-  '/api/sales/preview': need('start a bill', 'sales.draft.write'),
-  '/api/sales/record': need('issue a bill', 'sales.draft.write', 'sales.finalise'),
-  '/api/sales/print': need('print bills', 'sales.draft.write'),
-  '/api/sales/cancel/preview': need('cancel a bill', 'sales.cancel'),
-  '/api/sales/cancel': need('cancel a bill', 'sales.cancel'),
-  '/api/payments/preview': need('record money received or paid', 'payments.record'),
-  '/api/payments/record': need('record money received or paid', 'payments.record'),
-  '/api/payments/open-bills': need('record money received or paid', 'payments.record'),
-  '/api/payments/voucher': need('record money received or paid', 'payments.record'),
-  '/api/agent/plan': need('ask the assistant to do something', 'agent.plan'),
-  '/api/agent/approve': need('approve what the assistant will do', 'agent.approve'),
-  '/api/agent/execute': need('let the assistant do something', 'agent.execute'),
-  '/api/reminders': need('see payment reminders', 'collections.reminders.view'),
-  '/api/reminders/send': need('send payment reminders', 'collections.reminders.send'),
-  '/api/reminders/send-all': need('send payment reminders', 'collections.reminders.send'),
-  '/api/reminders/retry': need('send payment reminders', 'collections.reminders.send'),
-  '/api/reminders/stop': need('send payment reminders', 'collections.reminders.send'),
-  '/api/reminders/resume': need('send payment reminders', 'collections.reminders.send'),
-  '/api/reminders/promise': need('record a promise to pay', 'collections.promise.record'),
-  '/api/reminders/dispute': need('handle a disputed bill', 'collections.dispute.manage'),
-  '/api/reminders/dispute/resolve': need('handle a disputed bill', 'collections.dispute.manage'),
-  '/api/bank-feeds/consent': need('connect a bank account', 'bank.feed.manage'),
-  '/api/bank-feeds/consent/complete': need('connect a bank account', 'bank.feed.manage'),
-  '/api/bank-feeds/disconnect': need('connect a bank account', 'bank.feed.manage'),
-  '/api/bank-feeds/sync': need('fetch bank entries', 'bank.feed.sync'),
-  '/api/itc': need('see purchase tax credit', 'itc.view'),
-  '/api/itc/import': need('bring in the government purchase record', 'itc.import'),
-  '/api/itc/typed': need('bring in the government purchase record', 'itc.import'),
-  '/api/itc/decide': need('decide on purchase tax credit', 'itc.decide'),
-  '/api/gst-returns': need('see GST returns', 'gst_returns.view'),
-  '/api/gst-returns/prepare': need('prepare GST returns', 'gst_returns.prepare'),
-  '/api/gst-returns/approve': need('approve GST returns', 'gst_returns.approve'),
-  '/api/gst-returns/reopen': need('reopen GST returns', 'gst_returns.reopen'),
-  '/api/gst-returns/export': need('download GST returns', 'gst_returns.export'),
-  '/api/returns/preview': need('record returns', 'returns.create'),
-  '/api/returns/record': need('record returns', 'returns.create'),
-  '/api/returns/supplier-note': need('record returns', 'returns.create'),
-  '/api/returns/print': need('record returns', 'returns.create'),
-};
-
-const requirePostPermission = (actor: ActorContext, pathname: string): void => {
-  const gate = POST_PERMISSIONS[pathname];
-  if (gate === undefined) return;
-  for (const permission of gate.all) permissionPortFromActor.require(actor, permission, gate.what);
-  if (gate.any.length > 0 && !gate.any.some((permission) => actor.permissions.includes(permission))) permissionPortFromActor.require(actor, gate.any[0]!, gate.what);
-};
-
-export async function handleApi(method: string, pathname: string, body: Record<string, unknown> = {}, authorization?: string, delivery?: WebhookDelivery): Promise<ApiResult> {
+async function dispatch(method: string, pathname: string, body: unknown, authorization: string | undefined, delivery: WebhookDelivery | undefined, requestId: string): Promise<ApiResult> {
+  // A path the URL parser rejects (`//`, a stray space) names nothing that could exist.
+  const url = URL.parse(pathname, 'http://localhost');
+  const found = url === null ? undefined : matchRoute(method, url.pathname);
+  if (url === null || found === undefined) return failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
+  const { route, params } = found;
+  annotate({ route: `${route.method} ${route.path}` });
   try {
     const runtime = apiRuntime();
-    if (method === 'POST' && pathname === '/api/auth/login') return json(200, runtime.signIn(body));
-    if (method === 'GET' && pathname === '/api/status') return json(200, runtime.publicStatus());
-    // Issue #123 — a provider's callback about a government call. No session: it authenticates by
-    // signing the bytes it sent, so this sits in front of authentication and reads the raw body.
-    const webhook = /^\/api\/webhooks\/government\/([^/]+)$/.exec(pathname);
-    if (method === 'POST' && webhook?.[1] !== undefined) {
-      const kind = decodeURIComponent(webhook[1]);
-      if (!isGovernmentConnector(kind)) return json(404, { state: 'failed', title: 'Not found', message: 'That is not a government callback address.' });
-      const received = await receiveGovernmentWebhook(kind, delivery?.rawBody ?? '', delivery?.signature ?? '');
-      return json(received.status, { state: 'received', outcome: received.outcome });
+    const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
+    let reply: unknown;
+    if (isPublic(route)) {
+      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery });
+    } else {
+      const context = runtime.authenticate(authorization);
+      annotate({ company_id: context.companyId, user_id: context.actorId });
+      const actor = runtime.actor(context);
+      if (route.access.kind === 'gate') requirePermission(actor, route.access);
+      const input = await route.input.parseAsync(raw);
+      const app = await runtime.application(context);
+      reply = await route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      if (route.list !== undefined) reply = pageOf(reply, route.list, input as Parameters<typeof pageOf>[2]);
     }
-    const context = runtime.authenticate(authorization);
-    const actor = runtime.actor(context);
-    if (method === 'POST') requirePostPermission(actor, pathname);
-    const app = await runtime.application(context);
-    if (method === 'GET' && pathname === '/api/session') return json(200, { company: runtime.companySummary(context.companyId), userId: context.actorId, permissions: [...context.permissions] });
-    if (method === 'GET' && pathname === '/api/dashboard') return json(200, await app.dashboard(actor));
-    if (method === 'GET' && pathname === '/api/reports') return json(200, await app.reports(actor));
-    if (method === 'GET' && pathname === '/api/operations') return json(200, await runtime.operationsWorkspace(context));
-    if (method === 'POST' && pathname === '/api/operations/jobs/replay') return json(200, runtime.replayOperationalJob(context, body));
-    if (method === 'POST' && pathname === '/api/operations/support-grants') return json(200, runtime.grantSupportAccess(context, body));
-    // Issue #34 — ask about this company's own books; the answer cites the report every figure came
-    // from, and the notification behind every rule it quotes.
-    if (method === 'GET' && pathname === '/api/assistant/examples') return json(200, { examples: DemoApplication.assistantExamples() });
-    if (method === 'POST' && pathname === '/api/assistant/ask') return json(200, await app.ask(actor, body));
-    // Setting up a business runs against its own fresh company, so it needs a signed-in session but
-    // not the session's company. Gated by authentication above, like the rest of the app.
-    // Issue #237 — the one list of current states, for setting up a business.
-    if (method === 'GET' && pathname === '/api/states') return json(200, { states: currentStates() });
-    // Issue #288 — the state a PIN code is in, so the customer form fills it in. Reads nothing of the company.
-    if (method === 'POST' && pathname === '/api/pincode/state') return json(200, { stateCode: stateOfPincode(String(body.pincode ?? '')) });
-    if (method === 'POST' && pathname === '/api/onboarding/preview') return json(200, await previewOnboarding(body, context.companyId));
-    if (method === 'POST' && pathname === '/api/onboarding/finish') return json(200, await finishOnboarding(body, context.companyId));
-    // Issue #147 — the mark of a trade: search the picture library, then keep what was picked.
-    if (method === 'POST' && pathname === '/api/trade-marks/search') return json(200, searchMarks(body));
-    if (method === 'POST' && pathname === '/api/trade-marks/choose') return json(200, chooseMark(body));
-    // Issues #146 and #147 — the business's own logo, mark and colour, and a real bill to see them
-    // on. The preview goes through the same renderer a finalised sale is printed with.
-    if (method === 'GET' && pathname === '/api/branding') return json(200, readBranding(context.companyId));
-    if (method === 'POST' && pathname === '/api/branding') return json(200, saveBranding(context.companyId, body));
-    // Issue #180 — the business's own name, address, PIN code, phone, PAN and bank, in one place.
-    // Every printed document takes its seller block from here, and nothing is issued without an address.
-    if (method === 'GET' && pathname === '/api/business-details') return json(200, readBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId)));
-    if (method === 'POST' && pathname === '/api/business-details') return json(200, await app.saveBusinessDetails(actor, runtime.companyIdentity(context.companyId), body));
-    // Issue #181 — the customers and items this business keeps. Every sale, challan and quotation
-    // is made out to a record from these two lists, so the bill names the customer and the goods
-    // that were actually chosen.
-    if (method === 'GET' && pathname === '/api/catalogue') return json(200, await app.catalogue(actor));
-    if (method === 'POST' && pathname === '/api/customers') return json(200, await app.addCustomer(actor, body));
-    // Issue #228 — the businesses this company buys from, with the GST number that decides the tax.
-    if (method === 'POST' && pathname === '/api/suppliers') return json(200, await app.addSupplier(actor, body));
-    if (method === 'POST' && pathname === '/api/items') return json(200, app.addItem(actor, body));
-    if (method === 'POST' && pathname === '/api/items/code') return json(200, app.changeItemCode(actor, body));
-    // Issue #308 — the item's own edit dialog, and what the item picker ranks and prices with.
-    if (method === 'POST' && pathname === '/api/items/edit') return json(200, app.editItem(actor, body));
-    if (method === 'POST' && pathname === '/api/items/selling') return json(200, await app.itemSelling(actor, body));
-    // Issue #182 — where the goods go and who carries them: the customer's other addresses, and
-    // the transporters this business uses.
-    if (method === 'POST' && pathname === '/api/delivery/choices') return json(200, app.deliveryChoices(actor, String(body.customerId ?? '')));
-    if (method === 'POST' && pathname === '/api/transporters') return json(200, app.addTransporter(actor, body));
-    if (method === 'POST' && pathname === '/api/shipping-addresses') return json(200, app.addShippingAddress(actor, body));
-    if (method === 'POST' && pathname === '/api/customer-address') return json(200, app.customerAddress(actor, String(body.customerId ?? '')));
-    if (method === 'POST' && pathname === '/api/customer-address/correct') return json(200, app.correctCustomerAddress(actor, body));
-    // Issue #144 — the UPI id the pay-by-scan square on every bill pays to.
-    if (method === 'POST' && pathname === '/api/branding/upi') return json(200, await app.saveUpiId(actor, body));
-    if (method === 'POST' && pathname === '/api/branding/preview')
-      return json(200, previewBranding(context.companyId, runtime.companySummary(context.companyId).name, body));
-    // Issue #37 — bringing a business in from Tally, BUSY or Vyapar. Like setting up a business,
-    // this runs against its own fresh company, so nothing it reads in touches the demo books.
-    if (method === 'POST' && pathname === '/api/migration/start') return json(200, await startMigration(context));
-    if (method === 'POST' && pathname === '/api/migration/analyse') return json(200, await analyseFile(context, body));
-    if (method === 'POST' && pathname === '/api/migration/mapping') return json(200, await remapColumns(context, body));
-    if (method === 'POST' && pathname === '/api/migration/approve') return json(200, await approveAndPreview(context, body));
-    if (method === 'POST' && pathname === '/api/migration/preview') return json(200, await previewImport(context, body));
-    if (method === 'POST' && pathname === '/api/migration/commit') return json(200, await commitImport(context, body));
-    if (method === 'POST' && pathname === '/api/migration/rollback') return json(200, await rollbackImport(context, body));
-    // Issue #26 — does this bill need an IRN, and its life with the government.
-    if (method === 'GET' && pathname === '/api/einvoices/invoices') return json(200, await app.issuedInvoices(actor));
-    if (method === 'POST' && pathname === '/api/einvoices/preview') return json(200, await app.previewEInvoice(actor, body));
-    if (method === 'POST' && pathname === '/api/einvoices/register') return json(200, await app.registerEInvoice(actor, body));
-    if (method === 'POST' && pathname === '/api/einvoices/reconcile') return json(200, await app.reconcileEInvoice(actor, body));
-    if (method === 'POST' && pathname === '/api/einvoices/cancel') return json(200, await app.cancelEInvoice(actor, body));
-    if (method === 'POST' && pathname === '/api/einvoices/offline') return json(200, await app.eInvoiceOfflineJson(actor, body));
-    // Issue #27 — do these goods need an e-way bill, and its life with the portal.
-    // Issue #141 — delivery challans: goods that move before the bill exists.
-    if (method === 'GET' && pathname === '/api/challans/reasons') return json(200, ChallanDesk.reasons());
-    if (method === 'GET' && pathname === '/api/challans') return json(200, await app.challans.list(actor));
-    if (method === 'GET' && pathname === '/api/challans/movable') return json(200, { challans: await app.challans.movable(actor) });
-    if (method === 'POST' && pathname === '/api/challans/preview') return json(200, await app.challans.preview(actor, body));
-    if (method === 'POST' && pathname === '/api/challans/issue') return json(200, await app.challans.issue(actor, body));
-    if (method === 'POST' && pathname === '/api/challans/print') return json(200, await app.challans.print(actor, body));
-    if (method === 'POST' && pathname === '/api/challans/eway') return json(200, await app.challans.attachEwayBill(actor, body));
-    if (method === 'POST' && pathname === '/api/challans/link-invoice') return json(200, await app.challans.linkInvoice(actor, body));
-    if (method === 'POST' && pathname === '/api/challans/cancel') return json(200, await app.challans.cancel(actor, body));
-    // Issue #290 — bill the goods a challan sent, from the challan itself.
-    if (method === 'POST' && pathname === '/api/challans/bill') return json(200, await app.billChallan(actor, body));
-    // Issue #142 — quotations and proforma invoices: the papers sent before a sale. None of these posts
-    // anything; a quotation becomes a sale only through the ordinary sale, as a draft first.
-    if (method === 'GET' && pathname === '/api/presale') return json(200, await app.presale.list(actor));
-    if (method === 'POST' && pathname === '/api/presale/preview') return json(200, await app.presale.preview(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/issue') return json(200, await app.presale.issue(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/print') return json(200, await app.presale.print(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/convert') return json(200, await app.convertQuotation(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/issue-sale') return json(200, await app.issueConvertedSale(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/link-invoice') return json(200, await app.presale.linkInvoice(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/cancel') return json(200, await app.presale.cancel(actor, body));
-    // Issue #165 — money received against a proforma: the receipt voucher, and the refund voucher.
-    if (method === 'POST' && pathname === '/api/presale/advances') return json(200, await app.presale.advances(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/advance') return json(200, await app.presale.recordAdvance(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/refund-advance') return json(200, await app.presale.refundAdvance(actor, body));
-    if (method === 'POST' && pathname === '/api/presale/voucher') return json(200, await app.presale.printVoucher(actor, body));
-    if (method === 'GET' && pathname === '/api/eway/states') return json(200, DemoApplication.ewayStates());
-    if (method === 'GET' && pathname === '/api/eway/on-the-road') return json(200, await app.ewayBillsOnTheRoad(actor));
-    if (method === 'POST' && pathname === '/api/eway/preview') return json(200, await app.previewEwayBill(actor, body));
-    // Issue #240 — the bills to choose from, and one bill's e-way bill filled in from the bill.
-    if (method === 'GET' && pathname === '/api/eway/bills') return json(200, await app.ewayBillChoices(actor));
-    if (method === 'POST' && pathname === '/api/eway/for-bill') return json(200, await app.ewayBillForBill(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/generate') return json(200, await app.generateEwayBill(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/vehicle') return json(200, await app.updateEwayVehicle(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/extend') return json(200, await app.extendEwayValidity(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/cancel') return json(200, await app.cancelEwayBill(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/reject') return json(200, await app.rejectEwayBill(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/reconcile') return json(200, await app.reconcileEwayBill(actor, body));
-    if (method === 'POST' && pathname === '/api/eway/offline') return json(200, await app.ewayOfflineJson(actor, body));
-    // Issue #191 — the driver's copy: the portal's own page, on screen and as a PDF.
-    if (method === 'POST' && pathname === '/api/eway/print') return json(200, await app.ewayPrint(actor, body));
-    const ewayPdf = /^\/api\/eway\/([^/]+)\/pdf$/.exec(pathname);
-    if (method === 'GET' && ewayPdf?.[1]) {
-      const result = await app.ewayPrint(actor, { invoice: decodeURIComponent(ewayPdf[1]) }, { pdf: true });
-      if (!('pdf' in result)) throw new Error('The e-way bill PDF was not produced.');
-      return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="eway-${result.ewayBillNumber.replace(/[^0-9]/g, '')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
-    }
-    // Issue #28 — can this lorry carry this load, and who said to send it anyway.
-    if (method === 'GET' && pathname === '/api/vehicles/choices') return json(200, DemoApplication.vehicleChoices());
-    if (method === 'GET' && pathname === '/api/vehicles/held') return json(200, await app.blockedVehicleChecks(actor));
-    if (method === 'POST' && pathname === '/api/vehicles/record') return json(200, await app.lookupVehicleRecord(actor, body));
-    if (method === 'POST' && pathname === '/api/vehicles/check') return json(200, await app.checkVehicle(actor, body));
-    if (method === 'POST' && pathname === '/api/vehicles/check/override') return json(200, await app.overrideVehicleCheck(actor, body));
-    // Issue #19 — what we know about a supplier, and the evidence behind each warning.
-    if (method === 'GET' && pathname === '/api/suppliers/choices') return json(200, { choices: DemoApplication.supplierChoices() });
-    if (method === 'POST' && pathname === '/api/suppliers/check') return json(200, await app.checkSupplier(actor, body));
-    if (method === 'POST' && pathname === '/api/suppliers/check/acknowledge') return json(200, await app.acknowledgeSupplierRisk(actor, body));
-    // Issue #18 — the order, the delivery and the comparison between them and the bill.
-    if (method === 'POST' && pathname === '/api/purchase-orders') return json(200, await app.recordOrder(actor, body));
-    if (method === 'POST' && pathname === '/api/goods-receipts') return json(200, await app.recordReceipt(actor, body));
-    if (method === 'POST' && pathname === '/api/purchases/match') return json(200, await app.matchPurchaseBill(actor, body));
-    if (method === 'POST' && pathname === '/api/purchases/match/approve') return json(200, await app.approvePurchaseMatch(actor, body));
-    const purchaseMatch = /^\/api\/purchases\/([^/]+)$/.exec(pathname);
-    if (method === 'GET' && purchaseMatch?.[1] !== undefined) return json(200, await app.purchase(actor, decodeURIComponent(purchaseMatch[1])));
-    if (method === 'POST' && pathname === '/api/purchases/preview') return json(200, await app.previewPurchase(actor, body));
-    if (method === 'POST' && pathname === '/api/purchases/record') return json(200, await app.recordPurchase(actor, body));
-    // Issue #42 — what this business's plan covers, what it has used, and paying for it.
-    if (method === 'GET' && pathname === '/api/subscription') return json(200, await app.subscriptionAccount(actor, body));
-    if (method === 'POST' && pathname === '/api/subscription/plan') return json(200, await app.changeSubscriptionPlan(actor, body));
-    if (method === 'POST' && pathname === '/api/subscription/pay') return json(200, await app.issueSubscriptionInvoice(actor, body));
-    // Issue #306 — the live GST and total while a bill is typed. Stores nothing.
-    if (method === 'POST' && pathname === '/api/sales/estimate') return json(200, await app.estimateSale(actor, body));
-    if (method === 'POST' && pathname === '/api/sales/preview') return json(200, await app.previewSale(actor, body));
-    if (method === 'POST' && pathname === '/api/sales/record') return json(200, await app.recordSale(actor, body));
-    // Issue #233 — cancelling a wrong bill: what it will do, then doing it. Refused with the credit-note
-    // route once the bill's month is approved or filed.
-    if (method === 'POST' && pathname === '/api/sales/cancel/preview') return json(200, await app.previewCancelSale(actor, body));
-    if (method === 'POST' && pathname === '/api/sales/cancel') return json(200, await app.cancelSale(actor, body));
-    // Issue #132 — the finished bill, on screen and ready for the printer, in the chosen language
-    // and on the paper it will be printed on. Issue #133's PDF comes off the same page.
-    if (method === 'POST' && pathname === '/api/sales/print') {
-      // Issue #183 — `copies: "all"` is the business's own printer taking the whole marked set in
-      // one job. Everything else, and every PDF a customer receives, is the Original alone.
-      return json(200, await app.invoicePrint(actor, String(body.invoice ?? ''), {
-        format: body.format, locale: body.locale, allCopies: body.copies === 'all',
-      }));
-    }
-    const notePdf = /^\/api\/returns\/([^/]+)\/pdf$/.exec(pathname);
-    if (method === 'GET' && notePdf?.[1]) {
-      const result = await app.notePrint(actor, decodeURIComponent(notePdf[1]), { pdf: true });
-      if (!('pdf' in result)) throw new Error('The note PDF was not produced.');
-      return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${result.number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
-    }
-    const invoicePdf = /^\/api\/sales\/([^/]+)\/pdf$/.exec(pathname);
-    if (method === 'GET' && invoicePdf?.[1]) {
-      const result = await app.invoicePrint(actor, decodeURIComponent(invoicePdf[1]), { pdf: true });
-      if (!('pdf' in result)) throw new Error('PDF generation failed.');
-      return { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${result.number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf"`, 'cache-control': 'private, no-store' }, body: result.pdf };
-    }
-    const invoicePreview = /^\/api\/sales\/([^/]+)\/preview$/.exec(pathname);
-    if (method === 'GET' && invoicePreview?.[1]) return json(200, await app.invoicePrint(actor, decodeURIComponent(invoicePreview[1])));
-    if (method === 'POST' && pathname === '/api/payments/preview') return json(200, await app.previewPayment(actor, body));
-    if (method === 'POST' && pathname === '/api/payments/record') return json(200, await app.recordPayment(actor, body));
-    // Issue #230 — the chosen customer's or supplier's own open bills, and the receipt or payment voucher.
-    if (method === 'POST' && pathname === '/api/payments/open-bills') return json(200, await app.paymentOpenBills(actor, body));
-    if (method === 'POST' && pathname === '/api/payments/voucher') return json(200, await app.paymentVoucher(actor, body));
-    // Issue #47 — asking the assistant to do something: what it would do, and then doing it.
-    if (method === 'GET' && pathname === '/api/agent/capabilities') return json(200, app.agentCapabilities(actor));
-    if (method === 'GET' && pathname === '/api/agent/history') return json(200, await app.agentHistory(actor));
-    if (method === 'POST' && pathname === '/api/agent/plan') return json(200, await app.agentPlan(actor, body));
-    if (method === 'POST' && pathname === '/api/agent/approve') return json(200, await app.agentApprove(actor, body));
-    if (method === 'POST' && pathname === '/api/agent/execute') return json(200, await app.agentExecute(actor, body));
-    // Issue #23 — who is being chased for money, who is deliberately not, and what was sent.
-    if (method === 'GET' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders') return json(200, await app.reminders(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/send') return json(200, await app.sendReminder(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/send-all') return json(200, await app.sendAllReminders(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/retry') return json(200, await app.retryReminder(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/promise') return json(200, await app.recordPromiseToPay(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/dispute') return json(200, await app.raiseBillDispute(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/dispute/resolve') return json(200, await app.resolveBillDispute(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/stop') return json(200, await app.stopReminders(actor, body));
-    if (method === 'POST' && pathname === '/api/reminders/resume') return json(200, await app.resumeReminders(actor, body));
-    if (method === 'GET' && pathname === '/api/bank-feeds') return json(200, await app.bankFeedWorkspace(actor));
-    if (method === 'POST' && pathname === '/api/bank-feeds/consent') return json(200, await app.startBankFeedConsent(actor, body));
-    if (method === 'POST' && pathname === '/api/bank-feeds/consent/complete') return json(200, await app.completeBankFeedConsent(actor, body));
-    if (method === 'POST' && pathname === '/api/bank-feeds/sync') return json(200, await app.syncBankFeed(actor, body));
-    if (method === 'POST' && pathname === '/api/bank-feeds/disconnect') return json(200, await app.disconnectBankFeed(actor, body));
-    // Issue #30 — the month's GST returns: what they say, what stops them, and the file to upload.
-    // Issue #31 — your purchases against what your suppliers told the government.
-    if (method === 'POST' && pathname === '/api/itc') return json(200, await app.itcWorkspace(actor, body));
-    if (method === 'POST' && pathname === '/api/itc/import') return json(200, await app.importItcFile(actor, body));
-    if (method === 'POST' && pathname === '/api/itc/typed') return json(200, await app.addTypedItcRecord(actor, body));
-    if (method === 'POST' && pathname === '/api/itc/decide') return json(200, await app.decideItcLine(actor, body));
-    if (method === 'POST' && pathname === '/api/gst-returns') return json(200, await app.gstReturnWorkspace(actor, body));
-    if (method === 'POST' && pathname === '/api/gst-returns/prepare') return json(200, await app.prepareGstReturn(actor, body));
-    if (method === 'POST' && pathname === '/api/gst-returns/approve') return json(200, await app.approveGstReturn(actor, body));
-    if (method === 'POST' && pathname === '/api/gst-returns/reopen') return json(200, await app.reopenGstReturn(actor, body));
-    if (method === 'POST' && pathname === '/api/gst-returns/export') return json(200, await app.exportGstReturn(actor, body));
-    if (method === 'GET' && pathname === '/api/returns/documents') return json(200, await app.returnDocuments(actor));
-    if (method === 'POST' && pathname === '/api/returns/preview') return json(200, await app.previewReturn(actor, body));
-    if (method === 'POST' && pathname === '/api/returns/record') return json(200, await app.recordReturn(actor, body));
-    // Issue #186 — the credit or debit note on paper: listed, printed, and downloaded as a PDF.
-    if (method === 'GET' && pathname === '/api/returns/notes') return json(200, await app.listReturnNotes(actor));
-    // Issue #249 — the supplier's credit note for goods sent back, added when it arrives.
-    if (method === 'POST' && pathname === '/api/returns/supplier-note') return json(200, await app.recordSupplierCreditNote(actor, body));
-    if (method === 'POST' && pathname === '/api/returns/print') {
-      const input = body as Record<string, unknown>;
-      return json(200, await app.notePrint(actor, String(input.note ?? ''), { format: input.format, locale: input.locale }));
-    }
-    return json(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
+    if (!(reply instanceof Reply)) return withRequestId(json(200, reply), requestId);
+    const result = reply.result;
+    return withRequestId('json' in result ? json(result.status, result.json) : result, requestId);
   } catch (error) {
-    return json(statusOf(error), {
-      state: 'failed',
-      title: error instanceof AuthenticationError ? 'Sign in required' : 'Nothing was saved',
-      code: error instanceof DomainError || error instanceof PlatformError ? error.code : undefined,
-      message: error instanceof Error ? error.message : 'The request could not be completed.',
-      // Issue #262 — the facts behind a refusal (never secrets: errors are logged), for the screen.
-      ...(error instanceof DomainError && Object.keys(error.details).length > 0 ? { details: error.details } : {}),
-    });
+    return failureOf(error, requestId, `${route.method} ${route.path}`);
   }
 }
 
@@ -446,11 +158,11 @@ export async function handleApi(method: string, pathname: string, body: Record<s
  * to verify against a signature that was perfectly correct. Issue #349: never more than the
  * route's limit (`bodyLimitFor`), so one large POST cannot fill the server's memory.
  */
-const readBody = async (request: IncomingMessage, limit: number): Promise<{ parsed: Record<string, unknown>; raw: string }> => {
+const readBody = async (request: IncomingMessage, limit: number): Promise<{ parsed: unknown; raw: string }> => {
   const bytes = await readLimitedBody(request, limit);
   if (bytes.length === 0) return { parsed: {}, raw: '' };
   const raw = bytes.toString('utf8');
-  return { parsed: JSON.parse(raw) as Record<string, unknown>, raw };
+  return { parsed: JSON.parse(raw) as unknown, raw };
 };
 
 const send = (response: ServerResponse, result: ApiResult): void => {
@@ -460,39 +172,59 @@ const send = (response: ServerResponse, result: ApiResult): void => {
 
 export async function serveApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
   applySecurityHeaders(response);
-  const url = new URL(request.url ?? '/', 'http://localhost');
+  // Always our own id: one a caller chose could collide with another request's in the log.
+  const requestId = randomUUID();
+  const started = performance.now();
   const method = request.method ?? 'GET';
+  // Parsed once, here: the cross-site check, the body limit and the router must all see the same
+  // path. A raw path such as `/api/webhooks/government/x\..\..\sales\record` normalises to
+  // another route entirely, so checking the raw text and routing the parsed one would let it past.
+  const url = URL.parse(request.url ?? '/', 'http://localhost');
+  const pathname = url?.pathname ?? '/';
+  await inRequest(requestId, async () => {
+    const result = url === null
+      ? failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' })
+      : await answer(request, response, method, url, requestId);
+    send(response, result);
+    // One line per request. The query string is left out: it can carry what a person typed.
+    log.info('request', { method, path: pathname, status: result.status, duration_ms: Math.round(performance.now() - started) });
+  });
+}
+
+const answer = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {
+  const { pathname } = url;
   // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
-  if (!isSignedCallback(url.pathname) && isCrossSiteWrite(method, request.headers)) {
-    return send(response, json(403, { state: 'failed', title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' }));
+  if (!isSignedCallback(pathname) && isCrossSiteWrite(method, request.headers)) {
+    return failure(403, requestId, { title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' });
   }
-  let body: Record<string, unknown> = {};
-  let raw = '';
-  try { const read = await readBody(request, bodyLimitFor(url.pathname)); body = read.parsed; raw = read.raw; }
+  let read: { parsed: unknown; raw: string };
+  try { read = await readBody(request, bodyLimitFor(pathname)); }
   catch (error) {
     if (error instanceof BodyTooLarge) {
       // The rest of the upload is not read; closing the connection stops the client sending it.
       response.setHeader('connection', 'close');
-      return send(response, json(413, { state: 'failed', title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: `That is too much to send at once (more than ${Math.round(error.limit / (1024 * 1024))} MB). If you were adding a picture or a file, use a smaller one.` }));
+      return failure(413, requestId, { title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: `That is too much to send at once (more than ${Math.round(error.limit / (1024 * 1024))} MB). If you were adding a picture or a file, use a smaller one.` });
     }
-    return send(response, json(400, { state: 'failed', title: 'Nothing was saved', message: 'The request body is not valid JSON.' }));
+    return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' });
   }
   const signature = request.headers['x-provider-signature'];
-  const result = await handleApi(method, url.pathname, body, request.headers.authorization, {
-    rawBody: raw,
+  // The parsed path, and the query with it: a GET's input is its query.
+  return handleApi(method, `${pathname}${url.search}`, read.parsed, request.headers.authorization, {
+    rawBody: read.raw,
     signature: typeof signature === 'string' ? signature : '',
-  });
-  send(response, result);
+  }, requestId);
 }
 
 export const apiServer = applyTimeouts(createServer(serveApi));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  installErrorReporting();
   const port = Number(process.env.API_PORT ?? 4172);
-  apiServer.listen(port, '127.0.0.1', () => console.log(`Karobar API: http://127.0.0.1:${port}`));
+  apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
   const recurringTimer = setInterval(() => {
-    void apiRuntime().runRecurringWork().catch(() => console.error('Recurring work tick failed; its queue state is available to operators.'));
+    // Each job's own failure is kept in its queue state for operators; this is the tick itself failing.
+    void apiRuntime().runRecurringWork().catch((error: unknown) => reportError('api.recurringTick', error));
   }, 60_000);
   recurringTimer.unref();
 }
