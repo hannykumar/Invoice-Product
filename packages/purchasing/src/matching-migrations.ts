@@ -6,6 +6,7 @@
 // fail because their SQL has not landed yet. The same reasoning as #17's migration.
 
 import type { Migration } from "../../platform/src/migration-definitions.ts";
+import { enforceTenant, releaseTenant } from "./tenant-policy.ts";
 
 export const purchaseMatchingMigrations: readonly Migration[] = Object.freeze([{
   id: "20260829T130536327Z_purchasing_77404f7e8b5f_three_way_matching",
@@ -158,5 +159,24 @@ export const purchaseMatchingMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS goods_receipts;
     DROP TABLE IF EXISTS purchase_order_lines;
     DROP TABLE IF EXISTS purchase_orders;
+  `,
+}, {
+  // Issue #366 — what the PostgreSQL order and delivery repositories need that #18's tables did not have.
+  id: "20261011T144950892Z_purchasing_eb132ada3f5a_matching_repository",
+  up: `
+    -- Every order of a business, oldest first, a page at a time.
+    CREATE INDEX purchase_orders_list_idx ON purchase_orders(company_id, created_at, id);
+    -- Every delivery of a business, oldest first, a page at a time.
+    CREATE INDEX goods_receipts_list_idx ON goods_receipts(company_id, created_at, id);
+    -- Every delivery against an order, whatever its state, and the foreign key to the order (the
+    -- existing index covers confirmed deliveries only).
+    CREATE INDEX goods_receipts_order_all_idx ON goods_receipts(company_id, order_id) WHERE order_id IS NOT NULL;
+    ${enforceTenant(["purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines", "goods_receipt_movements", "purchase_match_tolerances", "purchase_match_approvals"])}
+  `,
+  down: `
+    ${releaseTenant(["purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines", "goods_receipt_movements", "purchase_match_tolerances", "purchase_match_approvals"])}
+    DROP INDEX IF EXISTS goods_receipts_order_all_idx;
+    DROP INDEX IF EXISTS goods_receipts_list_idx;
+    DROP INDEX IF EXISTS purchase_orders_list_idx;
   `,
 }]);

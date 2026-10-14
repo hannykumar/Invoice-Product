@@ -6,6 +6,7 @@
 // migration must not fail because their SQL has not landed yet.
 
 import type { Migration } from "../../platform/src/migration-definitions.ts";
+import { enforceTenant, releaseTenant } from "./tenant-policy.ts";
 
 export const purchasePostingMigrations: readonly Migration[] = Object.freeze([{
   id: "20260829T114946172Z_purchasing_dcef4724c889_purchase_posting",
@@ -87,5 +88,73 @@ export const purchasePostingMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS purchase_bill_receipts;
     DROP TABLE IF EXISTS purchase_bill_lines;
     DROP TABLE IF EXISTS purchase_bills;
+  `,
+}, {
+  // Issue #366 — what the PostgreSQL bill repository needs that #17's tables did not have.
+  id: "20261011T144949662Z_purchasing_1236777b1d2e_posting_repository",
+  up: `
+    -- A posted bill keeps, per line, the tax split it was posted with and its share of the
+    -- supplier's printed total (#45 returns part of a line under the original treatment), and where
+    -- the goods landed. The table had no columns for any of these.
+    ALTER TABLE purchase_bill_lines
+      ADD COLUMN warehouse_id uuid REFERENCES master_records(id),
+      ADD COLUMN batch_id uuid REFERENCES master_records(id),
+      ADD COLUMN serial_numbers jsonb NOT NULL DEFAULT '[]',
+      ADD COLUMN cgst_paise bigint NOT NULL DEFAULT 0,
+      ADD COLUMN sgst_paise bigint NOT NULL DEFAULT 0,
+      ADD COLUMN igst_paise bigint NOT NULL DEFAULT 0,
+      ADD COLUMN cess_paise bigint NOT NULL DEFAULT 0,
+      ADD COLUMN ineligible_itc_paise bigint NOT NULL DEFAULT 0,
+      ADD COLUMN supplier_value_paise bigint NOT NULL DEFAULT 0,
+      -- The bill as the service keeps it does not carry these four, so the repository has nothing
+      -- to put in them. They stay, empty, until the purchase lane decides whether a posted line
+      -- should record them.
+      ALTER COLUMN hsn_sac DROP NOT NULL,
+      ALTER COLUMN rate_paise DROP NOT NULL,
+      ALTER COLUMN gst_rate_basis_points DROP NOT NULL,
+      ALTER COLUMN itc_eligibility DROP NOT NULL;
+
+    -- Deliveries (#18) whose goods this bill pays for and which moved the stock themselves.
+    ALTER TABLE purchase_bills ADD COLUMN received_by_receipt_ids jsonb NOT NULL DEFAULT '[]';
+
+    -- A reversed bill "must be approved afresh" (purchase-posting-v1): the same supplier bill is
+    -- then recorded again as a new row. The old rule counted the reversed row too and refused it.
+    -- One LIVE bill per supplier bill number is what was meant, and is what the in-memory store does.
+    ALTER TABLE purchase_bills DROP CONSTRAINT purchase_bills_company_id_supplier_party_id_invoice_number_key;
+    CREATE UNIQUE INDEX purchase_bills_live_number_idx ON purchase_bills(company_id, supplier_party_id, invoice_number) WHERE state = 'POSTED';
+
+    -- Every bill of a business, oldest first, a page at a time.
+    CREATE INDEX purchase_bills_list_idx ON purchase_bills(company_id, posted_at, id);
+    -- Every bill of one supplier, whatever its state (the existing party index covers live bills only).
+    CREATE INDEX purchase_bills_party_list_idx ON purchase_bills(company_id, supplier_party_id, posted_at, id);
+    -- "Has this approved purchase been recorded?", including a bill since reversed (the existing index covers live bills only).
+    CREATE INDEX purchase_bills_purchase_idx ON purchase_bills(company_id, purchase_id);
+    ${enforceTenant(["purchase_bills", "purchase_bill_lines", "purchase_bill_receipts"])}
+  `,
+  // Going back restores the old rules, and PostgreSQL refuses if bills written since do not fit
+  // them (a bill recorded again after a reversal, a line without an HSN code). That refusal is
+  // right: it must be looked at, not lost.
+  down: `
+    ${releaseTenant(["purchase_bill_receipts", "purchase_bill_lines", "purchase_bills"])}
+    DROP INDEX IF EXISTS purchase_bills_purchase_idx;
+    DROP INDEX IF EXISTS purchase_bills_party_list_idx;
+    DROP INDEX IF EXISTS purchase_bills_list_idx;
+    DROP INDEX IF EXISTS purchase_bills_live_number_idx;
+    ALTER TABLE purchase_bills ADD CONSTRAINT purchase_bills_company_id_supplier_party_id_invoice_number_key UNIQUE (company_id, supplier_party_id, invoice_number);
+    ALTER TABLE purchase_bills DROP COLUMN IF EXISTS received_by_receipt_ids;
+    ALTER TABLE purchase_bill_lines
+      ALTER COLUMN itc_eligibility SET NOT NULL,
+      ALTER COLUMN gst_rate_basis_points SET NOT NULL,
+      ALTER COLUMN rate_paise SET NOT NULL,
+      ALTER COLUMN hsn_sac SET NOT NULL,
+      DROP COLUMN IF EXISTS supplier_value_paise,
+      DROP COLUMN IF EXISTS ineligible_itc_paise,
+      DROP COLUMN IF EXISTS cess_paise,
+      DROP COLUMN IF EXISTS igst_paise,
+      DROP COLUMN IF EXISTS sgst_paise,
+      DROP COLUMN IF EXISTS cgst_paise,
+      DROP COLUMN IF EXISTS serial_numbers,
+      DROP COLUMN IF EXISTS batch_id,
+      DROP COLUMN IF EXISTS warehouse_id;
   `,
 }]);
