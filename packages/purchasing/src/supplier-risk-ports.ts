@@ -6,6 +6,7 @@
 
 import type { CompanyId } from "@invoice/kernel";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
+import type { Page } from "./paging.ts";
 import type {
   GstinLookupOutcome, Gstr2bSignal, RiskAcknowledgement, RiskPolicy, SupplierHistory,
   SupplierRiskAssessment,
@@ -47,9 +48,11 @@ export interface GstinCacheRepository {
 }
 
 export interface RiskAssessmentRepository {
-  insert(assessment: SupplierRiskAssessment): Promise<void>;
+  /** `assessedBy` is the person who ran the check (#366): the stored row records who, as well as what. */
+  insert(assessment: SupplierRiskAssessment, assessedBy: Id): Promise<void>;
   findByFingerprint(companyId: CompanyId, fingerprint: string): Promise<SupplierRiskAssessment | null>;
-  listForParty(companyId: CompanyId, partyId: Id): Promise<SupplierRiskAssessment[]>;
+  /** Oldest first when a page is asked for; the cursor is the last assessment's fingerprint. */
+  listForParty(companyId: CompanyId, partyId: Id, page?: Page): Promise<SupplierRiskAssessment[]>;
 }
 
 export interface RiskAcknowledgementRepository {

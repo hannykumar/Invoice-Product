@@ -127,7 +127,7 @@ export class SupplierRiskService {
     // day records one assessment rather than a row per page refresh.
     const existing = await this.#assessments.findByFingerprint(actor.companyId, assessment.fingerprint);
     if (existing === null) {
-      await this.#assessments.insert(assessment);
+      await this.#assessments.insert(assessment, actor.userId);
       await this.#audit.record({
         companyId: actor.companyId,
         actorId: actor.userId,
