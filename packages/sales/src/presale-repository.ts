@@ -8,6 +8,7 @@
 import { conflict, notFound, type CompanyId } from '@invoice/kernel';
 import type { TransactionParticipant } from '@invoice/ledger';
 import type { PreSaleDocument, PreSaleKind, PreSaleState } from './presale-model.ts';
+import { pageOf, type Page } from './ports.ts';
 
 export interface PreSaleFilter {
   readonly kind?: PreSaleKind;
@@ -23,7 +24,7 @@ export interface PreSaleRepository {
   insert(document: PreSaleDocument): Promise<void>;
   /** Replaces a document only if nobody else changed it first. */
   update(document: PreSaleDocument, expectedVersion: number): Promise<void>;
-  list(companyId: CompanyId, filter?: PreSaleFilter): Promise<PreSaleDocument[]>;
+  list(companyId: CompanyId, filter?: PreSaleFilter, page?: Page): Promise<PreSaleDocument[]>;
 }
 
 export class InMemoryPreSaleRepository implements PreSaleRepository, TransactionParticipant {
@@ -72,14 +73,14 @@ export class InMemoryPreSaleRepository implements PreSaleRepository, Transaction
     this.#documents = next;
   }
 
-  async list(companyId: CompanyId, filter: PreSaleFilter = {}): Promise<PreSaleDocument[]> {
-    return this.#documents.filter(
+  async list(companyId: CompanyId, filter: PreSaleFilter = {}, page?: Page): Promise<PreSaleDocument[]> {
+    return pageOf(this.#documents.filter(
       (d) =>
         d.companyId === companyId &&
         (filter.kind === undefined || d.kind === filter.kind) &&
         (filter.state === undefined || d.state === filter.state) &&
         (filter.partyId === undefined || d.partyId === filter.partyId) &&
         (filter.invoiceId === undefined || d.invoice?.invoiceId === filter.invoiceId || d.sale?.invoiceId === filter.invoiceId),
-    );
+    ), page);
   }
 }
