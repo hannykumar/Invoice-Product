@@ -131,11 +131,12 @@ test("every table of this lane is closed to other companies by the database itse
   // A query that forgot its company filter still sees only its own company's rows.
   const a = await company();
   const b = await company();
-  await app.unitOfWork(a.companyId, () => harness().bills.insert(bill(a.companyId, a.userId)));
+  const theirs = bill(a.companyId, a.userId);
+  await app.unitOfWork(a.companyId, () => harness().bills.insert(theirs));
   const seen = await app.tenantTransaction(b.companyId, (sql) => sql.query("SELECT count(*)::int AS n FROM eway_bills"));
   assert.equal(seen.rows[0]?.n, 0);
   await assert.rejects(app.tenantTransaction(b.companyId, (sql) => sql.query(
-    "INSERT INTO eway_bill_acknowledgements (company_id, eway_bill_id, acknowledgement) SELECT $1, id, '{}' FROM eway_bills LIMIT 1", [a.companyId])), code("42501"));
+    "INSERT INTO eway_bill_acknowledgements (company_id, eway_bill_id, acknowledgement) VALUES ($1, $2, '{}')", [a.companyId, theirs.id])), code("42501"));
 });
 
 test("the e-way bill service's whole lifecycle works through PostgreSQL, frozen rows included", { skip }, async () => {
