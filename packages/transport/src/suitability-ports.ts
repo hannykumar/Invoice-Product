@@ -8,6 +8,7 @@
 import type { CompanyId } from "@invoice/kernel";
 import type { ActorContext } from "@invoice/ledger";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
+import type { Page } from "./ports.ts";
 import type {
   PlatePhoto, VehicleEvidence, VehicleSuitabilityAssessment, VehicleSuitabilityPolicy,
 } from "./suitability-types.ts";
@@ -74,9 +75,10 @@ export interface SuitabilityRepository {
   findById(companyId: CompanyId, id: Id): Promise<VehicleSuitabilityAssessment | null>;
   /** The latest check for a movement, which is the one a dispatch screen shows. */
   findLatestForMovement(companyId: CompanyId, movementId: Id): Promise<VehicleSuitabilityAssessment | null>;
-  list(companyId: CompanyId): Promise<VehicleSuitabilityAssessment[]>;
+  /** In the order they were made. `page.after` is the id of the last check of the page before. */
+  list(companyId: CompanyId, page?: Page): Promise<VehicleSuitabilityAssessment[]>;
   /** Everything still blocked and not overridden: the exception queue for the dispatch desk. */
-  listBlocked(companyId: CompanyId): Promise<VehicleSuitabilityAssessment[]>;
+  listBlocked(companyId: CompanyId, page?: Page): Promise<VehicleSuitabilityAssessment[]>;
 }
 
 /** Per company, effective-dated, as every other policy in this product is held. */
