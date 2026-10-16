@@ -370,7 +370,7 @@ export const notificationAlertTransport = (
     const deliveries: AlertDelivery[] = [];
     for (const recipient of recipients) {
       for (const channel of ['in_app', 'email'] as const) {
-        const notification = notifications.schedule(context, {
+        const notification = await notifications.schedule(context, {
           recipientId: recipient.recipientId,
           recipientRole: alert.audiences.includes('OWNER') ? 'owner' : 'accountant',
           channel,
