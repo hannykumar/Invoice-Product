@@ -137,6 +137,49 @@ const platformMigrations: readonly Migration[] = [{
     DROP INDEX IF EXISTS audit_events_company_seq_idx;
     ALTER TABLE audit_events DROP COLUMN IF EXISTS seq;
   `,
+}, {
+  // Issue #342 — real sign-in. A person is found by the identity provider's id for them (ADR D1) and
+  // may sign in with a phone number alone, so email is no longer required. A session ends after a
+  // working day unused (last_seen_at) as well as at its fixed end (expires_at, which cannot be moved).
+  // The companies a person belongs to are read before any company is chosen, so memberships and
+  // branch access get a second, read-only policy: the rows of the person named in app.user_id.
+  id: "20261016T014813884Z_platform_3b14d5c4182e_sign_in_identity_and_idle_sessions",
+  up: `
+    ALTER TABLE users ADD COLUMN identity_subject text UNIQUE;
+    ALTER TABLE users ADD COLUMN phone text UNIQUE;
+    ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+    ALTER TABLE users ADD CONSTRAINT users_reachable CHECK (email IS NOT NULL OR phone IS NOT NULL);
+    ALTER TABLE sessions ADD COLUMN last_seen_at timestamptz;
+    -- Linking a person to the provider happens once: the link is never moved to someone else.
+    CREATE TRIGGER users_identity_final BEFORE UPDATE ON users FOR EACH ROW
+      WHEN (OLD.identity_subject IS NOT NULL AND NEW.identity_subject IS DISTINCT FROM OLD.identity_subject)
+      EXECUTE FUNCTION platform_refuse('A person already linked to their sign-in cannot be linked again.');
+    CREATE POLICY memberships_own ON memberships FOR SELECT
+      USING (user_id = nullif(current_setting('app.user_id', true), '')::uuid);
+    CREATE POLICY user_branch_access_own ON user_branch_access FOR SELECT
+      USING (user_id = nullif(current_setting('app.user_id', true), '')::uuid);
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'invoice_app') THEN
+        GRANT UPDATE (last_seen_at) ON sessions TO invoice_app;
+        GRANT UPDATE (identity_subject) ON users TO invoice_app;
+      END IF;
+    END $$;
+  `,
+  down: `
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'invoice_app') THEN
+        REVOKE UPDATE (last_seen_at) ON sessions FROM invoice_app;
+        REVOKE UPDATE (identity_subject) ON users FROM invoice_app;
+      END IF;
+    END $$;
+    DROP POLICY IF EXISTS user_branch_access_own ON user_branch_access;
+    DROP POLICY IF EXISTS memberships_own ON memberships;
+    DROP TRIGGER IF EXISTS users_identity_final ON users;
+    ALTER TABLE sessions DROP COLUMN IF EXISTS last_seen_at;
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_reachable;
+    ALTER TABLE users DROP COLUMN IF EXISTS phone;
+    ALTER TABLE users DROP COLUMN IF EXISTS identity_subject;
+  `,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(

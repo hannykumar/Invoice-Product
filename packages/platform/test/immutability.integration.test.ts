@@ -63,6 +63,11 @@ before(async () => {
       await app.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic person')", [id, `immutable-${id}@example.invalid`]);
       return id;
     },
+    knownUser: async (_auth, email) => {
+      const id = crypto.randomUUID();
+      await app.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic person')", [id, email]);
+      return id;
+    },
   };
 });
 after(async () => {

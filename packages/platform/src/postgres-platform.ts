@@ -9,7 +9,8 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import type { SqlExecutor, TransactionalExecutor } from "./database.ts";
-import type { Invitation, Session } from "./auth.ts";
+import { newSessionToken, sessionExpired, SESSION_ABSOLUTE_MS, SESSION_TOUCH_MS, type Invitation, type Membership, type Session } from "./auth.ts";
+import type { VerifiedIdentity } from "./identity.ts";
 import { canonicalJson, riskRank, transitions, type Member } from "./platform.ts";
 import { reviveJson, type PostgresAuditLog } from "./postgres-audit.ts";
 import { PlatformError } from "./types.ts";
@@ -178,7 +179,10 @@ export class PostgresAccessControl {
 }
 
 const at = (millis: number): string => new Date(millis).toISOString();
-const toSession = (r: Row): Session => ({ id: String(r.id), userId: String(r.user_id), companyId: String(r.company_id), branchId: String(r.branch_id), expiresAt: ms(r.expires_at), ...(r.revoked_at === null ? {} : { revokedAt: ms(r.revoked_at) }) });
+const toSession = (r: Row): Session => ({
+  id: String(r.id), userId: String(r.user_id), companyId: String(r.company_id), branchId: String(r.branch_id), expiresAt: ms(r.expires_at),
+  ...(r.revoked_at === null ? {} : { revokedAt: ms(r.revoked_at) }), ...(r.last_seen_at === null || r.last_seen_at === undefined ? {} : { lastSeenAt: ms(r.last_seen_at) }),
+});
 const toInvitation = (r: Row): Invitation => ({
   id: String(r.id), companyId: String(r.company_id), branchId: String(r.branch_id), email: String(r.email), permissions: new Set(r.permissions as Permission[]), expiresAt: ms(r.expires_at),
   ...(r.accepted_at === null ? {} : { acceptedAt: ms(r.accepted_at) }), ...(r.revoked_at === null ? {} : { revokedAt: ms(r.revoked_at) }),
@@ -222,11 +226,11 @@ export class PostgresAuthenticationService {
    * The returned `id` is the session's token: it is given to the person once and never stored.
    * The database keeps only its hash (issue #368), so reading the table yields no usable session.
    */
-  async createSession(companyId: Id, branchId: Id, userId: Id, ttlMs = 8 * 60 * 60 * 1000): Promise<Session> {
-    const token = randomUUID();
+  async createSession(companyId: Id, branchId: Id, userId: Id, ttlMs = SESSION_ABSOLUTE_MS): Promise<Session> {
+    const token = newSessionToken();
     const { rows } = await this.#db.unitOfWork(companyId, ({ sql }) => sql.query(
-      "INSERT INTO sessions (id, token_hash, company_id, branch_id, user_id, expires_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-      [randomUUID(), digest(token), companyId, branchId, userId, at(this.#now() + ttlMs)],
+      "INSERT INTO sessions (id, token_hash, company_id, branch_id, user_id, expires_at, last_seen_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+      [randomUUID(), digest(token), companyId, branchId, userId, at(this.#now() + ttlMs), at(this.#now())],
     ));
     return { ...toSession(rows[0] as Row), id: token };
   }
@@ -235,9 +239,15 @@ export class PostgresAuthenticationService {
     // The company comes from the stored session, never from the caller (rule 6).
     const row = (await this.#db.query("SELECT * FROM sessions WHERE token_hash = $1", [digest(sessionId)])).rows[0];
     const session = row === undefined ? undefined : toSession(row);
-    if (!session || session.revokedAt !== undefined || session.expiresAt <= this.#now()) throw new PlatformError("SESSION_EXPIRED", "SESSION_EXPIRED: Sign in again.");
+    if (!session || sessionExpired(session, this.#now())) throw new PlatformError("SESSION_EXPIRED", "SESSION_EXPIRED: Sign in again.");
     // The context carries the stored row's id, which identifies the session without being able to open it.
-    return this.#access.context(session.companyId, session.branchId, session.userId, session.id);
+    const context = await this.#access.context(session.companyId, session.branchId, session.userId, session.id);
+    // Issue #342 — still in use, so the idle clock restarts. Its own statement, outside any company's
+    // write lock: a page being read must not queue behind a bill being saved.
+    if (session.lastSeenAt === undefined || session.lastSeenAt + SESSION_TOUCH_MS <= this.#now()) {
+      await this.#db.query("UPDATE sessions SET last_seen_at = $2 WHERE id = $1 AND revoked_at IS NULL", [session.id, at(this.#now())]);
+    }
+    return context;
   }
 
   /** Ends a session, named either by its token or by the `sessionId` a request context carries. */
@@ -257,4 +267,43 @@ export class PostgresAuthenticationService {
   }
 
   review(companyId: Id): Promise<readonly Member[]> { return this.#access.members(companyId); }
+
+  /**
+   * Issue #342 — the person a provider has just checked. Found by the provider's id for them; a person
+   * added before they first signed in (the seed, a member brought in from another program) is found by
+   * the address they just proved and linked once; anyone else is a new person, with no company yet.
+   */
+  async userFor(identity: VerifiedIdentity): Promise<Id> {
+    const bySubject = async () => (await this.#db.query("SELECT id FROM users WHERE identity_subject = $1", [identity.subject])).rows[0]?.id as string | undefined;
+    const known = await bySubject();
+    if (known !== undefined) return known;
+    // The provider proved exactly one address, and each address belongs to one row, so at most one row is linked.
+    const linked = (await this.#db.query(
+      "UPDATE users SET identity_subject = $1 WHERE identity_subject IS NULL AND active AND (email = $2 OR phone = $3) RETURNING id",
+      [identity.subject, identity.email ?? null, identity.phone ?? null],
+    )).rows[0];
+    if (linked !== undefined) return String(linked.id);
+    await this.#db.query(
+      "INSERT INTO users (id, identity_subject, email, phone, display_name) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+      [randomUUID(), identity.subject, identity.email ?? null, identity.phone ?? null, identity.email ?? identity.phone ?? "New member"],
+    );
+    const created = await bySubject();
+    // The address is already someone else's sign-in (the provider's record was replaced): never merge two people.
+    if (created === undefined) throw new PlatformError("FORBIDDEN", "This phone number or email is already linked to another sign-in. Please contact Karobar support.");
+    return created;
+  }
+
+  /** The companies one person may switch between. Read as that person, before any company is chosen. */
+  companiesOf(userId: Id): Promise<readonly Membership[]> {
+    return this.#db.transaction(async (sql) => {
+      await sql.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+      const { rows } = await sql.query(
+        `SELECT m.company_id, array_agg(a.branch_id::text ORDER BY a.branch_id) AS branch_ids
+           FROM memberships m JOIN user_branch_access a ON a.company_id = m.company_id AND a.user_id = m.user_id
+          WHERE m.user_id = $1 AND m.active GROUP BY m.company_id ORDER BY m.company_id`,
+        [userId],
+      );
+      return rows.map((r) => ({ companyId: String(r.company_id), branchIds: r.branch_ids as string[] }));
+    });
+  }
 }
