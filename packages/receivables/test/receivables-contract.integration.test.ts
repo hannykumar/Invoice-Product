@@ -159,3 +159,23 @@ test('postgres: row-level security hides one company from another even without a
   assert.equal(Number((await one(b.companyId, 'SELECT count(*)::int AS n FROM payments')).n), 0);
   assert.equal(Number((await one(a.companyId, 'SELECT count(*)::int AS n FROM payments')).n), 1);
 });
+
+test('postgres: a refund and an allocation of one receipt at the same moment never use more than it (#367)', { skip }, async () => {
+  const s = await openShop(world());
+  const bill = await s.issueBill();
+  const receipt = await s.receivables.recordPayment(s.actor, { idempotencyKey: 'pg-r', direction: 'RECEIPT', partyId: s.ids.customer as PartyId, mode: 'CASH', amount: money(35_400n), date: '2026-04-11' as never });
+  // Each checks what is unused before the others save: only the database can refuse the excess.
+  const outcomes = await Promise.allSettled([
+    s.receivables.allocate(s.actor, receipt.id, [{ documentId: bill.id, documentNumber: bill.number, amount: money(35_400n) }], receipt.version),
+    ...['pg-refund-1', 'pg-refund-2'].map((key) => s.receivables.recordPayment(s.actor, {
+      idempotencyKey: key, direction: 'PAYMENT', partyId: s.ids.customer as PartyId, mode: 'CASH', amount: money(35_400n), date: '2026-04-12' as never, refundOf: receipt.id,
+    })),
+  ]);
+  assert.equal(outcomes.filter((o) => o.status === 'fulfilled').length, 1, outcomes.map((o) => o.status === 'rejected' ? String((o as PromiseRejectedResult).reason) : 'ok').join(' | '));
+  for (const o of outcomes.filter((x) => x.status === 'rejected')) {
+    const reason = (o as PromiseRejectedResult).reason;
+    assert.ok(reason instanceof DomainError && ['ALLOCATION_EXCEEDS_PAYMENT', 'PAYMENT_REFUND_EXCEEDS', 'PAYMENT_CONCURRENT_EDIT'].includes(reason.code), String(reason));
+  }
+  const used = await one(s.companyId, 'SELECT (allocated_paise + refunded_paise)::text AS used FROM payments WHERE company_id = $1 AND id = $2', [s.companyId, receipt.id]);
+  assert.equal(used.used, '35400');
+});

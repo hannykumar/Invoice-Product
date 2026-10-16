@@ -67,7 +67,7 @@ const groupBy = (rows: Row[], key: string): Map<string, Row[]> => {
 /** The database refused a figure the service had checked: someone else's change got there first. */
 const refusal = (error: unknown): Error => {
   const { code, constraint } = error as { code?: string; constraint?: string };
-  if (code === '23514' && constraint === 'payments_allocated_within_amount') {
+  if (code === '23514' && (constraint === 'payments_allocated_within_amount' || constraint === 'payments_refunded_within_amount')) {
     return invalid('ALLOCATION_EXCEEDS_PAYMENT', 'More has been put against bills than this payment brought in. Open it again to see what is already settled.');
   }
   if (code === '23514' && constraint === 'document_settlements_allocated_within_value') {
@@ -116,6 +116,12 @@ export class PostgresPaymentRepository implements PaymentRepository {
       );
     } catch (error) {
       if ((error as { code?: string }).code === '23505') throw conflict('PAYMENT_DUPLICATE', 'This payment was already recorded.');
+      // Issue #367 — a refund racing an allocation or another refund of the same receipt: the database
+      // counted what is left, after the other one, and found too little.
+      const { code, constraint } = error as { code?: string; constraint?: string };
+      if (code === '23514' && constraint === 'payments_refunded_within_amount') {
+        throw invalid('PAYMENT_REFUND_EXCEEDS', 'Some of that receipt was used or paid back while you were working on this, so this refund would be more than is left. Open it again to see what is unused.');
+      }
       throw error;
     }
     await this.#appendCheque(sql, payment, 0);
