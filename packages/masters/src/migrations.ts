@@ -8,6 +8,9 @@
 
 import type { Migration } from "../../platform/src/migration-definitions.ts";
 
+/** Every table of this module that holds a company's rows: each one forces row-level security (issue #366). */
+const TENANT_TABLES = ["master_records", "master_versions", "master_identity_keys", "master_name_index", "master_merges", "units_of_measure", "unit_conversions", "master_snapshots", "master_command_records"] as const;
+
 export const masterDataMigrations: readonly Migration[] = Object.freeze([{
   id: "0006_master_data",
   up: `
@@ -119,5 +122,66 @@ export const masterDataMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS master_identity_keys;
     DROP TABLE IF EXISTS master_versions;
     DROP TABLE IF EXISTS master_records;
+  `,
+}, {
+  // Issue #366 — what the PostgreSQL repositories (postgres-masters.ts) need that the first migration lacks.
+  id: "20261011T144837144Z_masters_daa8ac15a52a_repositories_rls_and_command_index",
+  up: `
+    -- The order records were created in. The in-memory stores list in that order, and the service
+    -- reads it ("the first tax default that matches"), so the database keeps it rather than guessing
+    -- from a timestamp shared by every row of one transaction.
+    ALTER TABLE master_records ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE units_of_measure ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE unit_conversions ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+
+    -- The target of the same-company foreign keys below: a version, a conversion or a command's
+    -- record can only point at a record of its own company. (Foreign-key checks do not go through
+    -- row-level security, so without this another company's record id would be accepted.)
+    CREATE UNIQUE INDEX master_records_company_id_idx ON master_records(company_id, id);
+    -- Listing one kind page by page: WHERE company_id = $1 AND kind = $2 AND id > $3 ORDER BY id.
+    CREATE INDEX master_records_company_kind_id_idx ON master_records(company_id, kind, id);
+    ALTER TABLE master_versions ADD CONSTRAINT master_versions_same_company_fk FOREIGN KEY (company_id, record_id) REFERENCES master_records(company_id, id);
+    ALTER TABLE unit_conversions ADD CONSTRAINT unit_conversions_same_company_fk FOREIGN KEY (company_id, item_id) REFERENCES master_records(company_id, id);
+    -- For that foreign key: the unique index holds item_id only inside an expression.
+    CREATE INDEX unit_conversions_item_idx ON unit_conversions(company_id, item_id) WHERE item_id IS NOT NULL;
+
+    -- Which record a finished master-data command wrote, so a retry with the same idempotency key
+    -- returns that record after a restart (the service's command-to-record map). Final when written.
+    CREATE TABLE master_command_records (
+      company_id uuid NOT NULL REFERENCES companies(id),
+      command_id uuid NOT NULL REFERENCES command_records(id),
+      record_id uuid NOT NULL,
+      recorded_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (company_id, command_id),
+      FOREIGN KEY (company_id, record_id) REFERENCES master_records(company_id, id)
+    );
+    -- For the foreign keys to the record and to the command.
+    CREATE INDEX master_command_records_record_idx ON master_command_records(company_id, record_id);
+    CREATE INDEX master_command_records_command_idx ON master_command_records(command_id);
+    CREATE TRIGGER master_command_records_frozen BEFORE UPDATE OR DELETE ON master_command_records
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    CREATE TRIGGER master_command_records_no_truncate BEFORE TRUNCATE ON master_command_records
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+${TENANT_TABLES.map((table) => `
+    ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
+    CREATE POLICY ${table}_tenant ON ${table}
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);`).join("")}
+  `,
+  down: `
+    DROP TABLE IF EXISTS master_command_records;
+${TENANT_TABLES.filter((table) => table !== "master_command_records").map((table) => `
+    DROP POLICY IF EXISTS ${table}_tenant ON ${table};
+    ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;`).join("")}
+    DROP INDEX IF EXISTS unit_conversions_item_idx;
+    ALTER TABLE unit_conversions DROP CONSTRAINT IF EXISTS unit_conversions_same_company_fk;
+    ALTER TABLE master_versions DROP CONSTRAINT IF EXISTS master_versions_same_company_fk;
+    DROP INDEX IF EXISTS master_records_company_kind_id_idx;
+    DROP INDEX IF EXISTS master_records_company_id_idx;
+    ALTER TABLE unit_conversions DROP COLUMN IF EXISTS seq;
+    ALTER TABLE units_of_measure DROP COLUMN IF EXISTS seq;
+    ALTER TABLE master_records DROP COLUMN IF EXISTS seq;
   `,
 }]);

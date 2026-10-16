@@ -9,7 +9,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { PlatformError } from "../../platform/src/types.ts";
 import type { CommandRecord, RequestContext } from "../../platform/src/types.ts";
 import type { AuditLog, PlatformCommandService } from "../../platform/src/platform.ts";
-import { VersionedStore, today } from "./effective.ts";
+import { CommandRecordIndex, VersionedStore, today } from "./effective.ts";
 import type { Version } from "./effective.ts";
 import { snapshotFrom } from "./snapshots.ts";
 import type { MasterSnapshot } from "./snapshots.ts";
@@ -114,7 +114,7 @@ export class MasterDataService {
   readonly #audit: AuditLog;
   readonly #stores: Stores;
   /** Command id to the record it wrote, so an idempotent retry can return that record. */
-  readonly #recordByCommand = new Map<Id, Id>();
+  readonly #recordByCommand = new CommandRecordIndex();
   public readonly units: UnitRegistry;
 
   constructor(commands: PlatformCommandService, audit: AuditLog, units: UnitRegistry = createDefaultUnitRegistry()) {
@@ -144,7 +144,7 @@ export class MasterDataService {
       idempotencyKey: options.idempotencyKey,
       payload: { effectiveFrom: options.effectiveFrom ?? today(), fingerprint: fingerprintOf(fingerprint) },
     });
-    const existingRecordId = this.#recordByCommand.get(command.id);
+    const existingRecordId = this.#recordByCommand.get(context.companyId, command.id);
     return existingRecordId === undefined ? { command } : { command, existingRecordId };
   }
 
@@ -157,7 +157,7 @@ export class MasterDataService {
     const approved = this.#commands.transition(context, submitted.id, "approved");
     const finalised = this.#commands.transition(context, approved.id, "finalised", options.reason);
     const version = store.append(record, options.effectiveFrom ?? today(), context.actorId, options.reason ?? `command:${finalised.id}`);
-    this.#recordByCommand.set(finalised.id, record.id);
+    this.#recordByCommand.set(context.companyId, finalised.id, record.id);
     return { version, command: finalised };
   }
 
