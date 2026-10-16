@@ -154,6 +154,17 @@ const platformMigrations: readonly Migration[] = [{
     CREATE TRIGGER users_identity_final BEFORE UPDATE ON users FOR EACH ROW
       WHEN (OLD.identity_subject IS NOT NULL AND NEW.identity_subject IS DISTINCT FROM OLD.identity_subject)
       EXECUTE FUNCTION platform_refuse('A person already linked to their sign-in cannot be linked again.');
+    -- The idle clock is the database's: last_seen_at can only be set to (about) now, never ahead, so the
+    -- application cannot switch off the idle limit by writing a date in the future.
+    CREATE FUNCTION sessions_seen_now() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+    BEGIN
+      IF NEW.last_seen_at > clock_timestamp() + interval '1 minute' THEN
+        RAISE EXCEPTION 'A session cannot be marked as used in the future.' USING ERRCODE = 'restrict_violation';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER sessions_seen_now BEFORE INSERT OR UPDATE OF last_seen_at ON sessions FOR EACH ROW EXECUTE FUNCTION sessions_seen_now();
     CREATE POLICY memberships_own ON memberships FOR SELECT
       USING (user_id = nullif(current_setting('app.user_id', true), '')::uuid);
     CREATE POLICY user_branch_access_own ON user_branch_access FOR SELECT
@@ -175,6 +186,8 @@ const platformMigrations: readonly Migration[] = [{
     DROP POLICY IF EXISTS user_branch_access_own ON user_branch_access;
     DROP POLICY IF EXISTS memberships_own ON memberships;
     DROP TRIGGER IF EXISTS users_identity_final ON users;
+    DROP TRIGGER IF EXISTS sessions_seen_now ON sessions;
+    DROP FUNCTION IF EXISTS sessions_seen_now();
     ALTER TABLE sessions DROP COLUMN IF EXISTS last_seen_at;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_reachable;
     ALTER TABLE users DROP COLUMN IF EXISTS phone;

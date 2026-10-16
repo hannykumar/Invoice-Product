@@ -120,6 +120,39 @@ test('#342: a business or branch that is not yours cannot be switched to, and it
   assert.deepEqual((await call('GET', '/api/session', {}, konkan)).body.companies.map((company: { id: string }) => company.id), [KONKAN]);
 });
 
+test('#342: switching keeps the session\'s fixed end, and of two switches sent at once only one wins', async () => {
+  const { AccessControl, AuthenticationService } = await import('../../../packages/platform/src/index.ts');
+  let now = 1_000_000_000_000;
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    const access = new AccessControl();
+    const store = new AuthenticationService(access, () => now);
+    const service = new SignIn(store, new MockIdentityProvider('111111'));
+    store.addUser({ id: 'u-ca', email: 'ca-two@example.invalid' });
+    for (const company of ['c1', 'c2']) access.grant({ companyId: company, userId: 'u-ca', branchIds: new Set([`${company}-b`]), active: true, permissions: new Set(['dashboard.read']) });
+    const first = await service.checkCode('ca-two@example.invalid', '111111');
+    // Six days of a busy shop: used every ten hours, so the idle limit never ends it.
+    for (let hours = 0; hours < 6 * 24; hours += 10) { now += 10 * 60 * 60 * 1000; await service.authenticate(`Bearer ${first.token}`); }
+    const context = await service.authenticate(`Bearer ${first.token}`);
+    const [won, lost] = await Promise.allSettled([service.switchCompany(context, 'c2'), service.switchCompany(context, 'c2')]);
+    assert.equal(won.status, 'fulfilled');
+    assert.equal(lost.status, 'rejected', 'one cookie never becomes two live sessions');
+    assert.equal((won as PromiseFulfilledResult<{ expiresAt: string }>).value.expiresAt, first.expiresAt, 'the week started at sign-in, not at the switch');
+    const switched = (won as PromiseFulfilledResult<{ token: string }>).value.token;
+    for (let hours = 0; hours < 48; hours += 10) { now += 10 * 60 * 60 * 1000; try { await service.authenticate(`Bearer ${switched}`); } catch { break; } }
+    await assert.rejects(service.authenticate(`Bearer ${switched}`), /Sign in again/, 'switching every few days cannot keep a stolen session alive');
+  } finally { Date.now = realNow; }
+});
+
+test('#342: signing in on a browser that still held a session ends the old one', async () => {
+  const old = await signIn(SAMPOORNA_OWNER);
+  const reply = await handleApi('POST', '/api/auth/sign-in', { address: SAMPOORNA_OWNER, code: DEMO_SIGN_IN_CODE }, `Bearer ${old}`);
+  assert.equal(reply.status, 200);
+  assert.equal((await call('GET', '/api/session', {}, old)).status, 401);
+  assert.equal((await call('GET', '/api/session', {}, tokenFrom(reply.headers))).status, 200);
+});
+
 test('#342: a sign-in asked for another company opens the person\'s own one instead', async () => {
   const token = await signIn(KONKAN_OWNER, SAMPOORNA);
   assert.equal((await call('GET', '/api/session', {}, token)).body.company.id, KONKAN);
@@ -151,6 +184,9 @@ test('#342: the demo sign-in and the in-memory store never run outside developme
   assert.throws(() => identityProviderFor({ NODE_ENV: 'production', SUPABASE_URL: 'http://x.supabase.co', SUPABASE_ANON_KEY: 'k' }, DEMO_SIGN_IN_CODE), /https/);
   assert.equal(identityProviderFor({ NODE_ENV: 'production', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k' }, DEMO_SIGN_IN_CODE).kind, 'supabase');
   assert.equal(identityProviderFor({ NODE_ENV: 'test' }, DEMO_SIGN_IN_CODE).kind, 'mock');
+  // A deployment that forgot NODE_ENV still has its database: it is not mistaken for a developer's machine.
+  assert.throws(() => identityProviderFor({ DATABASE_URL: 'postgresql://db.example.invalid/books' }, DEMO_SIGN_IN_CODE), /demo sign-in only runs/);
+  assert.equal(identityProviderFor({}, DEMO_SIGN_IN_CODE).kind, 'mock', 'no NODE_ENV and no database: a developer running it bare');
   assert.throws(() => signInStore({ NODE_ENV: 'production' }), /DATABASE_URL is not set/, 'production keeps sessions in the database, never in memory');
 });
 

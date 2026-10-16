@@ -163,12 +163,17 @@ export class SupabaseIdentityProvider implements IdentityProvider {
   }
 }
 
-const DEVELOPMENT = new Set(["", "development", "test"]);
-
 /**
- * The provider for this process. With `SUPABASE_URL` set, Supabase; without it, the mock — and only
- * on a developer's machine or in a test run, the same rule `createDatabase` uses for its fallback.
+ * Issue #342 — a developer's machine or a test run: `NODE_ENV` says so, or is unset with no database
+ * configured. A deployment that forgot `NODE_ENV` still has a `DATABASE_URL`, so it is never mistaken
+ * for one and never gets the demo sign-in or the in-memory store.
  */
+export const isDeveloperMachine = (env: Readonly<Record<string, string | undefined>>): boolean => {
+  const environment = (env.NODE_ENV ?? "").trim().toLowerCase();
+  return environment === "development" || environment === "test" || (environment === "" && !env.DATABASE_URL?.trim());
+};
+
+/** The provider for this process. With `SUPABASE_URL` set, Supabase; without it, the mock — and only on a developer's machine. */
 export const identityProviderFor = (env: Readonly<Record<string, string | undefined>>, demoCode: string): IdentityProvider => {
   const url = env.SUPABASE_URL?.trim();
   if (url) {
@@ -177,8 +182,8 @@ export const identityProviderFor = (env: Readonly<Record<string, string | undefi
     if (!url.startsWith("https://")) throw new Error("SUPABASE_URL must be an https:// address.");
     return new SupabaseIdentityProvider(url, key);
   }
-  if (!DEVELOPMENT.has((env.NODE_ENV ?? "").trim().toLowerCase())) {
-    throw new Error("SUPABASE_URL is not set. The demo sign-in only runs on a developer's machine, so the server will not start.");
+  if (!isDeveloperMachine(env)) {
+    throw new Error("SUPABASE_URL is not set. The demo sign-in only runs on a developer's machine (NODE_ENV=development or test), so the server will not start.");
   }
   return new MockIdentityProvider(demoCode);
 };

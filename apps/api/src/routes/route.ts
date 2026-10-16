@@ -45,6 +45,8 @@ export interface PublicCall<I> {
   readonly runtime: ApiRuntime;
   readonly requestId: string;
   readonly delivery: WebhookDelivery | undefined;
+  /** The session the caller sent, if any (`Bearer …`). Public routes may only end it, never use it. */
+  readonly authorization?: string | undefined;
 }
 export interface SessionCall<I> extends PublicCall<I> {
   readonly context: RequestContext;

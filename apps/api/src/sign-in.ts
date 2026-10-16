@@ -12,7 +12,7 @@ import {
   AccessControl, AuthenticationService, ConnectorError, PlatformError, SESSION_ABSOLUTE_MS,
   type Id, type Membership, type RequestContext, type Session,
 } from '../../../packages/platform/src/index.ts';
-import { AddressNotReadable, CodeNotAccepted, identityProviderFor, readSignInAddress, type IdentityProvider, type VerifiedIdentity } from '../../../packages/platform/src/identity.ts';
+import { AddressNotReadable, CodeNotAccepted, identityProviderFor, isDeveloperMachine, readSignInAddress, type IdentityProvider, type VerifiedIdentity } from '../../../packages/platform/src/identity.ts';
 import { DEMO_PEOPLE, DEMO_SIGN_IN_CODE } from '../../../packages/platform/src/seed.ts';
 import { createDatabase } from '../../../packages/platform/src/database.ts';
 import { PostgresAccessControl, PostgresAuthenticationService } from '../../../packages/platform/src/postgres-platform.ts';
@@ -22,9 +22,11 @@ type Maybe<T> = T | Promise<T>;
 export interface SignInStore {
   userFor(identity: VerifiedIdentity): Maybe<Id>;
   companiesOf(userId: Id): Maybe<readonly Membership[]>;
-  createSession(companyId: Id, branchId: Id, userId: Id): Maybe<Session>;
+  createSession(companyId: Id, branchId: Id, userId: Id, ttlMs?: number): Maybe<Session>;
   authenticate(token: string): Maybe<RequestContext>;
   revokeSession(sessionIdOrToken: string): Maybe<void>;
+  /** Ends a live session and says when it would have ended; `undefined` if it had already ended. */
+  closeSession(sessionId: Id): Maybe<number | undefined>;
 }
 
 export class AuthenticationError extends Error {
@@ -109,13 +111,18 @@ export class SignIn {
     const membership = (await this.#store.companiesOf(context.actorId)).find((candidate) => candidate.companyId === companyId);
     const branch = branchId === undefined || branchId === '' ? membership?.branchIds[0] : membership?.branchIds.find((candidate) => candidate === branchId);
     if (membership === undefined || branch === undefined) throw new PlatformError('NOT_FOUND', 'That business is not one you have been added to.');
-    const opened = await this.#open(membership.companyId, branch, context.actorId);
-    await this.#store.revokeSession(context.sessionId);
-    return opened;
+    // The old session ends first, in one statement: of two switches sent at once only one finds it
+    // live. The new one keeps the old one's end, so switching can never stretch a session past its week.
+    const endsAt = await this.#store.closeSession(context.sessionId);
+    if (endsAt === undefined || endsAt <= Date.now()) throw new AuthenticationError('Sign in again to continue.');
+    return this.#open(membership.companyId, branch, context.actorId, endsAt - Date.now());
   }
 
-  async #open(companyId: Id, branchId: Id, userId: Id): Promise<Opened> {
-    const session = await this.#store.createSession(companyId, branchId, userId);
+  /** Signing in on a browser that still held a session ends that one, so a copy of the old cookie stops working. */
+  async replaceSession(token: string | undefined): Promise<void> { if (token !== undefined) await this.#store.revokeSession(token); }
+
+  async #open(companyId: Id, branchId: Id, userId: Id, ttlMs?: number): Promise<Opened> {
+    const session = await this.#store.createSession(companyId, branchId, userId, ttlMs);
     return { token: session.id, companyId, expiresAt: new Date(session.expiresAt).toISOString() };
   }
 
@@ -130,15 +137,13 @@ export class SignIn {
   }
 }
 
-const DEVELOPMENT = new Set(['', 'development', 'test']);
-
 /**
  * Where sessions and members live. In production, PostgreSQL, so a restart signs nobody out. On a
  * developer's machine and in tests, memory, holding the seed's demo people — and only there.
  * #340 replaces this with its composition root's PostgreSQL instance.
  */
 export const signInStore = (env: Readonly<Record<string, string | undefined>> = process.env): SignInStore => {
-  if (!DEVELOPMENT.has((env.NODE_ENV ?? '').trim().toLowerCase())) {
+  if (!isDeveloperMachine(env)) {
     if (!env.DATABASE_URL?.trim()) throw new Error('DATABASE_URL is not set. Sessions are kept in the database outside development, so the server will not start.');
     const database = createDatabase(env.DATABASE_URL);
     return new PostgresAuthenticationService(database, new PostgresAccessControl(database));

@@ -137,7 +137,7 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
     const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
     let reply: unknown;
     if (isPublic(route)) {
-      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery });
+      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery, authorization });
     } else {
       const context = await runtime.authenticate(authorization);
       annotate({ company_id: context.companyId, user_id: context.actorId });

@@ -237,7 +237,8 @@ export class PostgresAuthenticationService {
 
   async authenticate(sessionId: Id): Promise<RequestContext> {
     // The company comes from the stored session, never from the caller (rule 6).
-    const row = (await this.#db.query("SELECT * FROM sessions WHERE token_hash = $1", [digest(sessionId)])).rows[0];
+    // A person switched off (users.active) is signed out everywhere, whatever their memberships say.
+    const row = (await this.#db.query("SELECT s.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND u.active", [digest(sessionId)])).rows[0];
     const session = row === undefined ? undefined : toSession(row);
     if (!session || sessionExpired(session, this.#now())) throw new PlatformError("SESSION_EXPIRED", "SESSION_EXPIRED: Sign in again.");
     // The context carries the stored row's id, which identifies the session without being able to open it.
@@ -258,6 +259,12 @@ export class PostgresAuthenticationService {
     await this.#db.unitOfWork(String(row.company_id), async ({ sql }) => { await sql.query("UPDATE sessions SET revoked_at = $2 WHERE id = $1 AND revoked_at IS NULL", [row.id, at(this.#now())]); });
   }
 
+  /** Ends a live session (by its stored id) in one statement and returns when it would have ended; `undefined` if it had already ended. */
+  async closeSession(sessionId: Id): Promise<number | undefined> {
+    const { rows } = await this.#db.query("UPDATE sessions SET revoked_at = $2 WHERE id = $1::uuid AND revoked_at IS NULL RETURNING expires_at", [sessionId, at(this.#now())]);
+    return rows[0] === undefined ? undefined : ms(rows[0].expires_at);
+  }
+
   /** Access and every open session end together, in one transaction. */
   revokeMember(companyId: Id, userId: Id): Promise<void> {
     return this.#db.unitOfWork(companyId, async ({ sql }) => {
@@ -274,9 +281,12 @@ export class PostgresAuthenticationService {
    * the address they just proved and linked once; anyone else is a new person, with no company yet.
    */
   async userFor(identity: VerifiedIdentity): Promise<Id> {
-    const bySubject = async () => (await this.#db.query("SELECT id FROM users WHERE identity_subject = $1", [identity.subject])).rows[0]?.id as string | undefined;
+    const bySubject = async () => (await this.#db.query("SELECT id, active FROM users WHERE identity_subject = $1", [identity.subject])).rows[0];
     const known = await bySubject();
-    if (known !== undefined) return known;
+    if (known !== undefined) {
+      if (!known.active) throw new PlatformError("FORBIDDEN", "This sign-in has been switched off. Ask the owner of your business.");
+      return String(known.id);
+    }
     // The provider proved exactly one address, and each address belongs to one row, so at most one row is linked.
     const linked = (await this.#db.query(
       "UPDATE users SET identity_subject = $1 WHERE identity_subject IS NULL AND active AND (email = $2 OR phone = $3) RETURNING id",
@@ -287,7 +297,7 @@ export class PostgresAuthenticationService {
       "INSERT INTO users (id, identity_subject, email, phone, display_name) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
       [randomUUID(), identity.subject, identity.email ?? null, identity.phone ?? null, identity.email ?? identity.phone ?? "New member"],
     );
-    const created = await bySubject();
+    const created = (await bySubject())?.id as string | undefined;
     // The address is already someone else's sign-in (the provider's record was replaced): never merge two people.
     if (created === undefined) throw new PlatformError("FORBIDDEN", "This phone number or email is already linked to another sign-in. Please contact Karobar support.");
     return created;

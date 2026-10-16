@@ -109,3 +109,18 @@ test('#342: removing a member ends their session at once, on every server', { sk
     await assert.rejects(one.checkCode(email, DEMO_SIGN_IN_CODE), /no business has added you yet/);
   } finally { await db.close(); }
 });
+
+test('#342: the idle clock cannot be pushed into the future, and a switched-off person is signed out everywhere', { skip }, async () => {
+  const opened = await server().checkCode('viewer@sampoorna.example.invalid', DEMO_SIGN_IN_CODE);
+  const db = createDb(appUrl);
+  pools.push(db);
+  await assert.rejects(db.query("UPDATE sessions SET last_seen_at = now() + interval '1 year' WHERE token_hash = encode(sha256($1::bytea), 'hex')", [opened.token]), /cannot be marked as used in the future/);
+  const one = server();
+  assert.equal((await one.authenticate(bearer(opened.token))).companyId, SAMPOORNA.companyId);
+  const viewer = '00000000-0000-4000-8000-000000000004';
+  await db.query('UPDATE users SET active = false WHERE id = $1', [viewer]);
+  try {
+    await assert.rejects(one.authenticate(bearer(opened.token)), /Sign in again/);
+    await assert.rejects(one.checkCode('viewer@sampoorna.example.invalid', DEMO_SIGN_IN_CODE), /switched off/);
+  } finally { await db.query('UPDATE users SET active = true WHERE id = $1', [viewer]); }
+});

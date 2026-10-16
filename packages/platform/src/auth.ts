@@ -56,6 +56,10 @@ export class AuthenticationService {
   revokeSession(sessionId: Id): void {
     for (const [key, session] of this.#sessions) if ((key === digest(sessionId) || session.id === sessionId) && session.revokedAt === undefined) this.#sessions.set(key, { ...session, revokedAt: this.now() });
   }
+  closeSession(sessionId: Id): number | undefined {
+    for (const [key, session] of this.#sessions) if (session.id === sessionId && session.revokedAt === undefined) { this.#sessions.set(key, { ...session, revokedAt: this.now() }); return session.expiresAt; }
+    return undefined;
+  }
   revokeMember(companyId: Id, userId: Id): void { this.access.revoke(companyId, userId); for (const [key, session] of this.#sessions) if (session.companyId === companyId && session.userId === userId && session.revokedAt === undefined) this.#sessions.set(key, { ...session, revokedAt: this.now() }); }
   review(companyId: Id): readonly Member[] { return this.access.members(companyId); }
 

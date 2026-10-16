@@ -44,8 +44,9 @@ export const CORE_ROUTES: readonly Route[] = [
   post('/api/auth/code', { access: publicRoute('asking for a sign-in code: there is no session yet'), input: fields({ address: text }) },
     ({ runtime, input }) => runtime.signIn.sendCode(String(input.address ?? ''))),
   post('/api/auth/sign-in', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ address: text, code: text, companyId: text }) },
-    async ({ runtime, input }) => {
+    async ({ runtime, input, authorization }) => {
       const opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId));
+      await runtime.signIn.replaceSession(/^Bearer\s+(\S+)$/i.exec(authorization ?? '')?.[1]);
       return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
     }),
   post('/api/auth/sign-out', { access: signedIn('anyone signed in may end their own session'), input: nothing },
