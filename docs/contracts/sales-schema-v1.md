@@ -80,15 +80,17 @@ erDiagram
 | A draft never holds a number; an issued bill has its number, its ledger entry, its pricing and who issued it | `CHECK`s on `sales_invoices` |
 | A cancellation names its reversal entry, who, when and why | `CHECK` |
 | An issued document's figures, date, customer and lines never change, and it is never deleted. A bill may only go `FINAL → CANCELLED`; a quotation, proforma or challan only from `ISSUED` to closed or withdrawn | `platform_freeze_posted`, `platform_freeze_with_parent` (#368) |
-| The lines of an issued document add up to its totals: line count, taxable value, and billed tax | `document_lines_add_up`, checked when the transaction ends |
+| The lines of an issued document add up to its totals: line count, taxable value, and billed tax. Every line of an issued bill has a positive quantity and no negative amount. A draft's lines are saved as typed, because the service saves a wrong draft and marks it NEEDS_INFO | `document_lines_add_up`, checked when the transaction ends. It reads the header `FOR SHARE`, so a line changed while the bill is being issued is checked against the issued bill |
 | A quotation is closed by a sale, a proforma by its tax invoice | `CHECK` |
 | A credit note takes back no more of a line than the bill sold, less earlier credit notes | `sales_return_within_original` on `return_note_lines`; it locks the bill's line first |
 | **Stock never goes below nothing. There is no override** (owner's rule, #262) | `CHECK (on_hand_micro >= 0)` on `stock_balances` |
 | A stock balance is the sum of its movements and nobody edits it | Only the trigger on `stock_movements` writes `stock_balances`. The application role cannot insert, update or delete a balance |
 | A movement is final; it is undone once, by another movement, with a reason | freeze trigger, `UNIQUE (company_id, reverses_movement_id)`, `CHECK`s |
 | A movement's direction belongs to its kind; one stock is counted in one unit | `CHECK`, trigger |
-| A payment settles no more than itself; a bill is paid no more than its value | `CHECK`s on `payments.allocated_paise` and `document_settlements.allocated_paise`. Only the trigger on `payment_allocations` writes those two figures |
-| A part payment never marks a bill paid | `document_settlements.status` is computed by the database from the figures |
+| A payment settles no more than itself, counting what was paid back out of it (`refunded_paise`, kept by a trigger on refund payments); a bill is paid no more than its value | `CHECK`s on `payments.allocated_paise` and `document_settlements.allocated_paise`. Only the trigger on `payment_allocations` writes those two figures |
+| A part payment never marks a bill paid. A credit note takes its value off what the bill is owed | `document_settlements.status` is computed by the database: settled when what is paid reaches the value less `credited_paise`. A trigger on `return_notes` keeps `credited_paise` |
+| A settlement row describes a real issued bill | a sales bill's row must match a FINAL bill of that company, customer and value |
+| A payment that was undone settles nothing new | the allocation trigger |
 | Money cannot be applied to a sales bill that was never issued | the allocation trigger |
 | A released allocation stays released; a reversed payment stays reversed and says why | triggers, `CHECK` |
 | A cheque's history is only ever added to | `cheque_events` is frozen |
@@ -114,16 +116,23 @@ application may not do that at all). Each named rule sets the `constraint` field
   `SELECT sales_discard_draft($1, $2)` (`lines_only` true to replace lines, false to discard the
   bill). It returns false, and removes nothing, for an issued bill or another company's bill.
 - **Stock.** Insert the movement; the balance moves itself. A refused movement
-  (`constraint = 'stock_balances_never_negative'`) is "not enough stock". To decide what can be
-  sold, lock the balance rows first (`SELECT … FROM stock_balances … ORDER BY item_id,
-  warehouse_id, batch_id FOR UPDATE`) and subtract the `HELD` reservations whose `expires_at`
-  has not passed. A hold lapses by the clock, so what is held is never stored as a figure.
+  (`constraint = 'stock_balances_never_negative'`) is "not enough stock". What can be sold is
+  decided by the inventory service as today: the movements less the `HELD` reservations (a hold
+  stays HELD until `expireStaleReservations` moves it on). Inside one company the unit of work's
+  lock already serialises this; #367 decides whether the balance rows are also locked.
 - **Settlements.** When a sales bill is issued, insert its `document_settlements` row in the same
-  unit of work (`value_paise` = the bill's value). When it is cancelled, set `cancelled = true`.
+  unit of work (`value_paise` = the bill's value). When it is cancelled, set `cancelled = true`;
+  money already applied to it stays on its payments, as it does today.
 - **Allocations.** A payment's `allocations` are rows of `payment_allocations`. To drop one (a
   bounced cheque, a reversed payment), set `released_at`; never delete. Do not write
   `allocated_paise` anywhere; it is refused.
 - **Cheques.** Append each step to `cheque_events` and set `payments.cheque_state` to the latest.
+- **Payments.** Update only the columns the application role may change (`cheque_state`, `state`,
+  the reversal fields, `version`, `updated_at`). A whole-record `UPDATE` is refused. `allocate()`
+  replaces the whole set: release the old rows before inserting the new ones.
+- **Advances.** An application may be for nothing (a second advance on a proforma whose bill the
+  first one covered).
+- **Undoing imported opening stock** is a `REVERSAL_OUT` that names no single movement.
 
 ## Known limits
 
@@ -136,8 +145,6 @@ application may not do that at all). Each named rule sets the `constraint` field
 - **`document_settlements` holds sales bills only.** Purchase bills and credit and debit notes
   join from their own lanes. Until then an allocation against one of those is recorded and capped
   by the payment's amount, but not by the document's value.
-- **Money refunded out of an unused receipt** (`payments.refund_of`) is capped by the service, not
-  by a database figure.
 - **Serial numbers** are kept on the movement as a list. "This serial is in stock" is still worked
   out by the inventory service from the movements.
 - **Reserved stock can exceed stock on hand** as far as the database is concerned; the inventory
