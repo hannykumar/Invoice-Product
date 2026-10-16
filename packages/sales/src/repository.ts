@@ -8,7 +8,7 @@
 import { conflict, notFound, type CompanyId } from '@invoice/kernel';
 import type { TransactionParticipant } from '@invoice/ledger';
 import type { SalesInvoice } from './model.ts';
-import type { SalesRepository } from './ports.ts';
+import { pageOf, type Page, type SalesRepository } from './ports.ts';
 
 interface State {
   invoices: SalesInvoice[];
@@ -87,12 +87,13 @@ export class InMemorySalesRepository implements SalesRepository, TransactionPart
   async list(
     companyId: CompanyId,
     filter: { partyId?: string; state?: SalesInvoice['state'] } = {},
+    page?: Page,
   ): Promise<SalesInvoice[]> {
-    return this.#state.invoices.filter(
+    return pageOf(this.#state.invoices.filter(
       (i) =>
         i.companyId === companyId &&
         (filter.partyId === undefined || i.partyId === filter.partyId) &&
         (filter.state === undefined || i.state === filter.state),
-    );
+    ), page);
   }
 }

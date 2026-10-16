@@ -7,6 +7,7 @@
  */
 import { conflict, notFound, type CompanyId } from '@invoice/kernel';
 import type { TransactionParticipant } from '@invoice/ledger';
+import { pageOf, type Page } from '@invoice/sales';
 import type { Reservation, StockMovement } from './model.ts';
 import type { InventoryStore, MovementFilter, MovementRepository, ReservationRepository } from './ports.ts';
 
@@ -49,8 +50,8 @@ export class InMemoryInventoryStore implements InventoryStore, TransactionPartic
     },
     findById: async (companyId: CompanyId, id: string): Promise<StockMovement | null> =>
       this.#state.movements.find((m) => m.companyId === companyId && m.id === id) ?? null,
-    list: async (companyId: CompanyId, filter: MovementFilter = {}): Promise<StockMovement[]> =>
-      this.#state.movements.filter(
+    list: async (companyId: CompanyId, filter: MovementFilter = {}, page?: Page): Promise<StockMovement[]> =>
+      pageOf(this.#state.movements.filter(
         (m) =>
           m.companyId === companyId &&
           (filter.itemId === undefined || m.itemId === filter.itemId) &&
@@ -58,9 +59,9 @@ export class InMemoryInventoryStore implements InventoryStore, TransactionPartic
           (filter.batchId === undefined || m.batchId === filter.batchId) &&
           (filter.from === undefined || m.documentDate >= filter.from) &&
           (filter.to === undefined || m.documentDate <= filter.to),
-      ),
-    listBySource: async (companyId: CompanyId, sourceKind: string, sourceId: string): Promise<StockMovement[]> =>
-      this.#state.movements.filter((m) => m.companyId === companyId && m.source.kind === sourceKind && m.source.id === sourceId),
+      ), page),
+    listBySource: async (companyId: CompanyId, sourceKind: string, sourceId: string, page?: Page): Promise<StockMovement[]> =>
+      pageOf(this.#state.movements.filter((m) => m.companyId === companyId && m.source.kind === sourceKind && m.source.id === sourceId), page),
   };
 
   readonly reservations: ReservationRepository = {
@@ -81,16 +82,17 @@ export class InMemoryInventoryStore implements InventoryStore, TransactionPartic
     listHeld: async (
       companyId: CompanyId,
       filter: { itemId?: string; warehouseId?: string; batchId?: string | null } = {},
+      page?: Page,
     ): Promise<Reservation[]> =>
-      this.#state.reservations.filter(
+      pageOf(this.#state.reservations.filter(
         (r) =>
           r.companyId === companyId &&
           r.state === 'HELD' &&
           (filter.itemId === undefined || r.itemId === filter.itemId) &&
           (filter.warehouseId === undefined || r.warehouseId === filter.warehouseId) &&
           (filter.batchId === undefined || r.batchId === filter.batchId),
-      ),
-    listForDocument: async (companyId: CompanyId, documentId: string): Promise<Reservation[]> =>
-      this.#state.reservations.filter((r) => r.companyId === companyId && r.documentId === documentId),
+      ), page),
+    listForDocument: async (companyId: CompanyId, documentId: string, page?: Page): Promise<Reservation[]> =>
+      pageOf(this.#state.reservations.filter((r) => r.companyId === companyId && r.documentId === documentId), page),
   };
 }
