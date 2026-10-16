@@ -17,7 +17,7 @@ export const stockEverything = async (authorization: string | undefined): Promis
   const runtime = apiRuntime();
   let context;
   try {
-    context = runtime.authenticate(authorization);
+    context = await runtime.authenticate(authorization);
   } catch {
     return; // not signed in: the request will be refused on its own, which is what it tests
   }
