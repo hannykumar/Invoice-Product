@@ -72,21 +72,38 @@ export interface ReminderTransport {
   send(actor: ActorContext, message: ReminderMessage): Promise<ReminderOutcome>;
 }
 
+/**
+ * Issue #366 — one page of a list. `after` is the last item of the previous page: a reminder's,
+ * promise's or dispute's `id`, or a preference's `channel`. Omitted, a list returns everything.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
+/**
+ * Lists are ordered by a stable key: reminders newest first (`scheduledAt`, then `id`, both
+ * descending), promises by `recordedAt` then `id`, disputes by `raisedAt` then `id`, preferences by
+ * `channel`.
+ *
+ * `insert` refuses a second reminder with the same id or key (`REMINDER_DUPLICATE`); `update`
+ * refuses one that was never inserted (`REMINDER_NOT_FOUND`).
+ */
 export interface ReminderRepository {
   insert(reminder: Reminder): Promise<void>;
   update(reminder: Reminder): Promise<void>;
   findByKey(companyId: CompanyId, key: string): Promise<Reminder | null>;
   findById(companyId: CompanyId, id: string): Promise<Reminder | null>;
-  list(companyId: CompanyId): Promise<readonly Reminder[]>;
+  list(companyId: CompanyId, page?: Page): Promise<readonly Reminder[]>;
 
   savePreference(preference: ContactPreference): Promise<void>;
-  preferences(companyId: CompanyId, partyId: PartyId): Promise<readonly ContactPreference[]>;
+  preferences(companyId: CompanyId, partyId: PartyId, page?: Page): Promise<readonly ContactPreference[]>;
   saveOptOut(optOut: OptOut): Promise<void>;
   removeOptOut(companyId: CompanyId, partyId: PartyId): Promise<void>;
   optOut(companyId: CompanyId, partyId: PartyId): Promise<OptOut | null>;
 
   savePromise(promise: PromiseToPay): Promise<void>;
-  promises(companyId: CompanyId): Promise<readonly PromiseToPay[]>;
+  promises(companyId: CompanyId, page?: Page): Promise<readonly PromiseToPay[]>;
   saveDispute(dispute: Dispute): Promise<void>;
-  disputes(companyId: CompanyId): Promise<readonly Dispute[]>;
+  disputes(companyId: CompanyId, page?: Page): Promise<readonly Dispute[]>;
 }
