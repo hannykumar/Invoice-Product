@@ -4,7 +4,8 @@
 // receipt can put back exactly what it took in.
 
 import type { CompanyId } from "@invoice/kernel";
-import type { GoodsReceipt, MatchApproval, MatchTolerancePolicy, PurchaseOrder } from "./matching-types.ts";
+import type { GoodsReceipt, MatchApproval, MatchResult, MatchTolerancePolicy, PurchaseOrder } from "./matching-types.ts";
+import type { Page } from "./paging.ts";
 
 export interface PurchaseOrderRepository {
   insert(order: PurchaseOrder): Promise<void>;
@@ -12,8 +13,8 @@ export interface PurchaseOrderRepository {
   findById(companyId: CompanyId, id: string): Promise<PurchaseOrder | null>;
   /** One order per number per company; this is what stops the same order being raised twice. */
   findByNumber(companyId: CompanyId, orderNumber: string): Promise<PurchaseOrder | null>;
-  listForParty(companyId: CompanyId, partyId: string): Promise<PurchaseOrder[]>;
-  list(companyId: CompanyId): Promise<PurchaseOrder[]>;
+  listForParty(companyId: CompanyId, partyId: string, page?: Page): Promise<PurchaseOrder[]>;
+  list(companyId: CompanyId, page?: Page): Promise<PurchaseOrder[]>;
 }
 
 export interface GoodsReceiptRepository {
@@ -21,14 +22,18 @@ export interface GoodsReceiptRepository {
   update(receipt: GoodsReceipt): Promise<void>;
   findById(companyId: CompanyId, id: string): Promise<GoodsReceipt | null>;
   findByNumber(companyId: CompanyId, receiptNumber: string): Promise<GoodsReceipt | null>;
-  listForOrder(companyId: CompanyId, orderId: string): Promise<GoodsReceipt[]>;
-  listForParty(companyId: CompanyId, partyId: string): Promise<GoodsReceipt[]>;
-  list(companyId: CompanyId): Promise<GoodsReceipt[]>;
+  listForOrder(companyId: CompanyId, orderId: string, page?: Page): Promise<GoodsReceipt[]>;
+  listForParty(companyId: CompanyId, partyId: string, page?: Page): Promise<GoodsReceipt[]>;
+  list(companyId: CompanyId, page?: Page): Promise<GoodsReceipt[]>;
 }
 
 /** Approvals of a held match, kept apart because they answer for a decision, not a document. */
 export interface MatchApprovalRepository {
-  insert(companyId: CompanyId, approval: MatchApproval): Promise<void>;
+  /**
+   * `match` names the bill the decision was about (#366). The stored row has always had a place
+   * for it, and an approval of an overcharge that cannot say which bill it was is no record at all.
+   */
+  insert(companyId: CompanyId, approval: MatchApproval, match: Pick<MatchResult, "purchaseId" | "invoiceNumber">): Promise<void>;
   findByFingerprint(companyId: CompanyId, fingerprint: string): Promise<MatchApproval | null>;
 }
 
