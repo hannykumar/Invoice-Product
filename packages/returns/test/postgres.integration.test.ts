@@ -9,7 +9,8 @@
  * pass there by not running.
  */
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { randomBytes } from 'node:crypto';
+import test, { after, before } from 'node:test';
 import { fixedClock, isoDate, money, quantityFromString, rupees, type AccountId, type CompanyId, type PartyId } from '@invoice/kernel';
 import {
   buildDefaultChart, InMemoryAuditPort, LedgerService, PostgresLedgerStore, permissionPortFromActor, type ActorContext,
@@ -18,6 +19,8 @@ import {
   noReturnInventory, PostgresReturnNoteRepository, ReturnService,
   type OriginalPurchaseDocument, type OriginalReturnLine, type OriginalSalesDocument,
 } from '../src/index.ts';
+import type { TransactionalExecutor } from '../../platform/src/database.ts';
+import { returnsContract, type ReturnsHarness } from './returns-contract.ts';
 
 const url = process.env.DATABASE_URL;
 if (url === undefined && process.env.CI !== undefined) throw new Error('DATABASE_URL must be set in CI so the return-note database test runs.');
@@ -125,4 +128,97 @@ test('note numbers run through one financial year on PostgreSQL without a unique
   } finally {
     await db.close();
   }
+});
+
+// Issue #366 — the repository contract, on a login that is only a member of invoice_app, so
+// row-level security is really in force. The owner connection only sets the scene.
+const skip = url === undefined && 'DATABASE_URL is not set';
+const login = `invoice_app_returns_${randomBytes(6).toString('hex')}`;
+let owner: TransactionalExecutor;
+let app: TransactionalExecutor;
+let harness: ReturnsHarness;
+
+before(async () => {
+  if (url === undefined) return;
+  const { createDatabase } = await import('../../platform/src/database.ts');
+  const { migrate } = await import('../../platform/src/migrations.ts');
+  owner = createDatabase(url);
+  await migrate(owner);
+  const password = randomBytes(18).toString('hex');
+  await owner.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' IN ROLE invoice_app`);
+  const appUrl = new URL(url);
+  appUrl.username = login;
+  appUrl.password = password;
+  app = createDatabase(appUrl.toString());
+  const store = new PostgresLedgerStore(app);
+  harness = {
+    repository: new PostgresReturnNoteRepository(store),
+    unitOfWork: (companyId, work) => store.transaction(companyId, () => work()),
+    company: async () => {
+      const ids = {
+        companyId: crypto.randomUUID() as CompanyId, partyId: crypto.randomUUID() as PartyId, itemId: crypto.randomUUID(),
+        warehouseId: crypto.randomUUID(), userId: crypto.randomUUID() as ActorContext['userId'],
+      };
+      await owner.query('INSERT INTO companies (id, legal_name) VALUES ($1, $2)', [ids.companyId, 'Synthetic Returns Traders']);
+      await owner.query('INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)', [ids.userId, `returns-${ids.userId}@example.invalid`, 'Synthetic clerk']);
+      for (const [id, kind] of [[ids.partyId, 'party'], [ids.itemId, 'item'], [ids.warehouseId, 'warehouse']]) {
+        await owner.query('INSERT INTO master_records (id, company_id, kind) VALUES ($1, $2, $3)', [id, ids.companyId, kind]);
+      }
+      return ids;
+    },
+  };
+});
+after(async () => {
+  await app?.close();
+  if (owner !== undefined) { await owner.query(`DROP ROLE IF EXISTS ${login}`); await owner.close(); }
+});
+
+returnsContract('postgres', () => harness, skip);
+
+test('postgres: a write outside a unit of work throws NO_UNIT_OF_WORK and saves nothing', { skip }, async () => {
+  const scene = await harness.company();
+  const id = crypto.randomUUID();
+  const line = {
+    originalLineId: 'line-1', itemId: scene.itemId, description: 'Synthetic bars', supplyKind: 'GOODS' as const,
+    quantity: quantityFromString('1', 'NOS'), disposition: 'ACCEPTED' as const, warehouseId: scene.warehouseId, batchId: null,
+    serialNumbers: [], replacementSerialNumbers: [], hsnOrSac: null, ratePercentTimes100: null, unitPrice: null,
+    amounts: { taxableValue: rupees(1), cgst: money(0n), sgst: money(0n), utgst: money(0n), igst: money(0n), cess: money(0n), ineligibleTax: money(0n), reverseChargeTax: money(0n), total: rupees(1) },
+  };
+  const note = {
+    id, companyId: scene.companyId, kind: 'PURCHASE_RETURN' as const, number: 'DN/26-27/0000001', documentDate: isoDate('2026-04-10'),
+    originalDocument: { id: 'bill-1', number: 'SUP/1', date: isoDate('2026-04-05') }, partyId: scene.partyId, reason: 'Synthetic',
+    lines: [line], totals: line.amounts, voucherId: crypto.randomUUID() as never, complianceStatus: 'NOT_APPLICABLE' as const,
+    createdBy: scene.userId, createdAt: '2026-04-10T05:30:00.000Z', idempotencyKey: `outside-${id}`, summary: 'Synthetic', supplierCreditNote: null,
+  };
+  const noUnitOfWork = (error: unknown) => (error as { code?: string }).code === 'NO_UNIT_OF_WORK';
+  await assert.rejects(harness.repository.insert(note), noUnitOfWork);
+  assert.equal(await harness.repository.findById(scene.companyId, id), null);
+  await harness.unitOfWork(scene.companyId, () => harness.repository.insert(note));
+  await assert.rejects(harness.repository.setSupplierCreditNote(scene.companyId, id, { number: 'S-1', date: isoDate('2026-04-12') }), noUnitOfWork);
+  assert.equal((await harness.repository.findById(scene.companyId, id))?.supplierCreditNote, null);
+});
+
+test('postgres: a line is an item or a charge, never both and never neither', { skip }, async () => {
+  const scene = await harness.company();
+  const noteId = crypto.randomUUID();
+  await app.unitOfWork(scene.companyId, ({ sql }) => sql.query(
+    `INSERT INTO return_notes (id, company_id, kind, number, document_date, original_document_id, original_document_number,
+       original_document_date, party_id, reason, taxable_value_paise, total_paise, voucher_id, compliance_status, created_by,
+       idempotency_key, summary)
+     VALUES ($1, $2, 'SALES_RETURN', 'CN/26-27/0000001', '2026-04-10', 'sale-1', 'INV/1', '2026-04-05', $3, 'Synthetic', 0, 0, $4,
+       'NOT_APPLICABLE', $5, 'check', 'Synthetic')`,
+    [noteId, scene.companyId, scene.partyId, crypto.randomUUID(), scene.userId],
+  ));
+  const line = (lineId: string, itemId: string | null, chargeKind: string | null) => app.unitOfWork(scene.companyId, ({ sql }) => sql.query(
+    `INSERT INTO return_note_lines (return_note_id, company_id, original_line_id, item_id, charge_kind, description, supply_kind,
+       quantity_micro, quantity_unit, disposition, taxable_value_paise, total_paise)
+     VALUES ($1, $2, $3, $4, $5, 'Synthetic', 'SERVICES', 1, 'NOS', 'ACCEPTED', 0, 0)`,
+    [noteId, scene.companyId, lineId, itemId, chargeKind],
+  ));
+  const refused = (error: unknown) => (error as { code?: string }).code === '23514';
+  await assert.rejects(line('both', scene.itemId, 'freight'), refused);
+  await assert.rejects(line('neither', null, null), refused);
+  await assert.rejects(line('bad-kind', null, 'Freight!'), refused);
+  await line('item', scene.itemId, null);
+  await line('charge', null, 'other');
 });
