@@ -2,9 +2,11 @@
  * Issue #367 — the books stay right under pressure, on PostgreSQL, with real parallel connections.
  *
  * "Two servers" are two connection pools, or two operating-system processes, against one database.
- * Nothing here relies on the per-company lock of #363 alone: the stock and the money each have a
- * database rule that refuses the wrong outcome even if a path forgot to take that lock
- * (sales-schema-v1). These tests show the whole system holding, through the real services.
+ * The per-company lock of #363 serialises one company's writes. Beneath it, each guarantee also has
+ * its own: stock on hand and the money have database rules (sales-schema-v1), bill numbers come
+ * from one locked counter row, a hold locks the balance rows it reads, and a repeated request racing
+ * its twin is answered with the saved bill. These tests show the whole system holding, through the
+ * real services.
  *
  * The fourth "Done when" of #367 — two parallel allocations of one payment never exceed it — is
  * proven by `packages/receivables/test/receivables-contract.*` (the same payment twice, and two
@@ -146,7 +148,7 @@ test('a lock that is not free in time is a plain "please try again", and nothing
   });
   await assert.rejects(sale, (error: unknown) => {
     assert.equal((error as { code?: string }).code, 'TRY_AGAIN');
-    assert.match((error as Error).message, /Please try again/);
+    assert.match((error as Error).message, /did not go through.*Please try again/);
     return true;
   });
   release();
@@ -155,4 +157,30 @@ test('a lock that is not free in time is a plain "please try again", and nothing
   // The retry, once the counter is free, goes through as the first bill.
   const retried = await shop.a.recordSale('waits-too-long', '1');
   assert.equal(retried.invoice.number, 'INV/26-27/000001');
+});
+
+test('"Issue" pressed twice on one bill, landing on two servers: both are answered with the issued bill, and no stock stays held', { skip }, async () => {
+  const shop = await newShop('10');
+  for (let round = 0; round < 5; round += 1) {
+    const draft = await serverA.unitOfWork(shop.ids.companyId, () => shop.a.sales.createDraft(shop.a.actor, {
+      idempotencyKey: `twice-${round}`,
+      input: {
+        partyId: shop.a.customerId as never, customerType: 'B2B', supplyKind: 'GOODS', documentDate: '2026-04-10' as never,
+        lines: [{ lineId: 'l1', itemId: shop.a.itemId, quantity: { scaled: 1_000_000n, unit: 'PCS' }, unitPrice: { minor: 33_333n, currency: 'INR' } as never, priceBasis: 'EXCLUSIVE' }],
+      },
+    }));
+    // Called as the API calls it: finalise opens its own units of work (the hold, then the bill), so
+    // the two presses really do interleave between them.
+    const presses = await Promise.allSettled([shop.a, shop.b].map((server) =>
+      server.sales.finalise(server.actor, { idempotencyKey: `twice-${round}-final`, invoiceId: draft.id })));
+    assert.deepEqual(presses.map((p) => p.status), ['fulfilled', 'fulfilled'], presses.map((p) => (p.status === 'rejected' ? codeOf(p) : 'ok')).join(', '));
+    const numbers = presses.map((p) => (p as PromiseFulfilledResult<{ invoice: { number: string | null } }>).value.invoice.number);
+    assert.equal(numbers[0], numbers[1], 'both presses name the same bill');
+  }
+  const counts = await scalar(shop.ids.companyId, `SELECT
+      (SELECT count(*)::int FROM sales_invoices WHERE company_id = $1 AND state = 'FINAL') AS bills,
+      (SELECT count(*)::int FROM stock_movements WHERE company_id = $1 AND kind = 'SALE_OUT') AS movements,
+      (SELECT count(*)::int FROM stock_reservations WHERE company_id = $1 AND state = 'HELD') AS still_held`);
+  assert.deepEqual(counts, { bills: 5, movements: 5, still_held: 0 });
+  assert.equal(await onHand(shop.ids.companyId), 5_000_000);
 });

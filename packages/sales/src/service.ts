@@ -151,7 +151,9 @@ export class SalesService {
     }
 
     const existing = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
-    if (existing !== null) return existing;
+    // Issue #367 — a first attempt can save the draft and then fail before pricing it (TRY_AGAIN);
+    // its retry finishes the job rather than handing back a bill with no figures.
+    if (existing !== null) return existing.state === 'DRAFT' && existing.pricing === null ? this.#priceInternal(actor, existing) : existing;
 
     const input = command.input;
     const invoice = this.#newDraft(actor, input, command.idempotencyKey);
@@ -575,65 +577,77 @@ export class SalesService {
     }
 
     const at = this.#clock.now().toISOString();
-    const outcome = await this.#store.transaction(actor.companyId, async (uow) => {
-      const sequence = await uow.sequences.next(actor.companyId, seriesScope(this.#policy.series, priced.documentDate));
-      const number = formatNumber(this.#policy.series, priced.documentDate, sequence);
+    let outcome;
+    try {
+      outcome = await this.#store.transaction(actor.companyId, async (uow) => {
+        const sequence = await uow.sequences.next(actor.companyId, seriesScope(this.#policy.series, priced.documentDate));
+        const number = formatNumber(this.#policy.series, priced.documentDate, sequence);
 
-      const lines = await buildSalePosting(uow.accounts, actor.companyId, priced.partyId, priced.supplyKind, pricing);
-      const posted = await this.#ledger.postVoucherIn(uow, actor, {
-        idempotencyKey: `sales:finalise:${priced.id}`,
-        type: 'SALE',
-        date: priced.documentDate,
-        narration: priced.narration ?? `Bill ${number}`,
-        source: { kind: 'sales_invoice', id: priced.id, number },
-        lines,
-      });
+        const lines = await buildSalePosting(uow.accounts, actor.companyId, priced.partyId, priced.supplyKind, pricing);
+        const posted = await this.#ledger.postVoucherIn(uow, actor, {
+          idempotencyKey: `sales:finalise:${priced.id}`,
+          type: 'SALE',
+          date: priced.documentDate,
+          narration: priced.narration ?? `Bill ${number}`,
+          source: { kind: 'sales_invoice', id: priced.id, number },
+          lines,
+        });
 
-      const final: SalesInvoice = {
-        ...priced,
-        state: 'FINAL',
-        number,
-        // From the date, never scraped out of the printed number: the number writes the year short.
-        financialYear: financialYearOf(priced.documentDate),
-        voucherId: posted.voucher.id,
-        finalisedBy: actor.userId,
-        finalisedAt: at,
-        approvedBy: priced.state === 'PENDING_APPROVAL' ? actor.userId : null,
-        approvedAt: priced.state === 'PENDING_APPROVAL' ? at : null,
-        version: priced.version + 1,
-      };
-      // Issue #229 — the goods leave the godown in this same unit of work. If they cannot (someone
-      // else took them in the meantime), the bill is not issued, no number is used up and no entry
-      // is posted. Issuing is keyed on the bill's lines, so a second press moves nothing twice.
-      if (final.supplyKind === 'GOODS') {
-        await this.#inventory.issue(actor, final.id, final.documentDate, number);
-      }
-      await this.#repo.update(final, priced.version);
-      // Issue #363 — the audit records and the government request are part of the same unit of
-      // work as the bill: a crash or a rollback leaves none of them behind. The compliance hook
-      // only queues its request here (it runs with the transaction open); the request itself is
-      // sent after the commit, so the books never wait for a government service and a failure
-      // there never unmakes the bill (issue #46, `gov.service_unavailable`).
-      if (!posted.deduplicated) await this.#ledger.recordPosted(actor, posted.voucher);
-      await this.#audit.record({
-        companyId: actor.companyId,
-        actorId: actor.userId,
-        at,
-        action: 'sales.invoice_finalised',
-        subjectType: 'sales_invoice',
-        subjectId: final.id,
-        summary: `Bill ${final.number} issued for ${formatINR(pricing.totals.invoiceValue)}.`,
-        details: {
-          number: final.number ?? '',
-          value: toDecimalString(pricing.totals.invoiceValue),
+        const final: SalesInvoice = {
+          ...priced,
+          state: 'FINAL',
+          number,
+          // From the date, never scraped out of the printed number: the number writes the year short.
+          financialYear: financialYearOf(priced.documentDate),
           voucherId: posted.voucher.id,
-          placeOfSupply: pricing.placeOfSupplyStateCode,
-          split: pricing.split,
-        },
+          finalisedBy: actor.userId,
+          finalisedAt: at,
+          approvedBy: priced.state === 'PENDING_APPROVAL' ? actor.userId : null,
+          approvedAt: priced.state === 'PENDING_APPROVAL' ? at : null,
+          version: priced.version + 1,
+        };
+        // Issue #229 — the goods leave the godown in this same unit of work. If they cannot (someone
+        // else took them in the meantime), the bill is not issued, no number is used up and no entry
+        // is posted. Issuing is keyed on the bill's lines, so a second press moves nothing twice.
+        if (final.supplyKind === 'GOODS') {
+          await this.#inventory.issue(actor, final.id, final.documentDate, number);
+        }
+        await this.#repo.update(final, priced.version);
+        // Issue #363 — the audit records and the government request are part of the same unit of
+        // work as the bill: a crash or a rollback leaves none of them behind. The compliance hook
+        // only queues its request here (it runs with the transaction open); the request itself is
+        // sent after the commit, so the books never wait for a government service and a failure
+        // there never unmakes the bill (issue #46, `gov.service_unavailable`).
+        if (!posted.deduplicated) await this.#ledger.recordPosted(actor, posted.voucher);
+        await this.#audit.record({
+          companyId: actor.companyId,
+          actorId: actor.userId,
+          at,
+          action: 'sales.invoice_finalised',
+          subjectType: 'sales_invoice',
+          subjectId: final.id,
+          summary: `Bill ${final.number} issued for ${formatINR(pricing.totals.invoiceValue)}.`,
+          details: {
+            number: final.number ?? '',
+            value: toDecimalString(pricing.totals.invoiceValue),
+            voucherId: posted.voucher.id,
+            placeOfSupply: pricing.placeOfSupplyStateCode,
+            split: pricing.split,
+          },
+        });
+        const registrations = await this.#compliance.onInvoiceFinalised(final);
+        return { final, voucher: posted.voucher, deduplicated: posted.deduplicated, registrations };
       });
-      const registrations = await this.#compliance.onInvoiceFinalised(final);
-      return { final, voucher: posted.voucher, deduplicated: posted.deduplicated, registrations };
-    });
+    } catch (error) {
+      // Issue #367 — "Issue" pressed twice: both requests got this far, one issued the bill and the
+      // other found it changed underneath it. The bill it was asked to issue is issued, so that is
+      // the answer, as a later retry would get; any stock it held for itself goes back on the shelf.
+      if (!(error instanceof DomainError && error.code === 'SALES_CONCURRENT_EDIT')) throw error;
+      const now = await this.#repo.findById(actor.companyId, priced.id);
+      if (now === null || now.state !== 'FINAL') throw error;
+      if (now.supplyKind === 'GOODS') await this.#inventory.release(actor, now.id);
+      return { invoice: now, voucherId: now.voucherId as VoucherId, deduplicated: true, registrations: [] };
+    }
     const registrations = outcome.registrations;
 
     return {

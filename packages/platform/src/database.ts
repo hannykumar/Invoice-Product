@@ -41,6 +41,9 @@ const current = new AsyncLocalStorage<Open>();
 const COMPANY_WRITE_LOCK = 363;
 /** lock_not_available (lock_timeout), deadlock_detected, serialization_failure. */
 const TRY_AGAIN = new Set(["55P03", "40P01", "40001"]);
+/** What this step tried did not happen. Earlier steps of a longer action may have; the retry with the same key finishes the job. */
+const busy = (cause: unknown): PlatformError =>
+  new PlatformError("TRY_AGAIN", "This did not go through because a lot is being saved in this shop at the same moment. Please try again.", { cause });
 
 /** Runs `work` as if no unit of work were open: the outbox relay must never join a caller's transaction. */
 export const outsideUnitOfWork = <T>(work: () => T): T => current.exit(work);
@@ -85,7 +88,14 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
   };
 
   const run = async <T>(companyId: string | undefined, asUnit: boolean, work: (open: Open | undefined, sql: SqlExecutor) => Promise<T>): Promise<T> => {
-    const client: PoolClient = await pool.connect();
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      // Issue #367 — every connection busy for longer than connectionTimeoutMillis: a burst, not a fault.
+      if (error instanceof Error && /timeout exceeded when trying to connect/i.test(error.message)) throw busy(error);
+      throw error;
+    }
     let finished = false;
     // One connection runs one statement at a time, so reads started together wait their turn.
     let queue: Promise<unknown> = Promise.resolve();
@@ -135,7 +145,7 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
       // shopkeeper's mistake and nothing was saved. Say so plainly; the caller retries with the same
       // idempotency key (ADR 0363: the platform never re-runs an action itself).
       if (asUnit && TRY_AGAIN.has(String((error as { code?: unknown }).code))) {
-        throw new PlatformError("TRY_AGAIN", "Too many people were saving in this shop at the same moment, so nothing was saved. Please try again.", { cause: error });
+        throw busy(error);
       }
       throw error;
     } finally {

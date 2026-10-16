@@ -65,6 +65,8 @@ const statusOf = (error: unknown): number | undefined => {
     if (error.code === 'FORBIDDEN') return 403;
     if (error.code === 'NOT_FOUND' || error.code === 'TENANT_ISOLATION') return 404;
     if (error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED') return 401;
+    // Issue #367 — the shop is busy; nothing in the request was wrong.
+    if (error.code === 'TRY_AGAIN') return 503;
     return 409;
   }
   if (isMeantForTheScreen(error)) return 400;
