@@ -2,6 +2,7 @@
 import type { CompanyId, IsoDate, Money } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
 import type { UnitRegistry } from '../../masters/src/units.ts';
+import type { Page } from '@invoice/sales';
 import type { Reservation, StockMovement } from './model.ts';
 
 /** What #5 knows about an item that stock cares about. */
@@ -37,16 +38,17 @@ export interface MovementRepository {
   insert(movement: StockMovement): Promise<void>;
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<StockMovement | null>;
   findById(companyId: CompanyId, id: string): Promise<StockMovement | null>;
-  list(companyId: CompanyId, filter?: MovementFilter): Promise<StockMovement[]>;
-  listBySource(companyId: CompanyId, sourceKind: string, sourceId: string): Promise<StockMovement[]>;
+  /** Issue #366 — `page` is optional keyset paging in id order (`Page` in @invoice/sales); without it, every row. */
+  list(companyId: CompanyId, filter?: MovementFilter, page?: Page): Promise<StockMovement[]>;
+  listBySource(companyId: CompanyId, sourceKind: string, sourceId: string, page?: Page): Promise<StockMovement[]>;
 }
 
 export interface ReservationRepository {
   insert(reservation: Reservation): Promise<void>;
   update(reservation: Reservation): Promise<void>;
   findById(companyId: CompanyId, id: string): Promise<Reservation | null>;
-  listHeld(companyId: CompanyId, filter?: { itemId?: string; warehouseId?: string; batchId?: string | null }): Promise<Reservation[]>;
-  listForDocument(companyId: CompanyId, documentId: string): Promise<Reservation[]>;
+  listHeld(companyId: CompanyId, filter?: { itemId?: string; warehouseId?: string; batchId?: string | null }, page?: Page): Promise<Reservation[]>;
+  listForDocument(companyId: CompanyId, documentId: string, page?: Page): Promise<Reservation[]>;
 }
 
 export interface InventoryStore {

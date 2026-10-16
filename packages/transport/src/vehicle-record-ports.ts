@@ -13,6 +13,7 @@ import type {
   VehicleRecordProvenance, VehicleRecordSnapshot, VehicleRecordUnavailableCode,
 } from "./vehicle-record-types.ts";
 import type { VehicleEvidence } from "./suitability-types.ts";
+import type { Page } from "./ports.ts";
 
 /**
  * One approved provider of vehicle records.
@@ -69,8 +70,11 @@ export type VehicleRecordProviderOutcome =
 export interface VehicleRecordCacheRepository {
   find(companyId: CompanyId, registrationNumber: string): Promise<VehicleRecordSnapshot | null>;
   save(snapshot: VehicleRecordSnapshot): Promise<void>;
-  /** Everything held for a company, for the "what do you know about me" screen and for deletion. */
-  list(companyId: CompanyId): Promise<readonly VehicleRecordSnapshot[]>;
+  /**
+   * Everything held for a company, for the "what do you know about me" screen and for deletion.
+   * A page is in vehicle-number order; `page.after` is the vehicle number of the last reading of the page before.
+   */
+  list(companyId: CompanyId, page?: Page): Promise<readonly VehicleRecordSnapshot[]>;
   /** Removes a reading. Used when consent is withdrawn, and by the retention sweep. */
   forget(companyId: CompanyId, registrationNumber: string): Promise<void>;
 }

@@ -76,7 +76,7 @@ const PLATFORM_RLS = ["audit_events", "command_records", "idempotency_keys", "ex
 /** The only tables the application may delete from: none of them holds a financial or audit record. */
 const APP_MAY_DELETE = ["user_branch_access"] as const;
 
-const tenantPolicy = (table: string): string => `
+export const tenantPolicy = (table: string): string => `
     ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
     ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
     CREATE POLICY ${table}_tenant ON ${table}

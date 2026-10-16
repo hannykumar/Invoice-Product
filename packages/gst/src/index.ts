@@ -6,6 +6,7 @@ export * from "./payload.ts";
 export * from "./einvoice-ports.ts";
 export * from "./einvoice-service.ts";
 export * from "./einvoice-adapters.ts";
+export * from "./einvoice-postgres.ts";
 export * from "./sandbox-gstins.ts";
 export * from "./environments.ts";
 export * from "./whitebooks-connector.ts";

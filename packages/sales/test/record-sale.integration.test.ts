@@ -125,7 +125,7 @@ test('the IRN request is sent only after the sale has committed, and never for a
   // The mock IRP: at the moment it is called, it looks for the bill on a connection of its own.
   const handlers = {
     'einvoice.generate': async (message: OutboxMessage) => {
-      const { rows } = await db.tenantTransaction(ids.companyId, (sql) => sql.query("SELECT 1 FROM uow_pilot_sales_invoices WHERE id = $1 AND state = 'FINAL'", [message.payload.invoiceId]));
+      const { rows } = await db.tenantTransaction(ids.companyId, (sql) => sql.query("SELECT 1 FROM sales_invoices WHERE id = $1 AND state = 'FINAL'", [message.payload.invoiceId]));
       requests.push({ number: message.payload.number, billWasCommitted: rows.length === 1 });
     },
   };

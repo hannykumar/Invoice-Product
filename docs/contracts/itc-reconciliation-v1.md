@@ -102,6 +102,30 @@ it is wrong.
 | `ItcClaimRepository` | this module | The by-construction guard against putting one bill's credit into two periods |
 | `ItcPolicyPort` | company setting | Amount tolerance, date window, whether an at-risk claim is allowed at all |
 
+### Storage (issue #366)
+
+Each of the four repositories has an in-memory store (`adapters.ts`) and a PostgreSQL one
+(`postgres-repository.ts`: `PostgresPortalRecords`, `PostgresImportBatches`, `PostgresItcDecisions`,
+`PostgresItcClaims`). One suite, `test/itc-repository-contract.ts`, runs on both.
+
+- **Writes need the action's unit of work** ([`unit-of-work-v1`](./unit-of-work-v1.md)). Outside one
+  they throw `NO_UNIT_OF_WORK`. `importFile`, `addTypedRecord`, `decide` and `claimPeriod` must
+  each be wrapped in `db.unitOfWork(companyId, …)` by the caller (#340). `fetchFromPortal` calls
+  the portal and then saves, and a unit of work must not be held open across a call out: #340 has
+  to decide how the download and the save are separated before that path runs on PostgreSQL.
+- **Ids are UUIDs** for import batches, decisions and claims (the service's default `idFactory`). A
+  portal row's id is `<batch id>:<row>`.
+- **Lists are in the order the rows were written**, and every list method takes an optional last
+  argument `page?: { limit, after }`, where `after` is the `id` of the last row of the page before.
+  Left out, the method returns everything, as before.
+- **Duplicates are refused, not doubled:** a second batch for the same file and month is
+  `ITC_IMPORT_DUPLICATE`; a second decision with the same idempotency key is
+  `ITC_DECISION_DUPLICATE` (both `CONFLICT`). The service looks first, so a person never sees either;
+  they are what two simultaneous requests get. A second claim for the same bill is not an error: the
+  first is returned with `inserted: false`.
+- Nothing is deleted. Import batches, decisions and claims are only ever added to (#368); a portal
+  row is replaced in place by a later reading of the same document.
+
 ## What other modules read
 
 - **#30 (GST returns)** consumes `itcInwardTaxPort`, which satisfies its existing `InwardTaxPort`.
