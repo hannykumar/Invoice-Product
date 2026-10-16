@@ -238,7 +238,7 @@ export function platformContract(label: string, harness: () => PlatformHarness, 
     const { h, companyId, branchId, userId } = await member([]);
     const auth = h.auth(() => now);
     const idle = await auth.createSession(companyId, branchId, userId);
-    const busy = await auth.createSession(companyId, branchId, userId, SESSION_IDLE_MS * 3);
+    const busy = await auth.createSession(companyId, branchId, userId, 26 * 60 * 60 * 1000);
     for (let hour = 0; hour < 24; hour += 6) { now += 6 * 60 * 60 * 1000; await auth.authenticate(busy.id); }
     await assert.rejects(attempt(() => auth.authenticate(idle.id)), code("SESSION_EXPIRED"), "unused for 24 hours");
     now += 6 * 60 * 60 * 1000;
