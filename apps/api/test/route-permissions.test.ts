@@ -1,12 +1,12 @@
 /**
  * Issue #280 — every POST route is refused to a read-only viewer unless it is on the allow-list
- * below. The routes are read out of server.ts itself, so a route added tomorrow is walked too: if it
- * has no permission in POST_PERMISSIONS and is not allow-listed here, this file fails.
+ * below. Issue #344: the routes are read from the route table `ROUTES` that the server serves, so a
+ * route added tomorrow is walked too, and the table's type will not let it be declared without an
+ * access rule. (Before #344 this file read server.ts as text with regexes; that text is gone.)
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { handleApi, POST_PERMISSIONS } from '../src/server.ts';
+import { handleApi, ROUTES } from '../src/server.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 
@@ -15,31 +15,15 @@ const ALLOWED = new Set([
   // Signing in: there is no session yet to hold a permission.
   '/api/auth/login',
   // The government provider's callback: no session, it proves itself by signing the bytes it sent.
-  '/api/webhooks/government/:param',
+  '/api/webhooks/government/:kind',
   // Which state a PIN code is in: a lookup in the public PIN table. Reads nothing of the company, stores nothing.
   '/api/pincode/state',
 ]);
 
-/** Every POST route in server.ts: literal paths, and regex routes as `/…/:param`. */
-const postRoutes = (): string[] => {
-  const source = readFileSync(new URL('../src/server.ts', import.meta.url), 'utf8');
-  const handleApi = source.slice(source.indexOf('export async function handleApi('));
-  const found: string[] = [];
-  let posts = 0;
-  for (const match of handleApi.matchAll(/method === 'POST' && ([^)\n]+)/g)) {
-    posts += 1;
-    const literal = /^pathname === '([^']+)'/.exec(match[1]!);
-    if (literal) { found.push(literal[1]!); continue; }
-    const variable = /^(\w+)\?\.\[1\]/.exec(match[1]!);
-    const pattern = variable && new RegExp(`const ${variable[1]} = /\\^(.+?)\\$/\\.exec\\(pathname\\)`).exec(handleApi);
-    if (pattern) found.push(pattern[1]!.replaceAll('\\/', '/').replaceAll('([^/]+)', ':param'));
-  }
-  assert.equal(found.length, posts, 'every POST in server.ts must be a literal path or a regex route this test can read');
-  return found;
-};
+const POSTS = ROUTES.filter((route) => route.method === 'POST');
 
 const call = async (path: string, session?: string, body: Record<string, unknown> = {}) => {
-  const response = await handleApi('POST', path.replace(':param', 'probe'), body, session === undefined ? undefined : `Bearer ${session}`);
+  const response = await handleApi('POST', path.replace(/:\w+/g, 'probe'), body, session === undefined ? undefined : `Bearer ${session}`);
   return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
@@ -49,23 +33,32 @@ const signIn = async (email: string, password: string): Promise<string> => {
   return response.body.sessionId as string;
 };
 
-test('#280: every POST route refuses a read-only viewer before it reads the body, unless allow-listed', async () => {
-  const routes = postRoutes();
-  assert.ok(routes.length > 100, `only ${routes.length} POST routes were found — the parser has gone wrong`);
-  for (const allowed of ALLOWED) assert.ok(routes.includes(allowed), `${allowed} is allow-listed but is no longer a route`);
-  for (const gated of Object.keys(POST_PERMISSIONS)) {
-    assert.ok(routes.includes(gated), `${gated} has a permission but is no longer a route`);
-    assert.ok(!ALLOWED.has(gated), `${gated} is both allow-listed and gated`);
+test('#344: every route declares who may call it, and only the allow-listed POSTs are ungated', () => {
+  assert.ok(POSTS.length > 100, `only ${POSTS.length} POST routes are in the table`);
+  for (const route of ROUTES) {
+    assert.ok(['gate', 'public', 'signedIn'].includes(route.access.kind), `${route.method} ${route.path} declares no access`);
+    if (route.access.kind !== 'gate') assert.ok(route.access.reason.length > 10, `${route.method} ${route.path} is open without saying why`);
+    // Nothing but signing in, the status check and the signed webhook is open to someone with no session.
+    if (route.access.kind === 'public') assert.ok(['/api/auth/login', '/api/status', '/api/webhooks/government/:kind'].includes(route.path), `${route.path} needs no session`);
   }
+  const paths = POSTS.map((route) => route.path);
+  for (const allowed of ALLOWED) assert.ok(paths.includes(allowed), `${allowed} is allow-listed but is no longer a route`);
+  for (const route of POSTS) if (route.access.kind === 'gate') assert.ok(!ALLOWED.has(route.path), `${route.path} is both allow-listed and gated`);
+  const ungated = POSTS.filter((route) => route.access.kind !== 'gate' && !ALLOWED.has(route.path)).map((route) => route.path);
+  assert.deepEqual(ungated, [], 'these POST routes have no permission and are not allow-listed');
+});
 
+test('#280: every POST route refuses a read-only viewer before it reads the body, unless allow-listed', async () => {
   const viewer = await signIn('viewer@sampoorna.example.invalid', 'viewer-demo');
   const open: string[] = [];
-  for (const route of routes) {
-    if (ALLOWED.has(route)) continue;
-    if (!Object.hasOwn(POST_PERMISSIONS, route)) { open.push(`${route} (no permission in POST_PERMISSIONS)`); continue; }
+  for (const route of POSTS) {
+    if (ALLOWED.has(route.path)) continue;
     // An empty body: a 422 here would mean the handler read it before the permission was checked.
-    const { status } = await call(route, viewer);
-    if (status !== 401 && status !== 403) open.push(`${route} answered ${status}`);
+    const { status } = await call(route.path, viewer);
+    if (status !== 401 && status !== 403) open.push(`${route.path} answered ${status}`);
+    // A body that is not even an object must still be refused for the permission, not for its shape (#344).
+    const garbage = await handleApi('POST', route.path.replace(/:\w+/g, 'probe'), ['not', 'an', 'object'], `Bearer ${viewer}`);
+    if (garbage.status !== 403) open.push(`${route.path} answered ${garbage.status} to a viewer's malformed body`);
   }
   assert.deepEqual(open, [], 'these POST routes are open to a read-only viewer');
 });
@@ -74,9 +67,11 @@ test('#280: the owner holds every permission a route asks for', async () => {
   const owner = await signIn('owner@sampoorna.example.invalid', 'karobar-demo');
   const session = await handleApi('GET', '/api/session', {}, `Bearer ${owner}`);
   const held = new Set<string>(JSON.parse(String(session.body)).permissions);
-  for (const [route, gate] of Object.entries(POST_PERMISSIONS)) {
-    for (const permission of gate.all) assert.ok(held.has(permission), `the owner lacks ${permission} for ${route}`);
-    if (gate.any.length > 0) assert.ok(gate.any.some((permission) => held.has(permission)), `the owner lacks all of ${gate.any.join(', ')} for ${route}`);
+  for (const route of ROUTES) {
+    if (route.access.kind !== 'gate') continue;
+    const gate = route.access;
+    for (const permission of gate.all) assert.ok(held.has(permission), `the owner lacks ${permission} for ${route.path}`);
+    if (gate.any.length > 0) assert.ok(gate.any.some((permission) => held.has(permission)), `the owner lacks all of ${gate.any.join(', ')} for ${route.path}`);
   }
 });
 

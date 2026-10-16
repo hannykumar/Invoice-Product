@@ -16,6 +16,7 @@ import { FileCredentialVault } from "../../platform/src/credentials.ts";
 import { makeCaller, unwrap, type Caller, type WhitebooksCredentials } from "./whitebooks-http.ts";
 import { computeIrn } from "./irn.ts";
 import type { EInvoiceDocumentType } from "./einvoice-types.ts";
+import { reportUnexpected } from "../../platform/src/error-reporting.ts";
 
 export type { WhitebooksCredentials };
 
@@ -129,7 +130,9 @@ export const whitebooksIrpConnector = (deps: WhitebooksDeps): WhitebooksIrpConne
     try {
       const found = unwrap(await call("GET", `/einvoice/type/GETIRN/version/V1_03?irn=${encodeURIComponent(irn)}`, { "auth-token": authToken }));
       return typeof found.Irn === "string" ? found : undefined;
-    } catch {
+    } catch (error) {
+      // The reply then carries only the duplicate code, as when no record is found; why the lookup failed is reported.
+      reportUnexpected("whitebooks.einvoice.lookupIrn", error);
       return undefined;
     }
   };
