@@ -100,4 +100,27 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
   `,
   down: `ALTER TABLE return_notes DROP CONSTRAINT IF EXISTS return_notes_supplier_credit_note_check;
     ALTER TABLE return_notes DROP COLUMN IF EXISTS supplier_credit_note_date, DROP COLUMN IF EXISTS supplier_credit_note_number;`,
+}, {
+  // Issue #366 — a returned freight or other charge (issue #233) has the item id `charge:<kind>`
+  // from gst-calc, which is not a master record. Such a line keeps the kind in `charge_kind` and no
+  // item; every other line keeps its item and no kind. The repository reads `charge:<kind>` back.
+  // The item foreign key stays on `master_records(id)` alone: a company-carrying key needs
+  // UNIQUE (company_id, id) on master_records, which #365 (PR #407) adds.
+  id: '20261014T182202848Z_returns_2ef7b18c49ba_charge_lines_and_page_index',
+  up: `
+    ALTER TABLE return_note_lines ALTER COLUMN item_id DROP NOT NULL;
+    ALTER TABLE return_note_lines ADD COLUMN charge_kind text CHECK (charge_kind ~ '^[a-z][a-z0-9_]*$');
+    ALTER TABLE return_note_lines ADD CONSTRAINT return_note_lines_item_or_charge_check
+      CHECK ((item_id IS NULL) <> (charge_kind IS NULL));
+    -- Every note for one original bill, a page at a time in id order (\`listForOriginal\`). The older
+    -- index leads with \`kind\`, which that query does not know.
+    CREATE INDEX return_notes_original_document_idx ON return_notes(company_id, original_document_id, id);
+    -- A company's notes a page at a time in id order (\`list\`).
+    CREATE INDEX return_notes_company_id_idx ON return_notes(company_id, id);
+  `,
+  // Fails while a charge line is stored, rather than losing it.
+  down: `DROP INDEX IF EXISTS return_notes_company_id_idx; DROP INDEX IF EXISTS return_notes_original_document_idx;
+    ALTER TABLE return_note_lines DROP CONSTRAINT IF EXISTS return_note_lines_item_or_charge_check;
+    ALTER TABLE return_note_lines DROP COLUMN IF EXISTS charge_kind;
+    ALTER TABLE return_note_lines ALTER COLUMN item_id SET NOT NULL;`,
 }]);
