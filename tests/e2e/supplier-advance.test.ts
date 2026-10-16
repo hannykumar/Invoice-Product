@@ -13,6 +13,7 @@ import { after, before, test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import { useFixedAppClock } from '../../apps/api/src/app-clock.ts';
 import { webServer } from '../../apps/web/server.ts';
+import { signIn as signInAs } from '../../apps/api/test/sign-in-helper.ts';
 
 // 27 Sep 2026, 10:00 in India.
 useFixedAppClock('2026-09-27T04:30:00.000Z');
@@ -69,9 +70,7 @@ const purchase = (extra: Record<string, unknown> = {}) => ({
 });
 
 test('Sign in to Sampoorna Traders; Shree Ram Steels has no bill yet', async () => {
-  const signedIn = await call('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
-  session = signedIn.body.sessionId as string;
+  session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
   const catalogue = await ok('GET', '/api/catalogue');
   trade.supplierId = catalogue.suppliers.find((row: any) => row.gstin === SHREE_RAM_GSTIN).id;
   trade.itemId = catalogue.items.find((row: any) => row.name === STEEL).id;

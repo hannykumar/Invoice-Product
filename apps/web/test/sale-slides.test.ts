@@ -16,6 +16,7 @@ import { after, before, test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import puppeteer, { type Browser, type Page } from 'puppeteer';
 import { webServer } from '../server.ts';
+import { signIn as signInAs, signInInBrowser } from '../../api/test/sign-in-helper.ts';
 
 let base = '';
 let session = '';
@@ -43,7 +44,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 700));
 before(async () => {
   await new Promise<void>((resolve) => webServer.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
-  session = (await call('/api/auth/login', { companyId: '00000000-0000-4000-8000-000000000001', email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' })).sessionId;
+  session = await signInAs('owner@sampoorna.example.invalid');
   // Full trade, steps 1 and 2 (the same requests the Purchase screen and the customer box send).
   const catalogue = await call('/api/catalogue');
   const steel = catalogue.items.find((item: any) => item.name === 'TMT Steel Bar 12mm').id;
@@ -67,9 +68,7 @@ before(async () => {
   page.on('request', (request) => { if (request.url().startsWith(base)) void request.continue(); else void request.abort(); });
   await page.goto(`${base}/#sale`, { waitUntil: 'load' });
   // Sign in with the details already filled in, as the owner does.
-  await page.waitForSelector('#login-form button[type="submit"]', { visible: true });
-  await page.click('#login-form button[type="submit"]');
-  await page.waitForFunction(() => !(document.querySelector('#login-dialog') as HTMLDialogElement).open);
+  await signInInBrowser(page);
   await page.waitForFunction(() => document.querySelectorAll('#sale-lines [data-item-search]').length > 0 && (document.querySelector('[data-draft="sale"] [name="party"]') as HTMLSelectElement).value !== '');
 });
 

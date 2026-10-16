@@ -23,6 +23,7 @@ import { after, before, test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import { useFixedAppClock } from '../../apps/api/src/app-clock.ts';
 import { webServer } from '../../apps/web/server.ts';
+import { signIn as signInAs } from '../../apps/api/test/sign-in-helper.ts';
 
 // 27 Sep 2026, 10:00 in India is 04:30 UTC.
 useFixedAppClock('2026-09-27T04:30:00.000Z');
@@ -110,9 +111,8 @@ const trade: {
 // ---------------------------------------------------------------------------------------------
 
 test('Before the trade: Sampoorna Traders, three old bills to ABC Traders (₹1,838 owed) and no steel', async (t) => {
-  const signedIn = await call('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
-  session = signedIn.body.sessionId as string;
+  session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
+  const signedIn = await call('GET', '/api/session');
   assert.equal(signedIn.body.company.name, 'Sampoorna Traders');
 
   const business = await ok('GET', '/api/business-details');

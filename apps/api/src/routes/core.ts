@@ -10,7 +10,10 @@ import { previewBranding, readBranding, saveBranding } from '../branding-applica
 import { currentStates, readBusinessDetails } from '../business-details-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from '../migration-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
-import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, signedIn, text, READ, type Route } from './route.ts';
+import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, READ, type Route } from './route.ts';
+import { clearedSessionCookie, sessionCookie } from '../sign-in.ts';
+import type { ApiRuntime } from '../runtime.ts';
+import type { RequestContext } from '../../../../packages/platform/src/index.ts';
 
 const PARTIES = need('add or change customers, suppliers or transporters', 'masters.party.write');
 const ITEMS = need('add or change items and the GST rate on them', 'masters.item.write', 'masters.item.rate.declare');
@@ -27,9 +30,33 @@ const migration = fields({ workspaceId: text, batchId: text, entity: text, fileN
 /** Setting up a business: the onboarding service reads and checks every answer itself. */
 const onboarding = fields({ businessType: text, registration: text, legalName: text, tradeName: text, gstin: text, stateCode: text, pincode: text, booksStartDate: text });
 
+/** Issue #342 — who is signed in, where, and the other businesses they can switch to. */
+const sessionView = async (runtime: ApiRuntime, context: RequestContext) => ({
+  company: runtime.companySummary(context.companyId),
+  userId: context.actorId,
+  permissions: [...context.permissions],
+  companies: (await runtime.signIn.companies(context)).map((membership) => runtime.companySummary(membership.companyId)),
+});
+
 export const CORE_ROUTES: readonly Route[] = [
-  post('/api/auth/login', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ companyId: text, email: text, password: text }) },
-    ({ runtime, input }) => runtime.signIn(input)),
+  // Issue #342 — signing in with a one-time code to a phone number or email (ADR D1). The session
+  // comes back only as an HttpOnly cookie (ADR D2): the reply body never carries it.
+  post('/api/auth/code', { access: publicRoute('asking for a sign-in code: there is no session yet'), input: fields({ address: text }) },
+    ({ runtime, input }) => runtime.signIn.sendCode(String(input.address ?? ''))),
+  post('/api/auth/sign-in', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ address: text, code: text, companyId: text }) },
+    async ({ runtime, input }) => {
+      const opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId));
+      return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
+    }),
+  post('/api/auth/sign-out', { access: signedIn('anyone signed in may end their own session'), input: nothing },
+    async ({ runtime, context }) => { await runtime.signIn.signOut(context); return replyWithCookie({ signedOut: true }, clearedSessionCookie()); }),
+  // Another of the person's own businesses: a new session, no second sign-in. The company named here
+  // is only a choice, checked against their memberships; every later request reads it from the session.
+  post('/api/session/company', { access: signedIn('switching to another business the person belongs to; checked against their memberships'), input: fields({ companyId: text, branchId: text }) },
+    async ({ runtime, context, input }) => {
+      const opened = await runtime.signIn.switchCompany(context, String(input.companyId ?? ''), input.branchId === undefined ? undefined : String(input.branchId));
+      return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
+    }),
   get('/api/status', { access: publicRoute('the health check a load balancer reads; says nothing about any company'), input: nothing },
     ({ runtime }) => runtime.publicStatus()),
   // Issue #123 — a provider's callback about a government call. No session: it authenticates by
@@ -41,8 +68,7 @@ export const CORE_ROUTES: readonly Route[] = [
       return replyJson(received.status, { state: 'received', outcome: received.outcome });
     }),
 
-  get('/api/session', { access: READ, input: nothing },
-    ({ runtime, context }) => ({ company: runtime.companySummary(context.companyId), userId: context.actorId, permissions: [...context.permissions] })),
+  get('/api/session', { access: READ, input: nothing }, ({ runtime, context }) => sessionView(runtime, context)),
   get('/api/dashboard', { access: READ, input: nothing }, ({ app, actor }) => app.dashboard(actor)),
   get('/api/reports', { access: READ, input: nothing }, ({ app, actor }) => app.reports(actor)),
   get('/api/operations', { access: READ, input: nothing }, ({ runtime, context }) => runtime.operationsWorkspace(context)),

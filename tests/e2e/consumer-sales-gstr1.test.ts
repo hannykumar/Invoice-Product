@@ -16,6 +16,7 @@ import type { AddressInfo } from 'node:net';
 import { useFixedAppClock } from '../../apps/api/src/app-clock.ts';
 import { webServer } from '../../apps/web/server.ts';
 import { stockEverything } from '../../apps/api/test/stock-helper.ts';
+import { signIn as signInAs } from '../../apps/api/test/sign-in-helper.ts';
 
 useFixedAppClock('2026-09-27T04:30:00.000Z');
 
@@ -30,8 +31,7 @@ let session = '';
 before(async () => {
   await new Promise<void>((resolve) => webServer.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
-  const signedIn = await ok('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  session = signedIn.sessionId as string;
+  session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
   await stockEverything(`Bearer ${session}`);
 });
 

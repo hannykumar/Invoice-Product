@@ -1,25 +1,16 @@
-/** Authenticated HTTP runtime: credentials -> session -> membership -> tenant application. */
-import { createHash, timingSafeEqual } from 'node:crypto';
+/** Authenticated HTTP runtime: session (sign-in.ts) -> membership -> tenant application. */
 import { asId, notFound } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
-import { AccessControl, AuthenticationService, PlatformError, type Permission, type RequestContext } from '../../../packages/platform/src/index.ts';
+import type { Permission, RequestContext } from '../../../packages/platform/src/index.ts';
 import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
 import { DemoApplication } from './demo-application.ts';
 import { businessDetailsOf, saveBusinessDetails } from './business-details-application.ts';
 import type { CompanySeed } from './company-shop.ts';
 import type { CatalogueSeed } from './catalogue-application.ts';
 import { createOperations } from '../../../ops/operations/src/index.ts';
+import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
 
-export class AuthenticationError extends Error {
-  readonly status = 401;
-  constructor(message = 'Sign in to continue.') { super(message); }
-}
-
-const passwordHash = (password: string): Buffer => createHash('sha256').update(password).digest();
-const passwordMatches = (supplied: string, expected: Buffer): boolean => {
-  const actual = passwordHash(supplied);
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
-};
+export { AuthenticationError } from './sign-in.ts';
 
 /**
  * The two synthetic companies the local app signs into.
@@ -102,78 +93,24 @@ const SYNTHETIC_BUSINESS_DETAILS: Readonly<Record<string, Record<string, string>
   },
 };
 
-interface Credential {
-  readonly email: string;
-  readonly password: Buffer;
-  readonly companyId: string;
-  readonly branchId: string;
-  readonly userId: string;
-  readonly permissions: readonly Permission[];
-}
-
 export class ApiRuntime {
-  readonly #access = new AccessControl();
-  readonly #authentication = new AuthenticationService(this.#access);
   readonly #applications = new Map<string, Promise<DemoApplication>>();
   readonly #operations = createOperations();
   readonly #operationsSeeded = new Set<string>();
   readonly #recurringRegistered = new Set<string>();
-  readonly #credentials: readonly Credential[];
+  /** Issue #342 — codes, sessions, signing out and switching company. */
+  readonly signIn: SignIn;
 
-  constructor() {
-    const owners = SYNTHETIC_PLATFORM_COMPANIES.map((company): Credential => ({
-      email: company.email,
-      password: passwordHash(process.env.DEMO_OWNER_PASSWORD ?? 'karobar-demo'),
-      companyId: company.companyId,
-      branchId: company.branchId,
-      userId: company.userId,
-      permissions: PRODUCT_OWNER_PERMISSIONS,
-    }));
-    const viewer: Credential = {
-      email: 'viewer@sampoorna.example.invalid',
-      password: passwordHash(process.env.DEMO_VIEWER_PASSWORD ?? 'viewer-demo'),
-      companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId,
-      branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId,
-      userId: '00000000-0000-4000-8000-000000000004',
-      permissions: ['dashboard.read'],
-    };
-    this.#credentials = [...owners, viewer];
-    for (const credential of this.#credentials) {
-      this.#access.grant({
-        companyId: credential.companyId,
-        userId: credential.userId,
-        branchIds: new Set([credential.branchId]),
-        active: true,
-        permissions: new Set(credential.permissions),
-      });
-    }
-    const demo = owners[0]!;
-    const incidentActor: RequestContext = { companyId: demo.companyId, branchId: demo.branchId, actorId: demo.userId, sessionId: 'operations-seed', permissions: new Set(demo.permissions) };
+  constructor(signIn: SignIn = createSignIn()) {
+    this.signIn = signIn;
+    const demo = SYNTHETIC_PLATFORM_COMPANIES[0];
+    const incidentActor: RequestContext = { companyId: demo.companyId, branchId: demo.branchId, actorId: demo.userId, sessionId: 'operations-seed', permissions: new Set(PRODUCT_OWNER_PERMISSIONS) };
     const incident = this.#operations.status.openIncident(incidentActor, 'E-invoice registration delay', 'Invoice Registration Portal', 'Some registrations were delayed. Customer invoices remained unchanged.');
     this.#operations.status.updateIncident(incidentActor, incident.id, 'resolved', 'The portal recovered. Safe queued registrations can now be replayed by an authorised operator.');
   }
 
-  signIn(input: Record<string, unknown>) {
-    const email = String(input.email ?? '').trim().toLowerCase();
-    const companyId = String(input.companyId ?? '').trim();
-    const credential = this.#credentials.find((candidate) => candidate.email === email && candidate.companyId === companyId);
-    if (credential === undefined || !passwordMatches(String(input.password ?? ''), credential.password)) {
-      throw new AuthenticationError('The email, password, or company is not correct.');
-    }
-    const session = this.#authentication.createSession(credential.companyId, credential.branchId, credential.userId);
-    return { sessionId: session.id, company: this.companySummary(credential.companyId), expiresAt: new Date(session.expiresAt).toISOString() };
-  }
-
-  authenticate(authorization: string | undefined): RequestContext {
-    const match = /^Bearer\s+(.+)$/i.exec(authorization ?? '');
-    if (match?.[1] === undefined) throw new AuthenticationError();
-    try {
-      return this.#authentication.authenticate(match[1]);
-    } catch (error) {
-      if (error instanceof PlatformError && (error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED')) throw new AuthenticationError(error.message);
-      throw error;
-    }
-  }
+  /** The signed-in context, from the session alone (rule 6). */
+  authenticate(authorization: string | undefined): Promise<RequestContext> { return this.signIn.authenticate(authorization); }
 
   actor(context: RequestContext): ActorContext {
     return {

@@ -54,10 +54,12 @@ export interface SessionCall<I> extends PublicCall<I> {
 
 /** A reply that is not `200` + JSON: a file, or a status of the handler's own choosing. */
 export class Reply {
-  readonly result: ApiResult | { readonly status: number; readonly json: unknown };
+  readonly result: ApiResult | { readonly status: number; readonly json: unknown; readonly setCookie?: string };
   constructor(result: Reply['result']) { this.result = result; }
 }
 export const replyJson = (status: number, json: unknown): Reply => new Reply({ status, json });
+/** Issue #342 — a JSON reply that also sets (or clears) the session cookie. */
+export const replyWithCookie = (json: unknown, setCookie: string): Reply => new Reply({ status: 200, json, setCookie });
 export const replyPdf = (fileName: string, pdf: Buffer): Reply => new Reply({
   status: 200,
   headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${fileName}"`, 'cache-control': 'private, no-store' },
