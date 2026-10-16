@@ -56,11 +56,22 @@ export type PortalFetchOutcome =
   /** We do not know. Never reported as "no purchases were reported", which is a different fact. */
   | { readonly kind: 'UNAVAILABLE'; readonly retryable: boolean; readonly at: string; readonly detail: string };
 
+/**
+ * Issue #366 — one page of a list, in the order the rows were written.
+ *
+ * `after` is the `id` of the last row of the page before. Left out altogether, a list method
+ * returns everything, as it always has.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
 /** The portal rows we hold, one row per company, period, supplier, document and kind. */
 export interface PortalRecordRepository {
-  listForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]>;
+  listForPeriod(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly PortalDocument[]>;
   /** Prior portal evidence remains relevant while its purchase bill is still unclaimed. */
-  listThroughPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]>;
+  listThroughPeriod(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly PortalDocument[]>;
   /** Used by #19's supplier check, which asks about one bill and not a month. */
   findByDocument(
     companyId: CompanyId,
@@ -81,11 +92,12 @@ export interface PortalRecordRepository {
 }
 
 export interface ImportBatchRepository {
+  /** A second batch with the same id, or the same file for the same month, is refused (`ITC_IMPORT_DUPLICATE`). */
   insert(batch: ImportBatch): Promise<void>;
   /** A file imported twice is recognised by its checksum and not imported again. */
   findByChecksum(companyId: CompanyId, period: TaxPeriod, checksum: string): Promise<ImportBatch | null>;
   latestFor(companyId: CompanyId, period: TaxPeriod): Promise<ImportBatch | null>;
-  list(companyId: CompanyId, period: TaxPeriod): Promise<readonly ImportBatch[]>;
+  list(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly ImportBatch[]>;
 }
 
 /**
@@ -96,16 +108,17 @@ export interface ImportBatchRepository {
  * reads.
  */
 export interface ItcDecisionRepository {
+  /** A second decision with the same id or idempotency key is refused (`ITC_DECISION_DUPLICATE`). */
   insert(decision: ItcDecision): Promise<void>;
-  latestForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly ItcDecision[]>;
+  latestForPeriod(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly ItcDecision[]>;
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ItcDecision | null>;
-  history(companyId: CompanyId, lineKey: string): Promise<readonly ItcDecision[]>;
+  history(companyId: CompanyId, lineKey: string, page?: Page): Promise<readonly ItcDecision[]>;
 }
 
 /** One immutable claim per purchase document, regardless of how many later workspaces are opened. */
 export interface ItcClaimRepository {
   insert(claim: ItcClaim): Promise<{ readonly claim: ItcClaim; readonly inserted: boolean }>;
-  listForCompany(companyId: CompanyId): Promise<readonly ItcClaim[]>;
+  listForCompany(companyId: CompanyId, page?: Page): Promise<readonly ItcClaim[]>;
 }
 
 /** Per-company and effective-dated, exactly as #18's tolerances are. */
