@@ -42,18 +42,25 @@ export type IrpCancelOutcome =
   | { readonly kind: "REFUSED"; readonly code: string; readonly message: string }
   | { readonly kind: "UNAVAILABLE"; readonly code: string; readonly message: string; readonly retryable: boolean };
 
+/**
+ * Issue #366 — one page of a list. Rows come oldest first (`createdAt`, then `id`); `after` is the
+ * id of the last row of the page before. Left out, a list returns everything, as it always has.
+ */
+export interface EInvoicePage { readonly limit: number; readonly after?: string }
+
 export interface EInvoiceRepository {
+  /** Refuses a second record for one sales document, or a second holder of one IRN, with `EINVOICE_DUPLICATE`. */
   insert(record: EInvoiceRecord): Promise<void>;
   update(record: EInvoiceRecord): Promise<void>;
   findById(companyId: CompanyId, id: Id): Promise<EInvoiceRecord | null>;
   /** The one that matters: one live e-invoice per sales document. */
   findByDocumentId(companyId: CompanyId, documentId: Id): Promise<EInvoiceRecord | null>;
   findByIrn(companyId: CompanyId, irn: string): Promise<EInvoiceRecord | null>;
-  list(companyId: CompanyId): Promise<EInvoiceRecord[]>;
+  list(companyId: CompanyId, page?: EInvoicePage): Promise<EInvoiceRecord[]>;
   /** Registered documents whose cancellation window has not closed yet. */
-  listCancellable(companyId: CompanyId, now: string): Promise<EInvoiceRecord[]>;
+  listCancellable(companyId: CompanyId, now: string, page?: EInvoicePage): Promise<EInvoiceRecord[]>;
   /** Applicable documents still not reported, so nothing quietly misses its deadline. */
-  listPendingReport(companyId: CompanyId, on: IsoDate): Promise<EInvoiceRecord[]>;
+  listPendingReport(companyId: CompanyId, on: IsoDate, page?: EInvoicePage): Promise<EInvoiceRecord[]>;
 }
 
 /** Per company, effective-dated. A port, so #7's versioned rules can answer this later. */

@@ -96,4 +96,50 @@ export const eInvoiceMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS e_invoice_policies;
     DROP TABLE IF EXISTS e_invoices;
   `,
+}, {
+  // Issue #366 — the tables behind the PostgreSQL repository (`einvoice-postgres.ts`).
+  id: "20261011T144836807Z_gst_e7c086d28659_einvoice_row_level_security_and_listing",
+  up: `
+    -- One company can never read or write another's rows, even through a query that forgot its filter.
+    ALTER TABLE e_invoices ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE e_invoices FORCE ROW LEVEL SECURITY;
+    CREATE POLICY e_invoices_tenant ON e_invoices USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE e_invoice_policies ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE e_invoice_policies FORCE ROW LEVEL SECURITY;
+    CREATE POLICY e_invoice_policies_tenant ON e_invoice_policies USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE e_invoice_supplier_facts ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE e_invoice_supplier_facts FORCE ROW LEVEL SECURITY;
+    CREATE POLICY e_invoice_supplier_facts_tenant ON e_invoice_supplier_facts USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+
+    -- The order every list is read and paged in: oldest first, the id breaking a tie.
+    CREATE INDEX e_invoices_listing_idx ON e_invoices(company_id, created_at, id);
+
+    -- reconcile() can learn from the portal that an e-invoice was cancelled there (on the portal
+    -- itself, or by a cancel whose reply we never received). The government does not send the reason
+    -- back, so the record is CANCELLED with none, which the old rule refused. What still holds: a
+    -- reason code and its words are kept together or not at all. EInvoiceService.cancel() still
+    -- refuses a cancellation of our own without a reason.
+    ALTER TABLE e_invoices DROP CONSTRAINT cancelled_has_reason;
+    ALTER TABLE e_invoices ADD CONSTRAINT cancel_reason_is_whole CHECK ((cancel_reason_code IS NULL) = (cancel_reason IS NULL));
+  `,
+  down: `
+    ALTER TABLE e_invoices DROP CONSTRAINT IF EXISTS cancel_reason_is_whole;
+    -- NOT VALID: rows cancelled on the portal since the change have no reason and must not block the way back.
+    ALTER TABLE e_invoices ADD CONSTRAINT cancelled_has_reason CHECK (
+      status <> 'CANCELLED' OR (cancel_reason_code IS NOT NULL AND cancel_reason IS NOT NULL)
+    ) NOT VALID;
+    DROP INDEX IF EXISTS e_invoices_listing_idx;
+    DROP POLICY IF EXISTS e_invoice_supplier_facts_tenant ON e_invoice_supplier_facts;
+    ALTER TABLE e_invoice_supplier_facts NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE e_invoice_supplier_facts DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS e_invoice_policies_tenant ON e_invoice_policies;
+    ALTER TABLE e_invoice_policies NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE e_invoice_policies DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS e_invoices_tenant ON e_invoices;
+    ALTER TABLE e_invoices NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE e_invoices DISABLE ROW LEVEL SECURITY;
+  `,
 }]);
