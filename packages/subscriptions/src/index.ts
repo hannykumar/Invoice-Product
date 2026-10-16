@@ -8,3 +8,4 @@ export * from './repository.ts';
 export * from './payments.ts';
 export * from './migrations.ts';
 export * from './service.ts';
+export * from './postgres-repository.ts';
