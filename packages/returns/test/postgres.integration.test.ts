@@ -221,4 +221,7 @@ test('postgres: a line is an item or a charge, never both and never neither', { 
   await assert.rejects(line('bad-kind', null, 'Freight!'), refused);
   await line('item', scene.itemId, null);
   await line('charge', null, 'other');
+  // The foreign keys carry the company: another company's item is not this company's item.
+  const other = await harness.company();
+  await assert.rejects(line('foreign-item', other.itemId, null), (error: unknown) => (error as { code?: string }).code === '23503');
 });
