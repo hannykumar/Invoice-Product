@@ -81,9 +81,19 @@ export interface ComplianceSignalPort {
   signalsFor(companyId: CompanyId, occurrence: ObligationOccurrence): Promise<readonly ComplianceSignal[]>;
 }
 
+/**
+ * Issue #366 — keyset pagination for every list. `after` is the last key of the previous page
+ * (an occurrence or alert id, an exception's `code:periodKey`). Omitted, a list returns everything.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
 export interface OccurrenceRepository {
   find(companyId: CompanyId, key: string): Promise<ObligationOccurrence | null>;
-  list(companyId: CompanyId, from: IsoDate, to: IsoDate): Promise<readonly ObligationOccurrence[]>;
+  /** Ordered by id when paged. */
+  list(companyId: CompanyId, from: IsoDate, to: IsoDate, page?: Page): Promise<readonly ObligationOccurrence[]>;
   /** Insert or replace by (company, key). The key carries no date, so a moved deadline updates. */
   put(occurrence: ObligationOccurrence): Promise<void>;
 }
@@ -97,13 +107,15 @@ export interface OccurrenceRepository {
 export interface AlertRepository {
   insert(alert: ComplianceAlert): Promise<void>;
   raisedKeys(companyId: CompanyId, occurrenceKey: string): Promise<ReadonlySet<string>>;
-  listForCompany(companyId: CompanyId): Promise<readonly ComplianceAlert[]>;
+  /** Ordered by id when paged. */
+  listForCompany(companyId: CompanyId, page?: Page): Promise<readonly ComplianceAlert[]>;
 }
 
 /** Unresolved applicability, waiting for a person to answer one question. */
 export interface ComplianceExceptionRepository {
   put(exception: ComplianceException): Promise<void>;
-  list(companyId: CompanyId): Promise<readonly ComplianceException[]>;
+  /** Ordered by `code:periodKey` when paged. */
+  list(companyId: CompanyId, page?: Page): Promise<readonly ComplianceException[]>;
   clear(companyId: CompanyId, code: string, periodKey: string): Promise<void>;
 }
 
