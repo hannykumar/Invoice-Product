@@ -27,3 +27,5 @@ export * from "./vehicle-record.ts";
 export * from "./vehicle-record-service.ts";
 export * from "./vehicle-record-adapters.ts";
 export * from "./vehicle-record-migrations.ts";
+// Issue #366 — the same ports in PostgreSQL, on the unit of work.
+export * from "./postgres-repositories.ts";

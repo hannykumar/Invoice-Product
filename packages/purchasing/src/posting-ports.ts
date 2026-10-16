@@ -6,6 +6,7 @@ import type { StockMovement } from "../../inventory/src/model.ts";
 import type { Quantity } from "../../masters/src/units.ts";
 import type { Id, Paise } from "../../masters/src/types.ts";
 import type { PurchaseBill } from "./posting-types.ts";
+import type { Page } from "./paging.ts";
 
 /** One stock receipt, as this module needs to ask for it. */
 export interface PurchaseReceiptCommand {
@@ -41,6 +42,7 @@ export interface PurchaseBillRepository {
   findById(companyId: CompanyId, id: string): Promise<PurchaseBill | null>;
   /** The idempotency that matters: one live bill per approved purchase. */
   findByPurchaseId(companyId: CompanyId, purchaseId: string): Promise<PurchaseBill | null>;
-  listForParty(companyId: CompanyId, partyId: string): Promise<PurchaseBill[]>;
-  list(companyId: CompanyId): Promise<PurchaseBill[]>;
+  /** Oldest first when a page is asked for (#366). Without one, every bill, as before. */
+  listForParty(companyId: CompanyId, partyId: string, page?: Page): Promise<PurchaseBill[]>;
+  list(companyId: CompanyId, page?: Page): Promise<PurchaseBill[]>;
 }

@@ -433,4 +433,48 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
     DROP TRIGGER IF EXISTS return_notes_reduce_bill ON return_notes;
     DROP FUNCTION IF EXISTS advance_not_overused(), payment_allocation_moves_balances(), payment_refund_moves_receipt(), credit_note_reduces_bill(), document_settlement_matches_bill();
   `,
+}, {
+  // Issue #367 — what is paid back out of a receipt counts against it, in the database. A refund and
+  // an allocation of one receipt made at the same moment each passed the service's own check, and
+  // together used more than the receipt (found by the independent review of #367).
+  id: '20261016T013758641Z_receivables_2abb8324563c_refunds_count_against_the_receipt',
+  up: `
+    -- payments may now also change refunded_paise, the database's own figure.
+    DROP TRIGGER payments_frozen ON payments;
+    ${frozen('payments', 'state', 'allocated_paise,refunded_paise,cheque_state,reversal_voucher_id,reversal_reason,updated_at,version', 'RECORDED>REVERSED').replace(/\n\s*CREATE TRIGGER payments_no_truncate[\s\S]*$/, '')}
+    ALTER TABLE payments ADD COLUMN refunded_paise bigint NOT NULL DEFAULT 0;
+    -- Refunds recorded before this change. Row-level security is lifted for the owner only while the
+    -- figure is worked out, so it sees every company's rows.
+    ALTER TABLE payments NO FORCE ROW LEVEL SECURITY;
+    UPDATE payments p SET refunded_paise = r.total
+      FROM (SELECT company_id, refund_of, sum(amount_paise) AS total FROM payments WHERE refund_of IS NOT NULL AND state = 'RECORDED' GROUP BY company_id, refund_of) r
+     WHERE p.company_id = r.company_id AND p.id = r.refund_of;
+    ALTER TABLE payments FORCE ROW LEVEL SECURITY;
+    -- What bills took of a receipt and what was paid back out of it never come to more than it.
+    ALTER TABLE payments ADD CONSTRAINT payments_refunded_within_amount CHECK (refunded_paise >= 0 AND allocated_paise + refunded_paise <= amount_paise);
+
+    -- A refund moves the figure on the receipt it pays back out of; undoing the refund moves it back.
+    -- The UPDATE waits for, and re-reads, a receipt another transaction is changing, so the CHECK
+    -- above judges the latest figure.
+    CREATE FUNCTION payment_refund_moves_receipt() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+    BEGIN
+      UPDATE payments SET refunded_paise = refunded_paise + CASE WHEN TG_OP = 'INSERT' THEN NEW.amount_paise ELSE -NEW.amount_paise END
+        WHERE company_id = NEW.company_id AND id = NEW.refund_of;
+      RETURN NULL;
+    END;
+    $$;
+    CREATE TRIGGER payments_refund_recorded AFTER INSERT ON payments
+      FOR EACH ROW WHEN (NEW.refund_of IS NOT NULL AND NEW.state = 'RECORDED') EXECUTE FUNCTION payment_refund_moves_receipt();
+    CREATE TRIGGER payments_refund_reversed AFTER UPDATE OF state ON payments
+      FOR EACH ROW WHEN (NEW.refund_of IS NOT NULL AND OLD.state = 'RECORDED' AND NEW.state = 'REVERSED') EXECUTE FUNCTION payment_refund_moves_receipt();
+  `,
+  down: `
+    DROP TRIGGER IF EXISTS payments_refund_reversed ON payments;
+    DROP TRIGGER IF EXISTS payments_refund_recorded ON payments;
+    DROP FUNCTION IF EXISTS payment_refund_moves_receipt();
+    ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_refunded_within_amount;
+    DROP TRIGGER payments_frozen ON payments;
+    ${frozen('payments', 'state', 'allocated_paise,cheque_state,reversal_voucher_id,reversal_reason,updated_at,version', 'RECORDED>REVERSED').replace(/\n\s*CREATE TRIGGER payments_no_truncate[\s\S]*$/, '')}
+    ALTER TABLE payments DROP COLUMN IF EXISTS refunded_paise;
+  `,
 }]);

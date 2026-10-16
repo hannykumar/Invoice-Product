@@ -35,6 +35,7 @@ export interface UnitOfMeasure {
  * here, because unit conversion is master data's; only the shape is shared.
  */
 import type { Quantity } from "@invoice/kernel";
+import { pageOf, type Maybe, type Page } from "./effective.ts";
 export type { Quantity };
 
 /** 1 `fromUnit` equals `numerator / denominator` `toUnit`, optionally only for one item. */
@@ -72,10 +73,24 @@ export function formatQuantity(value: Quantity, decimals = 3): string {
 }
 
 /**
+ * Issue #366 — what a unit registry answers. `UnitRegistry` (memory) and `PostgresUnitRegistry`
+ * (postgres-masters.ts) both implement it.
+ */
+export interface UnitStore {
+  registerUnit(unit: UnitOfMeasure): Maybe<void>;
+  unit(code: string): Maybe<UnitOfMeasure>;
+  units(page?: Page): Maybe<readonly UnitOfMeasure[]>;
+  registerConversion(conversion: UnitConversion): Maybe<void>;
+  factor(from: string, to: string, itemId?: string): Maybe<{ numerator: bigint; denominator: bigint } | null>;
+  convert(value: Quantity, toUnit: string, itemId?: string): Maybe<{ quantity: Quantity; exact: boolean }>;
+  convertExact(value: Quantity, toUnit: string, itemId?: string): Maybe<Quantity>;
+}
+
+/**
  * A per-company registry of units and the conversions between them. Conversions are
  * stored in both directions so a path search never has to invert on the fly.
  */
-export class UnitRegistry {
+export class UnitRegistry implements UnitStore {
   readonly #units = new Map<string, UnitOfMeasure>();
   readonly #edges = new Map<string, { readonly to: string; readonly numerator: bigint; readonly denominator: bigint }[]>();
 
@@ -89,8 +104,9 @@ export class UnitRegistry {
     return found;
   }
 
-  units(): readonly UnitOfMeasure[] {
-    return [...this.#units.values()];
+  units(page?: Page): readonly UnitOfMeasure[] {
+    const all = [...this.#units.values()];
+    return page === undefined ? all : pageOf(all.sort((left, right) => (left.code < right.code ? -1 : 1)), (unit) => unit.code, page);
   }
 
   registerConversion(conversion: UnitConversion): void {

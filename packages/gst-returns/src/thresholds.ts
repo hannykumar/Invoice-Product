@@ -20,7 +20,7 @@
  * behaviour: "we do not know where the line is this month" is a real answer, and quietly filing a
  * ₹1.4 lakh bill in the wrong table is not.
  */
-import { compareDates, invalid, type IsoDate, type Money } from '@invoice/kernel';
+import { compareDates, conflict, invalid, type IsoDate, type Money } from '@invoice/kernel';
 import type { ReviewState } from '@invoice/rules-engine';
 
 export interface B2clThreshold {
@@ -156,13 +156,27 @@ export class B2clThresholdTable {
   }
 }
 
+export const thresholdExists = (threshold: DeclaredThreshold): Error =>
+  conflict('DECLARED_THRESHOLD_EXISTS', `This business has already set a threshold starting ${threshold.effectiveFrom}.`);
+
 /** An in-memory reader, so a business's own threshold can be exercised without a database. */
 export class InMemoryDeclaredThresholds implements DeclaredThresholdReader {
   readonly #rows: DeclaredThreshold[] = [];
 
   declare(threshold: DeclaredThreshold): void {
     validateDeclaredThreshold(threshold);
+    // Issue #366 — the table's key is (company, effective from): one declared figure per start date.
+    if (this.#rows.some((row) => row.companyId === threshold.companyId && row.effectiveFrom === threshold.effectiveFrom)) {
+      throw thresholdExists(threshold);
+    }
     this.#rows.push(threshold);
+  }
+
+  /** Oldest first. With a page, the last row's `effectiveFrom` is the next `after`. */
+  list(companyId: string, page?: { readonly limit: number; readonly after?: string }): readonly DeclaredThreshold[] {
+    const rows = this.#rows.filter((row) => row.companyId === companyId)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+    return page === undefined ? rows : rows.filter((row) => page.after === undefined || row.effectiveFrom > page.after).slice(0, page.limit);
   }
 
   find(companyId: string, on: IsoDate): DeclaredThreshold | undefined {

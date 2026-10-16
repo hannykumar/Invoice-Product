@@ -10,8 +10,9 @@ import type { TransactionParticipant } from "@invoice/ledger";
 import { DEFAULT_VEHICLE_SUITABILITY_POLICY } from "./suitability-types.ts";
 import { normaliseVehicleNumber } from "./validity.ts";
 import { outstandingOf } from "./suitability-service.ts";
+import { DUPLICATES, pageOf, type Page } from "./ports.ts";
 import type {
-  PlatePhoto, VehicleEvidence, VehicleSuitabilityAssessment, VehicleSuitabilityPolicy,
+  PlatePhoto, SuitabilityOverride, VehicleEvidence, VehicleSuitabilityAssessment, VehicleSuitabilityPolicy,
 } from "./suitability-types.ts";
 import type {
   PlateOcrPort, PlateReadOutcome, SuitabilityRepository, VehicleMasterPort, VehicleRecordLookup,
@@ -25,11 +26,18 @@ export class InMemorySuitabilityStore implements SuitabilityRepository, Transact
   snapshot(): unknown { return [...this.#rows]; }
   restore(taken: unknown): void { this.#rows = [...(taken as VehicleSuitabilityAssessment[])]; }
 
-  async insert(assessment: VehicleSuitabilityAssessment): Promise<void> { this.#rows.push(Object.freeze(assessment)); }
+  async insert(assessment: VehicleSuitabilityAssessment): Promise<void> {
+    if (this.#rows.some((row) => row.id === assessment.id)) throw DUPLICATES.check();
+    this.#rows.push(Object.freeze(assessment));
+  }
 
   async update(assessment: VehicleSuitabilityAssessment): Promise<void> {
     const index = this.#rows.findIndex((row) => row.companyId === assessment.companyId && row.id === assessment.id);
-    if (index >= 0) this.#rows[index] = Object.freeze(assessment);
+    if (index < 0) return;
+    // Issue #366 — overrides are only ever added to. A save that does not carry every override already
+    // on the check was made from an old copy, and would silently drop somebody's answer.
+    if (!carriesEvery((this.#rows[index] as VehicleSuitabilityAssessment).overrides, assessment.overrides)) throw DUPLICATES.checkChanged();
+    this.#rows[index] = Object.freeze(assessment);
   }
 
   async findById(companyId: CompanyId, id: Id): Promise<VehicleSuitabilityAssessment | null> {
@@ -42,14 +50,22 @@ export class InMemorySuitabilityStore implements SuitabilityRepository, Transact
     return matching[matching.length - 1] ?? null;
   }
 
-  async list(companyId: CompanyId): Promise<VehicleSuitabilityAssessment[]> {
-    return this.#rows.filter((row) => row.companyId === companyId);
+  async list(companyId: CompanyId, page?: Page): Promise<VehicleSuitabilityAssessment[]> {
+    return pageOf(this.#rows.filter((row) => row.companyId === companyId), (row) => row.id, page);
   }
 
-  async listBlocked(companyId: CompanyId): Promise<VehicleSuitabilityAssessment[]> {
-    return this.#rows.filter((row) => row.companyId === companyId && outstandingOf(row.findings, row.overrides).length > 0);
+  async listBlocked(companyId: CompanyId, page?: Page): Promise<VehicleSuitabilityAssessment[]> {
+    return pageOf(this.#rows.filter((row) => row.companyId === companyId), (row) => row.id, page, (row) => outstandingOf(row.findings, row.overrides).length > 0);
   }
 }
+
+/** True when `next` starts with every override in `held`, unchanged and in the same order. */
+export const carriesEvery = (held: readonly SuitabilityOverride[], next: readonly SuitabilityOverride[]): boolean =>
+  held.every((entry, place) => {
+    const other = next[place];
+    return other !== undefined && entry.reason === other.reason && entry.byUserId === other.byUserId && entry.at === other.at
+      && entry.findingCodes.join("\n") === other.findingCodes.join("\n");
+  });
 
 /** Effective-dated policies, newest first, as every other policy in this product is held. */
 export class InMemoryVehicleSuitabilityPolicies implements VehicleSuitabilityPolicyPort {
