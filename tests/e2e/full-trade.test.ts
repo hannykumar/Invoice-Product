@@ -74,7 +74,7 @@ interface Reply { readonly status: number; readonly body: Record<string, any>; }
 const call = async (method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<Reply> => {
   const response = await fetch(`${base}${path}`, {
     method,
-    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { authorization: `Bearer ${session}` }) },
+    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { cookie: `__Host-karobar_session=${session}`, origin: base }) },
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
   return { status: response.status, body: await response.json() as Record<string, any> };

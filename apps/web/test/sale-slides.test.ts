@@ -26,7 +26,7 @@ let page: Page;
 const call = async (path: string, body?: Record<string, unknown>) => {
   const response = await fetch(`${base}${path}`, {
     method: body === undefined ? 'GET' : 'POST',
-    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { authorization: `Bearer ${session}` }) },
+    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { cookie: `__Host-karobar_session=${session}`, origin: base }) },
     body: body === undefined ? null : JSON.stringify(body),
   });
   const reply = await response.json() as Record<string, any>;

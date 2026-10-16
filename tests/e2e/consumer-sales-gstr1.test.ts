@@ -42,7 +42,7 @@ after(async () => {
 async function ok(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<Record<string, any>> {
   const response = await fetch(`${base}${path}`, {
     method,
-    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { authorization: `Bearer ${session}` }) },
+    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { cookie: `__Host-karobar_session=${session}`, origin: base }) },
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
   const reply = await response.json() as Record<string, any>;
