@@ -7,6 +7,7 @@
 import { conflict, notFound, type CompanyId } from '@invoice/kernel';
 import type { TransactionParticipant } from '@invoice/ledger';
 import type { ChallanState, DeliveryChallan } from './challan-model.ts';
+import { pageOf, type Page } from './ports.ts';
 
 export interface ChallanRepository {
   findById(companyId: CompanyId, id: string): Promise<DeliveryChallan | null>;
@@ -15,7 +16,7 @@ export interface ChallanRepository {
   insert(challan: DeliveryChallan): Promise<void>;
   /** Replaces a challan only if nobody else changed it first. */
   update(challan: DeliveryChallan, expectedVersion: number): Promise<void>;
-  list(companyId: CompanyId, filter?: { partyId?: string; state?: ChallanState; invoiceId?: string }): Promise<DeliveryChallan[]>;
+  list(companyId: CompanyId, filter?: { partyId?: string; state?: ChallanState; invoiceId?: string }, page?: Page): Promise<DeliveryChallan[]>;
 }
 
 export class InMemoryChallanRepository implements ChallanRepository, TransactionParticipant {
@@ -68,13 +69,14 @@ export class InMemoryChallanRepository implements ChallanRepository, Transaction
   async list(
     companyId: CompanyId,
     filter: { partyId?: string; state?: ChallanState; invoiceId?: string } = {},
+    page?: Page,
   ): Promise<DeliveryChallan[]> {
-    return this.#challans.filter(
+    return pageOf(this.#challans.filter(
       (c) =>
         c.companyId === companyId &&
         (filter.partyId === undefined || c.partyId === filter.partyId) &&
         (filter.state === undefined || c.state === filter.state) &&
         (filter.invoiceId === undefined || c.invoice?.invoiceId === filter.invoiceId),
-    );
+    ), page);
   }
 }

@@ -501,7 +501,7 @@ export class ThreeWayMatchingService {
       reason,
       accepted: [...new Set(match.findings.filter((finding) => finding.severity === "HOLD").map((finding) => finding.code))],
     };
-    await this.#approvals.insert(actor.companyId, approval);
+    await this.#approvals.insert(actor.companyId, approval, match);
     await this.#record(actor, at, "purchase.match_approved", match.purchaseId,
       `The differences on bill ${match.invoiceNumber} were accepted. Reason kept on record: ${reason}`,
       { invoice: match.invoiceNumber, accepted: approval.accepted.join(", "), fingerprint: match.fingerprint }, reason);

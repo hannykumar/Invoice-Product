@@ -128,4 +128,66 @@ export const itcMigrations: readonly Migration[] = Object.freeze([{
     CREATE INDEX itc_claims_company_period_idx ON itc_claims(company_id, period);
   `,
   down: `DROP TABLE IF EXISTS itc_claims;`,
+}, {
+  // Issue #366 — what the PostgreSQL repositories (postgres-repository.ts) need and the schema lacked.
+  id: "20261011T144842064Z_itc_b00fbee60e25_repository_columns_and_row_security",
+  up: `
+    -- The service numbers a portal row "<batch id>:<row>" (service.ts, #storeBatch), which is not a uuid.
+    ALTER TABLE itc_portal_documents ALTER COLUMN id TYPE text;
+    -- The service stores a batch's rows first and the batch itself second, because the batch records
+    -- how many rows were new. Both are in one transaction, so the link is checked when it commits.
+    ALTER TABLE itc_portal_documents ALTER CONSTRAINT itc_portal_documents_batch_id_fkey DEFERRABLE INITIALLY DEFERRED;
+    -- The sentence the person was shown when they imported, kept as shown.
+    ALTER TABLE itc_import_batches ADD COLUMN sentence jsonb NOT NULL DEFAULT '{"en-IN":"","hi-IN":""}';
+    -- The order rows were written in. "The newest answer wins" and "the latest import" cannot rest on
+    -- a timestamp alone: two rows can carry the same one. Also the key lists are paged on.
+    ALTER TABLE itc_import_batches ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE itc_portal_documents ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE itc_decisions ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE itc_claims ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+
+    -- For the foreign key to the import batch.
+    CREATE INDEX itc_portal_documents_batch_idx ON itc_portal_documents(batch_id);
+    -- "Everything up to this month", in the order it was written, a page at a time.
+    CREATE INDEX itc_portal_documents_company_seq_idx ON itc_portal_documents(company_id, seq);
+    -- Every answer ever given on one line (the existing index leads with the period, which history does not filter on).
+    CREATE INDEX itc_decisions_history_idx ON itc_decisions(company_id, line_key, seq);
+    -- Every claim a company has made, a page at a time.
+    CREATE INDEX itc_claims_company_seq_idx ON itc_claims(company_id, seq);
+
+    ALTER TABLE itc_import_batches ENABLE ROW LEVEL SECURITY; ALTER TABLE itc_import_batches FORCE ROW LEVEL SECURITY;
+    CREATE POLICY itc_import_batches_tenant ON itc_import_batches USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE itc_portal_documents ENABLE ROW LEVEL SECURITY; ALTER TABLE itc_portal_documents FORCE ROW LEVEL SECURITY;
+    CREATE POLICY itc_portal_documents_tenant ON itc_portal_documents USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE itc_decisions ENABLE ROW LEVEL SECURITY; ALTER TABLE itc_decisions FORCE ROW LEVEL SECURITY;
+    CREATE POLICY itc_decisions_tenant ON itc_decisions USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE itc_claims ENABLE ROW LEVEL SECURITY; ALTER TABLE itc_claims FORCE ROW LEVEL SECURITY;
+    CREATE POLICY itc_claims_tenant ON itc_claims USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+  `,
+  down: `
+    DROP POLICY IF EXISTS itc_import_batches_tenant ON itc_import_batches;
+    ALTER TABLE itc_import_batches NO FORCE ROW LEVEL SECURITY; ALTER TABLE itc_import_batches DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS itc_portal_documents_tenant ON itc_portal_documents;
+    ALTER TABLE itc_portal_documents NO FORCE ROW LEVEL SECURITY; ALTER TABLE itc_portal_documents DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS itc_decisions_tenant ON itc_decisions;
+    ALTER TABLE itc_decisions NO FORCE ROW LEVEL SECURITY; ALTER TABLE itc_decisions DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS itc_claims_tenant ON itc_claims;
+    ALTER TABLE itc_claims NO FORCE ROW LEVEL SECURITY; ALTER TABLE itc_claims DISABLE ROW LEVEL SECURITY;
+    DROP INDEX IF EXISTS itc_claims_company_seq_idx;
+    DROP INDEX IF EXISTS itc_decisions_history_idx;
+    DROP INDEX IF EXISTS itc_portal_documents_company_seq_idx;
+    DROP INDEX IF EXISTS itc_portal_documents_batch_idx;
+    ALTER TABLE itc_import_batches DROP COLUMN IF EXISTS seq;
+    ALTER TABLE itc_portal_documents DROP COLUMN IF EXISTS seq;
+    ALTER TABLE itc_decisions DROP COLUMN IF EXISTS seq;
+    ALTER TABLE itc_claims DROP COLUMN IF EXISTS seq;
+    ALTER TABLE itc_import_batches DROP COLUMN IF EXISTS sentence;
+    ALTER TABLE itc_portal_documents ALTER CONSTRAINT itc_portal_documents_batch_id_fkey NOT DEFERRABLE;
+    -- "<batch>:<row>" cannot be read back as a uuid and nothing refers to this id, so each row gets a new one.
+    ALTER TABLE itc_portal_documents ALTER COLUMN id TYPE uuid USING gen_random_uuid();
+  `,
 }]);
