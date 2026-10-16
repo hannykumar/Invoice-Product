@@ -118,4 +118,56 @@ export const gstReturnMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS gst_return_approvals;
     DROP TABLE IF EXISTS gst_return_preparations;
   `,
+}, {
+  // Issue #366 — what the PostgreSQL repository needs that the first migration did not give it.
+  id: "20261011T144926615Z_gst-returns_f477e95b6387_repository_rls_and_live_submission",
+  up: `
+    -- One company never sees another's returns, whatever the query forgot.
+    ${["gst_return_preparations", "gst_return_declared_thresholds"].map((table) => `
+    ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
+    CREATE POLICY ${table}_tenant ON ${table}
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);`).join("")}
+
+    -- Approvals and submissions carry no company of their own; they are reached through their
+    -- preparation, which the policy above already hides from every other company.
+    ${["gst_return_approvals", "gst_return_submissions"].map((table) => `
+    ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
+    CREATE POLICY ${table}_tenant ON ${table}
+      USING (EXISTS (SELECT 1 FROM gst_return_preparations p WHERE p.id = preparation_id))
+      WITH CHECK (EXISTS (SELECT 1 FROM gst_return_preparations p WHERE p.id = preparation_id));`).join("")}
+
+    -- Which attempt the return is showing. A return that is reopened and prepared again starts
+    -- with no submission, but the earlier attempts are history and stay: they are set aside, not
+    -- deleted. Null means "this is the one on the return".
+    ALTER TABLE gst_return_submissions ADD COLUMN superseded_at timestamptz;
+    -- At most one attempt is on the return at a time; also the index the read joins on.
+    CREATE UNIQUE INDEX gst_return_one_live_submission
+      ON gst_return_submissions(preparation_id) WHERE superseded_at IS NULL;
+
+    -- A filing key is unique within its return, not across every company. The key is built from
+    -- the GST number, the month and the figures, so two companies holding the same registration
+    -- (a business and its accountant, or two test companies) would otherwise block each other.
+    ALTER TABLE gst_return_submissions DROP CONSTRAINT gst_return_submissions_provider_idempotency_key_key;
+    ALTER TABLE gst_return_submissions ADD CONSTRAINT gst_return_submissions_filing_key
+      UNIQUE (preparation_id, provider, idempotency_key);
+
+    -- The foreign key to the preparation. The existing partial index covers only the live
+    -- approval; this one serves the key itself and the history of withdrawn approvals.
+    CREATE INDEX gst_return_approvals_preparation_idx ON gst_return_approvals(preparation_id);
+  `,
+  down: `
+    DROP INDEX IF EXISTS gst_return_approvals_preparation_idx;
+    ALTER TABLE gst_return_submissions DROP CONSTRAINT IF EXISTS gst_return_submissions_filing_key;
+    ALTER TABLE gst_return_submissions ADD CONSTRAINT gst_return_submissions_provider_idempotency_key_key
+      UNIQUE (provider, idempotency_key);
+    DROP INDEX IF EXISTS gst_return_one_live_submission;
+    ALTER TABLE gst_return_submissions DROP COLUMN IF EXISTS superseded_at;
+    ${["gst_return_submissions", "gst_return_approvals", "gst_return_declared_thresholds", "gst_return_preparations"].map((table) => `
+    DROP POLICY IF EXISTS ${table}_tenant ON ${table};
+    ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;`).join("")}
+  `,
 }]);

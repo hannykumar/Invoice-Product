@@ -25,8 +25,21 @@ export interface SalesRepository {
    * with no entry in the books (see `SalesService.discardDraft`); an issued bill is never removed.
    */
   remove(companyId: CompanyId, id: string): Promise<void>;
-  list(companyId: CompanyId, filter?: { partyId?: string; state?: SalesInvoice['state'] }): Promise<SalesInvoice[]>;
+  /** Issue #366 — with `page`, at most `limit` bills after the bill `after`, in id order. Without it, every bill. */
+  list(companyId: CompanyId, filter?: { partyId?: string; state?: SalesInvoice['state'] }, page?: Page): Promise<SalesInvoice[]>;
 }
+
+/** Issue #366 — keyset paging: at most `limit` rows whose id comes after `after`, in id order. */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
+/** One page of an in-memory list, in the same order and with the same cursor as PostgreSQL's. */
+export const pageOf = <T extends { readonly id: string }>(rows: readonly T[], page: Page | undefined): T[] =>
+  page === undefined
+    ? [...rows]
+    : [...rows].filter((r) => page.after === undefined || r.id > page.after).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, page.limit);
 
 export interface ReservationRequest {
   readonly companyId: CompanyId;

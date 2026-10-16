@@ -4,7 +4,7 @@
 // adapters, not a dependency the domain is written against. Everything below is in this module's
 // own words, so a change of provider is a change of adapter.
 
-import type { CompanyId, Clock } from "@invoice/kernel";
+import { conflict, type CompanyId, type Clock } from "@invoice/kernel";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
 import type {
   ConsolidatedTripRecord, EwayBillAcknowledgement, EwayBillPolicy, EwayBillRecord,
@@ -97,16 +97,18 @@ export interface EwayBillRepository {
   /** The one that matters: one live e-way bill per movement. */
   findByMovementId(companyId: CompanyId, movementId: Id): Promise<EwayBillRecord | null>;
   findByNumber(companyId: CompanyId, ewayBillNumber: string): Promise<EwayBillRecord | null>;
-  list(companyId: CompanyId): Promise<EwayBillRecord[]>;
+  /** In the order they were first saved. `page.after` is the id of the last bill of the page before. */
+  list(companyId: CompanyId, page?: Page): Promise<EwayBillRecord[]>;
   /** Bills still running, so a screen can show what is on the road right now. */
-  listActive(companyId: CompanyId): Promise<EwayBillRecord[]>;
+  listActive(companyId: CompanyId, page?: Page): Promise<EwayBillRecord[]>;
   /** Bills whose validity runs out before a moment — what an expiry warning reads. */
-  listExpiringBefore(companyId: CompanyId, before: string): Promise<EwayBillRecord[]>;
+  listExpiringBefore(companyId: CompanyId, before: string, page?: Page): Promise<EwayBillRecord[]>;
 }
 
 export interface ConsolidatedTripRepository {
   insert(record: ConsolidatedTripRecord): Promise<void>;
-  list(companyId: CompanyId): Promise<ConsolidatedTripRecord[]>;
+  /** In the order they were saved. `page.after` is the id of the last trip of the page before. */
+  list(companyId: CompanyId, page?: Page): Promise<ConsolidatedTripRecord[]>;
   findByTripNumber(companyId: CompanyId, tripNumber: string): Promise<ConsolidatedTripRecord | null>;
 }
 
@@ -116,3 +118,33 @@ export interface EwayBillPolicyPort {
 }
 
 export type { Clock, TransporterAssignment, VehicleAssignment };
+
+// ------------------------------------------------------------------ issue #366: paging and duplicates
+
+/**
+ * One page of a list, by keyset: at most `limit` rows that come after the row whose key is `after`.
+ *
+ * The key is named on each list method (an id, or the vehicle number). Leaving the page out returns
+ * the whole list, which is what every caller did before paging existed.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
+/** Paging for the in-memory stores: `rows` are in their stable order, `keep` is the list's own filter. */
+export const pageOf = <T>(rows: readonly T[], keyOf: (row: T) => string, page: Page | undefined, keep: (row: T) => boolean = () => true): T[] => {
+  if (page === undefined) return rows.filter(keep);
+  const at = page.after === undefined ? -1 : rows.findIndex((row) => keyOf(row) === page.after);
+  // A key this company does not hold is the end of the list, not the start of it.
+  if (page.after !== undefined && at < 0) return [];
+  return rows.slice(at + 1).filter(keep).slice(0, page.limit);
+};
+
+/** What both kinds of store say when a row that must be unique is written a second time. */
+export const DUPLICATES = {
+  ewayBill: () => conflict("EWAY_DUPLICATE", "This movement already has an e-way bill record, so a second one has not been made."),
+  trip: () => conflict("EWAY_TRIP_DUPLICATE", "This trip sheet has already been recorded."),
+  check: () => conflict("VEHICLE_CHECK_DUPLICATE", "This vehicle check has already been recorded."),
+  checkChanged: () => conflict("VEHICLE_CHECK_CHANGED", "Someone else answered this vehicle check a moment ago. Open it again to see what they wrote before adding to it."),
+} as const;

@@ -6,6 +6,7 @@
 // last four digits only.
 
 import type { Migration } from "../../platform/src/migration-definitions.ts";
+import { enforceTenant, releaseTenant } from "./tenant-policy.ts";
 
 export const supplierRiskMigrations: readonly Migration[] = Object.freeze([{
   id: "20260829T181515430Z_purchasing_a9be7b3d2c86_supplier_risk_warnings",
@@ -85,5 +86,18 @@ export const supplierRiskMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS supplier_risk_acknowledgements;
     DROP TABLE IF EXISTS supplier_risk_assessments;
     DROP TABLE IF EXISTS supplier_gstin_readings;
+  `,
+}, {
+  // Issue #366 — what the PostgreSQL supplier-check repositories need that #19's tables did not have.
+  id: "20261011T144952087Z_purchasing_dc50aa1c57d4_supplier_risk_repository",
+  up: `
+    -- The two lights of #99 (the GST department's answer, and our own books) are part of the
+    -- assessment as it was shown, and the table had no place for them.
+    ALTER TABLE supplier_risk_assessments ADD COLUMN lights jsonb NOT NULL DEFAULT '[]';
+    ${enforceTenant(["supplier_gstin_readings", "supplier_risk_assessments", "supplier_risk_acknowledgements", "supplier_risk_policies"])}
+  `,
+  down: `
+    ${releaseTenant(["supplier_gstin_readings", "supplier_risk_assessments", "supplier_risk_acknowledgements", "supplier_risk_policies"])}
+    ALTER TABLE supplier_risk_assessments DROP COLUMN IF EXISTS lights;
   `,
 }]);

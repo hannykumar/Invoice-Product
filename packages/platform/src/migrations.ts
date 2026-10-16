@@ -19,7 +19,7 @@ export async function migrate(executor: SqlExecutor): Promise<string[]> {
 }
 export async function rollback(executor: SqlExecutor): Promise<string | null> {
   validateMigrationRegistry(migrations);
-  const rows = (await executor.query("SELECT id FROM schema_migrations ORDER BY applied_at DESC LIMIT 1")).rows;
+  const rows = (await executor.query("SELECT id FROM schema_migrations ORDER BY applied_at DESC, id DESC LIMIT 1")).rows;
   const id = rows[0]?.id; if (typeof id !== "string") return null;
   const migration = migrations.find((item) => item.id === id); if (!migration) throw new Error(`Unknown applied migration: ${id}`);
   await executor.query("DELETE FROM schema_migrations WHERE id = $1", [id]); await executor.query(migration.down); return id;

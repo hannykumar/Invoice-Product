@@ -21,7 +21,48 @@ export interface Version<T> {
   readonly reason?: string;
 }
 
-const isIsoDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
+export const isIsoDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+/** Issue #366 — the in-memory stores answer directly and the PostgreSQL ones with a promise. */
+export type Maybe<T> = T | Promise<T>;
+
+/**
+ * Issue #366 — one page of a list. `after` is the key of the last row of the page before: a record
+ * id for `list`, a version number for `history`, a unit code for `units`. Left out, a list method
+ * returns everything in the order it always did.
+ */
+export interface Page { readonly limit: number; readonly after?: string }
+
+/** One page of rows already sorted by `key`. */
+export const pageOf = <R>(sorted: readonly R[], key: (row: R) => string | number, page: Page, after: string | number | undefined = page.after): R[] =>
+  sorted.filter((row) => after === undefined || key(row) > after).slice(0, page.limit);
+
+/**
+ * Issue #366 — what the master-data service keeps its records in. `VersionedStore` (memory) and
+ * `PostgresVersionedStore` (postgres-masters.ts) both implement it; `test/masters-store-contract.ts`
+ * runs one suite against both.
+ */
+export interface VersionStore<T extends { readonly id: Id; readonly companyId: Id }> {
+  append(data: T, effectiveFrom: IsoDate, recordedBy: Id, reason?: string): Maybe<Version<T>>;
+  history(companyId: Id, id: Id, page?: Page): Maybe<readonly Version<T>[]>;
+  asOf(companyId: Id, id: Id, asOf: IsoDate): Maybe<Version<T> | null>;
+  latest(companyId: Id, id: Id): Maybe<Version<T> | null>;
+  current(companyId: Id, id: Id, asOf?: IsoDate): Maybe<T | null>;
+  list(companyId: Id, asOf?: IsoDate, page?: Page): Maybe<readonly T[]>;
+  size(companyId: Id): Maybe<number>;
+}
+
+/** Issue #366 — which record a finished command wrote, so a retry can hand that record back. */
+export interface CommandRecordStore {
+  set(companyId: Id, commandId: Id, recordId: Id): Maybe<void>;
+  get(companyId: Id, commandId: Id): Maybe<Id | undefined>;
+}
+
+export class CommandRecordIndex implements CommandRecordStore {
+  readonly #recordByCommand = new Map<Id, Id>();
+  set(companyId: Id, commandId: Id, recordId: Id): void { this.#recordByCommand.set(`${companyId}|${commandId}`, recordId); }
+  get(companyId: Id, commandId: Id): Id | undefined { return this.#recordByCommand.get(`${companyId}|${commandId}`); }
+}
 
 export const today = (clock: () => Date = () => new Date()): IsoDate => indiaDateOf(clock());
 
@@ -29,7 +70,7 @@ export const today = (clock: () => Date = () => new Date()): IsoDate => indiaDat
  * Append-only store of versioned records, scoped per company. Reads always take a
  * company id and throw rather than return another tenant's row.
  */
-export class VersionedStore<T extends { readonly id: Id; readonly companyId: Id }> {
+export class VersionedStore<T extends { readonly id: Id; readonly companyId: Id }> implements VersionStore<T> {
   readonly #versions = new Map<Id, Version<T>[]>();
 
   /** Records a new version. Back-dating is allowed and slots into the timeline. */
@@ -54,11 +95,11 @@ export class VersionedStore<T extends { readonly id: Id; readonly companyId: Id 
   }
 
   /** Every version of one record, oldest recorded first. */
-  history(companyId: Id, id: Id): readonly Version<T>[] {
+  history(companyId: Id, id: Id, page?: Page): readonly Version<T>[] {
     const history = this.#versions.get(id);
     if (!history || history.length === 0) return [];
     if (history[0]?.companyId !== companyId) throw new PlatformError("TENANT_ISOLATION", "This record belongs to another company.");
-    return history;
+    return page === undefined ? history : pageOf(history, (version) => version.version, page, page.after === undefined ? undefined : Number(page.after));
   }
 
   /** The version in force on `asOf`, or null when the record did not exist yet. */
@@ -80,14 +121,15 @@ export class VersionedStore<T extends { readonly id: Id; readonly companyId: Id 
   }
 
   /** Every record of this kind that exists as of a date, for one company. */
-  list(companyId: Id, asOf: IsoDate = today()): readonly T[] {
+  list(companyId: Id, asOf: IsoDate = today(), page?: Page): readonly T[] {
     const rows: T[] = [];
     for (const [id, history] of this.#versions) {
       if (history[0]?.companyId !== companyId) continue;
       const version = this.asOf(companyId, id, asOf);
       if (version) rows.push(version.data);
     }
-    return rows;
+    // A page is in id order, the one order both stores can continue from; the whole list stays in the order records were created.
+    return page === undefined ? rows : pageOf(rows.sort((left, right) => (left.id < right.id ? -1 : 1)), (row) => row.id, page);
   }
 
   has(id: Id): boolean {

@@ -2,7 +2,7 @@
 import { conflict, notFound, type CompanyId, type PartyId } from '@invoice/kernel';
 import type { TransactionParticipant } from '@invoice/ledger';
 import type { Payment } from './model.ts';
-import type { PaymentRepository } from './ports.ts';
+import { pageOf, type Page, type PaymentRepository } from './ports.ts';
 
 export class InMemoryPaymentRepository implements PaymentRepository, TransactionParticipant {
   #payments: Payment[] = [];
@@ -49,11 +49,11 @@ export class InMemoryPaymentRepository implements PaymentRepository, Transaction
     return id === undefined ? null : this.findById(companyId, id);
   }
 
-  async listForParty(companyId: CompanyId, partyId: PartyId): Promise<Payment[]> {
-    return this.#payments.filter((p) => p.companyId === companyId && p.partyId === partyId);
+  async listForParty(companyId: CompanyId, partyId: PartyId, page?: Page): Promise<Payment[]> {
+    return pageOf(this.#payments.filter((p) => p.companyId === companyId && p.partyId === partyId), page);
   }
 
-  async list(companyId: CompanyId): Promise<Payment[]> {
-    return this.#payments.filter((p) => p.companyId === companyId);
+  async list(companyId: CompanyId, page?: Page): Promise<Payment[]> {
+    return pageOf(this.#payments.filter((p) => p.companyId === companyId), page);
   }
 }

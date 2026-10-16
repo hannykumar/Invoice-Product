@@ -338,7 +338,7 @@ export class GstReturnService {
       exportedAt: null,
       version: stored.version + 1,
     };
-    await this.#repository.update(reopened, stored.version);
+    await this.#repository.update(reopened, stored.version, { withdrawal: { by: actor.userId, reason } });
     await this.#record(actor, reopened, 'gst_return.reopened', `Reopened ${formatTaxPeriod(period)}.`, { reason });
     return reopened;
   }
@@ -422,15 +422,16 @@ export class GstReturnService {
     const sending: ReturnPreparation = { ...stored, state: 'SUBMITTING', version: stored.version + 1 };
     await this.#repository.update(sending, stored.version);
 
+    // Derived from what is being filed, not from the attempt, so two attempts at the same
+    // approved figures are one filing.
+    const filingKey = `gstr:${input.returnType}:${input.gstin}:${input.period}:${stored.approval.fingerprint}`;
     const outcome = await this.#government.submit({
       companyId: actor.companyId,
       gstin: input.gstin,
       period: input.period,
       returnType: input.returnType,
       payload,
-      // Derived from what is being filed, not from the attempt, so two attempts at the same
-      // approved figures are one filing.
-      idempotencyKey: `gstr:${input.returnType}:${input.gstin}:${input.period}:${stored.approval.fingerprint}`,
+      idempotencyKey: filingKey,
     });
 
     const at = this.#clock.now().toISOString();
@@ -445,7 +446,7 @@ export class GstReturnService {
             : { reference: null, attemptedAt: at, outcome: 'UNKNOWN', message: `We do not know whether this was filed: ${outcome.detail}. Check the portal before sending it again.`, errors: [] },
       version: sending.version + 1,
     };
-    await this.#repository.update(settled, sending.version);
+    await this.#repository.update(settled, sending.version, { attempt: { provider: this.#government.provider, idempotencyKey: filingKey } });
 
     await this.#record(actor, settled, 'gst_return.submitted',
       settled.submission?.message ?? 'Submission attempted.', {
