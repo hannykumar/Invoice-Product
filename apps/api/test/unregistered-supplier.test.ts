@@ -17,6 +17,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -45,7 +46,7 @@ let farmer = '';
 let composition = '';
 
 test('a supplier with no GST number is added only on a ground the law allows', async () => {
-  owner = (await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' })).body.sessionId;
+  owner = await signInAs('owner@sampoorna.example.invalid');
   const noGround = await request('POST', '/api/suppliers', { ...RAMU, unregisteredBasis: '' }, owner);
   assert.equal(noGround.status, 422);
   assert.equal(noGround.body.code, 'SUPPLIER_UNREGISTERED_BASIS');

@@ -11,6 +11,7 @@ import { handleApi } from '../src/server.ts';
 import { saveTurnoverBand } from './turnover-helper.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 // Issue #234 — the running app reads the real clock; this file pins it so its dates do not drift.
 useFixedAppClock('2026-09-28T10:00:00.000Z');
@@ -25,9 +26,7 @@ const request = async (method: string, path: string, body: Record<string, unknow
 };
 
 const signIn = async (): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+  return signInAs('owner@sampoorna.example.invalid', COMPANY_A);
 };
 
 const ensureCustomer = async (session: string, body: Record<string, unknown>): Promise<string> => {

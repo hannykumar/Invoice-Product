@@ -46,13 +46,43 @@ export const SYNTHETIC_PLATFORM_COMPANIES = [
   },
 ] as const;
 
+/**
+ * Issue #342 — the code the demo sign-in accepts, for every address. Development and tests only: the
+ * mock identity provider that reads it refuses to start anywhere else (`identityProviderFor`).
+ */
+export const DEMO_SIGN_IN_CODE = "246810";
+
+/**
+ * The people who can sign in to the demo: each company's owner, a read-only viewer, and an
+ * accountant (a CA) who looks after both businesses and switches between them. Invented; nobody's.
+ * The CA holds the owner's permissions until #343 gives each role its own list.
+ */
+export const DEMO_PEOPLE: readonly { userId: string; email: string; displayName: string; memberships: readonly { companyId: string; branchId: string; permissions: readonly Permission[] }[] }[] = [
+  ...SYNTHETIC_PLATFORM_COMPANIES.map((company) => ({
+    userId: company.userId, email: company.email, displayName: company.displayName,
+    memberships: [{ companyId: company.companyId, branchId: company.branchId, permissions: PRODUCT_OWNER_PERMISSIONS }],
+  })),
+  {
+    userId: "00000000-0000-4000-8000-000000000004", email: "viewer@sampoorna.example.invalid", displayName: "Sampoorna Viewer",
+    memberships: [{ companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, permissions: ["dashboard.read"] }],
+  },
+  {
+    userId: "00000000-0000-4000-8000-000000000005", email: "ca@example.invalid", displayName: "Synthetic Chartered Accountant",
+    memberships: SYNTHETIC_PLATFORM_COMPANIES.map((company) => ({ companyId: company.companyId, branchId: company.branchId, permissions: PRODUCT_OWNER_PERMISSIONS })),
+  },
+];
+
 export async function seed(executor: SqlExecutor): Promise<void> {
   for (const demo of SYNTHETIC_PLATFORM_COMPANIES) {
     await executor.query("INSERT INTO companies (id, legal_name) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET legal_name = EXCLUDED.legal_name", [demo.companyId, demo.legalName]);
     await executor.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name", [demo.branchId, demo.companyId, demo.branchName]);
-    await executor.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name", [demo.userId, demo.email, demo.displayName]);
-    await executor.query("INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb) ON CONFLICT (company_id, user_id) DO UPDATE SET permissions = EXCLUDED.permissions", [demo.companyId, demo.userId, JSON.stringify(PRODUCT_OWNER_PERMISSIONS)]);
-    await executor.query("INSERT INTO user_branch_access (company_id, user_id, branch_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [demo.companyId, demo.userId, demo.branchId]);
+  }
+  for (const person of DEMO_PEOPLE) {
+    await executor.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name", [person.userId, person.email, person.displayName]);
+    for (const membership of person.memberships) {
+      await executor.query("INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb) ON CONFLICT (company_id, user_id) DO UPDATE SET permissions = EXCLUDED.permissions", [membership.companyId, person.userId, JSON.stringify(membership.permissions)]);
+      await executor.query("INSERT INTO user_branch_access (company_id, user_id, branch_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", [membership.companyId, person.userId, membership.branchId]);
+    }
   }
 }
 if (process.argv[1]?.endsWith("seed.ts")) { const database = createDatabase(); try { await seed(database); console.log("Synthetic demo seed completed."); } finally { await database.close(); } }

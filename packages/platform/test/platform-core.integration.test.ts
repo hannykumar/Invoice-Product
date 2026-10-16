@@ -53,6 +53,11 @@ before(async () => {
       await db.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic person')", [id, `platform-${id}@example.invalid`]);
       return id;
     },
+    knownUser: async (_auth, email) => {
+      const id = crypto.randomUUID();
+      await db.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic person')", [id, email]);
+      return id;
+    },
   };
 });
 after(async () => { await db?.close(); });

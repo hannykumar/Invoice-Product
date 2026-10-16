@@ -13,9 +13,10 @@ import { DemoApplication } from '../src/demo-application.ts';
 import { captureLog, inRequest, log } from '../src/log.ts';
 import { apiErrorReporter } from '../src/error-reporting.ts';
 import { useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
+import { signInOverHttp } from './sign-in-helper.ts';
+import { DEMO_SIGN_IN_CODE } from '../../../packages/platform/src/seed.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
-const PASSWORD = 'karobar-demo';
 
 const listen = async () => {
   const server = createServer(serveApi);
@@ -32,11 +33,10 @@ test('#357: the request id in the response header finds every line of that reque
   const { server, base } = await listen();
   context.after(() => server.close());
 
-  const login = await fetch(`${base}/api/auth/login`, { method: 'POST', body: JSON.stringify({ companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: PASSWORD }) });
-  const { sessionId } = await login.json() as { sessionId: string };
+  const cookie = await signInOverHttp(base);
   // A fault deep inside the request: its line must join the request's own.
   context.mock.method(DemoApplication.prototype, 'reports', () => { throw new TypeError('a fault deep inside'); });
-  const reports = await fetch(`${base}/api/reports?from=2026-04-01`, { headers: { authorization: `Bearer ${sessionId}` } });
+  const reports = await fetch(`${base}/api/reports?from=2026-04-01`, { headers: { cookie } });
   assert.equal(reports.status, 500);
   const requestId = reports.headers.get('x-request-id')!;
 
@@ -54,11 +54,11 @@ test('#357: the request id in the response header finds every line of that reque
   assert.equal(typeof access.duration_ms, 'number');
   assert.match(mine[0]!.stack, /a fault deep inside/);
 
-  // Signing in carried a password and handed back a session: neither, nor the word, is in any line.
+  // Signing in carried a code and handed back a session: neither is in any line.
   const everything = raw.join('\n');
   assert.ok(!/password/i.test(everything), 'a log line mentions a password');
-  assert.ok(!everything.includes(PASSWORD));
-  assert.ok(!everything.includes(sessionId));
+  assert.ok(!everything.includes(DEMO_SIGN_IN_CODE));
+  assert.ok(!everything.includes(cookie.split('=')[1]!));
   assert.ok(!everything.includes('owner@sampoorna.example.invalid'));
 });
 

@@ -142,6 +142,8 @@ dialog { border: 0; border-radius: var(--radius); background: var(--surface); co
 .dialog-actions:has(button[hidden]) { grid-template-columns: 1fr; }
 .login-form { display: grid; gap: .85rem; margin-top: 1.1rem; text-align: left; }
 .login-form label { display: grid; gap: .35rem; color: var(--label); font-size: var(--fs-xs); font-weight: 700; }
+/* Issue #342 — the code box and "use another number" wait until a code has been sent. */
+.login-form [hidden] { display: none; }
 .login-form input, .login-form select { width: 100%; border: 1px solid var(--field-line); border-radius: var(--radius-field); min-height: var(--tap); padding: .55rem .78rem; background: var(--surface); color: var(--ink); }
 .login-error { min-height: 1.2rem; margin: 0; color: var(--late); }
 .demo-credential { margin-bottom: 0; font-size: var(--fs-xs); }

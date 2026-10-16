@@ -4,6 +4,7 @@ import { handleApi } from '../src/server.ts';
 import { saveTurnoverBand } from './turnover-helper.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 // Issue #234 — the running app reads the real clock; this file pins it so its dates do not drift.
 useFixedAppClock('2026-08-29T10:00:00.000Z');
@@ -18,16 +19,14 @@ const request = async (method: string, path: string, body: Record<string, unknow
   return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
-const signIn = async (companyId: string, email: string, password = 'karobar-demo'): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId, email, password });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+const signIn = async (companyId: string, email: string): Promise<string> => {
+  return signInAs(email, companyId);
 };
 
 test('the HTTP edge derives company and permissions from an authenticated session', async () => {
   assert.equal((await request('GET', '/api/dashboard')).status, 401);
   assert.equal((await request('GET', '/api/dashboard', {}, 'made-up-session')).status, 401);
-  assert.equal((await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'wrong' })).status, 401);
+  assert.equal((await request('POST', '/api/auth/sign-in', { address: 'owner@sampoorna.example.invalid', code: 'wrong' })).status, 401);
 
   const sessionA = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const sessionB = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
@@ -80,7 +79,7 @@ test('migration workspaces belong to the exact signed-in session that opened the
 });
 
 test('a real membership controls permissions at the domain boundary', async () => {
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('GET', '/api/dashboard', {}, viewer)).status, 200);
   const denied = await request('POST', '/api/purchases/record', { supplierId: 'sampoorna:party:supplier', reference: 'DENIED-80', date: '2026-08-29', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '1', rate: '100', gst: '1800' }] }, viewer);
   assert.equal(denied.status, 403);
@@ -110,7 +109,7 @@ test('operations API exposes tenant-safe failures and replays only safe jobs', a
   const grant = await request('POST', '/api/operations/support-grants', { supportActorId: '00000000-0000-4000-8000-000000000099', reason: 'Customer asked support to inspect IRP error codes', scopes: ['external-failures'], durationMinutes: 30 }, ownerA);
   assert.equal(grant.status, 200);
   assert.deepEqual(grant.body.scopes, ['external-failures']);
-  assert.equal((await request('GET', '/api/operations', {}, await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo'))).status, 403);
+  assert.equal((await request('GET', '/api/operations', {}, await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid'))).status, 403);
   const publicStatus = await request('GET', '/api/status');
   assert.equal(publicStatus.status, 200);
   assert.equal(publicStatus.body.incidents[0].state, 'resolved');
@@ -134,7 +133,7 @@ test('live bank feed API requires consent, syncs once and preserves history on d
   assert.equal(workspace.body.connections[0].transactions.length, 2);
   assert.equal(JSON.stringify(workspace.body).includes('sandbox-approved'), false);
 
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('GET', '/api/bank-feeds', {}, viewer)).status, 403);
 });
 
@@ -234,7 +233,7 @@ test('authenticated customer and supplier returns preview and post through real 
 
 test('return APIs require both a session and the dedicated permission', async () => {
   assert.equal((await request('GET', '/api/returns/documents')).status, 401);
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   const denied = await request('GET', '/api/returns/documents', {}, viewer);
   assert.equal(denied.status, 403);
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
@@ -313,7 +312,7 @@ test('assistant routes enforce authentication, permission and the session compan
   assert.equal((await request('GET', '/api/assistant/examples')).status, 401);
   assert.equal((await request('POST', '/api/assistant/ask', { question: 'how much did I sell?' })).status, 401);
 
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   const denied = await request('POST', '/api/assistant/ask', { question: 'how much did I sell?' }, viewer);
   assert.equal(denied.status, 403);
   assert.equal(denied.body.code, 'PERMISSION_DENIED');
@@ -775,7 +774,7 @@ test('a bill that is paid or disputed is not chased, over HTTP either', async ()
 test('reminders need a session, the right permission, and belong to one company only', async () => {
   assert.equal((await request('GET', '/api/reminders')).status, 401);
 
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('GET', '/api/reminders', {}, viewer)).status, 403);
   assert.equal((await request('POST', '/api/reminders/send', { documentId: 'anything' }, viewer)).status, 403);
 
@@ -860,7 +859,7 @@ test('the plan is enforced on a real write path, and counted only when the work 
 
 test('the subscription screen needs a session and its own permission, and is company-scoped', async () => {
   assert.equal((await request('GET', '/api/subscription')).status, 401);
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('GET', '/api/subscription', {}, viewer)).status, 403);
 
   const konkan = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
@@ -995,7 +994,7 @@ test('the assistant refuses over HTTP what it must not finish, and needs its own
   assert.equal(guess.body.refusals[0].code, 'MISSING_FACT');
 
   assert.equal((await request('GET', '/api/agent/capabilities')).status, 401);
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('GET', '/api/agent/capabilities', {}, viewer)).status, 403);
   assert.equal((await request('POST', '/api/agent/plan', { request: 'Send reminders' }, viewer)).status, 403);
 
@@ -1069,7 +1068,7 @@ test('a GST return cannot be exported before it is approved, and approving fixes
 });
 
 test('GST return APIs require both a session and the dedicated permission', async () => {
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   const denied = await request('POST', '/api/gst-returns/prepare', { period: '2026-05' }, viewer);
   assert.equal(denied.status, 403);
 });
@@ -1168,7 +1167,7 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   const refused = await request('POST', '/api/challans/link-invoice', { challan: issued.body.challan.id, invoice: bill.body.invoice.id }, owner);
   assert.equal(refused.status, 409, 'no invoice follows goods sent for job work');
 
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('POST', '/api/challans/issue', { ...jobWork, reference: 'viewer' }, viewer)).status, 403);
 });
 
@@ -1231,7 +1230,7 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   const listed = (await request('GET', '/api/presale', {}, owner)).body.documents.map((d: { number: string; state: string }) => `${d.number}:${d.state}`);
   assert.deepEqual(listed.sort(), ['PI/26-27/00001:INVOICED', 'QTN/26-27/00001:CONVERTED']);
 
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('POST', '/api/presale/issue', { ...quote, reference: 'viewer' }, viewer)).status, 403);
 });
 
@@ -1292,7 +1291,7 @@ test('#165 — money against a proforma gets a receipt voucher, GST on a service
   assert.match(printed.body.html, /CGST Rule 51/);
   assert.match(printed.body.html, new RegExp(`Receipt voucher refunded</th><td>${goodsAdvance.body.advance.number.replace(/\//g, '\\/')}`));
 
-  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
   assert.equal((await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '1', date: '2026-08-28', mode: 'CASH' }, viewer)).status, 403);
 });
 

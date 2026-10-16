@@ -46,6 +46,11 @@
               <option value="hi-IN">हिन्दी</option>
             </select>
           </label>
+          <!-- Issue #342 — shown only to someone in more than one business: switch without signing in again. -->
+          <label class="language-control" id="company-choice" hidden>
+            <span class="sr-only" data-i18n="switchCompany"></span>
+            <select id="company-switch" aria-label="Business" data-i18n-aria="switchCompany"></select>
+          </label>
           <button class="text-button" id="sign-out" type="button" data-i18n="signOut"></button>
           <span class="user-avatar" aria-label="Signed in as Hanny Kumar" data-i18n-aria="signedIn">HK</span>
         </div>
@@ -1542,13 +1547,13 @@
       <h2 id="login-title" data-i18n="loginTitle"></h2>
       <p id="login-help" data-i18n="loginHelp"></p>
       <form id="login-form" class="login-form">
-        <label><span data-i18n="company"></span><select name="companyId"><option value="00000000-0000-4000-8000-000000000001">Sampoorna Traders</option><option value="00000000-0000-4000-8000-000000000011">Konkan Fresh Foods</option></select></label>
-        <label><span data-i18n="email"></span><input name="email" type="email" value="owner@sampoorna.example.invalid" autocomplete="username" required /></label>
-        <label><span data-i18n="password"></span><input name="password" type="password" value="karobar-demo" autocomplete="current-password" required /></label>
+        <label><span data-i18n="signInAddress"></span><input name="address" type="text" inputmode="email" autocomplete="username" required /></label>
+        <label id="login-code-field" hidden><span data-i18n="signInCode"></span><input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" /></label>
+        <p class="demo-credential" id="login-hint" role="status" hidden></p>
         <p class="login-error" id="login-error" role="alert"></p>
-        <button class="primary-button" type="submit" data-i18n="signIn"></button>
+        <button class="primary-button" type="submit" data-i18n="sendCode"></button>
+        <button class="text-button" id="login-change-address" type="button" data-i18n="changeAddress" hidden></button>
       </form>
-      <p class="demo-credential" data-i18n="demoCredential"></p>
     </dialog>
     <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><!-- Issue #312 — on a sale review: one green line for what the law needs (it happens by itself), and at most one warning, only when the owner must act. --><p class="line-ok" id="review-ok" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p><p class="line-warn" id="review-warning" hidden><span aria-hidden="true">!</span><span data-line-text></span></p><label class="bill-choice" id="review-advance" hidden><input type="checkbox" id="review-advance-use" /><strong id="review-advance-label"></strong></label><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill"></button><button class="primary-button" id="review-add-customer" type="button" hidden data-i18n="addNamedCustomer"></button><button class="primary-button" id="review-date-today" type="button" hidden data-i18n="dateItToday"></button><button class="secondary-button" id="review-advance-voucher" type="button" hidden data-i18n="printAdvanceVoucher"></button><button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
     <!-- Issue #307 — the finish of every bill, filled by done-screen.js (the four-slide sale #305 reuses it). -->

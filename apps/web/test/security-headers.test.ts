@@ -13,6 +13,7 @@ import type { AddressInfo } from 'node:net';
 import puppeteer, { type Browser, type Page } from 'puppeteer';
 import { webServer } from '../server.ts';
 import { HEADERS_TIMEOUT_MS, REQUEST_TIMEOUT_MS, SECURITY_HEADERS } from '../../api/src/http-hardening.ts';
+import { signInInBrowser, signInOverHttp } from '../../api/test/sign-in-helper.ts';
 
 const HOSTILE = '<script>alert(1)</script><img src=x onerror=alert(2)>';
 
@@ -54,23 +55,16 @@ test('the page, its scripts and styles, and the API all carry every security hea
 });
 
 test('the app signs in and draws a bill under the policy, and a hostile name stays text', async () => {
-  const login = await fetch(`${base}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ companyId: '00000000-0000-4000-8000-000000000001', email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' }),
-  });
-  const session = (await login.json() as { sessionId: string }).sessionId;
+  const cookie = await signInOverHttp(base);
   const added = await fetch(`${base}/api/customers`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${session}` },
+    headers: { 'content-type': 'application/json', cookie, origin: base },
     body: JSON.stringify({ legalName: HOSTILE, registration: 'unregistered', line1: HOSTILE, city: 'Pune', pincode: '411026' }),
   });
   assert.equal(added.status, 200, await added.text());
 
   await page.goto(`${base}/#sale`, { waitUntil: 'load' });
-  await page.waitForSelector('#login-form button[type="submit"]', { visible: true });
-  await page.click('#login-form button[type="submit"]');
-  await page.waitForFunction(() => !(document.querySelector('#login-dialog') as HTMLDialogElement).open);
+  await signInInBrowser(page);
   // The customer list now holds the hostile name: it must be an option's text, not markup.
   await page.waitForFunction((name) => [...document.querySelectorAll('option')].some((option) => option.textContent === name), {}, HOSTILE);
 

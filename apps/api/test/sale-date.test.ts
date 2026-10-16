@@ -19,6 +19,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { apiRuntime } from '../src/runtime.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 // 11:30 in India on 29 September 2026.
 useFixedAppClock('2026-09-29T06:00:00.000Z');
@@ -35,14 +36,12 @@ const request = async (method: string, path: string, body: Record<string, unknow
 };
 
 const signIn = async (): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+  return signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
 };
 
 const internals = async (owner: string) => {
   const runtime = apiRuntime();
-  const context = runtime.authenticate(`Bearer ${owner}`);
+  const context = await runtime.authenticate(`Bearer ${owner}`);
   const app = await runtime.application(context) as any;
   const companyId = runtime.actor(context).companyId;
   return {

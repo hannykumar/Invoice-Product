@@ -8,6 +8,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { stockEverything } from './stock-helper.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -18,10 +19,8 @@ const request = async (method: string, path: string, body: Record<string, unknow
   return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
-const signIn = async (email = 'owner@sampoorna.example.invalid', password = 'karobar-demo'): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email, password });
-  assert.equal(response.status, 200, JSON.stringify(response.body));
-  return response.body.sessionId as string;
+const signIn = async (email = 'owner@sampoorna.example.invalid'): Promise<string> => {
+  return signInAs(email, SAMPOORNA);
 };
 
 test('#308: an item keeps its barcode, usual price and Hindi name; one barcode finds one item', async () => {
@@ -50,7 +49,7 @@ test('#308: an item keeps its barcode, usual price and Hindi name; one barcode f
   assert.equal((await request('POST', '/api/items/edit', { itemId: created.body.item.id, barcode: '8901063010048' }, owner)).status, 200);
   assert.equal((await request('POST', '/api/items/edit', { itemId: 'sampoorna:item:SOAP', barcode: '8901063010048' }, owner)).body.code, 'ITEM_BARCODE_TAKEN');
 
-  const viewer = await signIn('viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn('viewer@sampoorna.example.invalid');
   assert.equal((await request('POST', '/api/items/edit', { itemId: created.body.item.id, price: '1' }, viewer)).status, 403);
 });
 
