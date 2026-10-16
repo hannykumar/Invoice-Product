@@ -1,14 +1,17 @@
 /**
  * Issue #201 — return notes in PostgreSQL (`return_notes`, `return_note_lines`).
  *
- * Writes go through the ledger store's open transaction (`PostgresLedgerStore.withSql`), so a note,
- * its number and the voucher it posts are saved together or not at all — the database's version of
- * what `InMemoryReturnNoteRepository` does by joining the in-memory store.
+ * Writes join the caller's unit of work (`PostgresLedgerStore.writeSql`, which throws
+ * `NO_UNIT_OF_WORK` when none is open), so a note, its number and the voucher it posts are saved
+ * together or not at all — the database's version of what `InMemoryReturnNoteRepository` does by
+ * joining the in-memory store. Reads run in `withSql` (`tenantTransaction`). Every query also names
+ * `company_id`, so row-level security is a second wall, not the only one.
  */
-import { conflict, money, notFound, type CompanyId, type IsoDate, type Money } from '@invoice/kernel';
+import { conflict, invalid, money, notFound, type CompanyId, type IsoDate, type Money } from '@invoice/kernel';
 import type { PostgresLedgerStore, Sql } from '@invoice/ledger';
-import type { ReturnNote, ReturnNoteLine, ReturnTaxAmounts, SupplierCreditNoteRef } from './model.ts';
-import type { ReturnNoteRepository } from './ports.ts';
+import { isChargeLine, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts, type SupplierCreditNoteRef } from './model.ts';
+import type { Page, ReturnNoteRepository } from './ports.ts';
+import { pageLimit } from './repository.ts';
 
 type Row = Record<string, unknown>;
 const AMOUNTS = ['taxable_value', 'cgst', 'sgst', 'utgst', 'igst', 'cess', 'ineligible_tax', 'reverse_charge_tax', 'total'] as const;
@@ -23,6 +26,12 @@ const NOTE_COLUMNS = `id, company_id, kind, number, document_date::text AS docum
   original_document_date::text AS original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status,
   created_by, created_at, idempotency_key, summary, supplier_credit_note_number,
   supplier_credit_note_date::text AS supplier_credit_note_date`;
+const LINE_COLUMNS = `return_note_id, original_line_id, item_id, charge_kind, description, supply_kind, quantity_micro, quantity_unit,
+  disposition, warehouse_id, batch_id, serial_numbers, replacement_serial_numbers, ${amountColumns}, hsn_or_sac,
+  rate_percent_times100, unit_price_paise`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Issue #366 — a freight or other charge (`charge:<kind>`, gst-calc #205) is stored as its kind, not as an item. */
+const CHARGE = /^charge:(.+)$/;
 
 export class PostgresReturnNoteRepository implements ReturnNoteRepository {
   readonly #store: PostgresLedgerStore;
@@ -51,12 +60,13 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
       await sql.query(
         `INSERT INTO return_note_lines (return_note_id, company_id, original_line_id, item_id, description, supply_kind, quantity_micro,
            quantity_unit, disposition, warehouse_id, batch_id, serial_numbers, replacement_serial_numbers, ${amountColumns},
-           hsn_or_sac, rate_percent_times100, unit_price_paise)
-         VALUES (${placeholders(1, 25)})`,
-        [note.id, note.companyId, line.originalLineId, line.itemId, line.description, line.supplyKind, line.quantity.scaled.toString(),
+           hsn_or_sac, rate_percent_times100, unit_price_paise, charge_kind)
+         VALUES (${placeholders(1, 26)})`,
+        [note.id, note.companyId, line.originalLineId, isChargeLine(line) ? null : line.itemId, line.description, line.supplyKind, line.quantity.scaled.toString(),
           line.quantity.unit, line.disposition, line.warehouseId, line.batchId, JSON.stringify(line.serialNumbers),
           JSON.stringify(line.replacementSerialNumbers), ...amountValues(line.amounts), line.hsnOrSac,
-          line.ratePercentTimes100?.toString() ?? null, line.unitPrice?.minor.toString() ?? null],
+          line.ratePercentTimes100?.toString() ?? null, line.unitPrice?.minor.toString() ?? null,
+          CHARGE.exec(line.itemId)?.[1] ?? null],
       );
     }
   }
@@ -69,37 +79,47 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
     return (await this.#select(companyId, 'idempotency_key = $2', [key]))[0] ?? null;
   }
 
-  listForOriginal(companyId: CompanyId, originalDocumentId: string): Promise<ReturnNote[]> {
-    return this.#select(companyId, 'original_document_id = $2', [originalDocumentId]);
+  async listForOriginal(companyId: CompanyId, originalDocumentId: string, page?: Page): Promise<ReturnNote[]> {
+    return this.#select(companyId, 'original_document_id = $2', [originalDocumentId], page);
   }
 
-  list(companyId: CompanyId): Promise<ReturnNote[]> {
-    return this.#select(companyId, 'true', []);
+  async list(companyId: CompanyId, page?: Page): Promise<ReturnNote[]> {
+    return this.#select(companyId, 'true', [], page);
   }
 
   async setSupplierCreditNote(companyId: CompanyId, id: string, reference: SupplierCreditNoteRef): Promise<ReturnNote> {
-    await this.#store.withSql(companyId, async (sql) => {
-      const updated = await sql.query(
-        `UPDATE return_notes SET supplier_credit_note_number = $3, supplier_credit_note_date = $4
-          WHERE company_id = $1 AND id = $2 AND kind = 'PURCHASE_RETURN' RETURNING id`,
-        [companyId, id, reference.number, reference.date],
-      );
-      if (updated.rows.length === 0) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
-    });
+    // Issue #366 — a write, so it joins the caller's unit of work and never commits on its own.
+    const updated = await this.#store.writeSql(companyId).query(
+      `UPDATE return_notes SET supplier_credit_note_number = $3, supplier_credit_note_date = $4
+        WHERE company_id = $1 AND id = $2 AND kind = 'PURCHASE_RETURN' RETURNING id`,
+      [companyId, id, reference.number, reference.date],
+    );
+    if (updated.rows.length === 0) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
     const note = await this.findById(companyId, id);
     if (note === null) throw notFound('RETURN_NOTE_NOT_FOUND', 'We could not find that return in this business.');
     return note;
   }
 
-  #select(companyId: CompanyId, where: string, values: unknown[]): Promise<ReturnNote[]> {
+  async #select(companyId: CompanyId, where: string, values: unknown[], page?: Page): Promise<ReturnNote[]> {
+    // Without a page, every note in the order this store has always used; with one, keyset on id.
+    let tail = 'ORDER BY document_date, number';
+    if (page !== undefined) {
+      const limit = pageLimit(page);
+      if (page.after !== undefined && !UUID.test(page.after)) throw invalid('RETURN_PAGE_AFTER_INVALID', 'That page of returns does not exist.');
+      if (page.after !== undefined) {
+        values = [...values, page.after];
+        where = `${where} AND id > $${values.length + 1}::uuid`;
+      }
+      tail = `ORDER BY id LIMIT ${limit}`;
+    }
     return this.#store.withSql(companyId, async (sql: Sql) => {
       const notes = await sql.query(
-        `SELECT ${NOTE_COLUMNS} FROM return_notes WHERE company_id = $1 AND ${where} ORDER BY document_date, number`,
+        `SELECT ${NOTE_COLUMNS} FROM return_notes WHERE company_id = $1 AND ${where} ${tail}`,
         [companyId, ...values],
       );
       if (notes.rows.length === 0) return [];
       const lines = await sql.query(
-        `SELECT * FROM return_note_lines WHERE company_id = $1 AND return_note_id = ANY($2::uuid[]) ORDER BY original_line_id`,
+        `SELECT ${LINE_COLUMNS} FROM return_note_lines WHERE company_id = $1 AND return_note_id = ANY($2::uuid[]) ORDER BY original_line_id`,
         [companyId, notes.rows.map((r) => r.id)],
       );
       return notes.rows.map((r): ReturnNote => ({
@@ -123,7 +143,8 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
 const orNull = <T>(value: unknown, as: (v: unknown) => T): T | null => (value === null || value === undefined ? null : as(value));
 
 const toLine = (l: Row): ReturnNoteLine => ({
-  originalLineId: String(l.original_line_id), itemId: String(l.item_id), description: String(l.description),
+  originalLineId: String(l.original_line_id),
+  itemId: l.charge_kind === null ? String(l.item_id) : `charge:${String(l.charge_kind)}`, description: String(l.description),
   supplyKind: l.supply_kind as ReturnNoteLine['supplyKind'],
   quantity: { scaled: BigInt(String(l.quantity_micro)), unit: String(l.quantity_unit) },
   disposition: l.disposition as ReturnNoteLine['disposition'],

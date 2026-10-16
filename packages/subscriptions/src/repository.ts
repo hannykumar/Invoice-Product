@@ -7,8 +7,33 @@
  * the same starting value. The PostgreSQL version gets the same guarantee from a unique index on
  * the idempotency key.
  */
+import { conflict } from '@invoice/kernel';
 import type { MeterId, ServiceInvoice, Subscription, UsageEvent } from './model.ts';
-import type { ServiceInvoiceRepository, SubscriptionRepository, UsageRepository } from './ports.ts';
+import type { Page, ServiceInvoiceRepository, SubscriptionRepository, UsageRepository } from './ports.ts';
+
+/** Issue #366 — keyset pagination over a list already in its stable order: the rows after the one whose id is `after`. */
+export const pageOf = <T extends { readonly id: string }>(rows: readonly T[], page?: Page): readonly T[] => {
+  if (page === undefined) return rows;
+  const from = page.after === undefined ? 0 : rows.findIndex((row) => row.id === page.after) + 1;
+  return from === 0 && page.after !== undefined ? [] : rows.slice(from, from + page.limit);
+};
+
+/**
+ * What `subscription_service_invoices`' freeze trigger (#368, `FROZEN` in
+ * packages/platform/src/immutability-migrations.ts) allows once an invoice is ISSUED, PAID or
+ * FAILED: only the state (never back to DRAFT), `paidOn`, `providerReference` and `failureReason`
+ * change. Held here too so the in-memory store refuses what PostgreSQL refuses.
+ */
+export const assertServiceInvoiceChange = (before: ServiceInvoice | undefined, next: ServiceInvoice): void => {
+  if (before === undefined || before.state === 'DRAFT') return;
+  const fixed = (i: ServiceInvoice) => [i.companyId, i.planId, i.period, i.net.minor, i.gst.minor, i.total.minor, i.issuedOn, i.dueOn].join('|');
+  if (next.state === 'DRAFT' || fixed(before) !== fixed(next)) {
+    throw conflict('SERVICE_INVOICE_FROZEN', 'This subscription invoice has been issued, so its amounts and dates can no longer change.');
+  }
+};
+
+export const SERVICE_INVOICE_DUPLICATE_PERIOD = () =>
+  conflict('SERVICE_INVOICE_DUPLICATE', 'There is already a subscription invoice for this month.');
 
 export class InMemorySubscriptionRepository implements SubscriptionRepository {
   readonly #byCompany = new Map<string, Subscription>();
@@ -47,8 +72,11 @@ export class InMemoryUsageRepository implements UsageRepository {
     return this.#totals.get(`${companyId}:${meter}:${period}`) ?? 0n;
   }
 
-  async events(companyId: string, period: string): Promise<readonly UsageEvent[]> {
-    return this.#events.filter((event) => event.companyId === companyId && event.period === period);
+  async events(companyId: string, period: string, page?: Page): Promise<readonly UsageEvent[]> {
+    const rows = this.#events
+      .filter((event) => event.companyId === companyId && event.period === period)
+      .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return pageOf(rows, page);
   }
 }
 
@@ -56,7 +84,11 @@ export class InMemoryServiceInvoiceRepository implements ServiceInvoiceRepositor
   readonly #invoices = new Map<string, ServiceInvoice>();
 
   async save(invoice: ServiceInvoice): Promise<void> {
-    this.#invoices.set(`${invoice.companyId}:${invoice.id}`, invoice);
+    const key = `${invoice.companyId}:${invoice.id}`;
+    assertServiceInvoiceChange(this.#invoices.get(key), invoice);
+    const samePeriod = [...this.#invoices.values()].find((other) => other.companyId === invoice.companyId && other.period === invoice.period);
+    if (samePeriod !== undefined && samePeriod.id !== invoice.id) throw SERVICE_INVOICE_DUPLICATE_PERIOD();
+    this.#invoices.set(key, invoice);
   }
 
   async find(companyId: string, id: string): Promise<ServiceInvoice | null> {
@@ -68,9 +100,10 @@ export class InMemoryServiceInvoiceRepository implements ServiceInvoiceRepositor
     return [...this.#invoices.values()].find((invoice) => invoice.companyId === companyId && invoice.period === period) ?? null;
   }
 
-  async list(companyId: string): Promise<readonly ServiceInvoice[]> {
-    return [...this.#invoices.values()]
+  async list(companyId: string, page?: Page): Promise<readonly ServiceInvoice[]> {
+    const rows = [...this.#invoices.values()]
       .filter((invoice) => invoice.companyId === companyId)
       .sort((a, b) => (a.period < b.period ? 1 : -1));
+    return pageOf(rows, page);
   }
 }
