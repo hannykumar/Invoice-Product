@@ -60,8 +60,6 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       cheque_state text CHECK (cheque_state IN (${CHEQUE_STATES})),
       -- Kept by the database from payment_allocations.
       allocated_paise bigint NOT NULL DEFAULT 0,
-      -- Paid back out of this receipt (#165), kept by the database from the refund payments.
-      refunded_paise bigint NOT NULL DEFAULT 0,
       state text NOT NULL CHECK (state IN ('RECORDED','REVERSED')),
       voucher_id uuid,
       reversal_voucher_id uuid,
@@ -77,9 +75,6 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       UNIQUE (company_id, id),
       UNIQUE (company_id, idempotency_key),
       CONSTRAINT payments_allocated_within_amount CHECK (allocated_paise BETWEEN 0 AND amount_paise),
-      -- What bills took of a receipt and what was paid back out of it never come to more than it (#367:
-      -- a refund and an allocation made at the same moment each passed the service's own check).
-      CONSTRAINT payments_refunded_within_amount CHECK (refunded_paise >= 0 AND allocated_paise + refunded_paise <= amount_paise),
       CONSTRAINT payments_cheque_whole CHECK ((mode <> 'CHEQUE' OR cheque_number IS NOT NULL) AND num_nulls(cheque_number, cheque_date, cheque_state) IN (0, 3) AND (cheque_number IS NOT NULL OR cheque_bank_name IS NULL)),
       CONSTRAINT payments_supplier_advance_is_paid_out CHECK (NOT advance_to_supplier OR direction = 'PAYMENT'),
       CONSTRAINT payments_advance_particulars_whole CHECK (num_nulls(advance_purchase_order_number, advance_purchase_order_date) IN (0, 2)
@@ -243,21 +238,6 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
       FOR EACH ROW WHEN (OLD.released_at IS NOT NULL AND NEW.released_at IS DISTINCT FROM OLD.released_at)
       EXECUTE FUNCTION platform_refuse('An allocation that was released cannot be brought back. Record a new one.');
 
-    -- A refund moves the figure on the receipt it pays back out of; undoing the refund moves it back.
-    -- The CHECK above does the refusing, on the latest figure: the UPDATE waits for and re-reads a
-    -- row another transaction is changing.
-    CREATE FUNCTION payment_refund_moves_receipt() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
-    BEGIN
-      UPDATE payments SET refunded_paise = refunded_paise + CASE WHEN TG_OP = 'INSERT' THEN NEW.amount_paise ELSE -NEW.amount_paise END
-        WHERE company_id = NEW.company_id AND id = NEW.refund_of;
-      RETURN NULL;
-    END;
-    $$;
-    CREATE TRIGGER payments_refund_recorded AFTER INSERT ON payments
-      FOR EACH ROW WHEN (NEW.refund_of IS NOT NULL AND NEW.state = 'RECORDED') EXECUTE FUNCTION payment_refund_moves_receipt();
-    CREATE TRIGGER payments_refund_reversed AFTER UPDATE OF state ON payments
-      FOR EACH ROW WHEN (NEW.refund_of IS NOT NULL AND OLD.state = 'RECORDED' AND NEW.state = 'REVERSED') EXECUTE FUNCTION payment_refund_moves_receipt();
-
     -- A receipt voucher for money taken against a proforma invoice (CGST Rule 50, #165).
     CREATE TABLE advance_receipts (
       id uuid PRIMARY KEY,
@@ -401,7 +381,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
 
     -- Issue #368: money records are final when written. A payment can only be reversed; an
     -- allocation can only be released.
-    ${frozen('payments', 'state', 'allocated_paise,refunded_paise,cheque_state,reversal_voucher_id,reversal_reason,updated_at,version', 'RECORDED>REVERSED')}
+    ${frozen('payments', 'state', 'allocated_paise,cheque_state,reversal_voucher_id,reversal_reason,updated_at,version', 'RECORDED>REVERSED')}
     ${frozen('cheque_events')}
     ${frozen('payment_allocations', '', 'released_at,updated_at')}
     ${frozen('advance_receipts', '', 'updated_at,version')}
@@ -431,7 +411,7 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
   down: `
     DROP TABLE IF EXISTS refund_vouchers, advance_applications, advance_tax_lines, advance_receipts, payment_allocations, document_settlements, cheque_events, payments;
     DROP TRIGGER IF EXISTS return_notes_reduce_bill ON return_notes;
-    DROP FUNCTION IF EXISTS advance_not_overused(), payment_allocation_moves_balances(), payment_refund_moves_receipt(), credit_note_reduces_bill(), document_settlement_matches_bill();
+    DROP FUNCTION IF EXISTS advance_not_overused(), payment_allocation_moves_balances(), credit_note_reduces_bill(), document_settlement_matches_bill();
   `,
 }, {
   // Issue #367 — what is paid back out of a receipt counts against it, in the database. A refund and
