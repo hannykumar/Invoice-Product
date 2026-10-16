@@ -115,10 +115,11 @@ test('note numbers run through one financial year on PostgreSQL without a unique
     assert.equal(dn?.supplierCreditNote, null);
     await service.recordSupplierCreditNote(actor, { noteId: dn!.id, number: 'SUP-CN-7', date: isoDate('2026-04-12') });
     assert.deepEqual((await repository.findById(company, dn!.id))?.supplierCreditNote, { number: 'SUP-CN-7', date: '2026-04-12' });
-    const counters = await db.query(
+    // Issue #366 — ledger_sequence has row-level security, so the read names its company.
+    const counters = await db.tenantTransaction(company, (sql) => sql.query(
       "SELECT scope, value FROM ledger_sequence WHERE company_id = $1 AND (scope LIKE 'sales-return:%' OR scope LIKE 'purchase-return:%') ORDER BY scope",
       [company],
-    );
+    ));
     assert.deepEqual(counters.rows.map((r) => [r.scope, Number(r.value)]), [
       ['purchase-return:DN::2026-27', 4], ['sales-return:CN::2026-27', 4], ['sales-return:CN::2027-28', 2],
     ]);
