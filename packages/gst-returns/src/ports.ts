@@ -126,8 +126,47 @@ export interface ReturnPreparationRepository {
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ReturnPreparation | null>;
   insert(preparation: ReturnPreparation): Promise<void>;
   /** Refuses when `expectedVersion` no longer matches, so two preparers cannot overwrite each other. */
-  update(preparation: ReturnPreparation, expectedVersion: number): Promise<void>;
-  list(companyId: CompanyId): Promise<readonly ReturnPreparation[]>;
+  update(preparation: ReturnPreparation, expectedVersion: number, facts?: ReturnUpdateFacts): Promise<void>;
+  /** With a page: newest period first, and `preparationCursor` of the last row is the next `after`. */
+  list(companyId: CompanyId, page?: Page): Promise<readonly ReturnPreparation[]>;
+}
+
+/**
+ * Issue #366 — one page of a list. `after` is the cursor of the last row of the page before
+ * (`preparationCursor`, or a declared threshold's `effectiveFrom`). Omitted, a list returns
+ * everything, as it always did.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
+/** Newest period first; the id breaks the tie between two returns of one month. */
+export const preparationCursor = (preparation: Pick<ReturnPreparation, 'period' | 'id'>): string =>
+  `${preparation.period}|${preparation.id}`;
+
+/** The same paging for every in-memory list, so memory and PostgreSQL answer page for page alike. */
+export const keysetPage = <T>(rows: readonly T[], keyOf: (row: T) => string, page: Page, order: 'asc' | 'desc' = 'asc'): T[] => {
+  const sign = order === 'asc' ? 1 : -1;
+  const compare = (a: string, b: string): number => (a < b ? -sign : a > b ? sign : 0);
+  return [...rows]
+    .sort((a, b) => compare(keyOf(a), keyOf(b)))
+    .filter((row) => page.after === undefined || compare(keyOf(row), page.after) > 0)
+    .slice(0, page.limit);
+};
+
+/**
+ * Issue #366 — the two facts the database keeps that the preparation itself does not carry.
+ *
+ * `gst_return_approvals` records who withdrew an approval and why, and `gst_return_submissions`
+ * records which channel an attempt went through and under which filing key. The service knows both
+ * at the moment it saves; a store that keeps no such rows ignores them.
+ */
+export interface ReturnUpdateFacts {
+  /** Reopening: who took the approval back, and their reason. */
+  readonly withdrawal?: { readonly by: string; readonly reason: string };
+  /** Submitting: the channel and the filing key of `preparation.submission`. */
+  readonly attempt?: { readonly provider: string; readonly idempotencyKey: string };
 }
 
 /** How the workspace behaves for one business, and the one setting a shop actually notices. */

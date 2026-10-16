@@ -22,6 +22,7 @@ import type {
   VehicleRecordProviderOutcome, VehicleRecordProviderPort, VehicleRecordRequest,
 } from "./vehicle-record-ports.ts";
 import type { VahanPayloadFields } from "./vehicle-record.ts";
+import type { Page } from "./ports.ts";
 
 /** The connector's operation name, so a gateway log line says what was asked for. */
 export const VEHICLE_RECORD_OPERATION = "vehicle.record.fetch";
@@ -141,8 +142,12 @@ export class InMemoryVehicleRecordCache implements VehicleRecordCacheRepository 
     this.#rows.set(this.#key(snapshot.companyId, snapshot.registrationNumber), Object.freeze(snapshot));
   }
 
-  async list(companyId: CompanyId): Promise<readonly VehicleRecordSnapshot[]> {
-    return [...this.#rows.values()].filter((row) => row.companyId === companyId);
+  async list(companyId: CompanyId, page?: Page): Promise<readonly VehicleRecordSnapshot[]> {
+    const rows = [...this.#rows.values()].filter((row) => row.companyId === companyId);
+    if (page === undefined) return rows;
+    // Issue #366 — a page is in vehicle-number order, so forgetting a reading between pages loses nobody's place.
+    return rows.sort((left, right) => (left.registrationNumber < right.registrationNumber ? -1 : 1))
+      .filter((row) => page.after === undefined || row.registrationNumber > page.after).slice(0, page.limit);
   }
 
   async forget(companyId: CompanyId, registrationNumber: string): Promise<void> {

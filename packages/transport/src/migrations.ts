@@ -6,6 +6,13 @@
 
 import type { Migration } from "../../platform/src/migration-definitions.ts";
 
+/** Issue #366 — every table of this lane that holds one company's rows. The database closes each to every other company. */
+const TENANT_TABLES = [
+  "eway_bills", "eway_consolidated_trips", "eway_bill_policies", "eway_bill_acknowledgements",
+  "vehicle_suitability_checks", "vehicle_suitability_overrides", "vehicle_suitability_policies",
+  "vehicle_records", "vehicle_record_consents", "vehicle_record_freshness_policies",
+] as const;
+
 export const ewayBillMigrations: readonly Migration[] = Object.freeze([{
   id: "20260829T230150061Z_transport_f5901402df63_eway_bill_lifecycle",
   up: `
@@ -120,5 +127,142 @@ export const ewayBillMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS eway_bill_policies;
     DROP TABLE IF EXISTS eway_consolidated_trips;
     DROP TABLE IF EXISTS eway_bills;
+  `,
+}, {
+  // Issue #366 — what the PostgreSQL repositories of this lane need that the first three migrations
+  // did not give them. One migration for the whole lane, because it runs after all three.
+  id: "20261011T144920591Z_transport_ad4d8b8da9ec_postgres_repositories",
+  up: `
+    -- Issue #240 added the two PIN codes to the record after the table was made. They are part of
+    -- the route, so they are fixed once the bill has a government number (they are not in the list
+    -- of columns the freeze rule lets change).
+    ALTER TABLE eway_bills ADD COLUMN from_pincode text, ADD COLUMN to_pincode text;
+    -- The order rows were written in: what "list" returns them in, and what paging walks along.
+    ALTER TABLE eway_bills ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE eway_consolidated_trips ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    -- For list() and its paging: one company's rows in the order they were written.
+    CREATE UNIQUE INDEX eway_bills_company_seq_idx ON eway_bills(company_id, seq);
+    -- For listActive(): what is on the road or waiting for a vehicle, in the same order.
+    CREATE INDEX eway_bills_live_seq_idx ON eway_bills(company_id, seq) WHERE status IN ('ACTIVE','PART_A_ONLY');
+    -- For the trips list() and its paging.
+    CREATE UNIQUE INDEX eway_consolidated_trips_company_seq_idx ON eway_consolidated_trips(company_id, seq);
+
+    -- A reconcile can find that the portal holds a cancellation we never made (the other party, or
+    -- the portal's own screen). The service records that as CANCELLED with no reason of ours, which
+    -- this check refused. A cancellation we make ourselves still carries its reason: the service
+    -- will not send one without it.
+    ALTER TABLE eway_bills DROP CONSTRAINT cancelled_has_reason;
+
+    -- The portal answers a second movement carrying the same document with the bill it already
+    -- holds (its duplicate reply, code 604), and the service keeps that number on both records
+    -- rather than raising a second permit. A unique number per company refused exactly that.
+    -- findByNumber() still reads by it, so it stays an index.
+    DROP INDEX eway_bills_number_idx;
+    CREATE INDEX eway_bills_number_idx ON eway_bills(company_id, eway_bill_number, seq) WHERE eway_bill_number IS NOT NULL;
+
+    -- What the portal sent back, each time it answered, exactly as received: the number, its own
+    -- timestamps, our time of receipt and the distance it counted. Append-only. The newest row for
+    -- a bill is the bill's current acknowledgement; eway_bills keeps the number and the validity in
+    -- its own columns for its checks and indexes.
+    CREATE TABLE eway_bill_acknowledgements (
+      seq bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      company_id uuid NOT NULL REFERENCES companies(id),
+      eway_bill_id uuid NOT NULL REFERENCES eway_bills(id),
+      acknowledgement jsonb NOT NULL,
+      recorded_at timestamptz NOT NULL DEFAULT now()
+    );
+    -- The newest answer for a bill (and the foreign key to the bill).
+    CREATE INDEX eway_bill_acknowledgements_bill_idx ON eway_bill_acknowledgements(company_id, eway_bill_id, seq DESC);
+    INSERT INTO eway_bill_acknowledgements (company_id, eway_bill_id, acknowledgement)
+      SELECT company_id, id, jsonb_strip_nulls(jsonb_build_object(
+          'ewayBillNumber', eway_bill_number, 'generatedAt', COALESCE(generated_at, ''),
+          'validUntil', to_char(valid_until AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+          'providerRequestId', COALESCE(provider_request_id, ''), 'alert', alert,
+          'receivedAt', to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+        FROM eway_bills WHERE eway_bill_number IS NOT NULL ORDER BY seq;
+    CREATE TRIGGER eway_bill_acknowledgements_frozen BEFORE UPDATE OR DELETE ON eway_bill_acknowledgements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    CREATE TRIGGER eway_bill_acknowledgements_no_truncate BEFORE TRUNCATE ON eway_bill_acknowledgements
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+
+    -- A lorry can be checked, changed for another and changed back: the third check has the facts
+    -- of the first and is still a new check, and the newest one is what the dispatch desk sees. The
+    -- service already returns the existing check when the newest one has the same facts; a unique
+    -- key over every check of the movement refused the third.
+    ALTER TABLE vehicle_suitability_checks DROP CONSTRAINT vehicle_suitability_checks_company_id_movement_id_idempoten_key;
+    ALTER TABLE vehicle_suitability_checks ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    -- Whether the movement may go: nothing blocking or undecided is left unanswered.
+    ALTER TABLE vehicle_suitability_checks ADD COLUMN cleared_to_move boolean;
+    UPDATE vehicle_suitability_checks c SET cleared_to_move = NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(c.findings) f
+       WHERE f->>'severity' IN ('BLOCK','CANNOT_DECIDE')
+         AND NOT EXISTS (SELECT 1 FROM vehicle_suitability_overrides o WHERE o.check_id = c.id AND o.finding_codes ? (f->>'code')));
+    ALTER TABLE vehicle_suitability_checks ALTER COLUMN cleared_to_move SET NOT NULL;
+    -- For list() and its paging.
+    CREATE UNIQUE INDEX vehicle_suitability_checks_company_seq_idx ON vehicle_suitability_checks(company_id, seq);
+    -- For findLatestForMovement(): the newest check of one movement, by the order they were written.
+    CREATE INDEX vehicle_suitability_latest_idx ON vehicle_suitability_checks(company_id, movement_id, seq DESC);
+    -- For listBlocked(): the dispatch desk's queue.
+    CREATE INDEX vehicle_suitability_not_cleared_idx ON vehicle_suitability_checks(company_id, seq) WHERE NOT cleared_to_move;
+    -- The order overrides were given in. Unique, so two people answering the same check at the same
+    -- moment cannot both take the same place: the second is told the check has changed.
+    ALTER TABLE vehicle_suitability_overrides ADD COLUMN position integer;
+    UPDATE vehicle_suitability_overrides o SET position = n.position FROM (
+      SELECT id, row_number() OVER (PARTITION BY check_id ORDER BY overridden_at, id) - 1 AS position FROM vehicle_suitability_overrides) n
+     WHERE n.id = o.id;
+    ALTER TABLE vehicle_suitability_overrides ALTER COLUMN position SET NOT NULL;
+    ALTER TABLE vehicle_suitability_overrides ADD CONSTRAINT vehicle_suitability_overrides_place UNIQUE (check_id, position);
+
+    -- The application may not delete. "Forgetting" a reading therefore empties it: every fact and
+    -- the provider's reference are blanked and this is set. The vehicle number stays as the key.
+    ALTER TABLE vehicle_records ADD COLUMN forgotten_at timestamptz;
+
+    -- How long a stored reading may be reused and when it counts as stale. Per company and
+    -- effective-dated, like the other policies; the in-memory port had no table behind it.
+    CREATE TABLE vehicle_record_freshness_policies (
+      company_id uuid NOT NULL REFERENCES companies(id),
+      effective_from date NOT NULL,
+      reuse_within_hours integer NOT NULL CHECK (reuse_within_hours >= 0),
+      stale_after_days integer NOT NULL CHECK (stale_after_days >= 0),
+      set_by uuid NOT NULL REFERENCES users(id),
+      set_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (company_id, effective_from)
+    );
+${TENANT_TABLES.map((table) => `
+    ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;
+    CREATE POLICY ${table}_tenant ON ${table}
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);`).join("")}
+  `,
+  down: `
+${TENANT_TABLES.map((table) => `
+    DROP POLICY IF EXISTS ${table}_tenant ON ${table};
+    ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;`).join("")}
+    DROP TABLE IF EXISTS vehicle_record_freshness_policies;
+    ALTER TABLE vehicle_records DROP COLUMN IF EXISTS forgotten_at;
+    ALTER TABLE vehicle_suitability_overrides DROP CONSTRAINT IF EXISTS vehicle_suitability_overrides_place;
+    ALTER TABLE vehicle_suitability_overrides DROP COLUMN IF EXISTS position;
+    DROP INDEX IF EXISTS vehicle_suitability_not_cleared_idx;
+    DROP INDEX IF EXISTS vehicle_suitability_latest_idx;
+    DROP INDEX IF EXISTS vehicle_suitability_checks_company_seq_idx;
+    ALTER TABLE vehicle_suitability_checks DROP COLUMN IF EXISTS cleared_to_move, DROP COLUMN IF EXISTS seq;
+    -- Fails, rightly, if a movement was checked twice on the same facts while the rule was away.
+    ALTER TABLE vehicle_suitability_checks ADD CONSTRAINT vehicle_suitability_checks_company_id_movement_id_idempoten_key
+      UNIQUE (company_id, movement_id, idempotency_key);
+    DROP TABLE IF EXISTS eway_bill_acknowledgements;
+    -- NOT VALID: a cancellation found on the portal while the rule was away is left as it is.
+    ALTER TABLE eway_bills ADD CONSTRAINT cancelled_has_reason CHECK (
+      status <> 'CANCELLED' OR (cancel_reason_code IS NOT NULL AND cancel_reason IS NOT NULL)
+    ) NOT VALID;
+    DROP INDEX IF EXISTS eway_bills_number_idx;
+    -- Fails, rightly, if two movements came to share a number while the rule was away.
+    CREATE UNIQUE INDEX eway_bills_number_idx ON eway_bills(company_id, eway_bill_number) WHERE eway_bill_number IS NOT NULL;
+    DROP INDEX IF EXISTS eway_consolidated_trips_company_seq_idx;
+    DROP INDEX IF EXISTS eway_bills_live_seq_idx;
+    DROP INDEX IF EXISTS eway_bills_company_seq_idx;
+    ALTER TABLE eway_consolidated_trips DROP COLUMN IF EXISTS seq;
+    ALTER TABLE eway_bills DROP COLUMN IF EXISTS seq, DROP COLUMN IF EXISTS to_pincode, DROP COLUMN IF EXISTS from_pincode;
   `,
 }]);

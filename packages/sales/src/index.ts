@@ -17,3 +17,5 @@ export * from './presale-model.ts';
 export * from './presale-numbering.ts';
 export * from './presale-repository.ts';
 export * from './presale-service.ts';
+// Issue #366 — the same repositories on PostgreSQL.
+export * from './postgres-repository.ts';
