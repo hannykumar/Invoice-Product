@@ -35,6 +35,7 @@ import {
 import { STATE_NAMES } from '@invoice/transport';
 import { requireIssuable, sellerPrint } from './business-details-application.ts';
 import { customerPrint, resolveCustomer, resolveItem } from './catalogue-application.ts';
+import { DurableMap } from './durable.ts';
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
@@ -67,11 +68,13 @@ interface PrintFacts {
 export class PreSaleDesk {
   readonly #config: PreSaleDeskConfig;
   readonly #service: PreSaleService;
-  readonly #facts = new Map<string, PrintFacts>();
+  /** Frozen with the document when it is issued (issue #340: kept in the database too). */
+  readonly #facts: DurableMap<PrintFacts>;
   readonly #advances: AdvanceService;
 
   constructor(config: PreSaleDeskConfig, service: PreSaleService, advances: AdvanceService) {
     this.#config = config;
+    this.#facts = new DurableMap<PrintFacts>('presale_print', () => String(config.companyId), { frozen: true });
     this.#service = service;
     this.#advances = advances;
   }

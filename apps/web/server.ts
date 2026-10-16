@@ -6,6 +6,8 @@ import { serveApi } from "../api/src/server.ts";
 import { applySecurityHeaders, applyTimeouts } from "../api/src/http-hardening.ts";
 import { log } from "../api/src/log.ts";
 import { installErrorReporting } from "../api/src/error-reporting.ts";
+import { openPersistence } from "../api/src/persistence.ts";
+import { startRuntime } from "../api/src/runtime.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 // `PORT` is honoured too, so a tool that assigns a free port can start this without a clash.
@@ -44,5 +46,9 @@ export const webServer = applyTimeouts(createServer(async (request, response) =>
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   installErrorReporting();
+  // Issue #340 — the same choice as the API: PostgreSQL when DATABASE_URL is set, and no start in production without it.
+  const persistence = await openPersistence();
+  startRuntime(persistence);
+  log.info("The app keeps its books", { in: persistence.kind });
   webServer.listen(port, "127.0.0.1", () => log.info("The web preview is listening", { url: `http://127.0.0.1:${port}` }));
 }
