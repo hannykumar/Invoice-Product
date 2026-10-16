@@ -3746,11 +3746,11 @@ export class DemoApplication {
     const context = this.bankContext(actor);
     return {
       providers: [{ id: 'sandbox-aa', name: 'Sandbox authorised bank feed' }],
-      connections: this.bankFeeds.connections(context).map((connection) => ({
+      connections: await Promise.all((await this.bankFeeds.connections(context)).map(async (connection) => ({
         ...this.bankConnectionJson(connection),
-        accounts: this.bankFeeds.accounts(context, connection.id).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
-        transactions: this.bankFeeds.transactions(context, connection.id).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
-      })),
+        accounts: (await this.bankFeeds.accounts(context, connection.id)).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
+        transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
+      }))),
     };
   }
 
