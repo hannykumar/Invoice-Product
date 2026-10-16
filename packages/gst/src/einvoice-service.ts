@@ -27,7 +27,7 @@ import type {
   ApplicabilityDecision, CancelReasonCode, EInvoiceApplicabilityInput, EInvoicePolicy,
   EInvoiceRecord, EInvoiceStatus,
 } from "./einvoice-types.ts";
-import type { EInvoicePolicyPort, EInvoiceRepository, IrpPort } from "./einvoice-ports.ts";
+import type { EInvoicePolicyPort, EInvoiceRepository, IrpGenerateOutcome, IrpPort } from "./einvoice-ports.ts";
 import type { EInvoiceDocument, PayloadProblem } from "./payload.ts";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
 
@@ -56,6 +56,19 @@ export interface RegisterInput {
   readonly document: EInvoiceDocument;
   readonly applicability: EInvoiceApplicabilityInput;
 }
+
+/** Issue #345 — a registration between its two database steps: done already, or ready to send. */
+export type PreparedRegistration =
+  | { readonly kind: "DONE"; readonly record: EInvoiceRecord }
+  | {
+    readonly kind: "SEND";
+    readonly pending: EInvoiceRecord;
+    readonly document: EInvoiceDocument;
+    readonly payload: Readonly<Record<string, unknown>>;
+    readonly idempotencyKey: string;
+    readonly verifyIrnHash: boolean;
+    readonly cancellationWindowHours: number;
+  };
 
 /** What a preview returns: the decision, the payload's problems, and nothing written anywhere. */
 export interface EInvoicePreview {
@@ -164,6 +177,19 @@ export class EInvoiceService {
    * twice cannot produce two IRNs, whatever the network did in between.
    */
   async register(actor: ActorContext, input: RegisterInput): Promise<EInvoiceRecord> {
+    const prepared = await this.prepareRegistration(actor, input);
+    if (prepared.kind === "DONE") return prepared.record;
+    return this.completeRegistration(actor, prepared, await this.callPortal(prepared));
+  }
+
+  /**
+   * Issue #345 — `register` in three steps, so the call to the portal never runs inside a database
+   * transaction: `prepareRegistration` (checks, and the record marked PENDING) and
+   * `completeRegistration` (the answer recorded) each run in a unit of work; `callPortal` runs
+   * between them, holding nothing. The idempotency key is the document's, so a step repeated after a
+   * crash asks the portal the same question and gets the same IRN (or its duplicate reply).
+   */
+  async prepareRegistration(actor: ActorContext, input: RegisterInput): Promise<PreparedRegistration> {
     this.#require(actor, EINVOICE_GENERATE_PERMISSION);
     const document = input.document;
     const policy = await this.#policyFor(actor.companyId, document.documentDate);
@@ -171,7 +197,7 @@ export class EInvoiceService {
 
     const existing = await this.#records.findByDocumentId(actor.companyId, document.documentId);
     if (existing !== null && (existing.status === "REGISTERED" || existing.status === "CANCELLED")) {
-      return existing;
+      return { kind: "DONE", record: existing };
     }
 
     const applicability = decideApplicability(input.applicability);
@@ -224,8 +250,18 @@ export class EInvoiceService {
       message: "This bill has been sent to the government and we are waiting for the e-invoice number.",
     };
     await this.#records.update(pending);
+    return { kind: "SEND", pending, document, payload: built.payload, idempotencyKey, verifyIrnHash: policy.verifyIrnHash, cancellationWindowHours: policy.cancellationWindowHours };
+  }
 
-    const outcome = await this.#irp.generate(actor.companyId, document, built.payload, idempotencyKey);
+  /** The one step that reaches the portal. It writes nothing. */
+  callPortal(prepared: Extract<PreparedRegistration, { kind: "SEND" }>): Promise<IrpGenerateOutcome> {
+    return this.#irp.generate(prepared.pending.companyId as CompanyId, prepared.document, prepared.payload, prepared.idempotencyKey);
+  }
+
+  /** Records what the portal answered. Its record is the one `prepareRegistration` marked PENDING. */
+  async completeRegistration(actor: ActorContext, prepared: Extract<PreparedRegistration, { kind: "SEND" }>, outcome: IrpGenerateOutcome): Promise<EInvoiceRecord> {
+    const { pending, document } = prepared;
+    const policy = { verifyIrnHash: prepared.verifyIrnHash, cancellationWindowHours: prepared.cancellationWindowHours };
 
     if (outcome.kind === "UNAVAILABLE") {
       const failed: EInvoiceRecord = {

@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { asId, conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
@@ -138,7 +138,11 @@ import type { SalesRepository } from '../../../packages/sales/src/ports.ts';
 import type { PaymentRepository } from '../../../packages/receivables/src/ports.ts';
 import type { ReturnNoteRepository } from '../../../packages/returns/src/ports.ts';
 import type { ReturnPreparationRepository } from '../../../packages/gst-returns/src/ports.ts';
-import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import type { OutboxHandler } from '../../../packages/platform/src/outbox.ts';
+
+/** Issue #345 — the outbox topic of the automatic e-invoice that follows a bill. */
+export const EINVOICE_TOPIC = 'einvoice.generate';
 import {
   ActionAgentService,
   InMemoryAgentPlanStore,
@@ -224,7 +228,7 @@ import {
   type OutwardDocument, type OutwardLine, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
-import { DurableMap } from './durable.ts';
+import { DurableMap, persist } from './durable.ts';
 
 /** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
@@ -2850,7 +2854,19 @@ export class DemoApplication {
    *     portal's own duplicate answer is treated as success.
    */
   private startAutomaticEInvoice(actor: ActorContext, invoiceId: string): void {
-    void this.afterThisAction(actor.companyId, async () => {
+    const persistence = this.shop.persistence;
+    if (persistence.kind === 'postgres') {
+      // Issue #345 — written in the bill's own transaction: if the bill rolls back, so does this,
+      // and nothing is ever sent for a bill that does not exist. The worker sends it after commit.
+      // The action waits for this write before it commits (`durable.ts`).
+      persist(actor.companyId, () => persistence.db.requireUnitOfWork(actor.companyId).enqueue({
+        topic: EINVOICE_TOPIC,
+        dedupeKey: invoiceId,
+        payload: { documentId: invoiceId, actorId: String(actor.userId), branchId: actor.branchId === null ? null : String(actor.branchId) },
+      }));
+      return;
+    }
+    void (async () => {
       const document = await this.eInvoiceDocumentFor(actor, invoiceId);
       const applicability = this.applicabilityFor(document);
       // Decided here rather than inside the service, because the service refuses a bill that does
@@ -2858,7 +2874,7 @@ export class DemoApplication {
       // right answer, not an error worth showing them.
       if (decideApplicability(applicability).outcome !== 'APPLICABLE') return;
       await this.shop.eInvoice.register(actor, { document, applicability });
-    }).catch((error: unknown) => {
+    })().catch((error: unknown) => {
       // Nothing here may reach the bill. The record itself carries the failure and the retry; a
       // fault of our own (not the portal being down) is reported as well.
       reportUnexpected('api.einvoiceAutoSend', error);
@@ -2866,15 +2882,41 @@ export class DemoApplication {
   }
 
   /**
-   * Issue #340 — work that follows an action without being part of it. On PostgreSQL it is its own
-   * unit of work, which waits for the company's lock and so starts only after the action has
-   * committed; it reads the bill afresh, so a bill that rolled back is never sent anywhere.
-   * #345 moves this onto the transactional outbox and a separate worker.
+   * Issue #345 — the worker's side of the automatic e-invoice. The record is marked PENDING in one
+   * unit of work, the portal is called holding nothing, and the answer is saved in the unit of work
+   * that marks the outbox message sent. A crash anywhere repeats the same question with the same
+   * idempotency key, and the portal answers a repeat with the IRN it already gave.
    */
-  private afterThisAction(companyId: CompanyId, work: () => Promise<void>): Promise<void> {
+  outboxHandlers(): Readonly<Record<string, OutboxHandler>> {
     const persistence = this.shop.persistence;
-    if (persistence.kind === 'memory') return work();
-    return outsideUnitOfWork(() => persistence.db.unitOfWork(companyId, work));
+    if (persistence.kind === 'memory') return {};
+    return {
+      [EINVOICE_TOPIC]: async (message) => {
+        const payload = message.payload as { documentId: string; actorId: string; branchId: string | null };
+        const actor: ActorContext = {
+          companyId: this.config.companyId,
+          branchId: payload.branchId === null ? null : asId<'Branch'>(payload.branchId),
+          userId: asId<'User'>(payload.actorId),
+          permissions: ['einvoice.generate', 'einvoice.view'],
+        };
+        const prepared = await persistence.db.unitOfWork(this.config.companyId, async () => {
+          const document = await this.eInvoiceDocumentFor(actor, payload.documentId);
+          const applicability = this.applicabilityFor(document);
+          if (decideApplicability(applicability).outcome !== 'APPLICABLE') return null;
+          try {
+            return await this.shop.eInvoice.prepareRegistration(actor, { document, applicability });
+          } catch (error) {
+            // A bill the rules say not to send (or cannot yet decide) is an answer, not a failure to
+            // retry: it waits on the E-invoice screen, exactly as before.
+            if (error instanceof DomainError) return null;
+            throw error;
+          }
+        });
+        if (prepared === null || prepared.kind === 'DONE') return;
+        const outcome = await this.shop.eInvoice.callPortal(prepared);
+        return async () => { await this.shop.eInvoice.completeRegistration(actor, prepared, outcome); };
+      },
+    };
   }
 
   /**
