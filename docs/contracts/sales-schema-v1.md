@@ -87,7 +87,7 @@ erDiagram
 | A stock balance is the sum of its movements and nobody edits it | Only the trigger on `stock_movements` writes `stock_balances`. The application role cannot insert, update or delete a balance |
 | A movement is final; it is undone once, by another movement, with a reason | freeze trigger, `UNIQUE (company_id, reverses_movement_id)`, `CHECK`s |
 | A movement's direction belongs to its kind; one stock is counted in one unit | `CHECK`, trigger |
-| A payment settles no more than itself; a bill is paid no more than its value | `CHECK`s on `payments.allocated_paise` and `document_settlements.allocated_paise`. Only the trigger on `payment_allocations` writes those two figures |
+| A payment settles no more than itself, counting what was paid back out of it (`refunded_paise`, kept by a trigger on refund payments); a bill is paid no more than its value | `CHECK`s on `payments.allocated_paise` and `document_settlements.allocated_paise`. Only the trigger on `payment_allocations` writes those two figures |
 | A part payment never marks a bill paid. A credit note takes its value off what the bill is owed | `document_settlements.status` is computed by the database: settled when what is paid reaches the value less `credited_paise`. A trigger on `return_notes` keeps `credited_paise` |
 | A settlement row describes a real issued bill | a sales bill's row must match a FINAL bill of that company, customer and value |
 | A payment that was undone settles nothing new | the allocation trigger |
@@ -145,8 +145,6 @@ application may not do that at all). Each named rule sets the `constraint` field
 - **`document_settlements` holds sales bills only.** Purchase bills and credit and debit notes
   join from their own lanes. Until then an allocation against one of those is recorded and capped
   by the payment's amount, but not by the document's value.
-- **Money refunded out of an unused receipt** (`payments.refund_of`) is capped by the service, not
-  by a database figure.
 - **Serial numbers** are kept on the movement as a list. "This serial is in stock" is still worked
   out by the inventory service from the movements.
 - **Reserved stock can exceed stock on hand** as far as the database is concerned; the inventory
