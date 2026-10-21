@@ -422,6 +422,12 @@ export interface Gstr3bHead {
   readonly credit: Money;
   /** Liability less credit within the same head. Negative means credit is left over. */
   readonly difference: Money;
+  /** Issue #289 — the reverse-charge part of the liability, which credit cannot pay (s.49(4)). */
+  readonly reverseChargeCash: Money;
+  /** Cash due in this head: the reverse-charge tax plus what credit does not cover of the rest. */
+  readonly cashToPay: Money;
+  /** Credit left in this head after the rest of the liability. */
+  readonly creditLeft: Money;
 }
 
 export interface Gstr3bReturn {

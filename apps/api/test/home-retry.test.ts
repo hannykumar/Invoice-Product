@@ -33,7 +33,7 @@ const signIn = async (): Promise<string> => {
 /** The synthetic portals this company's app talks to; test-only reach past `private`. */
 const portals = async (session: string) => {
   const runtime = apiRuntime();
-  const app = await runtime.application(runtime.authenticate(`Bearer ${session}`)) as any;
+  const app = await runtime.application(await runtime.authenticate(`Bearer ${session}`)) as any;
   return { eway: app.shop.ewayPortal, irp: app.shop.irpPortal } as { eway: { setMode(mode: string): void }; irp: { setMode(mode: string): void } };
 };
 

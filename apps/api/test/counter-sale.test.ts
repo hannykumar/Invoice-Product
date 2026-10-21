@@ -158,7 +158,7 @@ test('#288: from ₹50,000 of taxable value a walk-in must be named (Rule 46(e))
 test('#288: the bill and its receipt are one unit of work — a receipt that fails leaves no bill, no number and no money', async () => {
   const session = await ownerSession();
   const runtime = apiRuntime();
-  const context = runtime.authenticate(`Bearer ${session}`);
+  const context = await runtime.authenticate(`Bearer ${session}`);
   const app = await runtime.application(context) as unknown as { payments: { recordPayment: (...args: unknown[]) => Promise<unknown> } };
   const before = await books(session);
   const original = app.payments.recordPayment;

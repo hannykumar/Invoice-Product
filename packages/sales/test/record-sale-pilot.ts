@@ -137,15 +137,15 @@ export const makePilot = (db: TransactionalExecutor, ids: PilotIds, hooks: Pilot
   return {
     actor, ledger, sales, stock, customerId, itemId, godownId,
     setUpBooks,
-    /** The books, the customer, the item and the godown as master records, and 100 crates in the godown. */
-    async setUp(): Promise<void> {
+    /** The books, the customer, the item and the godown as master records, and `crates` crates in the godown. */
+    async setUp(crates = '100'): Promise<void> {
       await setUpBooks();
       await db.tenantTransaction(ids.companyId, (sql) => sql.query(
         "INSERT INTO master_records (id, company_id, kind) VALUES ($1, $4, 'party'), ($2, $4, 'item'), ($3, $4, 'warehouse')",
         [customerId, itemId, godownId, ids.companyId],
       ));
       await stock.recordMovement(actor, {
-        idempotencyKey: 'pilot:opening', itemId, warehouseId: godownId, kind: 'OPENING', quantity: quantityFromString('100', 'PCS'),
+        idempotencyKey: 'pilot:opening', itemId, warehouseId: godownId, kind: 'OPENING', quantity: quantityFromString(crates, 'PCS'),
         unitCost: rupees(200), documentDate: isoDate('2026-04-01'), source: { kind: 'opening_stock', id: 'pilot', number: null },
       });
     },
@@ -161,13 +161,13 @@ export const makePilot = (db: TransactionalExecutor, ids: PilotIds, hooks: Pilot
       return { voucherId: posted.voucher.id };
     },
     /** One business action: the bill is started and issued in a single unit of work. */
-    recordSale(requestId: string) {
+    recordSale(requestId: string, crates = '3') {
       return db.unitOfWork(companyId, async () => {
         const draft = await sales.createDraft(actor, {
           idempotencyKey: `sale:${requestId}`,
           input: {
             partyId: customerId as PartyId, customerType: 'B2B', supplyKind: 'GOODS', documentDate: isoDate('2026-04-10'),
-            lines: [{ lineId: 'l1', itemId, quantity: quantityFromString('3', 'PCS'), unitPrice: rupees(333, 33), priceBasis: 'EXCLUSIVE' }],
+            lines: [{ lineId: 'l1', itemId, quantity: quantityFromString(crates, 'PCS'), unitPrice: rupees(333, 33), priceBasis: 'EXCLUSIVE' }],
           },
         });
         const result = await sales.finalise(actor, { idempotencyKey: `sale-final:${requestId}`, invoiceId: draft.id });

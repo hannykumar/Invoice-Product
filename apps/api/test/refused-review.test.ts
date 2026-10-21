@@ -38,7 +38,7 @@ const billNumbers = async (owner: string): Promise<string[]> =>
 /** The sales service and its store behind the running app, to look at what is really kept. */
 const internals = async (owner: string) => {
   const runtime = apiRuntime();
-  const context = runtime.authenticate(`Bearer ${owner}`);
+  const context = await runtime.authenticate(`Bearer ${owner}`);
   const app = await runtime.application(context) as any;
   return { app, actor: runtime.actor(context), unissued: async () => (await app.salesRepository.list(runtime.actor(context).companyId)).filter((invoice: any) => invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED') };
 };
