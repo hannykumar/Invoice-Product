@@ -11,6 +11,7 @@
  * Plan ids are uuids here (the service's default `crypto.randomUUID()`); a lookup by anything else
  * finds nothing, as it would in memory.
  */
+import { conflict } from '@invoice/kernel';
 import type { TransactionalExecutor } from '../../platform/src/database.ts';
 import type { AgentPlan, AgentReport } from './model.ts';
 import type { AgentPlanStore, Page } from './ports.ts';
@@ -71,7 +72,7 @@ export class PostgresAgentPlanStore implements AgentPlanStore {
 
   /** New or not, the whole plan. An EXECUTED plan is frozen by the database (see migrations.ts). */
   async put(plan: AgentPlan): Promise<void> {
-    await this.#db.requireUnitOfWork(plan.companyId).sql.query(
+    const saved = await this.#db.requireUnitOfWork(plan.companyId).sql.query(
       `INSERT INTO agent_plans (id, company_id, request, today, command_id, intent, evidence, confidence, steps, refusals,
          needs_approval, fingerprint, instruction_flag, summary, state, requested_by, requested_at)
        VALUES ($1::uuid, $2::uuid, $3, $4::date, $5::uuid, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14::jsonb, $15, $16::uuid, $17::timestamptz)
@@ -81,11 +82,15 @@ export class PostgresAgentPlanStore implements AgentPlanStore {
          needs_approval = EXCLUDED.needs_approval, fingerprint = EXCLUDED.fingerprint, instruction_flag = EXCLUDED.instruction_flag,
          summary = EXCLUDED.summary, state = EXCLUDED.state, requested_by = EXCLUDED.requested_by,
          requested_at = EXCLUDED.requested_at, updated_at = now()
-       WHERE agent_plans.company_id = EXCLUDED.company_id`,
+       WHERE agent_plans.company_id = EXCLUDED.company_id
+       RETURNING id`,
       [plan.id, plan.companyId, plan.request, plan.today, plan.commandId, plan.intent, plan.evidence, plan.confidence,
         json(plan.steps), json(plan.refusals), plan.needsApproval, plan.fingerprint, plan.instructionFlag, json(plan.summary),
         plan.state, plan.requestedBy, plan.requestedAt],
     );
+    // The id is another company's plan: the database skipped the update, and saying so is the only
+    // honest answer (a uuid that collides is a bug, never a coincidence worth handling quietly).
+    if (saved.rows.length === 0) throw conflict('AGENT_PLAN_ID_TAKEN', 'That plan id already belongs to another business.');
   }
 
   async find(companyId: string, id: string): Promise<AgentPlan | null> {

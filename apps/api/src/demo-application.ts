@@ -141,6 +141,7 @@ import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages
 import {
   ActionAgentService,
   InMemoryAgentPlanStore,
+  PostgresAgentPlanStore,
   ToolRegistry,
   cancelInvoiceTool,
   findUnpaidTool,
@@ -1189,7 +1190,7 @@ export class DemoApplication {
         sessionId: `agent:${from.userId}`,
       }),
       parties: agentParties,
-      store: new InMemoryAgentPlanStore(),
+      store: pick(() => new InMemoryAgentPlanStore(), (db) => new PostgresAgentPlanStore(db)),
       permissions: permissionPortFromActor,
       clock: appClock,
     });
