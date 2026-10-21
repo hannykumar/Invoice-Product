@@ -108,7 +108,10 @@ supplier GSTIN + financial year + document type + number is reported as a proble
   sender or the client. A provider redelivering the same message returns the original document
   and does not call OCR again. A reused id with a different file, the same id at another company,
   or the same text through another channel is a new document. A duplicate is only ever returned
-  when it is in the same company (or still unrouted) and came through the same channel.
+  when it was indexed for the same company (or unrouted address) and channel, and is still in
+  that company or still unrouted. An unrouted arrival with no delivery address gets no
+  channel-level dedup at all rather than a shared bucket. The intake command's idempotency key
+  is `[idempotencyKey, attachment sha256]`, so several files in one message are each a document.
 - **Logical level (#16):** `logicalKey(draft)` returns supplier GSTIN + invoice number + date +
   total for the same invoice arriving as a photo on WhatsApp and a PDF by email. This module
   exposes the key; deciding what to do about it is #16's.

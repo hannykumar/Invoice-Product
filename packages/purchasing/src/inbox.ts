@@ -59,7 +59,10 @@ export interface ReceiveInput {
    * nowhere else (#400: a caller-supplied company id is never authority).
    */
   readonly uploader?: RequestContext;
-  /** Required. A resend of the same provider message returns the original document. */
+  /**
+   * Required. Usually the provider message id. The intake command is keyed on this plus the
+   * file hash, so several attachments of one message are each their own document (#406).
+   */
   readonly idempotencyKey: string;
 }
 
@@ -115,7 +118,7 @@ export class PurchaseInboxService {
    * keyed by the bare message id, which is shared by every company and channel and, for email
    * (`Message-ID`) and camera/upload, written by the sender or the client.
    */
-  readonly #byProviderMessage = new Map<string, Id>();
+  readonly #byProviderMessage = new Map<string, { readonly id: Id; readonly scope: Id }>();
   /** For an unrouted document, the companies whose channel it arrived on: the only ones who may claim it. */
   readonly #channelOwners = new Map<Id, readonly Id[]>();
   /** The intake idempotency key, so a retry records its draft under the same command. */
@@ -186,11 +189,13 @@ export class PurchaseInboxService {
     });
     const routedTo = routing.ok ? routing.companyId : UNROUTED;
     const messageKey = this.#messageKey(input, routing.ok ? routing.companyId : null);
-    const existingByMessage = messageKey ? this.#byProviderMessage.get(messageKey) : undefined;
-    const original = existingByMessage ? this.#documents.get(existingByMessage) : undefined;
-    // Belt and braces: a "duplicate" is only ever a document of the same company (or still
-    // unrouted, for an unrouted arrival) through the same channel. Anything else is new.
-    if (original && original.companyId === routedTo && original.channel === input.channel) {
+    const indexed = messageKey ? this.#byProviderMessage.get(messageKey) : undefined;
+    const original = indexed ? this.#documents.get(indexed.id) : undefined;
+    // Belt and braces: a "duplicate" is only ever a document indexed for the same company (or
+    // the same unrouted address) through the same channel, and still in that company or still
+    // unrouted (one held at screening, before routing was applied). Anything else is new.
+    if (indexed && original && indexed.scope === routedTo && original.channel === input.channel
+      && (original.companyId === routedTo || original.companyId === UNROUTED)) {
       const draft = this.#draftFor(original.id);
       return { document: original, duplicate: true, ...(draft ? { draft } : {}) };
     }
@@ -208,7 +213,7 @@ export class PurchaseInboxService {
     };
     this.#documents.set(id, document);
     this.#intakeKeys.set(id, input.idempotencyKey);
-    if (messageKey) this.#byProviderMessage.set(messageKey, id);
+    if (messageKey) this.#byProviderMessage.set(messageKey, { id, scope: routedTo });
 
     // 1. Screening, before anything reads the file.
     document = this.#set(document, { status: "screening" });
@@ -400,6 +405,18 @@ export class PurchaseInboxService {
       arithmeticProblems: [...crossCheck({ ...fields, lines: readFields.lines }), ...readFields.problems, ...signatureNote],
       createdAt: new Date().toISOString(),
     };
+    // A command records the intake for audit and idempotency. It is created before the draft
+    // is stored, so a refused command leaves no half-finished document. Its key is per file:
+    // one provider message can carry several attachments, each its own document (#406).
+    const context: RequestContext = options.actor && options.actor.companyId === company.companyId
+      ? options.actor
+      : { companyId: company.companyId, branchId: company.companyId, actorId: document.sender.address, permissions: new Set(), sessionId: document.id };
+    const command = this.#commands.create(context, {
+      action: "purchase.inbox.draft_prepared",
+      risk: "low",
+      idempotencyKey: JSON.stringify([this.#intakeKeys.get(document.id) ?? document.id, document.attachment.sha256]),
+      payload: { documentId: document.id, sha256: document.attachment.sha256, supplierGstin: readFields.supplierGstin?.value ?? null },
+    });
     this.#drafts.set(draft.id, Object.freeze(draft));
 
     const retried = document.attempts > 1;
@@ -409,17 +426,7 @@ export class PurchaseInboxService {
         ? `Read successfully${retried ? " on retry" : ""}. Nothing has been posted yet — please review and approve.`
         : `Read${retried ? " on retry" : ""}, but ${draft.fieldsNeedingReview.length + draft.arithmeticProblems.length} thing(s) need your eye. Nothing has been posted yet.`,
     });
-    // A command records the intake for audit and idempotency. It finalises at "draft
-    // prepared"; approving and posting the purchase are separate commands in #16/#17.
-    const context: RequestContext = options.actor && options.actor.companyId === company.companyId
-      ? options.actor
-      : { companyId: company.companyId, branchId: company.companyId, actorId: document.sender.address, permissions: new Set(), sessionId: document.id };
-    const command = this.#commands.create(context, {
-      action: "purchase.inbox.draft_prepared",
-      risk: "low",
-      idempotencyKey: this.#intakeKeys.get(document.id) ?? document.id,
-      payload: { documentId: document.id, sha256: document.attachment.sha256, supplierGstin: readFields.supplierGstin?.value ?? null },
-    });
+    // The command finalises at "draft prepared"; approving and posting are #16/#17.
     this.#record(document, "purchase.inbox.draft_ready", { draftId: draft.id, command: command.id, needsReview: draft.fieldsNeedingReview, attempt: document.attempts }, options.actor?.actorId);
     return { document, draft, duplicate: false };
   }
@@ -434,6 +441,9 @@ export class PurchaseInboxService {
   #messageKey(input: ReceiveInput, companyId: Id | null): string | null {
     const messageId = input.sender.providerMessageId?.trim();
     if (!messageId) return null;
+    // Unrouted with no delivery address (an upload into a company with no inbox set up): there
+    // is nothing to scope by, so no channel-level dedup rather than a shared bucket (#406 review).
+    if (companyId === null && !(input.deliveredTo ?? "").trim()) return null;
     const scope = companyId === null
       ? ["unrouted", input.channel, (input.deliveredTo ?? "").trim().toLowerCase()]
       : ["company", companyId];

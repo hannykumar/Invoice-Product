@@ -609,3 +609,37 @@ test("#406: once a held document is claimed, a redelivery to the shared address 
   assert.equal(again.duplicate, false);
   assert.notEqual(again.document.companyId, "company-a");
 });
+
+test("#406 review: two files in one email, sharing one idempotency key, are two drafts and nothing throws", async () => {
+  const { inbox, audit } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE()], "s3://inbox/doc-2": [INVOICE_PAGE()] });
+  const sender = { channel: "email" as const, address: "accounts@shreeram.example", providerMessageId: "<two-files@sender.example>" };
+  const first = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "two-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "<two-files@sender.example>" });
+  const second = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "two-2", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "<two-files@sender.example>" });
+  assert.equal(first.document.status, "draft_ready");
+  assert.equal(second.document.status, "draft_ready");
+  const created = audit.forCompany({ companyId: "company-a" } as never).filter((event) => event.action === "purchase.inbox.draft_prepared.created");
+  assert.equal(created.length, 2);
+});
+
+test("#406 review: a redelivery of a file held at screening returns the held original, not a new hidden copy", async () => {
+  const { inbox } = setup();
+  const sender = { channel: "email" as const, address: "x@sender.example", providerMessageId: "<infected@sender.example>" };
+  const first = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "inf-1" }), head: PDF_HEAD, scanVerdict: "infected", deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "i1" });
+  const again = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "inf-1" }), head: PDF_HEAD, scanVerdict: "infected", deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "i1" });
+  assert.equal(again.duplicate, true);
+  assert.equal(again.document.id, first.document.id);
+  // The same id and file at another company is still not that company's duplicate.
+  const elsewhere = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "inf-1" }), head: PDF_HEAD, scanVerdict: "infected", deliveredTo: "bills-konkan@invoices.example", idempotencyKey: "i1" });
+  assert.equal(elsewhere.duplicate, false);
+});
+
+test("#406 review: uploads with no inbox set up are never pooled into one shared duplicate bucket", async () => {
+  const audit = new AuditLog();
+  const inbox = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), COMPANIES);
+  const sender = (address: string) => ({ channel: "manual_upload" as const, address, providerMessageId: "client-1" });
+  const one = await inbox.receive({ channel: "manual_upload", sender: sender("user-p"), attachment: attachment({ sha256: "same" }), head: PDF_HEAD, uploader: contextFor("not-set-up-p"), idempotencyKey: "p" });
+  const two = await inbox.receive({ channel: "manual_upload", sender: sender("user-q"), attachment: attachment({ sha256: "same" }), head: PDF_HEAD, uploader: contextFor("not-set-up-q"), idempotencyKey: "q" });
+  assert.equal(two.duplicate, false);
+  assert.notEqual(two.document.id, one.document.id);
+  assert.equal(two.document.sender.address, "user-q");
+});
