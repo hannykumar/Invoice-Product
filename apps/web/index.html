@@ -331,6 +331,8 @@
                 <label><span data-i18n="supplierBill"></span><input name="reference" data-i18n-placeholder="supplierBillPlaceholder" required /></label>
                 <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label>
+                <!-- Issue #289, part 2b — on a reverse-charge bill the GST falls due from the day the goods arrived (CGST s.12(3)), and a self-invoice is due within 30 days of it (Rule 47A). -->
+                <label><span data-i18n="receivedOn"></span><input name="receivedOn" type="date" data-no-default /><small data-i18n="receivedOnHelp"></small></label>
               </div>
               <!-- Issue #311 — the supplier check (#19) runs when the supplier is chosen: one line. -->
               <p class="line-ok" id="purchase-supplier-check" aria-live="polite" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p>
@@ -343,6 +345,15 @@
             </article>
             <aside class="panel summary-card"><h2 data-i18n="beforeSaving"></h2><ol class="check-list"><li data-i18n="checkSupplier"></li><li data-i18n="checkDuplicate"></li><li data-i18n="checkTax"></li></ol><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseSafety"></span></p><h2 data-i18n="postingTitle"></h2><ol class="check-list"><li data-i18n="postingStock"></li><li data-i18n="postingBooks"></li><li data-i18n="postingOwed"></li></ol><p class="safety-note"><span aria-hidden="true">◎</span><span data-i18n="postingTogether"></span></p><p class="safety-note"><span aria-hidden="true">↻</span><span data-i18n="postingRetrySafe"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPurchase"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
+          <!-- Issue #289, part 2b — self-invoices for purchases from sellers with no GST number (CGST s.31(3)(f), Rule 47A). -->
+          <article class="panel" id="self-invoice-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="selfInvoicesTitle"></h2><p data-i18n="selfInvoicesHelp"></p></div></div>
+            <ul class="self-invoice-list" data-self-invoices></ul>
+            <div data-self-invoice-view hidden>
+              <div class="panel-heading"><div><h2 data-self-invoice-title>—</h2></div><button type="button" class="primary-button" data-self-invoice-print data-i18n="printVoucher"></button></div>
+              <iframe data-self-invoice-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Self-invoice"></iframe>
+            </div>
+          </article>
         </section>
 
         <section class="view" id="view-payment" aria-labelledby="payment-title">

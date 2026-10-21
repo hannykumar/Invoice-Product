@@ -198,7 +198,7 @@ const copy = {
     gstApproveNote: "A note for the record",
     gstApprove: "Approve this return",
     gstExport: "Download the file to upload yourself",
-    gstOwe: "you owe", gstCredit: "already paid", gstLeftOver: "left over", gstCashRcm: "Pay {cash} in cash — {rcm} of it is reverse-charge tax, which credit cannot pay (CGST s.49(4))", gstCreditLeft: "{amount} credit left over", rcmQuestionsTitle: "Who pays the GST on this bill?", rcmQuestionsHelp: "Some purchases are under reverse charge: you, the buyer, pay their GST to the government, not the seller. Whether this one is turns on something only you know. Answer, then review the purchase again.", rcmYes: "Yes", rcmNo: "No", rcmAnswerAbove: "Answer the question on the form about who pays the GST, then review the purchase again.",
+    gstOwe: "you owe", gstCredit: "already paid", gstLeftOver: "left over", gstCashRcm: "Pay {cash} in cash — {rcm} of it is reverse-charge tax, which credit cannot pay (CGST s.49(4))", gstCreditLeft: "{amount} credit left over", rcmQuestionsTitle: "Who pays the GST on this bill?", rcmQuestionsHelp: "Some purchases are under reverse charge: you, the buyer, pay their GST to the government, not the seller. Whether this one is turns on something only you know. Answer, then review the purchase again.", rcmYes: "Yes", rcmNo: "No", rcmAnswerAbove: "Answer the question on the form about who pays the GST, then review the purchase again.", receivedOn: "Date the goods or service reached you", receivedOnHelp: "Only matters when you pay the GST yourself (reverse charge). Leave blank if it is the bill date.", selfInvoicesTitle: "Self-invoices to make", selfInvoicesHelp: "When you buy goods or services under reverse charge from a seller with no GST number, you make the bill yourself — a self-invoice — within 30 days of receiving them (CGST s.31(3)(f), Rule 47A).", selfInvoiceLine: "{supplier} · bill {bill} · received {date} · GST {tax}", issueSelfInvoice: "Make self-invoice", printSelfInvoice: "Show", selfInvoiceTitle: "Self-invoice {number}", selfInvoiceStateOVERDUE: "Late", selfInvoiceStateLAST_DAY: "Last day today", selfInvoiceStateDUE_SOON: "Due soon", selfInvoiceStateNOT_YET_DUE: "To make", selfInvoiceStateISSUED: "Made",
     gstOnReturn: "on the return", gstInBooks: "in your books",
     // Issue #249 — goods sent back to a supplier, and the credit side of the books check.
     supplierNoteNumber: "Supplier's credit note number", supplierNoteDate: "Supplier's credit note date",
@@ -550,7 +550,7 @@ const copy = {
     gstApproveNote: "Record ke liye ek note",
     gstApprove: "Yeh return approve karein",
     gstExport: "Khud upload karne ke liye file lein",
-    gstOwe: "dena hai", gstCredit: "pehle diya", gstLeftOver: "bacha", gstCashRcm: "{cash} cash mein bharna hai — ismein {rcm} reverse-charge tax hai, jo credit se nahin bhara ja sakta (CGST s.49(4))", gstCreditLeft: "{amount} credit bacha", rcmQuestionsTitle: "Is bill ka GST kaun bharega?", rcmQuestionsHelp: "Kuch kharid reverse charge mein hoti hai: unka GST seller nahin, aap (khareedne wale) sarkar ko bharte hain. Yeh kharid hai ya nahin, yeh ek baat par tay hota hai jo sirf aap jaante hain. Jawab dein, phir kharid dobara dekhen.", rcmYes: "Haan", rcmNo: "Nahin", rcmAnswerAbove: "Form par GST kaun bharega wale sawaal ka jawab dein, phir kharid dobara dekhen.",
+    gstOwe: "dena hai", gstCredit: "pehle diya", gstLeftOver: "bacha", gstCashRcm: "{cash} cash mein bharna hai — ismein {rcm} reverse-charge tax hai, jo credit se nahin bhara ja sakta (CGST s.49(4))", gstCreditLeft: "{amount} credit bacha", rcmQuestionsTitle: "Is bill ka GST kaun bharega?", rcmQuestionsHelp: "Kuch kharid reverse charge mein hoti hai: unka GST seller nahin, aap (khareedne wale) sarkar ko bharte hain. Yeh kharid hai ya nahin, yeh ek baat par tay hota hai jo sirf aap jaante hain. Jawab dein, phir kharid dobara dekhen.", rcmYes: "Haan", rcmNo: "Nahin", rcmAnswerAbove: "Form par GST kaun bharega wale sawaal ka jawab dein, phir kharid dobara dekhen.", receivedOn: "Maal ya sewa aap tak kis din pahunchi", receivedOnHelp: "Sirf tab zaroori hai jab GST aap khud bharte hain (reverse charge). Bill ki tareekh ho to khali chhod dein.", selfInvoicesTitle: "Banane wale self-invoice", selfInvoicesHelp: "Bina GST number wale seller se reverse charge mein maal ya sewa lene par bill aap khud banate hain — self-invoice — milne ke 30 din ke andar (CGST s.31(3)(f), Rule 47A).", selfInvoiceLine: "{supplier} · bill {bill} · mila {date} · GST {tax}", issueSelfInvoice: "Self-invoice banayein", printSelfInvoice: "Dekhein", selfInvoiceTitle: "Self-invoice {number}", selfInvoiceStateOVERDUE: "Der ho gayi", selfInvoiceStateLAST_DAY: "Aaj aakhri din", selfInvoiceStateDUE_SOON: "Jaldi banayein", selfInvoiceStateNOT_YET_DUE: "Banana hai", selfInvoiceStateISSUED: "Ban gaya",
     gstOnReturn: "return par", gstInBooks: "books mein",
     supplierNoteNumber: "Supplier ke credit note ka number", supplierNoteDate: "Supplier ke credit note ki tareekh",
     supplierNoteHelp: "Agar supplier ne apna credit note de diya hai to yahan likhiye. Nahin to khali chhodiye aur aane par jodiye — credit is mahine se ghat jata hai.",
@@ -903,6 +903,7 @@ function openView(view, section = null) {
   if (sheet?.open) sheet.close();
   history.replaceState(null, "", `#${target}`);
   document.querySelector(`#view-${target} h1`)?.focus?.();
+  if (target === "purchase") loadSelfInvoices();
   // Issue #310 — Home is read afresh every time it is opened, so a task done elsewhere is gone.
   if (target === "dashboard" && state.dashboard) loadDashboard();
   // Issue #358 — the screen keeps what it showed; the reason is not lost.
@@ -2352,6 +2353,60 @@ function clearReverseChargeQuestions(form) {
   box.hidden = true;
 }
 
+// ------------------------------------------------- issue #289, part 2b: self-invoices
+//
+// A purchase under reverse charge from a seller with no GST number needs the buyer's own invoice
+// within 30 days of receiving it (CGST s.31(3)(f), Rule 47A). The server keeps the list and the
+// 30-day count; this shows it, late ones first, with one button to make each and one to show it.
+
+async function loadSelfInvoices() {
+  const panel = document.querySelector("#self-invoice-panel");
+  if (!panel) return;
+  let list;
+  try { list = await apiList("/api/purchases/self-invoices", "items"); } catch { panel.hidden = true; return; }
+  const items = list?.items ?? [];
+  panel.hidden = items.length === 0;
+  const box = panel.querySelector("[data-self-invoices]");
+  box.replaceChildren(...items.map((item) => {
+    const row = document.createElement("li");
+    row.className = `self-invoice-row state-${String(item.state).toLowerCase()}`;
+    const what = document.createElement("p");
+    const badge = document.createElement("strong");
+    badge.textContent = copy[state.locale][`selfInvoiceState${item.state}`] ?? item.state;
+    what.append(badge, document.createTextNode(` ${text("selfInvoiceLine", { supplier: item.supplier, bill: item.bill, date: longDate(item.receivedOn), tax: money(item.tax) })}`));
+    const why = document.createElement("small");
+    why.textContent = item.number ? `${item.number} · ${item.words}` : item.words;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = item.number ? "secondary-button" : "primary-button";
+    button.textContent = copy[state.locale][item.number ? "printSelfInvoice" : "issueSelfInvoice"];
+    button.addEventListener("click", () => showSelfInvoice(item.billId, !item.number, button));
+    row.append(what, why, button);
+    return row;
+  }));
+}
+
+async function showSelfInvoice(billId, issue, button) {
+  const panel = document.querySelector("#self-invoice-panel");
+  button.disabled = true;
+  try {
+    const result = await api(issue ? "/api/purchases/self-invoice" : "/api/purchases/self-invoice/print", { method: "POST", body: JSON.stringify({ billId }) });
+    const view = panel.querySelector("[data-self-invoice-view]");
+    view.hidden = false;
+    view.querySelector("[data-self-invoice-title]").textContent = text("selfInvoiceTitle", { number: result.number });
+    view.querySelector("[data-self-invoice-frame]").srcdoc = result.html;
+    if (issue) showDialog(result, "recorded");
+    await loadSelfInvoices();
+    view.scrollIntoView?.({ block: "start" });
+  } catch (error) {
+    showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+  } finally { button.disabled = false; }
+}
+
+document.querySelector("[data-self-invoice-print]")?.addEventListener("click", () => {
+  document.querySelector("[data-self-invoice-frame]")?.contentWindow?.print();
+});
+
 // A different supplier is a different bill: answers given about the last one do not carry over.
 document.querySelector('form[data-draft="purchase"] select[name="supplierId"]')?.addEventListener("change", (event) => clearReverseChargeQuestions(event.currentTarget.form));
 
@@ -3585,6 +3640,8 @@ async function recordPending(button) {
     if (forSale) showPurchaseForSaleNote(true);
     // Issue #230 — the receipt or payment voucher is ready behind the dialog, and the form is empty for the next one.
     if (form.dataset.endpoint === "payments" && result.paymentId) await paymentRecorded(form, result);
+    // Issue #289, part 2b — a reverse-charge bill from a seller with no GST number joins the self-invoice list.
+    if (form.dataset.draft === "purchase" && result.reverseCharge?.selfInvoice) await loadSelfInvoices();
     // Issue #132 — the bill is waiting on the screen behind the done screen, not on a developer's laptop.
     if (saleDone) { await openDoneScreen(result); await showSaleBill(result.invoice.id); }
     await refreshDocumentLists();
