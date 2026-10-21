@@ -10,3 +10,4 @@ export * from './service.ts';
 export * from './adapters.ts';
 export * from './fixtures.ts';
 export { complianceCalendarMigrations } from './migrations.ts';
+export * from './postgres.ts';

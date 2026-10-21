@@ -98,6 +98,20 @@ export class PostgresInventoryStore implements InventoryStore {
     return this.#db.tenantTransaction(companyId, work);
   }
 
+  /** Issue #367 — the balance rows, locked in item, godown, batch order, inside the open unit of work. */
+  async lockStock(companyId: CompanyId, places: readonly { itemId: string; warehouseId: string; batchId: string | null }[]): Promise<void> {
+    if (places.length === 0) return;
+    await this.#db.requireUnitOfWork(companyId).sql.query(
+      `SELECT b.id FROM stock_balances b
+         JOIN unnest($2::uuid[], $3::uuid[], $4::uuid[]) AS p(item_id, warehouse_id, batch_id)
+           ON b.item_id = p.item_id AND b.warehouse_id = p.warehouse_id AND b.batch_id IS NOT DISTINCT FROM p.batch_id
+        WHERE b.company_id = $1
+        ORDER BY b.item_id, b.warehouse_id, b.batch_id NULLS FIRST
+        FOR UPDATE OF b`,
+      [companyId, places.map((p) => p.itemId), places.map((p) => p.warehouseId), places.map((p) => p.batchId)],
+    );
+  }
+
   async #movements(companyId: CompanyId, where: string, values: unknown[], page?: Page): Promise<StockMovement[]> {
     const q = paged(`company_id = $1${where}`, [companyId, ...values], page, MOVEMENT_ORDER);
     const { rows } = await this.#read(companyId, (sql) => sql.query(`SELECT ${MOVEMENT_READ} FROM stock_movements WHERE ${q.sql}`, q.values));

@@ -13,7 +13,9 @@ import { UnitConversionError } from '../../../packages/masters/src/units.ts';
 import { InboxError } from '../../../packages/purchasing/src/inbox.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
-import { apiRuntime, AuthenticationError } from './runtime.ts';
+import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
+import { openPersistence } from './persistence.ts';
+import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
@@ -65,6 +67,8 @@ const statusOf = (error: unknown): number | undefined => {
     if (error.code === 'FORBIDDEN') return 403;
     if (error.code === 'NOT_FOUND' || error.code === 'TENANT_ISOLATION') return 404;
     if (error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED') return 401;
+    // Issue #367 — the shop is busy; nothing in the request was wrong.
+    if (error.code === 'TRY_AGAIN') return 503;
     return 409;
   }
   if (isMeantForTheScreen(error)) return 400;
@@ -135,13 +139,18 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
     if (isPublic(route)) {
       reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery });
     } else {
-      const context = runtime.authenticate(authorization);
+      const context = await runtime.authenticate(authorization);
       annotate({ company_id: context.companyId, user_id: context.actorId });
       const actor = runtime.actor(context);
       if (route.access.kind === 'gate') requirePermission(actor, route.access);
       const input = await route.input.parseAsync(raw);
       const app = await runtime.application(context);
-      reply = await route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      const handle = async (): Promise<unknown> => route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      // Issue #340 — one request that changes something is one business action, and so one
+      // transaction (#363): the bill, its entry in the books, its stock movement and its audit record
+      // are saved together or not at all. Reads need none; their repositories read on their own.
+      const db = runtime.database;
+      reply = db === null ? await handle() : method === 'GET' ? await asOneRead(handle) : await asOneAction(db, context.companyId, handle);
       if (route.list !== undefined) reply = pageOf(reply, route.list, input as Parameters<typeof pageOf>[2]);
     }
     if (!(reply instanceof Reply)) return withRequestId(json(200, reply), requestId);
@@ -219,6 +228,10 @@ export const apiServer = applyTimeouts(createServer(serveApi));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   installErrorReporting();
+  // Issue #340 — the database is chosen before the first request, and production without one stops here.
+  const persistence = await openPersistence();
+  startRuntime(persistence);
+  log.info('The API keeps its books', { in: persistence.kind });
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
