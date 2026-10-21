@@ -2,6 +2,15 @@
 import type { IsoDate } from '@invoice/kernel';
 import type { MeterId, ServiceInvoice, Subscription, UsageEvent } from './model.ts';
 
+/**
+ * Issue #366 — keyset pagination for list reads. `after` is the opaque cursor of the last row of
+ * the previous page (`nextCursor` of the store that returned it). Omitted, a list returns everything.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
 export interface SubscriptionRepository {
   save(subscription: Subscription): Promise<void>;
   find(companyId: string): Promise<Subscription | null>;
@@ -18,14 +27,16 @@ export interface UsageRepository {
    */
   record(event: UsageEvent): Promise<{ counted: boolean; total: bigint }>;
   total(companyId: string, meter: MeterId, period: string): Promise<bigint>;
-  events(companyId: string, period: string): Promise<readonly UsageEvent[]>;
+  /** Oldest first, by when it was recorded and then by id. */
+  events(companyId: string, period: string, page?: Page): Promise<readonly UsageEvent[]>;
 }
 
 export interface ServiceInvoiceRepository {
   save(invoice: ServiceInvoice): Promise<void>;
   find(companyId: string, id: string): Promise<ServiceInvoice | null>;
   findForPeriod(companyId: string, period: string): Promise<ServiceInvoice | null>;
-  list(companyId: string): Promise<readonly ServiceInvoice[]>;
+  /** Newest period first. The cursor of a page is the period of its last invoice. */
+  list(companyId: string, page?: Page): Promise<readonly ServiceInvoice[]>;
 }
 
 export interface ChargeRequest {

@@ -198,7 +198,7 @@ const copy = {
     gstApproveNote: "A note for the record",
     gstApprove: "Approve this return",
     gstExport: "Download the file to upload yourself",
-    gstOwe: "you owe", gstCredit: "already paid", gstLeftOver: "left over",
+    gstOwe: "you owe", gstCredit: "already paid", gstLeftOver: "left over", gstCashRcm: "Pay {cash} in cash — {rcm} of it is reverse-charge tax, which credit cannot pay (CGST s.49(4))", gstCreditLeft: "{amount} credit left over", rcmQuestionsTitle: "Who pays the GST on this bill?", rcmQuestionsHelp: "Some purchases are under reverse charge: you, the buyer, pay their GST to the government, not the seller. Whether this one is turns on something only you know. Answer, then review the purchase again.", rcmYes: "Yes", rcmNo: "No", rcmAnswerAbove: "Answer the question on the form about who pays the GST, then review the purchase again.",
     gstOnReturn: "on the return", gstInBooks: "in your books",
     // Issue #249 — goods sent back to a supplier, and the credit side of the books check.
     supplierNoteNumber: "Supplier's credit note number", supplierNoteDate: "Supplier's credit note date",
@@ -550,7 +550,7 @@ const copy = {
     gstApproveNote: "Record ke liye ek note",
     gstApprove: "Yeh return approve karein",
     gstExport: "Khud upload karne ke liye file lein",
-    gstOwe: "dena hai", gstCredit: "pehle diya", gstLeftOver: "bacha",
+    gstOwe: "dena hai", gstCredit: "pehle diya", gstLeftOver: "bacha", gstCashRcm: "{cash} cash mein bharna hai — ismein {rcm} reverse-charge tax hai, jo credit se nahin bhara ja sakta (CGST s.49(4))", gstCreditLeft: "{amount} credit bacha", rcmQuestionsTitle: "Is bill ka GST kaun bharega?", rcmQuestionsHelp: "Kuch kharid reverse charge mein hoti hai: unka GST seller nahin, aap (khareedne wale) sarkar ko bharte hain. Yeh kharid hai ya nahin, yeh ek baat par tay hota hai jo sirf aap jaante hain. Jawab dein, phir kharid dobara dekhen.", rcmYes: "Haan", rcmNo: "Nahin", rcmAnswerAbove: "Form par GST kaun bharega wale sawaal ka jawab dein, phir kharid dobara dekhen.",
     gstOnReturn: "return par", gstInBooks: "books mein",
     supplierNoteNumber: "Supplier ke credit note ka number", supplierNoteDate: "Supplier ke credit note ki tareekh",
     supplierNoteHelp: "Agar supplier ne apna credit note de diya hai to yahan likhiye. Nahin to khali chhodiye aur aane par jodiye — credit is mahine se ghat jata hai.",
@@ -2285,10 +2285,14 @@ document.querySelectorAll(".draft-form").forEach((form) => {
       const shown = localizeResult(result, form.dataset.draft, "preview");
       showDialog(form.dataset.draft === "sale" ? saleReview(result, shown) : shown, "preview");
     } catch (error) {
-      showSaleFailure(error);
+      if (form.dataset.draft === "purchase" && error?.code === "PURCHASE_REVERSE_CHARGE_QUESTION") {
+        showReverseChargeQuestions(form, error);
+        showDialog({ title: copy[state.locale].nothingSaved, message: copy[state.locale].rcmAnswerAbove }, "failed");
+      } else showSaleFailure(error);
     } finally { setFormBusy(form, false); }
   });
   form.querySelector(".clear-draft").addEventListener("click", () => {
+    if (form.dataset.draft === "purchase") clearReverseChargeQuestions(form);
     if (form.dataset.draft === "sale") { resetSaleForm(form); setDraftStatus(form, "draftCleared"); startNewSaleSlides(); return; }
     storage?.removeItem(`karobar.draft.${form.dataset.draft}`);
     hideDraftDateNote(form);
@@ -2302,6 +2306,54 @@ document.querySelectorAll(".draft-form").forEach((form) => {
   });
 });
 showPaidBy();
+
+// ------------------------------------------------- issue #289: reverse charge, asked on the form
+//
+// The server decides from the notified lists whether the buyer pays a line's GST. Where the law turns
+// on a fact the item code cannot tell (did the transporter give a bilty? is the seller an advocate?),
+// it sends the question back, and it is asked here as Yes or No. Each answer is a form field named
+// `rcm_<question>`, so it goes with the next review and stays with the bill's draft.
+
+function showReverseChargeQuestions(form, error) {
+  let questions = [];
+  try { questions = JSON.parse(error.details?.questions ?? "[]"); } catch { questions = []; }
+  const box = form.querySelector("#purchase-rcm-questions");
+  if (!box || questions.length === 0) return;
+  const list = box.querySelector("[data-rcm-questions]");
+  questions.forEach((ask) => {
+    if (list.querySelector(`[name="rcm_${ask.id}"]`)) return;
+    const row = document.createElement("div");
+    row.className = "rcm-question";
+    row.dataset.rcmQuestion = ask.id;
+    const question = document.createElement("p");
+    question.textContent = ask.question;
+    const why = document.createElement("small");
+    why.textContent = ask.why;
+    const answers = document.createElement("div");
+    answers.className = "rcm-answers";
+    [["yes", "rcmYes"], ["no", "rcmNo"]].forEach(([value, key]) => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "radio"; input.name = `rcm_${ask.id}`; input.value = value; input.required = true;
+      label.append(input, document.createTextNode(copy[state.locale][key]));
+      answers.append(label);
+    });
+    row.append(question, why, answers);
+    list.append(row);
+  });
+  box.hidden = false;
+  box.scrollIntoView?.({ block: "center" });
+}
+
+function clearReverseChargeQuestions(form) {
+  const box = form.querySelector("#purchase-rcm-questions");
+  if (!box) return;
+  box.querySelector("[data-rcm-questions]").replaceChildren();
+  box.hidden = true;
+}
+
+// A different supplier is a different bill: answers given about the last one do not carry over.
+document.querySelector('form[data-draft="purchase"] select[name="supplierId"]')?.addEventListener("change", (event) => clearReverseChargeQuestions(event.currentTarget.form));
 
 // ------------------------------------------------- issue #230: money received and money paid
 //
@@ -6104,9 +6156,12 @@ function renderGstWorkspace(workspace) {
   workspace.gstr3b.outward.forEach((box) => summary3b.append(detailRow(/^\d/.test(box.boxId) ? `${box.boxId} ${box.label}` : box.label, `${money(box.taxableValue)} + ${money(box.tax)} GST`)));
   workspace.gstr3b.heads.forEach((head) => {
     // Positive means more is owed than there is credit for; negative means credit is left over.
-    const line = head.difference > 0
-      ? `${words.gstOwe} ${money(head.difference)}`
-      : head.difference < 0 ? `${money(-head.difference)} ${words.gstLeftOver}` : "—";
+    // Issue #289 — reverse-charge tax is paid in cash; credit pays only the rest (s.49(4)).
+    const line = head.reverseChargeCash > 0
+      ? [text("gstCashRcm", { cash: money(head.cashToPay), rcm: money(head.reverseChargeCash) }), ...(head.creditLeft > 0 ? [text("gstCreditLeft", { amount: money(head.creditLeft) })] : [])].join(" · ")
+      : head.difference > 0
+        ? `${words.gstOwe} ${money(head.difference)}`
+        : head.difference < 0 ? `${money(-head.difference)} ${words.gstLeftOver}` : "—";
     summary3b.append(detailRow(head.head, line, `${words.gstOwe} ${money(head.liability)} · ${words.gstCredit} ${money(head.credit)}`));
   });
 
@@ -7000,6 +7055,7 @@ function resetPurchaseForm(form) {
   form.querySelectorAll('input[type="date"]:not([data-no-default])').forEach((field) => { field.value = dateInput(); });
   document.querySelector("#purchase-lines")?.replaceChildren();
   addPurchaseLine();
+  clearReverseChargeQuestions(form);
   showChosenSupplier();
 }
 

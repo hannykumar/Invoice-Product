@@ -114,7 +114,7 @@ const newShop = async () => {
   return { ids, itemId, warehouseId, asOwner, vouchers: [first.voucherId, second.voucherId], run, one, billRow, lineRow, PRICED, issued, issueBill, movement, payment, allocation, onHand };
 };
 
-test('the three migrations of #365 run up, down and up again on a database of their own', { skip }, async () => {
+test('the migrations of #365 run up, down and up again on a database of their own', { skip }, async () => {
   const { migrate } = await import('../../platform/src/migrations.ts');
   const { migrations } = await import('../../platform/src/migration-definitions.ts');
   const name = `schema_updown_${randomBytes(6).toString('hex')}`;
@@ -127,15 +127,19 @@ test('the three migrations of #365 run up, down and up again on a database of th
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename ~ '^(sales_invoice|presale_document|delivery_challan|stock_|payment|cheque_events|document_settlements|advance_|refund_vouchers)' ORDER BY 1",
   )).rows.map((r) => String(r.tablename));
   try {
-    assert.equal(mine.length, 3);
+    assert.equal(mine.length, 4);
     await migrate(scratch);
     const created = await tables();
     assert.equal(created.length, 17, created.join(', '));
-    for (const migration of [...mine].reverse()) await scratch.query(migration.down);
+    // As a real rollback would: every migration newer than #365's first is undone, newest first, so
+    // later modules' foreign keys onto these tables (and onto master_records) go before they do.
+    const firstOfMine = migrations.indexOf(mine[0] as (typeof migrations)[number]);
+    const fromMine = migrations.slice(firstOfMine);
+    for (const migration of [...fromMine].reverse()) await scratch.query(migration.down);
     assert.deepEqual(await tables(), []);
-    const left = (await scratch.query("SELECT proname FROM pg_proc WHERE proname IN ('document_lines_add_up','sales_return_within_original','sales_discard_draft','stock_movement_moves_balance','payment_allocation_moves_balances','advance_not_overused')")).rows;
+    const left = (await scratch.query("SELECT proname FROM pg_proc WHERE proname IN ('document_lines_add_up','sales_return_within_original','sales_discard_draft','stock_movement_moves_balance','payment_allocation_moves_balances','payment_refund_moves_receipt','advance_not_overused')")).rows;
     assert.deepEqual(left, [], 'the down migrations leave no function behind');
-    for (const migration of mine) await scratch.query(migration.up);
+    for (const migration of fromMine) await scratch.query(migration.up);
     assert.deepEqual(await tables(), created);
   } finally {
     await scratch.close();
@@ -315,6 +319,19 @@ test('a payment never settles more than itself or more than the bill, and a part
   await assert.rejects(shop.run((sql) => sql.query("UPDATE payments SET state = 'RECORDED' WHERE id = $1", [large.id])), refused(FROZEN));
 
   await assert.rejects(shop.run((sql) => insert(sql, 'payment_allocations', shop.allocation(large.id, bill, 100))), refused(CHECK), 'a payment that was undone settles nothing');
+
+  // What is paid back out of a receipt counts against it too, and the application cannot set that figure (#367).
+  const receipt = shop.payment(20_000);
+  await shop.run((sql) => insert(sql, 'payments', receipt));
+  await shop.run((sql) => insert(sql, 'payments', shop.payment(15_000, { direction: 'PAYMENT', refund_of: receipt.id })));
+  await assert.rejects(shop.run((sql) => insert(sql, 'payments', shop.payment(5_001, { direction: 'PAYMENT', refund_of: receipt.id }))), refused(CHECK), 'more refunded than received');
+  const otherBill = await shop.issueBill('INV/26-27/000002');
+  await assert.rejects(shop.run((sql) => insert(sql, 'payment_allocations', shop.allocation(receipt.id, otherBill, 5_001))), refused(CHECK), 'refunded plus applied is more than received');
+  await shop.run((sql) => insert(sql, 'payment_allocations', shop.allocation(receipt.id, otherBill, 5_000)));
+  await assert.rejects(shop.run((sql) => sql.query('UPDATE payments SET refunded_paise = 0 WHERE id = $1', [receipt.id])), refused(NO_PRIVILEGE));
+  const refund = (await shop.one('SELECT id FROM payments WHERE refund_of = $1', [receipt.id])).id;
+  await shop.run((sql) => sql.query("UPDATE payments SET state = 'REVERSED', reversal_reason = 'Refund not paid.', version = version + 1 WHERE id = $1", [refund]));
+  assert.equal(Number((await shop.one('SELECT refunded_paise FROM payments WHERE id = $1', [receipt.id])).refunded_paise), 0, 'an undone refund gives the money back to the receipt');
 
   // A cancelled bill is owed nothing; money already applied to it stays on its payment, as it does today.
   await shop.run((sql) => sql.query('UPDATE document_settlements SET cancelled = true WHERE document_id = $1', [bill]));

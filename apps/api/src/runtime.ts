@@ -3,12 +3,16 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { asId, notFound } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
 import { AccessControl, AuthenticationService, PlatformError, type Permission, type RequestContext } from '../../../packages/platform/src/index.ts';
-import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
+import { PostgresAccessControl, PostgresAuthenticationService } from '../../../packages/platform/src/postgres-platform.ts';
+import { SYNTHETIC_PLATFORM_COMPANIES, SYNTHETIC_PLATFORM_USERS } from '../../../packages/platform/src/seed.ts';
 import { DemoApplication } from './demo-application.ts';
 import { businessDetailsOf, saveBusinessDetails } from './business-details-application.ts';
 import type { CompanySeed } from './company-shop.ts';
 import type { CatalogueSeed } from './catalogue-application.ts';
 import { createOperations } from '../../../ops/operations/src/index.ts';
+import { MEMORY, recordId, type Persistence } from './persistence.ts';
+import { recordMasterDataAs } from './master-data.ts';
+import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 
 export class AuthenticationError extends Error {
   readonly status = 401;
@@ -111,34 +115,60 @@ interface Credential {
   readonly permissions: readonly Permission[];
 }
 
+/** Sessions and memberships: in memory for the demo, in PostgreSQL (#364) when the app has a database. */
+interface SessionStore {
+  createSession(companyId: string, branchId: string, userId: string): { id: string; expiresAt: number } | Promise<{ id: string; expiresAt: number }>;
+  authenticate(token: string): RequestContext | Promise<RequestContext>;
+}
+
+/**
+ * Issue #340 — the demo company's named records (its customer, supplier and items), under the ids
+ * the database can keep. In memory they keep their readable names.
+ */
+const storedSeed = (persistence: Persistence, companyId: string, details: Omit<CompanySeed, 'companyId' | 'branchId' | 'setupUserId'>) => {
+  if (persistence.kind === 'memory') return details;
+  const id = (name: string) => recordId(persistence, companyId, name);
+  const supplier = details.catalogue.supplier;
+  return {
+    ...details,
+    customerId: asId<'Party'>(id(details.customerId)),
+    supplierId: asId<'Party'>(id(details.supplierId)),
+    catalogue: {
+      ...details.catalogue,
+      customerId: id(details.catalogue.customerId),
+      ...(supplier === undefined ? {} : { supplier: { ...supplier, id: id(supplier.id) } }),
+      items: details.catalogue.items.map((item) => ({ ...item, id: id(item.id) })),
+    },
+  };
+};
+
 export class ApiRuntime {
+  readonly #persistence: Persistence;
   readonly #access = new AccessControl();
-  readonly #authentication = new AuthenticationService(this.#access);
+  readonly #authentication: SessionStore;
   readonly #applications = new Map<string, Promise<DemoApplication>>();
   readonly #operations = createOperations();
   readonly #operationsSeeded = new Set<string>();
   readonly #recurringRegistered = new Set<string>();
   readonly #credentials: readonly Credential[];
 
-  constructor() {
-    const owners = SYNTHETIC_PLATFORM_COMPANIES.map((company): Credential => ({
-      email: company.email,
-      password: passwordHash(process.env.DEMO_OWNER_PASSWORD ?? 'karobar-demo'),
-      companyId: company.companyId,
-      branchId: company.branchId,
-      userId: company.userId,
-      permissions: PRODUCT_OWNER_PERMISSIONS,
+  constructor(persistence: Persistence = MEMORY) {
+    this.#persistence = persistence;
+    this.#authentication = persistence.kind === 'postgres'
+      ? new PostgresAuthenticationService(persistence.db, new PostgresAccessControl(persistence.db))
+      : new AuthenticationService(this.#access);
+    // Issue #340 — the same three people per company that `npm run db:seed` writes. Owners sign in
+    // with DEMO_OWNER_PASSWORD, everybody else with DEMO_VIEWER_PASSWORD (#342 replaces all of this).
+    const credentials = SYNTHETIC_PLATFORM_USERS.map((user): Credential => ({
+      email: user.email,
+      password: passwordHash(user.role === 'owner' ? process.env.DEMO_OWNER_PASSWORD ?? 'karobar-demo' : process.env.DEMO_VIEWER_PASSWORD ?? 'viewer-demo'),
+      companyId: user.companyId,
+      branchId: user.branchId,
+      userId: user.userId,
+      permissions: user.permissions,
     }));
-    const viewer: Credential = {
-      email: 'viewer@sampoorna.example.invalid',
-      password: passwordHash(process.env.DEMO_VIEWER_PASSWORD ?? 'viewer-demo'),
-      companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId,
-      branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId,
-      userId: '00000000-0000-4000-8000-000000000004',
-      permissions: ['dashboard.read'],
-    };
-    this.#credentials = [...owners, viewer];
-    for (const credential of this.#credentials) {
+    this.#credentials = credentials;
+    for (const credential of persistence.kind === 'memory' ? this.#credentials : []) {
       this.#access.grant({
         companyId: credential.companyId,
         userId: credential.userId,
@@ -147,28 +177,31 @@ export class ApiRuntime {
         permissions: new Set(credential.permissions),
       });
     }
-    const demo = owners[0]!;
+    // In PostgreSQL the memberships are rows (`npm run db:seed` writes the synthetic ones), and the
+    // made-up incident below is demo data, which a database never receives.
+    if (persistence.kind === 'postgres') return;
+    const demo = credentials[0]!;
     const incidentActor: RequestContext = { companyId: demo.companyId, branchId: demo.branchId, actorId: demo.userId, sessionId: 'operations-seed', permissions: new Set(demo.permissions) };
     const incident = this.#operations.status.openIncident(incidentActor, 'E-invoice registration delay', 'Invoice Registration Portal', 'Some registrations were delayed. Customer invoices remained unchanged.');
     this.#operations.status.updateIncident(incidentActor, incident.id, 'resolved', 'The portal recovered. Safe queued registrations can now be replayed by an authorised operator.');
   }
 
-  signIn(input: Record<string, unknown>) {
+  async signIn(input: Record<string, unknown>) {
     const email = String(input.email ?? '').trim().toLowerCase();
     const companyId = String(input.companyId ?? '').trim();
     const credential = this.#credentials.find((candidate) => candidate.email === email && candidate.companyId === companyId);
     if (credential === undefined || !passwordMatches(String(input.password ?? ''), credential.password)) {
       throw new AuthenticationError('The email, password, or company is not correct.');
     }
-    const session = this.#authentication.createSession(credential.companyId, credential.branchId, credential.userId);
+    const session = await this.#authentication.createSession(credential.companyId, credential.branchId, credential.userId);
     return { sessionId: session.id, company: this.companySummary(credential.companyId), expiresAt: new Date(session.expiresAt).toISOString() };
   }
 
-  authenticate(authorization: string | undefined): RequestContext {
+  async authenticate(authorization: string | undefined): Promise<RequestContext> {
     const match = /^Bearer\s+(.+)$/i.exec(authorization ?? '');
     if (match?.[1] === undefined) throw new AuthenticationError();
     try {
-      return this.#authentication.authenticate(match[1]);
+      return await this.#authentication.authenticate(match[1]);
     } catch (error) {
       if (error instanceof PlatformError && (error.code === 'SESSION_EXPIRED' || error.code === 'SESSION_REVOKED')) throw new AuthenticationError(error.message);
       throw error;
@@ -191,15 +224,22 @@ export class ApiRuntime {
       const details = COMPANY_DETAILS[context.companyId];
       if (company === undefined || details === undefined) throw notFound('API_COMPANY_NOT_FOUND', 'That company is not available.');
       const seeded = SYNTHETIC_BUSINESS_DETAILS[context.companyId];
-      if (seeded !== undefined && businessDetailsOf(context.companyId) === null) {
+      // The made-up address and phone are demo data; a company with a database types its own.
+      if (this.#persistence.kind === 'memory' && seeded !== undefined && businessDetailsOf(context.companyId) === null) {
         saveBusinessDetails(context.companyId, { name: details.name, gstin: details.gstin }, seeded);
       }
       application = DemoApplication.create({
         companyId: asId<'Company'>(company.companyId),
         branchId: asId<'Branch'>(company.branchId),
         setupUserId: asId<'User'>(company.userId),
-        ...details,
+        ...storedSeed(this.#persistence, company.companyId, details),
+      }, this.#persistence).then(async (created) => {
+        // After a restart: this company's customers, items, business details and bill copies.
+        await loadCompany(company.companyId);
+        return created;
       });
+      // A company whose set-up failed is tried again on the next request, not remembered as broken.
+      application.catch(() => this.#applications.delete(context.companyId));
       this.#applications.set(context.companyId, application);
     }
     const resolved = await application;
@@ -215,7 +255,12 @@ export class ApiRuntime {
           'einvoice.generate', 'einvoice.view',
         ]),
       };
-      for (const job of resolved.recurringJobs()) this.#operations.recurring.register(serviceContext, job);
+      const db = this.database;
+      for (const job of resolved.recurringJobs()) {
+        // Issue #340 — on PostgreSQL each run is one action for its company. #345 moves these runs
+        // to a separate worker; until then they run on the API's own tick.
+        this.#operations.recurring.register(serviceContext, db === null ? job : { ...job, run: (ctx, at, signal) => asOneAction(db, ctx.companyId, () => job.run(ctx, at, signal)) });
+      }
       this.#recurringRegistered.add(context.companyId);
     }
     return resolved;
@@ -239,7 +284,8 @@ export class ApiRuntime {
   }
 
   async operationsWorkspace(context: RequestContext) {
-    if (!this.#operationsSeeded.has(context.companyId)) {
+    // The made-up portal failure is demo data: shown in memory, never written for a real company.
+    if (this.#persistence.kind === 'memory' && !this.#operationsSeeded.has(context.companyId)) {
       this.#operations.telemetry.registerHealthCheck('api', () => true);
       this.#operations.telemetry.registerHealthCheck('queue', () => true);
       this.#operations.telemetry.externalFailure(context, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
@@ -264,7 +310,21 @@ export class ApiRuntime {
   }
 
   publicStatus() { return { incidents: this.#operations.status.publicStatus() }; }
+
+  /** Whether write requests run as one unit of work, and on which database. */
+  get database() { return this.#persistence.kind === 'postgres' ? this.#persistence.db : null; }
 }
 
 let runtimeInstance: ApiRuntime | undefined;
 export const apiRuntime = (): ApiRuntime => (runtimeInstance ??= new ApiRuntime());
+
+/** Issue #340 — the server picks its persistence once, before it takes a request. */
+export const startRuntime = (persistence: Persistence): ApiRuntime => {
+  if (runtimeInstance !== undefined) throw new Error('The API runtime has already started.');
+  if (persistence.kind === 'postgres') {
+    // A record written outside anybody's request (the main godown, on first opening) is the owner's.
+    enableDurability(persistence.db);
+    recordMasterDataAs((companyId) => SYNTHETIC_PLATFORM_COMPANIES.find((company) => company.companyId === companyId)?.userId ?? companyId);
+  }
+  return (runtimeInstance = new ApiRuntime(persistence));
+};
