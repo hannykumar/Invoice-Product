@@ -276,9 +276,14 @@ export interface PostedBillLike {
 
 export const purchaseBillToBookDocument = (
   bill: PostedBillLike,
-  supplier: { readonly gstin: string | null; readonly imported?: boolean; readonly kind?: BookPurchaseDocument['kind']; readonly inTable5?: boolean; readonly outsideGstr2b?: true },
+  supplier: {
+    readonly gstin: string | null; readonly imported?: boolean; readonly kind?: BookPurchaseDocument['kind']; readonly inTable5?: boolean; readonly outsideGstr2b?: true;
+    /** Issue #289, part 2b — a reverse-charge bill's time of supply, decided by the purchase lane. */
+    readonly taxPointDate?: string;
+  },
 ): BookPurchaseDocument => ({
   ...(supplier.inTable5 === undefined ? {} : { inTable5: supplier.inTable5 }),
+  ...(supplier.taxPointDate === undefined || !bill.tax.reverseCharge ? {} : { taxPointPeriod: supplier.taxPointDate.slice(0, 7) as TaxPeriod }),
   ...(supplier.outsideGstr2b === undefined ? {} : { outsideGstr2b: supplier.outsideGstr2b }),
   sourceKind: 'purchase_bill',
   sourceId: bill.id,

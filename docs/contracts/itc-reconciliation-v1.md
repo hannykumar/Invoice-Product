@@ -165,6 +165,22 @@ our return.
   ledger's input GST for the month. Reverse-charge liability and exempt inward value count only
   the month's own documents.
 
+## Reverse charge: the month of the time of supply (issue #289, part 2b)
+
+A reverse-charge bill may carry `taxPointPeriod`: the month of its time of supply under CGST
+s.12(3) (goods: earliest of receipt, payment, the day after 30 days from the supplier's document)
+or s.13(3) (services: earlier of payment and, from a registered supplier, the day after 60 days
+from their invoice, or, from an unregistered one, the date of our self-invoice). The purchase lane
+decides it (`packages/purchasing/src/reverse-charge-timing.ts`); this module only reads it.
+
+- `reverseChargeLiability` (GSTR-3B 3.1(d)) counts a reverse-charge invoice in `taxPointPeriod`,
+  not its own month (`liabilityPeriodOf`). Absent, the document's month, as before.
+- The purchase-books port hands a reverse-charge bill over from the earlier of its own month and
+  its tax-point month. It is compared with GSTR-2B only from its own month.
+- A self-assessed bill (seller with no GSTIN) is claimed in 4(A)(3) in its tax-point month.
+- A bill matched through GSTR-2B whose tax point is later than the period is `HELD_BACK`, saying
+  when it falls due: its credit comes from paying that tax, on the same return.
+
 ## Known limitations
 
 - The GSP download is exercised against `SyntheticPortalSource`; no production intermediary is
