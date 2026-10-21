@@ -29,3 +29,7 @@ Tenant identity always comes from the authenticated context. The database tables
 ## Known limitations
 
 The first version supports INR current, savings, cash-credit and other deposit accounts. It neither becomes an RBI Account Aggregator nor initiates payments. Production providers and legal/commercial access remain separately approved business work.
+
+## Storage (#366)
+
+`BankFeedService` keeps its records behind `BankFeedStore` (`src/store.ts`): `InMemoryBankFeedStore`, or `PostgresBankFeedStore` (`src/postgres-store.ts`) on `bank_feed_connections`, `bank_feed_accounts`, `bank_feed_transactions`, `bank_feed_syncs` and the platform's `audit_events`. On PostgreSQL every command runs inside the caller's unit of work. Imported lines and sync results are frozen when written. Every list takes an optional `{ limit, after }` page. Another company's connection is answered `NOT_FOUND` on PostgreSQL (row-level security hides it) and `TENANT_ISOLATION` in memory; both refuse.

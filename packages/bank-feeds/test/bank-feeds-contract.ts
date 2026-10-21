@@ -137,8 +137,9 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     assert.deepEqual(await h.store.audit((await h.company()).companyId), []);
   });
 
-  test(`${name}: what a failed action wrote is gone with it`, { skip: skip || !make().atomic }, async () => {
+  test(`${name}: what a failed action wrote is gone with it`, { skip }, async (t) => {
     const { h, companyId, userId, connection, account } = await setup();
+    if (!h.atomic) { t.skip('memory has no transaction to roll back'); return; }
     await assert.rejects(h.write(companyId, async () => {
       await h.store.saveConnection({ ...connection, status: 'CONNECTED' });
       await h.store.saveAccount({ ...account, cursor: 'moved' });
