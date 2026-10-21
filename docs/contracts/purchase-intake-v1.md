@@ -101,8 +101,14 @@ supplier GSTIN + financial year + document type + number is reported as a proble
 
 - **Attachment level (here):** SHA-256 of the file, scoped to the company. A second arrival is
   marked `discarded` with `duplicateOfId` set, and is never read twice.
-- **Channel level (here):** `sender.providerMessageId`. A provider redelivering the same message
-  returns the original document and does not call OCR again.
+- **Channel level (here, changed in 1.2.0 by #406):** keyed on (routed company — or, for a
+  document no company could be chosen for, the channel and delivery address — , channel,
+  `sender.providerMessageId`, attachment SHA-256). Never on the bare message id: it is shared by
+  every company and channel, and for email (`Message-ID`) and camera/upload it is written by the
+  sender or the client. A provider redelivering the same message returns the original document
+  and does not call OCR again. A reused id with a different file, the same id at another company,
+  or the same text through another channel is a new document. A duplicate is only ever returned
+  when it is in the same company (or still unrouted) and came through the same channel.
 - **Logical level (#16):** `logicalKey(draft)` returns supplier GSTIN + invoice number + date +
   total for the same invoice arriving as a photo on WhatsApp and a PDF by email. This module
   exposes the key; deciding what to do about it is #16's.
