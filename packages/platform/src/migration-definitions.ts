@@ -6,6 +6,7 @@ import { masterDataMigrations } from "../../masters/src/migrations.ts";
 import { purchasePostingMigrations } from "../../purchasing/src/posting-migrations.ts";
 import { purchaseMatchingMigrations } from "../../purchasing/src/matching-migrations.ts";
 import { supplierRiskMigrations } from "../../purchasing/src/supplier-risk-migrations.ts";
+import { reverseChargeMigrations } from "../../purchasing/src/reverse-charge-migrations.ts";
 import { eInvoiceMigrations } from "../../gst/src/einvoice-migrations.ts";
 import { gstReturnMigrations } from "../../gst-returns/src/migrations.ts";
 import { itcMigrations } from "../../itc/src/migrations.ts";
@@ -140,5 +141,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...immutabilityMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...immutabilityMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );
