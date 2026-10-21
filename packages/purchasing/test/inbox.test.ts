@@ -537,3 +537,75 @@ test("#400: with no government key configured, a signed file goes through the in
   assert.equal(result.draft?.signature, "unverified");
   assert.ok(result.draft?.fieldsNeedingReview.includes("invoiceNumber"));
 });
+
+// ------------------------------------------------------------------ #406: channel-level dedup
+
+test("#406: the same message id at two companies is two bills, and both are kept", async () => {
+  const { inbox, ocr } = setup({ "s3://inbox/doc-a": [INVOICE_PAGE(BUYER_GSTIN)], "s3://inbox/doc-b": [INVOICE_PAGE(OTHER_BUYER_GSTIN)] });
+  const reused = "<reused-123@sender.example>";
+  const toA = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: reused }, attachment: attachment({ sha256: "bill-for-a", storageKey: "s3://inbox/doc-a" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "a1" });
+  const toB = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: reused }, attachment: attachment({ sha256: "bill-for-b", storageKey: "s3://inbox/doc-b" }), head: PDF_HEAD, deliveredTo: "bills-konkan@invoices.example", idempotencyKey: "b1" });
+  assert.equal(toA.duplicate, false);
+  assert.equal(toB.duplicate, false);
+  assert.notEqual(toB.document.id, toA.document.id);
+  assert.equal(toB.document.companyId, "company-b");
+  assert.equal(toB.document.status, "draft_ready");
+  // Company B never receives company A's document or draft.
+  assert.equal(toB.draft?.companyId, "company-b");
+  assert.equal(inbox.inbox(contextFor("company-a")).length, 1);
+  assert.equal(inbox.inbox(contextFor("company-b")).length, 1);
+  assert.equal(ocr.callCount, 2);
+});
+
+test("#406: even the same file under the same message id at two companies is not another company's duplicate", async () => {
+  const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE(BUYER_GSTIN)] });
+  const sender = { channel: "email" as const, address: "accounts@shreeram.example", providerMessageId: "<same@sender.example>" };
+  const toA = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "same-bytes", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "a1" });
+  const toX = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "same-bytes", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-stranger@invoices.example", idempotencyKey: "x1" });
+  assert.equal(toX.duplicate, false);
+  assert.notEqual(toX.document.id, toA.document.id);
+  assert.equal(toX.document.companyId, "company-x");
+});
+
+test("#406: a reused email Message-ID with a different file at the same company is a new document", async () => {
+  const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE()], "s3://inbox/doc-2": [INVOICE_PAGE()] });
+  const sender = { channel: "email" as const, address: "accounts@shreeram.example", providerMessageId: "<one-mail-two-files@sender.example>" };
+  const first = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "file-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "m1" });
+  const second = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "file-2", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "m2" });
+  assert.equal(second.duplicate, false);
+  assert.notEqual(second.document.id, first.document.id);
+  // A true redelivery of the first file is still recognised, without a second read.
+  const redelivered = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "file-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "m1" });
+  assert.equal(redelivered.duplicate, true);
+  assert.equal(redelivered.document.id, first.document.id);
+});
+
+test("#406: a WhatsApp id and an email id with the same text do not collide", async () => {
+  const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE()], "s3://inbox/doc-2": [INVOICE_PAGE()] });
+  const sameText = "ABC123";
+  const viaWhatsapp = await inbox.receive({ channel: "whatsapp", sender: whatsapp({ providerMessageId: sameText }), attachment: attachment({ sha256: "wa-file", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "w1" });
+  const viaEmail = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: sameText }, attachment: attachment({ sha256: "mail-file", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "e1" });
+  assert.equal(viaEmail.duplicate, false);
+  assert.notEqual(viaEmail.document.id, viaWhatsapp.document.id);
+  assert.equal(viaEmail.document.channel, "email");
+});
+
+test("#406: an unrouted message id does not return a document that arrived on another address", async () => {
+  const { inbox } = setup();
+  const sender = { channel: "email" as const, address: "x@sender.example", providerMessageId: "<unrouted@sender.example>" };
+  const first = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "u-1" }), head: PDF_HEAD, deliveredTo: "nobody-1@invoices.example", idempotencyKey: "u1" });
+  const second = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "u-1" }), head: PDF_HEAD, deliveredTo: "nobody-2@invoices.example", idempotencyKey: "u2" });
+  assert.equal(first.document.quarantineReason, "COMPANY_NOT_IDENTIFIED");
+  assert.equal(second.duplicate, false);
+  assert.notEqual(second.document.id, first.document.id);
+});
+
+test("#406: once a held document is claimed, a redelivery to the shared address is not handed back as a duplicate", async () => {
+  const { inbox } = setup();
+  const sender = { channel: "email" as const, address: "x@sender.example", providerMessageId: "<shared@sender.example>" };
+  const held = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "sh-1" }), head: PDF_HEAD, deliveredTo: "shared-desk@invoices.example", idempotencyKey: "s1" });
+  inbox.assignCompany(contextFor("company-a"), held.document.id, "ours");
+  const again = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "sh-1" }), head: PDF_HEAD, deliveredTo: "shared-desk@invoices.example", idempotencyKey: "s1" });
+  assert.equal(again.duplicate, false);
+  assert.notEqual(again.document.companyId, "company-a");
+});
