@@ -18,14 +18,14 @@
 import { randomUUID } from "node:crypto";
 import { ConnectorError } from "../../platform/src/connectors.ts";
 import { PlatformError } from "../../platform/src/types.ts";
-import type { RequestContext } from "../../platform/src/types.ts";
+import type { Permission, RequestContext } from "../../platform/src/types.ts";
 import type { AuditLog, PlatformCommandService } from "../../platform/src/platform.ts";
 import type { Id } from "../../masters/src/types.ts";
 import { NO_IRP_SIGNING_KEY } from "../../gst/src/irp-signature.ts";
 import type { IrpSignatureVerifier } from "../../gst/src/irp-signature.ts";
 import { screenAttachment } from "./safety.ts";
 import type { ScanVerdict } from "./safety.ts";
-import { routeDocument } from "./routing.ts";
+import { assertDistinctChannels, routeDocument } from "./routing.ts";
 import type { CompanyRoutingProfile } from "./routing.ts";
 import { readEInvoiceJson } from "./einvoice.ts";
 import type { EInvoiceReadResult } from "./einvoice.ts";
@@ -85,6 +85,15 @@ export const QUARANTINE_CONFIDENCE = 0.4;
 
 const UNROUTED = "__unrouted__";
 
+/** Claiming a held document, or asking for it to be read again (#400). */
+export const INBOX_MANAGE_PERMISSION: Permission = "purchase.inbox.manage";
+
+/**
+ * One answer for "does not exist" and "belongs to another company", so a document id from
+ * another company cannot be probed for (#400).
+ */
+const notFound = (): InboxError => new InboxError("NOT_FOUND", "That document was not found.");
+
 /** The quarantine reasons a person may resolve by saying which company a document is for. */
 const ASSIGNABLE: ReadonlySet<QuarantineReason> = new Set(["COMPANY_NOT_IDENTIFIED", "COMPANY_MISMATCH"]);
 
@@ -111,6 +120,9 @@ export class PurchaseInboxService {
     this.#commands = commands;
     this.#audit = audit;
     this.#ocr = ocr;
+    // An address under two businesses that do not share an owner would let one claim the
+    // other's documents (#400 review), so that configuration is refused outright.
+    assertDistinctChannels(companies);
     this.#companies = companies;
     this.#signatures = options.irpSignatures ?? NO_IRP_SIGNING_KEY;
   }
@@ -119,8 +131,7 @@ export class PurchaseInboxService {
 
   document(context: RequestContext, id: Id): InboundDocument {
     const found = this.#documents.get(id);
-    if (!found) throw new InboxError("NOT_FOUND", "That document was not found.");
-    if (found.companyId !== context.companyId) throw new PlatformError("TENANT_ISOLATION", "This document belongs to another company.");
+    if (!found || found.companyId !== context.companyId) throw notFound();
     return found;
   }
 
@@ -137,13 +148,13 @@ export class PurchaseInboxService {
 
   /**
    * Documents that arrived on an address this company shares with another (so routing could
-   * not choose) and are waiting for someone to claim them. Only file name, channel and time are
-   * shown: nothing has been read from them.
+   * not choose) and are waiting for someone to claim them. Only the file name, size, channel
+   * and time are shown: nothing has been read from them, and no storage key or hash leaves.
    */
-  awaitingAssignment(context: RequestContext): readonly Pick<InboundDocument, "id" | "channel" | "receivedAt" | "attachment">[] {
+  awaitingAssignment(context: RequestContext): readonly { readonly id: Id; readonly channel: IntakeChannel; readonly receivedAt: string; readonly fileName: string; readonly sizeBytes: number }[] {
     return [...this.#documents.values()]
       .filter((document) => document.companyId === UNROUTED && document.status === "quarantined" && (this.#channelOwners.get(document.id) ?? []).includes(context.companyId))
-      .map((document) => ({ id: document.id, channel: document.channel, receivedAt: document.receivedAt, attachment: document.attachment }));
+      .map((document) => ({ id: document.id, channel: document.channel, receivedAt: document.receivedAt, fileName: document.attachment.fileName, sizeBytes: document.attachment.sizeBytes }));
   }
 
   /** The key #16 will use to spot the same invoice arriving twice through two channels. */
@@ -232,6 +243,7 @@ export class PurchaseInboxService {
    */
   async retry(context: RequestContext, documentId: Id): Promise<ReceiveResult> {
     const document = this.document(context, documentId);
+    this.#require(context);
     if (document.status !== "failed") throw new InboxError("INVALID_STATE", "Only a document that failed can be tried again.");
     const company = this.#companies.find((candidate) => candidate.companyId === document.companyId);
     if (!company) throw new InboxError("INVALID_STATE", "This document has not been routed to a company yet.");
@@ -247,25 +259,31 @@ export class PurchaseInboxService {
    */
   assignCompany(context: RequestContext, documentId: Id, reason: string): InboundDocument {
     const document = this.#documents.get(documentId);
-    if (!document) throw new InboxError("NOT_FOUND", "That document was not found.");
-    if (document.companyId === UNROUTED) {
-      // Answer as if it did not exist, so another company's held document cannot be probed for.
-      if (!(this.#channelOwners.get(document.id) ?? []).includes(context.companyId)) throw new InboxError("NOT_FOUND", "That document was not found.");
-    } else if (document.companyId !== context.companyId) {
-      throw new PlatformError("TENANT_ISOLATION", "This document belongs to another company.");
-    }
+    if (!document) throw notFound();
+    const mayClaim = document.companyId === UNROUTED
+      ? (this.#channelOwners.get(document.id) ?? []).includes(context.companyId)
+      : document.companyId === context.companyId;
+    if (!mayClaim) throw notFound();
+    this.#require(context);
     if (document.status !== "quarantined" || !document.quarantineReason || !ASSIGNABLE.has(document.quarantineReason)) {
       throw new InboxError("INVALID_STATE", "Only a document held because its business was unclear can be assigned. Other holds, such as an unsafe file, cannot be cleared this way.");
     }
     if (!reason.trim()) throw new InboxError("INVALID_STATE", "Please say why this document belongs to this business.");
-    const assigned = this.#set(document, {
+    // The hold is lifted, so its reason goes; the decision and who made it are kept.
+    const { quarantineReason, ...rest } = document;
+    const assigned = Object.freeze({
+      ...rest,
       companyId: context.companyId,
       status: "received",
       statusMessage: "Assigned to this business by hand. Nothing has been read or posted yet.",
       routing: { basis: "explicit_company", evidence: `Assigned by ${context.actorId}: ${reason.trim()}`, confidence: 1 },
-    });
+    }) as InboundDocument;
+    this.#documents.set(document.id, assigned);
     this.#channelOwners.delete(document.id);
-    this.#record(assigned, "purchase.inbox.company_assigned", { reason: reason.trim(), quarantineReason: document.quarantineReason }, context.actorId);
+    // The file now belongs to this company, so the same file arriving again is a duplicate here.
+    const contentKey = `${context.companyId}:${document.attachment.sha256}`;
+    if (!this.#byContent.has(contentKey)) this.#byContent.set(contentKey, document.id);
+    this.#record(assigned, "purchase.inbox.company_assigned", { reason: reason.trim(), quarantineReason }, context.actorId);
     return assigned;
   }
 
@@ -375,9 +393,9 @@ export class PurchaseInboxService {
     const retried = document.attempts > 1;
     document = this.#set(document, {
       status: "draft_ready",
-      statusMessage: draft.fieldsNeedingReview.length === 0
+      statusMessage: draft.fieldsNeedingReview.length === 0 && draft.arithmeticProblems.length === 0
         ? `Read successfully${retried ? " on retry" : ""}. Nothing has been posted yet — please review and approve.`
-        : `Read${retried ? " on retry" : ""}, but ${draft.fieldsNeedingReview.length} value(s) need your eye. Nothing has been posted yet.`,
+        : `Read${retried ? " on retry" : ""}, but ${draft.fieldsNeedingReview.length + draft.arithmeticProblems.length} thing(s) need your eye. Nothing has been posted yet.`,
     });
     // A command records the intake for audit and idempotency. It finalises at "draft
     // prepared"; approving and posting the purchase are separate commands in #16/#17.
@@ -392,6 +410,12 @@ export class PurchaseInboxService {
     });
     this.#record(document, "purchase.inbox.draft_ready", { draftId: draft.id, command: command.id, needsReview: draft.fieldsNeedingReview, attempt: document.attempts }, options.actor?.actorId);
     return { document, draft, duplicate: false };
+  }
+
+  #require(context: RequestContext): void {
+    if (!context.permissions.has(INBOX_MANAGE_PERMISSION)) {
+      throw new PlatformError("FORBIDDEN", "You do not have permission to manage held purchase documents. Ask the owner to give you access.");
+    }
   }
 
   #draftFor(documentId: Id): ExtractionDraft | undefined {

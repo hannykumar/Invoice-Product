@@ -47,6 +47,11 @@ test("an unknown kid still checks every configured key, so a rotated header does
   assert.equal(verifier.verify(jws(invoice, stranger.privateKey, { alg: "RS256", kid: "other" })).status, "invalid");
 });
 
+test("only an RSA key can be configured, because RS256 is RSA", () => {
+  const ec = generateKeyPairSync("ec", { namedCurve: "P-256" }).publicKey.export({ type: "spki", format: "pem" }).toString();
+  assert.throws(() => new Rs256IrpSignatureVerifier([{ pem: ec }]), /RSA/);
+});
+
 test("with no key configured nothing is verified, and nothing is called forged either", () => {
   assert.equal(NO_IRP_SIGNING_KEY.verify(jws(invoice)).status, "unverifiable");
   assert.equal(verifier.verify("not-a-token").status, "invalid");

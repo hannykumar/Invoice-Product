@@ -21,7 +21,7 @@
 //
 // No dependency is added: node:crypto verifies RSASSA-PKCS1-v1_5 with SHA-256 natively.
 
-import { createPublicKey, verify as verifySignature } from "node:crypto";
+import { constants, createPublicKey, verify as verifySignature } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 
 export type IrpSignatureCheck =
@@ -52,7 +52,13 @@ export class Rs256IrpSignatureVerifier implements IrpSignatureVerifier {
   readonly #keys: readonly { readonly keyId?: string; readonly key: KeyObject }[];
 
   constructor(keys: readonly IrpPublicKey[]) {
-    this.#keys = keys.map((entry) => ({ ...(entry.keyId === undefined ? {} : { keyId: entry.keyId }), key: createPublicKey(entry.pem) }));
+    this.#keys = keys.map((entry) => {
+      const key = createPublicKey(entry.pem);
+      // RS256 means RSA PKCS#1 v1.5. An EC or RSA-PSS key configured by mistake would make
+      // node check a different algorithm than the header claims, so it is refused here.
+      if (key.asymmetricKeyType !== "rsa") throw new Error("The government signing key must be an RSA public key.");
+      return { ...(entry.keyId === undefined ? {} : { keyId: entry.keyId }), key };
+    });
   }
 
   verify(jws: string): IrpSignatureCheck {
@@ -72,7 +78,7 @@ export class Rs256IrpSignatureVerifier implements IrpSignatureVerifier {
     const signed = Buffer.from(`${headerPart}.${payloadPart}`, "ascii");
     const signature = Buffer.from(signaturePart, "base64url");
     const match = candidates.find((entry) => {
-      try { return verifySignature("sha256", signed, entry.key, signature); } catch { return false; }
+      try { return verifySignature("sha256", signed, { key: entry.key, padding: constants.RSA_PKCS1_PADDING }, signature); } catch { return false; }
     });
     if (!match) return { status: "invalid", reason: "The government's signature on this invoice does not match its contents." };
 

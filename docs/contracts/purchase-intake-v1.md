@@ -55,18 +55,29 @@ never authority; pass `uploader: RequestContext` instead.
 Business phone-number id), never from a header the sender wrote. That is the channel adapter's
 obligation (GPT 2).
 
-## Later commands are tenant-checked (1.1.0, #400)
+An alias or WhatsApp number may be shared only by companies that declare the same `ownerId`;
+the service constructor refuses any other overlap. WhatsApp numbers compare in full
+international digits (a bare ten-digit number is read as +91), not by their last ten digits.
 
-- `retry(context, documentId)` — only a `failed` document of `context.companyId`; another
-  company's id answers `TENANT_ISOLATION`. A retry runs the same reading, cross-check and review
-  rules as the first attempt.
+## Later commands are tenant- and permission-checked (1.1.0, #400)
+
+Both need the new permission `purchase.inbox.manage` (added to the platform `Permission` union and
+the owner/setup role lists). Another company's document answers `NOT_FOUND` everywhere —
+`document`, `draft`, `retry`, `assignCompany` — so ids cannot be probed (previously
+`TENANT_ISOLATION`).
+
+- `retry(context, documentId)` — only a `failed` document of `context.companyId`. A retry runs
+  the same reading, cross-check and review rules as the first attempt.
 - `assignCompany(context, documentId, reason)` — only for a document quarantined
   `COMPANY_NOT_IDENTIFIED` or `COMPANY_MISMATCH`, and only when it is already in
   `context.companyId` or arrived on an address `context.companyId` owns (a shared alias).
   An unrouted document that arrived on nobody's address answers `NOT_FOUND` to everyone. Safety
   holds (malware, active content, `SIGNATURE_INVALID`, …) cannot be cleared this way. A reason is
-  required and the audit actor is `context.actorId`.
-- `awaitingAssignment(context)` lists the unrouted documents on this company's shared addresses.
+  required and the audit actor is `context.actorId`. The hold reason is cleared and the file
+  joins the company's duplicate index. Reading an assigned document is not built yet: it stays
+  `received`.
+- `awaitingAssignment(context)` lists the unrouted documents on this company's shared addresses
+  (id, channel, time, file name and size only).
 
 ## e-invoice signatures (1.1.0, #400)
 

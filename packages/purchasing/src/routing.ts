@@ -23,6 +23,11 @@ export interface CompanyRoutingProfile {
   readonly emailAliases: readonly string[];
   /** WhatsApp Business numbers this company receives documents on. */
   readonly whatsappNumbers: readonly string[];
+  /**
+   * The account that owns this company. Two companies may share an alias or number only when
+   * both name the same owner (#400): otherwise one could claim the other's documents.
+   */
+  readonly ownerId?: Id;
 }
 
 export type RoutingResult =
@@ -38,7 +43,34 @@ export type RoutingResult =
     readonly channelOwners: readonly Id[];
   };
 
-const digits = (value: string): string => value.replace(/\D/g, "").slice(-10);
+/**
+ * A phone number in full international digits. A bare ten-digit number, or one written with a
+ * trunk 0, is an Indian mobile number; anything else is kept whole. The last ten digits alone are
+ * not enough: two countries' numbers can share them (#400 review).
+ */
+export const phoneKey = (value: string): string => {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
+  return digits.replace(/^00/, "");
+};
+
+const aliasKey = (value: string): string => value.trim().toLowerCase();
+
+/** Refuses a set of companies in which one address belongs to two businesses with different owners. */
+export function assertDistinctChannels(companies: readonly CompanyRoutingProfile[]): void {
+  const seen = new Map<string, CompanyRoutingProfile>();
+  for (const company of companies) {
+    const keys = [...company.emailAliases.map((alias) => `email:${aliasKey(alias)}`), ...company.whatsappNumbers.map((number) => `whatsapp:${phoneKey(number)}`)];
+    for (const key of new Set(keys)) {
+      const earlier = seen.get(key);
+      if (earlier && earlier.companyId !== company.companyId && (earlier.ownerId === undefined || earlier.ownerId !== company.ownerId)) {
+        throw new Error(`The address ${key.slice(key.indexOf(":") + 1)} is set up for two businesses that do not share an owner. Each business needs its own address.`);
+      }
+      if (!earlier) seen.set(key, company);
+    }
+  }
+}
 
 /** The companies a delivery address belongs to, for the channel it arrived through. */
 export function channelOwners(companies: readonly CompanyRoutingProfile[], channel: IntakeChannel, deliveredTo: string | undefined): readonly CompanyRoutingProfile[] {
@@ -46,11 +78,11 @@ export function channelOwners(companies: readonly CompanyRoutingProfile[], chann
   if (!target) return [];
   // An alias only binds email, a number only binds WhatsApp: the same text arriving through
   // another channel proves nothing about where it was sent.
-  if (channel === "email") return companies.filter((company) => company.emailAliases.some((alias) => alias.trim().toLowerCase() === target.toLowerCase()));
+  if (channel === "email") return companies.filter((company) => company.emailAliases.some((alias) => aliasKey(alias) === aliasKey(target)));
   if (channel === "whatsapp") {
-    const wanted = digits(target);
+    const wanted = phoneKey(target);
     if (wanted.length < 10) return [];
-    return companies.filter((company) => company.whatsappNumbers.some((number) => digits(number) === wanted));
+    return companies.filter((company) => company.whatsappNumbers.some((number) => phoneKey(number) === wanted));
   }
   return [];
 }

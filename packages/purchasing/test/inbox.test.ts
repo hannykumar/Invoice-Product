@@ -6,7 +6,7 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import { computeIrn } from "../../gst/src/irn.ts";
 import { Rs256IrpSignatureVerifier } from "../../gst/src/irp-signature.ts";
-import type { RequestContext } from "../../platform/src/types.ts";
+import type { Permission, RequestContext } from "../../platform/src/types.ts";
 import { MockOcrAdapter, PurchaseInboxService, REVIEW_CONFIDENCE, UNSIGNED_JSON_CONFIDENCE, pageFromLines, parseInvoiceDate, parsePaise, readEInvoiceJson, readInvoiceFromOcr, routeDocument, screenAttachment } from "../src/index.ts";
 import type { Attachment, CompanyRoutingProfile, InboundSender } from "../src/index.ts";
 
@@ -15,13 +15,13 @@ const OTHER_BUYER_GSTIN = syntheticGstin("27", "AAACZ9999Q");
 const SUPPLIER_GSTIN = syntheticGstin("27", "AAECS5678D");
 
 const COMPANIES: readonly CompanyRoutingProfile[] = [
-  { companyId: "company-a", legalName: "Sampoorna Traders", gstins: [BUYER_GSTIN], emailAliases: ["bills-sampoorna@invoices.example", "shared-desk@invoices.example"], whatsappNumbers: ["+91 98450 12345"] },
-  { companyId: "company-b", legalName: "Konkan Metals", gstins: [OTHER_BUYER_GSTIN], emailAliases: ["bills-konkan@invoices.example", "shared-desk@invoices.example"], whatsappNumbers: ["+91 98220 11122"] },
+  { companyId: "company-a", legalName: "Sampoorna Traders", gstins: [BUYER_GSTIN], emailAliases: ["bills-sampoorna@invoices.example", "shared-desk@invoices.example"], whatsappNumbers: ["+91 98450 12345"], ownerId: "owner-1" },
+  { companyId: "company-b", legalName: "Konkan Metals", gstins: [OTHER_BUYER_GSTIN], emailAliases: ["bills-konkan@invoices.example", "shared-desk@invoices.example"], whatsappNumbers: ["+91 98220 11122"], ownerId: "owner-1" },
   // The stranger in #400's scenario: a tenant of their own, with their own alias.
   { companyId: "company-x", legalName: "Stranger Trading", gstins: [syntheticGstin("07", "AAACX1111J")], emailAliases: ["bills-stranger@invoices.example"], whatsappNumbers: ["+91 99999 00000"] },
 ];
 
-const contextFor = (companyId: string): RequestContext => ({ companyId, branchId: `${companyId}-main`, actorId: `owner-${companyId}`, permissions: new Set(), sessionId: `session-${companyId}` });
+const contextFor = (companyId: string, permissions: readonly Permission[] = ["purchase.inbox.manage"]): RequestContext => ({ companyId, branchId: `${companyId}-main`, actorId: `owner-${companyId}`, permissions: new Set(permissions), sessionId: `session-${companyId}` });
 
 // A key pair standing in for the IRP's (no government key is needed to test), and a forger's.
 const IRP_KEY = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -283,7 +283,7 @@ test("one company cannot read another company's inbox", async () => {
   const { inbox } = setup();
   const result = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "hash-D", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   const otherCompany = { companyId: "company-b", branchId: "branch-b", actorId: "owner-b", permissions: new Set(), sessionId: "s" } as never;
-  assert.throws(() => inbox.document(otherCompany, result.document.id), /another company/);
+  assert.throws(() => inbox.document(otherCompany, result.document.id), /not found/);
   assert.equal(inbox.inbox(otherCompany).length, 0);
 });
 
@@ -422,7 +422,7 @@ test("#400: another company cannot assign a document held in this company", asyn
   const held = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "held-a", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   assert.equal(held.document.companyId, "company-a");
   assert.equal(held.document.quarantineReason, "COMPANY_MISMATCH");
-  assert.throws(() => inbox.assignCompany(contextFor("company-b"), held.document.id, "the GST number is ours"), /another company/);
+  assert.throws(() => inbox.assignCompany(contextFor("company-b"), held.document.id, "the GST number is ours"), /not found/);
   assert.equal(inbox.document(contextFor("company-a"), held.document.id).companyId, "company-a");
   // Its own company may confirm it.
   const confirmed = inbox.assignCompany(contextFor("company-a"), held.document.id, "a branch we bought for");
@@ -435,6 +435,8 @@ test("#400: a document on a shared address can be claimed only by a business tha
   const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ sha256: "shared-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "shared-desk@invoices.example", idempotencyKey: "k1" });
   assert.equal(result.document.quarantineReason, "COMPANY_NOT_IDENTIFIED");
   assert.deepEqual(inbox.awaitingAssignment(contextFor("company-a")).map((item) => item.id), [result.document.id]);
+  assert.deepEqual(Object.keys(inbox.awaitingAssignment(contextFor("company-a"))[0] ?? {}).sort(), ["channel", "fileName", "id", "receivedAt", "sizeBytes"]);
+  assert.throws(() => inbox.assignCompany(contextFor("company-a", []), result.document.id, "ours"), /permission/);
   assert.deepEqual(inbox.awaitingAssignment(contextFor("company-x")), []);
   assert.throws(() => inbox.assignCompany(contextFor("company-x"), result.document.id, "mine"), /not found/);
   assert.throws(() => inbox.assignCompany(contextFor("company-a"), result.document.id, "   "), /say why/);
@@ -442,7 +444,12 @@ test("#400: a document on a shared address can be claimed only by a business tha
   const claimed = inbox.assignCompany(contextFor("company-a"), result.document.id, "our supplier");
   assert.equal(claimed.companyId, "company-a");
   // Once claimed, the other owner of the address cannot take it.
-  assert.throws(() => inbox.assignCompany(contextFor("company-b"), result.document.id, "ours"), /another company/);
+  assert.throws(() => inbox.assignCompany(contextFor("company-b"), result.document.id, "ours"), /not found/);
+  // The hold is lifted cleanly, and the same file arriving again is a duplicate in its new home.
+  assert.equal(claimed.quarantineReason, undefined);
+  const again = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner-company-a" }, attachment: attachment({ sha256: "shared-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k2" });
+  assert.equal(again.duplicate, true);
+  assert.equal(again.document.duplicateOfId, result.document.id);
 });
 
 test("#400: assigning cannot clear a hold that was not about the company", async () => {
@@ -465,7 +472,9 @@ test("#400: another company cannot retry this company's document", async () => {
   const failed = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ sha256: "retry-x", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(failed.document.status, "failed");
   const calls = ocr.callCount;
-  await assert.rejects(() => inbox.retry(contextFor("company-b"), failed.document.id), /another company/);
+  await assert.rejects(() => inbox.retry(contextFor("company-b"), failed.document.id), /not found/);
+  // Inside the company, a person without the permission cannot ask for a paid re-read either.
+  await assert.rejects(() => inbox.retry(contextFor("company-a", []), failed.document.id), /permission/);
   assert.equal(ocr.callCount, calls);
   assert.equal(inbox.document(contextFor("company-a"), failed.document.id).status, "failed");
 });
@@ -478,4 +487,53 @@ test("#400: a retry goes through the same company cross-check as the first read"
   const retried = await inbox.retry(contextFor("company-a"), failed.document.id);
   assert.equal(retried.document.quarantineReason, "COMPANY_MISMATCH");
   assert.equal(retried.draft, undefined);
+});
+
+test("#400: one address under two businesses with different owners is refused, and phone numbers compare in full", () => {
+  const audit = new AuditLog();
+  const make = (companies: readonly CompanyRoutingProfile[]) => new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), companies);
+  const victim = { companyId: "v", legalName: "Victim", gstins: [], emailAliases: ["bills-v@invoices.example"], whatsappNumbers: ["+91 98450 12345"] };
+  assert.throws(() => make([victim, { ...victim, companyId: "x", legalName: "Stranger", whatsappNumbers: [] }]), /two businesses/);
+  assert.throws(() => make([victim, { ...victim, companyId: "x", legalName: "Stranger", emailAliases: [], whatsappNumbers: ["09845012345"] }]), /two businesses/);
+  assert.doesNotThrow(() => make([{ ...victim, ownerId: "o" }, { ...victim, companyId: "y", ownerId: "o" }]));
+
+  // Same last ten digits, different country: not the same number.
+  const routed = routeDocument({ companies: [victim], channel: "whatsapp", sender: whatsapp(), deliveredTo: "+44 98450 12345" });
+  assert.equal(routed.ok, false);
+  const local = routeDocument({ companies: [victim], channel: "whatsapp", sender: whatsapp(), deliveredTo: "9845012345" });
+  assert.equal(local.ok && local.companyId, "v");
+});
+
+test("#400: an IRN that does not check out is listed for review even inside a genuine signature", async () => {
+  const { inbox } = setup();
+  const genuine = JSON.parse(signedEinvoice({ number: "SRS/2026/0080" })) as { SignedInvoice: string };
+  // Re-sign a payload whose IRN belongs to a different invoice number.
+  const [, payload] = genuine.SignedInvoice.split(".");
+  const data = JSON.parse(JSON.parse(Buffer.from(payload ?? "", "base64url").toString()).data) as Record<string, unknown>;
+  const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const input = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({ data: JSON.stringify({ ...data, Irn: irnFor("OTHER/1") }), iss: "NIC" })}`;
+  const json = JSON.stringify({ SignedInvoice: `${input}.${sign("sha256", Buffer.from(input), IRP_KEY.privateKey).toString("base64url")}` });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("irn-mismatch"), head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  assert.equal(result.draft?.signature, "verified");
+  assert.ok(result.draft?.fieldsNeedingReview.includes("irn"));
+  assert.doesNotMatch(result.document.statusMessage ?? "", /successfully/);
+});
+
+test("#400: a signed QR code in place of the signed invoice is not read as an invoice", async () => {
+  const { inbox } = setup();
+  const qrData = { SellerGstin: SUPPLIER_GSTIN, BuyerGstin: BUYER_GSTIN, DocNo: "SRS/2026/0090", DocTyp: "INV", DocDt: "21/07/2026", TotInvVal: 37760, Irn: irnFor("SRS/2026/0090") };
+  const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const input = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({ data: JSON.stringify(qrData), iss: "NIC" })}`;
+  const json = JSON.stringify({ SignedInvoice: `${input}.${sign("sha256", Buffer.from(input), IRP_KEY.privateKey).toString("base64url")}` });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("qr-as-invoice"), head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  assert.equal(result.document.quarantineReason, "NOT_AN_INVOICE");
+});
+
+test("#400: with no government key configured, a signed file goes through the inbox as unverified, never as trusted", async () => {
+  const audit = new AuditLog();
+  const inbox = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), COMPANIES);
+  const json = signedEinvoice({ number: "SRS/2026/0095" });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("no-key"), head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  assert.equal(result.draft?.signature, "unverified");
+  assert.ok(result.draft?.fieldsNeedingReview.includes("invoiceNumber"));
 });

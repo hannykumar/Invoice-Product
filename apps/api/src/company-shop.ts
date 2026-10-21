@@ -163,7 +163,7 @@ const SETUP_PERMISSIONS = [
   'notification.send', 'collections.manage', 'collections.send',
   'collections.reminders.view', 'collections.reminders.send', 'collections.promise.record', 'collections.dispute.manage',
   'bank.balance.read', 'bank.feed.manage', 'bank.feed.sync',
-  'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve',
+  'purchase.order.write', 'purchase.order.cancel', 'purchase.receipt.write', 'purchase.match.approve', 'purchase.inbox.manage',
   'supplier.risk.view', 'supplier.risk.acknowledge',
   'einvoice.view', 'einvoice.generate', 'einvoice.cancel',
   'itc.view', 'itc.import', 'itc.decide', 'itc.claim_at_risk',

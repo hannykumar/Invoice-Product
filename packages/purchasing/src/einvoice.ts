@@ -174,10 +174,14 @@ export function readEInvoiceJson(raw: string, options: { readonly signatures?: I
   // formula differs at the portal; either way a person must look, so it is reported.
   const docType = DOCUMENT_TYPES[(text(document, "DocDtls.Typ") ?? "INV").toUpperCase()];
   const documentNumber = text(document, "DocDtls.No") as string;
-  if (irnRaw && supplierGstinRaw && invoiceDate && docType
+  let irnWarning: string | undefined;
+  if (irnRaw && !docType) {
+    irnWarning = `The document type in this file (${text(document, "DocDtls.Typ")}) is not one an e-invoice uses, so its IRN could not be checked.`;
+  } else if (irnRaw && supplierGstinRaw && invoiceDate && docType
     && irnRaw.toLowerCase() !== computeIrn({ supplierGstin: supplierGstinRaw, documentNumber, documentDate: invoiceDate, documentType: docType })) {
-    problems.push("The e-invoice number (IRN) in this file does not belong to this supplier, invoice number and date.");
+    irnWarning = "The e-invoice number (IRN) in this file does not belong to this supplier, invoice number and date.";
   }
+  if (irnWarning) problems.push(irnWarning);
 
   return {
     ok: problems.length === 0,
@@ -191,7 +195,8 @@ export function readEInvoiceJson(raw: string, options: { readonly signatures?: I
     ...(money(document, "ValDtls.AssVal") ? { taxableValuePaise: money(document, "ValDtls.AssVal") as ExtractedField<Paise> } : {}),
     ...(totalTax ? { totalTaxPaise: totalTax } : {}),
     ...(money(document, "ValDtls.TotInvVal") ? { invoiceTotalPaise: money(document, "ValDtls.TotInvVal") as ExtractedField<Paise> } : {}),
-    ...(irnRaw ? { irn: field(irnRaw, "Irn", irnRaw) } : {}),
+    // An IRN that does not check out is listed for review even inside a genuine signature.
+    ...(irnRaw ? { irn: irnWarning ? { ...field(irnRaw, "Irn", irnRaw), confidence: Math.min(UNSIGNED_JSON_CONFIDENCE, 0.5), warning: irnWarning } : field(irnRaw, "Irn", irnRaw) } : {}),
     allGstins: [supplierGstinRaw, buyerGstinRaw].filter((value): value is string => Boolean(value)),
     lines,
   };
