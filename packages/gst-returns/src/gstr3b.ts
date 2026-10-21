@@ -147,11 +147,12 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
 
   const liability = sumAmounts([taxable, zeroRated, input.inward.reverseChargeLiability]);
 
+  const rcm = input.inward.reverseChargeLiability;
   const heads: Gstr3bHead[] = [
-    head('IGST', liability.igst, netItc.igst),
-    head('CGST', liability.cgst, netItc.cgst),
-    head('SGST', liability.sgst, netItc.sgst),
-    head('CESS', liability.cess, netItc.cess),
+    head('IGST', liability.igst, netItc.igst, rcm.igst),
+    head('CGST', liability.cgst, netItc.cgst, rcm.cgst),
+    head('SGST', liability.sgst, netItc.sgst, rcm.sgst),
+    head('CESS', liability.cess, netItc.cess, rcm.cess),
   ];
 
   const totalLiability = totalTaxOf(liability);
@@ -180,12 +181,24 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
   };
 };
 
-const head = (name: Gstr3bHead['head'], liability: Money, credit: Money): Gstr3bHead => ({
-  head: name,
-  liability,
-  credit,
-  difference: { currency: 'INR', minor: liability.minor - credit.minor },
-});
+/**
+ * Issue #289, part 2 — tax under reverse charge is not "output tax" (CGST s.2(82)), and credit may be
+ * used only against output tax (s.49(4)); so it is paid in cash, and the credit it gives (4(A)(3))
+ * is used against the rest (Circular 172/04/2022-GST). Within a head, the cash due is that tax plus
+ * whatever of the rest the credit does not cover.
+ */
+const head = (name: Gstr3bHead['head'], liability: Money, credit: Money, reverseCharge: Money): Gstr3bHead => {
+  const rest = liability.minor - reverseCharge.minor;
+  return {
+    head: name,
+    liability,
+    credit,
+    difference: { currency: 'INR', minor: liability.minor - credit.minor },
+    reverseChargeCash: reverseCharge,
+    cashToPay: { currency: 'INR', minor: reverseCharge.minor + (rest > credit.minor ? rest - credit.minor : 0n) },
+    creditLeft: { currency: 'INR', minor: credit.minor > rest ? credit.minor - rest : 0n },
+  };
+};
 
 /** An inward summary with nothing in it, for a business with no purchases in the month. */
 export const emptyInward = (period: TaxPeriod): InwardTaxSummary => ({
