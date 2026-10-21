@@ -15,6 +15,7 @@ export type IntakeChannel = "manual_upload" | "camera" | "email" | "whatsapp" | 
 export type InboundStatus =
   | "received"      // stored, nothing read yet
   | "screening"     // attachment safety checks running
+  | "awaiting_scan" // safe so far, but the virus scanner has not answered; nothing reads it (#401)
   | "quarantined"   // unsafe, unsupported, unroutable or too uncertain to work with
   | "extracting"    // OCR or JSON parsing running
   | "draft_ready"   // an extraction draft exists and is waiting for a human
@@ -25,6 +26,8 @@ export type QuarantineReason =
   | "UNSUPPORTED_FILE_TYPE"
   | "FILE_TYPE_MISMATCH"
   | "FILE_TOO_LARGE"
+  | "FILE_DETAILS_MISMATCH"   // declared size or SHA-256 differs from the bytes that arrived (#401)
+  | "PDF_TOO_COMPLEX"         // a page, object, pixel, decompression or time cap was exceeded (#401)
   | "PASSWORD_PROTECTED"
   | "ACTIVE_CONTENT"
   | "MALWARE_SUSPECTED"
@@ -39,8 +42,9 @@ export interface Attachment {
   readonly fileName: string;
   /** What the sender claimed. Screening compares it against the actual bytes. */
   readonly declaredMimeType: string;
+  /** Measured on the server from the bytes that arrived (#401), never the sender's claim. */
   readonly sizeBytes: number;
-  /** SHA-256 of the file, the primary duplicate key. */
+  /** SHA-256 of the file as measured on the server, the primary duplicate key. */
   readonly sha256: string;
   /** Reference in object storage. Never the bytes themselves. */
   readonly storageKey: string;
