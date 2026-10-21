@@ -12,6 +12,7 @@ import { analyseFile, approveAndPreview, commitImport, previewImport, remapColum
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
 import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, READ, type Route } from './route.ts';
 import { clearedSessionCookie, sessionCookie } from '../sign-in.ts';
+import { outsideUnitOfWork } from '../../../../packages/platform/src/database.ts';
 import type { ApiRuntime } from '../runtime.ts';
 import type { RequestContext } from '../../../../packages/platform/src/index.ts';
 
@@ -55,7 +56,9 @@ export const CORE_ROUTES: readonly Route[] = [
   // is only a choice, checked against their memberships; every later request reads it from the session.
   post('/api/session/company', { access: signedIn('switching to another business the person belongs to; checked against their memberships'), input: fields({ companyId: text, branchId: text }) },
     async ({ runtime, context, input }) => {
-      const opened = await runtime.signIn.switchCompany(context, String(input.companyId ?? ''), input.branchId === undefined ? undefined : String(input.branchId));
+      // On PostgreSQL every signed-in request runs in its company's unit of work; the new session belongs
+      // to another company, so it is written outside it (one action never touches two companies, #363).
+      const opened = await outsideUnitOfWork(() => runtime.signIn.switchCompany(context, String(input.companyId ?? ''), input.branchId === undefined ? undefined : String(input.branchId)));
       return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
     }),
   get('/api/status', { access: publicRoute('the health check a load balancer reads; says nothing about any company'), input: nothing },

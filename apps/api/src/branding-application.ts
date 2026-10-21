@@ -29,8 +29,9 @@ import {
   validateUpiId,
 } from '@invoice/invoice-templates';
 import { amountInWords } from '@invoice/invoice-templates';
+import { DurableMap } from './durable.ts';
 
-const store = new Map<string, CompanyBranding>();
+const store = new DurableMap<CompanyBranding>('branding', (companyId) => companyId);
 
 export const brandingOf = (companyId: CompanyId | string): CompanyBranding =>
   store.get(String(companyId)) ?? EMPTY_BRANDING;
@@ -48,7 +49,7 @@ const put = (companyId: CompanyId | string, next: CompanyBranding): CompanyBrand
  * Kept apart from the branding, which is how the bill looks. This is where the money goes, and it
  * is checked as such: an id no UPI app could pay to is refused, never saved.
  */
-const upiStore = new Map<string, string>();
+const upiStore = new DurableMap<string>('upi_id', (companyId) => companyId);
 
 export const upiIdOf = (companyId: CompanyId | string): string | null => upiStore.get(String(companyId)) ?? null;
 

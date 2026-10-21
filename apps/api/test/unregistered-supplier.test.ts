@@ -7,7 +7,7 @@
  *  - composition dealer: has a GSTIN but may not collect tax (s.10(4)); no credit (s.17(5)(e));
  *  - a purchase from an unregistered seller on a reverse-charge list (Notification 4/2017-CT(R)
  *    S.No. 4A raw cotton from an agriculturist, S.No. 8 metal scrap from any unregistered person) is
- *    held back with the notification named, rather than recorded without the GST the buyer owes;
+ *    recorded with the GST the buyer owes (part 2; see reverse-charge.test.ts);
  *  - GSTR-3B Table 5 counts composition purchases but not a taxable item from an unregistered seller.
  *
  * Every name and figure below is synthetic and belongs to nobody.
@@ -93,24 +93,23 @@ test('their bill carries no GST and gives no credit; GST typed on it is refused,
   assert.equal(composed.purchaseCheck, null, 'a composition dealer files no GSTR-1 either');
 });
 
-test('a reverse-charge purchase from an unregistered seller is held back, naming the notification', async () => {
+test('a reverse-charge purchase from an unregistered seller is recorded with the GST the buyer owes', async () => {
   await ok('/api/items', { name: 'MS Scrap (heavy melting)', kind: 'goods', hsnSac: '72044900', unit: 'KGS', taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'Rate schedule' });
   await ok('/api/items', { name: 'Raw Cotton (kapas)', kind: 'goods', hsnSac: '52010012', unit: 'KGS', taxKind: 'taxable', ratePercentTimes100: '500', basis: 'Rate schedule' });
 
-  const scrap = await request('POST', '/api/purchases/record', {
+  // Issue #289, part 2 — no longer refused: recorded under reverse charge (the full flow is in
+  // reverse-charge.test.ts).
+  const scrap = await ok('/api/purchases/record', {
     supplierId: ramu, reference: 'RK-12', date: DATE, lines: [{ item: 'MS Scrap (heavy melting)', quantity: '1000', rate: '30' }],
-  }, owner);
-  assert.equal(scrap.body.code, 'PURCHASE_REVERSE_CHARGE');
-  assert.match(scrap.body.message, /4\/2017-Central Tax \(Rate\), S\.No\. 8 inserted by 06\/2024/);
-  assert.match(scrap.body.message, /10 October 2024/);
-  assert.match(scrap.body.message, /Rule 47A/);
-  assert.match(scrap.body.message, /nothing was recorded/);
+  });
+  assert.equal(scrap.owe, 30000, 'Ramu is owed the price only');
+  assert.equal(scrap.bill.cgst + scrap.bill.sgst, 5400, '18% of ₹30,000, owed by the buyer');
 
-  const cotton = await request('POST', '/api/purchases/record', {
+  const cotton = await ok('/api/purchases/record', {
     supplierId: farmer, reference: 'SH-1', date: DATE, lines: [{ item: 'Raw Cotton (kapas)', quantity: '500', rate: '70' }],
-  }, owner);
-  assert.equal(cotton.body.code, 'PURCHASE_REVERSE_CHARGE');
-  assert.match(cotton.body.message, /S\.No\. 4A/);
+  });
+  assert.equal(cotton.owe, 35000);
+  assert.equal(cotton.bill.cgst + cotton.bill.sgst, 1750, '5% of ₹35,000');
 
   // The same cotton from a trader below the threshold is not on the list: the entry names an
   // agriculturist as the supplier. It is an ordinary purchase with no GST.
@@ -118,6 +117,7 @@ test('a reverse-charge purchase from an unregistered seller is held back, naming
     supplierId: ramu, reference: 'RK-13', date: DATE, lines: [{ item: 'Raw Cotton (kapas)', quantity: '100', rate: '70' }],
   });
   assert.equal(fromTrader.owe, 7000);
+  assert.equal(fromTrader.bill.cgst + fromTrader.bill.sgst, 0);
 });
 
 test('GSTR-3B Table 5 counts the composition purchase, not the taxable items from the unregistered seller', async () => {

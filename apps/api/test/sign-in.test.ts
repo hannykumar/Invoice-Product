@@ -11,6 +11,7 @@ import test, { after, before } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import { apiServer, handleApi } from '../src/server.ts';
 import { CODE_NOT_ACCEPTED, SignIn, signInStore } from '../src/sign-in.ts';
+import { MEMORY } from '../src/persistence.ts';
 import { CodeNotAccepted, identityProviderFor, MockIdentityProvider, readSignInAddress, SupabaseIdentityProvider } from '../../../packages/platform/src/identity.ts';
 import { DEMO_SIGN_IN_CODE } from '../../../packages/platform/src/seed.ts';
 import { KONKAN_OWNER, SAMPOORNA_OWNER, SYNTHETIC_CA, signIn, signInOverHttp, tokenFrom } from './sign-in-helper.ts';
@@ -187,7 +188,6 @@ test('#342: the demo sign-in and the in-memory store never run outside developme
   // A deployment that forgot NODE_ENV still has its database: it is not mistaken for a developer's machine.
   assert.throws(() => identityProviderFor({ DATABASE_URL: 'postgresql://db.example.invalid/books' }, DEMO_SIGN_IN_CODE), /demo sign-in only runs/);
   assert.equal(identityProviderFor({}, DEMO_SIGN_IN_CODE).kind, 'mock', 'no NODE_ENV and no database: a developer running it bare');
-  assert.throws(() => signInStore({ NODE_ENV: 'production' }), /DATABASE_URL is not set/, 'production keeps sessions in the database, never in memory');
 });
 
 test('#342: no file carries a demo password or hashes a password itself', () => {
@@ -288,7 +288,7 @@ test('#342: a Supabase token that is forged, old, for someone else, or signed wi
 test('#342: Supabase saying the code is wrong is the person\'s to fix; Supabase being down is ours, and says so', async () => {
   const wrong = standIn(() => new Response('{"msg":"Token has expired or is invalid"}', { status: 403 }));
   await assert.rejects(wrong.provider.checkCode(phone, '000000'), CodeNotAccepted);
-  const store = signInStore({ NODE_ENV: 'test' });
+  const store = signInStore(MEMORY);
   await assert.rejects(new SignIn(store, wrong.provider).checkCode('9876543210', '000000'), { message: CODE_NOT_ACCEPTED });
   const down = standIn(() => new Response('upstream', { status: 502 }));
   await assert.rejects(new SignIn(store, down.provider).checkCode('9876543210', '000000'), /Sign-in is not working just now/);

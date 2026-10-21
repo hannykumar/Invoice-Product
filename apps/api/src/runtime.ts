@@ -8,9 +8,12 @@ import { businessDetailsOf, saveBusinessDetails } from './business-details-appli
 import type { CompanySeed } from './company-shop.ts';
 import type { CatalogueSeed } from './catalogue-application.ts';
 import { createOperations } from '../../../ops/operations/src/index.ts';
+import { MEMORY, recordId, type Persistence } from './persistence.ts';
+import { recordMasterDataAs } from './master-data.ts';
+import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
 
-export { AuthenticationError } from './sign-in.ts';
+export { AuthenticationError };
 
 /**
  * The two synthetic companies the local app signs into.
@@ -93,7 +96,29 @@ const SYNTHETIC_BUSINESS_DETAILS: Readonly<Record<string, Record<string, string>
   },
 };
 
+/**
+ * Issue #340 — the demo company's named records (its customer, supplier and items), under the ids
+ * the database can keep. In memory they keep their readable names.
+ */
+const storedSeed = (persistence: Persistence, companyId: string, details: Omit<CompanySeed, 'companyId' | 'branchId' | 'setupUserId'>) => {
+  if (persistence.kind === 'memory') return details;
+  const id = (name: string) => recordId(persistence, companyId, name);
+  const supplier = details.catalogue.supplier;
+  return {
+    ...details,
+    customerId: asId<'Party'>(id(details.customerId)),
+    supplierId: asId<'Party'>(id(details.supplierId)),
+    catalogue: {
+      ...details.catalogue,
+      customerId: id(details.catalogue.customerId),
+      ...(supplier === undefined ? {} : { supplier: { ...supplier, id: id(supplier.id) } }),
+      items: details.catalogue.items.map((item) => ({ ...item, id: id(item.id) })),
+    },
+  };
+};
+
 export class ApiRuntime {
+  readonly #persistence: Persistence;
   readonly #applications = new Map<string, Promise<DemoApplication>>();
   readonly #operations = createOperations();
   readonly #operationsSeeded = new Set<string>();
@@ -101,8 +126,11 @@ export class ApiRuntime {
   /** Issue #342 — codes, sessions, signing out and switching company. */
   readonly signIn: SignIn;
 
-  constructor(signIn: SignIn = createSignIn()) {
+  constructor(persistence: Persistence = MEMORY, signIn: SignIn = createSignIn(persistence)) {
+    this.#persistence = persistence;
     this.signIn = signIn;
+    // The made-up incident below is demo data, which a database never receives.
+    if (persistence.kind === 'postgres') return;
     const demo = SYNTHETIC_PLATFORM_COMPANIES[0];
     const incidentActor: RequestContext = { companyId: demo.companyId, branchId: demo.branchId, actorId: demo.userId, sessionId: 'operations-seed', permissions: new Set(PRODUCT_OWNER_PERMISSIONS) };
     const incident = this.#operations.status.openIncident(incidentActor, 'E-invoice registration delay', 'Invoice Registration Portal', 'Some registrations were delayed. Customer invoices remained unchanged.');
@@ -128,15 +156,22 @@ export class ApiRuntime {
       const details = COMPANY_DETAILS[context.companyId];
       if (company === undefined || details === undefined) throw notFound('API_COMPANY_NOT_FOUND', 'That company is not available.');
       const seeded = SYNTHETIC_BUSINESS_DETAILS[context.companyId];
-      if (seeded !== undefined && businessDetailsOf(context.companyId) === null) {
+      // The made-up address and phone are demo data; a company with a database types its own.
+      if (this.#persistence.kind === 'memory' && seeded !== undefined && businessDetailsOf(context.companyId) === null) {
         saveBusinessDetails(context.companyId, { name: details.name, gstin: details.gstin }, seeded);
       }
       application = DemoApplication.create({
         companyId: asId<'Company'>(company.companyId),
         branchId: asId<'Branch'>(company.branchId),
         setupUserId: asId<'User'>(company.userId),
-        ...details,
+        ...storedSeed(this.#persistence, company.companyId, details),
+      }, this.#persistence).then(async (created) => {
+        // After a restart: this company's customers, items, business details and bill copies.
+        await loadCompany(company.companyId);
+        return created;
       });
+      // A company whose set-up failed is tried again on the next request, not remembered as broken.
+      application.catch(() => this.#applications.delete(context.companyId));
       this.#applications.set(context.companyId, application);
     }
     const resolved = await application;
@@ -152,7 +187,12 @@ export class ApiRuntime {
           'einvoice.generate', 'einvoice.view',
         ]),
       };
-      for (const job of resolved.recurringJobs()) this.#operations.recurring.register(serviceContext, job);
+      const db = this.database;
+      for (const job of resolved.recurringJobs()) {
+        // Issue #340 — on PostgreSQL each run is one action for its company. #345 moves these runs
+        // to a separate worker; until then they run on the API's own tick.
+        this.#operations.recurring.register(serviceContext, db === null ? job : { ...job, run: (ctx, at, signal) => asOneAction(db, ctx.companyId, () => job.run(ctx, at, signal)) });
+      }
       this.#recurringRegistered.add(context.companyId);
     }
     return resolved;
@@ -176,7 +216,8 @@ export class ApiRuntime {
   }
 
   async operationsWorkspace(context: RequestContext) {
-    if (!this.#operationsSeeded.has(context.companyId)) {
+    // The made-up portal failure is demo data: shown in memory, never written for a real company.
+    if (this.#persistence.kind === 'memory' && !this.#operationsSeeded.has(context.companyId)) {
       this.#operations.telemetry.registerHealthCheck('api', () => true);
       this.#operations.telemetry.registerHealthCheck('queue', () => true);
       this.#operations.telemetry.externalFailure(context, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
@@ -201,7 +242,21 @@ export class ApiRuntime {
   }
 
   publicStatus() { return { incidents: this.#operations.status.publicStatus() }; }
+
+  /** Whether write requests run as one unit of work, and on which database. */
+  get database() { return this.#persistence.kind === 'postgres' ? this.#persistence.db : null; }
 }
 
 let runtimeInstance: ApiRuntime | undefined;
 export const apiRuntime = (): ApiRuntime => (runtimeInstance ??= new ApiRuntime());
+
+/** Issue #340 — the server picks its persistence once, before it takes a request. */
+export const startRuntime = (persistence: Persistence): ApiRuntime => {
+  if (runtimeInstance !== undefined) throw new Error('The API runtime has already started.');
+  if (persistence.kind === 'postgres') {
+    // A record written outside anybody's request (the main godown, on first opening) is the owner's.
+    enableDurability(persistence.db);
+    recordMasterDataAs((companyId) => SYNTHETIC_PLATFORM_COMPANIES.find((company) => company.companyId === companyId)?.userId ?? companyId);
+  }
+  return (runtimeInstance = new ApiRuntime(persistence));
+};

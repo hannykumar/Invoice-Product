@@ -109,6 +109,10 @@ function fingerprintOf(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(canonical(value)) ?? "null").digest("hex").slice(0, 32);
 }
 
+/** The kinds `master_records.kind` allows; one store each. */
+export type MasterStoreKind = MasterKind | "opening_stock" | "price_list_entry";
+export type MasterStoreFactory = <T extends { readonly id: Id; readonly companyId: Id }>(kind: MasterStoreKind) => VersionedStore<T>;
+
 export class MasterDataService {
   readonly #commands: PlatformCommandService;
   readonly #audit: AuditLog;
@@ -117,16 +121,20 @@ export class MasterDataService {
   readonly #recordByCommand = new CommandRecordIndex();
   public readonly units: UnitRegistry;
 
-  constructor(commands: PlatformCommandService, audit: AuditLog, units: UnitRegistry = createDefaultUnitRegistry()) {
+  /**
+   * `storeFor` lets the host keep each kind somewhere other than plain memory (issue #340 mirrors
+   * them to PostgreSQL while this service is synchronous). The default is the in-memory store.
+   */
+  constructor(commands: PlatformCommandService, audit: AuditLog, units: UnitRegistry = createDefaultUnitRegistry(), storeFor: MasterStoreFactory = () => new VersionedStore()) {
     this.#commands = commands;
     this.#audit = audit;
     this.units = units;
     this.#stores = {
-      parties: new VersionedStore<Party>(), addresses: new VersionedStore<PartyAddress>(), items: new VersionedStore<Item>(),
-      warehouses: new VersionedStore<Warehouse>(), batches: new VersionedStore<Batch>(), serials: new VersionedStore<SerialNumber>(),
-      openingStock: new VersionedStore<OpeningStock>(), priceLists: new VersionedStore<PriceList>(), priceEntries: new VersionedStore<PriceListEntry>(),
-      taxDefaults: new VersionedStore<TaxDefault>(), transporters: new VersionedStore<Transporter>(), vehicles: new VersionedStore<Vehicle>(),
-      bankAccounts: new VersionedStore<BankAccount>(),
+      parties: storeFor<Party>("party"), addresses: storeFor<PartyAddress>("party_address"), items: storeFor<Item>("item"),
+      warehouses: storeFor<Warehouse>("warehouse"), batches: storeFor<Batch>("batch"), serials: storeFor<SerialNumber>("serial"),
+      openingStock: storeFor<OpeningStock>("opening_stock"), priceLists: storeFor<PriceList>("price_list"), priceEntries: storeFor<PriceListEntry>("price_list_entry"),
+      taxDefaults: storeFor<TaxDefault>("tax_default"), transporters: storeFor<Transporter>("transporter"), vehicles: storeFor<Vehicle>("vehicle"),
+      bankAccounts: storeFor<BankAccount>("bank_account"),
     };
   }
 

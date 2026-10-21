@@ -12,9 +12,9 @@ import {
   AccessControl, AuthenticationService, ConnectorError, PlatformError, SESSION_ABSOLUTE_MS,
   type Id, type Membership, type RequestContext, type Session,
 } from '../../../packages/platform/src/index.ts';
-import { AddressNotReadable, CodeNotAccepted, identityProviderFor, isDeveloperMachine, readSignInAddress, type IdentityProvider, type VerifiedIdentity } from '../../../packages/platform/src/identity.ts';
-import { DEMO_PEOPLE, DEMO_SIGN_IN_CODE } from '../../../packages/platform/src/seed.ts';
-import { createDatabase } from '../../../packages/platform/src/database.ts';
+import { AddressNotReadable, CodeNotAccepted, identityProviderFor, readSignInAddress, type IdentityProvider, type VerifiedIdentity } from '../../../packages/platform/src/identity.ts';
+import { DEMO_SIGN_IN_CODE, SYNTHETIC_PLATFORM_USERS } from '../../../packages/platform/src/seed.ts';
+import type { Persistence } from './persistence.ts';
 import { PostgresAccessControl, PostgresAuthenticationService } from '../../../packages/platform/src/postgres-platform.ts';
 
 type Maybe<T> = T | Promise<T>;
@@ -138,26 +138,19 @@ export class SignIn {
 }
 
 /**
- * Where sessions and members live. In production, PostgreSQL, so a restart signs nobody out. On a
- * developer's machine and in tests, memory, holding the seed's demo people — and only there.
- * #340 replaces this with its composition root's PostgreSQL instance.
+ * Where sessions and members live: the persistence #340 chose at start-up. PostgreSQL keeps them
+ * across restarts; memory (a developer's machine, a test) holds the seed's synthetic people.
  */
-export const signInStore = (env: Readonly<Record<string, string | undefined>> = process.env): SignInStore => {
-  if (!isDeveloperMachine(env)) {
-    if (!env.DATABASE_URL?.trim()) throw new Error('DATABASE_URL is not set. Sessions are kept in the database outside development, so the server will not start.');
-    const database = createDatabase(env.DATABASE_URL);
-    return new PostgresAuthenticationService(database, new PostgresAccessControl(database));
-  }
+export const signInStore = (persistence: Persistence): SignInStore => {
+  if (persistence.kind === 'postgres') return new PostgresAuthenticationService(persistence.db, new PostgresAccessControl(persistence.db));
   const access = new AccessControl();
   const store = new AuthenticationService(access);
-  for (const person of DEMO_PEOPLE) {
+  for (const person of SYNTHETIC_PLATFORM_USERS) {
     store.addUser({ id: person.userId, email: person.email });
-    for (const membership of person.memberships) {
-      access.grant({ companyId: membership.companyId, userId: person.userId, branchIds: new Set([membership.branchId]), active: true, permissions: new Set(membership.permissions) });
-    }
+    access.grant({ companyId: person.companyId, userId: person.userId, branchIds: new Set([person.branchId]), active: true, permissions: new Set(person.permissions) });
   }
   return store;
 };
 
-export const createSignIn = (env: Readonly<Record<string, string | undefined>> = process.env): SignIn =>
-  new SignIn(signInStore(env), identityProviderFor(env, DEMO_SIGN_IN_CODE));
+export const createSignIn = (persistence: Persistence, env: Readonly<Record<string, string | undefined>> = process.env): SignIn =>
+  new SignIn(signInStore(persistence), identityProviderFor(env, DEMO_SIGN_IN_CODE));

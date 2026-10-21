@@ -1,10 +1,16 @@
-/** Production-shaped in-memory composition used by the local HTTP surface. */
+/**
+ * One company's books, stock, purchases and GST records, composed over memory (the demo and the
+ * tests) or over PostgreSQL (issue #340), behind the same ports either way.
+ */
+import { randomUUID } from 'node:crypto';
 import { asId, isoDate, type CompanyId } from '@invoice/kernel';
 import { appClock } from './app-clock.ts';
 import {
   InMemoryAuditPort,
   InMemoryLedgerStore,
   LedgerService,
+  PostgresLedgerStore,
+  type TransactionParticipant,
   buildDefaultChart,
   defaultChartIdFactory,
   permissionPortFromActor,
@@ -12,6 +18,23 @@ import {
   type ActorContext,
 } from '@invoice/ledger';
 import { InMemoryInventoryStore } from '../../../packages/inventory/src/repository.ts';
+import { PostgresInventoryStore } from '../../../packages/inventory/src/postgres-store.ts';
+import {
+  PostgresGoodsReceiptRepository, PostgresGstinCache, PostgresMatchApprovalRepository, PostgresMatchTolerances,
+  PostgresPurchaseBillRepository, PostgresPurchaseOrderRepository, PostgresRiskAcknowledgementRepository,
+  PostgresRiskAssessmentRepository,
+} from '../../../packages/purchasing/src/postgres-repositories.ts';
+import { PostgresImportBatches, PostgresItcClaims, PostgresItcDecisions, PostgresPortalRecords } from '../../../packages/itc/src/postgres-repository.ts';
+import { PostgresReturnNoteRepository } from '../../../packages/returns/src/postgres-repository.ts';
+import { PostgresEInvoicePolicies, PostgresEInvoiceRepository } from '../../../packages/gst/src/einvoice-postgres.ts';
+import {
+  PostgresConsolidatedTripRepository, PostgresEwayBillPolicies, PostgresEwayBillRepository, PostgresSuitabilityRepository,
+  PostgresVehicleRecordCache, PostgresVehicleRecordConsents, PostgresVehicleRecordFreshness, PostgresVehicleSuitabilityPolicies,
+} from '../../../packages/transport/src/postgres-repositories.ts';
+import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
+import { PostgresVersionedStore } from '../../../packages/masters/src/postgres-masters.ts';
+import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import { MEMORY, recordId, stableUuid, type Persistence } from './persistence.ts';
 import { InventoryService } from '../../../packages/inventory/src/service.ts';
 import { ledgerStockBooks } from '../../../packages/inventory/src/ledger-adapter.ts';
 import type { StockItem, StockMasterData, Warehouse } from '../../../packages/inventory/src/ports.ts';
@@ -58,7 +81,7 @@ import {
   InMemorySuitabilityStore, InMemoryVehicleSuitabilityPolicies, SyntheticPlateReader,
   mastersVehicleAdapter,
 } from '../../../packages/transport/src/suitability-adapters.ts';
-import type { Vehicle } from '../../../packages/masters/src/types.ts';
+import type { Vehicle, Warehouse as MasterWarehouse } from '../../../packages/masters/src/types.ts';
 import { billingAddressOf, items as catalogueItems, suppliers, type CatalogueSeed } from './catalogue-application.ts';
 import { businessDetailsOf, turnoverAnswerForYear } from './business-details-application.ts';
 
@@ -93,10 +116,10 @@ class CompanyMasters implements StockMasterData {
   readonly #units = createDefaultUnitRegistry();
   readonly #warehouse: Warehouse;
 
-  constructor(location: string, itemIds: readonly string[]) {
-    this.#warehouse = { warehouseId: 'wh-main', name: location };
+  constructor(location: string, warehouseId: string, soapIds: readonly string[]) {
+    this.#warehouse = { warehouseId, name: location };
     // One box of this soap is 24 pieces, whichever of its ids a screen names it by.
-    for (const itemId of ['SOAP', ...itemIds.filter((id) => id.endsWith(':item:SOAP'))]) {
+    for (const itemId of ['SOAP', ...soapIds]) {
       this.#units.registerConversion({ fromUnit: 'BOX', toUnit: 'PCS', numerator: 24n, denominator: 1n, itemId });
     }
   }
@@ -182,25 +205,40 @@ const OWN_VEHICLES: readonly Omit<Vehicle, 'companyId'>[] = [
   { id: 'veh-own-1', registrationNumber: 'KA09OW5566', vehicleType: 'regular', bodyType: 'closed', ratedCapacityKg: 1500, active: true },
 ];
 
-export async function createCompanyShop(seed: CompanySeed) {
-  const store = new InMemoryLedgerStore();
-  const inventory = new InMemoryInventoryStore();
-  const bills = new InMemoryPurchaseBillStore();
-  const orders = new InMemoryPurchaseOrderStore();
-  const receipts = new InMemoryGoodsReceiptStore();
-  const approvals = new InMemoryMatchApprovalStore();
+/** The main godown's id: `wh-main` in memory, a stable UUID in PostgreSQL. */
+export const mainWarehouseId = (persistence: Persistence, companyId: string): string => recordId(persistence, companyId, 'wh-main');
+
+export async function createCompanyShop(seed: CompanySeed, persistence: Persistence = MEMORY) {
+  // Issue #340 — every store with a PostgreSQL repository uses it when the app has a database. The
+  // in-memory ledger store rolls its participants back together; on PostgreSQL the unit of work does.
+  const db: TransactionalExecutor | null = persistence.kind === 'postgres' ? persistence.db : null;
+  const pick = <M, P>(memory: () => M, postgres: (db: TransactionalExecutor) => P): M | P => db === null ? memory() : postgres(db);
+  const store = pick(() => new InMemoryLedgerStore(), (db) => new PostgresLedgerStore(db));
+  const participate = (...participants: readonly unknown[]): void => {
+    if (store instanceof InMemoryLedgerStore) for (const participant of participants) store.join(participant as TransactionParticipant);
+  };
+  const inventory = pick(() => new InMemoryInventoryStore(), (db) => new PostgresInventoryStore(db));
+  const bills = pick(() => new InMemoryPurchaseBillStore(), (db) => new PostgresPurchaseBillRepository(db));
+  const orders = pick(() => new InMemoryPurchaseOrderStore(), (db) => new PostgresPurchaseOrderRepository(db));
+  const receipts = pick(() => new InMemoryGoodsReceiptStore(), (db) => new PostgresGoodsReceiptRepository(db));
+  const approvals = pick(() => new InMemoryMatchApprovalStore(), (db) => new PostgresMatchApprovalRepository(db));
   // Issue #249 — the credit and debit notes live here, beside the bills, because the purchase
   // comparison reads both: goods sent back to a supplier take their credit off the bill they correct.
-  const returnNotes = new InMemoryReturnNoteRepository();
-  store.join(inventory).join(bills).join(orders).join(receipts).join(approvals).join(returnNotes);
-  const audit = new InMemoryAuditPort();
-  store.join(audit);
+  const returnNotes = store instanceof PostgresLedgerStore ? new PostgresReturnNoteRepository(store) : new InMemoryReturnNoteRepository();
+  participate(inventory, bills, orders, receipts, approvals, returnNotes);
+  const audit = pick(() => new InMemoryAuditPort(), (db) => new PostgresAuditLog(db));
+  participate(audit);
+  // Memory keeps readable ids (`<company>:bill:7`); the database keeps UUIDs, and a counter that
+  // restarts at 1 with the process would hand out an id already in the books.
+  let sequence = 0;
+  const nextId = (kind: string): string => db === null ? `${seed.companyId}:${kind}:${sequence += 1}` : randomUUID();
+  const warehouseId = mainWarehouseId(persistence, seed.companyId);
   // Issue #234 — the real clock (tests pin it through app-clock.ts). It used to be frozen at
   // 29 Aug 2026, so an e-way bill raised in September was "valid until" a day in August.
   const clock = appClock;
-  const masters = new CompanyMasters(seed.location, seed.catalogue.items.map((item) => item.id));
+  const masters = new CompanyMasters(seed.location, warehouseId,
+    seed.catalogue.items.filter((item) => item.id.endsWith(':item:SOAP') || item.name === 'Herbal Bath Soap 100g').map((item) => item.id));
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock });
-  let sequence = 0;
   const inventoryService = new InventoryService({
     store,
     inventory,
@@ -209,7 +247,7 @@ export async function createCompanyShop(seed: CompanySeed) {
     audit,
     clock,
     policy: { reservationMinutes: 120, valuationMethod: 'WEIGHTED_AVERAGE' },
-    idFactory: () => `${seed.companyId}:movement:${sequence += 1}`,
+    idFactory: () => nextId('movement'),
     // Issue #229 — every movement writes its value into the books, in the same transaction.
     books: ledgerStockBooks(store, ledger),
   });
@@ -222,7 +260,7 @@ export async function createCompanyShop(seed: CompanySeed) {
     clock,
     // No nominated codes: issue #73 put PURCHASES_SERVICES and REVERSE_CHARGE_PAYABLE in the
     // standard chart, and the posting service finds them by role.
-    idFactory: () => `${seed.companyId}:bill:${sequence += 1}`,
+    idFactory: () => nextId('bill'),
   });
   // Issue #18. One per company, sharing this company's store and godown, so an order raised on
   // the screen and the stock it later moves are the same records the tests exercise.
@@ -232,12 +270,12 @@ export async function createCompanyShop(seed: CompanySeed) {
     orders, receipts, approvals,
     audit,
     clock,
-    tolerance: new InMemoryMatchTolerances(),
-    idFactory: () => `${seed.companyId}:doc:${sequence += 1}`,
+    tolerance: pick(() => new InMemoryMatchTolerances(), (db) => new PostgresMatchTolerances(db)),
+    idFactory: () => nextId('doc'),
   });
-  const riskAssessments = new InMemoryRiskAssessmentStore();
-  const riskAcknowledgements = new InMemoryRiskAcknowledgementStore();
-  store.join(riskAssessments).join(riskAcknowledgements);
+  const riskAssessments = pick(() => new InMemoryRiskAssessmentStore(), (db) => new PostgresRiskAssessmentRepository(db));
+  const riskAcknowledgements = pick(() => new InMemoryRiskAcknowledgementStore(), (db) => new PostgresRiskAcknowledgementRepository(db));
+  participate(riskAssessments, riskAcknowledgements);
 
   /**
    * What our own books say about a supplier, read from the bills #17 actually posted.
@@ -290,10 +328,10 @@ export async function createCompanyShop(seed: CompanySeed) {
    * purchase whose supplier we have no GST number for is reported as uncomparable, which is the
    * honest answer and the one the screen shows.
    */
-  const itcRecords = new InMemoryPortalRecords();
-  const itcBatches = new InMemoryImportBatches();
-  const itcDecisions = new InMemoryItcDecisions();
-  const itcClaims = new InMemoryItcClaims();
+  const itcRecords = pick(() => new InMemoryPortalRecords(), (db) => new PostgresPortalRecords(db));
+  const itcBatches = pick(() => new InMemoryImportBatches(), (db) => new PostgresImportBatches(db));
+  const itcDecisions = pick(() => new InMemoryItcDecisions(), (db) => new PostgresItcDecisions(db));
+  const itcClaims = pick(() => new InMemoryItcClaims(), (db) => new PostgresItcClaims(db));
   // Issue #228 — whichever supplier the bill was posted to, read from their master record. Only the
   // seed supplier used to be known here, so a bill from anyone else could never be compared.
   const gstinOfParty = (partyId: string): string | null =>
@@ -350,13 +388,13 @@ export async function createCompanyShop(seed: CompanySeed) {
     claims: itcClaims,
     audit,
     clock,
-    idFactory: () => `${seed.companyId}:itc:${sequence += 1}`,
+    idFactory: () => nextId('itc'),
   });
 
   const risk = new SupplierRiskService({
     gstin: gstinStatusAdapter({
       gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
-      cache: new InMemoryGstinCache(),
+      cache: pick(() => new InMemoryGstinCache(), (db) => new PostgresGstinCache(db)),
       clock: () => clock.now(),
     }),
     history: supplierHistory,
@@ -374,9 +412,9 @@ export async function createCompanyShop(seed: CompanySeed) {
     ? new SyntheticIrp(() => clock.now())
     : whitebooksIrpConnectorFromVault(whitebooksVault, businessDetailsOf(seed.companyId)?.email ?? '');
   const irpVault = whitebooksVault ?? new SyntheticCredentialVault();
-  const eInvoices = new InMemoryEInvoiceStore();
-  const eInvoicePolicies = new InMemoryEInvoicePolicies();
-  store.join(eInvoices);
+  const eInvoices = pick(() => new InMemoryEInvoiceStore(), (db) => new PostgresEInvoiceRepository(db));
+  const eInvoicePolicies = pick(() => new InMemoryEInvoicePolicies(), (db) => new PostgresEInvoicePolicies(db));
+  participate(eInvoices);
   const eInvoice = new EInvoiceService({
     irp: irpAdapter({
       gateway: new ConnectorGateway([irpPortal], irpVault, new StaticWebhookVerifier()),
@@ -386,15 +424,15 @@ export async function createCompanyShop(seed: CompanySeed) {
     audit,
     clock,
     policy: eInvoicePolicies,
-    idFactory: () => `${seed.companyId}:einv:${sequence += 1}`,
+    idFactory: () => nextId('einv'),
   });
   // Issue #27. The e-way bill portal behind the same gateway; development runs against a synthetic
   // one that enforces the real windows, so expiry and the 24-hour cancellation are genuinely tried.
   const ewayPortal = new SyntheticEwayBillPortal(() => clock.now());
-  const ewayBills = new InMemoryEwayBillStore();
-  const ewayTrips = new InMemoryConsolidatedTripStore();
-  const ewayPolicies = new InMemoryEwayBillPolicies();
-  store.join(ewayBills).join(ewayTrips);
+  const ewayBills = pick(() => new InMemoryEwayBillStore(), (db) => new PostgresEwayBillRepository(db));
+  const ewayTrips = pick(() => new InMemoryConsolidatedTripStore(), (db) => new PostgresConsolidatedTripRepository(db));
+  const ewayPolicies = pick(() => new InMemoryEwayBillPolicies(), (db) => new PostgresEwayBillPolicies(db));
+  participate(ewayBills, ewayTrips);
   const ewayBill = new EwayBillService({
     portal: ewayBillAdapter({
       gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
@@ -407,16 +445,16 @@ export async function createCompanyShop(seed: CompanySeed) {
     policy: ewayPolicies,
     // Issue #187 — how many HSN digits the portal needs depends on the business's turnover answer.
     turnoverAbove5Crore: (financialYear) => turnoverAnswerForYear(seed.companyId, financialYear),
-    idFactory: () => `${seed.companyId}:ewb:${sequence += 1}`,
+    idFactory: () => nextId('ewb'),
   });
   // Issue #29. The registering authority, reached the way production reaches it: this product's
   // verification service, over issue #8's connector gateway, with a synthetic VAHAN at the far end.
   // Only that last hop is fake, so the consent check, the field narrowing, the masking, the caching
   // and the audit trail are all the real ones on the screen.
   const vahan = new SyntheticVahanConnector();
-  const vehicleRecordCache = new InMemoryVehicleRecordCache();
-  const vehicleRecordConsents = new InMemoryVehicleRecordConsents();
-  const vehicleRecordFreshness = new InMemoryVehicleRecordFreshness();
+  const vehicleRecordCache = pick(() => new InMemoryVehicleRecordCache(), (db) => new PostgresVehicleRecordCache(db));
+  const vehicleRecordConsents = pick(() => new InMemoryVehicleRecordConsents(), (db) => new PostgresVehicleRecordConsents(db));
+  const vehicleRecordFreshness = pick(() => new InMemoryVehicleRecordFreshness(), (db) => new PostgresVehicleRecordFreshness(db));
   const vehicleRecords = new VehicleRecordService({
     provider: apiSetuVehicleAdapter({
       gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
@@ -428,9 +466,10 @@ export async function createCompanyShop(seed: CompanySeed) {
     audit,
     clock,
   });
-  // The shop connected the service when it was set up, and agreed to the whole allow-list. A
-  // business that had not would see "we could not ask", which is its own state on the screen.
-  vehicleRecordConsents.seed({
+  // The demo shop connected the service when it was set up, and agreed to the whole allow-list. A
+  // business that had not would see "we could not ask", which is its own state on the screen. A real
+  // company (PostgreSQL) gives its own consent through `VehicleRecordService.grantConsent`.
+  if (vehicleRecordConsents instanceof InMemoryVehicleRecordConsents) vehicleRecordConsents.seed({
     companyId: seed.companyId,
     purpose: TRANSPORT_SUITABILITY_PURPOSE,
     fields: [...PERMITTED_VEHICLE_FIELDS],
@@ -445,9 +484,9 @@ export async function createCompanyShop(seed: CompanySeed) {
     permissions: SETUP_PERMISSIONS,
   };
   const plateReader = new SyntheticPlateReader();
-  const vehicleChecks = new InMemorySuitabilityStore();
-  const vehiclePolicies = new InMemoryVehicleSuitabilityPolicies();
-  store.join(vehicleChecks);
+  const vehicleChecks = pick(() => new InMemorySuitabilityStore(), (db) => new PostgresSuitabilityRepository(db));
+  const vehiclePolicies = pick(() => new InMemoryVehicleSuitabilityPolicies(), (db) => new PostgresVehicleSuitabilityPolicies(db));
+  participate(vehicleChecks);
   const vehicleSuitability = new VehicleSuitabilityService({
     records: vehicleChecks,
     audit,
@@ -458,22 +497,40 @@ export async function createCompanyShop(seed: CompanySeed) {
     vehicleMaster: mastersVehicleAdapter(() => OWN_VEHICLES.map((vehicle) => ({ ...vehicle, companyId: seed.companyId })), () => clock.now()),
     plateOcr: plateReader,
     policy: vehiclePolicies,
-    idFactory: () => `${seed.companyId}:vsc:${sequence += 1}`,
+    idFactory: () => nextId('vsc'),
   });
-  const chart = buildDefaultChart(seed.companyId, defaultChartIdFactory(seed.companyId));
+  const accountId = db === null ? defaultChartIdFactory(seed.companyId) : (code: string) => asId<'Account'>(stableUuid(seed.companyId, 'account', code));
+  const chart = buildDefaultChart(seed.companyId, accountId);
   const liabilities = chart.find((account) => account.code === '2000');
   const bankParent = chart.find((account) => account.code === '1120');
   const additions: Account[] = [
     {
-      id: asId<'Account'>(`${seed.companyId}:acc:1121`), companyId: seed.companyId, code: '1121',
+      id: accountId('1121'), companyId: seed.companyId, code: '1121',
       name: 'Current bank account', type: 'ASSET', parentId: bankParent?.id ?? null,
       isGroup: false, active: true, partyId: null, systemRole: null,
     },
   ];
-  await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
-  await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
-  await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
+  // On PostgreSQL the books are set up once, the first time the company is opened; after a restart
+  // they are already there. The demo's own customer and supplier exist only in memory.
+  if (db !== null) {
+    // The books and the main godown, set up together the first time the company is opened. Checked
+    // inside the unit of work, under the company's lock, so two servers opening it at once set it up once.
+    await db.unitOfWork(seed.companyId, async ({ sql }) => {
+      if ((await sql.query('SELECT 1 FROM ledger_settings WHERE company_id = $1', [seed.companyId])).rows.length > 0) return;
+      await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
+      await new PostgresVersionedStore<MasterWarehouse>(db, 'warehouse').append(
+        { id: warehouseId, companyId: seed.companyId, code: 'MAIN', name: seed.location, addressLine: '', city: seed.location, stateCode: seed.gstin.slice(0, 2), pincode: '', active: true },
+        isoDate('2026-04-01'), seed.setupUserId, 'The main godown, set up with the books',
+      );
+    });
+  }
+  if (db === null) await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
+  if (db === null) {
+    await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
+    await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
+  }
   return {
+    persistence, warehouseId, nextId,
     store, inventory, inventoryService, bills, returnNotes, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
     itc, itcRecords, itcBatches, itcDecisions, itcClaims,

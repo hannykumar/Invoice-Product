@@ -341,6 +341,12 @@ dialog { border: 0; border-radius: var(--radius); background: var(--surface); co
 .payment-bills [data-payment-bills] { display: grid; gap: .45rem; margin: .3rem 0 .5rem; }
 .payment-bills .bill-choice { display: flex; align-items: flex-start; gap: .55rem; font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
 .payment-bills .bill-choice input[type="checkbox"] { width: auto; min-height: 0; margin-top: .2rem; flex: none; }
+.rcm-questions [data-rcm-questions] { display: grid; gap: .9rem; margin-top: .6rem; }
+.rcm-question p { margin: 0 0 .25rem; font-size: var(--fs-sm); font-weight: 700; line-height: 1.4; }
+.rcm-question small { display: block; margin-bottom: .4rem; }
+.rcm-question .rcm-answers { display: flex; gap: 1.2rem; }
+.rcm-question .rcm-answers label { display: flex; align-items: center; gap: .4rem; }
+.rcm-question input[type="radio"] { width: auto; min-height: 0; }
 .bill-choice-empty { color: var(--muted); font-size: var(--fs-sm); margin: 0; }
 
 /* Issue #233 — the cancel dialog hides its reason box when the bill cannot be cancelled, and the
