@@ -26,6 +26,7 @@ import { appToday } from './app-clock.ts';
 import type { RenderableParty } from '@invoice/invoice-templates';
 import {
   InMemoryDeclaredRates,
+  type DeclaredRate,
   type ItemTaxClassification,
   type MasterDataReader,
   type CompanyTaxProfile,
@@ -56,6 +57,7 @@ import { STATE_NAMES } from '@invoice/transport';
 import { masterData, mastersContext } from './master-data.ts';
 import { businessDetailsOf, currentStates, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
+import { DurableMap } from './durable.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
 
@@ -93,13 +95,13 @@ interface ItemTax {
   readonly ratePercentTimes100: bigint | null;
 }
 
-const itemTaxes = new Map<string, ItemTax>();
+const itemTaxes = new DurableMap<ItemTax>('item_tax', (key) => key.slice(0, key.indexOf(':')));
 /**
  * Issue #308 — the price the business usually sells an item at, in paise. A suggestion for a new
  * line only: the bill carries whatever price is on the line, and last time's price to the same
  * customer comes first.
  */
-const itemPrices = new Map<string, bigint>();
+const itemPrices = new DurableMap<bigint>('item_price', (key) => key.slice(0, key.indexOf(':')));
 
 /** "250", "1,250.50" → paise. Empty is `null`; anything else is refused rather than guessed. */
 const pricePaise = (value: unknown): bigint | null => {
@@ -123,6 +125,36 @@ const barcodeOf = (companyId: CompanyId | string, value: unknown, exceptItemId?:
   return code;
 };
 const declaredRates = new Map<string, InMemoryDeclaredRates>();
+/**
+ * Issue #340 — every rate a business declared, in the order declared. Declarations are never
+ * changed, only followed by later ones, so each is kept as written and replayed on opening.
+ */
+const declarations = new DurableMap<DeclaredRate>('declared_rate', (key) => key.slice(0, key.indexOf(':')), {
+  frozen: true,
+  replayed: (rate) => { (declaredRatesOf(rate.companyId) as KeptDeclaredRates).replay(rate); },
+  // Emptied in place, never replaced: the company's calculator holds this very register.
+  forgotten: (companyId) => { (declaredRates.get(companyId) as KeptDeclaredRates | undefined)?.reset(); },
+});
+
+/** Each new declaration is also kept, under a key that sorts in the order it was made. */
+class KeptDeclaredRates extends InMemoryDeclaredRates {
+  #rates = new InMemoryDeclaredRates();
+
+  override declare(rate: DeclaredRate): this {
+    this.#rates.declare(rate);
+    declarations.set(`${rate.companyId}:${new Date().toISOString()}:${crypto.randomUUID()}`, rate);
+    return this;
+  }
+
+  override find(...args: Parameters<InMemoryDeclaredRates['find']>) { return this.#rates.find(...args); }
+  override list(companyId: string) { return this.#rates.list(companyId); }
+
+  /** A declaration read back from the database: into memory only. */
+  replay(rate: DeclaredRate): void { this.#rates.declare(rate); }
+
+  /** Forgets everything, so the database can be read back into it. */
+  reset(): void { this.#rates = new InMemoryDeclaredRates(); }
+}
 
 const taxKey = (companyId: CompanyId | string, itemId: string): string => `${String(companyId)}:${itemId}`;
 
@@ -131,7 +163,7 @@ export const declaredRatesOf = (companyId: CompanyId | string): InMemoryDeclared
   const key = String(companyId);
   const existing = declaredRates.get(key);
   if (existing !== undefined) return existing;
-  const created = new InMemoryDeclaredRates();
+  const created = new KeptDeclaredRates();
   declaredRates.set(key, created);
   return created;
 };

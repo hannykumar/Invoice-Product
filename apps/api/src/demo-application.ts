@@ -5,7 +5,7 @@
  */
 import { conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
-import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
+import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { reportError, reportUnexpected } from '../../../packages/platform/src/error-reporting.ts';
@@ -127,6 +127,17 @@ import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/s
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
+import { MEMORY, type Persistence } from './persistence.ts';
+import { PostgresSalesRepository, PostgresChallanRepository, PostgresPreSaleRepository } from '../../../packages/sales/src/postgres-repository.ts';
+import { PostgresAdvanceRepository, PostgresPaymentRepository } from '../../../packages/receivables/src/postgres-repository.ts';
+import { PostgresReturnPreparations } from '../../../packages/gst-returns/src/postgres-repository.ts';
+import { PostgresReminderRepository } from '../../../packages/collections/src/postgres-repository.ts';
+import { PostgresServiceInvoiceRepository, PostgresSubscriptionRepository, PostgresUsageRepository } from '../../../packages/subscriptions/src/postgres-repository.ts';
+import type { SalesRepository } from '../../../packages/sales/src/ports.ts';
+import type { PaymentRepository } from '../../../packages/receivables/src/ports.ts';
+import type { ReturnNoteRepository } from '../../../packages/returns/src/ports.ts';
+import type { ReturnPreparationRepository } from '../../../packages/gst-returns/src/ports.ts';
+import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import {
   ActionAgentService,
   InMemoryAgentPlanStore,
@@ -209,6 +220,7 @@ import {
   type OutwardDocument, type OutwardLine, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
+import { DurableMap } from './durable.ts';
 
 /** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
@@ -609,10 +621,10 @@ export class DemoApplication {
   private readonly config: CompanySeed;
   private readonly shop: Awaited<ReturnType<typeof createCompanyShop>>;
   private readonly sales: SalesService;
-  private readonly salesRepository: InMemorySalesRepository;
-  private readonly invoicePrints = new Map<string, { document: InvoiceDocument; snapshot: TemplateSnapshot }>();
+  private readonly salesRepository: SalesRepository;
+  private readonly invoicePrints: DurableMap<{ document: InvoiceDocument; snapshot: TemplateSnapshot }>;
   /** Issue #186 — each credit or debit note's printed page, frozen the moment it is recorded. */
-  private readonly notePrints = new Map<string, { document: CreditNoteDocument; snapshot: TemplateSnapshot }>();
+  private readonly notePrints: DurableMap<{ document: CreditNoteDocument; snapshot: TemplateSnapshot }>;
   /**
    * The movement each e-way bill was actually raised on, kept against its document.
    *
@@ -621,32 +633,32 @@ export class DemoApplication {
    * which never has a form behind it — quietly loses the ship-to address and the transaction type,
    * so the page in the driver's hand disagrees with the government's record for that number.
    */
-  private readonly ewayMovements = new Map<string, Movement>();
+  private readonly ewayMovements: DurableMap<Movement>;
   /**
    * Issue #182 — the delivery and reference answers, kept against the draft they were checked with
    * until the bill is issued and they are frozen onto it.
    */
-  private readonly deliveries = new Map<string, DeliveryDetails>();
+  private readonly deliveries: DurableMap<DeliveryDetails>;
   /** Issue #233 — what stops a bill being cancelled; the same guard the sales service asks. */
   private cancelGuard: CancellationGuardPort = { async blockers() { return []; } };
   /**
    * Issue #266 — the GST returns as prepared on the GST returns screen, so a new bill is never
    * dated into a month whose return is already approved or filed.
    */
-  private returnMonths: InMemoryReturnPreparations = new InMemoryReturnPreparations();
+  private returnMonths: ReturnPreparationRepository = new InMemoryReturnPreparations();
   /**
    * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
    * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
    */
-  private readonly exportSales: Map<string, ExportParticulars>;
+  private readonly exportSales: DurableMap<ExportParticulars>;
   private readonly payments: ReceivablesService;
-  private readonly paymentRepository: InMemoryPaymentRepository;
+  private readonly paymentRepository: PaymentRepository;
   private readonly documents: DocumentLedgerPort;
   private readonly reportService: ReportService;
   private readonly assistant: AssistantService;
   private readonly terms: TradeTermsService;
   private readonly returns: ReturnService;
-  private readonly returnNotes: InMemoryReturnNoteRepository;
+  private readonly returnNotes: ReturnNoteRepository;
   private readonly subscriptions: SubscriptionService;
   private readonly collections: CollectionsService;
   private readonly notifications: NotificationService;
@@ -664,15 +676,15 @@ export class DemoApplication {
     config: CompanySeed,
     shop: Awaited<ReturnType<typeof createCompanyShop>>,
     sales: SalesService,
-    salesRepository: InMemorySalesRepository,
+    salesRepository: SalesRepository,
     payments: ReceivablesService,
-    paymentRepository: InMemoryPaymentRepository,
+    paymentRepository: PaymentRepository,
     documents: DocumentLedgerPort,
     reportService: ReportService,
     assistant: AssistantService,
     terms: TradeTermsService,
     returns: ReturnService,
-    returnNotes: InMemoryReturnNoteRepository,
+    returnNotes: ReturnNoteRepository,
     collections: CollectionsService,
     notifications: NotificationService,
     outbox: DemoReminderOutbox,
@@ -683,9 +695,17 @@ export class DemoApplication {
     gstReturns: GstReturnService,
     challans: ChallanDesk,
     presale: PreSaleDesk,
-    exportSales: Map<string, ExportParticulars>,
+    exportSales: DurableMap<ExportParticulars>,
   ) {
     this.config = config;
+    // Issue #340 — the copies frozen when a bill, note or e-way bill is issued, and what was said
+    // about a draft's delivery, kept in the database too so a reprint after a restart is the same.
+    const company = () => String(config.companyId);
+    this.invoicePrints = new DurableMap('invoice_print', company, { frozen: true });
+    this.notePrints = new DurableMap('note_print', company, { frozen: true });
+    // Not frozen: an e-way bill cancelled and raised again for the same movement replaces it.
+    this.ewayMovements = new DurableMap('eway_movement', company);
+    this.deliveries = new DurableMap('sale_delivery', company);
     this.exportSales = exportSales;
     this.challans = challans;
     this.presale = presale;
@@ -710,17 +730,28 @@ export class DemoApplication {
     this.gstReturns = gstReturns;
   }
 
-  static async create(config: CompanySeed): Promise<DemoApplication> {
-    const shop = await createCompanyShop(config);
-    const salesRepository = new InMemorySalesRepository();
-    const paymentRepository = new InMemoryPaymentRepository();
+  /**
+   * Composes one company. In memory (`MEMORY`) it is the synthetic demo company, seeded with its
+   * customer, items and three old bills. On PostgreSQL (issue #340) nothing is seeded, ever: the
+   * company starts with an empty standard chart of accounts and keeps what its people enter.
+   */
+  static async create(config: CompanySeed, persistence: Persistence = MEMORY): Promise<DemoApplication> {
+    const demo = persistence.kind === 'memory';
+    const shop = await createCompanyShop(config, persistence);
+    const pick = <M, P>(memory: () => M, postgres: (db: TransactionalExecutor) => P): M | P =>
+      persistence.kind === 'memory' ? memory() : postgres(persistence.db);
+    const participate = (...participants: readonly unknown[]): void => {
+      if (shop.store instanceof InMemoryLedgerStore) for (const participant of participants) shop.store.join(participant as TransactionParticipant);
+    };
+    const salesRepository = pick(() => new InMemorySalesRepository(), (db) => new PostgresSalesRepository(db));
+    const paymentRepository = pick(() => new InMemoryPaymentRepository(), (db) => new PostgresPaymentRepository(db));
     // Issue #249 — the shop holds the notes, so the purchase comparison reads the same ones.
     const returnNotes = shop.returnNotes;
-    shop.store.join(salesRepository).join(paymentRepository);
+    participate(salesRepository, paymentRepository);
     // Issue #181 — the customers and items this company actually keeps, in `packages/masters`.
     // The screens add to the same records, so a customer added at the counter is a customer the
-    // bill can be made out to a moment later.
-    seedCatalogue(config.companyId, config.catalogue);
+    // bill can be made out to a moment later. Only the demo company is given any to start with.
+    if (demo) seedCatalogue(config.companyId, config.catalogue);
     const masters = catalogueTaxReader(config);
     // The rates are the ones this business declared (option C, #54), and nothing else. The fixture
     // rate table is gone from this app: it described itself as "not a statement of Indian law", and
@@ -735,7 +766,7 @@ export class DemoApplication {
     // Issue #229 — a bill takes its goods out of the same godown purchases put them into. Before
     // this the sales service was given a stand-in that said yes to everything and moved nothing,
     // so stock never went down and a business could sell steel it did not have.
-    const godown = salesInventoryAdapter(shop.inventoryService, { defaultWarehouseId: 'wh-main' });
+    const godown = salesInventoryAdapter(shop.inventoryService, { defaultWarehouseId: shop.warehouseId });
     // A service is not kept in a godown, so its lines are never checked against stock or issued.
     const goodsLines = (request: ReservationRequest) => request.lines.filter((line) =>
       catalogueItems(request.companyId).find((item) => item.id === line.itemId)?.kind !== 'service');
@@ -756,7 +787,7 @@ export class DemoApplication {
     // Issue #233 — what stops an issued bill being cancelled, read from the modules that hold it.
     // The GST return's preparations are kept here so the guard reads the same record the GST returns
     // screen approves.
-    const gstPreparations = new InMemoryReturnPreparations();
+    const gstPreparations = pick(() => new InMemoryReturnPreparations(), (db) => new PostgresReturnPreparations(db));
     const cancellationGuard: CancellationGuardPort = {
       async blockers(_actor, invoice) {
         const found: CancelBlocker[] = [];
@@ -880,7 +911,7 @@ export class DemoApplication {
         // Purchases keep their own short item ids, so those fall back to the purchase catalogue.
         item: (companyId, itemId) => catalogueItems(companyId).find((item) => item.id === itemId)?.name
           ?? DemoApplication.CATALOGUE[itemId]?.description,
-        warehouse: (_companyId, warehouseId) => warehouseId === 'wh-main' ? config.location : undefined,
+        warehouse: (_companyId, warehouseId) => warehouseId === shop.warehouseId ? config.location : undefined,
         branch: () => undefined,
       },
       permissions: permissionPortFromActor,
@@ -988,7 +1019,7 @@ export class DemoApplication {
         const reasons: BlockingReason[] = [];
         if (invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED') {
           for (const line of invoice.lines) {
-            const balance = await shop.inventoryService.balance(shop.setupActor, { itemId: line.itemId, warehouseId: 'wh-main' });
+            const balance = await shop.inventoryService.balance(shop.setupActor, { itemId: line.itemId, warehouseId: shop.warehouseId });
             if (balance.available.scaled >= line.quantity.scaled) continue;
             reasons.push({
               code: 'STOCK_SHORTFALL',
@@ -1088,7 +1119,7 @@ export class DemoApplication {
       receivables: receivablesPositions(payments, documents),
       contacts: reminderContacts,
       transport: notificationReminderTransport(notifications, reminderContext, () => appClock.now().getTime()),
-      repository: new InMemoryReminderRepository(),
+      repository: pick(() => new InMemoryReminderRepository(), (db) => new PostgresReminderRepository(db)),
       permissions: permissionPortFromActor,
       audit: shop.audit,
       // Issue #234 — the app's one real clock, so a reminder is judged on the day it is sent.
@@ -1098,17 +1129,20 @@ export class DemoApplication {
     });
 
     const bankProvider = new SyntheticBankFeedProvider();
-    bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
-    bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
+    // Made-up bank lines are demo data: a real company's bank feed shows only its own bank's.
+    if (demo) {
+      bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
+      bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
+    }
     const bankFeeds = new BankFeedService([bankProvider]);
 
     // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
     // is the mock one — no production credential is needed to run any of this — and the limits it
     // enforces are the real ones from the shipped catalogue.
     const subscriptions = new SubscriptionService({
-      subscriptions: new InMemorySubscriptionRepository(),
-      usage: new InMemoryUsageRepository(),
-      invoices: new InMemoryServiceInvoiceRepository(),
+      subscriptions: pick(() => new InMemorySubscriptionRepository(), (db) => new PostgresSubscriptionRepository(db)),
+      usage: pick(() => new InMemoryUsageRepository(), (db) => new PostgresUsageRepository(db)),
+      invoices: pick(() => new InMemoryServiceInvoiceRepository(), (db) => new PostgresServiceInvoiceRepository(db)),
       payments: alwaysPays(),
       permissions: permissionPortFromActor,
       audit: shop.audit,
@@ -1224,7 +1258,7 @@ export class DemoApplication {
       }
       return documents;
     };
-    const exportSales = new Map<string, ExportParticulars>();
+    const exportSales = new DurableMap<ExportParticulars>('export_sale', () => String(config.companyId));
     const outwardSupplies: OutwardSupplyPort = {
       async documentsFor(companyId, period): Promise<readonly OutwardDocument[]> {
         const supplier = { gstin: config.gstin, stateCode: config.gstin.slice(0, 2) };
@@ -1341,8 +1375,8 @@ export class DemoApplication {
     // Issue #141. Challans share the store, so a number is allocated in the same transaction that
     // saves the challan; they read the same master data and calculator the invoice does, so a sale
     // challan shows the tax its invoice will charge.
-    const challanRepository = new InMemoryChallanRepository();
-    shop.store.join(challanRepository);
+    const challanRepository = pick(() => new InMemoryChallanRepository(), (db) => new PostgresChallanRepository(db));
+    participate(challanRepository);
     const challans = new ChallanDesk(config, new ChallanService({
       store: shop.store, calculator, masterData: masters, repository: challanRepository, invoices: salesRepository,
       permissions: permissionPortFromActor, audit: shop.audit, clock: appClock, invoicePrefix: 'INV',
@@ -1351,12 +1385,12 @@ export class DemoApplication {
     // Issue #142. Quotations and proformas share the store only so a number and the document are
     // saved together; they post nothing to it. They are priced by the invoice's own calculator, and a
     // quotation becomes a sale through the invoice's own service, as a draft.
-    const presaleRepository = new InMemoryPreSaleRepository();
-    shop.store.join(presaleRepository);
+    const presaleRepository = pick(() => new InMemoryPreSaleRepository(), (db) => new PostgresPreSaleRepository(db));
+    participate(presaleRepository);
     // Issue #165. Money taken against a proforma is recorded by the same receivables service as any
     // other receipt, and linking the proforma's invoice applies it and sets off its tax.
-    const advanceRepository = new InMemoryAdvanceRepository();
-    shop.store.join(advanceRepository);
+    const advanceRepository = pick(() => new InMemoryAdvanceRepository(), (db) => new PostgresAdvanceRepository(db));
+    participate(advanceRepository);
     const advances = new AdvanceService({
       store: shop.store, ledger: shop.ledger, receivables: payments, proformas: presaleRepository, repository: advanceRepository,
       permissions: permissionPortFromActor, audit: shop.audit, clock: appClock,
@@ -1372,7 +1406,7 @@ export class DemoApplication {
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
     app.returnMonths = gstPreparations;
-    await app.seed();
+    if (demo) await app.seed();
     return app;
   }
 
@@ -1405,7 +1439,7 @@ export class DemoApplication {
     return this.shop.inventoryService.recordMovement(actor, {
       idempotencyKey: input.idempotencyKey,
       itemId: input.itemId,
-      warehouseId: 'wh-main',
+      warehouseId: this.shop.warehouseId,
       kind: 'OPENING',
       quantity: input.quantity,
       unitCost: input.unitCost,
@@ -1429,6 +1463,19 @@ export class DemoApplication {
     // Two older bills, so the Reminders screen has something to decide about on the demo's date.
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
+  }
+
+  /** Issue #280 — every change to where customers pay, oldest first, from the audit trail. */
+  private async payeeChanges(companyId: CompanyId): Promise<readonly { readonly at: string; readonly summary: string }[]> {
+    const audit = this.shop.audit;
+    if (audit instanceof InMemoryAuditPort) {
+      return audit.events.filter((event) => event.action === 'payee.changed' && event.companyId === companyId).map((event) => ({ at: event.at, summary: event.summary }));
+    }
+    const db = (this.shop.persistence as Extract<Persistence, { kind: 'postgres' }>).db;
+    const { rows } = await db.tenantTransaction(companyId, (sql) => sql.query(
+      `SELECT occurred_at, after_json ->> 'summary' AS summary FROM audit_events
+        WHERE company_id = $1 AND action = 'payee.changed' ORDER BY seq DESC LIMIT 20`, [companyId]));
+    return rows.reverse().map((row) => ({ at: (row.occurred_at as Date).toISOString(), summary: String(row.summary) }));
   }
 
   async dashboard(actor: ActorContext) {
@@ -1502,7 +1549,7 @@ export class DemoApplication {
         ...payments.map((payment) => ({ id: payment.id, kind: 'payment', direction: payment.direction, title: `${payment.direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${this.partyName(companyId, payment.partyId)} · ${payment.mode.replace('_', ' ')}`, amount: jsonAmount(payment.amount.minor), status: payment.state === 'RECORDED' ? 'Recorded' : payment.state })),
         ...returnNotes.map((note) => ({ id: note.id, kind: 'return', title: `${note.number} · ${note.originalDocument.number}`, amount: jsonAmount(note.totals.total.minor), status: 'Recorded' })),
         // Issue #280 — a change to where customers pay, so the owner sees it whoever made it.
-        ...this.shop.audit.events.filter((event) => event.action === 'payee.changed' && event.companyId === companyId)
+        ...(await this.payeeChanges(companyId))
           .map((event) => ({ id: `payee:${event.at}`, kind: 'payee', title: event.summary, detail: 'If you did not make this change, put it back now and check who can sign in.', amount: null, status: 'Changed' })),
       ].reverse(),
     };
@@ -1591,7 +1638,7 @@ export class DemoApplication {
   private async stockNeedingAttention(actor: ActorContext, companyId: CompanyId) {
     const goods = catalogueItems(companyId).filter((item) => item.kind === 'goods' && item.active !== false);
     const rows = await Promise.all(goods.map(async (item) => {
-      const balance = await this.shop.inventoryService.balance(actor, { itemId: item.id, warehouseId: 'wh-main' });
+      const balance = await this.shop.inventoryService.balance(actor, { itemId: item.id, warehouseId: this.shop.warehouseId });
       const left = balance.physical.scaled;
       const reorder = item.reorderLevel?.scaled ?? null;
       const needsAttention = left <= 0n || (reorder !== null && left <= reorder);
@@ -2546,7 +2593,7 @@ export class DemoApplication {
   challanHooks(): ChallanHooks {
     const goodsLines = (challan: ChallanFacts) => challan.lines
       .filter((line) => itemView(this.config.companyId, line.itemId).kind === 'goods')
-      .map((line) => ({ lineId: line.lineId, itemId: line.itemId, warehouseId: line.warehouseId ?? 'wh-main', quantity: line.quantity }));
+      .map((line) => ({ lineId: line.lineId, itemId: line.itemId, warehouseId: line.warehouseId ?? this.shop.warehouseId, quantity: line.quantity }));
     const inventory = this.shop.inventoryService;
     return {
       check: async (actor, challan) => {
@@ -2797,7 +2844,7 @@ export class DemoApplication {
    *     portal's own duplicate answer is treated as success.
    */
   private startAutomaticEInvoice(actor: ActorContext, invoiceId: string): void {
-    void (async () => {
+    void this.afterThisAction(actor.companyId, async () => {
       const document = await this.eInvoiceDocumentFor(actor, invoiceId);
       const applicability = this.applicabilityFor(document);
       // Decided here rather than inside the service, because the service refuses a bill that does
@@ -2805,11 +2852,23 @@ export class DemoApplication {
       // right answer, not an error worth showing them.
       if (decideApplicability(applicability).outcome !== 'APPLICABLE') return;
       await this.shop.eInvoice.register(actor, { document, applicability });
-    })().catch((error: unknown) => {
+    }).catch((error: unknown) => {
       // Nothing here may reach the bill. The record itself carries the failure and the retry; a
       // fault of our own (not the portal being down) is reported as well.
       reportUnexpected('api.einvoiceAutoSend', error);
     });
+  }
+
+  /**
+   * Issue #340 — work that follows an action without being part of it. On PostgreSQL it is its own
+   * unit of work, which waits for the company's lock and so starts only after the action has
+   * committed; it reads the bill afresh, so a bill that rolled back is never sent anywhere.
+   * #345 moves this onto the transactional outbox and a separate worker.
+   */
+  private afterThisAction(companyId: CompanyId, work: () => Promise<void>): Promise<void> {
+    const persistence = this.shop.persistence;
+    if (persistence.kind === 'memory') return work();
+    return outsideUnitOfWork(() => persistence.db.unitOfWork(companyId, work));
   }
 
   /**
@@ -4376,7 +4435,7 @@ export class DemoApplication {
   private async stockOf(actor: ActorContext, itemId: string) {
     const item = this.catalogueItem(itemId);
     const balance = await this.shop.inventoryService.balance(actor, {
-      itemId: item.id, warehouseId: 'wh-main', batchId: item.batchId ?? null,
+      itemId: item.id, warehouseId: this.shop.warehouseId, batchId: item.batchId ?? null,
     });
     return { itemId: item.id, name: item.description, onShelf: showQuantity(balance.physical) };
   }
@@ -4432,7 +4491,7 @@ export class DemoApplication {
         lineNumber: 1, itemId: item.id, description: item.description, hsnSac: item.hsnSac,
         quantity: this.typedQuantity(input.quantity, item.unit), ratePaise: paise(input.rate),
         gstRateBasisPoints: Number(input.gst ?? 1800), supplyKind: item.kind,
-        ...(item.kind === 'GOODS' ? { warehouseId: 'wh-main' } : {}),
+        ...(item.kind === 'GOODS' ? { warehouseId: this.shop.warehouseId } : {}),
       }],
     });
     const order = created.state === 'DRAFT' ? await this.shop.matching.placeOrder(actor, created.id) : created;
@@ -4468,7 +4527,7 @@ export class DemoApplication {
       receiptDate: String(input.date ?? ''),
       ...(input.deliveryNote ? { deliveryNote: String(input.deliveryNote) } : {}),
       lines: [{
-        lineNumber: 1, itemId: item.id, description: item.description, warehouseId: 'wh-main',
+        lineNumber: 1, itemId: item.id, description: item.description, warehouseId: this.shop.warehouseId,
         ...(item.batchId ? { batchId: item.batchId } : {}),
         receivedQuantity: received, acceptedQuantity: accepted, ratePaise: rate,
         ...(shortfall > 0n
@@ -6215,7 +6274,7 @@ export class DemoApplication {
         description: item.name,
         hsnSac: item.hsnSac,
         supplyKind: goods ? 'GOODS' as const : 'SERVICES' as const,
-        ...(goods ? { warehouseId: 'wh-main' } : {}),
+        ...(goods ? { warehouseId: this.shop.warehouseId } : {}),
         quantity: qty,
         ratePaise: rate,
         taxableValuePaise: lineTaxableValue(qty.scaled, rate),
@@ -6245,7 +6304,7 @@ export class DemoApplication {
       return {
         lineId: `line-${index + 1}`,
         itemId: item.id,
-        warehouseId: 'wh-main',
+        warehouseId: this.shop.warehouseId,
         quantity: quantityFromString(String(row.quantity ?? ''), unit),
         unitPrice: money(paise(row.rate)),
         priceBasis: 'EXCLUSIVE' as const,
@@ -6332,7 +6391,7 @@ export class DemoApplication {
     const shared = {
       idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
-      lines: [{ originalLineId: lineId, quantity, disposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT', warehouseId: 'wh-main' }],
+      lines: [{ originalLineId: lineId, quantity, disposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT', warehouseId: this.shop.warehouseId }],
     };
     // Issue #249 — the supplier's credit note, when it is already in hand. Both or neither.
     const supplierNoteNumber = String(input.supplierNoteNumber ?? '').trim();
