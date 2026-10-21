@@ -13,7 +13,7 @@
  * of what a warning needs, it is stable enough to survive those modules changing, and it means this
  * module can be finished and tested against a mock without waiting for anybody.
  */
-import { formatINR, type CompanyId, type IsoDate, type Money } from '@invoice/kernel';
+import { formatINR, invalid, type CompanyId, type IsoDate, type Money } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
 import type {
   NotificationService,
@@ -35,6 +35,7 @@ import type {
   HolidayCalendarPort,
   ObligationDefinitionPort,
   OccurrenceRepository,
+  Page,
 } from './ports.ts';
 import {
   bilingual,
@@ -50,6 +51,24 @@ import {
 
 // ---------------------------------------------------------------------------- stores
 
+/** Issue #366 — refuse a page size that is not a positive whole number, as Postgres does. */
+export const checkPage = (page: Page | undefined): void => {
+  if (page !== undefined && (!Number.isInteger(page.limit) || page.limit < 1)) {
+    throw invalid('COMPLIANCE_PAGE_INVALID', 'Ask for at least one row per page.');
+  }
+};
+
+/** Issue #366 — the in-memory half of keyset pagination: sorted by key, after the cursor. */
+const paged = <T>(rows: readonly T[], keyOf: (row: T) => string, page: Page | undefined): readonly T[] => {
+  checkPage(page);
+  if (page === undefined) return rows;
+  const after = page.after;
+  return rows
+    .filter((row) => after === undefined || keyOf(row) > after)
+    .sort((left, right) => (keyOf(left) < keyOf(right) ? -1 : keyOf(left) > keyOf(right) ? 1 : 0))
+    .slice(0, page.limit);
+};
+
 export class InMemoryOccurrences implements OccurrenceRepository {
   readonly #rows = new Map<string, ObligationOccurrence>();
 
@@ -57,12 +76,13 @@ export class InMemoryOccurrences implements OccurrenceRepository {
     return this.#rows.get(`${companyId}:${key}`) ?? null;
   }
 
-  async list(companyId: CompanyId, from: IsoDate, to: IsoDate): Promise<readonly ObligationOccurrence[]> {
+  async list(companyId: CompanyId, from: IsoDate, to: IsoDate, page?: Page): Promise<readonly ObligationOccurrence[]> {
     // The window is judged on the period, not the due date: July's return is due in August and is
     // still July's obligation, and a query that missed it would create a second one.
-    return [...this.#rows.values()].filter(
+    const rows = [...this.#rows.values()].filter(
       (row) => row.companyId === companyId && row.period.to >= from && row.period.from <= to,
     );
+    return paged(rows, (row) => row.id, page);
   }
 
   async put(occurrence: ObligationOccurrence): Promise<void> {
@@ -90,8 +110,8 @@ export class InMemoryAlerts implements AlertRepository {
     );
   }
 
-  async listForCompany(companyId: CompanyId): Promise<readonly ComplianceAlert[]> {
-    return this.#rows.filter((row) => row.companyId === companyId);
+  async listForCompany(companyId: CompanyId, page?: Page): Promise<readonly ComplianceAlert[]> {
+    return paged(this.#rows.filter((row) => row.companyId === companyId), (row) => row.id, page);
   }
 }
 
@@ -102,8 +122,9 @@ export class InMemoryComplianceExceptions implements ComplianceExceptionReposito
     this.#rows.set(`${exception.companyId}:${exception.code}:${exception.periodKey}`, exception);
   }
 
-  async list(companyId: CompanyId): Promise<readonly ComplianceException[]> {
-    return [...this.#rows.values()].filter((row) => row.companyId === companyId);
+  async list(companyId: CompanyId, page?: Page): Promise<readonly ComplianceException[]> {
+    const rows = [...this.#rows.values()].filter((row) => row.companyId === companyId);
+    return paged(rows, (row) => `${row.code}:${row.periodKey}`, page);
   }
 
   async clear(companyId: CompanyId, code: string, periodKey: string): Promise<void> {

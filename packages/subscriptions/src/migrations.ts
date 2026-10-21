@@ -83,4 +83,18 @@ export const subscriptionMigrations: readonly Migration[] = [{
     DROP TABLE IF EXISTS subscription_usage_events;
     DROP TABLE IF EXISTS subscriptions;
   `,
+}, {
+  // Issue #366 — indexes for the PostgreSQL repositories (packages/subscriptions/src/postgres-repository.ts).
+  // Row-level security is already forced on all four tables by the migration above.
+  id: '20261014T182142742Z_subscriptions_82344ba271bb_repository_indexes',
+  up: `
+    -- UsageRepository.events(company, period): filters on period without a meter, and pages oldest first.
+    CREATE INDEX subscription_usage_events_page_idx ON subscription_usage_events(company_id, period, recorded_at, id);
+    -- The foreign key from a payment event to its invoice.
+    CREATE INDEX subscription_payment_events_invoice_idx ON subscription_payment_events(company_id, invoice_id);
+  `,
+  down: `
+    DROP INDEX IF EXISTS subscription_payment_events_invoice_idx;
+    DROP INDEX IF EXISTS subscription_usage_events_page_idx;
+  `,
 }];

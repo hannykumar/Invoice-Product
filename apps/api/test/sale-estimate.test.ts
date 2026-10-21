@@ -31,7 +31,7 @@ const signIn = async (email = 'owner@sampoorna.example.invalid', password = 'kar
 
 const internals = async (owner: string) => {
   const runtime = apiRuntime();
-  const context = runtime.authenticate(`Bearer ${owner}`);
+  const context = await runtime.authenticate(`Bearer ${owner}`);
   const app = await runtime.application(context) as any;
   const companyId = runtime.actor(context).companyId;
   return {

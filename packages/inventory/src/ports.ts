@@ -54,6 +54,12 @@ export interface ReservationRepository {
 export interface InventoryStore {
   readonly movements: MovementRepository;
   readonly reservations: ReservationRepository;
+  /**
+   * Issue #367 — holds the stock of these places for the rest of the transaction, so two bills
+   * cannot both see the same last box as free. Locked in one fixed order, so they cannot deadlock.
+   * Optional: the in-memory store has no other writer to wait for.
+   */
+  lockStock?(companyId: CompanyId, places: readonly { itemId: string; warehouseId: string; batchId: string | null }[]): Promise<void>;
 }
 
 /**

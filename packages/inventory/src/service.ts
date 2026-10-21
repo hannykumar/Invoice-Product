@@ -361,6 +361,11 @@ export class InventoryService {
     this.#permissions.require(actor, INVENTORY_PERMISSIONS.move, 'hold stock for a bill');
     const hold = command.hold !== false;
     return this.#store.transaction(actor.companyId, async (): Promise<ReserveResult> => {
+      // Issue #367 — the stock these lines read is locked first, so the check below and the hold it
+      // leads to cannot interleave with another bill's, even on a path without the company lock.
+      if (hold) {
+        await this.#inventory.lockStock?.(actor.companyId, command.lines.map((l) => ({ itemId: l.itemId, warehouseId: l.warehouseId, batchId: l.batchId ?? null })));
+      }
       // Re-holding for the same document replaces the previous hold rather than stacking on it.
       const previous = hold ? await this.#inventory.reservations.listForDocument(actor.companyId, command.documentId) : [];
       for (const reservation of previous.filter((r) => r.state === 'HELD')) {

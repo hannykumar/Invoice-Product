@@ -103,8 +103,19 @@ new OutboxRelay(db, { leaseSeconds?: 60, maxAttempts?: 10 })
 
 ## Error codes
 
-`NO_UNIT_OF_WORK`, `TENANT_ISOLATION`, `UNIT_OF_WORK_ABORTED` (all `PlatformError`), and
-PostgreSQL errors rethrown unchanged after rollback.
+`NO_UNIT_OF_WORK`, `TENANT_ISOLATION`, `UNIT_OF_WORK_ABORTED` and `TRY_AGAIN` (all
+`PlatformError`), and other PostgreSQL errors rethrown unchanged after rollback.
+
+**`TRY_AGAIN`** (#367, v1.1): the outermost unit of work rolled back because a lock was not free
+within `lock_timeout` (`55P03`), a deadlock was broken (`40P01`) or a serialisation failed
+(`40001`); or no pooled connection came free within `connectionTimeoutMillis`. Nothing in that unit
+of work was saved, and the PostgreSQL error is kept as `cause`. It never covers a commit whose
+outcome is unknown (a dropped connection has no SQLSTATE). The platform still does not retry
+(ADR 0363). The caller retries with the same idempotency key, and the API answers it with HTTP 503.
+A nested `unitOfWork` (a savepoint) rethrows the raw error, so the outer action decides.
+
+Affected callers: every command handler (#340 maps it to 503 in `apps/api/src/server.ts`) and the
+outbox relay (#345). The relay records `error.message`; the PostgreSQL text is in `cause`.
 
 ## Contract tests
 
