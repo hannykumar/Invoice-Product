@@ -80,6 +80,7 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
   let igst = 0n;
   let cess = 0n;
   let ineligible = 0n;
+  const blockedHeads = { cgstPaise: 0n, sgstPaise: 0n, igstPaise: 0n, cessPaise: 0n };
   const lineCost: Paise[] = [];
 
   for (const line of approved.lines) {
@@ -106,6 +107,12 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
 
     taxable += line.taxableValuePaise;
     ineligible += blocked;
+    if (blocked > 0n) {
+      blockedHeads.cgstPaise += tax.cgst;
+      blockedHeads.sgstPaise += tax.sgst;
+      blockedHeads.igstPaise += tax.igst;
+      blockedHeads.cessPaise += tax.cess;
+    }
     if (blocked === 0n) {
       cgst += tax.cgst;
       sgst += tax.sgst;
@@ -126,14 +133,19 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
   const claimable = cgst + sgst + igst + cess;
   // Debits are what the business received; credits are what it owes. Round-off closes the gap
   // between the recomputed figures and the rupee-rounded total printed on the bill.
+  //
+  // Issue #289, part 3 — under reverse charge the buyer owes the government the tax on every line
+  // (CGST s.9(3)), blocked or not: s.17(5) takes away the credit, never the liability. So what is
+  // owed to the government is the claimable tax plus the blocked tax, which went into cost.
+  const reverseChargeTax = reverseCharge ? claimable + ineligible : 0n;
   const debits = goodsCost + servicesCost + claimable;
-  const credits = approved.invoiceTotalPaise + (reverseCharge ? claimable : 0n);
+  const credits = approved.invoiceTotalPaise + reverseChargeTax;
   const roundOff = credits - debits;
   const gap = roundOff < 0n ? -roundOff : roundOff;
   if (gap > ROUND_OFF_TOLERANCE_PAISE) {
     throw invalid(
       "PURCHASE_TOTAL_DISAGREES",
-      `The parts of this bill come to ${formatPaise(debits - (reverseCharge ? claimable : 0n))}, but the bill asks for ${formatPaise(approved.invoiceTotalPaise)}. That difference of ${formatPaise(gap)} is too big to be rounding, so nothing has been recorded.`,
+      `The parts of this bill come to ${formatPaise(debits - reverseChargeTax)}, but the bill asks for ${formatPaise(approved.invoiceTotalPaise)}. That difference of ${formatPaise(gap)} is too big to be rounding, so nothing has been recorded.`,
       { messageId: "purchase.total_disagrees", details: { difference: formatPaise(gap) } },
     );
   }
@@ -141,7 +153,7 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
     warnings.push(`${formatPaise(gap)} of rounding has been recorded on its own so the books match the bill exactly.`);
   }
   if (reverseCharge) {
-    warnings.push(`This purchase is under reverse charge, so ${approved.supplierName} has not charged GST. The ${formatPaise(claimable)} of tax is yours to pay the government directly, and has been recorded that way.`);
+    warnings.push(`This purchase is under reverse charge, so ${approved.supplierName} has not charged GST. The ${formatPaise(reverseChargeTax)} of tax is yours to pay the government directly, and has been recorded that way.`);
   }
 
   const summary: PurchaseTaxSummary = {
@@ -151,6 +163,7 @@ export const computePurchaseTotals = (approved: ApprovedPurchase): PurchaseTotal
     igstPaise: igst,
     cessPaise: cess,
     ineligibleItcPaise: ineligible,
+    ...(ineligible === 0n ? {} : { ineligibleHeads: blockedHeads }),
     intraState,
     reverseCharge,
     ...(approved.verdict.taxCheck.ruleSetVersion === undefined ? {} : { ruleSetVersion: approved.verdict.taxCheck.ruleSetVersion }),
@@ -259,7 +272,8 @@ export const buildPurchasePosting = async (
   push(supplierAccount.id, approved.supplierPartyId, 0n, approved.invoiceTotalPaise, `Amount owed to ${approved.supplierName}`);
 
   if (totals.tax.reverseCharge) {
-    const claimable = totals.tax.cgstPaise + totals.tax.sgstPaise + totals.tax.igstPaise + totals.tax.cessPaise;
+    // Blocked lines included: the liability does not depend on the credit (s.9(3), s.17(5)).
+    const claimable = totals.tax.cgstPaise + totals.tax.sgstPaise + totals.tax.igstPaise + totals.tax.cessPaise + totals.tax.ineligibleItcPaise;
     const rcmAccount = (await byRole("REVERSE_CHARGE_PAYABLE")) ?? (await byCode(codes.reverseChargePayable));
     if (rcmAccount === null) {
       throw invalid(
