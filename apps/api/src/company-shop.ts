@@ -1,5 +1,5 @@
 /** Production-shaped in-memory composition used by the local HTTP surface. */
-import { asId, isoDate, type CompanyId } from '@invoice/kernel';
+import { asId, isoDate, type CompanyId, type IsoDate } from '@invoice/kernel';
 import { appClock } from './app-clock.ts';
 import {
   InMemoryAuditPort,
@@ -23,6 +23,7 @@ import {
   InMemoryGoodsReceiptStore, InMemoryMatchApprovalStore, InMemoryMatchTolerances, InMemoryPurchaseOrderStore,
 } from '../../../packages/purchasing/src/matching-adapters.ts';
 import { SupplierRiskService } from '../../../packages/purchasing/src/supplier-risk-service.ts';
+import { InMemoryReverseChargeRegister, ReverseChargeService } from '../../../packages/purchasing/src/reverse-charge-register.ts';
 import {
   InMemoryGstinCache, InMemoryRiskAcknowledgementStore, InMemoryRiskAssessmentStore,
   SyntheticCredentialVault, SyntheticGstConnector, gstinStatusAdapter,
@@ -193,6 +194,10 @@ export async function createCompanyShop(seed: CompanySeed) {
   // comparison reads both: goods sent back to a supplier take their credit off the bill they correct.
   const returnNotes = new InMemoryReturnNoteRepository();
   store.join(inventory).join(bills).join(orders).join(receipts).join(approvals).join(returnNotes);
+  // Issue #289, part 2b — the reverse-charge register: when each reverse-charge bill's GST falls
+  // due, and the self-invoices issued for purchases from unregistered suppliers.
+  const reverseChargeRegister = new InMemoryReverseChargeRegister();
+  store.join(reverseChargeRegister);
   const audit = new InMemoryAuditPort();
   store.join(audit);
   // Issue #234 — the real clock (tests pin it through app-clock.ts). It used to be frozen at
@@ -304,12 +309,35 @@ export async function createCompanyShop(seed: CompanySeed) {
     const party = suppliers(seed.companyId).find((candidate) => candidate.id === partyId);
     return party === undefined ? null : party.gstRegistrationType === 'unregistered' && party.unregisteredBasis === 'EXEMPT_ONLY' ? 'exempt_only' : party.gstRegistrationType;
   };
+  const reverseCharge = new ReverseChargeService({
+    register: reverseChargeRegister, audit, clock,
+    idFactory: () => `${seed.companyId}:self-invoice:${sequence += 1}`,
+  });
+  // Issue #289, part 2b — the earliest payment against a bill, from the money-paid records. Those
+  // live in the receivables service, which is made after the shop; it plugs itself in here.
+  let paidOnOf: (companyId: CompanyId, billId: string) => Promise<IsoDate | null> = async () => null;
+  /** When a reverse-charge bill's GST falls due (CGST s.12(3) / s.13(3)), or `null` for any other bill. */
+  const taxPointOf = async (companyId: CompanyId, billId: string) =>
+    reverseCharge.timeOfSupply(companyId, billId, await paidOnOf(companyId, billId));
   const itc = new ItcReconciliationService({
     books: {
       async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
         const posted = await bills.list(companyId);
+        // Issue #289, part 2b — a reverse-charge bill's tax belongs to the month of its time of
+        // supply, which can be before the bill's own month (paid in advance) or after it (a service
+        // unpaid for 60 days). It is handed over from whichever month comes first.
+        const taxPoints = new Map<string, IsoDate>();
+        for (const bill of posted) {
+          if (!bill.tax.reverseCharge) continue;
+          const point = await taxPointOf(companyId, bill.id);
+          if (point !== null) taxPoints.set(bill.id, point.date);
+        }
+        const firstMonth = (bill: (typeof posted)[number]) => {
+          const point = taxPoints.get(bill.id);
+          return point !== undefined && point.slice(0, 7) < bill.invoiceDate.slice(0, 7) ? point.slice(0, 7) : bill.invoiceDate.slice(0, 7);
+        };
         const fromBills = posted
-          .filter((bill) => bill.invoiceDate.slice(0, 7) <= period)
+          .filter((bill) => firstMonth(bill) <= period)
           .map((bill) => purchaseBillToBookDocument(
             {
               id: bill.id, companyId: bill.companyId, supplierPartyId: bill.supplierPartyId,
@@ -328,6 +356,7 @@ export async function createCompanyShop(seed: CompanySeed) {
               gstin: gstinOfParty(bill.supplierPartyId),
               ...(registrationOfParty(bill.supplierPartyId) === 'unregistered' ? { inTable5: false } : {}),
               ...(['unregistered', 'exempt_only', 'composition'].includes(registrationOfParty(bill.supplierPartyId) ?? '') ? { outsideGstr2b: true as const } : {}),
+              ...(taxPoints.has(bill.id) ? { taxPointDate: taxPoints.get(bill.id) as string } : {}),
             },
           ));
         // Issue #249 — every return of goods to a supplier, as a credit note linked to its bill, from
@@ -474,6 +503,9 @@ export async function createCompanyShop(seed: CompanySeed) {
   await ledger.openPartyAccount(setupActor, { partyId: seed.supplierId, name: seed.supplierName, kind: 'SUPPLIER' });
   await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
   return {
+    reverseCharge, reverseChargeRegister, taxPointOf,
+    /** Issue #289, part 2b — how the shop learns when a bill was first paid (s.12(3)(b), s.13(3)(a)). */
+    setPaidOn(read: (companyId: CompanyId, billId: string) => Promise<IsoDate | null>) { paidOnOf = read; },
     store, inventory, inventoryService, bills, returnNotes, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
     itc, itcRecords, itcBatches, itcDecisions, itcClaims,

@@ -8,7 +8,8 @@
  *    truckload, ₹750 or less a consignee, and for some goods (12/2017-CT(R) S.No. 21); 5% under
  *    reverse charge (GST Council, 56th meeting, 3 Sep 2025);
  *  - advocates (13/2017 S.No. 2), exempt to a business with turnover up to ₹20 lakh (12/2017 S.No. 45);
- *  - the tax is paid in cash (s.49(4), Circular 172/04/2022-GST): GSTR-3B 3.1(d), credit 4(A)(3).
+ *  - the tax is paid in cash (s.49(4), Circular 172/04/2022-GST): GSTR-3B 3.1(d), credit 4(A)(3),
+ *    on the return of its time of supply (s.12(3) goods, s.13(3) services — part 2b).
  *
  * Every name and figure below is synthetic and belongs to nobody.
  */
@@ -144,15 +145,18 @@ test('GSTR-3B: the tax is in 3.1(d), the self-assessed credit in 4(A)(3), and it
   const threeB = month.gstr3b ?? month.workspace?.gstr3b;
   assert.ok(threeB, JSON.stringify(Object.keys(month)));
   const cgst = threeB.heads.find((head: any) => head.head === 'CGST');
-  // Scrap ₹9,000 + GTA ₹200 + legal ₹2,250 of CGST under reverse charge.
-  assert.equal(cgst.reverseChargeCash, 11450);
-  assert.ok(cgst.cashToPay >= 11450, 'credit cannot pay reverse-charge tax');
+  // Issue #289, part 2b — only the scrap's ₹9,000 of CGST is August's. The scrap arrived in August
+  // (CGST s.12(3)(a)). The GTA freight and the legal fees are services from registered suppliers,
+  // still unpaid: their tax falls due the day after 60 days from their 12 August bills, 12 October
+  // (s.13(3)(b)), and goes on October's return (reverse-charge-time-of-supply.test.ts follows it).
+  assert.equal(cgst.reverseChargeCash, 9000);
+  assert.ok(cgst.cashToPay >= 9000, 'credit cannot pay reverse-charge tax');
 
   await ok('/api/gst-returns/prepare', { period: MONTH });
   await ok('/api/gst-returns/approve', { period: MONTH, note: 'checked' });
   const file = (await ok('/api/gst-returns/export', { period: MONTH, returnType: 'GSTR3B' })).payload;
   const reverse = file.sup_details.isup_rev;
-  assert.equal(reverse.camt + reverse.samt, 22900, 'scrap ₹18,000 + GTA ₹400 + legal ₹4,500');
+  assert.equal(reverse.camt + reverse.samt, 18000, 'the scrap ₹18,000; the GTA ₹400 and legal ₹4,500 fall due in October');
   const selfAssessed = file.itc_elg.itc_avl.find((row: any) => row.ty === 'ISRC');
   // The scrap dealer has no GST number: its credit is self-assessed. The GTA and the advocate are
   // registered: their reverse-charge bills reach GSTR-2B and are matched there as usual.
