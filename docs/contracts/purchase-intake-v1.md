@@ -66,8 +66,11 @@ constructor.
   stream and 256 MB per file (`zlib.inflateSync` with `maxOutputLength`), 100 megapixels per
   image, 5 seconds wall clock.
 - **Never wave through what we could not read.** An object stream that will not decompress,
-  a stream with no end, an LZW/RunLength/unknown filter, or a stream naming its filter twice is
-  quarantined as `UNREADABLE`.
+  a stream with no end, an LZW/RunLength/unknown filter, a stream naming its filter twice or
+  indirectly (`/Filter 9 0 R`), or an object stream with a predictor or indirect `/DecodeParms`
+  is quarantined as `UNREADABLE`.
+- **Assigning a company is not a release.** `assignCompany` refuses a document in
+  `awaiting_scan`/`screening` or quarantined for a screening reason; it only resolves routing.
 - **Virus scanner.** `VirusScanPort.scan({ bytes, sha256, sizeBytes, storageKey, correlationId,
   idempotencyKey: "scan:<sha256>" })` returns `{ verdict, scannedSha256, engine,
   providerRequestId }`. Only `clean` about the same SHA-256 passes; `infected` is

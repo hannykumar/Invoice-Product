@@ -70,6 +70,12 @@ export const QUARANTINE_CONFIDENCE = 0.4;
 
 const UNROUTED = "__unrouted__";
 
+/** Quarantines decided by screening; only routing problems may be resolved by assigning a company. */
+const SAFETY_REASONS: ReadonlySet<QuarantineReason> = new Set<QuarantineReason>([
+  "UNSUPPORTED_FILE_TYPE", "FILE_TYPE_MISMATCH", "FILE_TOO_LARGE", "FILE_DETAILS_MISMATCH", "PDF_TOO_COMPLEX",
+  "PASSWORD_PROTECTED", "ACTIVE_CONTENT", "MALWARE_SUSPECTED", "UNREADABLE",
+]);
+
 export class PurchaseInboxService {
   readonly #commands: PlatformCommandService;
   readonly #audit: AuditLog;
@@ -389,6 +395,11 @@ export class PurchaseInboxService {
     const document = this.#documents.get(documentId);
     if (!document) throw new InboxError("NOT_FOUND", "That document was not found.");
     if (document.companyId !== UNROUTED && document.companyId !== context.companyId) throw new PlatformError("TENANT_ISOLATION", "This document belongs to another company.");
+    // Choosing a company answers "whose is this?", never "is this safe?". A file held for
+    // its safety, or still waiting for the virus scanner, cannot be released this way (#401).
+    if (document.status === "awaiting_scan" || document.status === "screening" || (document.status === "quarantined" && document.quarantineReason !== undefined && SAFETY_REASONS.has(document.quarantineReason))) {
+      throw new InboxError("INVALID_STATE", "This file was held because it may not be safe to open, so it cannot be moved into a company's books. Ask the supplier for a fresh copy.");
+    }
     const assigned = this.#set(document, { companyId: context.companyId, status: "received", routing: { basis: "explicit_company", evidence: reason, confidence: 1 } });
     this.#record(assigned, "purchase.inbox.company_assigned", { reason });
     return assigned;

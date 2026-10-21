@@ -81,7 +81,7 @@ const quarantine = (reason: QuarantineReason, message: string, measured: Measure
 function pdfFinding(result: Exclude<PdfScanResult, { kind: "clean" }>, measured: MeasuredFile, limits: PdfScanLimits): InspectionResult {
   switch (result.kind) {
     case "encrypted":
-      return quarantine("PASSWORD_PROTECTED", "This PDF is password protected. Please ask the supplier for an unlocked copy.", measured, result.where);
+      return quarantine("PASSWORD_PROTECTED", "This PDF is locked (encrypted). Even when it opens without a password, a locked file cannot be checked safely, so it has been held. Please ask the supplier for an unlocked copy.", measured, result.where);
     case "active_content":
       return quarantine("ACTIVE_CONTENT", "This PDF contains an embedded script, automatic action or attached file, which invoices do not need, so it has been held.", measured, `${result.feature} (${result.where})`);
     case "damaged":

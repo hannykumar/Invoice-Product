@@ -332,3 +332,31 @@ test("photos and e-invoice JSON are not put through the PDF checks", () => {
   // Photos and JSON still need a clean scan, like everything else.
   assert.equal(reasonOf(screenAttachment(att({ fileName: "photo.jpg", declaredMimeType: "image/jpeg" }), jpeg)), "VIRUS_SCAN_PENDING");
 });
+
+// ------------------------------------------------------------------ found in independent review
+
+test("an object stream whose compression or predictor is named indirectly is quarantined", () => {
+  const packed = deflateSync(latin1("5 0 << /Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert(1)) >> >>"));
+  const indirectFilter = pdf([streamObject(1, "/Type /ObjStm /N 1 /First 4 /Filter 9 0 R", packed), "9 0 obj\n/FlateDecode\nendobj\n"]);
+  assert.equal(reasonOf(screenAttachment(att(), indirectFilter, "clean")), "UNREADABLE");
+  const refInArray = pdf([streamObject(1, "/Filter [9 0 R]", packed), "9 0 obj\n/FlateDecode\nendobj\n"]);
+  assert.equal(reasonOf(screenAttachment(att(), refInArray, "clean")), "UNREADABLE");
+  const indirectParms = pdf([streamObject(1, "/Type /ObjStm /N 1 /First 4 /Filter /FlateDecode /DecodeParms 9 0 R", packed), "9 0 obj\n<< /Predictor 12 /Columns 1 >>\nendobj\n"]);
+  assert.equal(reasonOf(screenAttachment(att(), indirectParms, "clean")), "UNREADABLE");
+  const indirectPredictor = pdf([streamObject(1, "/Type /ObjStm /N 1 /First 4 /Filter /FlateDecode /DecodeParms << /Predictor 9 0 R >>", packed), "9 0 obj\n12\nendobj\n"]);
+  assert.equal(reasonOf(screenAttachment(att(), indirectPredictor, "clean")), "UNREADABLE");
+  // Ordinary direct filters still pass.
+  assert.equal(scanPdf(pdf([streamObject(1, "/Filter [ /FlateDecode ]", deflateSync(latin1("BT ET")))])).kind, "clean");
+});
+
+test("a document held for its safety cannot be released by assigning it to a company", async () => {
+  const scanner = new MockVirusScanner({ mode: "outage" });
+  const { inbox } = setup(scanner);
+  const context = { companyId: "company-a", branchId: "company-a", actorId: "owner", permissions: new Set<string>(), sessionId: "s" } as never;
+  const waiting = await inbox.receive(upload(cleanInvoicePdf()));
+  assert.throws(() => inbox.assignCompany(context, waiting.document.id, "mine"), /may not be safe/);
+  const scripted = pdf(["1 0 obj\n<< /OpenAction << /S /JavaScript >> >>\nendobj\n"]);
+  const held = await inbox.receive(upload(scripted, att({ id: "att-9" }), "k9"));
+  assert.equal(held.document.quarantineReason, "ACTIVE_CONTENT");
+  assert.throws(() => inbox.assignCompany(context, held.document.id, "mine"), /may not be safe/);
+});

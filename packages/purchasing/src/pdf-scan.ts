@@ -135,11 +135,16 @@ interface StreamInfo {
 interface StreamDict {
   readonly filters: readonly string[];
   readonly filterKeyCount: number;
+  /** /Filter is present but is not a plain name or array of names (e.g. `9 0 R`). */
+  readonly filterUnreadable: boolean;
+  /** /DecodeParms refers to another object, so its predictor cannot be seen here. */
+  readonly decodeParmsIndirect: boolean;
   readonly isObjectStream: boolean;
   readonly isImage: boolean;
   readonly width: number | null;
   readonly height: number | null;
-  readonly predictor: number | null;
+  /** A /Predictor key other than a direct 1 (none) is present. */
+  readonly hasPredictor: boolean;
   readonly objectCount: number | null;
   readonly length: { readonly value: number } | { readonly ref: string } | null;
 }
@@ -151,6 +156,12 @@ function readStreamDict(rawDict: string): StreamDict {
   const filters = filterMatch
     ? [...(filterMatch[1] as string).matchAll(/\/([^\x00\t\n\f\r \/()<>[\]{}%]+)/g)].map((m) => FILTER_ALIASES[m[1] as string] ?? (m[1] as string))
     : [];
+  // An indirect filter (`/Filter 9 0 R`) or one with references inside its array would
+  // otherwise read as "no filter", and compressed bytes would be scanned as if plain.
+  const filterUnreadable = filterKeyCount === 1 && (!filterMatch || /[0-9]|(?<![A-Za-z])R(?![A-Za-z])/.test((filterMatch[1] as string).replace(/\/[^\x00\t\n\f\r \/()<>[\]{}%]+/g, "")));
+  const parms = /\/DecodeParms[\x00\t\n\f\r ]*(\[[^\]]*\]|.{0,32})/s.exec(dict);
+  const decodeParmsIndirect = parms !== null && /^[0-9]|[0-9]+[\x00\t\n\f\r ]+[0-9]+[\x00\t\n\f\r ]+R(?![A-Za-z])/.test(parms[1] as string) && !(parms[1] as string).startsWith("<<");
+  const predictorKey = /\/Predictor(?![^\x00\t\n\f\r \/()<>[\]{}%])/.test(dict);
   const int = (key: string): number | null => {
     const found = new RegExp(`/${key}[\\x00\\t\\n\\f\\r ]+([0-9]{1,15})(?![0-9]*[\\x00\\t\\n\\f\\r ]+[0-9]+[\\x00\\t\\n\\f\\r ]+R)`).exec(dict);
     return found ? Number(found[1]) : null;
@@ -161,11 +172,13 @@ function readStreamDict(rawDict: string): StreamDict {
   return {
     filters,
     filterKeyCount,
+    filterUnreadable,
+    decodeParmsIndirect,
     isObjectStream,
     isImage: /\/Subtype[\x00\t\n\f\r ]*\/Image(?![A-Za-z])/.test(dict),
     width: int("Width"),
     height: int("Height"),
-    predictor: int("Predictor"),
+    hasPredictor: predictorKey && int("Predictor") !== 1,
     objectCount: int("N"),
     length: lengthRef ? { ref: `${lengthRef[1]} ${lengthRef[2]}` } : lengthValue === null ? null : { value: lengthValue },
   };
@@ -332,6 +345,8 @@ export function scanPdf(bytes: Uint8Array, limits: PdfScanLimits = PDF_SCAN_LIMI
     if (performance.now() > deadline) return { kind: "too_complex", limit: "time", detail: "unpacking streams" };
     const info = readStreamDict(stream.dict);
     if (info.filterKeyCount > 1) return { kind: "unsupported", detail: "a stream names its compression more than once" };
+    if (info.filterUnreadable) return { kind: "unsupported", detail: "a stream names its compression indirectly" };
+    if (info.isObjectStream && (info.decodeParmsIndirect || info.hasPredictor)) return { kind: "unsupported", detail: "an object stream with a predictor or indirect decode settings" };
     if (info.isImage && info.width !== null && info.height !== null && info.width * info.height > limits.maxImagePixels) {
       return { kind: "too_complex", limit: "image_pixels", detail: `${info.width} x ${info.height} image` };
     }
@@ -358,7 +373,6 @@ export function scanPdf(bytes: Uint8Array, limits: PdfScanLimits = PDF_SCAN_LIMI
     }
     const decodedText = decoded.data.toString("latin1");
     if (info.isObjectStream) {
-      if (info.predictor !== null && info.predictor > 1) return { kind: "unsupported", detail: "an object stream with a predictor" };
       const hit = firstDangerousName(decodedText, 0, decodedText.length, DANGEROUS_NAMES);
       if (hit === "Encrypt") return { kind: "encrypted", where: "inside an object stream" };
       if (hit) return { kind: "active_content", feature: hit, where: "inside an object stream" };
