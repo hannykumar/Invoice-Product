@@ -125,6 +125,36 @@ that did not authenticate, `404` for a connector that takes no government callba
 (`GovernmentCallReconciler`) remains the fallback when no callback ever arrives; the two agree by
 construction because both read the acknowledgement with the same function.
 
+## Storage (issue #366)
+
+`PostgresAuthorisations` and `PostgresCallLog` (`src/postgres-repositories.ts`) implement the same
+ports as the in-memory stores, and one contract suite (`test/gsp-store-contract.ts`) runs on both.
+Writes join the action's unit of work (`requireUnitOfWork`); reads run in `tenantTransaction`.
+Migration `…gsp_59f4d0dcbdf0_postgres_repositories`:
+
+- **Row-level security** on `gstin_authorisations`, `gstin_consents`, `gsp_credentials`,
+  `gsp_otp_challenges`, `government_calls`. A consent, credential or challenge can only point at an
+  authorisation of its own company.
+- **Nothing secret is stored.** A credential is a vault reference; a one-time password never
+  reaches the database, only the challenge's id, expiry, tries left and phone hint.
+- **Frozen.** A call is fixed once `ACCEPTED`, `REJECTED` or `REFUSED`: only `reconciled_at` may
+  change, and `government_reference` may be filled in once. No call's government reference is ever
+  written over. A consent may only gain its withdrawal; a credential only `superseded_at`. None of
+  the three can be deleted or truncated.
+- **Paging.** `CallLogRepository.list` and `listUnsettled` take an optional `Page` (keyset by start
+  time, ties in the order written). `AuthorisationRepository.list` is not paged: one row per
+  registration.
+- **A retry under the same idempotency key is a row of its own** (as the channel always did);
+  `findByIdempotencyKey` answers with the first. The unique key on `(company_id, idempotency_key)`
+  became an index.
+- **The OTP request id is unique per company**, not globally: it is the provider's id, not ours.
+- **Not on PostgreSQL yet: provider callbacks.** A callback names no company, so
+  `findByProviderRequestId`, `findByCorrelationId` and `WebhookEventRepository` (deduplication
+  across companies, rows with no company) cannot run under row-level security. `PostgresCallLog`
+  refuses the two lookups with `GSP_CALLBACK_NEEDS_COMPANY`; there is no PostgreSQL webhook store,
+  and `government_webhook_events` stays on the pending list. Waiting on #345/#340 for a lookup that
+  resolves the company from a provider request id before the tenant transaction opens.
+
 ## Assumptions recorded against unfinished dependencies
 
 - **#50 (provider comparison) and #51 (production contracting) are open.** No provider has been

@@ -1,0 +1,144 @@
+/**
+ * Issue #366 — this module's stores on a real PostgreSQL, connected as the application role so
+ * row-level security and the freeze rules of #368 are really in force.
+ *
+ * The sandbox provider and the synthetic IRP answer in-process, so calling them inside a unit of
+ * work here holds no real connection open. In the server, #340 must keep provider calls outside it.
+ *
+ * Needs DATABASE_URL. Without it the tests are skipped locally, and fail in CI so they can never
+ * pass there by not running.
+ */
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import test, { after, before } from 'node:test';
+import type { CompanyId, UserId } from '@invoice/kernel';
+import type { TransactionalExecutor } from '../../platform/src/database.ts';
+import { KARNATAKA_GSTIN, invoicePayload } from '../src/fixtures.ts';
+import type * as Repositories from '../src/postgres-repositories.ts';
+import { desk, gspStoreContract, type GspHarness } from './gsp-store-contract.ts';
+
+const url = process.env.DATABASE_URL;
+if (url === undefined && process.env.CI !== undefined) throw new Error('DATABASE_URL must be set in CI so the gsp database tests run.');
+const skip = url === undefined && 'DATABASE_URL is not set';
+
+let owner: TransactionalExecutor;
+let app: TransactionalExecutor;
+let repos: typeof Repositories;
+const login = `invoice_app_test_${randomBytes(6).toString('hex')}`;
+
+before(async () => {
+  if (url === undefined) return;
+  const { createDatabase } = await import('../../platform/src/database.ts');
+  const { migrate } = await import('../../platform/src/migrations.ts');
+  repos = await import('../src/postgres-repositories.ts');
+  owner = createDatabase(url);
+  await migrate(owner);
+  const password = randomBytes(18).toString('hex');
+  await owner.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' IN ROLE invoice_app`);
+  const appUrl = new URL(url);
+  appUrl.username = login;
+  appUrl.password = password;
+  app = createDatabase(appUrl.toString());
+});
+after(async () => {
+  await app?.close();
+  if (owner !== undefined) { await owner.query(`DROP ROLE IF EXISTS ${login}`); await owner.close(); }
+});
+
+const company = async (): Promise<{ companyId: CompanyId; userId: UserId }> => {
+  const companyId = crypto.randomUUID() as CompanyId;
+  const userId = crypto.randomUUID() as UserId;
+  await app.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Hardware Traders')", [companyId]);
+  await app.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic owner')", [userId, `gsp-${userId}@example.invalid`]);
+  return { companyId, userId };
+};
+
+const harness = (): GspHarness => ({
+  authorisations: new repos.PostgresAuthorisations(app),
+  calls: new repos.PostgresCallLog(app),
+  company,
+  write: (companyId, work) => app.unitOfWork(companyId, () => work()),
+});
+
+gspStoreContract('postgres as the application role', harness, skip);
+
+const code = (expected: string) => (error: unknown) => (error as { code?: string }).code === expected;
+
+test('a write outside the action\'s transaction is refused, and a failed action leaves nothing', { skip }, async () => {
+  const h = harness();
+  const d = await desk({ ...h, write: (_companyId, work) => work() });
+  await assert.rejects(d.connect(KARNATAKA_GSTIN), code('NO_UNIT_OF_WORK'));
+  await assert.rejects(d.channel.call(d.owner, { operation: 'einvoice.generate', payload: invoicePayload(KARNATAKA_GSTIN, 'SI-1'), idempotencyKey: 'SI-1' }), code('NO_UNIT_OF_WORK'));
+  await assert.rejects(app.unitOfWork(d.companyId, async () => {
+    await d.service.beginOnboarding(d.owner, { gstin: KARNATAKA_GSTIN, legalName: 'Synthetic', signatoryHint: 'the owner', scopes: ['GSTR2B_FETCH'] });
+    throw new Error('abandoned');
+  }), /abandoned/);
+  assert.equal(await h.authorisations.find(d.companyId, KARNATAKA_GSTIN), null);
+  assert.deepEqual(await h.calls.list(d.companyId), []);
+});
+
+test('every table of this module that holds a company\'s rows is closed to other companies by the database', { skip }, async () => {
+  const tables = ['gstin_authorisations', 'gstin_consents', 'gsp_credentials', 'gsp_otp_challenges', 'government_calls'];
+  const { rows } = await owner.query(
+    'SELECT c.relname AS name FROM pg_class c WHERE c.relname = ANY ($1) AND c.relrowsecurity AND c.relforcerowsecurity', [tables]);
+  assert.deepEqual(rows.map((row) => row.name).sort(), [...tables].sort());
+  const h = harness();
+  const d = await desk(h);
+  await d.connect(KARNATAKA_GSTIN);
+  const theirs = await h.authorisations.find(d.companyId, KARNATAKA_GSTIN);
+  const other = await company();
+  // A query that forgot its company filter still sees only its own company's rows.
+  for (const table of tables) {
+    const seen = await app.tenantTransaction(other.companyId, (sql) => sql.query(`SELECT count(*)::int AS n FROM ${table}`));
+    assert.equal(seen.rows[0]?.n, 0, table);
+  }
+  // A consent cannot be hung on another company's authorisation, under either company's name.
+  const consent = (as: string) => app.unitOfWork(other.companyId, ({ sql }) => sql.query(
+    `INSERT INTO gstin_consents (id, authorisation_id, company_id, scopes, wording_shown, method, granted_by)
+     VALUES (gen_random_uuid(), $1, $2, '{GSTR2B_FETCH}', '{}', 'PORTAL_OTP', $3)`, [theirs?.id, as, other.userId]));
+  await assert.rejects(consent(d.companyId), code('42501'));
+  await assert.rejects(consent(other.companyId), code('23503'));
+});
+
+test('a settled call, a consent and a credential cannot be rewritten or removed', { skip }, async () => {
+  const h = harness();
+  const d = await desk(h);
+  await d.connect(KARNATAKA_GSTIN);
+  const answered = await d.act(() => d.channel.call(d.owner, { operation: 'einvoice.generate', payload: invoicePayload(KARNATAKA_GSTIN, 'SI-9'), idempotencyKey: 'SI-9', documentRef: 'SI-9' }));
+  const settled = await h.calls.find(d.companyId, answered.callId);
+  assert.equal(settled?.outcome, 'ACCEPTED');
+  const settle = (over: Record<string, unknown>) => d.act(() => h.calls.settle({ ...settled!, ...over }));
+  // What reconciliation and a callback do to a settled call is allowed: mark it looked at.
+  await settle({ reconciledAt: '2026-08-17T05:00:00.000Z' });
+  // Nothing else.
+  await assert.rejects(settle({ outcome: 'UNKNOWN' }), code('23001'));
+  await assert.rejects(settle({ governmentReference: 'another-irn' }), code('23001'));
+  await assert.rejects(settle({ errorCode: 'REWRITTEN' }), code('23001'));
+  const raw = (statement: string) => app.unitOfWork(d.companyId, ({ sql }) => sql.query(statement, [d.companyId]));
+  await assert.rejects(raw("UPDATE gstin_consents SET method = 'SIGNED_AUTHORISATION' WHERE company_id = $1"), code('23001'));
+  await assert.rejects(raw("UPDATE gsp_credentials SET reference = 'vault://elsewhere' WHERE company_id = $1"), code('23001'));
+  for (const table of ['government_calls', 'gstin_consents', 'gsp_credentials']) {
+    await assert.rejects(raw(`DELETE FROM ${table} WHERE company_id = $1`), code('42501'), table);
+  }
+  assert.equal((await h.calls.find(d.companyId, answered.callId))?.reconciledAt, '2026-08-17T05:00:00.000Z');
+});
+
+test('a callback cannot be matched across companies on the database yet, and says so', { skip }, async () => {
+  const calls = harness().calls;
+  await assert.rejects(calls.findByProviderRequestId('provider-1'), code('GSP_CALLBACK_NEEDS_COMPANY'));
+  await assert.rejects(calls.findByCorrelationId('gsp-1'), code('GSP_CALLBACK_NEEDS_COMPANY'));
+});
+
+test('the migration runs down and up again', { skip }, async () => {
+  const { gspMigrations } = await import('../src/migrations.ts');
+  const mine = gspMigrations.at(-1)!;
+  const { migrate } = await import('../../platform/src/migrations.ts');
+  const { withScratchDatabase } = await import('../../platform/test/scratch-database.ts');
+  await withScratchDatabase(owner, url as string, 'gsp_updown', async (scratch) => {
+    await migrate(scratch);
+    await scratch.query(mine.down);
+    await scratch.query(mine.up);
+    await scratch.query(mine.down);
+    await scratch.query(mine.up);
+  });
+});
