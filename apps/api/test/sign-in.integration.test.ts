@@ -162,3 +162,35 @@ test('#343: the team on PostgreSQL — invite by phone, join at sign-in, remove 
   await assert.rejects(signIn.authenticate(bearer(ownerToken)), /Sign in again/);
   await assert.rejects(signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE), /no business has added you yet/);
 });
+
+test('#343: a database from before roles keeps every member\'s reads, and its owner becomes the owner', { skip }, async () => {
+  const { migrations } = await import('../../../packages/platform/src/migration-definitions.ts');
+  const { ROLES } = await import('../../../packages/platform/src/roles.ts');
+  const roles = migrations.find((migration) => migration.id.endsWith('_membership_roles'))!;
+  const companyId = crypto.randomUUID(); const branchId = crypto.randomUUID();
+  const people = { owner: crypto.randomUUID(), cashier: crypto.randomUUID(), viewer: crypto.randomUUID() };
+  await owner.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Old Traders')", [companyId]);
+  await owner.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, 'Main shop')", [branchId, companyId]);
+  const NEW: readonly string[] = ['sales.view', 'purchases.view', 'masters.read', 'business.settings.read', 'business.transfer'];
+  const before = {
+    owner: ROLES.owner.permissions.filter((permission) => !NEW.includes(permission)),
+    cashier: ['dashboard.read', 'sales.draft.write', 'sales.finalise', 'payments.record'],
+    viewer: ['dashboard.read'],
+  };
+  // Rolled back first, so the rows are written exactly as a database from before #343 holds them.
+  await owner.query(roles.down);
+  try {
+    for (const [name, id] of Object.entries(people)) {
+      await owner.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic old member')", [id, `old-${id}@example.invalid`]);
+      await owner.query('INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb)', [companyId, id, JSON.stringify(before[name as keyof typeof before])]);
+    }
+  } finally { await owner.query(roles.up); }
+  const rows = Object.fromEntries((await owner.query('SELECT user_id, role, permissions FROM memberships WHERE company_id = $1', [companyId])).rows
+    .map((row) => [String(row.user_id), { role: String(row.role), permissions: row.permissions as string[] }]));
+  assert.equal(rows[people.owner]!.role, 'owner');
+  for (const permission of NEW) assert.ok(rows[people.owner]!.permissions.includes(permission), `the owner keeps ${permission}`);
+  assert.equal(rows[people.cashier]!.role, 'custom');
+  assert.ok(rows[people.cashier]!.permissions.includes('sales.view') && rows[people.cashier]!.permissions.includes('masters.read'), 'the cashier can still see bills and customers');
+  assert.ok(!rows[people.cashier]!.permissions.includes('business.settings.read'), 'but not the business PAN and bank');
+  assert.deepEqual(rows[people.viewer]!.permissions, ['dashboard.read'], 'and a viewer gains nothing');
+});
