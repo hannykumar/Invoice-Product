@@ -73,6 +73,8 @@ does.
 | `payment_allocations` | always | `released_at` (once), `updated_at` | — |
 | `document_settlements` | always | `allocated_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
 | `advance_receipts` | always | `updated_at`, `version` | — |
+| `agent_plans` (#47, #366) | `EXECUTED` | `updated_at` | none: an executed plan is only ever saved again unchanged |
+| `agent_reports` | always | nothing | — |
 
 Each row was checked against the module's service and repository before it was frozen. The list
 lives in one place, `FROZEN` in `immutability-migrations.ts`.
