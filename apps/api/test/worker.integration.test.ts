@@ -48,7 +48,7 @@ after(async () => {
 });
 
 const worker = (env: Record<string, string> = {}): ChildProcess => {
-  const started = startProcess(WORKER, { DATABASE_URL: database!.appUrl, WORKER_IDLE_MS: '200', WORKER_OUTBOX_LEASE_SECONDS: '2', ...env });
+  const started = startProcess(WORKER, { DATABASE_URL: database!.appUrl, WORKER_IDLE_MS: '500', WORKER_OUTBOX_LEASE_SECONDS: '2', ...env });
   workers.push(started);
   return started;
 };
@@ -85,8 +85,10 @@ test('a worker killed after the portal answered, before it saved the answer: the
   assert.equal((await message())?.sent_at, null, 'the answer was never saved');
 
   // A second worker takes it over once the lease has passed, and finishes it.
-  worker();
+  const second = worker();
   const sent = await waitFor('the second worker to finish the message', async () => { const row = await message(); return row?.sent_at === null ? null : row; }, 90_000);
+  // Stopped at once: a worker left polling would hold claims while other test files change the schema.
+  await killProcess(second);
   assert.equal(sent.attempts, 2, 'sent twice, once by each worker');
   assert.equal(sent.dead_at, null);
   const records = await einvoice();
