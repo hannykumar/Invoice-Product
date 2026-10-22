@@ -24,8 +24,29 @@ received → screening → (quarantined)
 
 ## Order of operations, and why
 
-1. **Screen the attachment** before anything reads it: real type from magic bytes against the
-   declared type, size cap, password-protected and script-carrying PDFs, virus verdict.
+1. **Screen the attachment** before anything reads it, against the whole file the channel
+   adapter passed as `ReceiveInput.bytes` — never what the sender declared (1.2.0, #401):
+   - the inbox measures `sizeBytes` and `sha256` from the bytes itself and stores the
+     measured values on the document; the declared `attachment.sizeBytes`/`sha256` never
+     reach the size cap or the dedup index;
+   - real type from magic bytes against the declared type;
+   - a virus-scan verdict of `infected` is quarantined `MALWARE_SUSPECTED`, and `unscanned`
+     — a file no scanner has answered for — is **held** `AWAITING_SCAN`, not passed. The
+     scanner's answer releases it through `scanAnswered(documentId, verdict)`, which runs
+     the identical route-and-read pipeline on `clean` and holds `MALWARE_SUSPECTED` on
+     `infected`;
+   - a PDF is parsed for real over the whole file, not pattern-matched over its first
+     kilobytes: `/Encrypt` in the trailer, active content (`/JavaScript`, `/JS`,
+     `/OpenAction`, `/AA`, `/Launch`, `/EmbeddedFile`) in the clear or inside a
+     decompressed stream, embedded files and actions reported by the parser are all
+     held. Caps bound the check itself: `MAX_PDF_PAGES` (250), `MAX_PDF_OBJECTS`
+     (20,000), `MAX_PDF_INFLATED_BYTES` (64 MB total across Flate streams — a
+     decompression bomb) and `PDF_PARSE_LIMIT_MS` (10 s — a file that cannot be
+     checked in time is held `UNREADABLE`).
+
+   `ReceiveInput.head` (the first few kilobytes) and `jsonBody` were replaced by `bytes`,
+   the whole file, in 1.2.0: an e-invoice JSON file is its own body, and every other
+   type goes to the OCR connector by `storageKey`.
 2. **Route to a company** before anything is read, so no company's paperwork is ever processed
    under another company's tenant, and so nothing inside the file can influence the choice.
 3. **Read** — e-invoice JSON is parsed locally after its IRP signature is checked; PDFs and
@@ -78,6 +99,10 @@ the owner/setup role lists). Another company's document answers `NOT_FOUND` ever
   `received`.
 - `awaitingAssignment(context)` lists the unrouted documents on this company's shared addresses
   (id, channel, time, file name and size only).
+- `scanAnswered(documentId, verdict)` (1.2.0, #401) is the scanner integration's call, not a
+  tenant command: it releases a document held `AWAITING_SCAN` into the normal pipeline on
+  `clean`, or confirms it `MALWARE_SUSPECTED` on `infected`. It is the only way an
+  unscanned file ever reaches a company.
 
 ## e-invoice signatures (1.1.0, #400)
 
@@ -99,11 +124,13 @@ supplier GSTIN + financial year + document type + number is reported as a proble
 
 ## Deduplication
 
-- **Attachment level (here):** SHA-256 of the file, scoped to the company. A second arrival is
-  marked `discarded` with `duplicateOfId` set, and is never read twice.
+- **Attachment level (here):** SHA-256 of the file **as measured from the received bytes**
+  (#401 — a sender's declared hash cannot borrow another file's slot), scoped to the
+  company. A second arrival is marked `discarded` with `duplicateOfId` set, and is never
+  read twice.
 - **Channel level (here):** `sender.providerMessageId`, scoped to facts the sender cannot write
   (#406): the channel, the destination the message arrived on (the uploader's company, or the
-  delivery address the provider reported) and the file's SHA-256. A provider redelivering the
+  delivery address the provider reported) and the file's measured SHA-256. A provider redelivering the
   same message with the same file returns the original document and does not call OCR again. A
   sender-chosen id (an email `Message-ID`, a client's message id) can never collide across
   companies or channels, and the same id carrying a different file is a new document — never a
