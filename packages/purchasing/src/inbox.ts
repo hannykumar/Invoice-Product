@@ -15,7 +15,7 @@
 // move it to another. Every later command (`retry`, `assignCompany`) takes the caller's
 // `RequestContext` and works only on that company's documents.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ConnectorError } from "../../platform/src/connectors.ts";
 import { PlatformError } from "../../platform/src/types.ts";
 import type { Permission, RequestContext } from "../../platform/src/types.ts";
@@ -24,7 +24,7 @@ import type { Id } from "../../masters/src/types.ts";
 import { NO_IRP_SIGNING_KEY } from "../../gst/src/irp-signature.ts";
 import type { IrpSignatureVerifier } from "../../gst/src/irp-signature.ts";
 import { screenAttachment } from "./safety.ts";
-import type { ScanVerdict } from "./safety.ts";
+import type { ScanVerdict, SupportedType } from "./safety.ts";
 import { assertDistinctChannels, deliveryKey, routeDocument } from "./routing.ts";
 import type { CompanyRoutingProfile } from "./routing.ts";
 import { readEInvoiceJson } from "./einvoice.ts";
@@ -43,10 +43,12 @@ export interface ReceiveInput {
   readonly channel: IntakeChannel;
   readonly sender: InboundSender;
   readonly attachment: Attachment;
-  /** The first few kilobytes, for type and safety checks. */
-  readonly head: Uint8Array;
-  /** Full text, for e-invoice JSON only. Binary documents go to OCR instead. */
-  readonly jsonBody?: string;
+  /**
+   * The whole file. Its size and SHA-256 are measured here from the bytes — the
+   * `sizeBytes`/`sha256` the caller declared on `attachment` are never trusted (#401).
+   * For an e-invoice JSON this is also the parsed body.
+   */
+  readonly bytes: Uint8Array;
   readonly scanVerdict?: ScanVerdict;
   /**
    * The alias or number the document was delivered to, for channel routing. The channel
@@ -131,6 +133,8 @@ export class PurchaseInboxService {
   readonly #channelOwners = new Map<Id, readonly Id[]>();
   /** The intake idempotency key, so a retry records its draft under the same command. */
   readonly #intakeKeys = new Map<Id, string>();
+  /** Files held until the virus scanner answers (#401), keyed by document id. */
+  readonly #awaitingScan = new Map<Id, ReceiveInput>();
 
   constructor(commands: PlatformCommandService, audit: AuditLog, ocr: OcrAdapter, companies: readonly CompanyRoutingProfile[], options: PurchaseInboxOptions = {}) {
     this.#commands = commands;
@@ -186,7 +190,18 @@ export class PurchaseInboxService {
   // ------------------------------------------------------------------ writing
 
   async receive(input: ReceiveInput): Promise<ReceiveResult> {
-    const messageKey = providerMessageKey(input);
+    // The file is measured before anything trusts it: the size and hash the caller
+    // declared are replaced by what the bytes actually contain (#401). Dedup keys,
+    // the size cap and the stored record all use the measured values, so a lying
+    // upload cannot smuggle a bigger file past the cap or claim another file's hash.
+    const measured: Attachment = {
+      ...input.attachment,
+      sizeBytes: input.bytes.length,
+      sha256: createHash("sha256").update(input.bytes).digest("hex"),
+    };
+    const checked: ReceiveInput = { ...input, attachment: measured };
+
+    const messageKey = providerMessageKey(checked);
     const existingByMessage = messageKey ? this.#byProviderMessage.get(messageKey) : undefined;
     if (existingByMessage) {
       // The key is scoped to this delivery's destination and file, so the document found is
@@ -201,7 +216,7 @@ export class PurchaseInboxService {
       companyId: UNROUTED,
       channel: input.channel,
       sender: input.sender,
-      attachment: input.attachment,
+      attachment: measured,
       receivedAt: new Date().toISOString(),
       status: "received",
       attempts: 1,
@@ -212,9 +227,54 @@ export class PurchaseInboxService {
 
     // 1. Screening, before anything reads the file.
     document = this.#set(document, { status: "screening" });
-    const screening = screenAttachment(input.attachment, input.head, input.scanVerdict ?? "unscanned");
-    if (!screening.ok) return { document: this.#quarantine(document, screening.reason, screening.message), duplicate: false };
+    const screening = await screenAttachment(measured, input.bytes, input.scanVerdict ?? "unscanned");
+    if (!screening.ok) {
+      // A file waiting on the scanner keeps its delivery so "clean" can release it
+      // back into this same pipeline (#401); every other hold ends here.
+      if (screening.reason === "AWAITING_SCAN") this.#awaitingScan.set(id, checked);
+      return { document: this.#quarantine(document, screening.reason, screening.message), duplicate: false };
+    }
+    if (screening.pageCount !== undefined) {
+      document = this.#set(document, { attachment: { ...document.attachment, pageCount: screening.pageCount } });
+    }
+    return this.#routeAndDraft(document, checked, screening.detectedType);
+  }
 
+  /**
+   * The virus scanner has answered for a document that was held as `AWAITING_SCAN`
+   * (#401). A clean verdict runs it through the identical pipeline any other file
+   * takes — routing, duplicate check, reading — so a held document can never skip a
+   * step. An infected verdict holds it for good. Called by the scanner integration,
+   * not by a tenant: the document is still unrouted, so no RequestContext exists yet.
+   */
+  async scanAnswered(documentId: Id, verdict: ScanVerdict): Promise<ReceiveResult> {
+    const input = this.#awaitingScan.get(documentId);
+    const document = this.#documents.get(documentId);
+    if (!input || !document || document.status !== "quarantined" || document.quarantineReason !== "AWAITING_SCAN") {
+      throw new InboxError("INVALID_STATE", "This document is not waiting for a virus check.");
+    }
+    if (verdict === "unscanned") throw new InboxError("INVALID_STATE", "A scan answer must be clean or infected.");
+    this.#awaitingScan.delete(documentId);
+    if (verdict === "infected") {
+      return { document: this.#quarantine(document, "MALWARE_SUSPECTED", "This file was flagged as unsafe by the virus scanner, so it has not been opened."), duplicate: false };
+    }
+    // The hold is lifted: its reason and message go, everything else is kept.
+    const { quarantineReason: _hold, statusMessage: _holdMessage, ...fields } = document;
+    let released = this.#set(fields as InboundDocument, { status: "screening" });
+    const screening = await screenAttachment(input.attachment, input.bytes, "clean");
+    if (!screening.ok) return { document: this.#quarantine(released, screening.reason, screening.message), duplicate: false };
+    if (screening.pageCount !== undefined) {
+      released = this.#set(released, { attachment: { ...released.attachment, pageCount: screening.pageCount } });
+    }
+    return this.#routeAndDraft(released, input, screening.detectedType);
+  }
+
+  /**
+   * Everything after a file has passed screening: route to a company, drop a file
+   * the company already has, then read and draft. `scanAnswered` releases a held
+   * document into exactly this path, so a released file is never read differently.
+   */
+  async #routeAndDraft(document: InboundDocument, input: ReceiveInput, detectedType: SupportedType): Promise<ReceiveResult> {
     // 2. Routing, from the uploader's session or the delivery address only. Nothing inside
     //    the file is consulted (#400).
     const routing = routeDocument({
@@ -225,15 +285,16 @@ export class PurchaseInboxService {
       ...(input.uploader === undefined ? {} : { uploader: input.uploader }),
     });
     if (!routing.ok) {
-      this.#channelOwners.set(id, routing.channelOwners);
+      this.#channelOwners.set(document.id, routing.channelOwners);
       return { document: this.#quarantine(document, routing.reason, routing.message), duplicate: false };
     }
     document = this.#set(document, { companyId: routing.companyId, routing: routing.decision });
 
     // 3. Attachment-level duplicate check, scoped to the company that owns the file.
-    const contentKey = `${routing.companyId}:${input.attachment.sha256}`;
+    //    The hash was measured from the bytes at intake (#401), not taken from the sender.
+    const contentKey = `${routing.companyId}:${document.attachment.sha256}`;
     const earlier = this.#byContent.get(contentKey);
-    if (earlier && earlier !== id) {
+    if (earlier && earlier !== document.id) {
       const original = this.#documents.get(earlier) as InboundDocument;
       const marked = this.#set(document, {
         status: "discarded",
@@ -243,12 +304,13 @@ export class PurchaseInboxService {
       this.#record(marked, "purchase.inbox.duplicate_discarded", { duplicateOfId: earlier });
       return { document: marked, duplicate: true };
     }
-    this.#byContent.set(contentKey, id);
+    this.#byContent.set(contentKey, document.id);
 
     // 4-6. Reading, cross-checking and drafting.
     const company = this.#companies.find((candidate) => candidate.companyId === routing.companyId) as CompanyRoutingProfile;
     return this.#readAndDraft(document, company, {
-      json: screening.detectedType === "json" ? { body: input.jsonBody ?? "" } : null,
+      // An e-invoice JSON file is its own body; the text comes from the received bytes.
+      json: detectedType === "json" ? { body: new TextDecoder("utf-8").decode(input.bytes) } : null,
       ...(input.uploader === undefined ? {} : { actor: input.uploader }),
     });
   }

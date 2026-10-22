@@ -28,6 +28,8 @@ export type QuarantineReason =
   | "PASSWORD_PROTECTED"
   | "ACTIVE_CONTENT"
   | "MALWARE_SUSPECTED"
+  // #401: a file no virus scanner has answered for yet. A hold, not a pass.
+  | "AWAITING_SCAN"
   | "COMPANY_NOT_IDENTIFIED"
   | "COMPANY_MISMATCH"
   | "NOT_AN_INVOICE"
@@ -41,8 +43,15 @@ export interface Attachment {
   readonly fileName: string;
   /** What the sender claimed. Screening compares it against the actual bytes. */
   readonly declaredMimeType: string;
+  /**
+   * On a stored document this is the measured size; on input the caller's claim is
+   * accepted but discarded — the inbox measures the real bytes before trusting it (#401).
+   */
   readonly sizeBytes: number;
-  /** SHA-256 of the file, the primary duplicate key. */
+  /**
+   * On a stored document this is the SHA-256 measured at intake, the duplicate key.
+   * On input the caller's claim is discarded the same way (#401).
+   */
   readonly sha256: string;
   /** Reference in object storage. Never the bytes themselves. */
   readonly storageKey: string;
