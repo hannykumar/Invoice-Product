@@ -117,8 +117,8 @@ const PUBLIC_ORIGINS = parseOrigins(process.env.KAROBAR_PUBLIC_ORIGINS);
  * With `KAROBAR_PUBLIC_ORIGINS` set, `Origin` must be one of them. Without it (local development,
  * no proxy), the `Origin` host must be the `Host` the request was sent to.
  *
- * The session today is a bearer token the page adds itself, which another site cannot read; this
- * check is what keeps state-changing routes safe once #342 moves the session into a cookie.
+ * Issue #342 moved the session into a cookie, which the browser attaches by itself; this check, with
+ * `SameSite=Lax` and `isUnnamedWrite`, is what keeps state-changing routes safe.
  */
 export const isCrossSiteWrite = (method: string, headers: IncomingHttpHeaders, publicOrigins: ReadonlySet<string> = PUBLIC_ORIGINS): boolean => {
   if (SAFE_METHODS.has(method.toUpperCase())) return false;
@@ -131,6 +131,10 @@ export const isCrossSiteWrite = (method: string, headers: IncomingHttpHeaders, p
   }
   return headers['sec-fetch-site'] === 'cross-site';
 };
+
+/** A state-changing request that does not say which page sent it: no `Origin`. Refused when it carries the session cookie. */
+export const isUnnamedWrite = (method: string, headers: IncomingHttpHeaders): boolean =>
+  !SAFE_METHODS.has(method.toUpperCase()) && (typeof headers.origin !== 'string' || headers.origin === '');
 
 /**
  * Slow clients cannot hold a connection open for ever. Headers must arrive within ten seconds; the

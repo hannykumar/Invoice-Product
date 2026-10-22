@@ -7,7 +7,8 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Invitation, Session } from "../src/auth.ts";
+import { SESSION_IDLE_MS, type Invitation, type Membership, type Session } from "../src/auth.ts";
+import type { VerifiedIdentity } from "../src/identity.ts";
 import type { Member } from "../src/platform.ts";
 import type { ApprovalPolicy, AuditEvent, CommandRecord, CommandStatus, ExceptionItem, Id, Permission, RequestContext } from "../src/types.ts";
 
@@ -38,7 +39,11 @@ export interface PlatformHarness {
     revokeSession(sessionId: Id): Maybe<void>;
     revokeMember(companyId: Id, userId: Id): Maybe<void>;
     review(companyId: Id): Maybe<readonly Member[]>;
+    userFor(identity: VerifiedIdentity): Maybe<Id>;
+    companiesOf(userId: Id): Maybe<readonly Membership[]>;
   };
+  /** A person added before they ever signed in (the seed, an import), known only by their email. */
+  knownUser(auth: ReturnType<PlatformHarness["auth"]>, email: string): Promise<Id>;
   /** A company with one branch, and a user: rows that exist wherever the implementation keeps them. */
   company(): Promise<{ companyId: Id; branchId: Id }>;
   user(): Promise<Id>;
@@ -226,5 +231,47 @@ export function platformContract(label: string, harness: () => PlatformHarness, 
     await auth.revokeMember(companyId, userId);
     for (const session of sessions) await assert.rejects(attempt(() => auth.authenticate(session.id)), code("SESSION_EXPIRED"));
     await assert.rejects(attempt(() => h.access.context(companyId, branchId, userId, crypto.randomUUID())), code("SESSION_REVOKED"));
+  });
+
+  test(`${label}: a session unused for a working day ends; one in use carries on until its fixed end`, { skip }, async () => {
+    let now = 1_000_000;
+    const { h, companyId, branchId, userId } = await member([]);
+    const auth = h.auth(() => now);
+    const idle = await auth.createSession(companyId, branchId, userId);
+    const busy = await auth.createSession(companyId, branchId, userId, 26 * 60 * 60 * 1000);
+    for (let hour = 0; hour < 24; hour += 6) { now += 6 * 60 * 60 * 1000; await auth.authenticate(busy.id); }
+    await assert.rejects(attempt(() => auth.authenticate(idle.id)), code("SESSION_EXPIRED"), "unused for 24 hours");
+    now += 6 * 60 * 60 * 1000;
+    await assert.rejects(attempt(() => auth.authenticate(busy.id)), code("SESSION_EXPIRED"), "past its fixed end, however busy");
+  });
+
+  test(`${label}: a person is found by the provider's id; an added person is linked once by the address they proved`, { skip }, async () => {
+    const h = harness();
+    const auth = h.auth();
+    const subject = `provider:${crypto.randomUUID()}`;
+    const fresh = await auth.userFor({ subject, phone: `+9198${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}` });
+    assert.equal(await auth.userFor({ subject, phone: "+919999999999" }), fresh, "the provider's id decides, not the address");
+    assert.deepEqual(await auth.companiesOf(fresh), [], "a new person belongs to no company yet");
+    const email = `added-${crypto.randomUUID()}@example.invalid`;
+    const added = await h.knownUser(auth, email);
+    const linkedSubject = `provider:${crypto.randomUUID()}`;
+    assert.equal(await auth.userFor({ subject: linkedSubject, email }), added);
+    assert.equal(await auth.userFor({ subject: linkedSubject, email: "changed@example.invalid" }), added);
+    const impostor = await auth.userFor({ subject: `provider:${crypto.randomUUID()}`, phone: `+9197${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}` });
+    assert.notEqual(impostor, added, "a second sign-in never takes over a linked person");
+  });
+
+  test(`${label}: a person's companies are their active memberships, each with the branches they may use`, { skip }, async () => {
+    const h = harness();
+    const userId = await h.user();
+    const a = await h.company(); const b = await h.company(); const c = await h.company();
+    await h.access.grant({ companyId: a.companyId, userId, branchIds: new Set([a.branchId]), active: true, permissions: new Set(["dashboard.read"]) });
+    await h.access.grant({ companyId: b.companyId, userId, branchIds: new Set([b.branchId]), active: true, permissions: new Set(["dashboard.read"]) });
+    await h.access.grant({ companyId: c.companyId, userId, branchIds: new Set([c.branchId]), active: true, permissions: new Set(["dashboard.read"]) });
+    await h.access.revoke(c.companyId, userId);
+    const expected = [a, b].sort((x, y) => x.companyId < y.companyId ? -1 : 1).map((x) => ({ companyId: x.companyId, branchIds: [x.branchId] }));
+    assert.deepEqual(await h.auth().companiesOf(userId), expected);
+    const stranger = await h.user();
+    assert.deepEqual(await h.auth().companiesOf(stranger), []);
   });
 }

@@ -78,3 +78,16 @@ declare. The agent never holds a permission of its own beyond these; it borrows 
 
 Unrestricted remote control, browser automation of government portals, and inventing a fact it
 does not have. A missing party, amount or date is a refusal with a question, never a guess.
+
+## Storage (#366)
+
+`AgentPlanStore` has two implementations behind the same port: `InMemoryAgentPlanStore` and
+`PostgresAgentPlanStore` (tables `agent_plans`, `agent_reports`; migration in
+`packages/action-agent/src/migrations.ts`). One contract suite runs on both
+(`test/agent-plan-store-contract.ts`).
+
+- `put` saves the whole plan. `list(companyId, page?)` is newest first; plans asked for at the same
+  moment come in the reverse of the order they were first saved.
+- `putReport` refuses a key it already holds (`AGENT_REPORT_EXISTS`); `reportFor` is the latest.
+- On PostgreSQL an `EXECUTED` plan and every report are frozen by the database (#368), and both
+  tables force row-level security. Writes need the action's unit of work.

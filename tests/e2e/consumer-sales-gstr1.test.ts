@@ -16,6 +16,7 @@ import type { AddressInfo } from 'node:net';
 import { useFixedAppClock } from '../../apps/api/src/app-clock.ts';
 import { webServer } from '../../apps/web/server.ts';
 import { stockEverything } from '../../apps/api/test/stock-helper.ts';
+import { signIn as signInAs } from '../../apps/api/test/sign-in-helper.ts';
 
 useFixedAppClock('2026-09-27T04:30:00.000Z');
 
@@ -30,8 +31,7 @@ let session = '';
 before(async () => {
   await new Promise<void>((resolve) => webServer.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
-  const signedIn = await ok('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  session = signedIn.sessionId as string;
+  session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
   await stockEverything(`Bearer ${session}`);
 });
 
@@ -42,7 +42,7 @@ after(async () => {
 async function ok(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<Record<string, any>> {
   const response = await fetch(`${base}${path}`, {
     method,
-    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { authorization: `Bearer ${session}` }) },
+    headers: { 'content-type': 'application/json', ...(session === '' ? {} : { cookie: `__Host-karobar_session=${session}`, origin: base }) },
     body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
   });
   const reply = await response.json() as Record<string, any>;

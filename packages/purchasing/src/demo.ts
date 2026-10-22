@@ -76,7 +76,7 @@ export async function runDemo(): Promise<void> {
 
   show("4. A blurred photo of a bill", await inbox.receive({
     channel: "camera", sender: { channel: "camera", address: "owner@sampoorna.example", providerMessageId: "cam.1" },
-    attachment: attachment("att-d", "s3://d", "photo.jpg", "image/jpeg"), bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]), explicitCompanyId: "sampoorna", idempotencyKey: "cam.1",
+    attachment: attachment("att-d", "s3://d", "photo.jpg", "image/jpeg"), bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]), uploader: { companyId: "sampoorna", branchId: "sampoorna", actorId: "owner", permissions: new Set(), sessionId: "demo" }, idempotencyKey: "cam.1",
   }));
 
   const eInvoice = JSON.stringify({
@@ -86,7 +86,7 @@ export async function runDemo(): Promise<void> {
     ItemList: [{ SlNo: "1", PrdDesc: "OPC Cement 53 Grade", HsnCd: "25232930", Qty: 100, Unit: "BAG", UnitPrice: 380, AssAmt: 38000, GstRt: 28 }],
     ValDtls: { AssVal: 38000, IgstVal: 10640, TotInvVal: 48640 },
   });
-  show("5. A signed e-invoice JSON, delivered to the wrong number", await inbox.receive({
+  show("5. An unsigned e-invoice JSON naming Sampoorna, sent to Konkan's number: held at Konkan, never moved", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", providerMessageId: "wamid.3" },
     attachment: attachment("att-e", "s3://e", "einvoice.json", "application/json"),
     bytes: new Uint8Array(Buffer.from(eInvoice, "utf8")), deliveredTo: "+91 98220 11122", idempotencyKey: "wamid.3",

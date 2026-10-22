@@ -85,5 +85,11 @@ export class AccessControl {
   grant(member: Member): void { this.#members.set(`${member.companyId}:${member.userId}`, member); }
   revoke(companyId: Id, userId: Id): void { const key = `${companyId}:${userId}`; const member = this.#members.get(key); if (member) this.#members.set(key, { ...member, active: false }); }
   members(companyId: Id): readonly Member[] { return [...this.#members.values()].filter((member) => member.companyId === companyId); }
+  /** Issue #342 — the companies one person may switch between: active memberships with at least one branch, in a fixed order. */
+  companiesOf(userId: Id): readonly { companyId: Id; branchIds: readonly Id[] }[] {
+    return [...this.#members.values()].filter((member) => member.userId === userId && member.active && member.branchIds.size > 0)
+      .map((member) => ({ companyId: member.companyId, branchIds: [...member.branchIds].sort() }))
+      .sort((left, right) => left.companyId < right.companyId ? -1 : left.companyId > right.companyId ? 1 : 0);
+  }
   context(companyId: Id, branchId: Id, userId: Id, sessionId: Id): RequestContext { const member = this.#members.get(`${companyId}:${userId}`); if (!member || !member.active || !member.branchIds.has(branchId)) throw new PlatformError("SESSION_REVOKED", "Your access is no longer active."); return { companyId, branchId, actorId: userId, sessionId, permissions: member.permissions }; }
 }

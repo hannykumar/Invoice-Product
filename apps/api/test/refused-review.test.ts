@@ -11,6 +11,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { apiRuntime } from '../src/runtime.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -24,9 +25,7 @@ const request = async (method: string, path: string, body: Record<string, unknow
 };
 
 const signIn = async (): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+  return signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
 };
 
 const waiting = async (owner: string) =>
@@ -38,7 +37,7 @@ const billNumbers = async (owner: string): Promise<string[]> =>
 /** The sales service and its store behind the running app, to look at what is really kept. */
 const internals = async (owner: string) => {
   const runtime = apiRuntime();
-  const context = runtime.authenticate(`Bearer ${owner}`);
+  const context = await runtime.authenticate(`Bearer ${owner}`);
   const app = await runtime.application(context) as any;
   return { app, actor: runtime.actor(context), unissued: async () => (await app.salesRepository.list(runtime.actor(context).companyId)).filter((invoice: any) => invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED') };
 };

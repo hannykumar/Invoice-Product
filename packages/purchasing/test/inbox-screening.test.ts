@@ -9,6 +9,7 @@ import { AuditLog, PlatformCommandService } from "../../platform/src/index.ts";
 import { syntheticGstin } from "../../masters/src/index.ts";
 import { EICAR_TEST_STRING, MockOcrAdapter, MockVirusScanner, PDF_SCAN_LIMITS, PurchaseInboxService, inspectAttachment, pageFromLines, scanPdf, screenAttachment } from "../src/index.ts";
 import type { CompanyRoutingProfile, DeclaredAttachment, PdfScanLimits, VirusScanPort } from "../src/index.ts";
+import type { RequestContext } from "../../platform/src/types.ts";
 
 const BUYER_GSTIN = syntheticGstin("29", "AAACB1234M");
 const SUPPLIER_GSTIN = syntheticGstin("27", "AAECS5678D");
@@ -83,8 +84,9 @@ function setup(scanner: VirusScanPort = new MockVirusScanner()) {
   const ocr = new MockOcrAdapter({ "s3://inbox/doc-1": [PAGE] });
   return { audit, ocr, inbox: new PurchaseInboxService(new PlatformCommandService(audit, []), audit, ocr, COMPANIES, scanner) };
 }
+const uploader: RequestContext = { companyId: "company-a", branchId: "company-a", actorId: "owner", permissions: new Set(), sessionId: "s" };
 const upload = (bytes: Uint8Array, attachment: DeclaredAttachment = att(), key = "k1") => ({
-  channel: "manual_upload" as const, sender: { channel: "manual_upload" as const, address: "owner@sampoorna.example" }, attachment, bytes, explicitCompanyId: "company-a", idempotencyKey: key,
+  channel: "manual_upload" as const, sender: { channel: "manual_upload" as const, address: "owner@sampoorna.example" }, attachment, bytes, uploader, idempotencyKey: key,
 });
 
 // ------------------------------------------------------------------ the whole file is read
@@ -352,11 +354,14 @@ test("an object stream whose compression or predictor is named indirectly is qua
 test("a document held for its safety cannot be released by assigning it to a company", async () => {
   const scanner = new MockVirusScanner({ mode: "outage" });
   const { inbox } = setup(scanner);
-  const context = { companyId: "company-a", branchId: "company-a", actorId: "owner", permissions: new Set<string>(), sessionId: "s" } as never;
+  const context = { companyId: "company-a", branchId: "company-a", actorId: "owner", permissions: new Set(["purchase.inbox.manage"]), sessionId: "s" } as never;
+  // Safety holds land before routing, so the document belongs to nobody and answers as
+  // "not found" to whoever asks — a safety quarantine is never cleared by claiming (#401).
   const waiting = await inbox.receive(upload(cleanInvoicePdf()));
-  assert.throws(() => inbox.assignCompany(context, waiting.document.id, "mine"), /may not be safe/);
+  assert.equal(waiting.document.status, "awaiting_scan");
+  assert.throws(() => inbox.assignCompany(context, waiting.document.id, "mine"), /not found/);
   const scripted = pdf(["1 0 obj\n<< /OpenAction << /S /JavaScript >> >>\nendobj\n"]);
   const held = await inbox.receive(upload(scripted, att({ id: "att-9" }), "k9"));
   assert.equal(held.document.quarantineReason, "ACTIVE_CONTENT");
-  assert.throws(() => inbox.assignCompany(context, held.document.id, "mine"), /may not be safe/);
+  assert.throws(() => inbox.assignCompany(context, held.document.id, "mine"), /not found/);
 });

@@ -33,12 +33,16 @@ with the same bytes from object storage; different bytes are quarantined as
 1. **Screen the attachment** before anything reads it: measured size and SHA-256, real type from
    magic bytes against the declared type, size cap, a whole-file structural scan of PDFs, and a
    verdict from the inbox's own virus scanner. See "Screening" below.
-2. **Route to a company** before the pages go to the OCR provider, so no company's paperwork is
-   ever processed under another company's tenant.
-3. **Read** — e-invoice JSON is parsed locally; PDFs and photos go to the OCR connector.
-4. **Re-check routing against what was printed.** When routing came from a channel binding
-   (guessed) and the document names a different company's GSTIN and never this one's, the
-   document is quarantined as `COMPANY_MISMATCH`.
+2. **Route to a company** before anything is read by an outside provider, so no company's
+   paperwork is ever processed under another company's tenant, and so nothing inside the file
+   can influence the choice.
+3. **Read** — e-invoice JSON is parsed locally after its IRP signature is checked; PDFs and
+   photos go to the OCR connector.
+4. **Cross-check against what was printed.** The cross-check can *hold* a document in the
+   company it was routed to (`COMPANY_MISMATCH`); it never moves it to another company:
+   - a buyer GSTIN that is not one of this company's GSTINs holds it, whatever the routing basis;
+   - for a channel binding, a document that prints GSTINs but none of this company's holds it.
+   The hold message never names another company: the company list is every tenant.
 
 ## Screening (#401, threat model I3)
 
@@ -69,8 +73,8 @@ constructor.
   a stream with no end, an LZW/RunLength/unknown filter, a stream naming its filter twice or
   indirectly (`/Filter 9 0 R`), or an object stream with a predictor or indirect `/DecodeParms`
   is quarantined as `UNREADABLE`.
-- **Assigning a company is not a release.** `assignCompany` refuses a document in
-  `awaiting_scan`/`screening` or quarantined for a screening reason; it only resolves routing.
+- **Assigning a company is not a release.** Safety holds land before routing, so the document
+  belongs to nobody and `assignCompany` answers `NOT_FOUND` for it; it only resolves routing.
 - **Virus scanner.** `VirusScanPort.scan({ bytes, sha256, sizeBytes, storageKey, correlationId,
   idempotencyKey: "scan:<sha256>" })` returns `{ verdict, scannedSha256, engine,
   providerRequestId }`. Only `clean` about the same SHA-256 passes; `infected` is
@@ -81,22 +85,72 @@ constructor.
   (GPT 2) — not added here.
 - Photos and JSON are not put through the PDF scan, but still need a clean scan verdict.
 
-## Routing precedence
+## Routing (changed in 1.1.0, #400)
+
+Only facts the sender cannot write decide the company:
 
 | basis | when | confidence |
 | --- | --- | --- |
-| `explicit_company` | an authenticated user uploaded into a company | 1.0 |
-| `buyer_gstin` | the buyer GSTIN on the document matches exactly one company | 0.99 |
-| `channel_binding` | the email alias or WhatsApp number belongs to one company | 0.70 |
+| `explicit_company` | an authenticated upload: the company is `uploader.companyId` from the uploader's `RequestContext` | 1.0 |
+| `channel_binding` | the address the provider delivered to belongs to exactly one company — an email alias for `email`, a WhatsApp Business number for `whatsapp` | 0.70 |
 
-An explicit upload is still overruled by a buyer GSTIN that belongs to a *different* company:
-that is the most common way a document ends up in the wrong books. A GSTIN that matches no
-company is `COMPANY_MISMATCH` — it is someone else's invoice.
+Anything else is quarantined `COMPANY_NOT_IDENTIFIED` and stays unrouted. **The buyer GSTIN
+printed in a document never routes it** (`buyer_gstin` was removed from `RoutingBasis`): a GSTIN
+is printed on every bill, so anyone can type a victim's into a forged file (threat model I1).
+`ReceiveInput.explicitCompanyId` was removed for the same reason — a caller-supplied company id is
+never authority; pass `uploader: RequestContext` instead.
+
+`deliveredTo` must come from the provider's delivery record (SMTP envelope recipient, WhatsApp
+Business phone-number id), never from a header the sender wrote. That is the channel adapter's
+obligation (GPT 2).
+
+An alias or WhatsApp number may be shared only by companies that declare the same `ownerId`;
+the service constructor refuses any other overlap. WhatsApp numbers compare in full
+international digits (a bare ten-digit number is read as +91), not by their last ten digits.
+
+## Later commands are tenant- and permission-checked (1.1.0, #400)
+
+Both need the new permission `purchase.inbox.manage` (added to the platform `Permission` union and
+the owner/setup role lists). Another company's document answers `NOT_FOUND` everywhere —
+`document`, `draft`, `retry`, `assignCompany` — so ids cannot be probed (previously
+`TENANT_ISOLATION`).
+
+- `retry(context, documentId)` — only a `failed` document of `context.companyId`. A retry runs
+  the same reading, cross-check and review rules as the first attempt.
+- `assignCompany(context, documentId, reason)` — only for a document quarantined
+  `COMPANY_NOT_IDENTIFIED` or `COMPANY_MISMATCH`, and only when it is already in
+  `context.companyId` or arrived on an address `context.companyId` owns (a shared alias).
+  An unrouted document that arrived on nobody's address answers `NOT_FOUND` to everyone. Safety
+  holds (malware, active content, `SIGNATURE_INVALID`, …) cannot be cleared this way. A reason is
+  required and the audit actor is `context.actorId`. The hold reason is cleared and the file
+  joins the company's duplicate index. Reading an assigned document is not built yet: it stays
+  `received`.
+- `awaitingAssignment(context)` lists the unrouted documents on this company's shared addresses
+  (id, channel, time, file name and size only).
+
+## e-invoice signatures (1.1.0, #400)
+
+`readEInvoiceJson(raw, { signatures })` and `PurchaseInboxService(…, { irpSignatures })` take an
+`IrpSignatureVerifier` (`packages/gst/src/irp-signature.ts`). `Rs256IrpSignatureVerifier` checks
+the IRP's RS256 JWS (`SignedInvoice`) with the public key(s) published on the IRP portal, using
+`node:crypto` only. The key is configuration and is not in the repository; without one nothing is
+ever verified.
+
+| `signature` | meaning | effect |
+| --- | --- | --- |
+| `verified` | the IRP's signature checks out | values are read **only** from inside the signature, confidence 1 |
+| `unverified` | carries a signature we could not check (no key) | values at `UNSIGNED_JSON_CONFIDENCE` (0.75), all listed for review |
+| `unsigned` | no signature | same as `unverified` |
+| `invalid` | the signature does not match, wrong key, or `alg` is not RS256 | quarantined `SIGNATURE_INVALID` |
+
+`ExtractionDraft.signature` carries the status for JSON drafts. An IRN that is not the SHA-256 of
+supplier GSTIN + financial year + document type + number is reported as a problem.
 
 ## Deduplication
 
-- **Attachment level (here):** SHA-256 of the file, scoped to the company. A second arrival is
-  marked `discarded` with `duplicateOfId` set, and is never read twice.
+- **Attachment level (here):** SHA-256 of the file **as measured from the bytes** (#401),
+  scoped to the company. A second arrival is marked `discarded` with `duplicateOfId` set, and
+  is never read twice.
 - **Channel level (here):** `sender.providerMessageId`. A provider redelivering the same message
   returns the original document and does not call OCR again.
 - **Logical level (#16):** `logicalKey(draft)` returns supplier GSTIN + invoice number + date +
@@ -121,7 +175,8 @@ the UI shows the source text and highlights it, it does not ask the user to trus
 
 Confidence bands: below `REVIEW_CONFIDENCE` (0.8) a field is listed in `fieldsNeedingReview`;
 below `QUARANTINE_CONFIDENCE` (0.4), or with three of the four essential fields missing, an OCR
-document is quarantined rather than drafted. e-invoice JSON reads at confidence 1.
+document is quarantined rather than drafted. e-invoice JSON reads at confidence 1 only when its
+IRP signature is verified; otherwise at `UNSIGNED_JSON_CONFIDENCE` (see above).
 
 ## Deterministic reading, never repair
 

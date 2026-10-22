@@ -10,6 +10,7 @@ import { handleApi } from '../src/server.ts';
 import { apiRuntime } from '../src/runtime.ts';
 import { stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -22,10 +23,8 @@ const request = async (method: string, path: string, body: Record<string, unknow
   return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
-const signIn = async (email = 'owner@sampoorna.example.invalid', password = 'karobar-demo'): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email, password });
-  assert.equal(response.status, 200, JSON.stringify(response.body));
-  return response.body.sessionId as string;
+const signIn = async (email = 'owner@sampoorna.example.invalid'): Promise<string> => {
+  return signInAs(email, SAMPOORNA);
 };
 
 let owner: Promise<string> | null = null;
@@ -158,7 +157,7 @@ test('#288: from ₹50,000 of taxable value a walk-in must be named (Rule 46(e))
 test('#288: the bill and its receipt are one unit of work — a receipt that fails leaves no bill, no number and no money', async () => {
   const session = await ownerSession();
   const runtime = apiRuntime();
-  const context = runtime.authenticate(`Bearer ${session}`);
+  const context = await runtime.authenticate(`Bearer ${session}`);
   const app = await runtime.application(context) as unknown as { payments: { recordPayment: (...args: unknown[]) => Promise<unknown> } };
   const before = await books(session);
   const original = app.payments.recordPayment;
@@ -191,7 +190,7 @@ test('#288: a customer with no GST number gets their state from the PIN code', a
 test('#288: a viewer cannot take money at the counter', async () => {
   const session = await ownerSession();
   const before = await books(session);
-  const viewer = await signIn('viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn('viewer@sampoorna.example.invalid');
   const refused = await request('POST', '/api/sales/record', { customerId: 'walk-in', item: SOAP, quantity: '1', rate: '40', date: DATE, terms: 'now', paidBy: 'CASH', requestId: 'counter-288-viewer' }, viewer);
   assert.equal(refused.status, 403, JSON.stringify(refused.body));
   assert.deepEqual(await books(session), before);

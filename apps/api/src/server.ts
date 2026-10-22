@@ -13,11 +13,14 @@ import { UnitConversionError } from '../../../packages/masters/src/units.ts';
 import { InboxError } from '../../../packages/purchasing/src/inbox.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
-import { apiRuntime, AuthenticationError } from './runtime.ts';
+import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
+import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
+import { openPersistence } from './persistence.ts';
+import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
-import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
+import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, readLimitedBody } from './http-hardening.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
 
@@ -50,6 +53,7 @@ const isMeantForTheScreen = (error: unknown): error is Error =>
 /** The status a known error answers with, or `undefined` for a fault on our side. */
 const statusOf = (error: unknown): number | undefined => {
   if (error instanceof AuthenticationError) return 401;
+  if (error instanceof SignInUnavailable) return 503;
   // A provider that signed its callback wrongly is told so, and told nothing else.
   if (error instanceof WebhookNotAuthenticated) return 401;
   if (error instanceof ZodError) return 400;
@@ -135,20 +139,27 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
     const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
     let reply: unknown;
     if (isPublic(route)) {
-      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery });
+      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery, authorization });
     } else {
-      const context = runtime.authenticate(authorization);
+      const context = await runtime.authenticate(authorization);
       annotate({ company_id: context.companyId, user_id: context.actorId });
       const actor = runtime.actor(context);
       if (route.access.kind === 'gate') requirePermission(actor, route.access);
       const input = await route.input.parseAsync(raw);
       const app = await runtime.application(context);
-      reply = await route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      const handle = async (): Promise<unknown> => route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      // Issue #340 — one request that changes something is one business action, and so one
+      // transaction (#363): the bill, its entry in the books, its stock movement and its audit record
+      // are saved together or not at all. Reads need none; their repositories read on their own.
+      const db = runtime.database;
+      reply = db === null ? await handle() : method === 'GET' || route.ownUnitsOfWork ? await asOneRead(handle) : await asOneAction(db, context.companyId, handle);
       if (route.list !== undefined) reply = pageOf(reply, route.list, input as Parameters<typeof pageOf>[2]);
     }
     if (!(reply instanceof Reply)) return withRequestId(json(200, reply), requestId);
     const result = reply.result;
-    return withRequestId('json' in result ? json(result.status, result.json) : result, requestId);
+    if (!('json' in result)) return withRequestId(result, requestId);
+    const answered = json(result.status, result.json);
+    return withRequestId(result.setCookie === undefined ? answered : { ...answered, headers: { ...answered.headers, 'set-cookie': result.setCookie } }, requestId);
   } catch (error) {
     return failureOf(error, requestId, `${route.method} ${route.path}`);
   }
@@ -196,7 +207,11 @@ export async function serveApi(request: IncomingMessage, response: ServerRespons
 const answer = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {
   const { pathname } = url;
   // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
-  if (!isSignedCallback(pathname) && isCrossSiteWrite(method, request.headers)) {
+  // Issue #342 — the session is the cookie, and only the cookie: an `Authorization` header is not read
+  // over HTTP. A write that carries the cookie must also say which page sent it (ADR D2); every
+  // browser sends `Origin` on a POST, so a request without one did not come from Karobar's page.
+  const session = sessionTokenFrom(request.headers.cookie);
+  if (!isSignedCallback(pathname) && (isCrossSiteWrite(method, request.headers) || (session !== undefined && isUnnamedWrite(method, request.headers)))) {
     return failure(403, requestId, { title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' });
   }
   let read: { parsed: unknown; raw: string };
@@ -211,7 +226,7 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
   }
   const signature = request.headers['x-provider-signature'];
   // The parsed path, and the query with it: a GET's input is its query.
-  return handleApi(method, `${pathname}${url.search}`, read.parsed, request.headers.authorization, {
+  return handleApi(method, `${pathname}${url.search}`, read.parsed, session === undefined ? undefined : `Bearer ${session}`, {
     rawBody: read.raw,
     signature: typeof signature === 'string' ? signature : '',
   }, requestId);
@@ -221,6 +236,10 @@ export const apiServer = applyTimeouts(createServer(serveApi));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   installErrorReporting();
+  // Issue #340 — the database is chosen before the first request, and production without one stops here.
+  const persistence = await openPersistence();
+  startRuntime(persistence);
+  log.info('The API keeps its books', { in: persistence.kind });
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.

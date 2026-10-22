@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -18,8 +19,7 @@ const request = async (method: string, path: string, body: Record<string, unknow
 };
 
 test('#311: a recorded supplier bill carries its purchase check, before and after the portal row is in', async () => {
-  const login = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  const session = login.body.sessionId as string;
+  const session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
   const input = { supplierId: 'sampoorna:party:supplier', reference: 'SRS-311-1', date: '2026-09-02', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '10', rate: '64', gst: '1800' }] };
 
   const recorded = await request('POST', '/api/purchases/record', input, session);

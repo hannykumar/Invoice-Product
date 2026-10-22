@@ -96,21 +96,21 @@ test('a body just under 1 MB is read; the file screens may send up to 5 MB and n
 });
 
 test('a write posted from another website is refused before anything is read', async () => {
-  const body = JSON.stringify({ email: 'owner@example.invalid', password: 'x' });
-  const crossSite = await send('POST', '/api/auth/login', { 'content-type': 'application/json', origin: 'https://evil.example', host: host() }, body);
+  const body = JSON.stringify({ address: 'owner@example.invalid' });
+  const crossSite = await send('POST', '/api/auth/code', { 'content-type': 'application/json', origin: 'https://evil.example', host: host() }, body);
   assert.equal(crossSite.status, 403);
   assert.equal((JSON.parse(crossSite.body) as Record<string, unknown>).code, 'CROSS_SITE_REQUEST');
 
-  const nullOrigin = await send('POST', '/api/auth/login', { 'content-type': 'application/json', origin: 'null', host: host() }, body);
+  const nullOrigin = await send('POST', '/api/auth/code', { 'content-type': 'application/json', origin: 'null', host: host() }, body);
   assert.equal(nullOrigin.status, 403);
 
-  const fetchMetadataOnly = await send('POST', '/api/auth/login', { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, body);
+  const fetchMetadataOnly = await send('POST', '/api/auth/code', { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, body);
   assert.equal(fetchMetadataOnly.status, 403);
 
   // The page itself, and a client that is not a browser, still get through to the route.
-  const sameOrigin = await send('POST', '/api/auth/login', { 'content-type': 'application/json', origin: `http://${host()}`, host: host(), 'sec-fetch-site': 'same-origin' }, body);
+  const sameOrigin = await send('POST', '/api/auth/code', { 'content-type': 'application/json', origin: `http://${host()}`, host: host(), 'sec-fetch-site': 'same-origin' }, body);
   assert.notEqual(sameOrigin.status, 403);
-  const noBrowser = await send('POST', '/api/auth/login', { 'content-type': 'application/json' }, body);
+  const noBrowser = await send('POST', '/api/auth/code', { 'content-type': 'application/json' }, body);
   assert.notEqual(noBrowser.status, 403);
 
   // Reading is not a write: a cross-site GET is answered (and protected by the bearer token).
