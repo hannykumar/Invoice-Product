@@ -18,6 +18,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -48,7 +49,7 @@ let transporter = '';
 let advocate = '';
 
 test('suppliers and items for the reverse-charge cases', async () => {
-  owner = (await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' })).body.sessionId;
+  owner = await signInAs('owner@sampoorna.example.invalid', COMPANY_A);
   scrapDealer = (await ok('/api/suppliers', { legalName: 'Kabadi Traders', registration: 'unregistered', unregisteredBasis: 'BELOW_THRESHOLD', line1: '2, Scrap Lane', city: 'Bengaluru', pincode: '560026' })).supplier.id;
   transporter = (await ok('/api/suppliers', { legalName: 'Sri Durga Roadways', registration: 'regular', gstin: syntheticGstin('29', 'DDDDD4444D'), line1: '7, Lorry Stand', city: 'Bengaluru', pincode: '560023' })).supplier.id;
   advocate = (await ok('/api/suppliers', { legalName: 'R. Iyer, Advocate', registration: 'regular', gstin: syntheticGstin('29', 'IIIII3333I'), line1: '11, Court Road', city: 'Bengaluru', pincode: '560001' })).supplier.id;

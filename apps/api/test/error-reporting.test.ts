@@ -15,13 +15,13 @@ import { apiErrorReporter } from '../src/error-reporting.ts';
 import { framesOf, parseDsn, scrubMessage, sentryEvent, sentryReporter } from '../src/sentry.ts';
 import { RecordingErrorReporter, reportError, useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
 import { InvoiceDeliveryService } from '../../../packages/delivery/src/index.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 const EU_DSN = 'https://publickey123@o4501.ingest.de.sentry.io/4507';
 
 const ownerSession = async (): Promise<string> => {
-  const response = await handleApi('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  return `Bearer ${JSON.parse(String(response.body)).sessionId}`;
+  return `Bearer ${await signInAs('owner@sampoorna.example.invalid', COMPANY_A)}`;
 };
 
 test('#358: a request that fails on our side is reported once, under its route and request id', async (context) => {
@@ -143,7 +143,7 @@ test('#358: the error-check route throws only in staging, and only for an operat
   const thrown = await handleApi('POST', '/api/operations/error-check', {}, owner);
   assert.equal(thrown.status, 500);
   assert.deepEqual(recorder.wheres(), ['api.request']);
-  const viewer = JSON.parse(String((await handleApi('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'viewer@sampoorna.example.invalid', password: 'viewer-demo' })).body)).sessionId;
+  const viewer = await signInAs('viewer@sampoorna.example.invalid');
   assert.equal((await handleApi('POST', '/api/operations/error-check', {}, `Bearer ${viewer}`)).status, 403);
 });
 

@@ -11,4 +11,5 @@ platformContract("memory", () => ({
   auth: (now) => new AuthenticationService(access, now),
   company: async () => ({ companyId: crypto.randomUUID(), branchId: crypto.randomUUID() }),
   user: async () => crypto.randomUUID(),
+  knownUser: async (auth, email) => { const id = crypto.randomUUID(); (auth as AuthenticationService).addUser({ id, email }); return id; },
 }));

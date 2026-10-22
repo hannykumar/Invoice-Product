@@ -7,13 +7,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi, ROUTES } from '../src/server.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 
 /** The only POSTs a signed-in viewer (or nobody at all) may make. Keep this list short. */
 const ALLOWED = new Set([
-  // Signing in: there is no session yet to hold a permission.
-  '/api/auth/login',
+  // Signing in: there is no session yet to hold a permission (#342).
+  '/api/auth/code',
+  '/api/auth/sign-in',
+  // Ending one's own session, and moving it to another business one belongs to (checked against one's memberships).
+  '/api/auth/sign-out',
+  '/api/session/company',
   // The government provider's callback: no session, it proves itself by signing the bytes it sent.
   '/api/webhooks/government/:kind',
   // Which state a PIN code is in: a lookup in the public PIN table. Reads nothing of the company, stores nothing.
@@ -27,19 +32,15 @@ const call = async (path: string, session?: string, body: Record<string, unknown
   return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
-const signIn = async (email: string, password: string): Promise<string> => {
-  const response = await call('/api/auth/login', undefined, { companyId: COMPANY_A, email, password });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
-};
+const signIn = (email: string): Promise<string> => signInAs(email, COMPANY_A);
 
 test('#344: every route declares who may call it, and only the allow-listed POSTs are ungated', () => {
   assert.ok(POSTS.length > 100, `only ${POSTS.length} POST routes are in the table`);
   for (const route of ROUTES) {
     assert.ok(['gate', 'public', 'signedIn'].includes(route.access.kind), `${route.method} ${route.path} declares no access`);
     if (route.access.kind !== 'gate') assert.ok(route.access.reason.length > 10, `${route.method} ${route.path} is open without saying why`);
-    // Nothing but signing in, the status check and the signed webhook is open to someone with no session.
-    if (route.access.kind === 'public') assert.ok(['/api/auth/login', '/api/status', '/api/webhooks/government/:kind'].includes(route.path), `${route.path} needs no session`);
+    // Nothing but asking for a code, signing in, the status check and the signed webhook is open to someone with no session.
+    if (route.access.kind === 'public') assert.ok(['/api/auth/code', '/api/auth/sign-in', '/api/status', '/api/webhooks/government/:kind'].includes(route.path), `${route.path} needs no session`);
   }
   const paths = POSTS.map((route) => route.path);
   for (const allowed of ALLOWED) assert.ok(paths.includes(allowed), `${allowed} is allow-listed but is no longer a route`);
@@ -49,7 +50,7 @@ test('#344: every route declares who may call it, and only the allow-listed POST
 });
 
 test('#280: every POST route refuses a read-only viewer before it reads the body, unless allow-listed', async () => {
-  const viewer = await signIn('viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn('viewer@sampoorna.example.invalid');
   const open: string[] = [];
   for (const route of POSTS) {
     if (ALLOWED.has(route.path)) continue;
@@ -64,7 +65,7 @@ test('#280: every POST route refuses a read-only viewer before it reads the body
 });
 
 test('#280: the owner holds every permission a route asks for', async () => {
-  const owner = await signIn('owner@sampoorna.example.invalid', 'karobar-demo');
+  const owner = await signIn('owner@sampoorna.example.invalid');
   const session = await handleApi('GET', '/api/session', {}, `Bearer ${owner}`);
   const held = new Set<string>(JSON.parse(String(session.body)).permissions);
   for (const route of ROUTES) {
@@ -76,8 +77,8 @@ test('#280: the owner holds every permission a route asks for', async () => {
 });
 
 test('#280: the viewer cannot redirect customer money, and the owner sees every change to where it goes', async () => {
-  const owner = await signIn('owner@sampoorna.example.invalid', 'karobar-demo');
-  const viewer = await signIn('viewer@sampoorna.example.invalid', 'viewer-demo');
+  const owner = await signIn('owner@sampoorna.example.invalid');
+  const viewer = await signIn('viewer@sampoorna.example.invalid');
   const upiOf = async () => JSON.parse(String((await handleApi('GET', '/api/branding', {}, `Bearer ${owner}`)).body)).upiId;
 
   assert.equal((await call('/api/branding/upi', owner, { upiId: 'sampoorna@okhdfcbank' })).status, 200);

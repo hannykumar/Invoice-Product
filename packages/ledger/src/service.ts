@@ -212,7 +212,8 @@ export class LedgerService {
     return {
       id: voucherId,
       companyId: actor.companyId,
-      branchId: actor.branchId,
+      // Issue #366 — `'main'` is what other services call a person with no branch; in the books that is no branch.
+      branchId: actor.branchId === 'main' ? null : actor.branchId,
       type,
       number: `${type}/${financialYear}/${padSequence(sequence)}`,
       date,
@@ -237,7 +238,7 @@ export class LedgerService {
   ): Promise<void> {
     this.#permissions.require(actor, SETUP_PERMISSION, 'set up the books');
     await this.#store.transaction(actor.companyId, async (uow) => {
-      const existing = await uow.accounts.listAll(actor.companyId);
+      const existing = await uow.accounts.listAll(actor.companyId, { limit: 1 });
       if (existing.length > 0) {
         throw conflict('LEDGER_ALREADY_SET_UP', 'The books for this business have already been set up.');
       }

@@ -32,7 +32,9 @@ export type QuarantineReason =
   | "COMPANY_MISMATCH"
   | "NOT_AN_INVOICE"
   | "UNREADABLE"
-  | "EXTRACTION_TOO_UNCERTAIN";
+  | "EXTRACTION_TOO_UNCERTAIN"
+  // #400: an e-invoice file whose government signature does not match its contents.
+  | "SIGNATURE_INVALID";
 
 export interface Attachment {
   readonly id: Id;
@@ -75,7 +77,8 @@ export interface InboundDocument {
   readonly routing?: RoutingDecision;
 }
 
-export type RoutingBasis = "buyer_gstin" | "channel_binding" | "explicit_company" | "sender_known_supplier";
+// #400: "buyer_gstin" was removed. A GST number printed in a file is public and never routes.
+export type RoutingBasis = "channel_binding" | "explicit_company" | "sender_known_supplier";
 
 export interface RoutingDecision {
   readonly basis: RoutingBasis;
@@ -125,6 +128,11 @@ export interface ExtractionDraft {
   readonly companyId: Id;
   readonly documentId: Id;
   readonly source: "einvoice_json" | "ocr" | "manual";
+  /**
+   * e-invoice JSON only (#400): whether the government's signature was verified. Anything but
+   * "verified" means the values were read at review confidence, not trusted.
+   */
+  readonly signature?: "verified" | "unverified" | "unsigned" | "invalid";
   readonly supplierGstin?: ExtractedField<string>;
   readonly supplierName?: ExtractedField<string>;
   readonly buyerGstin?: ExtractedField<string>;

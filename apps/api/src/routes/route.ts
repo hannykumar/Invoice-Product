@@ -45,6 +45,8 @@ export interface PublicCall<I> {
   readonly runtime: ApiRuntime;
   readonly requestId: string;
   readonly delivery: WebhookDelivery | undefined;
+  /** The session the caller sent, if any (`Bearer …`). Public routes may only end it, never use it. */
+  readonly authorization?: string | undefined;
 }
 export interface SessionCall<I> extends PublicCall<I> {
   readonly context: RequestContext;
@@ -54,10 +56,12 @@ export interface SessionCall<I> extends PublicCall<I> {
 
 /** A reply that is not `200` + JSON: a file, or a status of the handler's own choosing. */
 export class Reply {
-  readonly result: ApiResult | { readonly status: number; readonly json: unknown };
+  readonly result: ApiResult | { readonly status: number; readonly json: unknown; readonly setCookie?: string };
   constructor(result: Reply['result']) { this.result = result; }
 }
 export const replyJson = (status: number, json: unknown): Reply => new Reply({ status, json });
+/** Issue #342 — a JSON reply that also sets (or clears) the session cookie. */
+export const replyWithCookie = (json: unknown, setCookie: string): Reply => new Reply({ status: 200, json, setCookie });
 export const replyPdf = (fileName: string, pdf: Buffer): Reply => new Reply({
   status: 200,
   headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="${fileName}"`, 'cache-control': 'private, no-store' },
@@ -73,6 +77,12 @@ interface RouteBase {
   readonly input: z.ZodType<unknown, z.ZodTypeDef, unknown>;
   /** On a list route, the key of the array the dispatcher pages with `cursor` and `limit`. */
   readonly list?: string;
+  /**
+   * The handler opens its own units of work because it calls a provider outside the database
+   * (#366, bank feeds): the dispatcher must not wrap the request in one, or the call would run
+   * while the company's lock is held. Input validation and the permission gate are unchanged.
+   */
+  readonly ownUnitsOfWork?: true;
 }
 export interface PublicRoute extends RouteBase { readonly access: Public; handle(call: PublicCall<AnyInput>): unknown }
 export interface SessionRoute extends RouteBase { readonly access: Gate | SignedIn; handle(call: SessionCall<AnyInput>): unknown }
@@ -95,6 +105,8 @@ export const list = (path: string, declared: { readonly access: Gate | SignedIn;
   ({ method: 'GET', path, input: paged, access: declared.access, list: declared.key, handle } as Route);
 /** `post('/api/x', { access, input }, ({ app, actor, input }) => …)`. For a POST, `input` is the JSON body. */
 export const post = declare('POST');
+/** A POST whose handler opens its own units of work around a provider call (see `ownUnitsOfWork`). */
+export const postCallingOut: typeof post = (path, declared, handle) => ({ ...post(path, declared, handle), ownUnitsOfWork: true });
 
 // ── Lenient field types ──────────────────────────────────────────────────────────────────────────
 // Decision D4: Zod at the HTTP boundary, and lenient on purpose. Every service below already reads

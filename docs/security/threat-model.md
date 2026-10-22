@@ -80,8 +80,8 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 
 | Family | Routes | Notes |
 | --- | --- | --- |
-| Before authentication | `POST /api/auth/login`, `GET /api/status`, `POST /api/webhooks/government/:kind` | §4.3 for the webhook |
-| Session, operations, assistant | `/api/session`, `/api/dashboard`, `/api/reports`, `/api/operations*`, `/api/assistant/*` | |
+| Before authentication | `POST /api/auth/code`, `POST /api/auth/sign-in`, `GET /api/status`, `POST /api/webhooks/government/:kind` | §4.3 for the webhook; codes are checked by the identity provider (ADR D1), rate limits are #350 |
+| Session, operations, assistant | `/api/session`, `POST /api/session/company`, `POST /api/auth/sign-out`, `/api/dashboard`, `/api/reports`, `/api/operations*`, `/api/assistant/*` | |
 | Setup and masters | onboarding, trade marks, branding, business details, catalogue, customers, suppliers, items, transporters, addresses, PIN code, states | Logo and signature uploads (§4.2) |
 | Migration | `/api/migration/*` | §4.5 |
 | Sales and returns | `/api/sales/*`, `/api/returns/*`, PDFs and previews | §4.6 |
@@ -246,7 +246,10 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 
 | Method | Path | Gate |
 | --- | --- | --- |
-| POST | `/api/auth/login` | — |
+| POST | `/api/auth/code` | — |
+| POST | `/api/auth/sign-in` | — |
+| POST | `/api/auth/sign-out` | — |
+| POST | `/api/session/company` | — |
 | GET | `/api/status` | — |
 | POST | `/api/webhooks/government/:param` | — |
 | GET | `/api/session` | service |

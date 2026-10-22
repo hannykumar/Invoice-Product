@@ -21,6 +21,7 @@ import { indiaDateOf } from '@invoice/kernel';
 import { handleApi } from '../src/server.ts';
 import { stockEverything } from './stock-helper.ts';
 import { useFixedAppClock, useSystemAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 const SAMPOORNA = '00000000-0000-4000-8000-000000000001';
 
@@ -30,9 +31,7 @@ const request = async (method: string, path: string, body: Record<string, unknow
 };
 
 const signIn = async (): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+  return signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
 };
 
 const lateness = async (session: string, party: string): Promise<number | undefined> =>

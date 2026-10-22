@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -27,9 +28,7 @@ const request = async (method: string, path: string, body: Record<string, unknow
 };
 
 const signIn = async (): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+  return signInAs('owner@sampoorna.example.invalid', COMPANY_A);
 };
 
 const steelRow = async (owner: string) =>
