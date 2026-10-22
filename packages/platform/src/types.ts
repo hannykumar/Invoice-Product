@@ -18,6 +18,8 @@ export type Permission =
   | "purchase.order.cancel"
   | "purchase.receipt.write"
   | "purchase.match.approve"
+  // Issue #400. Claiming a held purchase document for this company, or asking for it to be read again.
+  | "purchase.inbox.manage"
   | "supplier.risk.view"
   | "supplier.risk.acknowledge"
   | "einvoice.view"

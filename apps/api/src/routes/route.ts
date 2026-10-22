@@ -80,6 +80,12 @@ interface RouteBase {
   readonly input: z.ZodType<unknown, z.ZodTypeDef, unknown>;
   /** On a list route, the key of the array the dispatcher pages with `cursor` and `limit`. */
   readonly list?: string;
+  /**
+   * The handler opens its own units of work because it calls a provider outside the database
+   * (#366, bank feeds): the dispatcher must not wrap the request in one, or the call would run
+   * while the company's lock is held. Input validation and the permission gate are unchanged.
+   */
+  readonly ownUnitsOfWork?: true;
 }
 export interface PublicRoute extends RouteBase { readonly access: Public; handle(call: PublicCall<AnyInput>): unknown }
 export interface SessionRoute extends RouteBase { readonly access: Gate | SignedIn; handle(call: SessionCall<AnyInput>): unknown }
@@ -102,6 +108,8 @@ export const list = (path: string, declared: { readonly access: Gate | SignedIn;
   ({ method: 'GET', path, input: paged, access: declared.access, list: declared.key, handle } as Route);
 /** `post('/api/x', { access, input }, ({ app, actor, input }) => …)`. For a POST, `input` is the JSON body. */
 export const post = declare('POST');
+/** A POST whose handler opens its own units of work around a provider call (see `ownUnitsOfWork`). */
+export const postCallingOut: typeof post = (path, declared, handle) => ({ ...post(path, declared, handle), ownUnitsOfWork: true });
 
 // ── Lenient field types ──────────────────────────────────────────────────────────────────────────
 // Decision D4: Zod at the HTTP boundary, and lenient on purpose. Every service below already reads

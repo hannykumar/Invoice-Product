@@ -67,7 +67,7 @@
     "fflate": "^0.8.3",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.1",
-    "puppeteer": "^25.13.0",
+    "puppeteer": "^25.14.0",
     "read-excel-file": "^9.3.12",
     "zod": "^3.25.76"
   },
@@ -75,6 +75,6 @@
     "@tabler/icons": "^3.49.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.5",
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   }
 }

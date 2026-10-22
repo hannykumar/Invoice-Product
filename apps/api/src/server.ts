@@ -152,7 +152,7 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
       // transaction (#363): the bill, its entry in the books, its stock movement and its audit record
       // are saved together or not at all. Reads need none; their repositories read on their own.
       const db = runtime.database;
-      reply = db === null ? await handle() : method === 'GET' ? await asOneRead(handle) : await asOneAction(db, context.companyId, handle);
+      reply = db === null ? await handle() : method === 'GET' || route.ownUnitsOfWork ? await asOneRead(handle) : await asOneAction(db, context.companyId, handle);
       if (route.list !== undefined) reply = pageOf(reply, route.list, input as Parameters<typeof pageOf>[2]);
     }
     if (!(reply instanceof Reply)) return withRequestId(json(200, reply), requestId);

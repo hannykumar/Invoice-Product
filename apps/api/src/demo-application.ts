@@ -132,6 +132,7 @@ import { PostgresSalesRepository, PostgresChallanRepository, PostgresPreSaleRepo
 import { PostgresAdvanceRepository, PostgresPaymentRepository } from '../../../packages/receivables/src/postgres-repository.ts';
 import { PostgresReturnPreparations } from '../../../packages/gst-returns/src/postgres-repository.ts';
 import { PostgresReminderRepository } from '../../../packages/collections/src/postgres-repository.ts';
+import { PostgresBankFeedStore } from '../../../packages/bank-feeds/src/postgres-store.ts';
 import { PostgresServiceInvoiceRepository, PostgresSubscriptionRepository, PostgresUsageRepository } from '../../../packages/subscriptions/src/postgres-repository.ts';
 import type { SalesRepository } from '../../../packages/sales/src/ports.ts';
 import type { PaymentRepository } from '../../../packages/receivables/src/ports.ts';
@@ -141,6 +142,7 @@ import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages
 import {
   ActionAgentService,
   InMemoryAgentPlanStore,
+  PostgresAgentPlanStore,
   ToolRegistry,
   cancelInvoiceTool,
   findUnpaidTool,
@@ -211,7 +213,7 @@ import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages
 import {
   InMemoryReturnNoteRepository, ReturnService, isChargeLine, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
 } from '../../../packages/returns/src/index.ts';
-import { BankFeedService, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
+import { BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
 import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
 import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
@@ -1138,7 +1140,7 @@ export class DemoApplication {
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
     }
-    const bankFeeds = new BankFeedService([bankProvider]);
+    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)));
 
     // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
     // is the mock one — no production credential is needed to run any of this — and the limits it
@@ -1193,7 +1195,7 @@ export class DemoApplication {
         sessionId: `agent:${from.userId}`,
       }),
       parties: agentParties,
-      store: new InMemoryAgentPlanStore(),
+      store: pick(() => new InMemoryAgentPlanStore(), (db) => new PostgresAgentPlanStore(db)),
       permissions: permissionPortFromActor,
       clock: appClock,
     });
@@ -3814,11 +3816,11 @@ export class DemoApplication {
     const context = this.bankContext(actor);
     return {
       providers: [{ id: 'sandbox-aa', name: 'Sandbox authorised bank feed' }],
-      connections: this.bankFeeds.connections(context).map((connection) => ({
+      connections: await Promise.all((await this.bankFeeds.connections(context)).map(async (connection) => ({
         ...this.bankConnectionJson(connection),
-        accounts: this.bankFeeds.accounts(context, connection.id).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
-        transactions: this.bankFeeds.transactions(context, connection.id).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
-      })),
+        accounts: (await this.bankFeeds.accounts(context, connection.id)).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
+        transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
+      }))),
     };
   }
 

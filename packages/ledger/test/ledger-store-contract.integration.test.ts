@@ -117,3 +117,14 @@ test("'main' is stored as NULL in the uuid branch column even when written strai
   assert.deepEqual(stored.rows, [{ branch_id: null }]);
   assert.equal((await h.store.read().vouchers.findById(b.actor.companyId, id))?.branchId, null);
 });
+
+test("a line cannot point at another company's entry", { skip }, async () => {
+  const h = harness();
+  const mine = await openBooks(h);
+  const theirs = await openBooks(h);
+  const { voucher } = await cashSale(theirs, '2026-04-10', 100);
+  await assert.rejects(h.store.transaction(mine.actor.companyId, () => h.store.writeSql(mine.actor.companyId).query(
+    `INSERT INTO journal_line (id, company_id, voucher_id, line_no, account_id, debit_minor, credit_minor) VALUES ($1, $2, $3, 99, $4, 100, 0)`,
+    [crypto.randomUUID(), mine.actor.companyId, voucher.id, mine.cash],
+  )), (error: unknown) => (error as { code?: string; constraint?: string }).code === '23503' && (error as { constraint?: string }).constraint === 'journal_line_same_company_fk');
+});

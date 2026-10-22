@@ -20,10 +20,23 @@ export interface PartyDirectoryPort {
   nameOf(actor: ActorContext, partyId: string): Promise<string>;
 }
 
+/** A page of a list: up to `limit` rows after the row whose id is `after` (an unknown id means from the start). */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
+/**
+ * Where plans and reports live (`InMemoryAgentPlanStore`, `PostgresAgentPlanStore`).
+ *
+ * `put` saves the whole plan, new or not. `list` is newest first, plans asked for at the same
+ * moment in the reverse of the order they were first saved. `putReport` refuses a key it already
+ * holds (`AGENT_REPORT_EXISTS`): one run per key. `reportFor` is the latest report of the plan.
+ */
 export interface AgentPlanStore {
   put(plan: AgentPlan): Promise<void>;
   find(companyId: string, id: string): Promise<AgentPlan | null>;
-  list(companyId: string): Promise<readonly AgentPlan[]>;
+  list(companyId: string, page?: Page): Promise<readonly AgentPlan[]>;
   putReport(companyId: string, key: string, report: AgentReport): Promise<void>;
   findReport(companyId: string, key: string): Promise<AgentReport | null>;
   reportFor(companyId: string, planId: string): Promise<AgentReport | null>;
