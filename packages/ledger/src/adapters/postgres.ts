@@ -13,7 +13,7 @@ import { conflict, money, type CompanyId, type IsoDate, type UserId } from '@inv
 import type { Account } from '../domain/account.ts';
 import type { FiscalPeriod } from '../domain/period.ts';
 import type { JournalLine, Voucher } from '../domain/voucher.ts';
-import type { LedgerStore, UnitOfWork } from '../ports.ts';
+import { pageLimit, type LedgerStore, type UnitOfWork } from '../ports.ts';
 
 export interface Sql {
   query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
@@ -40,6 +40,15 @@ const toAccount = (r: Row): Account => ({
   type: r.type as Account['type'], parentId: text(r.parent_id) as Account['parentId'], isGroup: Boolean(r.is_group),
   active: Boolean(r.active), partyId: text(r.party_id) as Account['partyId'], systemRole: text(r.system_role) as Account['systemRole'],
 });
+
+/**
+ * Issue #366 — the services call a person with no branch of their own `'main'`, and `voucher.branch_id`
+ * is a uuid. The ledger's service already turns `'main'` into "no branch" (null), so this only
+ * guards a caller that writes through the port directly: NULL is read back as null either way.
+ */
+const branchIn = (branchId: string | null): string | null => (branchId === 'main' ? null : branchId);
+
+const PERIOD_COLUMNS = 'id, company_id, month_key, financial_year, state, locked_by, locked_at, reason';
 
 const VOUCHER_COLUMNS = `id, company_id, branch_id, type, number, document_date::text AS document_date, state, narration,
   source_kind, source_id, source_number, idempotency_key, created_by, created_at, reversed_by_voucher_id,
@@ -94,8 +103,16 @@ const unitOfWork = (sql: Sql): UnitOfWork => {
       findByCode: (companyId, code) => oneAccount('company_id = $1 AND code = $2', [companyId, code]),
       findBySystemRole: (companyId, role) => oneAccount('company_id = $1 AND system_role = $2', [companyId, role]),
       findByPartyId: (companyId, partyId) => oneAccount('company_id = $1 AND party_id = $2 ORDER BY code', [companyId, partyId]),
-      async listAll(companyId) {
-        const { rows } = await sql.query(`SELECT ${ACCOUNT_COLUMNS} FROM account WHERE company_id = $1 ORDER BY code`, [companyId]);
+      async listAll(companyId, page) {
+        if (page === undefined) {
+          const { rows } = await sql.query(`SELECT ${ACCOUNT_COLUMNS} FROM account WHERE company_id = $1 ORDER BY code`, [companyId]);
+          return rows.map(toAccount);
+        }
+        const { rows } = await sql.query(
+          `SELECT ${ACCOUNT_COLUMNS} FROM account WHERE company_id = $1 AND ($2::text IS NULL OR code COLLATE "C" > $2)
+            ORDER BY code COLLATE "C" LIMIT $3`,
+          [companyId, page.afterCode ?? null, pageLimit(page.limit)],
+        );
         return rows.map(toAccount);
       },
       async insertMany(accounts) {
@@ -127,7 +144,7 @@ const unitOfWork = (sql: Sql): UnitOfWork => {
                source_number, idempotency_key, created_by, created_at, reversed_by_voucher_id, reverses_voucher_id, amends_voucher_id,
                reason, total_debit_minor, total_credit_minor)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
-            [v.id, v.companyId, v.branchId, v.type, v.number, v.date, v.state, v.narration, v.source?.kind ?? null, v.source?.id ?? null,
+            [v.id, v.companyId, branchIn(v.branchId), v.type, v.number, v.date, v.state, v.narration, v.source?.kind ?? null, v.source?.id ?? null,
               v.source?.number ?? null, v.idempotencyKey, v.createdBy, v.createdAt, v.reversedByVoucherId, v.reversesVoucherId,
               v.amendsVoucherId, v.reason, debit.toString(), credit.toString()],
           );
@@ -159,13 +176,25 @@ const unitOfWork = (sql: Sql): UnitOfWork => {
         if (filter.includeStates !== undefined) add('state::text = ANY(?::text[])', filter.includeStates);
         if (filter.accountId !== undefined) add('id IN (SELECT voucher_id FROM journal_line WHERE account_id = ?)', filter.accountId);
         if (filter.partyId !== undefined) add('id IN (SELECT voucher_id FROM journal_line WHERE party_id = ?)', filter.partyId);
-        const { rows } = await sql.query(`SELECT ${VOUCHER_COLUMNS} FROM voucher WHERE ${where.join(' AND ')} ORDER BY document_date, number`, values);
+        const { page } = filter;
+        let order = 'ORDER BY document_date, number';
+        if (page !== undefined) {
+          const limit = pageLimit(page.limit);
+          if (page.after !== undefined) {
+            add('document_date >= ?::date', page.after.date);
+            values.push(page.after.date, page.after.number);
+            where.push(`(document_date > $${values.length - 1}::date OR number COLLATE "C" > $${values.length})`);
+          }
+          values.push(limit);
+          order = `ORDER BY document_date, number COLLATE "C" LIMIT $${values.length}`;
+        }
+        const { rows } = await sql.query(`SELECT ${VOUCHER_COLUMNS} FROM voucher WHERE ${where.join(' AND ')} ${order}`, values);
         return vouchersWithLines(companyId, rows);
       },
     },
     periods: {
       async find(companyId, monthKey) {
-        const { rows } = await sql.query('SELECT * FROM fiscal_period WHERE company_id = $1 AND month_key = $2', [companyId, monthKey]);
+        const { rows } = await sql.query(`SELECT ${PERIOD_COLUMNS} FROM fiscal_period WHERE company_id = $1 AND month_key = $2`, [companyId, monthKey]);
         return rows[0] === undefined ? null : toPeriod(rows[0]);
       },
       async upsertState(companyId, monthKey, financialYear, state, lockedBy, lockedAt, reason) {
@@ -174,14 +203,14 @@ const unitOfWork = (sql: Sql): UnitOfWork => {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
            ON CONFLICT (company_id, month_key) DO UPDATE SET financial_year = EXCLUDED.financial_year, state = EXCLUDED.state,
              locked_by = EXCLUDED.locked_by, locked_at = EXCLUDED.locked_at, reason = EXCLUDED.reason
-           RETURNING *`,
+           RETURNING ${PERIOD_COLUMNS}`,
           [crypto.randomUUID(), companyId, monthKey, financialYear, state, lockedBy, lockedAt, reason],
         );
         return toPeriod(rows[0] as Row);
       },
       async list(companyId, financialYear) {
         const { rows } = await sql.query(
-          'SELECT * FROM fiscal_period WHERE company_id = $1 AND ($2::text IS NULL OR financial_year = $2) ORDER BY month_key',
+          `SELECT ${PERIOD_COLUMNS} FROM fiscal_period WHERE company_id = $1 AND ($2::text IS NULL OR financial_year = $2) ORDER BY month_key`,
           [companyId, financialYear ?? null],
         );
         return rows.map(toPeriod);
@@ -227,6 +256,9 @@ const unitOfWork = (sql: Sql): UnitOfWork => {
   };
 };
 
+/** The repository methods that change a row. */
+const WRITES = new Set(['insertMany', 'insert', 'markReversed', 'upsertState', 'next', 'put', 'remember']);
+
 export class PostgresLedgerStore implements LedgerStore {
   readonly #db: SqlDatabase;
 
@@ -240,7 +272,30 @@ export class PostgresLedgerStore implements LedgerStore {
     return this.#db.unitOfWork(companyId, (open) => work(unitOfWork(open.sql)));
   }
 
-  read(): UnitOfWork { return unitOfWork(this.#db); }
+  /**
+   * Issue #366 — every table here has row-level security, so a read runs on the open unit of work
+   * for its company or in a short transaction of its own with `app.company_id` set; a plain query
+   * on the pool would see nothing. A write through `read()` is refused with NO_UNIT_OF_WORK unless
+   * the action's transaction is open, so it can never commit on its own.
+   */
+  read(): UnitOfWork {
+    const db = this.#db;
+    // Every method's first argument is the company, or a record that carries it.
+    const companyOf = (first: unknown): string =>
+      typeof first === 'string' ? first : String((Array.isArray(first) ? first[0] : first as { companyId?: string } | undefined)?.companyId);
+    const repository = (name: keyof UnitOfWork) => new Proxy({}, {
+      // Not a thenable: `then` and symbols are left undefined so the repository is never mistaken for a promise.
+      get: (_target, method) => typeof method !== 'string' || method === 'then' ? undefined : async (...args: unknown[]) => {
+        const call = (sql: Sql) => (unitOfWork(sql)[name] as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]!(...args);
+        const companyId = companyOf(args[0]);
+        return WRITES.has(method) ? call(db.requireUnitOfWork(companyId).sql) : db.tenantTransaction(companyId, call);
+      },
+    });
+    return {
+      accounts: repository('accounts'), vouchers: repository('vouchers'), periods: repository('periods'),
+      sequences: repository('sequences'), settings: repository('settings'), idempotency: repository('idempotency'),
+    } as UnitOfWork;
+  }
 
   /** For reads: runs `work` on the open transaction for this company, or in a short one of its own. */
   withSql<T>(companyId: CompanyId, work: (sql: Sql) => Promise<T>): Promise<T> {

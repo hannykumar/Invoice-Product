@@ -124,6 +124,11 @@ test('a bill made before a restart is still there after it, with its copy, its c
   const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2` }, token);
   assert.equal(second.status, 200, 'business details and the item rate came back');
   assert.equal(Number(String(second.invoice.number).slice(-6)), Number(number.slice(-6)) + 1, 'numbering continues');
+  // Issue #366 — the ledger's tables have row-level security; the reports still read this company's books.
+  const reports = await call('GET', '/api/reports', undefined, token);
+  assert.equal(reports.status, 200, JSON.stringify(reports));
+  assert.equal(reports.trialBalance.balanced, true);
+  assert.ok(reports.profitAndLoss.income.total >= 1500, `both bills are in the books: ${reports.profitAndLoss.income.total}`);
 
   // And straight from the database: the bill, its balanced entry in the books, and its audit record.
   const rows = (await owner.query(
