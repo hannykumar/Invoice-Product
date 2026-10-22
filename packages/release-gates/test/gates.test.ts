@@ -16,6 +16,7 @@ import {
   everyVoucherBalances,
   finalRecordsAreImmutable,
   goldenDatasetStillMatches,
+  noTrackedCopyFiles,
   observeEverything,
   renderReport,
   retriesAreIdempotent,
@@ -212,4 +213,21 @@ test('the report names the figure, not the function', () => {
   const rendered = renderReport(report);
   assert.match(rendered, /INV\/26-27\/000001/, 'a person should be able to go and look at the bill');
   assert.match(rendered, /99 paise of GST, but its parts come to 2/);
+});
+
+test('a tracked file named like an accidental copy stops the release (issue #299)', () => {
+  const result = noTrackedCopyFiles([
+    'packages/purchasing/src/inbox.ts',
+    'packages/purchasing/src/inbox 2.ts',
+    'docs/gpt3-handbook 2.md',
+  ]);
+  assert.equal(result.passed, false);
+  assert.equal(result.severity, 'CRITICAL');
+  assert.match(result.detail, /inbox 2\.ts/);
+
+  const report = runGates(withDefect({
+    trackedPaths: [...REAL.trackedPaths, 'apps/api/src/demo-application 2.ts'],
+  }));
+  assert.equal(report.mayRelease, false);
+  assert.ok(report.failures.some((failure) => failure.id === 'NO_TRACKED_COPY_FILES'));
 });

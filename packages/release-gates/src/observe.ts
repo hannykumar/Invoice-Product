@@ -6,6 +6,7 @@
  * of it is asserted here — this file only watches, and `invariants.ts` judges — because a checker
  * that also gathers its own evidence can quietly gather evidence that suits it.
  */
+import { execFileSync } from 'node:child_process';
 import {
   DomainError,
   asId,
@@ -86,6 +87,7 @@ export interface Observations {
   readonly golden: readonly GoldenObservation[];
   readonly modelFields: readonly ModelFieldObservation[];
   readonly materialConfidence: number;
+  readonly trackedPaths: readonly string[];
 }
 
 /** Every rule the product ships, across every version of every rule set it knows about. */
@@ -125,7 +127,7 @@ export const observeGolden = async (): Promise<GoldenObservation[]> => {
  * Exercises the ledger and inventory for real: posts entries, retries one, tries to change a
  * finished one, and takes stock below zero with and without an authorised reason.
  */
-export const observeLive = async (): Promise<Omit<Observations, 'rules' | 'golden' | 'materialConfidence' | 'tax' | 'modelFields'>> => {
+export const observeLive = async (): Promise<Omit<Observations, 'rules' | 'golden' | 'materialConfidence' | 'tax' | 'modelFields' | 'trackedPaths'>> => {
   const store = new InMemoryLedgerStore();
   const inventoryStore = new InMemoryInventoryStore();
   store.join(inventoryStore);
@@ -342,6 +344,10 @@ export const observeModelFields = (): ModelFieldObservation[] => {
   ];
 };
 
+/** Issue #299 — every path git tracks, so a stray "copy 2" file can never slip back in. */
+export const observeTrackedPaths = (): readonly string[] =>
+  execFileSync('git', ['ls-files'], { encoding: 'utf8' }).split('\n').filter(Boolean);
+
 export const observeEverything = async (): Promise<Observations> => {
   const live = await observeLive();
   return {
@@ -351,6 +357,7 @@ export const observeEverything = async (): Promise<Observations> => {
     golden: await observeGolden(),
     modelFields: observeModelFields(),
     materialConfidence: observeMaterialConfidence(),
+    trackedPaths: observeTrackedPaths(),
   };
 };
 

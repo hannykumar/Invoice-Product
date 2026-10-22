@@ -640,7 +640,12 @@ test('the HTTP surface refuses to assume every bill needs an IRN', async () => {
 test('the HTTP surface registers once, verifies the reply, and cannot make a second IRN', async () => {
   const session = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const { invoices } = (await request('GET', '/api/einvoices/invoices', {}, session)).body;
-  const invoice = invoices[0].id;
+  // A bill still inside the portal's 30-day window — the seed's newest, dated today (#299 keeps
+  // the seeded bills in date order, so position in the list no longer says which that is).
+  const chosen = invoices.find((candidate: { date: string }) => candidate.date === '2026-08-29');
+  assert.ok(chosen, 'an issued bill dated today should be in the list');
+  const invoice = chosen.id;
+  const chosenDate = chosen.date;
 
   // Issue #236 — ₹5 to ₹10 crore: an e-invoice is needed, and there is no deadline for sending it.
   await saveTurnoverBand(session, '5_TO_10_CRORE');
@@ -655,7 +660,7 @@ test('the HTTP surface registers once, verifies the reply, and cannot make a sec
   assert.equal(preview.body.outcome, 'APPLICABLE');
   assert.equal(preview.body.ready, true);
   assert.match(preview.body.expectedIrn, /^[0-9a-f]{64}$/);
-  const day = new Date(`${invoices[0].date}T00:00:00Z`);
+  const day = new Date(`${chosenDate}T00:00:00Z`);
   day.setUTCDate(day.getUTCDate() + 29);
   assert.equal(preview.body.reportableUntil, day.toISOString().slice(0, 10));
   await saveTurnoverBand(session, '5_TO_10_CRORE');
