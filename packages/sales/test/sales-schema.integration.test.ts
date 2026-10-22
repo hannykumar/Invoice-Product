@@ -117,16 +117,12 @@ const newShop = async () => {
 test('the migrations of #365 run up, down and up again on a database of their own', { skip }, async () => {
   const { migrate } = await import('../../platform/src/migrations.ts');
   const { migrations } = await import('../../platform/src/migration-definitions.ts');
-  const name = `schema_updown_${randomBytes(6).toString('hex')}`;
-  await owner.query(`CREATE DATABASE ${name}`);
-  const scratchUrl = new URL(url as string);
-  scratchUrl.pathname = `/${name}`;
-  const scratch = createDatabase(scratchUrl.toString());
-  const mine = migrations.filter((m) => /_(sales|inventory|receivables)_[0-9a-f]{12}_/.test(m.id));
-  const tables = async () => (await scratch.query(
-    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename ~ '^(sales_invoice|presale_document|delivery_challan|stock_|payment|cheque_events|document_settlements|advance_|refund_vouchers)' ORDER BY 1",
-  )).rows.map((r) => String(r.tablename));
-  try {
+  const { withScratchDatabase } = await import('../../platform/test/scratch-database.ts');
+  await withScratchDatabase(owner, url as string, 'schema_updown', async (scratch) => {
+    const mine = migrations.filter((m) => /_(sales|inventory|receivables)_[0-9a-f]{12}_/.test(m.id));
+    const tables = async () => (await scratch.query(
+      "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename ~ '^(sales_invoice|presale_document|delivery_challan|stock_|payment|cheque_events|document_settlements|advance_|refund_vouchers)' ORDER BY 1",
+    )).rows.map((r) => String(r.tablename));
     assert.equal(mine.length, 4);
     await migrate(scratch);
     const created = await tables();
@@ -141,10 +137,7 @@ test('the migrations of #365 run up, down and up again on a database of their ow
     assert.deepEqual(left, [], 'the down migrations leave no function behind');
     for (const migration of fromMine) await scratch.query(migration.up);
     assert.deepEqual(await tables(), created);
-  } finally {
-    await scratch.close();
-    await owner.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-  }
+  });
 });
 
 test('a bill gets its number only when it is issued, and an issued bill is complete', { skip }, async () => {
