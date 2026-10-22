@@ -76,7 +76,8 @@ test('a bill made before a restart is still there after it, with its copy, its c
   assert.equal(reprint.status, 200, 'the frozen print copy came back');
   const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2` }, token);
   assert.equal(second.status, 200, 'business details and the item rate came back');
-  assert.equal(Number(String(second.invoice.number).slice(-6)), Number(number.slice(-6)) + 1, 'numbering continues');
+  // Later than the first, never the same: another test file may bill this company at the same time.
+  assert.ok(Number(String(second.invoice.number).slice(-6)) > Number(number.slice(-6)), 'numbering continues; no number is used again');
   // Issue #366 — the ledger's tables have row-level security; the reports still read this company's books.
   const reports = await call('GET', '/api/reports', undefined, token);
   assert.equal(reports.status, 200, JSON.stringify(reports));
