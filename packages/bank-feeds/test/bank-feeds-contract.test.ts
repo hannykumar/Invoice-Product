@@ -7,4 +7,5 @@ bankFeedContract('memory', () => ({
   company: async () => ({ companyId: crypto.randomUUID(), userId: crypto.randomUUID() }),
   write: (_companyId, work) => work(),
   atomic: false,
+  inUnitOfWork: () => false,
 }));

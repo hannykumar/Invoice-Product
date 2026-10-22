@@ -54,6 +54,12 @@ const harness = (): BankFeedHarness => ({
   company,
   write: (companyId, work) => app.unitOfWork(companyId, () => work()),
   atomic: true,
+  inUnitOfWork: (companyId) => {
+    try { app.requireUnitOfWork(companyId); return true; } catch (error) {
+      if ((error as { code?: string }).code === 'NO_UNIT_OF_WORK') return false;
+      throw error;
+    }
+  },
 });
 
 bankFeedContract('postgres as the application role', harness, skip);

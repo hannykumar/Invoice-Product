@@ -13,6 +13,11 @@ export const providerKey = (accountId: string, providerTransactionId: string): s
 
 export interface BankFeedStore {
   /**
+   * One short business action: its writes are kept together, or (on PostgreSQL) none are when it
+   * throws. The service never calls the bank inside one; it reads, lets go, calls, then writes.
+   */
+  action<T>(companyId: string, work: () => Promise<T>): Promise<T>;
+  /**
    * The connection with this id. Memory returns it whichever company it belongs to, so the service
    * can answer TENANT_ISOLATION as it always has; PostgreSQL's row-level security hides another
    * company's row, so there the answer is NOT_FOUND. Either way the caller is refused.
@@ -50,6 +55,17 @@ export class InMemoryBankFeedStore implements BankFeedStore {
   readonly #syncKeys = new Map<string, SyncResult>();
   readonly #audit: BankFeedAuditEvent[] = [];
 
+  #tail: Promise<unknown> = Promise.resolve();
+  /**
+   * Actions run one after another, as the company lock makes them on PostgreSQL; before #366 the
+   * service's writes after the bank answered ran without an await, so they could not interleave.
+   * ponytail: one queue for every company; an action must not open another (it would wait forever).
+   */
+  action<T>(_companyId: string, work: () => Promise<T>): Promise<T> {
+    const result = this.#tail.then(work);
+    this.#tail = result.catch(() => undefined);
+    return result;
+  }
   async connection(_companyId: string, id: string) { return this.#connections.get(id) ?? null; }
   async connections(companyId: string, page?: Page) { return paged([...this.#connections.values()].filter((item) => item.companyId === companyId), page); }
   async saveConnection(connection: BankFeedConnection) { this.#connections.set(connection.id, connection); }

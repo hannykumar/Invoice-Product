@@ -16,6 +16,23 @@ export interface BankFeedHarness {
   write<T>(companyId: string, work: () => Promise<T>): Promise<T>;
   /** Whether a failed action's writes are undone (a database) or not (memory has no transaction). */
   atomic: boolean;
+  /** Whether a unit of work is open for this company right now (memory: never). */
+  inUnitOfWork(companyId: string): boolean;
+}
+
+/**
+ * The synthetic bank, which notes every call made while a unit of work was open. The service must
+ * never hold the company's lock while the bank answers.
+ */
+class GuardedProvider extends SyntheticBankFeedProvider {
+  readonly insideUnitOfWork: string[] = [];
+  readonly #h: BankFeedHarness;
+  constructor(h: BankFeedHarness) { super(); this.#h = h; }
+  #check(operation: string, companyId: string): void { if (this.#h.inUnitOfWork(companyId)) this.insideUnitOfWork.push(operation); }
+  override startConsent(input: Parameters<SyntheticBankFeedProvider['startConsent']>[0]) { this.#check('startConsent', input.companyId); return super.startConsent(input); }
+  override completeConsent(input: Parameters<SyntheticBankFeedProvider['completeConsent']>[0]) { this.#check('completeConsent', input.companyId); return super.completeConsent(input); }
+  override sync(input: Parameters<SyntheticBankFeedProvider['sync']>[0]) { this.#check('sync', input.companyId); return super.sync(input); }
+  override revoke(input: { companyId: string; providerConsentId: string; idempotencyKey: string }) { this.#check('revoke', input.companyId); return super.revoke(input); }
 }
 
 const at = '2026-08-30T12:00:00.000Z';
@@ -158,9 +175,10 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const h = make();
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
-    const provider = new SyntheticBankFeedProvider();
+    const provider = new GuardedProvider(h);
     const service = new BankFeedService([provider], () => new Date(at), h.store);
-    const run = <T>(work: () => Promise<T>) => h.write(companyId, work);
+    // Not wrapped: the service opens its own short units of work around each call to the bank.
+    const run = <T>(work: () => Promise<T>) => work();
 
     const pending = await run(() => service.startConsent(context, { provider: provider.provider, redirectUri: 'https://app.example/bank/callback' }));
     const connection = await run(() => service.completeConsent(context, pending.id, 'sandbox-approved'));
@@ -201,7 +219,8 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const outsider: BankFeedContext = { ...context, companyId: other.companyId, actorId: other.userId };
     const refused = (error: unknown) => ['NOT_FOUND', 'TENANT_ISOLATION'].includes((error as { code?: string }).code ?? '');
     await assert.rejects(service.accounts(outsider, connection.id), refused);
-    await assert.rejects(h.write(other.companyId, () => service.sync(outsider, connection.id, 'cross-company')), refused);
+    await assert.rejects(service.sync(outsider, connection.id, 'cross-company'), refused);
+    assert.deepEqual(provider.insideUnitOfWork, []);
     assert.deepEqual(await service.connections(outsider), []);
   });
 
@@ -209,9 +228,10 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const h = make();
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
-    const provider = new SyntheticBankFeedProvider();
+    const provider = new GuardedProvider(h);
     const service = new BankFeedService([provider], () => new Date(at), h.store);
-    const run = <T>(work: () => Promise<T>) => h.write(companyId, work);
+    // Not wrapped: the service opens its own short units of work around each call to the bank.
+    const run = <T>(work: () => Promise<T>) => work();
     const pending = await run(() => service.startConsent(context, { provider: provider.provider, redirectUri: 'https://app.example/bank/callback' }));
     const connection = await run(() => service.completeConsent(context, pending.id, 'sandbox-approved'));
     provider.addTransaction(`current-${companyId}`, { providerTransactionId: 'txn-1', bookedOn: '2026-08-30', description: 'Rent', amountMinor: 25_000n, direction: 'DEBIT' });
@@ -224,5 +244,50 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     assert.equal((await service.accounts(context, connection.id))[0]?.active, false);
     const [line] = await service.transactions(context, connection.id);
     assert.deepEqual([line?.debitPaise, line?.creditPaise, line?.bookedOn], [25_000n, 0n, '2026-08-30']);
+    assert.deepEqual(provider.insideUnitOfWork, []);
+  });
+
+  const connected = async () => {
+    const h = make();
+    const { companyId, userId } = await h.company();
+    const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
+    const provider = new GuardedProvider(h);
+    const service = new BankFeedService([provider], () => new Date(at), h.store);
+    const pending = await service.startConsent(context, { provider: provider.provider, redirectUri: 'https://app.example/bank/callback' });
+    const connection = await service.completeConsent(context, pending.id, 'sandbox-approved');
+    return { h, companyId, context, provider, service, connection };
+  };
+
+  test(`${name}: a failed sync tells the caller, and its failure and audit event are already saved`, { skip }, async () => {
+    const { h, companyId, context, provider, service, connection } = await connected();
+    provider.addTransaction(`current-${companyId}`, { providerTransactionId: 'txn-1', bookedOn: '2026-08-30', description: 'NEFT receipt', amountMinor: 50_000n, direction: 'CREDIT' });
+    provider.setMode('outage');
+    await assert.rejects(service.sync(context, connection.id, 'attempt-1'), (error: unknown) => error instanceof ConnectorError && error.code === 'OUTAGE');
+    // Read straight from the store: on PostgreSQL these rows were committed before the error came back.
+    const saved = await h.store.connection(companyId, connection.id);
+    assert.deepEqual([saved?.status, saved?.syncStatus, saved?.lastError], ['CONNECTED', 'FAILED', 'The bank is temporarily unavailable. Your last successful import is unchanged; try again.']);
+    const failure = (await h.store.audit(companyId, connection.id)).at(-1);
+    assert.deepEqual([failure?.action, failure?.details], ['bank_feed.sync_failed', { retryable: true, code: 'OUTAGE' }]);
+    assert.equal(await h.store.countTransactions(companyId, connection.id), 0);
+    assert.equal((await h.store.accounts(companyId, connection.id))[0]?.cursor, null);
+    provider.setMode('healthy');
+    assert.equal((await service.sync(context, connection.id, 'attempt-2')).imported, 1);
+    assert.deepEqual(provider.insideUnitOfWork, []);
+  });
+
+  test(`${name}: syncs at the same moment, with the same key or another, import each line once`, { skip }, async () => {
+    const { h, companyId, context, provider, service, connection } = await connected();
+    for (const n of [1, 2, 3]) provider.addTransaction(`current-${companyId}`, { providerTransactionId: `txn-${n}`, bookedOn: '2026-08-30', description: `UPI ${n}`, amountMinor: 1_000n * BigInt(n), direction: 'CREDIT' });
+    const results = await Promise.all([
+      service.sync(context, connection.id, 'same-key'), service.sync(context, connection.id, 'same-key'), service.sync(context, connection.id, 'other-key'),
+    ]);
+    assert.equal(await h.store.countTransactions(companyId, connection.id), 3);
+    // The second call with the same key is answered with the first one's result.
+    assert.deepEqual(results[1], results[0]);
+    assert.deepEqual(results[0], await h.store.syncResult(companyId, connection.id, 'same-key'));
+    assert.equal(results[0]!.imported + results[2]!.imported, 3);
+    assert.equal((await h.store.accounts(companyId, connection.id))[0]?.cursor, '3');
+    assert.equal((await service.sync(context, connection.id, 'same-key')).imported, results[0]!.imported);
+    assert.deepEqual(provider.insideUnitOfWork, []);
   });
 };

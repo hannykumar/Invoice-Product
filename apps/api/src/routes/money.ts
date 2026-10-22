@@ -2,7 +2,7 @@
  * Issue #344 — the business's plan (#42), the assistant that does things (#47), payment reminders
  * (#23) and bank feeds.
  */
-import { anything, fields, get, need, nothing, list, post, text, READ, type Route } from './route.ts';
+import { anything, fields, get, need, nothing, list, post, postCallingOut, text, READ, type Route } from './route.ts';
 
 const PLAN = need('change your plan', 'subscription.manage');
 const SEND = need('send payment reminders', 'collections.reminders.send');
@@ -43,8 +43,9 @@ export const MONEY_ROUTES: readonly Route[] = [
   post('/api/reminders/dispute/resolve', { access: DISPUTES, input: reminder }, ({ app, actor, input }) => app.resolveBillDispute(actor, input)),
 
   get('/api/bank-feeds', { access: READ, input: nothing }, ({ app, actor }) => app.bankFeedWorkspace(actor)),
-  post('/api/bank-feeds/consent', { access: BANK, input: bankFeed }, ({ app, actor, input }) => app.startBankFeedConsent(actor, input)),
-  post('/api/bank-feeds/consent/complete', { access: BANK, input: bankFeed }, ({ app, actor, input }) => app.completeBankFeedConsent(actor, input)),
-  post('/api/bank-feeds/sync', { access: need('fetch bank entries', 'bank.feed.sync'), input: bankFeed }, ({ app, actor, input }) => app.syncBankFeed(actor, input)),
-  post('/api/bank-feeds/disconnect', { access: BANK, input: bankFeed }, ({ app, actor, input }) => app.disconnectBankFeed(actor, input)),
+  // Issue #366: these call the bank, so BankFeedService opens its own units of work around the call.
+  postCallingOut('/api/bank-feeds/consent', { access: BANK, input: bankFeed }, ({ app, actor, input }) => app.startBankFeedConsent(actor, input)),
+  postCallingOut('/api/bank-feeds/consent/complete', { access: BANK, input: bankFeed }, ({ app, actor, input }) => app.completeBankFeedConsent(actor, input)),
+  postCallingOut('/api/bank-feeds/sync', { access: need('fetch bank entries', 'bank.feed.sync'), input: bankFeed }, ({ app, actor, input }) => app.syncBankFeed(actor, input)),
+  postCallingOut('/api/bank-feeds/disconnect', { access: BANK, input: bankFeed }, ({ app, actor, input }) => app.disconnectBankFeed(actor, input)),
 ];

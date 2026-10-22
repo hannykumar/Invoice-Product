@@ -57,6 +57,8 @@ export class PostgresBankFeedStore implements BankFeedStore {
   readonly #audit: PostgresAuditLog;
   constructor(db: TransactionalExecutor) { this.#db = db; this.#audit = new PostgresAuditLog(db); }
 
+  /** A unit of work of its own, or a savepoint inside the caller's if one is already open. */
+  action<T>(companyId: string, work: () => Promise<T>): Promise<T> { return this.#db.unitOfWork(companyId, () => work()); }
   #read<T>(companyId: string, work: (sql: SqlExecutor) => Promise<T>): Promise<T> { return this.#db.tenantTransaction(companyId, work); }
   #write(companyId: string): SqlExecutor { return this.#db.requireUnitOfWork(companyId).sql; }
 

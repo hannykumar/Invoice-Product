@@ -8,6 +8,7 @@ const digest = (value: string): string => createHash('sha256').update(value).dig
 const frozen = <T>(value: T): T => Object.freeze(value);
 const validDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
 const safeMask = (value: string): boolean => /[*xX•]/.test(value) && !/\d{9,}/.test(value.replace(/\D/g, ''));
+const CHANGED = 'This bank connection changed while the bank was answering. Open it again and retry.';
 
 export class BankFeedService {
   readonly #adapters: ReadonlyMap<string, BankFeedProviderAdapter>;
@@ -16,8 +17,13 @@ export class BankFeedService {
 
   /**
    * Issue #366: `store` is where the records live — memory by default, or PostgresBankFeedStore.
-   * On PostgreSQL every write must run inside the caller's `db.unitOfWork` (#340 opens it). The
-   * provider is called between writes; #340 must split each command around that call.
+   *
+   * The bank is never called inside a unit of work (unit-of-work-v1: the company's lock would be
+   * held while the bank answers). Each command reads in one short action, lets go, calls the bank,
+   * then writes in a second action that re-reads and re-checks what could have changed meanwhile
+   * (the connection's state, the sync key, the cursors). A provider failure is written in an action
+   * of its own, so it is committed before the error reaches the caller. The caller must therefore
+   * not wrap these commands in a unit of work of its own (apps/api: `postCallingOut`).
    */
   constructor(adapters: readonly BankFeedProviderAdapter[], now: () => Date = () => new Date(), store: BankFeedStore = new InMemoryBankFeedStore()) {
     this.#adapters = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
@@ -32,20 +38,26 @@ export class BankFeedService {
     if (!/^https:\/\//.test(input.redirectUri) && !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//.test(input.redirectUri)) throw new Error('Use a secure return address for bank permission.');
     const id = randomUUID();
     const pending: BankFeedConnection = frozen({ id, companyId: context.companyId, provider: input.provider, providerConsentId: null, consentUrl: null, status: 'PENDING_CONSENT', consentExpiresAt: null, connectedAt: null, disconnectedAt: null, lastSyncedAt: null, syncStatus: 'IDLE', lastError: null, createdAt: this.#now().toISOString() });
-    await this.#store.saveConnection(pending);
-    // Only the provider's answer is caught. A database error is never caught and carried on from
-    // (unit-of-work-v1): PostgreSQL has already aborted the transaction.
+    await this.#act(context, () => this.#store.saveConnection(pending));
+    // Only the provider's answer is caught. A database error is never caught and carried on from.
     let consent: ConsentStart;
     try {
       consent = await adapter.startConsent({ companyId: context.companyId, connectionId: id, redirectUri: input.redirectUri });
     } catch (error) {
-      await this.#store.saveConnection(frozen({ ...pending, status: 'ERROR', lastError: this.#message(error) }));
+      await this.#act(context, async () => {
+        const current = await this.#get(context, id);
+        if (current.status === 'PENDING_CONSENT' && current.providerConsentId === null) await this.#store.saveConnection(frozen({ ...current, status: 'ERROR', lastError: this.#message(error) }));
+      });
       throw error;
     }
-    const result = frozen({ ...pending, providerConsentId: consent.providerConsentId, consentUrl: consent.consentUrl, consentExpiresAt: consent.expiresAt });
-    await this.#store.saveConnection(result);
-    await this.#record(context, result, 'bank_feed.consent_started', { provider: result.provider, consentExpiresAt: result.consentExpiresAt });
-    return result;
+    return this.#act(context, async () => {
+      const current = await this.#get(context, id);
+      if (current.status !== 'PENDING_CONSENT' || current.providerConsentId !== null) throw new PlatformError('INVALID_TRANSITION', CHANGED);
+      const result = frozen({ ...current, providerConsentId: consent.providerConsentId, consentUrl: consent.consentUrl, consentExpiresAt: consent.expiresAt });
+      await this.#store.saveConnection(result);
+      await this.#record(context, result, 'bank_feed.consent_started', { provider: result.provider, consentExpiresAt: result.consentExpiresAt });
+      return result;
+    });
   }
 
   async completeConsent(context: BankFeedContext, connectionId: string, authorizationCode: string): Promise<BankFeedConnection> {
@@ -60,52 +72,79 @@ export class BankFeedService {
       if (seen.has(account.providerAccountId)) throw new Error('The provider returned the same bank account twice.');
       seen.add(account.providerAccountId);
     }
-    const existing = await this.#store.accounts(context.companyId, connection.id);
-    for (const account of result.accounts) await this.#saveAccount(connection, existing, account);
-    const connected = frozen({ ...connection, consentUrl: null, consentExpiresAt: result.consentExpiresAt, status: 'CONNECTED' as const, connectedAt: this.#now().toISOString(), lastError: null });
-    await this.#store.saveConnection(connected);
-    await this.#record(context, connected, 'bank_feed.connected', { provider: connected.provider, accountCount: result.accounts.length, consentExpiresAt: connected.consentExpiresAt });
-    return connected;
+    return this.#act(context, async () => {
+      // Completed, disconnected or revoked while the bank was answering: nothing is written twice.
+      const current = await this.#get(context, connectionId);
+      if (current.status !== 'PENDING_CONSENT' || current.providerConsentId !== connection.providerConsentId) throw new PlatformError('INVALID_TRANSITION', 'This bank permission request cannot be completed.');
+      const existing = await this.#store.accounts(context.companyId, current.id);
+      for (const account of result.accounts) await this.#saveAccount(current, existing, account);
+      const connected = frozen({ ...current, consentUrl: null, consentExpiresAt: result.consentExpiresAt, status: 'CONNECTED' as const, connectedAt: this.#now().toISOString(), lastError: null });
+      await this.#store.saveConnection(connected);
+      await this.#record(context, connected, 'bank_feed.connected', { provider: connected.provider, accountCount: result.accounts.length, consentExpiresAt: connected.consentExpiresAt });
+      return connected;
+    });
   }
 
   async sync(context: BankFeedContext, connectionId: string, idempotencyKey: string): Promise<SyncResult> {
     this.#require(context, 'bank.feed.sync');
     if (!idempotencyKey.trim()) throw new Error('A sync idempotency key is required.');
-    const connection = await this.#get(context, connectionId);
-    const prior = await this.#store.syncResult(context.companyId, connectionId, idempotencyKey);
-    if (prior) return prior;
-    if (connection.status !== 'CONNECTED' || !connection.providerConsentId) throw new PlatformError('INVALID_TRANSITION', connection.status === 'TOKEN_EXPIRED' ? 'Bank permission expired. Reconnect this account before syncing.' : 'Connect this bank account before syncing.');
-    if (connection.consentExpiresAt && Date.parse(connection.consentExpiresAt) <= this.#now().getTime()) {
-      const expired = frozen({ ...connection, status: 'TOKEN_EXPIRED' as const, syncStatus: 'FAILED' as const, lastError: 'Bank permission expired. Reconnect to continue.' });
-      await this.#store.saveConnection(expired);
-      await this.#record(context, expired, 'bank_feed.token_expired', {});
-      throw new PlatformError('INVALID_TRANSITION', expired.lastError!);
-    }
-    const processing = frozen({ ...connection, syncStatus: 'PROCESSING' as const, lastError: null });
-    await this.#store.saveConnection(processing);
-    await this.#record(context, processing, 'bank_feed.sync_started', { idempotencyKey });
-    const accounts = await this.#store.accounts(context.companyId, connection.id);
-    // Only the provider's answer and its validation are caught, as in startConsent.
+    // Action 1: check, mark the sync started, and read the cursors.
+    const start = await this.#act(context, async (): Promise<{ prior: SyncResult } | { refused: PlatformError } | { connection: BankFeedConnection; accounts: readonly BankFeedAccount[] }> => {
+      const connection = await this.#get(context, connectionId);
+      const prior = await this.#store.syncResult(context.companyId, connectionId, idempotencyKey);
+      if (prior) return { prior };
+      if (connection.status !== 'CONNECTED' || !connection.providerConsentId) throw new PlatformError('INVALID_TRANSITION', connection.status === 'TOKEN_EXPIRED' ? 'Bank permission expired. Reconnect this account before syncing.' : 'Connect this bank account before syncing.');
+      if (connection.consentExpiresAt && Date.parse(connection.consentExpiresAt) <= this.#now().getTime()) {
+        const expired = frozen({ ...connection, status: 'TOKEN_EXPIRED' as const, syncStatus: 'FAILED' as const, lastError: 'Bank permission expired. Reconnect to continue.' });
+        await this.#store.saveConnection(expired);
+        await this.#record(context, expired, 'bank_feed.token_expired', {});
+        return { refused: new PlatformError('INVALID_TRANSITION', expired.lastError!) }; // thrown once this is committed
+      }
+      const processing = frozen({ ...connection, syncStatus: 'PROCESSING' as const, lastError: null });
+      await this.#store.saveConnection(processing);
+      await this.#record(context, processing, 'bank_feed.sync_started', { idempotencyKey });
+      return { connection: processing, accounts: await this.#store.accounts(context.companyId, connection.id) };
+    });
+    if ('prior' in start) return start.prior;
+    if ('refused' in start) throw start.refused;
+    const { connection, accounts } = start;
+
+    // The bank, outside any unit of work. Only its answer and the answer's validation are caught.
     let pages: readonly ProviderAccountPage[];
     try {
-      pages = (await this.#adapter(connection).sync({ companyId: context.companyId, providerConsentId: connection.providerConsentId, cursors: Object.fromEntries(accounts.map((account) => [account.providerAccountId, account.cursor])), idempotencyKey })).accounts;
+      pages = (await this.#adapter(connection).sync({ companyId: context.companyId, providerConsentId: connection.providerConsentId!, cursors: Object.fromEntries(accounts.map((account) => [account.providerAccountId, account.cursor])), idempotencyKey })).accounts;
       this.#validatePage(accounts, pages);
     } catch (error) {
-      const status = error instanceof ConnectorError && error.code === 'UNAUTHORIZED' ? 'TOKEN_EXPIRED' as const : 'CONNECTED' as const;
-      const failed = frozen({ ...processing, status, syncStatus: 'FAILED' as const, lastError: this.#message(error) });
-      await this.#store.saveConnection(failed);
-      await this.#record(context, failed, status === 'TOKEN_EXPIRED' ? 'bank_feed.token_expired' : 'bank_feed.sync_failed', { retryable: error instanceof ConnectorError ? error.retryable : false, code: error instanceof ConnectorError ? error.code : 'INVALID_PROVIDER_DATA' });
+      // Committed in its own action before the caller hears of the failure.
+      await this.#act(context, async () => {
+        const current = await this.#get(context, connectionId);
+        const status = error instanceof ConnectorError && error.code === 'UNAUTHORIZED' ? 'TOKEN_EXPIRED' as const : 'CONNECTED' as const;
+        // A disconnect or revocation made meanwhile stands; the failure is still recorded.
+        const failed = current.status === 'CONNECTED' ? frozen({ ...current, status, syncStatus: 'FAILED' as const, lastError: this.#message(error) }) : current;
+        if (failed !== current) await this.#store.saveConnection(failed);
+        await this.#record(context, failed, failed.status === 'TOKEN_EXPIRED' ? 'bank_feed.token_expired' : 'bank_feed.sync_failed', { retryable: error instanceof ConnectorError ? error.retryable : false, code: error instanceof ConnectorError ? error.code : 'INVALID_PROVIDER_DATA' });
+      });
       throw error;
     }
-    const staged = await this.#stage(context, connection, accounts, pages);
-    for (const account of staged.accounts) await this.#store.saveAccount(account);
-    await this.#store.addTransactions(staged.transactions);
-    const succeeded = frozen({ ...processing, syncStatus: 'SUCCEEDED' as const, lastSyncedAt: this.#now().toISOString(), lastError: null });
-    await this.#store.saveConnection(succeeded);
-    const result: SyncResult = frozen({ connection: succeeded, imported: staged.transactions.length, duplicates: staged.duplicates, transactions: frozen(staged.transactions) });
-    await this.#store.saveSyncResult(context.companyId, connection.id, idempotencyKey, result);
-    await this.#record(context, succeeded, 'bank_feed.sync_succeeded', { imported: result.imported, duplicates: result.duplicates, accountCount: staged.accounts.length });
-    return result;
+
+    // Action 2: re-check and write. Another sync may have landed meanwhile (same key: its result is
+    // returned; another key: its lines count as duplicates and its newer cursor is kept).
+    return this.#act(context, async () => {
+      const current = await this.#get(context, connectionId);
+      const prior = await this.#store.syncResult(context.companyId, connectionId, idempotencyKey);
+      if (prior) return prior;
+      if (current.status !== 'CONNECTED') throw new PlatformError('INVALID_TRANSITION', 'Connect this bank account before syncing.');
+      const fresh = await this.#store.accounts(context.companyId, current.id);
+      const staged = await this.#stage(context, current, accounts, fresh, pages);
+      for (const account of staged.accounts) await this.#store.saveAccount(account);
+      await this.#store.addTransactions(staged.transactions);
+      const succeeded = frozen({ ...current, syncStatus: 'SUCCEEDED' as const, lastSyncedAt: this.#now().toISOString(), lastError: null });
+      await this.#store.saveConnection(succeeded);
+      const result: SyncResult = frozen({ connection: succeeded, imported: staged.transactions.length, duplicates: staged.duplicates, transactions: frozen(staged.transactions) });
+      await this.#store.saveSyncResult(context.companyId, current.id, idempotencyKey, result);
+      await this.#record(context, succeeded, 'bank_feed.sync_succeeded', { imported: result.imported, duplicates: result.duplicates, accountCount: pages.length });
+      return result;
+    });
   }
 
   async disconnect(context: BankFeedContext, connectionId: string, idempotencyKey: string): Promise<BankFeedConnection> {
@@ -113,21 +152,27 @@ export class BankFeedService {
     const connection = await this.#get(context, connectionId);
     if (connection.status === 'DISCONNECTED') return connection;
     if (connection.providerConsentId && connection.status !== 'REVOKED') await this.#adapter(connection).revoke({ companyId: context.companyId, providerConsentId: connection.providerConsentId, idempotencyKey });
-    await this.#deactivateAccounts(context, connection.id);
-    const disconnected = frozen({ ...connection, status: 'DISCONNECTED' as const, consentUrl: null, disconnectedAt: this.#now().toISOString(), syncStatus: 'IDLE' as const, lastError: null });
-    await this.#store.saveConnection(disconnected);
-    await this.#record(context, disconnected, 'bank_feed.disconnected', { historicalTransactionsPreserved: await this.#store.countTransactions(context.companyId, connection.id) });
-    return disconnected;
+    return this.#act(context, async () => {
+      const current = await this.#get(context, connectionId);
+      if (current.status === 'DISCONNECTED') return current; // a second disconnect landed first
+      await this.#deactivateAccounts(context, current.id);
+      const disconnected = frozen({ ...current, status: 'DISCONNECTED' as const, consentUrl: null, disconnectedAt: this.#now().toISOString(), syncStatus: 'IDLE' as const, lastError: null });
+      await this.#store.saveConnection(disconnected);
+      await this.#record(context, disconnected, 'bank_feed.disconnected', { historicalTransactionsPreserved: await this.#store.countTransactions(context.companyId, current.id) });
+      return disconnected;
+    });
   }
 
   async markRevoked(context: BankFeedContext, connectionId: string): Promise<BankFeedConnection> {
     this.#require(context, 'bank.feed.manage');
-    const connection = await this.#get(context, connectionId);
-    await this.#deactivateAccounts(context, connection.id);
-    const revoked = frozen({ ...connection, status: 'REVOKED' as const, consentUrl: null, syncStatus: 'IDLE' as const, lastError: 'The bank withdrew permission for this connection.' });
-    await this.#store.saveConnection(revoked);
-    await this.#record(context, revoked, 'bank_feed.revoked', { historicalDataPreserved: true });
-    return revoked;
+    return this.#act(context, async () => {
+      const connection = await this.#get(context, connectionId);
+      await this.#deactivateAccounts(context, connection.id);
+      const revoked = frozen({ ...connection, status: 'REVOKED' as const, consentUrl: null, syncStatus: 'IDLE' as const, lastError: 'The bank withdrew permission for this connection.' });
+      await this.#store.saveConnection(revoked);
+      await this.#record(context, revoked, 'bank_feed.revoked', { historicalDataPreserved: true });
+      return revoked;
+    });
   }
 
   async connections(context: BankFeedContext, page?: Page): Promise<readonly BankFeedConnection[]> { this.#requireAny(context); return this.#store.connections(context.companyId, page); }
@@ -145,9 +190,14 @@ export class BankFeedService {
     }
   }
 
-  /** The validated page as records: new transactions, repeats counted as duplicates, cursors advanced. */
-  async #stage(context: BankFeedContext, connection: BankFeedConnection, known: readonly BankFeedAccount[], pages: readonly ProviderAccountPage[]) {
-    const accountByProvider = new Map(known.map((account) => [account.providerAccountId, account]));
+  /**
+   * The validated page as records: new transactions, repeats counted as duplicates, cursors advanced.
+   * `read` is what the bank was asked from; `fresh` is the same accounts now. An account whose cursor
+   * moved meanwhile was advanced by another sync: its newer cursor and balance are kept.
+   */
+  async #stage(context: BankFeedContext, connection: BankFeedConnection, read: readonly BankFeedAccount[], fresh: readonly BankFeedAccount[], pages: readonly ProviderAccountPage[]) {
+    const accountByProvider = new Map(read.map((account) => [account.providerAccountId, account]));
+    const now = new Map(fresh.map((account) => [account.id, account]));
     const imported = await this.#store.knownProviderTransactions(context.companyId, pages.flatMap((page) => page.transactions.map((item) => ({ accountId: accountByProvider.get(page.providerAccountId)!.id, providerTransactionId: item.providerTransactionId }))));
     const accounts: BankFeedAccount[] = [];
     const transactions: BankFeedTransaction[] = [];
@@ -163,11 +213,14 @@ export class BankFeedService {
         const creditPaise = item.direction === 'CREDIT' ? item.amountMinor : 0n;
         transactions.push(frozen({ id: randomUUID(), companyId: context.companyId, connectionId: connection.id, accountId: account.id, providerTransactionId: item.providerTransactionId, bookedOn: item.bookedOn, description: item.description.trim(), debitPaise, creditPaise, ...(item.reference ? { reference: item.reference } : {}), fingerprint: digest(`${context.companyId}\u0000${connection.id}\u0000${account.id}\u0000${item.providerTransactionId}`), importedAt: this.#now().toISOString() }));
       }
-      accounts.push(frozen({ ...account, balancePaise: page.balanceMinor, balanceAsOf: page.balanceAsOf, cursor: page.nextCursor }));
+      const current = now.get(account.id);
+      if (current === undefined || current.cursor !== account.cursor) continue;
+      accounts.push(frozen({ ...current, balancePaise: page.balanceMinor, balanceAsOf: page.balanceAsOf, cursor: page.nextCursor }));
     }
     return { accounts, transactions, duplicates };
   }
 
+  #act<T>(context: BankFeedContext, work: () => Promise<T>): Promise<T> { return this.#store.action(context.companyId, work); }
   async #saveAccount(connection: BankFeedConnection, existing: readonly BankFeedAccount[], account: ProviderAccount): Promise<void> { const current = existing.find((item) => item.providerAccountId === account.providerAccountId); const saved = frozen({ id: current?.id ?? randomUUID(), companyId: connection.companyId, connectionId: connection.id, providerAccountId: account.providerAccountId, displayName: account.displayName, maskedAccountNumber: account.maskedAccountNumber, accountType: account.accountType, currency: 'INR' as const, balancePaise: current?.balancePaise ?? null, balanceAsOf: current?.balanceAsOf ?? null, cursor: current?.cursor ?? null, active: true }); await this.#store.saveAccount(saved); }
   #validateAccount(account: ProviderAccount): void { if (!account.providerAccountId || !account.displayName.trim() || account.currency !== 'INR' || !['CURRENT', 'SAVINGS', 'CASH_CREDIT', 'OTHER'].includes(account.accountType) || !safeMask(account.maskedAccountNumber)) throw new Error('The provider returned an unsupported or unsafe bank account.'); }
   async #deactivateAccounts(context: BankFeedContext, connectionId: string): Promise<void> { for (const account of await this.#store.accounts(context.companyId, connectionId)) await this.#store.saveAccount(frozen({ ...account, active: false })); }
