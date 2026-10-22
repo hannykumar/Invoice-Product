@@ -5,7 +5,7 @@
  */
 import { asId, conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
-import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
+import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { reportError, reportUnexpected } from '../../../packages/platform/src/error-reporting.ts';
@@ -1469,10 +1469,46 @@ export class DemoApplication {
       quantity: quantityFromString('7', 'PCS'),
       unitCost: money(200_00n),
     });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
-    // Two older bills, so the Reminders screen has something to decide about on the demo's date.
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.clearOpeningStockSuspense();
+    // Issue #299 — the bills are recorded oldest first so bill numbers climb with the dates:
+    // 000001 is two months past its due date, 000002 is ten days past, 000003 is the newest.
     await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
+  }
+
+  /**
+   * Issue #299 — the opening stock entry parks its cost in the opening-balance-difference account,
+   * which is where an unexplained difference is meant to sit until the owner decides. The demo
+   * knows where it came from — the owner put in the soap the business began with — so the balance
+   * is moved to Capital the way an accountant clears a suspense balance, and the demo books carry
+   * no unexplained difference. Whatever happens to sit in the account is cleared, not a fixed
+   * figure, so the journal stays right if the seeded count or cost changes.
+   */
+  private async clearOpeningStockSuspense(): Promise<void> {
+    const actor = this.shop.setupActor;
+    const accounts = this.shop.store.read().accounts;
+    const [difference, capital] = await Promise.all([
+      accounts.findByCode(actor.companyId, '3900'),
+      accounts.findByCode(actor.companyId, '3100'),
+    ]);
+    if (!difference || !capital) return;
+    const row = (await trialBalance(this.shop.store.read(), actor.companyId)).rows
+      .find((entry) => entry.account.id === difference.id);
+    if (!row || row.balance.minor === 0n) return;
+    // Clear to the opposite side: a credit balance is debited away, a debit balance credited.
+    const { balance: amount, side } = row;
+    await this.shop.ledger.postVoucher(actor, {
+      idempotencyKey: 'seed-opening-stock-clearance',
+      type: 'JOURNAL',
+      date: isoDate('2026-04-01'),
+      narration: 'The opening stock was the owner\u2019s own goods, so its cost is moved from the opening difference to capital',
+      source: { kind: 'opening_stock', id: 'seed-opening-soap', number: null },
+      lines: [
+        { accountId: difference.id, debit: side === 'CREDIT' ? amount : money(0n), credit: side === 'DEBIT' ? amount : money(0n) },
+        { accountId: capital.id, debit: side === 'DEBIT' ? amount : money(0n), credit: side === 'CREDIT' ? amount : money(0n) },
+      ],
+    });
   }
 
   /** Issue #280 — every change to where customers pay, oldest first, from the audit trail. */
