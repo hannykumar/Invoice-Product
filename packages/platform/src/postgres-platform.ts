@@ -148,9 +148,9 @@ export class PostgresAccessControl {
   grant(member: Member): Promise<void> {
     return this.#db.unitOfWork(member.companyId, async ({ sql }) => {
       await sql.query(
-        `INSERT INTO memberships (company_id, user_id, permissions, active) VALUES ($1, $2, $3::jsonb, $4)
-         ON CONFLICT (company_id, user_id) DO UPDATE SET permissions = EXCLUDED.permissions, active = EXCLUDED.active`,
-        [member.companyId, member.userId, JSON.stringify([...member.permissions]), member.active],
+        `INSERT INTO memberships (company_id, user_id, permissions, active, role) VALUES ($1, $2, $3::jsonb, $4, $5)
+         ON CONFLICT (company_id, user_id) DO UPDATE SET permissions = EXCLUDED.permissions, active = EXCLUDED.active, role = EXCLUDED.role`,
+        [member.companyId, member.userId, JSON.stringify([...member.permissions]), member.active, member.role ?? "custom"],
       );
       await sql.query("DELETE FROM user_branch_access WHERE company_id = $1 AND user_id = $2", [member.companyId, member.userId]);
       for (const branchId of member.branchIds) await sql.query("INSERT INTO user_branch_access (company_id, user_id, branch_id) VALUES ($1, $2, $3)", [member.companyId, member.userId, branchId]);
@@ -163,12 +163,12 @@ export class PostgresAccessControl {
 
   async members(companyId: Id): Promise<readonly Member[]> {
     const { rows } = await this.#db.tenantTransaction(companyId, (sql) => sql.query(
-      `SELECT m.user_id, m.permissions, m.active,
+      `SELECT m.user_id, m.permissions, m.active, m.role,
               COALESCE((SELECT jsonb_agg(a.branch_id) FROM user_branch_access a WHERE a.company_id = m.company_id AND a.user_id = m.user_id), '[]') AS branch_ids
          FROM memberships m WHERE m.company_id = $1 ORDER BY m.user_id`,
       [companyId],
     ));
-    return rows.map((r) => ({ userId: String(r.user_id), companyId, branchIds: new Set(r.branch_ids as string[]), active: Boolean(r.active), permissions: new Set(r.permissions as Permission[]) }));
+    return rows.map((r) => ({ userId: String(r.user_id), companyId, branchIds: new Set(r.branch_ids as string[]), active: Boolean(r.active), permissions: new Set(r.permissions as Permission[]), role: r.role as NonNullable<Member["role"]> }));
   }
 
   async context(companyId: Id, branchId: Id, userId: Id, sessionId: Id): Promise<RequestContext> {

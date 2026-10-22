@@ -3,13 +3,15 @@
  * proforma invoices, delivery challans, and returns with their credit and debit notes.
  */
 import { ChallanDesk } from '../challan-application.ts';
-import { anything, fields, get, need, needAny, nothing, list, post, replyPdf, text, READ, type Route } from './route.ts';
+import { anything, fields, get, need, needAny, nothing, list, post, replyPdf, text, REFERENCE, type Route } from './route.ts';
 
 const DRAFT = need('start a bill', 'sales.draft.write');
 const CHALLANS = need('issue delivery challans', 'challan.issue');
 const PRESALE = needAny('make quotations or proforma invoices', 'quotation.issue', 'proforma.issue');
 const MONEY = need('record money received or paid', 'payments.record');
 const RETURNS = need('record returns', 'returns.create');
+const SALES_VIEW = need('see bills, quotations and challans', 'sales.view');
+const RETURNS_VIEW = needAny('see returns and credit or debit notes', 'sales.view', 'purchases.view');
 
 const safeFileName = (number: string): string => `${number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`;
 
@@ -63,12 +65,12 @@ export const SALES_ROUTES: readonly Route[] = [
   post('/api/sales/print', { access: need('print bills', 'sales.draft.write'), input: fields({ invoice: text, format: anything, locale: anything, copies: anything }) },
     ({ app, actor, input }) => app.invoicePrint(actor, String(input.invoice ?? ''), { format: input.format, locale: input.locale, allCopies: input.copies === 'all' })),
   // Issue #133 — the PDF comes off the same page.
-  get('/api/sales/:invoice/pdf', { access: READ, input: nothing }, async ({ app, actor, params }) => {
+  get('/api/sales/:invoice/pdf', { access: SALES_VIEW, input: nothing }, async ({ app, actor, params }) => {
     const result = await app.invoicePrint(actor, params.invoice!, { pdf: true });
     if (!('pdf' in result)) throw new TypeError('The bill PDF was not produced.');
     return replyPdf(safeFileName(result.number), result.pdf);
   }),
-  get('/api/sales/:invoice/preview', { access: READ, input: nothing }, ({ app, actor, params }) => app.invoicePrint(actor, params.invoice!)),
+  get('/api/sales/:invoice/preview', { access: SALES_VIEW, input: nothing }, ({ app, actor, params }) => app.invoicePrint(actor, params.invoice!)),
 
   post('/api/payments/preview', { access: MONEY, input: payment }, ({ app, actor, input }) => app.previewPayment(actor, input)),
   post('/api/payments/record', { access: MONEY, input: payment }, ({ app, actor, input }) => app.recordPayment(actor, input)),
@@ -78,7 +80,7 @@ export const SALES_ROUTES: readonly Route[] = [
 
   // Issue #142 — quotations and proforma invoices: the papers sent before a sale. None of these posts
   // anything; a quotation becomes a sale only through the ordinary sale, as a draft first.
-  list('/api/presale', { access: READ, key: 'documents' }, ({ app, actor }) => app.presale.list(actor)),
+  list('/api/presale', { access: SALES_VIEW, key: 'documents' }, ({ app, actor }) => app.presale.list(actor)),
   post('/api/presale/preview', { access: PRESALE, input: presale }, ({ app, actor, input }) => app.presale.preview(actor, input)),
   post('/api/presale/issue', { access: PRESALE, input: presale }, ({ app, actor, input }) => app.presale.issue(actor, input)),
   post('/api/presale/print', { access: PRESALE, input: presale }, ({ app, actor, input }) => app.presale.print(actor, input)),
@@ -94,9 +96,9 @@ export const SALES_ROUTES: readonly Route[] = [
   post('/api/presale/voucher', { access: MONEY, input: advance }, ({ app, actor, input }) => app.presale.printVoucher(actor, input)),
 
   // Issue #141 — delivery challans: goods that move before the bill exists.
-  get('/api/challans/reasons', { access: READ, input: nothing }, () => ChallanDesk.reasons()),
-  list('/api/challans', { access: READ, key: 'challans' }, ({ app, actor }) => app.challans.list(actor)),
-  list('/api/challans/movable', { access: READ, key: 'challans' }, async ({ app, actor }) => ({ challans: await app.challans.movable(actor) })),
+  get('/api/challans/reasons', { access: REFERENCE, input: nothing }, () => ChallanDesk.reasons()),
+  list('/api/challans', { access: SALES_VIEW, key: 'challans' }, ({ app, actor }) => app.challans.list(actor)),
+  list('/api/challans/movable', { access: SALES_VIEW, key: 'challans' }, async ({ app, actor }) => ({ challans: await app.challans.movable(actor) })),
   post('/api/challans/preview', { access: CHALLANS, input: challan }, ({ app, actor, input }) => app.challans.preview(actor, input)),
   post('/api/challans/issue', { access: CHALLANS, input: challan }, ({ app, actor, input }) => app.challans.issue(actor, input)),
   post('/api/challans/print', { access: CHALLANS, input: challan }, ({ app, actor, input }) => app.challans.print(actor, input)),
@@ -106,16 +108,16 @@ export const SALES_ROUTES: readonly Route[] = [
   // Issue #290 — bill the goods a challan sent, from the challan itself.
   post('/api/challans/bill', { access: need('make bills', 'sales.finalise'), input: challan }, ({ app, actor, input }) => app.billChallan(actor, input)),
 
-  list('/api/returns/documents', { access: READ, key: 'documents' }, ({ app, actor }) => app.returnDocuments(actor)),
+  list('/api/returns/documents', { access: RETURNS_VIEW, key: 'documents' }, ({ app, actor }) => app.returnDocuments(actor)),
   post('/api/returns/preview', { access: RETURNS, input: goodsReturn }, ({ app, actor, input }) => app.previewReturn(actor, input)),
   post('/api/returns/record', { access: RETURNS, input: goodsReturn }, ({ app, actor, input }) => app.recordReturn(actor, input)),
   // Issue #249 — the supplier's credit note for goods sent back, added when it arrives.
   post('/api/returns/supplier-note', { access: RETURNS, input: goodsReturn }, ({ app, actor, input }) => app.recordSupplierCreditNote(actor, input)),
   // Issue #186 — the credit or debit note on paper: listed, printed, and downloaded as a PDF.
-  list('/api/returns/notes', { access: READ, key: 'notes' }, ({ app, actor }) => app.listReturnNotes(actor)),
+  list('/api/returns/notes', { access: RETURNS_VIEW, key: 'notes' }, ({ app, actor }) => app.listReturnNotes(actor)),
   post('/api/returns/print', { access: RETURNS, input: fields({ note: text, format: anything, locale: anything }) },
     ({ app, actor, input }) => app.notePrint(actor, String(input.note ?? ''), { format: input.format, locale: input.locale })),
-  get('/api/returns/:note/pdf', { access: READ, input: nothing }, async ({ app, actor, params }) => {
+  get('/api/returns/:note/pdf', { access: RETURNS_VIEW, input: nothing }, async ({ app, actor, params }) => {
     const result = await app.notePrint(actor, params.note!, { pdf: true });
     if (!('pdf' in result)) throw new TypeError('The note PDF was not produced.');
     return replyPdf(safeFileName(result.number), result.pdf);

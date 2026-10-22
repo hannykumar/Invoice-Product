@@ -4383,7 +4383,12 @@ export class DemoApplication {
     if (frozen === undefined) throw notFound('API_NOTE_PRINT_FACTS', 'This note was recorded before notes could be printed, so it has no stored page.');
     // Issue #284 — the government's IRN and signed QR, once registered, printed as on a bill.
     // The note prints without the IRN block rather than not at all; why the record was unreadable is reported.
-    const record = await this.shop.eInvoice.forDocument(actor, note.id).catch((error: unknown) => { reportUnexpected('api.notePrintIrn', error); return null; });
+    // Issue #343 — a refusal is not "unreadable": it is passed on, never printed around (#348 found the note printed anyway).
+    const record = await this.shop.eInvoice.forDocument(actor, note.id).catch((error: unknown) => {
+      if ((error as { kind?: string; code?: string }).kind === 'FORBIDDEN' || (error as { code?: string }).code === 'FORBIDDEN') throw error;
+      reportUnexpected('api.notePrintIrn', error);
+      return null;
+    });
     const acknowledgement = record?.status === 'REGISTERED' ? record.acknowledgement ?? null : null;
     const facts = acknowledgement === null ? frozen : {
       ...frozen,

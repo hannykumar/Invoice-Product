@@ -147,7 +147,7 @@ export const signInStore = (persistence: Persistence): SignInStore => {
   const store = new AuthenticationService(access);
   for (const person of SYNTHETIC_PLATFORM_USERS) {
     store.addUser({ id: person.userId, email: person.email });
-    access.grant({ companyId: person.companyId, userId: person.userId, branchIds: new Set([person.branchId]), active: true, permissions: new Set(person.permissions) });
+    access.grant({ companyId: person.companyId, userId: person.userId, branchIds: new Set([person.branchId]), active: true, permissions: new Set(person.permissions), role: person.role });
   }
   return store;
 };

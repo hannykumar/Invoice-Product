@@ -10,7 +10,7 @@ import { previewBranding, readBranding, saveBranding } from '../branding-applica
 import { currentStates, readBusinessDetails } from '../business-details-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from '../migration-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
-import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, READ, type Route } from './route.ts';
+import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, REFERENCE, type Route } from './route.ts';
 import { clearedSessionCookie, sessionCookie } from '../sign-in.ts';
 import { outsideUnitOfWork } from '../../../../packages/platform/src/database.ts';
 import type { ApiRuntime } from '../runtime.ts';
@@ -72,10 +72,10 @@ export const CORE_ROUTES: readonly Route[] = [
       return replyJson(received.status, { state: 'received', outcome: received.outcome });
     }),
 
-  get('/api/session', { access: READ, input: nothing }, ({ runtime, context }) => sessionView(runtime, context)),
-  get('/api/dashboard', { access: READ, input: nothing }, ({ app, actor }) => app.dashboard(actor)),
-  get('/api/reports', { access: READ, input: nothing }, ({ app, actor }) => app.reports(actor)),
-  get('/api/operations', { access: READ, input: nothing }, ({ runtime, context }) => runtime.operationsWorkspace(context)),
+  get('/api/session', { access: signedIn('who is signed in, where, and their own businesses: every member may see their own'), input: nothing }, ({ runtime, context }) => sessionView(runtime, context)),
+  get('/api/dashboard', { access: need('see the Home page', 'dashboard.read'), input: nothing }, ({ app, actor }) => app.dashboard(actor)),
+  get('/api/reports', { access: needAny('see reports', 'reports.view.financial', 'reports.view.sales', 'reports.view.purchase', 'reports.view.stock', 'reports.view.dues', 'reports.view.gst'), input: nothing }, ({ app, actor }) => app.reports(actor)),
+  get('/api/operations', { access: need('see whether the service is working', 'operations.read'), input: nothing }, ({ runtime, context }) => runtime.operationsWorkspace(context)),
   post('/api/operations/jobs/replay', { access: need('replay a stuck job', 'queue.replay'), input: fields({ jobId: text }) },
     ({ runtime, context, input }) => runtime.replayOperationalJob(context, input)),
   // Issue #358 — proves a fault reaches the error tracker: throws on purpose, in staging only. Anywhere
@@ -89,12 +89,12 @@ export const CORE_ROUTES: readonly Route[] = [
 
   // Issue #34 — ask about this company's own books; the answer cites the report every figure came
   // from, and the notification behind every rule it quotes.
-  get('/api/assistant/examples', { access: READ, input: nothing }, () => ({ examples: DemoApplication.assistantExamples() })),
+  get('/api/assistant/examples', { access: need('ask about the books', 'assistant.ask'), input: nothing }, () => ({ examples: DemoApplication.assistantExamples() })),
   post('/api/assistant/ask', { access: need('ask about the books', 'assistant.ask'), input: fields({ question: text }) },
     ({ app, actor, input }) => app.ask(actor, input)),
 
   // Issue #237 — the one list of current states, for setting up a business.
-  get('/api/states', { access: READ, input: nothing }, () => ({ states: currentStates() })),
+  get('/api/states', { access: REFERENCE, input: nothing }, () => ({ states: currentStates() })),
   // Issue #288 — the state a PIN code is in, so the customer form fills it in.
   post('/api/pincode/state', { access: signedIn('a lookup in the public PIN table: reads nothing of the company, stores nothing'), input: fields({ pincode: text }) },
     ({ input }) => ({ stateCode: stateOfPincode(String(input.pincode ?? '')) })),
@@ -109,7 +109,7 @@ export const CORE_ROUTES: readonly Route[] = [
   post('/api/trade-marks/search', { access: BRANDING, input: fields({ query: text, limit: text }) }, ({ input }) => searchMarks(input)),
   post('/api/trade-marks/choose', { access: BRANDING, input: fields({ pictureId: text, opacityPercent: text }) }, ({ input }) => chooseMark(input)),
   // Issues #146 and #147 — the business's own logo, mark and colour, and a real bill to see them on.
-  get('/api/branding', { access: READ, input: nothing }, ({ context }) => readBranding(context.companyId)),
+  get('/api/branding', { access: need('see how your bills look', 'business.settings.read'), input: nothing }, ({ context }) => readBranding(context.companyId)),
   post('/api/branding', { access: BRANDING, input: fields({ logoDataUri: text, accent: text, pictureId: text, opacityPercent: text, templateId: text, clear: anything }) },
     ({ context, input }) => saveBranding(context.companyId, input)),
   post('/api/branding/preview', { access: BRANDING, input: fields({ logoDataUri: text, accent: text, pictureId: text, templateId: text, locale: text, format: text }) },
@@ -118,14 +118,14 @@ export const CORE_ROUTES: readonly Route[] = [
   post('/api/branding/upi', { access: need('change the UPI id customers pay into', 'payments.upi.write'), input: fields({ upiId: text, clear: anything }) },
     ({ app, actor, input }) => app.saveUpiId(actor, input)),
   // Issue #180 — the business's own name, address, PIN code, phone, PAN and bank, in one place.
-  get('/api/business-details', { access: READ, input: nothing },
+  get('/api/business-details', { access: need('see your business details', 'business.settings.read'), input: nothing },
     ({ runtime, context }) => readBusinessDetails(context.companyId, runtime.companyIdentity(context.companyId))),
   post('/api/business-details', { access: need('change your business details', 'business.settings.write'),
     input: fields({ legalName: text, tradeName: text, address1: text, address2: text, city: text, pincode: text, stateCode: text, phone: text, email: text, pan: text, bankName: text, accountNumber: text, ifsc: text, branch: text }) },
   ({ runtime, app, actor, context, input }) => app.saveBusinessDetails(actor, runtime.companyIdentity(context.companyId), input)),
 
   // Issue #181 — the customers and items this business keeps; #228 the businesses it buys from.
-  get('/api/catalogue', { access: READ, input: nothing }, ({ app, actor }) => app.catalogue(actor)),
+  get('/api/catalogue', { access: need('see customers, suppliers and items', 'masters.read'), input: nothing }, ({ app, actor }) => app.catalogue(actor)),
   post('/api/customers', { access: PARTIES, input: partyForm }, ({ app, actor, input }) => app.addCustomer(actor, input)),
   post('/api/suppliers', { access: PARTIES, input: partyForm }, ({ app, actor, input }) => app.addSupplier(actor, input)),
   post('/api/items', { access: ITEMS, input: itemForm }, ({ app, actor, input }) => app.addItem(actor, input)),

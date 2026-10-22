@@ -146,7 +146,14 @@ export type Permission =
   | "onboarding.finish"
   | "migration.run"
   | "migration.commit"
-  | "migration.rollback";
+  | "migration.rollback"
+  // Issue #343. Reading is a permission too: a viewer must not see the business's PAN, bank account
+  // or UPI id, or every customer's GST number and address, just by being a member. Each read route
+  // names one of these (or a narrower view permission above).
+  | "sales.view"
+  | "purchases.view"
+  | "masters.read"
+  | "business.settings.read";
 
 export interface RequestContext {
   companyId: Id;

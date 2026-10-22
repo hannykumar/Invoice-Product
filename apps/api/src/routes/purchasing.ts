@@ -3,7 +3,7 @@
  * comparison with the bill (#18), and recording the supplier's bill (#17).
  */
 import { DemoApplication } from '../demo-application.ts';
-import { anything, fields, get, need, nothing, post, text, READ, type Route } from './route.ts';
+import { anything, fields, get, need, nothing, post, text, type Route } from './route.ts';
 
 const RECORD_BILL = need('record a supplier bill', 'ledger.post.purchase');
 
@@ -22,7 +22,7 @@ const purchase = fields({
 
 export const PURCHASING_ROUTES: readonly Route[] = [
   // Issue #19 — what we know about a supplier, and the evidence behind each warning.
-  get('/api/suppliers/choices', { access: READ, input: nothing }, () => ({ choices: DemoApplication.supplierChoices() })),
+  get('/api/suppliers/choices', { access: need('see suppliers', 'masters.read'), input: nothing }, () => ({ choices: DemoApplication.supplierChoices() })),
   post('/api/suppliers/check', { access: need('check suppliers', 'supplier.risk.view'), input: supplierCheck }, ({ app, actor, input }) => app.checkSupplier(actor, input)),
   post('/api/suppliers/check/acknowledge', { access: need('accept a supplier warning', 'supplier.risk.acknowledge'), input: supplierCheck },
     ({ app, actor, input }) => app.acknowledgeSupplierRisk(actor, input)),
@@ -34,5 +34,5 @@ export const PURCHASING_ROUTES: readonly Route[] = [
     ({ app, actor, input }) => app.approvePurchaseMatch(actor, input)),
   post('/api/purchases/preview', { access: RECORD_BILL, input: purchase }, ({ app, actor, input }) => app.previewPurchase(actor, input)),
   post('/api/purchases/record', { access: RECORD_BILL, input: purchase }, ({ app, actor, input }) => app.recordPurchase(actor, input)),
-  get('/api/purchases/:id', { access: READ, input: nothing }, ({ app, actor, params }) => app.purchase(actor, params.id!)),
+  get('/api/purchases/:id', { access: need('see supplier bills', 'purchases.view'), input: nothing }, ({ app, actor, params }) => app.purchase(actor, params.id!)),
 ];
