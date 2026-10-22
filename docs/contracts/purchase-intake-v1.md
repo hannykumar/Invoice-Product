@@ -15,19 +15,27 @@ the draft and issue #17 posts it, both after a human has approved.
 
 ```
 received → screening → (quarantined)
+                     → awaiting_scan → (rescan) → screening …
          → extracting → (failed → retry) → draft_ready
          → discarded (duplicate, or a human rejected it)
 ```
 
 `quarantined` always carries a `QuarantineReason` and a sentence a shopkeeper can act on.
 `failed` is a technical problem and is retryable; `quarantined` needs a human decision.
+`awaiting_scan` (#401) means the file passed every check we can do ourselves but the virus
+scanner has not given a verdict — it was down, timed out, could not decide, or answered about
+different bytes. Nothing reads the file in this state. A worker calls `rescan(documentId, bytes)`
+with the same bytes from object storage; different bytes are quarantined as
+`FILE_DETAILS_MISMATCH`.
 
 ## Order of operations, and why
 
-1. **Screen the attachment** before anything reads it: real type from magic bytes against the
-   declared type, size cap, password-protected and script-carrying PDFs, virus verdict.
-2. **Route to a company** before anything is read, so no company's paperwork is ever processed
-   under another company's tenant, and so nothing inside the file can influence the choice.
+1. **Screen the attachment** before anything reads it: measured size and SHA-256, real type from
+   magic bytes against the declared type, size cap, a whole-file structural scan of PDFs, and a
+   verdict from the inbox's own virus scanner. See "Screening" below.
+2. **Route to a company** before anything is read by an outside provider, so no company's
+   paperwork is ever processed under another company's tenant, and so nothing inside the file
+   can influence the choice.
 3. **Read** — e-invoice JSON is parsed locally after its IRP signature is checked; PDFs and
    photos go to the OCR connector.
 4. **Cross-check against what was printed.** The cross-check can *hold* a document in the
@@ -35,6 +43,47 @@ received → screening → (quarantined)
    - a buyer GSTIN that is not one of this company's GSTINs holds it, whatever the routing basis;
    - for a channel binding, a document that prints GSTINs but none of this company's holds it.
    The hold message never names another company: the company list is every tenant.
+
+## Screening (#401, threat model I3)
+
+`receive` takes the **whole file** as `bytes`. There is no `head`, no separate `jsonBody` and
+no caller-supplied `scanVerdict` any more: what is screened is exactly what is read, and the
+verdict comes from the inbox's own `VirusScanPort`, passed to the `PurchaseInboxService`
+constructor.
+
+- **Measured, not declared.** Size and SHA-256 are computed from `bytes` with `node:crypto`.
+  `attachment.sizeBytes` and `attachment.sha256` are optional claims on input
+  (`DeclaredAttachment`); when given and different from what arrived, the document is
+  quarantined as `FILE_DETAILS_MISMATCH`. The stored document always carries the measured
+  values, so duplicate detection cannot be faked or dodged with a forged hash.
+- **Size first.** More than 25 MB measured is `FILE_TOO_LARGE`, before hashing or parsing.
+- **Whole-file PDF scan** (`scanPdf`, Node built-ins only — no parser library without the
+  owner's approval). Names are checked after decoding `#xx` escapes, in the object layer
+  (every dictionary and every trailer) and inside decompressed object streams:
+  `/JavaScript /JS /OpenAction /AA /Launch /EmbeddedFile(s) /RichMedia /RichMediaExecute /XFA
+  /SubmitForm /ImportData /GoToE /GoToR` → `ACTIVE_CONTENT`; `/Encrypt` → `PASSWORD_PROTECTED`.
+  Inside other stream data only names of three or more letters are checked, because random bytes
+  produce `/JS` and `/AA` by chance; neither does anything without `/S /JavaScript` or a long
+  action name, which are checked everywhere.
+- **Caps** (`PDF_SCAN_LIMITS`), each a quarantine as `PDF_TOO_COMPLEX`: 20,000 objects
+  (including those packed in object streams), 200 pages (`/Type /Page`), 64 MB decompressed per
+  stream and 256 MB per file (`zlib.inflateSync` with `maxOutputLength`), 100 megapixels per
+  image, 5 seconds wall clock.
+- **Never wave through what we could not read.** An object stream that will not decompress,
+  a stream with no end, an LZW/RunLength/unknown filter, a stream naming its filter twice or
+  indirectly (`/Filter 9 0 R`), or an object stream with a predictor or indirect `/DecodeParms`
+  is quarantined as `UNREADABLE`.
+- **Assigning a company is not a release.** Safety holds land before routing, so the document
+  belongs to nobody and `assignCompany` answers `NOT_FOUND` for it; it only resolves routing.
+- **Virus scanner.** `VirusScanPort.scan({ bytes, sha256, sizeBytes, storageKey, correlationId,
+  idempotencyKey: "scan:<sha256>" })` returns `{ verdict, scannedSha256, engine,
+  providerRequestId }`. Only `clean` about the same SHA-256 passes; `infected` is
+  `MALWARE_SUSPECTED`; `unscanned`, a different SHA-256, an unknown verdict, a `ConnectorError`
+  (retryable or not) or any other exception is `awaiting_scan`. `MockVirusScanner` flags the
+  EICAR test string and listed hashes, and simulates outage, timeout, no verdict and wrong-file
+  answers. A connector-backed adapter needs a `malware_scan` kind in `connector-v1`
+  (GPT 2) — not added here.
+- Photos and JSON are not put through the PDF scan, but still need a clean scan verdict.
 
 ## Routing (changed in 1.1.0, #400)
 
@@ -99,8 +148,9 @@ supplier GSTIN + financial year + document type + number is reported as a proble
 
 ## Deduplication
 
-- **Attachment level (here):** SHA-256 of the file, scoped to the company. A second arrival is
-  marked `discarded` with `duplicateOfId` set, and is never read twice.
+- **Attachment level (here):** SHA-256 of the file **as measured from the bytes** (#401),
+  scoped to the company. A second arrival is marked `discarded` with `duplicateOfId` set, and
+  is never read twice.
 - **Channel level (here):** `sender.providerMessageId`. A provider redelivering the same message
   returns the original document and does not call OCR again.
 - **Logical level (#16):** `logicalKey(draft)` returns supplier GSTIN + invoice number + date +

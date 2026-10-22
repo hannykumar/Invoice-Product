@@ -14,6 +14,10 @@
 // printed in it are then a cross-check that can *hold* the document in that company, never
 // move it to another. Every later command (`retry`, `assignCompany`) takes the caller's
 // `RequestContext` and works only on that company's documents.
+//
+// Issue #401: screening trusts nothing the sender declared. Size and hash are measured
+// from the bytes that arrived, the whole file is read by the PDF checks, and a document
+// waits for the virus scanner's own answer before anything reads it.
 
 import { randomUUID } from "node:crypto";
 import { ConnectorError } from "../../platform/src/connectors.ts";
@@ -23,8 +27,9 @@ import type { AuditLog, PlatformCommandService } from "../../platform/src/platfo
 import type { Id } from "../../masters/src/types.ts";
 import { NO_IRP_SIGNING_KEY } from "../../gst/src/irp-signature.ts";
 import type { IrpSignatureVerifier } from "../../gst/src/irp-signature.ts";
-import { screenAttachment } from "./safety.ts";
-import type { ScanVerdict } from "./safety.ts";
+import { applyScanVerdict, inspectAttachment } from "./safety.ts";
+import type { DeclaredAttachment, ScreeningResult, SupportedType } from "./safety.ts";
+import type { VirusScanPort } from "./virus-scan.ts";
 import { assertDistinctChannels, routeDocument } from "./routing.ts";
 import type { CompanyRoutingProfile } from "./routing.ts";
 import { readEInvoiceJson } from "./einvoice.ts";
@@ -32,7 +37,7 @@ import type { EInvoiceReadResult } from "./einvoice.ts";
 import { crossCheck, readInvoiceFromOcr } from "./extraction.ts";
 import type { OcrReadResult } from "./extraction.ts";
 import type { OcrAdapter } from "./ocr.ts";
-import type { Attachment, ExtractedField, ExtractionDraft, InboundDocument, InboundSender, InboundStatus, IntakeChannel, LogicalInvoiceKey, QuarantineReason } from "./inbox-types.ts";
+import type { ExtractedField, ExtractionDraft, InboundDocument, InboundSender, InboundStatus, IntakeChannel, LogicalInvoiceKey, QuarantineReason } from "./inbox-types.ts";
 
 export class InboxError extends Error {
   public readonly code: "NOT_FOUND" | "TENANT_ISOLATION" | "INVALID_STATE";
@@ -42,12 +47,19 @@ export class InboxError extends Error {
 export interface ReceiveInput {
   readonly channel: IntakeChannel;
   readonly sender: InboundSender;
-  readonly attachment: Attachment;
-  /** The first few kilobytes, for type and safety checks. */
-  readonly head: Uint8Array;
-  /** Full text, for e-invoice JSON only. Binary documents go to OCR instead. */
-  readonly jsonBody?: string;
-  readonly scanVerdict?: ScanVerdict;
+  /**
+   * What the channel says about the file. `sizeBytes` and `sha256` are optional claims:
+   * when given they are compared with the bytes, and the stored document always carries
+   * the measured values (#401).
+   */
+  readonly attachment: DeclaredAttachment;
+  /**
+   * The whole file exactly as it arrived. Screening reads all of it — never a prefix —
+   * and e-invoice JSON is parsed from these same bytes, so what was screened is what is
+   * read (#401). There is deliberately no way to pass in a scan verdict: the inbox asks
+   * its own scanner.
+   */
+  readonly bytes: Uint8Array;
   /**
    * The alias or number the document was delivered to, for channel routing. The channel
    * adapter must take it from the provider's delivery record (SMTP envelope recipient,
@@ -115,8 +127,11 @@ export class PurchaseInboxService {
   readonly #channelOwners = new Map<Id, readonly Id[]>();
   /** The intake idempotency key, so a retry records its draft under the same command. */
   readonly #intakeKeys = new Map<Id, string>();
+  /** Documents waiting for the virus scanner, with what is needed to carry on later. */
+  readonly #awaitingScan = new Map<Id, Omit<ReceiveInput, "bytes">>();
+  readonly #scanner: VirusScanPort;
 
-  constructor(commands: PlatformCommandService, audit: AuditLog, ocr: OcrAdapter, companies: readonly CompanyRoutingProfile[], options: PurchaseInboxOptions = {}) {
+  constructor(commands: PlatformCommandService, audit: AuditLog, ocr: OcrAdapter, companies: readonly CompanyRoutingProfile[], scanner: VirusScanPort, options: PurchaseInboxOptions = {}) {
     this.#commands = commands;
     this.#audit = audit;
     this.#ocr = ocr;
@@ -124,6 +139,7 @@ export class PurchaseInboxService {
     // other's documents (#400 review), so that configuration is refused outright.
     assertDistinctChannels(companies);
     this.#companies = companies;
+    this.#scanner = scanner;
     this.#signatures = options.irpSignatures ?? NO_IRP_SIGNING_KEY;
   }
 
@@ -182,7 +198,8 @@ export class PurchaseInboxService {
       companyId: UNROUTED,
       channel: input.channel,
       sender: input.sender,
-      attachment: input.attachment,
+      // Size and hash are filled in from the measured bytes during screening.
+      attachment: { ...input.attachment, sizeBytes: input.bytes.byteLength, sha256: "" },
       receivedAt: new Date().toISOString(),
       status: "received",
       attempts: 1,
@@ -191,10 +208,75 @@ export class PurchaseInboxService {
     this.#intakeKeys.set(id, input.idempotencyKey);
     if (input.sender.providerMessageId) this.#byProviderMessage.set(input.sender.providerMessageId, id);
 
-    // 1. Screening, before anything reads the file.
+    // 1. Screening, before anything reads the file: the whole file, measured size and
+    //    hash, and an answer from the virus scanner (#401).
     document = this.#set(document, { status: "screening" });
-    const screening = screenAttachment(input.attachment, input.head, input.scanVerdict ?? "unscanned");
-    if (!screening.ok) return { document: this.#quarantine(document, screening.reason, screening.message), duplicate: false };
+    const screened = await this.#screen(document, input.attachment, input.bytes);
+    document = screened.document;
+    const screening = screened.screening;
+    if (!screening.ok && screening.outcome === "quarantine") return { document: this.#quarantine(document, screening.reason, screening.message, screening.detail), duplicate: false };
+    if (!screening.ok) {
+      const { bytes: _bytes, ...rest } = input;
+      this.#awaitingScan.set(id, rest);
+      return { document: this.#set(document, { status: "awaiting_scan", statusMessage: screening.message }), duplicate: false };
+    }
+    return this.#afterScreening(document, input, screening.detectedType, input.bytes);
+  }
+
+  /**
+   * Asks the scanner again about a document it has not answered for yet. The caller (a
+   * worker reading from object storage) supplies the bytes; they must be the same file,
+   * byte for byte, or the document is quarantined.
+   */
+  async rescan(documentId: Id, bytes: Uint8Array): Promise<ReceiveResult> {
+    const document = this.#documents.get(documentId);
+    const pending = this.#awaitingScan.get(documentId);
+    if (!document) throw new InboxError("NOT_FOUND", "That document was not found.");
+    if (document.status !== "awaiting_scan" || !pending) throw new InboxError("INVALID_STATE", "Only a document waiting for its virus check can be checked again.");
+    const attempted = this.#set(document, { status: "screening", attempts: document.attempts + 1 });
+    // The stored, measured size and hash are now the declaration the bytes must match.
+    const screened = await this.#screen(attempted, attempted.attachment, bytes);
+    const screening = screened.screening;
+    if (!screening.ok && screening.outcome === "quarantine") {
+      this.#awaitingScan.delete(documentId);
+      return { document: this.#quarantine(screened.document, screening.reason, screening.message, screening.detail), duplicate: false };
+    }
+    if (!screening.ok) return { document: this.#set(screened.document, { status: "awaiting_scan", statusMessage: screening.message }), duplicate: false };
+    this.#awaitingScan.delete(documentId);
+    return this.#afterScreening(screened.document, { ...pending, bytes }, screening.detectedType, bytes);
+  }
+
+  async #screen(document: InboundDocument, declared: DeclaredAttachment, bytes: Uint8Array): Promise<{ document: InboundDocument; screening: ScreeningResult }> {
+    const inspection = inspectAttachment(declared, bytes);
+    const withMeasured = this.#set(document, { attachment: { ...document.attachment, sizeBytes: inspection.measured.sizeBytes, sha256: inspection.measured.sha256 ?? "" } });
+    if (!inspection.ok) return { document: withMeasured, screening: inspection };
+    const sha256 = inspection.measured.sha256;
+    try {
+      const answer = await this.#scanner.scan({
+        bytes,
+        sha256,
+        sizeBytes: inspection.measured.sizeBytes,
+        storageKey: document.attachment.storageKey,
+        correlationId: document.id,
+        idempotencyKey: `scan:${sha256}`,
+      });
+      // An answer about different bytes, or one we do not recognise, is no answer.
+      const sameFile = typeof answer?.scannedSha256 === "string" && answer.scannedSha256.toLowerCase() === sha256;
+      const verdict = sameFile && (answer.verdict === "clean" || answer.verdict === "infected") ? answer.verdict : "unscanned";
+      this.#record(withMeasured, "purchase.inbox.virus_scanned", { verdict, sameFile, engine: String(answer?.engine ?? ""), providerRequestId: String(answer?.providerRequestId ?? "") });
+      return { document: withMeasured, screening: applyScanVerdict(inspection, verdict) };
+    } catch (error) {
+      // Outage, timeout, a non-retryable failure or a bug in the adapter: all hold.
+      const connectorError = error instanceof ConnectorError ? error : null;
+      this.#record(withMeasured, "purchase.inbox.virus_scan_unavailable", { code: connectorError?.code ?? "UNKNOWN", retryable: connectorError?.retryable ?? false });
+      return { document: withMeasured, screening: applyScanVerdict(inspection, undefined, true) };
+    }
+  }
+
+  async #afterScreening(screened: InboundDocument, input: ReceiveInput, detectedType: SupportedType, bytes: Uint8Array): Promise<ReceiveResult> {
+    let document = screened;
+    const id = document.id;
+    const measuredSha256 = document.attachment.sha256;
 
     // 2. Routing, from the uploader's session or the delivery address only. Nothing inside
     //    the file is consulted (#400).
@@ -211,8 +293,9 @@ export class PurchaseInboxService {
     }
     document = this.#set(document, { companyId: routing.companyId, routing: routing.decision });
 
-    // 3. Attachment-level duplicate check, scoped to the company that owns the file.
-    const contentKey = `${routing.companyId}:${input.attachment.sha256}`;
+    // 3. Attachment-level duplicate check, scoped to the company that owns the file. The
+    //    hash is the one measured during screening, never a declared one (#401).
+    const contentKey = `${routing.companyId}:${measuredSha256}`;
     const earlier = this.#byContent.get(contentKey);
     if (earlier && earlier !== id) {
       const original = this.#documents.get(earlier) as InboundDocument;
@@ -226,10 +309,12 @@ export class PurchaseInboxService {
     }
     this.#byContent.set(contentKey, id);
 
-    // 4-6. Reading, cross-checking and drafting.
+    // 4-6. Reading, cross-checking and drafting. e-invoice JSON is decoded from the
+    //    screened bytes — the same bytes the hash and the virus check covered (#401).
     const company = this.#companies.find((candidate) => candidate.companyId === routing.companyId) as CompanyRoutingProfile;
+    const jsonBody = detectedType === "json" ? new TextDecoder("utf-8").decode(bytes) : null;
     return this.#readAndDraft(document, company, {
-      json: screening.detectedType === "json" ? { body: input.jsonBody ?? "" } : null,
+      json: jsonBody === null ? null : { body: jsonBody },
       ...(input.uploader === undefined ? {} : { actor: input.uploader }),
     });
   }
@@ -428,9 +513,9 @@ export class PurchaseInboxService {
     return updated;
   }
 
-  #quarantine(document: InboundDocument, reason: QuarantineReason, message: string): InboundDocument {
+  #quarantine(document: InboundDocument, reason: QuarantineReason, message: string, detail?: string): InboundDocument {
     const held = this.#set(document, { status: "quarantined", quarantineReason: reason, statusMessage: message });
-    this.#record(held, "purchase.inbox.quarantined", { reason, message });
+    this.#record(held, "purchase.inbox.quarantined", { reason, message, ...(detail === undefined ? {} : { detail }) });
     return held;
   }
 

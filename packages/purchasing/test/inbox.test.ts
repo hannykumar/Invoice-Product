@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AuditLog, PlatformCommandService } from "../../platform/src/index.ts";
 import { syntheticGstin } from "../../masters/src/index.ts";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import type { KeyObject } from "node:crypto";
 import { computeIrn } from "../../gst/src/irn.ts";
 import { Rs256IrpSignatureVerifier } from "../../gst/src/irp-signature.ts";
 import type { Permission, RequestContext } from "../../platform/src/types.ts";
-import { MockOcrAdapter, PurchaseInboxService, REVIEW_CONFIDENCE, UNSIGNED_JSON_CONFIDENCE, pageFromLines, parseInvoiceDate, parsePaise, readEInvoiceJson, readInvoiceFromOcr, routeDocument, screenAttachment } from "../src/index.ts";
-import type { Attachment, CompanyRoutingProfile, InboundSender } from "../src/index.ts";
+import { MockOcrAdapter, MockVirusScanner, PurchaseInboxService, REVIEW_CONFIDENCE, UNSIGNED_JSON_CONFIDENCE, pageFromLines, parseInvoiceDate, parsePaise, readEInvoiceJson, readInvoiceFromOcr, routeDocument, screenAttachment } from "../src/index.ts";
+import type { CompanyRoutingProfile, DeclaredAttachment, InboundSender } from "../src/index.ts";
 
 const BUYER_GSTIN = syntheticGstin("29", "AAACB1234M");
 const OTHER_BUYER_GSTIN = syntheticGstin("27", "AAACZ9999Q");
@@ -51,15 +51,15 @@ const signedEinvoice = (options: Parameters<typeof einvoiceObject>[0] & { readon
 
 const bytes = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "latin1"));
 const PDF_HEAD = bytes("%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n");
+const PDF_HEAD_SHA256 = createHash("sha256").update(PDF_HEAD).digest("hex");
 
 let counter = 0;
-const jsonAttachment = (sha256: string): Attachment => attachment({ fileName: "einvoice.json", declaredMimeType: "application/json", sha256, storageKey: `s3://inbox/${sha256}` });
-const attachment = (overrides: Partial<Attachment> = {}): Attachment => ({
+const jsonAttachment = (key: string): DeclaredAttachment => attachment({ fileName: "einvoice.json", declaredMimeType: "application/json", storageKey: `s3://inbox/${key}` });
+// Size and hash are deliberately absent: they are claims the inbox measures for itself (#401).
+const attachment = (overrides: Partial<DeclaredAttachment> = {}): DeclaredAttachment => ({
   id: `att-${(counter += 1)}`,
   fileName: "invoice.pdf",
   declaredMimeType: "application/pdf",
-  sizeBytes: 240_000,
-  sha256: `hash-${counter}`,
   storageKey: `s3://inbox/doc-${counter}`,
   ...overrides,
 });
@@ -81,11 +81,11 @@ const INVOICE_PAGE = (buyer = BUYER_GSTIN) => pageFromLines(1, [
   "Grand Total: 37,760.00",
 ]);
 
-function setup(pages = { "s3://inbox/doc-1": [INVOICE_PAGE()] } as Record<string, ReturnType<typeof pageFromLines>[]>, mode: "healthy" | "outage" = "healthy") {
+function setup(pages = { "s3://inbox/doc-1": [INVOICE_PAGE()] } as Record<string, ReturnType<typeof pageFromLines>[]>, mode: "healthy" | "outage" = "healthy", scanner = new MockVirusScanner()) {
   const audit = new AuditLog();
   const commands = new PlatformCommandService(audit, []);
   const ocr = new MockOcrAdapter(pages, mode);
-  return { audit, ocr, inbox: new PurchaseInboxService(commands, audit, ocr, COMPANIES, { irpSignatures: IRP_VERIFIER }) };
+  return { audit, ocr, scanner, inbox: new PurchaseInboxService(commands, audit, ocr, COMPANIES, scanner, { irpSignatures: IRP_VERIFIER }) };
 }
 
 test("money on an Indian invoice is read as exact paise", () => {
@@ -102,7 +102,7 @@ test("dates are read day-first and say so when they could be read either way", (
 });
 
 test("attachment screening holds files that are not safe to read", () => {
-  assert.equal(screenAttachment(attachment(), PDF_HEAD).ok, true);
+  assert.equal(screenAttachment(attachment(), PDF_HEAD, "clean").ok, true);
   const disguised = screenAttachment(attachment({ fileName: "invoice.pdf.exe" }), PDF_HEAD);
   assert.equal(disguised.ok === false && disguised.reason, "UNSUPPORTED_FILE_TYPE");
   const mismatch = screenAttachment(attachment({ declaredMimeType: "image/png" }), PDF_HEAD);
@@ -111,7 +111,7 @@ test("attachment screening holds files that are not safe to read", () => {
   assert.equal(locked.ok === false && locked.reason, "PASSWORD_PROTECTED");
   const scripted = screenAttachment(attachment(), bytes("%PDF-1.7\n/OpenAction << /JavaScript (app.alert) >>\n"));
   assert.equal(scripted.ok === false && scripted.reason, "ACTIVE_CONTENT");
-  const huge = screenAttachment(attachment({ sizeBytes: 40 * 1024 * 1024 }), PDF_HEAD);
+  const huge = screenAttachment(attachment(), new Uint8Array(40 * 1024 * 1024), "clean");
   assert.equal(huge.ok === false && huge.reason, "FILE_TOO_LARGE");
   const infected = screenAttachment(attachment(), PDF_HEAD, "infected");
   assert.equal(infected.ok === false && infected.reason, "MALWARE_SUSPECTED");
@@ -233,8 +233,8 @@ test("a rotated multi-page scan still reads, because the provider corrected the 
 test("a received document becomes a draft and nothing is posted", async () => {
   const { inbox, audit } = setup();
   const result = await inbox.receive({
-    channel: "whatsapp", sender: whatsapp({ providerMessageId: "wamid.1" }), attachment: attachment({ sha256: "hash-A", storageKey: "s3://inbox/doc-1" }),
-    head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.1",
+    channel: "whatsapp", sender: whatsapp({ providerMessageId: "wamid.1" }), attachment: attachment({ storageKey: "s3://inbox/doc-1" }),
+    bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.1",
   });
   assert.equal(result.document.status, "draft_ready");
   assert.equal(result.document.companyId, "company-a");
@@ -247,8 +247,8 @@ test("a received document becomes a draft and nothing is posted", async () => {
 
 test("the same file arriving twice is not added twice", async () => {
   const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE()], "s3://inbox/doc-2": [INVOICE_PAGE()] });
-  const first = await inbox.receive({ channel: "whatsapp", sender: whatsapp({ providerMessageId: "wamid.1" }), attachment: attachment({ sha256: "same-file", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
-  const again = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: "mail.9" }, attachment: attachment({ sha256: "same-file", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2" });
+  const first = await inbox.receive({ channel: "whatsapp", sender: whatsapp({ providerMessageId: "wamid.1" }), attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  const again = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: "mail.9" }, attachment: attachment({ storageKey: "s3://inbox/doc-2" }), bytes: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2" });
   assert.equal(first.document.status, "draft_ready");
   assert.equal(again.duplicate, true);
   assert.equal(again.document.status, "discarded");
@@ -258,8 +258,8 @@ test("the same file arriving twice is not added twice", async () => {
 test("a channel redelivering the same message returns the original document", async () => {
   const { inbox, ocr } = setup();
   const sender = whatsapp({ providerMessageId: "wamid.retry" });
-  const first = await inbox.receive({ channel: "whatsapp", sender, attachment: attachment({ sha256: "hash-B", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
-  const redelivered = await inbox.receive({ channel: "whatsapp", sender, attachment: attachment({ sha256: "hash-B", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  const first = await inbox.receive({ channel: "whatsapp", sender, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  const redelivered = await inbox.receive({ channel: "whatsapp", sender, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   assert.equal(redelivered.document.id, first.document.id);
   assert.equal(redelivered.duplicate, true);
   // The provider was not asked to read the same document a second time.
@@ -269,8 +269,8 @@ test("a channel redelivering the same message returns the original document", as
 test("an invoice addressed to another company is held, not filed", async () => {
   const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE(OTHER_BUYER_GSTIN)] });
   const result = await inbox.receive({
-    channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "hash-C", storageKey: "s3://inbox/doc-1" }),
-    head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1",
+    channel: "whatsapp", sender: whatsapp(), attachment: attachment({ storageKey: "s3://inbox/doc-1" }),
+    bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1",
   });
   assert.equal(result.document.status, "quarantined");
   assert.equal(result.document.quarantineReason, "COMPANY_MISMATCH");
@@ -281,7 +281,7 @@ test("an invoice addressed to another company is held, not filed", async () => {
 
 test("one company cannot read another company's inbox", async () => {
   const { inbox } = setup();
-  const result = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "hash-D", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   const otherCompany = { companyId: "company-b", branchId: "branch-b", actorId: "owner-b", permissions: new Set(), sessionId: "s" } as never;
   assert.throws(() => inbox.document(otherCompany, result.document.id), /not found/);
   assert.equal(inbox.inbox(otherCompany).length, 0);
@@ -290,7 +290,7 @@ test("one company cannot read another company's inbox", async () => {
 test("an outage marks the document for retry and the retry does not re-read what was already read", async () => {
   const { inbox, ocr } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE()] });
   ocr.failNext(1);
-  const failed = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ sha256: "hash-E", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const failed = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(failed.document.status, "failed");
   assert.match(failed.document.statusMessage ?? "", /tried again/);
 
@@ -303,7 +303,7 @@ test("an outage marks the document for retry and the retry does not re-read what
 test("a document too uncertain to be worth reviewing is quarantined instead of drafted", async () => {
   const smudged = pageFromLines(1, [{ text: "TAX INVOICE", confidence: 0.3 }, { text: "Total: 100.00", confidence: 0.25 }]);
   const { inbox } = setup({ "s3://inbox/doc-1": [smudged] });
-  const result = await inbox.receive({ channel: "camera", sender: { channel: "camera", address: "owner@sampoorna.example" }, attachment: attachment({ sha256: "hash-F", storageKey: "s3://inbox/doc-1", declaredMimeType: "image/jpeg", fileName: "photo.jpg" }), head: bytes("\xff\xd8\xff\xe0JFIF"), uploader: contextFor("company-a"), idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "camera", sender: { channel: "camera", address: "owner@sampoorna.example" }, attachment: attachment({ storageKey: "s3://inbox/doc-1", declaredMimeType: "image/jpeg", fileName: "photo.jpg" }), bytes: bytes("\xff\xd8\xff\xe0JFIF"), uploader: contextFor("company-a"), idempotencyKey: "k1" });
   assert.equal(result.document.status, "quarantined");
   assert.equal(result.document.quarantineReason, "EXTRACTION_TOO_UNCERTAIN");
 });
@@ -315,7 +315,7 @@ test("values read with low confidence are listed for review rather than accepted
     "Taxable Value: 1,000.00", "IGST 18%: 180.00", "Grand Total: 1,180.00",
   ]);
   const { inbox } = setup({ "s3://inbox/doc-1": [shaky] });
-  const result = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner@sampoorna.example" }, attachment: attachment({ sha256: "hash-G", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner@sampoorna.example" }, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k1" });
   assert.equal(result.document.status, "draft_ready");
   assert.ok(result.draft?.fieldsNeedingReview.includes("invoiceDate"));
   assert.match(result.draft?.invoiceDate?.warning ?? "", /day\/month or month\/day/);
@@ -328,16 +328,16 @@ test("an invoice whose own arithmetic does not add up says so", async () => {
     "Taxable Value: 32,000.00", "IGST 18%: 5,760.00", "Grand Total: 37,000.00",
   ]);
   const { inbox } = setup({ "s3://inbox/doc-1": [wrong] });
-  const result = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner@sampoorna.example" }, attachment: attachment({ sha256: "hash-H", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner@sampoorna.example" }, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k1" });
   assert.match(result.draft?.arithmeticProblems.join(" ") ?? "", /does not equal the invoice total/);
 });
 
 test("#400: a forged JSON naming a victim's GST number never reaches the victim's books", async () => {
   const { inbox } = setup();
   const forged = einvoiceJson({ number: "FAKE/1", buyer: BUYER_GSTIN });
-  const send = (deliveredTo: string, sha: string) => inbox.receive({
-    channel: "email", sender: { channel: "email", address: "attacker@evil.example" }, attachment: jsonAttachment(sha),
-    head: bytes(forged.slice(0, 512)), jsonBody: forged, deliveredTo, idempotencyKey: sha,
+  const send = (deliveredTo: string, key: string) => inbox.receive({
+    channel: "email", sender: { channel: "email", address: "attacker@evil.example" }, attachment: jsonAttachment(key),
+    bytes: bytes(forged), deliveredTo, idempotencyKey: key,
   });
 
   // Sent to the stranger's own alias: it stays in the stranger's company, held, with no draft.
@@ -363,7 +363,7 @@ test("#400: an unsigned JSON sent to the right address is drafted, but every val
   const json = einvoiceJson({ number: "SRS/2026/0050" });
   const result = await inbox.receive({
     channel: "whatsapp", sender: whatsapp(), attachment: jsonAttachment("unsigned-ok"),
-    head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "+91 98450 12345", idempotencyKey: "k1",
+    bytes: bytes(json), deliveredTo: "+91 98450 12345", idempotencyKey: "k1",
   });
   assert.equal(result.document.companyId, "company-a");
   assert.equal(result.document.routing?.basis, "channel_binding");
@@ -378,7 +378,7 @@ test("#400: a verified signed e-invoice is drafted at full confidence; a forged 
   const signed = signedEinvoice({ number: "SRS/2026/0051" });
   const good = await inbox.receive({
     channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("signed-ok"),
-    head: bytes(signed.slice(0, 512)), jsonBody: signed, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1",
+    bytes: bytes(signed), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1",
   });
   assert.equal(good.document.status, "draft_ready");
   assert.equal(good.draft?.signature, "verified");
@@ -387,7 +387,7 @@ test("#400: a verified signed e-invoice is drafted at full confidence; a forged 
   const forged = signedEinvoice({ number: "SRS/2026/0052", key: FORGER.privateKey });
   const bad = await inbox.receive({
     channel: "email", sender: { channel: "email", address: "attacker@evil.example" }, attachment: jsonAttachment("signed-bad"),
-    head: bytes(forged.slice(0, 512)), jsonBody: forged, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2",
+    bytes: bytes(forged), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2",
   });
   assert.equal(bad.document.quarantineReason, "SIGNATURE_INVALID");
   assert.equal(bad.draft, undefined);
@@ -398,7 +398,7 @@ test("#400: a genuinely signed invoice for one business, sent to another's addre
   const signed = signedEinvoice({ number: "SRS/2026/0053", buyer: BUYER_GSTIN });
   const result = await inbox.receive({
     channel: "whatsapp", sender: whatsapp(), attachment: jsonAttachment("signed-wrong-door"),
-    head: bytes(signed.slice(0, 512)), jsonBody: signed, deliveredTo: "+91 98220 11122", idempotencyKey: "k1",
+    bytes: bytes(signed), deliveredTo: "+91 98220 11122", idempotencyKey: "k1",
   });
   assert.equal(result.document.companyId, "company-b");
   assert.equal(result.document.quarantineReason, "COMPANY_MISMATCH");
@@ -410,7 +410,7 @@ test("#400: an upload takes its company from the session, and a printed buyer of
   const json = einvoiceJson({ buyer: OTHER_BUYER_GSTIN, number: "SRS/2026/0060" });
   const result = await inbox.receive({
     channel: "manual_upload", sender: { channel: "manual_upload", address: "owner-company-a" }, attachment: jsonAttachment("upload-wrong-buyer"),
-    head: bytes(json.slice(0, 512)), jsonBody: json, uploader: contextFor("company-a"), idempotencyKey: "k1",
+    bytes: bytes(json), uploader: contextFor("company-a"), idempotencyKey: "k1",
   });
   assert.equal(result.document.companyId, "company-a");
   assert.equal(result.document.quarantineReason, "COMPANY_MISMATCH");
@@ -419,7 +419,7 @@ test("#400: an upload takes its company from the session, and a printed buyer of
 
 test("#400: another company cannot assign a document held in this company", async () => {
   const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE(OTHER_BUYER_GSTIN)] });
-  const held = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "held-a", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  const held = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   assert.equal(held.document.companyId, "company-a");
   assert.equal(held.document.quarantineReason, "COMPANY_MISMATCH");
   assert.throws(() => inbox.assignCompany(contextFor("company-b"), held.document.id, "the GST number is ours"), /not found/);
@@ -432,7 +432,7 @@ test("#400: another company cannot assign a document held in this company", asyn
 
 test("#400: a document on a shared address can be claimed only by a business that owns that address", async () => {
   const { inbox } = setup();
-  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ sha256: "shared-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "shared-desk@invoices.example", idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "shared-desk@invoices.example", idempotencyKey: "k1" });
   assert.equal(result.document.quarantineReason, "COMPANY_NOT_IDENTIFIED");
   assert.deepEqual(inbox.awaitingAssignment(contextFor("company-a")).map((item) => item.id), [result.document.id]);
   assert.deepEqual(Object.keys(inbox.awaitingAssignment(contextFor("company-a"))[0] ?? {}).sort(), ["channel", "fileName", "id", "receivedAt", "sizeBytes"]);
@@ -447,20 +447,20 @@ test("#400: a document on a shared address can be claimed only by a business tha
   assert.throws(() => inbox.assignCompany(contextFor("company-b"), result.document.id, "ours"), /not found/);
   // The hold is lifted cleanly, and the same file arriving again is a duplicate in its new home.
   assert.equal(claimed.quarantineReason, undefined);
-  const again = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner-company-a" }, attachment: attachment({ sha256: "shared-1", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k2" });
+  const again = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner-company-a" }, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, uploader: contextFor("company-a"), idempotencyKey: "k2" });
   assert.equal(again.duplicate, true);
   assert.equal(again.document.duplicateOfId, result.document.id);
 });
 
 test("#400: assigning cannot clear a hold that was not about the company", async () => {
-  const { inbox } = setup();
-  const infected = await inbox.receive({ channel: "email", sender: { channel: "email", address: "a@b.example" }, attachment: attachment({ sha256: "bad-1" }), head: PDF_HEAD, scanVerdict: "infected", deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const { inbox } = setup(undefined, "healthy", new MockVirusScanner({ infectedSha256: [PDF_HEAD_SHA256] }));
+  const infected = await inbox.receive({ channel: "email", sender: { channel: "email", address: "a@b.example" }, attachment: attachment(), bytes: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(infected.document.quarantineReason, "MALWARE_SUSPECTED");
   // Screened out before routing, so it belongs to nobody and nobody can claim it.
   assert.throws(() => inbox.assignCompany(contextFor("company-a"), infected.document.id, "looks fine"), /not found/);
 
   const tampered = signedEinvoice({ number: "SRS/2026/0070", key: FORGER.privateKey });
-  const held = await inbox.receive({ channel: "email", sender: { channel: "email", address: "a@b.example" }, attachment: jsonAttachment("tampered-1"), head: bytes(tampered.slice(0, 512)), jsonBody: tampered, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2" });
+  const held = await inbox.receive({ channel: "email", sender: { channel: "email", address: "a@b.example" }, attachment: jsonAttachment("tampered-1"), bytes: bytes(tampered), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2" });
   assert.equal(held.document.companyId, "company-a");
   assert.equal(held.document.quarantineReason, "SIGNATURE_INVALID");
   assert.throws(() => inbox.assignCompany(contextFor("company-a"), held.document.id, "looks fine"), /cannot be cleared/);
@@ -469,7 +469,7 @@ test("#400: assigning cannot clear a hold that was not about the company", async
 test("#400: another company cannot retry this company's document", async () => {
   const { inbox, ocr } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE()] });
   ocr.failNext(1);
-  const failed = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ sha256: "retry-x", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const failed = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(failed.document.status, "failed");
   const calls = ocr.callCount;
   await assert.rejects(() => inbox.retry(contextFor("company-b"), failed.document.id), /not found/);
@@ -482,7 +482,7 @@ test("#400: another company cannot retry this company's document", async () => {
 test("#400: a retry goes through the same company cross-check as the first read", async () => {
   const { inbox, ocr } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE(OTHER_BUYER_GSTIN)] });
   ocr.failNext(1);
-  const failed = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "retry-y", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  const failed = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   assert.equal(failed.document.status, "failed");
   const retried = await inbox.retry(contextFor("company-a"), failed.document.id);
   assert.equal(retried.document.quarantineReason, "COMPANY_MISMATCH");
@@ -491,7 +491,7 @@ test("#400: a retry goes through the same company cross-check as the first read"
 
 test("#400: one address under two businesses with different owners is refused, and phone numbers compare in full", () => {
   const audit = new AuditLog();
-  const make = (companies: readonly CompanyRoutingProfile[]) => new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), companies);
+  const make = (companies: readonly CompanyRoutingProfile[]) => new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), companies, new MockVirusScanner());
   const victim = { companyId: "v", legalName: "Victim", gstins: [], emailAliases: ["bills-v@invoices.example"], whatsappNumbers: ["+91 98450 12345"] };
   assert.throws(() => make([victim, { ...victim, companyId: "x", legalName: "Stranger", whatsappNumbers: [] }]), /two businesses/);
   assert.throws(() => make([victim, { ...victim, companyId: "x", legalName: "Stranger", emailAliases: [], whatsappNumbers: ["09845012345"] }]), /two businesses/);
@@ -513,7 +513,7 @@ test("#400: an IRN that does not check out is listed for review even inside a ge
   const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
   const input = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({ data: JSON.stringify({ ...data, Irn: irnFor("OTHER/1") }), iss: "NIC" })}`;
   const json = JSON.stringify({ SignedInvoice: `${input}.${sign("sha256", Buffer.from(input), IRP_KEY.privateKey).toString("base64url")}` });
-  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("irn-mismatch"), head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("irn-mismatch"), bytes: bytes(json), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(result.draft?.signature, "verified");
   assert.ok(result.draft?.fieldsNeedingReview.includes("irn"));
   assert.doesNotMatch(result.document.statusMessage ?? "", /successfully/);
@@ -525,15 +525,15 @@ test("#400: a signed QR code in place of the signed invoice is not read as an in
   const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
   const input = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({ data: JSON.stringify(qrData), iss: "NIC" })}`;
   const json = JSON.stringify({ SignedInvoice: `${input}.${sign("sha256", Buffer.from(input), IRP_KEY.privateKey).toString("base64url")}` });
-  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("qr-as-invoice"), head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("qr-as-invoice"), bytes: bytes(json), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(result.document.quarantineReason, "NOT_AN_INVOICE");
 });
 
 test("#400: with no government key configured, a signed file goes through the inbox as unverified, never as trusted", async () => {
   const audit = new AuditLog();
-  const inbox = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), COMPANIES);
+  const inbox = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, new MockOcrAdapter({}), COMPANIES, new MockVirusScanner());
   const json = signedEinvoice({ number: "SRS/2026/0095" });
-  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("no-key"), head: bytes(json.slice(0, 512)), jsonBody: json, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: jsonAttachment("no-key"), bytes: bytes(json), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(result.draft?.signature, "unverified");
   assert.ok(result.draft?.fieldsNeedingReview.includes("invoiceNumber"));
 });

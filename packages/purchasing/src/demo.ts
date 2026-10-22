@@ -5,7 +5,7 @@
 
 import { AuditLog, PlatformCommandService } from "../../platform/src/index.ts";
 import { syntheticGstin } from "../../masters/src/index.ts";
-import { MockOcrAdapter, PurchaseInboxService, pageFromLines } from "./index.ts";
+import { MockOcrAdapter, MockVirusScanner, PurchaseInboxService, pageFromLines } from "./index.ts";
 import { formatPaise } from "./money.ts";
 import type { CompanyRoutingProfile } from "./routing.ts";
 
@@ -25,7 +25,9 @@ const invoicePage = (buyer: string, number: string, total: string) => pageFromLi
   "Taxable Value: 32,000.00", "IGST 18%: 5,760.00", `Grand Total: ${total}`,
 ]);
 
-const pdfHead = new Uint8Array(Buffer.from("%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n", "latin1"));
+// A whole (tiny) PDF per document: screening reads every byte, and the hash that spots a
+// repeat is measured from these bytes, never taken from the sender (#401).
+const pdf = (tag: string) => new Uint8Array(Buffer.from(`%PDF-1.7\n% ${tag}\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n`, "latin1"));
 const line = (text = "") => console.log(text);
 
 export async function runDemo(): Promise<void> {
@@ -36,8 +38,8 @@ export async function runDemo(): Promise<void> {
     "s3://c": [invoicePage(THEIRS, "SRS/2026/0099", "37,760.00")],
     "s3://d": [pageFromLines(1, [{ text: "TAX INVOICE", confidence: 0.3 }, { text: "Total 100.00", confidence: 0.22 }])],
   });
-  const inbox = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, ocr, companies);
-  const attachment = (sha: string, key: string, fileName = "invoice.pdf", mime = "application/pdf") => ({ id: sha, fileName, declaredMimeType: mime, sizeBytes: 240_000, sha256: sha, storageKey: key });
+  const inbox = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, ocr, companies, new MockVirusScanner());
+  const attachment = (id: string, key: string, fileName = "invoice.pdf", mime = "application/pdf") => ({ id, fileName, declaredMimeType: mime, storageKey: key });
 
   const show = (label: string, result: Awaited<ReturnType<typeof inbox.receive>>) => {
     line();
@@ -59,22 +61,22 @@ export async function runDemo(): Promise<void> {
 
   show("1. A supplier's PDF on WhatsApp", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", displayName: "Shree Ram Steels", providerMessageId: "wamid.1" },
-    attachment: attachment("sha-a", "s3://a"), head: pdfHead, deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.1",
+    attachment: attachment("att-a", "s3://a"), bytes: pdf("SRS/2026/0042"), deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.1",
   }));
 
   show("2. The same invoice emailed as well (same file)", await inbox.receive({
     channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: "mail.7" },
-    attachment: attachment("sha-a", "s3://b"), head: pdfHead, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "mail.7",
+    attachment: attachment("att-b", "s3://b"), bytes: pdf("SRS/2026/0042"), deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "mail.7",
   }));
 
   show("3. An invoice addressed to a different business", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", providerMessageId: "wamid.2" },
-    attachment: attachment("sha-c", "s3://c"), head: pdfHead, deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.2",
+    attachment: attachment("att-c", "s3://c"), bytes: pdf("SRS/2026/0099"), deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.2",
   }));
 
   show("4. A blurred photo of a bill", await inbox.receive({
     channel: "camera", sender: { channel: "camera", address: "owner@sampoorna.example", providerMessageId: "cam.1" },
-    attachment: attachment("sha-d", "s3://d", "photo.jpg", "image/jpeg"), head: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), uploader: { companyId: "sampoorna", branchId: "sampoorna", actorId: "owner", permissions: new Set(), sessionId: "demo" }, idempotencyKey: "cam.1",
+    attachment: attachment("att-d", "s3://d", "photo.jpg", "image/jpeg"), bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]), uploader: { companyId: "sampoorna", branchId: "sampoorna", actorId: "owner", permissions: new Set(), sessionId: "demo" }, idempotencyKey: "cam.1",
   }));
 
   const eInvoice = JSON.stringify({
@@ -86,8 +88,8 @@ export async function runDemo(): Promise<void> {
   });
   show("5. An unsigned e-invoice JSON naming Sampoorna, sent to Konkan's number: held at Konkan, never moved", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", providerMessageId: "wamid.3" },
-    attachment: attachment("sha-e", "s3://e", "einvoice.json", "application/json"),
-    head: new Uint8Array(Buffer.from(eInvoice.slice(0, 512), "latin1")), jsonBody: eInvoice, deliveredTo: "+91 98220 11122", idempotencyKey: "wamid.3",
+    attachment: attachment("att-e", "s3://e", "einvoice.json", "application/json"),
+    bytes: new Uint8Array(Buffer.from(eInvoice, "utf8")), deliveredTo: "+91 98220 11122", idempotencyKey: "wamid.3",
   }));
 
   line();
