@@ -165,6 +165,7 @@ import {
 import {
   ChannelNotificationTransport,
   InAppNotificationAdapter,
+  InMemoryNotificationStore,
   NotificationService,
   NotificationTemplateRegistry,
   type Notification,
@@ -172,6 +173,7 @@ import {
   type Permission,
   type RequestContext,
 } from '../../../packages/platform/src/index.ts';
+import { PostgresNotificationStore } from '../../../packages/platform/src/postgres-notifications.ts';
 import {
   CollectionsService,
   InMemoryReminderRepository,
@@ -1086,6 +1088,8 @@ export class DemoApplication {
       new ChannelNotificationTransport({ in_app: new InAppNotificationAdapter(), email: outbox, whatsapp: outbox, sms: outbox }),
       () => appClock.now().getTime(),
       { maxPerWindow: 100, windowMs: 60_000 },
+      // Issue #366 — on PostgreSQL the notifications and their delivery timeline survive a restart.
+      pick(() => new InMemoryNotificationStore(), (db) => new PostgresNotificationStore(db)),
     );
     const reminderContext = (from: ActorContext): RequestContext => ({
       companyId: from.companyId,

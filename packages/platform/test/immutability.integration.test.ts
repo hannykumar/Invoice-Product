@@ -425,7 +425,6 @@ test("every table that holds a company's rows enforces row-level security, excep
     "gst_return_declared_thresholds", "gst_return_preparations", "gstin_authorisations", "gstin_consents",
     "itc_claims", "itc_decisions", "itc_import_batches", "itc_portal_documents",
     "master_identity_keys", "master_merges", "master_name_index", "master_records", "master_snapshots", "master_versions",
-    "notification_delivery_events", "notification_preferences", "notifications",
     "purchase_bill_lines", "purchase_bill_receipts", "purchase_bills", "purchase_match_approvals", "purchase_match_tolerances", "purchase_order_lines", "purchase_orders",
     "supplier_gstin_readings", "supplier_risk_acknowledgements", "supplier_risk_assessments", "supplier_risk_policies",
     "unit_conversions", "units_of_measure", "vehicle_record_consents", "vehicle_records", "vehicle_suitability_checks", "vehicle_suitability_overrides", "vehicle_suitability_policies",
