@@ -20,6 +20,7 @@ import test, { after, before } from 'node:test';
 import type { ChildProcess } from 'node:child_process';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import type { RequestContext } from '../../../packages/platform/src/index.ts';
+import { signInOverHttp } from './sign-in-helper.ts';
 import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
 import { appDatabase, callApi, freePort, killProcess, startApi, startProcess, waitFor, WORKER } from './processes.ts';
 
@@ -57,7 +58,7 @@ test('a worker killed after the portal answered, before it saved the answer: the
   const run = randomBytes(3).toString('hex');
   api = await startApi(database!.appUrl, port);
   const call = callApi(port);
-  const token = String((await call('POST', '/api/auth/login', { email: 'owner@sampoorna.example.invalid', password: 'karobar-demo', companyId: COMPANY })).sessionId);
+  const token = (await signInOverHttp(`http://127.0.0.1:${port}`, 'owner@sampoorna.example.invalid', COMPANY)).split('=')[1]!;
   // Above ₹5 crore and below ₹10 crore: e-invoices are needed, and the 30-day reporting limit does not apply.
   assert.equal((await call('POST', '/api/business-details', { legalName: 'Sampoorna Traders', address1: 'Plot 14, 2nd Phase, Peenya Industrial Area', city: 'Bengaluru', pincode: '560058', stateCode: '29', turnoverBand: '5_TO_10_CRORE' }, token)).status, 200);
   const customer = await call('POST', '/api/customers', { name: `Mysuru Distributors ${run}`, registration: 'regular', gstin: syntheticGstin('29', `BBBCM${String(randomBytes(2).readUInt16BE() % 10_000).padStart(4, '0')}Z`), stateCode: '29', pincode: '570001', city: 'Mysuru', address1: '4 Sayyaji Rao Road', acknowledgeSimilar: true }, token);

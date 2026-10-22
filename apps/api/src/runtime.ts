@@ -1,7 +1,7 @@
 /** Authenticated HTTP runtime: session (sign-in.ts) -> membership -> tenant application. */
 import { asId, notFound } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
-import type { Permission, RequestContext } from '../../../packages/platform/src/index.ts';
+import { PlatformError, type Permission, type RequestContext } from '../../../packages/platform/src/index.ts';
 import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
 import { DemoApplication } from './demo-application.ts';
 import { businessDetailsOf, saveBusinessDetails } from './business-details-application.ts';
