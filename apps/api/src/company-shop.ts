@@ -348,6 +348,7 @@ export async function createCompanyShop(seed: CompanySeed) {
                 taxableValuePaise: bill.tax.taxableValuePaise, cgstPaise: bill.tax.cgstPaise,
                 sgstPaise: bill.tax.sgstPaise, igstPaise: bill.tax.igstPaise, cessPaise: bill.tax.cessPaise,
                 ineligibleItcPaise: bill.tax.ineligibleItcPaise, reverseCharge: bill.tax.reverseCharge,
+                ...(bill.tax.ineligibleHeads === undefined ? {} : { ineligibleHeads: bill.tax.ineligibleHeads }),
               },
             },
             // Issue #289 — a seller who is not registered sells taxable goods without GST; that is not

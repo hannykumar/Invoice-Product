@@ -122,6 +122,7 @@ import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adap
 import { citeReverseChargeEntry, reverseChargeDecisionFor, type ReverseChargeDecision } from '../../../packages/purchasing/src/reverse-charge-notified.ts';
 import { checkReverseChargeEntry, type RegisterParty, type ReverseChargeLine, type SelfInvoice } from '../../../packages/purchasing/src/reverse-charge-register.ts';
 import { rcmTimeOfSupply, selfInvoiceDue, type RcmSupplyKind } from '../../../packages/purchasing/src/reverse-charge-timing.ts';
+import { BLOCKED_CREDIT_REASONS, blockedCreditReasonFor } from '../../../packages/purchasing/src/blocked-credit.ts';
 import type { Party } from '../../../packages/masters/src/types.ts';
 import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
@@ -671,9 +672,11 @@ const previewEffects = (preview: PurchasePostingPreview, location: string): stri
   if (effects.length === 0) effects.push('Stock: nothing, this is a service');
   effects.push(
     tax.reverseCharge
-      ? `GST: ${formatPaise(claimable)} payable by you under reverse charge`
+      ? `GST: ${formatPaise(claimable + tax.ineligibleItcPaise)} payable by you under reverse charge`
       : `GST you can claim back: ${formatPaise(claimable)} (${tax.intraState ? 'CGST + SGST' : 'IGST'})`,
   );
+  // Issue #289, part 3 — tax CGST s.17(5) blocks: in the cost, not claimed.
+  if (tax.ineligibleItcPaise > 0n) effects.push(`GST that cannot be claimed (CGST s.17(5)), added to cost: ${formatPaise(tax.ineligibleItcPaise)}`);
   effects.push(`Supplier due: ${formatPaise(preview.totalPaise)}`);
   effects.push(`Due date: ${preview.dueDate}`);
   if (preview.roundOffPaise !== 0n) effects.push(`Rounding recorded separately: ${formatPaise(preview.roundOffPaise < 0n ? -preview.roundOffPaise : preview.roundOffPaise)}`);
@@ -1891,8 +1894,11 @@ export class DemoApplication {
     // Issue #289 — a supplier who may not charge GST: the bill carries none, whatever the states.
     const registration = resolveSupplier(this.companyOf(actor), approved.supplierPartyId).gstRegistrationType;
     const reverseCharge = approved.taxLiability === 'REVERSE_CHARGE';
+    // Issue #289, part 3 — under reverse charge the blocked tax is still owed (s.9(3)); only its credit goes.
+    const rcmPayable = claimable + (reverseCharge ? preview.tax.ineligibleItcPaise : 0n);
+    const blockedNotes = DemoApplication.blockedCreditNotes(approved, preview.tax.intraState);
     const why = reverseCharge
-      ? `This bill is under reverse charge: ${approved.supplierName} charges no GST on it, and you pay ${formatPaise(claimable)} of GST to the government yourself (CGST s.9(3)).`
+      ? `This bill is under reverse charge: ${approved.supplierName} charges no GST on it, and you pay ${formatPaise(rcmPayable)} of GST to the government yourself (CGST s.9(3)).`
       : registration === 'unregistered'
       ? `The supplier is not registered for GST, so their bill carries no GST (CGST s.32(1)) and none can be claimed back (s.16(2)(a)).`
       : registration === 'composition'
@@ -1912,14 +1918,14 @@ export class DemoApplication {
       message: advance !== null && advance.used > 0n
         ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} for ${formatPaise(preview.totalPaise)} will take the ${formatPaise(advance.used)} advance already paid off it, so you will owe them ${formatPaise(preview.totalPaise - advance.used)}, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`
         : reverseCharge
-          ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST under reverse charge that you pay the government in cash and then claim back as credit.`
+          ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(rcmPayable)} of GST under reverse charge that you pay the government in cash${claimable === rcmPayable ? ' and then claim back as credit' : `, of which ${formatPaise(claimable)} comes back as credit`}.`
           : `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`,
       amount: jsonAmount(preview.totalPaise),
       supplier: approved.supplierName,
       taxType: intra ? 'CGST_SGST' : 'IGST',
       tax: { cgst: jsonAmount(preview.tax.cgstPaise), sgst: jsonAmount(preview.tax.sgstPaise), igst: jsonAmount(preview.tax.igstPaise), total: jsonAmount(claimable) },
       // Issue #261 — with an advance taken off, the bill's total is not what is due; the sum below says what is.
-      effects: [why, ...reverseChargeNotes, ...lines, ...sumLine,
+      effects: [why, ...reverseChargeNotes, ...blockedNotes, ...lines, ...sumLine,
         ...previewEffects(preview, this.config.location).map((line) => advance !== null && advance.used > 0n && line.startsWith('Supplier due: ') ? `Bill total: ${formatPaise(preview.totalPaise)}` : line),
         ...preview.warnings, ...(advance === null ? [] : advance.effects)],
       token: approved.id,
@@ -4110,6 +4116,13 @@ export class DemoApplication {
           taxableValue: jsonAmount(box.amounts.taxableValue.minor),
           tax: jsonAmount(totalTaxOf(box.amounts).minor),
         })),
+        // Issue #289, part 3 — Table 4 box by box, so 4(A) and the s.17(5) credit taken out in 4(B)(1) can be seen.
+        credit: workspace.gstr3b.credit.map((box) => ({
+          boxId: box.boxId, label: box.label['en-IN'],
+          cgst: jsonAmount(box.amounts.cgst.minor), sgst: jsonAmount(box.amounts.sgst.minor),
+          igst: jsonAmount(box.amounts.igst.minor), cess: jsonAmount(box.amounts.cess.minor),
+          tax: jsonAmount(totalTaxOf(box.amounts).minor),
+        })),
         heads: workspace.gstr3b.heads.map((head) => ({
           head: head.head,
           liability: jsonAmount(head.liability.minor),
@@ -6273,6 +6286,16 @@ export class DemoApplication {
       const shown = verdict.findings.filter((finding) => finding.severity !== 'MINOR');
       throw invalid('PURCHASE_NEEDS_CHECKING', shown.length === 0 ? verdict.summary : shown.map((finding) => finding.message).join(' '), { details: { status: verdict.status } });
     }
+    // Issue #289, part 3 — a line with no GST at all (unregistered seller, exempt freight) has no
+    // credit to block. Checked on the final rates, after reverse charge has set the law's rate.
+    const finalLines = lines.map((line, index) => {
+      const decided = reverseCharge.lines[index];
+      return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+    });
+    const untaxedBlocked = finalLines.find((line) => line.itcEligibility === 'INELIGIBLE' && line.gstRateBasisPoints === 0);
+    if (untaxedBlocked !== undefined) {
+      throw invalid('PURCHASE_BLOCKED_NO_GST', `Line ${untaxedBlocked.lineNumber} (${untaxedBlocked.description}) carries no GST, so there is no credit to mark as not available. Leave it as "GST can be claimed".`);
+    }
     return {
       approved: {
         id: `web-purchase:${draftId}`,
@@ -6284,10 +6307,7 @@ export class DemoApplication {
         invoiceNumber: reference,
         invoiceDate: date,
         // Issue #289 — on a reverse-charge line the GST is the law's rate for the supply, owed by us.
-        lines: lines.map((line, index) => {
-          const decided = reverseCharge.lines[index];
-          return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
-        }),
+        lines: finalLines,
         invoiceTotalPaise: total,
         taxLiability: reverseCharge.any ? 'REVERSE_CHARGE' : 'SUPPLIER',
         creditDays: 30,
@@ -6413,6 +6433,19 @@ export class DemoApplication {
     return { lines: result, any, notes };
   }
 
+  /**
+   * Issue #289, part 3 — one sentence per line whose credit CGST s.17(5) blocks: the clause, the
+   * tax, and where it went instead.
+   */
+  private static blockedCreditNotes(approved: ApprovedPurchase, intraState: boolean): string[] {
+    return approved.lines.filter((line) => line.itcEligibility === 'INELIGIBLE').map((line) => {
+      const tax = taxOn(line.taxableValuePaise, line.gstRateBasisPoints);
+      const reason = BLOCKED_CREDIT_REASONS.find((candidate) => candidate.clause === line.blockedCreditClause);
+      const owed = approved.taxLiability === 'REVERSE_CHARGE' ? ' You still pay this GST to the government under reverse charge; only the credit is lost.' : '';
+      return `${line.description}: credit not available — ${reason?.label.toLowerCase() ?? 'blocked'} (CGST s.${line.blockedCreditClause ?? '17(5)'}). Its ${formatPaise(tax)} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you, not to the GST you claim back.${owed}`;
+    });
+  }
+
   /** Issue #289 — answers to the reverse-charge questions, from `rcm_<id>` form fields or an object. */
   private static reverseChargeAnswers(input: Record<string, unknown>): Record<string, boolean> {
     const answers: Record<string, boolean> = {};
@@ -6477,7 +6510,14 @@ export class DemoApplication {
         throw invalid('PURCHASE_GST_RATE', `${label}: choose the GST rate printed on the supplier's bill.`);
       }
       const goods = item.kind === 'goods';
+      // Issue #289, part 3 — credit blocked by CGST s.17(5): the person names the clause; the app
+      // never decides it. A bill with no GST has nothing to block.
+      const blocked = blockedCreditReasonFor(row.blocked ?? row.creditBlocked);
+      if (blocked === undefined) {
+        throw invalid('PURCHASE_BLOCKED_REASON', `${label}: choose why the GST on it cannot be claimed from the list, or leave it as "GST can be claimed".`);
+      }
       return {
+        ...(blocked === null ? {} : { blockedCreditClause: blocked.clause }),
         lineNumber: index + 1,
         itemId: item.id,
         description: item.name,
@@ -6488,7 +6528,7 @@ export class DemoApplication {
         ratePaise: rate,
         taxableValuePaise: lineTaxableValue(qty.scaled, rate),
         gstRateBasisPoints: gstBasisPoints,
-        itcEligibility: 'ELIGIBLE' as const,
+        itcEligibility: blocked === null ? 'ELIGIBLE' as const : 'INELIGIBLE' as const,
       };
     });
   }

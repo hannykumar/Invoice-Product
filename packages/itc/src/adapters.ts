@@ -270,6 +270,8 @@ export interface PostedBillLike {
     readonly igstPaise: bigint;
     readonly cessPaise: bigint;
     readonly ineligibleItcPaise: bigint;
+    /** Issue #289, part 3 — the blocked (s.17(5)) tax by head; the heads above are the claimable part. */
+    readonly ineligibleHeads?: { readonly cgstPaise: bigint; readonly sgstPaise: bigint; readonly igstPaise: bigint; readonly cessPaise: bigint };
     readonly reverseCharge: boolean;
   };
 }
@@ -295,15 +297,18 @@ export const purchaseBillToBookDocument = (
   number: bill.invoiceNumber,
   documentDate: bill.invoiceDate as IsoDate,
   period: bill.invoiceDate.slice(0, 7) as TaxPeriod,
+  // Issue #289, part 3 — the tax on the bill as charged (what GSTR-2B shows, and what reverse charge
+  // owes): the claimable heads plus the blocked ones. `ineligibleItc` is then taken off it for the
+  // credit (`creditableFromBooks`). A bill posted without the blocked heads had nothing blocked.
   amounts: {
     taxableValue: { currency: 'INR', minor: bill.tax.taxableValuePaise },
-    cgst: { currency: 'INR', minor: bill.tax.cgstPaise },
-    sgst: { currency: 'INR', minor: bill.tax.sgstPaise },
-    igst: { currency: 'INR', minor: bill.tax.igstPaise },
-    cess: { currency: 'INR', minor: bill.tax.cessPaise },
+    cgst: { currency: 'INR', minor: bill.tax.cgstPaise + (bill.tax.ineligibleHeads?.cgstPaise ?? 0n) },
+    sgst: { currency: 'INR', minor: bill.tax.sgstPaise + (bill.tax.ineligibleHeads?.sgstPaise ?? 0n) },
+    igst: { currency: 'INR', minor: bill.tax.igstPaise + (bill.tax.ineligibleHeads?.igstPaise ?? 0n) },
+    cess: { currency: 'INR', minor: bill.tax.cessPaise + (bill.tax.ineligibleHeads?.cessPaise ?? 0n) },
   },
   invoiceValue: { currency: 'INR', minor: bill.totalPaise },
-  ineligibleItc: { currency: 'INR', minor: bill.tax.ineligibleItcPaise },
+  ineligibleItc: { currency: 'INR', minor: bill.tax.ineligibleHeads === undefined ? 0n : bill.tax.ineligibleItcPaise },
   reverseCharge: bill.tax.reverseCharge,
   imported: supplier.imported ?? false,
   voucherId: bill.voucherId,

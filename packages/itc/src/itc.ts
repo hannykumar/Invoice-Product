@@ -666,14 +666,31 @@ export const linkageFor = (
 
   // Issue #286 — a supplier's credit note reduces the credit in the same box its bill was claimed
   // in, as GSTR-2B nets it into 4(A)(5) (or 4(A)(3) under reverse charge). Putting it in 4(B) as well
-  // as 2B's net figure reduced it twice, or disagreed with 2B. 4(B) is kept for real reversals —
-  // Rule 42/43 and section 17(5) — which this module does not post, so it is empty here.
+  // as 2B's net figure reduced it twice, or disagreed with 2B. 4(B)(1) is kept for real reversals:
+  // section 17(5) below (issue #289, part 3); Rules 42/43 are not posted by this module.
   const net = (predicate: (line: ReconciliationLine) => boolean): TaxAmounts =>
     subtract(bucket((line) => !isCreditNote(line) && predicate(line)), bucket((line) => isCreditNote(line) && predicate(line)));
-  const allOtherItc = net((line) => line.book?.reverseCharge !== true && line.book?.imported !== true);
-  const reverseChargeItc = net((line) => line.book?.reverseCharge === true);
-  const importItc = net((line) => line.book?.imported === true);
-  const reversedItc = emptyAmounts();
+  // Issue #289, part 3 — credit CGST s.17(5) blocks. Table 4(A) carries the whole of the credit as
+  // GSTR-2B shows it, eligible and ineligible alike, and the s.17(5) part is taken out in Table
+  // 4(B)(1) (Circular 170/02/2022-GST, 06.07.2022, para 4 A and B; form as amended by Notification
+  // 14/2022-CT). So a bill's blocked tax goes into its 4(A) box and into 4(B)(1), in the month its
+  // credit goes on the return; a bill whose credit is blocked entirely, in the month its tax belongs to.
+  const blockedOf = (line: ReconciliationLine): TaxAmounts => {
+    const book = line.book;
+    if (book === null || book.kind !== 'INVOICE' || book.reversed || book.ineligibleItc.minor === 0n) return emptyAmounts();
+    return { ...subtract(book.amounts, creditableFromBooks(book)), taxableValue: zeroMoney };
+  };
+  const blockedLines = lines.filter((line) => line.outcome === 'CLAIM_NOW' || line.outcome === 'CLAIM_AT_RISK'
+    || (line.outcome === 'BLOCKED_IN_BOOKS' && line.book !== null && liabilityPeriodOf(line.book) === period));
+  const blockedIn = (predicate: (line: ReconciliationLine) => boolean): TaxAmounts =>
+    sumAmounts(blockedLines.filter(predicate).map(blockedOf));
+  const isOther = (line: ReconciliationLine) => line.book?.reverseCharge !== true && line.book?.imported !== true;
+  const isReverse = (line: ReconciliationLine) => line.book?.reverseCharge === true;
+  const isImport = (line: ReconciliationLine) => line.book?.imported === true;
+  const allOtherItc = addAmounts(net(isOther), blockedIn(isOther));
+  const reverseChargeItc = addAmounts(net(isReverse), blockedIn(isReverse));
+  const importItc = addAmounts(net(isImport), blockedIn(isImport));
+  const reversedItc = blockedIn(() => true);
 
   // Issue #249 — the books hand over every unclaimed document up to this month (so late credit can
   // be taken, #222), but tax owed under reverse charge and the value of untaxed purchases belong to
