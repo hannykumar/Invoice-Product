@@ -76,8 +76,13 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /\/api\/returns\/preview/);
   assert.match(script, /\/api\/returns\/record/);
   assert.match(script, /localizeReturnResult/);
-  assert.match(script, /authorization: `Bearer \$\{state\.sessionId\}`/);
-  assert.match(script, /\/api\/auth\/login/);
+  // Issue #342 — the session is an HttpOnly cookie: the page never holds a token or sends one itself.
+  assert.doesNotMatch(script, /authorization: `Bearer/);
+  assert.doesNotMatch(script, /setItem\("karobar\.session"/);
+  assert.match(script, /credentials: "same-origin"/);
+  assert.match(script, /api\("\/api\/auth\/sign-in"/);
+  assert.match(script, /api\("\/api\/auth\/sign-out"/);
+  assert.doesNotMatch(html, /type="password"/);
   assert.match(script, /karobar\.session/);
   // Issue #310 (was #237's stock tile) — goods that need the owner are a Home task, worded by the server.
   assert.match(script, /home\.tasks\.map\(\(task\) =>/);
@@ -94,7 +99,6 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.match(script, /setFormBusy\(form, true\)/);
   assert.match(script, /draftRestored/);
   assert.match(script, /customerDocumentsOne/);
-  assert.match(script, /copy\[state\.locale\]\.loginInvalid/);
   assert.doesNotMatch(script, /subtotal \* \.05/);
   // Issue #306 — GST and the total on the form are the server's estimate, never worked out here.
   assert.match(script, /\[data-calculated="tax"\]'\)\.textContent = totals \? money\(totals\.totalTax\) : "—"/);

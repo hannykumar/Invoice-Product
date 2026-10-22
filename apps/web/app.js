@@ -61,7 +61,7 @@ const copy = {
     reportsTitle: "Reports",
     reportsHelp: "Every figure below comes from this shop's own books: the ledger, sales, stock and money owed. Nothing is typed in.",
     reportsLoading: "Getting your reports…",
-    signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Sign in to open your shop's books.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "The demo shop's owner is filled in. Press Sign in.",
+    signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Type your mobile number or email. We will send you a code.", signInAddress: "Mobile number or email", signInCode: "Code", sendCode: "Send me a code", signIn: "Sign in", codeSent: "We sent a code. Type it here.", changeAddress: "Use another number or email", switchCompany: "Business",
     salesFromModule: "From today's bills", openSalesInvoices: "From bills not yet paid", postedSupplierBills: "From supplier bills", calculatedLive: "Things waiting for you", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Checking your stock…", loadingSupplier: "Loading supplier balance…", readingReceivables: "Checking what you owe suppliers…",
     // Issue #132 — the bill itself: shown after a sale is recorded, and printed from the browser.
     // Issue #182 — where the goods go, who carries them, and what the bill refers back to.
@@ -119,7 +119,7 @@ const copy = {
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "How {company} is doing today.", salesLessReturns: "{billed} billed − {returned} returned by customers", purchasesLessReturns: "{billed} billed − {returned} sent back to suppliers", customerDocumentsOne: "1 bill still to collect", customerDocumentsMany: "{count} bills still to collect", supplierBillsOne: "1 supplier bill", supplierBillsMany: "{count} supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Money paid to the supplier", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 supplier bill still to pay", supplierDocumentsMany: "{count} supplier bills still to pay", noActivity: "No recorded activity yet.", purchaseActivity: "Supplier bill entered, stock updated", paymentActivity: "Money received from the customer", saleActivity: "Bill made",
-    checking: "Checking this entry…", checkingBody: "Checking the figures…", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "That did not work, and nothing was changed. Please try again.", signInAgain: "Sign in again to continue.", loginInvalid: "The email, password, or company is not correct.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…", enterPurchaseBill: "Enter the purchase bill", backToSale: "Back to the sale", purchaseForSale: "For the sale you were making: it asks for {required} {unit} of {item}, and {warehouse} has {available} {unit}. Type the quantity printed on the supplier's bill. The goods go into {warehouse}.", purchaseForSaleDone: "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.",
+    checking: "Checking this entry…", checkingBody: "Checking the figures…", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "That did not work, and nothing was changed. Please try again.", signInAgain: "Sign in again to continue.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…", enterPurchaseBill: "Enter the purchase bill", backToSale: "Back to the sale", purchaseForSale: "For the sale you were making: it asks for {required} {unit} of {item}, and {warehouse} has {available} {unit}. Type the quantity printed on the supplier's bill. The goods go into {warehouse}.", purchaseForSaleDone: "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.",
     navAsk: "Ask",
     agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
     agentRequest: "What should I do?", agentRequestPlaceholder: "Find ABC Traders' unpaid invoices and send reminders",
@@ -416,7 +416,7 @@ const copy = {
     reportsTitle: "Report",
     reportsHelp: "Neeche ka har aankda is company ke ledger, bikri, stock aur lena-dena se abhi nikala gaya hai. Kuch bhi likh kar nahin daala gaya.",
     reportsLoading: "Aapki report aa rahi hai…",
-    signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Apni dukaan ka hisaab kholne ke liye sign in karein.", company: "Company", email: "Email", password: "Password", signIn: "Sign in", demoCredential: "Demo dukaan ke maalik ki jaankari bhari hai. Sign in dabaiye.",
+    signOut: "Sign out karen", loginTitle: "Karobar mein sign in karen", loginHelp: "Apna mobile number ya email likhen. Hum aapko code bhejenge.", signInAddress: "Mobile number ya email", signInCode: "Code", sendCode: "Mujhe code bhejen", signIn: "Sign in", codeSent: "Humne code bheja hai. Use yahan likhen.", changeAddress: "Doosra number ya email", switchCompany: "Business",
     salesFromModule: "Aaj ke bills se", openSalesInvoices: "Jin bills ka paisa nahin aaya", postedSupplierBills: "Supplier ke bills se", calculatedLive: "Aapke liye baaki kaam", loadingActivity: "Darj kaam load ho raha hai…", loadingStock: "Stock load ho raha hai…", readingInventory: "Stock dekh rahe hain…", loadingSupplier: "Supplier balance load ho raha hai…", readingReceivables: "Supplier ka baaki dekh rahe hain…",
     exportSection: "Export ya SEZ supply", exportKindOverseas: "Yeh customer Bharat ke bahar hai, isliye yeh bill export hai.", exportKindSez: "Yeh customer SEZ mein hai. Bill par yahi likha jayega, SEZ wali ghoshna ke saath.", exportKindDeemed: "Yeh customer deemed export mein khareedta hai. GST hamesha ki tarah lagega aur bill par yeh likha hoga.",
     underLutLabel: "Yeh export kaise ho raha hai?", underLutYes: "LUT ya bond par — GST nahin lagega", underLutNo: "IGST bharkar", exportCountryLabel: "Maal kis desh ja raha hai", exportCountryHelp: "Do akshar: UAE ke liye AE, America ke liye US.", exportCurrencyLabel: "Bikri kis currency mein", exportCurrencyHelp: "Customer rupaye mein de raha ho to khali chhodein.", exchangeRateLabel: "Us currency ki ek unit kitne rupaye",
@@ -471,7 +471,7 @@ const copy = {
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Aaj {company} ka haal.", salesLessReturns: "{billed} ke bill − {returned} customers ne lautaya", purchasesLessReturns: "{billed} ke bill − {returned} suppliers ko lautaya", customerDocumentsOne: "1 bill ka paisa aana baaki", customerDocumentsMany: "{count} bills ka paisa aana baaki", supplierBillsOne: "1 supplier ka bill", supplierBillsMany: "{count} supplier ke bill", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko paisa diya", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 supplier bill chukana baaki", supplierDocumentsMany: "{count} supplier bill chukana baaki", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Supplier ka bill darj, stock badha", paymentActivity: "Customer se paisa mila", saleActivity: "Bill bana",
-    checking: "Entry jaanch rahe hain…", checkingBody: "Aankde jaanch rahe hain…", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Yeh nahin ho paya, aur kuch nahin badla. Dobara koshish karein.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", loginInvalid: "Email, password ya company sahi nahin hai.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…", enterPurchaseBill: "Purchase bill darj karen", backToSale: "Bikri par wapas jayen", purchaseForSale: "Jo bikri aap bana rahe the: usmein {item} ke {required} {unit} hain, aur {warehouse} mein {available} {unit} hain. Supplier ke bill par chhapi matra likhen. Saman {warehouse} mein jayega.", purchaseForSaleDone: "Saman ab stock mein hai. Bikri par wapas jayen: aapka likha sab wahin hai. Bill jaari karne ke liye use dobara dekhen.",
+    checking: "Entry jaanch rahe hain…", checkingBody: "Aankde jaanch rahe hain…", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Yeh nahin ho paya, aur kuch nahin badla. Dobara koshish karein.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…", enterPurchaseBill: "Purchase bill darj karen", backToSale: "Bikri par wapas jayen", purchaseForSale: "Jo bikri aap bana rahe the: usmein {item} ke {required} {unit} hain, aur {warehouse} mein {available} {unit} hain. Supplier ke bill par chhapi matra likhen. Saman {warehouse} mein jayega.", purchaseForSaleDone: "Saman ab stock mein hai. Bikri par wapas jayen: aapka likha sab wahin hai. Bill jaari karne ke liye use dobara dekhen.",
     navAsk: "Poochein",
     agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
     agentRequest: "Main kya karun?", agentRequestPlaceholder: "ABC Traders ke baaki bill dekh kar reminder bhej do",
@@ -716,7 +716,7 @@ const storage = (() => {
   } catch { return undefined; }
 })();
 
-const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, returnDocuments: [], pendingForm: null, pendingInput: null, pendingReturnInput: null, sessionId: storage?.getItem("karobar.session") ?? null, draftStatuses: {} };
+const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, returnDocuments: [], pendingForm: null, pendingInput: null, pendingReturnInput: null, signedIn: storage?.getItem("karobar.signedIn") === "1", draftStatuses: {} };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const REPORT_TEXT = {
@@ -1160,10 +1160,16 @@ function forgetPendingDraft(form) {
   pendingDraft.delete(form.dataset.draft);
 }
 
+// Issue #342 — the session is an HttpOnly cookie the browser sends by itself; this page never sees it.
+// "karobar.signedIn" is only a hint for which screen to open first, and opens nothing on the server.
+storage?.removeItem("karobar.session");
+const SIGN_IN_PATHS = new Set(["/api/auth/code", "/api/auth/sign-in"]);
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
-    headers: { "content-type": "application/json", ...(state.sessionId ? { authorization: `Bearer ${state.sessionId}` } : {}), ...(options.headers || {}) },
+    credentials: "same-origin",
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -1172,9 +1178,9 @@ async function api(path, options = {}) {
     error.code = payload.code;
     // Issue #262 — the facts behind a refusal (the Hindi sentence, the goods that are short).
     error.details = payload.details ?? {};
-    if (response.status === 401 && path !== "/api/auth/login") {
-      state.sessionId = null;
-      storage?.removeItem("karobar.session");
+    if (response.status === 401 && !SIGN_IN_PATHS.has(path)) {
+      state.signedIn = false;
+      storage?.removeItem("karobar.signedIn");
       showLogin();
     }
     throw error;
@@ -1967,9 +1973,7 @@ document.querySelector("#review-eway").addEventListener("click", (event) => {
 });
 
 async function downloadBillPdf(invoiceId, number) {
-  const response = await fetch(`/api/sales/${encodeURIComponent(invoiceId)}/pdf`, {
-    headers: { authorization: `Bearer ${state.sessionId}` },
-  });
+  const response = await fetch(`/api/sales/${encodeURIComponent(invoiceId)}/pdf`, { credentials: "same-origin" });
   if (!response.ok) throw new Error((await response.json()).message || copy[state.locale].requestFailed);
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
@@ -2138,7 +2142,7 @@ function scheduleEstimate() {
 
 async function runEstimate() {
   const form = saleForm();
-  if (!form || !state.sessionId) return;
+  if (!form || !state.signedIn) return;
   const lines = saleLineValues();
   const asked = ++estimateAsked;
   if (lines.length === 0) { lastEstimate = null; renderEstimate(); return; }
@@ -2385,7 +2389,7 @@ async function loadPaymentBills(form) {
     empty.textContent = copy[state.locale][key];
     box.replaceChildren(empty);
   };
-  if (!partyId || !state.sessionId) { note("chooseAPartyFirst"); updateAdvanceChoice(form); return; }
+  if (!partyId || !state.signedIn) { note("chooseAPartyFirst"); updateAdvanceChoice(form); return; }
   let read;
   try {
     read = await api("/api/payments/open-bills", { method: "POST", body: JSON.stringify({ direction: form.dataset.direction, partyId }) });
@@ -3432,23 +3436,62 @@ document.addEventListener("keydown", (event) => {
     openNewSale();
   }
 });
-document.querySelector('#login-form [name="companyId"]').addEventListener("change", (event) => {
-  const email = document.querySelector('#login-form [name="email"]');
-  email.value = event.target.value.endsWith("11") ? "owner@konkan.example.invalid" : "owner@sampoorna.example.invalid";
-});
+/** Issue #342 — after signing in, and on every load: the business shown, and the others this person can switch to. */
+async function loadSession() {
+  const session = await api("/api/session");
+  const choice = document.querySelector("#company-choice");
+  const select = document.querySelector("#company-switch");
+  select.replaceChildren(...session.companies.map((company) => {
+    const option = document.createElement("option");
+    option.value = company.id;
+    option.textContent = company.name;
+    option.selected = company.id === session.company.id;
+    return option;
+  }));
+  choice.hidden = session.companies.length < 2;
+}
+
+function resetLoginForm() {
+  const form = document.querySelector("#login-form");
+  form.reset();
+  document.querySelector("#login-code-field").hidden = true;
+  document.querySelector("#login-change-address").hidden = true;
+  form.querySelector('[name="code"]').required = false;
+  document.querySelector("#login-hint").hidden = true;
+  document.querySelector("#login-error").textContent = "";
+  form.querySelector('button[type="submit"]').textContent = copy[state.locale].sendCode;
+}
+
+// Two steps: the phone number or email, then the code sent to it (ADR D1). No password exists.
 document.querySelector("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   const error = document.querySelector("#login-error");
   const button = form.querySelector('button[type="submit"]');
+  const codeField = document.querySelector("#login-code-field");
+  const hint = document.querySelector("#login-hint");
+  const address = form.querySelector('[name="address"]').value;
+  const askingForCode = codeField.hidden;
   error.textContent = "";
   button.disabled = true;
   button.textContent = copy[state.locale].working;
   try {
-    const result = await api("/api/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-    state.sessionId = result.sessionId;
-    storage?.setItem("karobar.session", state.sessionId);
+    if (askingForCode) {
+      const sent = await api("/api/auth/code", { method: "POST", body: JSON.stringify({ address }) });
+      codeField.hidden = false;
+      document.querySelector("#login-change-address").hidden = false;
+      form.querySelector('[name="code"]').required = true;
+      hint.textContent = sent.hint ?? copy[state.locale].codeSent;
+      hint.hidden = false;
+      form.querySelector('[name="code"]').focus();
+      return;
+    }
+    await api("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ address, code: form.querySelector('[name="code"]').value }) });
+    state.signedIn = true;
+    storage?.setItem("karobar.signedIn", "1");
     document.querySelector("#login-dialog").close("signed-in");
+    resetLoginForm();
+    loadSession();
     await loadDashboard();
     loadCatalogue();
     loadSupplierChoices();
@@ -3460,13 +3503,35 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
     loadVehiclesHeld();
     loadSetupStates();
     loadReminders();
-  } catch { error.textContent = copy[state.locale].loginInvalid; }
-  finally { button.disabled = false; button.textContent = copy[state.locale].signIn; }
+  } catch (failure) { error.textContent = failure.message || copy[state.locale].requestFailed; }
+  finally {
+    button.disabled = false;
+    if (button.textContent === copy[state.locale].working) button.textContent = codeField.hidden ? copy[state.locale].sendCode : copy[state.locale].signIn;
+  }
 });
-document.querySelector("#sign-out").addEventListener("click", () => {
-  state.sessionId = null;
-  storage?.removeItem("karobar.session");
+document.querySelector("#login-change-address").addEventListener("click", () => resetLoginForm());
+document.querySelector("#sign-out").addEventListener("click", async () => {
+  // Ends the session on the server too, so a copy of the cookie stops working at once.
+  try { await api("/api/auth/sign-out", { method: "POST" }); } catch { /* already signed out */ }
+  state.signedIn = false;
+  storage?.removeItem("karobar.signedIn");
+  resetLoginForm();
   showLogin();
+});
+// Another of this person's businesses: a new session from the server, then the page starts afresh,
+// so nothing of the business just left stays on the screen.
+document.querySelector("#company-switch").addEventListener("change", async (event) => {
+  try {
+    await api("/api/session/company", { method: "POST", body: JSON.stringify({ companyId: event.target.value }) });
+    location.reload();
+  } catch (failure) {
+    const banner = document.querySelector("#connection-banner");
+    banner.hidden = false;
+    banner.classList.add("failed");
+    banner.querySelector("strong").textContent = copy[state.locale].nothingSaved;
+    banner.querySelector("span span").textContent = ` ${failure.message}`;
+    loadSession();
+  }
 });
 
 // ------------------------------------------------ issue #23: payment reminders and collection tracking
@@ -3484,7 +3549,7 @@ function bankActivityRow(iconText, title, detail, tone = "green") {
 async function loadBankFeeds() {
   const connections = document.querySelector("#bank-feed-connections");
   const transactions = document.querySelector("#bank-feed-transactions");
-  if (!connections || !transactions || !state.sessionId) return;
+  if (!connections || !transactions || !state.signedIn) return;
   try {
     const workspace = await api("/api/bank-feeds");
     connections.replaceChildren(); transactions.replaceChildren();
@@ -3940,7 +4005,7 @@ async function showReturnNote(noteId) {
 
 async function loadReturnNotes() {
   const list = document.querySelector("#note-list");
-  if (!list || !state.sessionId) return;
+  if (!list || !state.signedIn) return;
   try {
     const { notes } = await apiList("/api/returns/notes", "notes");
     document.querySelector("#note-list-panel").hidden = notes.length === 0;
@@ -4015,7 +4080,7 @@ document.querySelector("#note-download")?.addEventListener("click", async (event
   const button = event.currentTarget;
   button.disabled = true;
   try {
-    const response = await fetch(`/api/returns/${encodeURIComponent(noteOnScreen.noteId)}/pdf`, { headers: { authorization: `Bearer ${state.sessionId}` } });
+    const response = await fetch(`/api/returns/${encodeURIComponent(noteOnScreen.noteId)}/pdf`, { credentials: "same-origin" });
     if (!response.ok) throw new Error((await response.json()).message || copy[state.locale].requestFailed);
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
@@ -4030,7 +4095,7 @@ document.querySelector("#note-download")?.addEventListener("click", async (event
 
 async function loadReturnDocuments() {
   const select = document.querySelector("#return-document");
-  if (!select || !state.sessionId) return;
+  if (!select || !state.signedIn) return;
   try {
     const result = await apiList("/api/returns/documents", "documents");
     state.returnDocuments = result.documents;
@@ -6024,7 +6089,7 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.sessionId) { loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); if (state.view === "operations") loadOperations(); } else showLogin();
+if (state.signedIn) { loadSession().catch(() => {}); loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); if (state.view === "operations") loadOperations(); } else showLogin();
 
 // ------------------------------------ issue #30: the month's GST returns
 //
@@ -6792,7 +6857,7 @@ const saleReviewKey = (form) => JSON.stringify({ ...draftData(form), lines: sale
  */
 async function reviewSaleOnSlide() {
   const form = saleForm();
-  if (!form || !state.sessionId || saleLineValues().length === 0) return null;
+  if (!form || !state.signedIn || saleLineValues().length === 0) return null;
   const key = saleReviewKey(form);
   if (saleReviewState.forInput === key && saleReviewState.result) return saleReviewState.result;
   saveDraft(form);
@@ -7113,7 +7178,7 @@ const pickerWords = () => ({ newItem: copy[state.locale].newItemFromSearch, newI
 const cameraRefused = () => showDialog({ title: copy[state.locale].scanTitle, message: copy[state.locale].cameraRefused, effects: [] }, "failed");
 
 async function loadSelling() {
-  if (!state.sessionId) return;
+  if (!state.signedIn) return;
   const customerId = saleForm()?.elements.namedItem("party")?.value ?? "";
   try {
     Object.assign(selling, await api("/api/items/selling", { method: "POST", body: JSON.stringify({ customerId }) }));
@@ -7530,7 +7595,7 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
   } catch (requestError) { error.textContent = requestError.message; }
 });
 
-if (state.sessionId) loadCatalogue();
+if (state.signedIn) loadCatalogue();
 
 // ------------------------------------------- issue #182: where the goods go and who carries them
 //
@@ -7719,4 +7784,4 @@ document.querySelector("#address-form")?.addEventListener("submit", async (event
   } catch (requestError) { error.textContent = requestError.message; }
 });
 
-if (state.sessionId) loadDeliveryChoices();
+if (state.signedIn) loadDeliveryChoices();

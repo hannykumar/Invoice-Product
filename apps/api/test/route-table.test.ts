@@ -15,15 +15,14 @@ import { captureLog } from '../src/log.ts';
 import { apiErrorReporter } from '../src/error-reporting.ts';
 import { useErrorReporter } from '../../../packages/platform/src/error-reporting.ts';
 import { PdfRenderingError } from '../../../packages/invoice-templates/src/pdf.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 const COMPANY_A = '00000000-0000-4000-8000-000000000001';
 const COMPANY_B = '00000000-0000-4000-8000-000000000011';
 
 const parse = (result: { body: string | Buffer }) => JSON.parse(String(result.body)) as Record<string, any>;
 const signIn = async (companyId: string, email: string): Promise<string> => {
-  const response = await handleApi('POST', '/api/auth/login', { companyId, email, password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return `Bearer ${parse(response).sessionId}`;
+  return `Bearer ${await signInAs(email, companyId)}`;
 };
 const pathOf = (path: string) => path.replace(/:\w+/g, 'probe');
 

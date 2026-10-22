@@ -14,12 +14,13 @@ import { InboxError } from '../../../packages/purchasing/src/inbox.ts';
 import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
+import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
 import { openPersistence } from './persistence.ts';
 import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
-import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, readLimitedBody } from './http-hardening.ts';
+import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, readLimitedBody } from './http-hardening.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
 
@@ -52,6 +53,7 @@ const isMeantForTheScreen = (error: unknown): error is Error =>
 /** The status a known error answers with, or `undefined` for a fault on our side. */
 const statusOf = (error: unknown): number | undefined => {
   if (error instanceof AuthenticationError) return 401;
+  if (error instanceof SignInUnavailable) return 503;
   // A provider that signed its callback wrongly is told so, and told nothing else.
   if (error instanceof WebhookNotAuthenticated) return 401;
   if (error instanceof ZodError) return 400;
@@ -137,7 +139,7 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
     const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
     let reply: unknown;
     if (isPublic(route)) {
-      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery });
+      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery, authorization });
     } else {
       const context = await runtime.authenticate(authorization);
       annotate({ company_id: context.companyId, user_id: context.actorId });
@@ -155,7 +157,9 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
     }
     if (!(reply instanceof Reply)) return withRequestId(json(200, reply), requestId);
     const result = reply.result;
-    return withRequestId('json' in result ? json(result.status, result.json) : result, requestId);
+    if (!('json' in result)) return withRequestId(result, requestId);
+    const answered = json(result.status, result.json);
+    return withRequestId(result.setCookie === undefined ? answered : { ...answered, headers: { ...answered.headers, 'set-cookie': result.setCookie } }, requestId);
   } catch (error) {
     return failureOf(error, requestId, `${route.method} ${route.path}`);
   }
@@ -203,7 +207,11 @@ export async function serveApi(request: IncomingMessage, response: ServerRespons
 const answer = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {
   const { pathname } = url;
   // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
-  if (!isSignedCallback(pathname) && isCrossSiteWrite(method, request.headers)) {
+  // Issue #342 — the session is the cookie, and only the cookie: an `Authorization` header is not read
+  // over HTTP. A write that carries the cookie must also say which page sent it (ADR D2); every
+  // browser sends `Origin` on a POST, so a request without one did not come from Karobar's page.
+  const session = sessionTokenFrom(request.headers.cookie);
+  if (!isSignedCallback(pathname) && (isCrossSiteWrite(method, request.headers) || (session !== undefined && isUnnamedWrite(method, request.headers)))) {
     return failure(403, requestId, { title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' });
   }
   let read: { parsed: unknown; raw: string };
@@ -218,7 +226,7 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
   }
   const signature = request.headers['x-provider-signature'];
   // The parsed path, and the query with it: a GET's input is its query.
-  return handleApi(method, `${pathname}${url.search}`, read.parsed, request.headers.authorization, {
+  return handleApi(method, `${pathname}${url.search}`, read.parsed, session === undefined ? undefined : `Bearer ${session}`, {
     rawBody: read.raw,
     signature: typeof signature === 'string' ? signature : '',
   }, requestId);
