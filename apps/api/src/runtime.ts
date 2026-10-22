@@ -1,14 +1,17 @@
 /** Authenticated HTTP runtime: session (sign-in.ts) -> membership -> tenant application. */
 import { asId, notFound } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
-import type { Permission, RequestContext } from '../../../packages/platform/src/index.ts';
+import { PlatformError, type Permission, type RequestContext } from '../../../packages/platform/src/index.ts';
 import { PRODUCT_OWNER_PERMISSIONS, SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
 import { DemoApplication } from './demo-application.ts';
 import { businessDetailsOf, saveBusinessDetails } from './business-details-application.ts';
 import type { CompanySeed } from './company-shop.ts';
 import type { CatalogueSeed } from './catalogue-application.ts';
-import { createOperations } from '../../../ops/operations/src/index.ts';
+import { createOperations, type QueueJob, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
+import { PostgresRecurringWork } from '../../../ops/operations/src/recurring-postgres.ts';
+import { OutboxRelay } from '../../../packages/platform/src/outbox.ts';
 import { MEMORY, recordId, type Persistence } from './persistence.ts';
+import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { recordMasterDataAs } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
@@ -125,10 +128,18 @@ export class ApiRuntime {
   readonly #recurringRegistered = new Set<string>();
   /** Issue #342 — codes, sessions, signing out and switching company. */
   readonly signIn: SignIn;
+  /** Issue #345 — on PostgreSQL: the schedule and the outbox are rows, run by the worker. */
+  readonly #recurring: PostgresRecurringWork | null;
+  readonly #relay: OutboxRelay | null;
+  /** Each company's recurring jobs and the service actor that runs them, once its application is open. */
+  readonly #jobs = new Map<string, { readonly context: RequestContext; readonly definitions: readonly RecurringJobDefinition[] }>();
 
   constructor(persistence: Persistence = MEMORY, signIn: SignIn = createSignIn(persistence)) {
     this.#persistence = persistence;
     this.signIn = signIn;
+    this.#recurring = persistence.kind === 'postgres' ? new PostgresRecurringWork(persistence.db) : null;
+    // A message whose sender died is sent again once its lease has passed (60 s unless set).
+    this.#relay = persistence.kind === 'postgres' ? new OutboxRelay(persistence.db, { leaseSeconds: Number(process.env.WORKER_OUTBOX_LEASE_SECONDS ?? 60), maxAttempts: OUTBOX_MAX_ATTEMPTS }) : null;
     // The made-up incident below is demo data, which a database never receives.
     if (persistence.kind === 'postgres') return;
     const demo = SYNTHETIC_PLATFORM_COMPANIES[0];
@@ -187,12 +198,11 @@ export class ApiRuntime {
           'einvoice.generate', 'einvoice.view',
         ]),
       };
-      const db = this.database;
-      for (const job of resolved.recurringJobs()) {
-        // Issue #340 — on PostgreSQL each run is one action for its company. #345 moves these runs
-        // to a separate worker; until then they run on the API's own tick.
-        this.#operations.recurring.register(serviceContext, db === null ? job : { ...job, run: (ctx, at, signal) => asOneAction(db, ctx.companyId, () => job.run(ctx, at, signal)) });
-      }
+      const definitions = resolved.recurringJobs();
+      if (this.#recurring === null) for (const job of definitions) this.#operations.recurring.register(serviceContext, job);
+      // Issue #345 — on PostgreSQL the company is put on the database's schedule, which the worker runs.
+      else await this.#recurring.ensure(serviceContext, definitions);
+      this.#jobs.set(context.companyId, { context: serviceContext, definitions });
       this.#recurringRegistered.add(context.companyId);
     }
     return resolved;
@@ -226,13 +236,51 @@ export class ApiRuntime {
       this.#operations.queue.fail(context, job.id, 'IRP_TEMPORARILY_UNAVAILABLE');
       this.#operationsSeeded.add(context.companyId);
     }
-    return { health: await this.#operations.telemetry.health(), failures: this.#operations.telemetry.failures(context), jobs: this.#operations.queue.list(context), recurring: this.#operations.recurring.status(context), incidents: this.#operations.status.publicStatus() };
+    const db = this.database;
+    const [jobs, recurring] = db === null || this.#recurring === null
+      ? [this.#operations.queue.list(context), this.#operations.recurring.status(context)]
+      : [await outboxJobs(db, context), await this.#recurring.status(context)];
+    return { health: await this.#operations.telemetry.health(), failures: this.#operations.telemetry.failures(context), jobs, recurring, incidents: this.#operations.status.publicStatus() };
   }
 
+  /** In memory: the in-process schedule. On PostgreSQL the worker runs it (`workOn`). */
   runRecurringWork(companyId?: string) { return this.#operations.recurring.runDue(companyId); }
 
-  replayOperationalJob(context: RequestContext, input: Record<string, unknown>) {
-    return this.#operations.queue.replay(context, String(input.jobId ?? ''));
+  /**
+   * Issue #345 — replays a failed job. On PostgreSQL a job is an outbox message (work that followed
+   * a bill) or a company's recurring job (`recurring:<key>`); either goes back for the next tick.
+   */
+  async replayOperationalJob(context: RequestContext, input: Record<string, unknown>) {
+    const jobId = String(input.jobId ?? '');
+    const db = this.database;
+    if (db === null || this.#recurring === null) return this.#operations.queue.replay(context, jobId);
+    if (!context.permissions.has('queue.replay')) throw new PlatformError('FORBIDDEN', 'You do not have permission to perform this operational action.');
+    if (jobId.startsWith('recurring:')) {
+      const status = await this.#recurring.replay(context, jobId.slice('recurring:'.length));
+      return { id: jobId, state: 'draft', attempts: status.attempts };
+    }
+    const { rows } = await db.requireUnitOfWork(context.companyId).sql.query(
+      `UPDATE outbox_messages SET dead_at = NULL, attempts = 0, available_at = now(), updated_at = now()
+        WHERE company_id = $1 AND id = $2::uuid AND sent_at IS NULL AND (dead_at IS NOT NULL OR last_error IS NOT NULL)
+        RETURNING id`, [context.companyId, /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId) ? jobId : null]);
+    if (rows[0] === undefined) throw new Error('ONLY_FAILED_JOBS_CAN_BE_REPLAYED');
+    return { id: jobId, state: 'draft', attempts: 0 };
+  }
+
+  /**
+   * Issue #345 — one company's due work, for the worker: what its bills queued (sent only after they
+   * committed), then its recurring jobs. False when this process cannot open that company.
+   */
+  async workOn(companyId: string): Promise<boolean> {
+    if (this.#relay === null || this.#recurring === null) throw new Error('The worker needs the database.');
+    const company = SYNTHETIC_PLATFORM_COMPANIES.find((candidate) => candidate.companyId === companyId);
+    if (company === undefined) return false;
+    const app = await this.application({ companyId, branchId: company.branchId, actorId: company.userId, sessionId: `worker:${companyId}`, permissions: new Set<Permission>(['queue.replay']) });
+    await this.#relay.drain(companyId, app.outboxHandlers());
+    const jobs = this.#jobs.get(companyId);
+    const db = this.database!;
+    if (jobs !== undefined) await this.#recurring.runDue(jobs.context, jobs.definitions, (work) => asOneAction(db, companyId, work));
+    return true;
   }
 
   grantSupportAccess(context: RequestContext, input: Record<string, unknown>) {
@@ -246,6 +294,26 @@ export class ApiRuntime {
   /** Whether write requests run as one unit of work, and on which database. */
   get database() { return this.#persistence.kind === 'postgres' ? this.#persistence.db : null; }
 }
+
+/** How many times the worker tries a queued job before it is left, dead, for a person. */
+const OUTBOX_MAX_ATTEMPTS = 10;
+
+/** Issue #345 — the work that followed this company's bills, as the Operations screen lists jobs. */
+const outboxJobs = async (db: TransactionalExecutor, context: RequestContext): Promise<readonly QueueJob[]> => {
+  if (!context.permissions.has('operations.read')) throw new PlatformError('FORBIDDEN', 'You do not have permission to perform this operational action.');
+  const { rows } = await db.tenantTransaction(context.companyId, (sql) => sql.query(
+    `SELECT id, topic, dedupe_key, attempts, last_error, sent_at, dead_at, claim_token, created_at
+       FROM outbox_messages WHERE company_id = $1 ORDER BY created_at DESC LIMIT 200`, [context.companyId]));
+  return rows.map((r): QueueJob => Object.fromEntries(Object.entries({
+    id: String(r.id), companyId: context.companyId, kind: String(r.topic), idempotencyKey: String(r.dedupe_key), idempotent: true,
+    state: r.sent_at !== null ? 'success' : r.claim_token !== null ? 'processing' : r.dead_at !== null || r.last_error !== null ? 'failure' : 'draft',
+    attempts: Number(r.attempts), maxAttempts: OUTBOX_MAX_ATTEMPTS, correlationId: `outbox:${String(r.id)}`,
+    // Only a code-like first word of the error, never its text: it can carry a document's contents.
+    lastErrorCode: r.last_error === null ? undefined : /^[A-Z0-9_.-]+/.exec(String(r.last_error))?.[0] ?? 'JOB_FAILED',
+    createdAt: (r.created_at as Date).toISOString(),
+    completedAt: r.sent_at instanceof Date ? r.sent_at.toISOString() : r.dead_at instanceof Date ? r.dead_at.toISOString() : undefined,
+  }).filter(([, value]) => value !== undefined)) as unknown as QueueJob);
+};
 
 let runtimeInstance: ApiRuntime | undefined;
 export const apiRuntime = (): ApiRuntime => (runtimeInstance ??= new ApiRuntime());

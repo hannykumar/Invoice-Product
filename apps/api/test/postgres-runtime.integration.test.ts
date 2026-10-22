@@ -9,64 +9,28 @@
  * Needs DATABASE_URL (the owner, for migrations). Skipped locally without it; fails in CI.
  */
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { createServer } from 'node:net';
-import { fileURLToPath } from 'node:url';
 import test, { after, before } from 'node:test';
+import type { ChildProcess } from 'node:child_process';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { signInOverHttp } from './sign-in-helper.ts';
+import { appDatabase, callApi, freePort, killProcess, startApi } from './processes.ts';
 
 const url = process.env.DATABASE_URL;
 if (url === undefined && process.env.CI !== undefined) throw new Error('DATABASE_URL must be set in CI so the restart test runs.');
 const skip = url === undefined && 'DATABASE_URL is not set';
 
 const COMPANY = '00000000-0000-4000-8000-000000000001';
-const SERVER = fileURLToPath(new URL('../src/server.ts', import.meta.url));
-const login = `invoice_app_api_${randomBytes(6).toString('hex')}`;
+let database: Awaited<ReturnType<typeof appDatabase>> | undefined;
 let owner: TransactionalExecutor;
-let appUrl: string;
 let port: number;
 let server: ChildProcess | undefined;
+let call: ReturnType<typeof callApi>;
 /** A bill of company A, for company B to try to open. */
 let sampoornaBill: string | undefined;
 
-const freePort = (): Promise<number> => new Promise((resolve, reject) => {
-  const probe = createServer().listen(0, '127.0.0.1', () => {
-    const address = probe.address();
-    probe.close(() => (typeof address === 'object' && address !== null ? resolve(address.port) : reject(new Error('no port'))));
-  });
-});
-
-const start = async (): Promise<void> => {
-  server = spawn(process.execPath, ['--experimental-strip-types', SERVER], {
-    env: { ...process.env, DATABASE_URL: appUrl, API_PORT: String(port), NODE_ENV: 'development' },
-    stdio: ['ignore', 'ignore', 'inherit'],
-  });
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try { if ((await fetch(`http://127.0.0.1:${port}/api/status`)).ok) return; } catch { /* not listening yet */ }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error('The API did not start.');
-};
-
-const stop = async (): Promise<void> => {
-  const running = server;
-  server = undefined;
-  if (running === undefined || running.exitCode !== null) return;
-  const exited = new Promise((resolve) => running.once('exit', resolve));
-  running.kill('SIGKILL');
-  await exited;
-};
-
-const call = async (method: string, path: string, body?: unknown, token?: string): Promise<Record<string, any>> => {
-  const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-    method,
-    headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${port}`, ...(token === undefined ? {} : { cookie: `__Host-karobar_session=${token}` }) },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  return { status: response.status, ...(await response.json() as Record<string, unknown>) };
-};
+const start = async (): Promise<void> => { server = await startApi(database!.appUrl, port); };
+const stop = async (): Promise<void> => { await killProcess(server); server = undefined; };
 
 /** Signs in by code (#342) against the running server; the session token from its cookie. */
 const signInHere = async (address: string, companyId: string): Promise<string> =>
@@ -74,29 +38,15 @@ const signInHere = async (address: string, companyId: string): Promise<string> =
 
 before(async () => {
   if (url === undefined) return;
-  const { createDatabase } = await import('../../../packages/platform/src/database.ts');
-  const { migrate } = await import('../../../packages/platform/src/migrations.ts');
-  const { seed } = await import('../../../packages/platform/src/seed.ts');
-  owner = createDatabase(url);
-  await migrate(owner);
-  await seed(owner);
-  const password = randomBytes(18).toString('hex');
-  await owner.query(`CREATE ROLE ${login} LOGIN PASSWORD '${password}' IN ROLE invoice_app`);
-  const app = new URL(url);
-  app.username = login;
-  app.password = password;
-  appUrl = app.toString();
+  database = await appDatabase(url);
+  owner = database.owner;
   port = await freePort();
+  call = callApi(port);
 });
 
 after(async () => {
   await stop();
-  if (owner !== undefined) {
-    // The role owns nothing; its sessions are ended with it.
-    await owner.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = '${login}'`);
-    await owner.query(`DROP ROLE IF EXISTS ${login}`);
-    await owner.close();
-  }
+  await database?.close();
 });
 
 test('a bill made before a restart is still there after it, with its copy, its customer and the next number', { skip }, async () => {
@@ -126,7 +76,8 @@ test('a bill made before a restart is still there after it, with its copy, its c
   assert.equal(reprint.status, 200, 'the frozen print copy came back');
   const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2` }, token);
   assert.equal(second.status, 200, 'business details and the item rate came back');
-  assert.equal(Number(String(second.invoice.number).slice(-6)), Number(number.slice(-6)) + 1, 'numbering continues');
+  // Later than the first, never the same: another test file may bill this company at the same time.
+  assert.ok(Number(String(second.invoice.number).slice(-6)) > Number(number.slice(-6)), 'numbering continues; no number is used again');
   // Issue #366 — the ledger's tables have row-level security; the reports still read this company's books.
   const reports = await call('GET', '/api/reports', undefined, token);
   assert.equal(reports.status, 200, JSON.stringify(reports));

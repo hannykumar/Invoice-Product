@@ -50,5 +50,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const persistence = await openPersistence();
   startRuntime(persistence);
   log.info("The app keeps its books", { in: persistence.kind });
+  // Issue #345 — with a database, e-invoices and recurring work are sent by the worker, not here.
+  if (persistence.kind === "postgres") log.info("E-invoices and recurring work are sent by the worker. Run it beside this server: npm run worker", {});
   webServer.listen(port, "127.0.0.1", () => log.info("The web preview is listening", { url: `http://127.0.0.1:${port}` }));
 }
