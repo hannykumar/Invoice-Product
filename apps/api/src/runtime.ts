@@ -11,7 +11,8 @@ import { createOperations } from '../../../ops/operations/src/index.ts';
 import { MEMORY, recordId, type Persistence } from './persistence.ts';
 import { recordMasterDataAs } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
-import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
+import { AuthenticationError, createSignIn, signInStore, type SignIn } from './sign-in.ts';
+import { Team } from '../../../packages/platform/src/team.ts';
 
 export { AuthenticationError };
 
@@ -125,10 +126,14 @@ export class ApiRuntime {
   readonly #recurringRegistered = new Set<string>();
   /** Issue #342 — codes, sessions, signing out and switching company. */
   readonly signIn: SignIn;
+  /** Issue #343 — who is in the business, and what each may do. */
+  readonly team: Team;
 
-  constructor(persistence: Persistence = MEMORY, signIn: SignIn = createSignIn(persistence)) {
+  constructor(persistence: Persistence = MEMORY) {
     this.#persistence = persistence;
-    this.signIn = signIn;
+    const people = signInStore(persistence);
+    this.signIn = createSignIn(people);
+    this.team = new Team(people);
     // The made-up incident below is demo data, which a database never receives.
     if (persistence.kind === 'postgres') return;
     const demo = SYNTHETIC_PLATFORM_COMPANIES[0];

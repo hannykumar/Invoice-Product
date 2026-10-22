@@ -114,6 +114,7 @@
               <li><button type="button" class="more-link" data-view="business"><span aria-hidden="true">▣</span><span data-i18n="navBusiness"></span></button></li>
               <li><button type="button" class="more-link" data-view="branding"><span aria-hidden="true">◐</span><span data-i18n="navBranding"></span></button></li>
               <li><button type="button" class="more-link" data-view="plan"><span aria-hidden="true">◈</span><span data-i18n="navPlan"></span></button></li>
+              <li><button type="button" class="more-link" data-view="team"><span aria-hidden="true">☺</span><span data-i18n="navTeam"></span></button></li>
               <li><button type="button" class="more-link" data-view="setup"><span aria-hidden="true">✦</span><span data-i18n="navSetup"></span></button></li>
               <li><button type="button" class="more-link" data-view="migration"><span aria-hidden="true">⇪</span><span data-i18n="navMigration"></span></button></li>
               <li><button type="button" class="more-link" data-view="operations"><span aria-hidden="true">●</span><span data-i18n="navOperations"></span></button></li>
@@ -985,6 +986,25 @@
 
         <!-- Issue #42 [E42]: what the plan covers. The screen leads with the promise, because the
              thing a person most needs to know about pricing is what it cannot take away. -->
+        <!-- Issue #343 — who can use this business: invite, change a role, remove, hand over, leave. -->
+        <section class="view" id="view-team" aria-labelledby="team-title">
+          <div class="page-heading"><div><h1 id="team-title" tabindex="-1" data-i18n="teamTitle"></h1><p data-i18n="teamHelp"></p></div></div>
+          <article class="panel">
+            <ul class="item-list" id="team-members"></ul>
+            <p class="login-error" id="team-error" role="alert"></p>
+          </article>
+          <article class="panel">
+            <h2 data-i18n="teamInviteTitle"></h2>
+            <form id="team-invite" class="login-form">
+              <label><span data-i18n="signInAddress"></span><input name="address" type="text" inputmode="email" required /></label>
+              <label><span data-i18n="teamRole"></span><select name="role"><option value="staff" data-i18n="roleStaff"></option><option value="accountant" data-i18n="roleAccountant"></option><option value="viewer" data-i18n="roleViewer"></option><option value="admin" data-i18n="roleAdmin"></option></select></label>
+              <button class="primary-button" type="submit" data-i18n="teamInvite"></button>
+              <p class="demo-credential" id="team-link" role="status" hidden></p>
+            </form>
+          </article>
+          <article class="panel"><button type="button" class="secondary-button" id="team-leave" data-i18n="teamLeave"></button></article>
+        </section>
+
         <section class="view" id="view-plan" aria-labelledby="plan-title">
           <div class="page-heading">
             <div>

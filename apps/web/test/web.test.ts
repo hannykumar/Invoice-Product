@@ -201,8 +201,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
   // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six;
-  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 29);
+  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine; #343's
+  // team screen makes thirty.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 30);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {

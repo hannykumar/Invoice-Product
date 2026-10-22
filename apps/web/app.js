@@ -288,6 +288,11 @@ const copy = {
     onTheRoad: "On the road right now", onTheRoadHelp: "Every consignment with a running e-way bill, and how long each one has left.",
     navSupplier: "Supplier check",
     navPlan: "Your plan",
+    navTeam: "People who can use this business", teamTitle: "People who can use this business", teamHelp: "Who can sign in to this business, and what each person may do. Removing someone signs them out at once.",
+    teamInviteTitle: "Add a person", teamRole: "What they may do", teamInvite: "Make an invitation link", teamLeave: "Leave this business",
+    teamLinkMade: "Send this link to {address}. It works for 7 days, only for that number or email: {link}", teamYou: "you",
+    teamRemove: "Remove", teamHandOver: "Hand the business over", teamConfirmRemove: "Remove {name}? They are signed out at once.", teamConfirmHandOver: "Hand the business over to {name}? They become the owner and you stay on as an admin.", teamConfirmLeave: "Leave this business? You will be signed out of it.",
+    roleOwner: "Owner", roleAdmin: "Admin", roleAccountant: "Accountant (or CA)", roleStaff: "Staff", roleViewer: "Viewer", roleCustom: "Custom", joinInvited: "You have been invited to a business. Sign in with the number or email the invitation was sent to.",
     planTitle: "What your plan covers", planHelp: "Plans differ in how much you do. They never differ in how carefully it is done — every warning, every check and your own data are in all of them, including the free one.",
     planUsage: "What you have used this month", planNeverWithheld: "What no plan can take away",
     planChoose: "Change your plan", planPay: "Pay for this month", planInvoices: "Our invoices to you",
@@ -639,6 +644,11 @@ const copy = {
     onTheRoad: "Abhi sadak par", onTheRoadHelp: "Har khep jiska e-way bill chal raha hai, aur har ek ke paas kitna samay bacha hai.",
     navSupplier: "Supplier jaanch",
     navPlan: "Aapka plan",
+    navTeam: "Is business ke log", teamTitle: "Is business ke log", teamHelp: "Kaun is business mein sign in kar sakta hai, aur har vyakti kya kar sakta hai. Kisi ko hatane par woh turant sign out ho jaata hai.",
+    teamInviteTitle: "Ek vyakti jodein", teamRole: "Woh kya kar sakte hain", teamInvite: "Nimantran link banayein", teamLeave: "Yeh business chhodein",
+    teamLinkMade: "Yeh link {address} ko bhejein. Yeh 7 din chalega, sirf usi number ya email ke liye: {link}", teamYou: "aap",
+    teamRemove: "Hatayein", teamHandOver: "Business saunpein", teamConfirmRemove: "{name} ko hatayein? Woh turant sign out ho jaayenge.", teamConfirmHandOver: "Business {name} ko saunpein? Woh owner ban jaayenge aur aap admin rahenge.", teamConfirmLeave: "Yeh business chhodein? Aap isse sign out ho jaayenge.",
+    roleOwner: "Owner", roleAdmin: "Admin", roleAccountant: "Accountant (ya CA)", roleStaff: "Staff", roleViewer: "Dekhne wale", roleCustom: "Alag", joinInvited: "Aapko ek business mein bulaya gaya hai. Usi number ya email se sign in karein jis par nimantran aaya.",
     planTitle: "Aapke plan mein kya hai", planHelp: "Plan sirf itne mein alag hain ki aap kitna kaam karte hain. Kaam kitni savdhani se hota hai usme koi farq nahin — har chetavni, har jaanch aur aapka apna data har plan mein hai, muft wale mein bhi.",
     planUsage: "Is mahine aapne kitna istemal kiya", planNeverWithheld: "Jo koi plan chheen nahin sakta",
     planChoose: "Plan badlein", planPay: "Is mahine ka bhugtan karein", planInvoices: "Hamare aapko bheje gaye bill",
@@ -716,6 +726,10 @@ const storage = (() => {
   } catch { return undefined; }
 })();
 
+// Issue #343 — an invitation link (`/#join=…`): kept in memory for the sign-in, and taken out of the
+// address bar at once so it is not left in the history or a bookmark.
+const invitationToken = location.hash.startsWith("#join=") ? decodeURIComponent(location.hash.slice("#join=".length)) : null;
+if (invitationToken !== null) history.replaceState(null, "", "#dashboard");
 const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, returnDocuments: [], pendingForm: null, pendingInput: null, pendingReturnInput: null, signedIn: storage?.getItem("karobar.signedIn") === "1", draftStatuses: {} };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
@@ -912,6 +926,7 @@ function openView(view, section = null) {
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
+  if (target === "team") loadTeam();
   if (target === "vehicle") loadVehiclesHeld();
   if (target === "presale") openPresale();
   if (target === "challan") openChallans();
@@ -3486,7 +3501,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
       form.querySelector('[name="code"]').focus();
       return;
     }
-    await api("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ address, code: form.querySelector('[name="code"]').value }) });
+    await api("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ address, code: form.querySelector('[name="code"]').value, ...(invitationToken === null ? {} : { invitation: invitationToken }) }) });
     state.signedIn = true;
     storage?.setItem("karobar.signedIn", "1");
     document.querySelector("#login-dialog").close("signed-in");
@@ -4572,6 +4587,86 @@ function renderPlan(data) {
         invoice.failureReason ?? `Net ${money(invoice.net)} + GST ${money(invoice.gst)}`,
       ))));
 }
+
+// ------------------------------------------------ issue #343: the people in this business
+
+const ROLE_WORD = { owner: "roleOwner", admin: "roleAdmin", accountant: "roleAccountant", staff: "roleStaff", viewer: "roleViewer", custom: "roleCustom" };
+
+async function teamAct(path, body) {
+  const error = document.querySelector("#team-error");
+  error.textContent = "";
+  try { renderTeam(await api(path, { method: "POST", body: JSON.stringify(body) })); }
+  catch (failure) { error.textContent = failure.message; }
+}
+
+function renderTeam(data) {
+  const list = document.querySelector("#team-members");
+  const words = copy[state.locale];
+  list.replaceChildren(...data.members.map((member) => {
+    const row = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = member.you ? `${member.name} (${words.teamYou})` : member.name;
+    row.append(name);
+    if (member.you || member.role === "owner") {
+      const role = document.createElement("span");
+      role.textContent = ` · ${words[ROLE_WORD[member.role]]}`;
+      row.append(role);
+      return row;
+    }
+    const role = document.createElement("select");
+    role.setAttribute("aria-label", `${words.teamRole}: ${member.name}`);
+    for (const value of ["admin", "accountant", "staff", "viewer"]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = words[ROLE_WORD[value]];
+      option.selected = value === member.role;
+      role.append(option);
+    }
+    role.addEventListener("change", () => teamAct("/api/team/role", { userId: member.userId, role: role.value }));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "text-button";
+    remove.textContent = words.teamRemove;
+    remove.addEventListener("click", () => { if (confirm(words.teamConfirmRemove.replace("{name}", member.name))) teamAct("/api/team/remove", { userId: member.userId }); });
+    const handOver = document.createElement("button");
+    handOver.type = "button";
+    handOver.className = "text-button";
+    handOver.textContent = words.teamHandOver;
+    handOver.addEventListener("click", () => { if (confirm(words.teamConfirmHandOver.replace("{name}", member.name))) teamAct("/api/team/transfer", { userId: member.userId }); });
+    row.append(" ", role, " ", remove, " ", handOver);
+    return row;
+  }));
+}
+
+async function loadTeam() {
+  const error = document.querySelector("#team-error");
+  if (!error) return;
+  error.textContent = "";
+  try { renderTeam(await api("/api/team")); } catch (failure) { error.textContent = failure.message; }
+}
+
+document.querySelector("#team-invite")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const shown = document.querySelector("#team-link");
+  try {
+    const result = await api("/api/team/invite", { method: "POST", body: JSON.stringify(formValues(form)) });
+    shown.textContent = copy[state.locale].teamLinkMade.replace("{address}", result.invitation.address).replace("{link}", `${location.origin}${result.link}`);
+    shown.hidden = false;
+    form.reset();
+  } catch (failure) { shown.textContent = failure.message; shown.hidden = false; }
+});
+
+document.querySelector("#team-leave")?.addEventListener("click", async () => {
+  if (!confirm(copy[state.locale].teamConfirmLeave)) return;
+  try {
+    await api("/api/team/leave", { method: "POST" });
+    state.signedIn = false;
+    storage?.removeItem("karobar.signedIn");
+    location.hash = "dashboard";
+    location.reload();
+  } catch (failure) { document.querySelector("#team-error").textContent = failure.message; }
+});
 
 async function loadPlan() {
   try {
@@ -6089,7 +6184,7 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.signedIn) { loadSession().catch(() => {}); loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); if (state.view === "operations") loadOperations(); } else showLogin();
+if (invitationToken !== null) { document.querySelector("#login-help").textContent = copy[state.locale].joinInvited; showLogin(); } else if (state.signedIn) { loadSession().catch(() => {}); loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); if (state.view === "operations") loadOperations(); } else showLogin();
 
 // ------------------------------------ issue #30: the month's GST returns
 //

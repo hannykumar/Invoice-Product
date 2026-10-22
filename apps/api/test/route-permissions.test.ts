@@ -19,6 +19,8 @@ const ALLOWED = new Set([
   // Ending one's own session, and moving it to another business one belongs to (checked against one's memberships).
   '/api/auth/sign-out',
   '/api/session/company',
+  // Leaving a business one belongs to (#343): anyone's own choice; the last owner is refused by the team service.
+  '/api/team/leave',
   // The government provider's callback: no session, it proves itself by signing the bytes it sent.
   '/api/webhooks/government/:kind',
   // Which state a PIN code is in: a lookup in the public PIN table. Reads nothing of the company, stores nothing.

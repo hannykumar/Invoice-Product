@@ -124,3 +124,41 @@ test('#342: the idle clock cannot be pushed into the future, and a switched-off 
     await assert.rejects(one.checkCode('viewer@sampoorna.example.invalid', DEMO_SIGN_IN_CODE), /switched off/);
   } finally { await db.query('UPDATE users SET active = true WHERE id = $1', [viewer]); }
 });
+
+test('#343: the team on PostgreSQL — invite by phone, join at sign-in, remove ends the session, the only owner cannot leave until they hand over', { skip }, async () => {
+  const { Team } = await import('../../../packages/platform/src/team.ts');
+  const companyId = crypto.randomUUID(); const branchId = crypto.randomUUID(); const ownerId = crypto.randomUUID();
+  const ownerEmail = `team-owner-${ownerId}@example.invalid`;
+  await owner.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Team Traders')", [companyId]);
+  await owner.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, 'Main shop')", [branchId, companyId]);
+  await owner.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic team owner')", [ownerId, ownerEmail]);
+  const db = createDb(appUrl);
+  pools.push(db);
+  const { ROLES } = await import('../../../packages/platform/src/roles.ts');
+  const store = new PostgresAuthenticationService(db, new PostgresAccessControl(db));
+  await store.grantMember({ companyId, userId: ownerId, branchIds: new Set([branchId]), active: true, permissions: new Set(ROLES.owner.permissions), role: 'owner' });
+  const signIn = new SignIn(store, new MockIdentityProvider(DEMO_SIGN_IN_CODE));
+  const team = new Team(store);
+
+  const ownerToken = (await signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE)).token;
+  const ownerContext = await signIn.authenticate(bearer(ownerToken));
+  const phone = `+9198${String(randomBytes(4).readUInt32BE() % 100_000_000).padStart(8, '0')}`;
+  const { token } = await team.invite(ownerContext, phone, 'admin');
+  const joined = await signIn.checkCode(phone, DEMO_SIGN_IN_CODE, undefined, token);
+  assert.equal(joined.companyId, companyId);
+  const adminContext = await signIn.authenticate(bearer(joined.token));
+  assert.ok(adminContext.permissions.has('access.review'));
+  assert.ok(!adminContext.permissions.has('business.transfer'));
+  assert.deepEqual((await team.list(ownerContext)).members.map((member) => member.role).sort(), ['admin', 'owner']);
+
+  await assert.rejects(team.leave(ownerContext), /only owner/);
+  await team.transfer(ownerContext, adminContext.actorId);
+  const roles = Object.fromEntries((await team.list(ownerContext)).members.map((member) => [member.userId, member.role]));
+  assert.equal(roles[adminContext.actorId], 'owner');
+  assert.equal(roles[ownerId], 'admin');
+
+  // The new owner removes the old one: every session the old owner had in this business ends at once.
+  await team.remove(await signIn.authenticate(bearer(joined.token)), ownerId);
+  await assert.rejects(signIn.authenticate(bearer(ownerToken)), /Sign in again/);
+  await assert.rejects(signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE), /no business has added you yet/);
+});

@@ -194,6 +194,21 @@ const platformMigrations: readonly Migration[] = [{
     ALTER TABLE users DROP COLUMN IF EXISTS phone;
     ALTER TABLE users DROP COLUMN IF EXISTS identity_subject;
   `,
+}, {
+  // Issue #343 — the role each membership and invitation was given (roles.ts). Permissions stay the
+  // list the server checks; the role is what "change role" sets them back to, and what decides who
+  // owns the business: the last owner can neither leave nor be removed.
+  id: "20261021T200729200Z_platform_4f50c8a47c7b_membership_roles",
+  up: `
+    ALTER TABLE memberships ADD COLUMN role text NOT NULL DEFAULT 'custom'
+      CHECK (role IN ('owner', 'admin', 'accountant', 'staff', 'viewer', 'custom'));
+    ALTER TABLE invitations ADD COLUMN role text NOT NULL DEFAULT 'custom'
+      CHECK (role IN ('owner', 'admin', 'accountant', 'staff', 'viewer', 'custom'));
+  `,
+  down: `
+    ALTER TABLE invitations DROP COLUMN IF EXISTS role;
+    ALTER TABLE memberships DROP COLUMN IF EXISTS role;
+  `,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(

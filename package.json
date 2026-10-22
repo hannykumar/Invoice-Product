@@ -37,6 +37,7 @@
     "db:rollback": "node --experimental-strip-types packages/platform/src/migrations.ts down",
     "db:migration:id": "node --experimental-strip-types tools/migrations/new-id.ts",
     "db:seed": "node --experimental-strip-types packages/platform/src/seed.ts",
+    "permissions:docs": "node --experimental-strip-types tools/permissions/generate.ts",
     "demo:masters": "node --experimental-strip-types packages/masters/src/demo.ts",
     "demo:inbox": "node --experimental-strip-types packages/purchasing/src/demo.ts",
     "demo:invoice": "node --experimental-strip-types packages/invoice-templates/src/demo.ts",

@@ -3,9 +3,13 @@ import { AccessControl, type Member } from "./platform.ts";
 import { PlatformError } from "./types.ts";
 import type { Id, Permission, RequestContext } from "./types.ts";
 import type { VerifiedIdentity } from "./identity.ts";
+import type { RoleName } from "./roles.ts";
 
 export interface Session { id: Id; userId: Id; companyId: Id; branchId: Id; expiresAt: number; revokedAt?: number; lastSeenAt?: number; }
-export interface Invitation { id: Id; companyId: Id; branchId: Id; email: string; permissions: ReadonlySet<Permission>; expiresAt: number; acceptedAt?: number; revokedAt?: number; }
+/** `email` is the address the invitation was sent to: an email, or a phone number in +91 form (#343). */
+export interface Invitation { id: Id; companyId: Id; branchId: Id; email: string; permissions: ReadonlySet<Permission>; expiresAt: number; acceptedAt?: number; revokedAt?: number; role?: RoleName | "custom"; }
+/** How a member is named on the team screen. */
+export interface Person { id: Id; label: string; }
 /** A company a person belongs to, and the branches of it they may work in. */
 export interface Membership { companyId: Id; branchIds: readonly Id[]; }
 export interface User { id: Id; subject?: string; email?: string; phone?: string; }
@@ -30,15 +34,22 @@ export class AuthenticationService {
   #sessions = new Map<string, Session>(); #invitations = new Map<string, Invitation>(); #users = new Map<Id, User>();
   private readonly access: AccessControl; private readonly now: () => number;
   constructor(access: AccessControl, now: () => number = Date.now) { this.access = access; this.now = now; }
-  invite(actor: RequestContext, email: string, permissions: ReadonlySet<Permission>, expiresInMs = 7 * 24 * 60 * 60 * 1000): { invitation: Invitation; token: string } {
+  invite(actor: RequestContext, email: string, permissions: ReadonlySet<Permission>, expiresInMs = 7 * 24 * 60 * 60 * 1000, role: RoleName | "custom" = "custom"): { invitation: Invitation; token: string } {
     if (!actor.permissions.has("access.review")) throw new PlatformError("FORBIDDEN", "You do not have permission to review access.");
-    const token = randomUUID(); const invitation: Invitation = { id: randomUUID(), companyId: actor.companyId, branchId: actor.branchId, email: email.toLowerCase(), permissions, expiresAt: this.now() + expiresInMs };
+    const token = randomUUID(); const invitation: Invitation = { id: randomUUID(), companyId: actor.companyId, branchId: actor.branchId, email: email.toLowerCase(), permissions, expiresAt: this.now() + expiresInMs, role };
     this.#invitations.set(digest(token), invitation); return { invitation, token };
   }
-  acceptInvitation(token: string, userId: Id): Invitation {
+  /** With `provedAddress` (#343), only the person the invitation was sent to may take it up. */
+  acceptInvitation(token: string, userId: Id, provedAddress?: string): Invitation {
     const invitation = this.#invitations.get(digest(token)); if (!invitation || invitation.revokedAt || invitation.acceptedAt || invitation.expiresAt <= this.now()) throw new Error("INVALID_INVITATION");
+    if (provedAddress !== undefined && invitation.email !== provedAddress) throw new Error("INVALID_INVITATION");
     const accepted = { ...invitation, acceptedAt: this.now() }; this.#invitations.set(digest(token), accepted);
-    this.access.grant({ userId, companyId: accepted.companyId, branchIds: new Set([accepted.branchId]), active: true, permissions: accepted.permissions }); return accepted;
+    this.access.grant({ userId, companyId: accepted.companyId, branchIds: new Set([accepted.branchId]), active: true, permissions: accepted.permissions, role: accepted.role ?? "custom" }); return accepted;
+  }
+  /** Issue #343 — sets a member's role, permissions and branches (changing a role, handing over ownership). */
+  grantMember(member: Member): void { this.access.grant(member); }
+  describeUsers(ids: readonly Id[]): readonly Person[] {
+    return ids.map((id) => { const user = this.#users.get(id); return { id, label: user?.email ?? user?.phone ?? id }; });
   }
   /** The returned `id` is the token. The context of a request carries the stored id, which cannot open the session. */
   createSession(companyId: Id, branchId: Id, userId: Id, ttlMs = SESSION_ABSOLUTE_MS): Session {

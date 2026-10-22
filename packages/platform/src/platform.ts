@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PlatformError } from "./types.ts";
+import type { RoleName } from "./roles.ts";
 import type { AuditEvent, ApprovalPolicy, CommandRecord, CommandStatus, ExceptionItem, Id, Permission, RequestContext } from "./types.ts";
 import { redactSecrets } from "./credentials.ts";
 
@@ -79,7 +80,8 @@ export class ExceptionQueue {
   resolve(context: RequestContext, id: Id): ExceptionItem { const current = this.get(context, id); const next = freeze({ ...current, status: "resolved" as const }); this.#items.set(id, next); this.audit?.append({ companyId: context.companyId, actorId: context.actorId, action: "exception.resolved", correlationId: id, before: { status: current.status }, after: { status: next.status } }); return next; }
 }
 
-export interface Member { userId: Id; companyId: Id; branchIds: ReadonlySet<Id>; active: boolean; permissions: ReadonlySet<Permission>; }
+/** `role` is the named starting point (roles.ts) the permissions came from; "custom" when tailored or given before roles existed. */
+export interface Member { userId: Id; companyId: Id; branchIds: ReadonlySet<Id>; active: boolean; permissions: ReadonlySet<Permission>; role?: RoleName | "custom"; }
 export class AccessControl {
   #members = new Map<string, Member>();
   grant(member: Member): void { this.#members.set(`${member.companyId}:${member.userId}`, member); }
