@@ -101,7 +101,7 @@ re-creates its trigger, and name the reason in the PR.
 
 Append-only by their schema comments but not verified against a repository, so left to their own
 lanes: `master_versions`, `master_snapshots`, `master_merges`, `bank_statement_transactions`,
-`bank_feed_transactions`, `subscription_payment_events`, `subscription_usage_events`,
+`subscription_payment_events`, `subscription_usage_events`,
 `notification_delivery_events`, `collection_communications`, `compliance_alerts`,
 `privacy_consents`, `restore_drills`, `status_incident_updates`, `government_calls` (freezable
 once its outcome is settled). `stock_balances` is not frozen because it is not a record: it is the

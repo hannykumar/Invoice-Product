@@ -16,4 +16,61 @@ export const bankFeedMigrations: readonly Migration[] = [{
     CREATE POLICY bank_feed_transactions_tenant ON bank_feed_transactions USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
   `,
   down: `DROP TABLE IF EXISTS bank_feed_transactions; DROP TABLE IF EXISTS bank_feed_accounts; DROP TABLE IF EXISTS bank_feed_connections;`,
+}, {
+  // Issue #366 — what PostgresBankFeedStore needs to hold everything the service kept in memory.
+  id: '20261016T014425043Z_bank-feeds_156746db52c6_postgres_repositories',
+  up: `
+    -- The provider's page for the customer to grant permission, kept only while the request is
+    -- pending (the service clears it on connect, disconnect and revoke). It is a link, not a
+    -- credential: no password, OTP or token is stored (connector-v1 CredentialVault).
+    ALTER TABLE bank_feed_connections ADD COLUMN consent_url text;
+    -- The order rows were written in, for lists and keyset paging.
+    ALTER TABLE bank_feed_connections ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE bank_feed_accounts ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE bank_feed_transactions ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    CREATE UNIQUE INDEX bank_feed_connections_company_seq_idx ON bank_feed_connections(company_id, seq);
+    CREATE UNIQUE INDEX bank_feed_accounts_connection_seq_idx ON bank_feed_accounts(company_id, connection_id, seq);
+    CREATE UNIQUE INDEX bank_feed_transactions_connection_seq_idx ON bank_feed_transactions(company_id, connection_id, seq);
+
+    -- What a sync with this idempotency key returned, so the same key returns it again without
+    -- calling the bank. Written once. The transactions themselves are not copied: their ids are.
+    CREATE TABLE bank_feed_syncs (
+      company_id uuid NOT NULL REFERENCES companies(id),
+      connection_id uuid NOT NULL REFERENCES bank_feed_connections(id),
+      idempotency_key text NOT NULL,
+      connection jsonb NOT NULL,
+      imported integer NOT NULL CHECK (imported >= 0),
+      duplicates integer NOT NULL CHECK (duplicates >= 0),
+      transaction_ids uuid[] NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (company_id, connection_id, idempotency_key)
+    );
+    ALTER TABLE bank_feed_syncs ENABLE ROW LEVEL SECURITY; ALTER TABLE bank_feed_syncs FORCE ROW LEVEL SECURITY;
+    CREATE POLICY bank_feed_syncs_tenant ON bank_feed_syncs USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+
+    -- Imported bank lines and sync results are final when written (database-immutability-v1).
+    CREATE TRIGGER bank_feed_transactions_frozen BEFORE UPDATE OR DELETE ON bank_feed_transactions
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    CREATE TRIGGER bank_feed_transactions_no_truncate BEFORE TRUNCATE ON bank_feed_transactions
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+    CREATE TRIGGER bank_feed_syncs_frozen BEFORE UPDATE OR DELETE ON bank_feed_syncs
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    CREATE TRIGGER bank_feed_syncs_no_truncate BEFORE TRUNCATE ON bank_feed_syncs
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+
+    -- The bank-feed audit trail lives in audit_events (PostgresAuditLog), read back by connection.
+    CREATE INDEX audit_events_bank_feed_idx ON audit_events(company_id, correlation_id, seq) WHERE action LIKE 'bank_feed.%';
+  `,
+  down: `
+    DROP INDEX IF EXISTS audit_events_bank_feed_idx;
+    DROP TABLE IF EXISTS bank_feed_syncs;
+    DROP TRIGGER IF EXISTS bank_feed_transactions_no_truncate ON bank_feed_transactions;
+    DROP TRIGGER IF EXISTS bank_feed_transactions_frozen ON bank_feed_transactions;
+    DROP INDEX IF EXISTS bank_feed_transactions_connection_seq_idx;
+    DROP INDEX IF EXISTS bank_feed_accounts_connection_seq_idx;
+    DROP INDEX IF EXISTS bank_feed_connections_company_seq_idx;
+    ALTER TABLE bank_feed_transactions DROP COLUMN IF EXISTS seq;
+    ALTER TABLE bank_feed_accounts DROP COLUMN IF EXISTS seq;
+    ALTER TABLE bank_feed_connections DROP COLUMN IF EXISTS seq, DROP COLUMN IF EXISTS consent_url;
+  `,
 }];
