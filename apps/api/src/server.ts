@@ -243,9 +243,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
-  const recurringTimer = setInterval(() => {
-    // Each job's own failure is kept in its queue state for operators; this is the tick itself failing.
-    void apiRuntime().runRecurringWork().catch((error: unknown) => reportError('api.recurringTick', error));
-  }, 60_000);
-  recurringTimer.unref();
+  // Issue #345 — only in memory. With a database the worker (`npm run worker`) runs it, out of the
+  // request path, and keeps running it when this process restarts.
+  if (persistence.kind === 'memory') {
+    const recurringTimer = setInterval(() => {
+      // Each job's own failure is kept in its queue state for operators; this is the tick itself failing.
+      void apiRuntime().runRecurringWork().catch((error: unknown) => reportError('api.recurringTick', error));
+    }, 60_000);
+    recurringTimer.unref();
+  }
 }

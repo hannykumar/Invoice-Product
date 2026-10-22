@@ -415,11 +415,17 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   const eInvoices = pick(() => new InMemoryEInvoiceStore(), (db) => new PostgresEInvoiceRepository(db));
   const eInvoicePolicies = pick(() => new InMemoryEInvoicePolicies(), (db) => new PostgresEInvoicePolicies(db));
   participate(eInvoices);
+  const irp = irpAdapter({
+    gateway: new ConnectorGateway([irpPortal], irpVault, new StaticWebhookVerifier()),
+    clock: () => clock.now(),
+  });
+  // Issue #345 — for the worker's crash test only, and only against the synthetic portal: wait
+  // after the portal has answered, so a test can stop the worker before the answer is saved.
+  const answerDelayMs = whitebooksVault === null ? Number(process.env.SYNTHETIC_IRP_ANSWER_DELAY_MS ?? 0) : 0;
   const eInvoice = new EInvoiceService({
-    irp: irpAdapter({
-      gateway: new ConnectorGateway([irpPortal], irpVault, new StaticWebhookVerifier()),
-      clock: () => clock.now(),
-    }),
+    irp: answerDelayMs > 0
+      ? { ...irp, async generate(...args) { const answer = await irp.generate(...args); await new Promise((done) => setTimeout(done, answerDelayMs)); return answer; } }
+      : irp,
     records: eInvoices,
     audit,
     clock,

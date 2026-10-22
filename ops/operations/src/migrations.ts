@@ -48,4 +48,46 @@ export const operationsMigrations: readonly Migration[] = [{
     CREATE POLICY recurring_work_tenant ON recurring_work_status USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
   `,
   down: `DROP TABLE IF EXISTS recurring_work_status;`,
+}, {
+  // Issue #345 — the worker has to find which companies have work due without being able to read any
+  // company's data. Row-level security hides every row from a connection that names no company, so
+  // one function, owned by a role that may see only the columns that say "something is due", answers
+  // that question with company ids and nothing else. The application role may only call it.
+  id: "20261016T071944132Z_operations_b75f8117d2e9_worker_finds_due_work",
+  up: `
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'invoice_work_finder') THEN
+        CREATE ROLE invoice_work_finder NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      END IF;
+    END $$;
+    GRANT USAGE ON SCHEMA public TO invoice_work_finder;
+    GRANT SELECT (id) ON companies TO invoice_work_finder;
+    GRANT SELECT (company_id, sent_at, dead_at, available_at) ON outbox_messages TO invoice_work_finder;
+    GRANT SELECT (company_id, outcome, next_run_at, last_started_at) ON recurring_work_status TO invoice_work_finder;
+    CREATE POLICY outbox_messages_work_finder ON outbox_messages FOR SELECT TO invoice_work_finder USING (true);
+    CREATE POLICY recurring_work_status_work_finder ON recurring_work_status FOR SELECT TO invoice_work_finder USING (true);
+    CREATE FUNCTION companies_with_due_work(stale_after interval) RETURNS SETOF uuid
+      LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $fn$
+        SELECT c.id FROM companies c
+         WHERE EXISTS (SELECT 1 FROM outbox_messages o
+                        WHERE o.company_id = c.id AND o.sent_at IS NULL AND o.dead_at IS NULL AND o.available_at <= now())
+            OR EXISTS (SELECT 1 FROM recurring_work_status r
+                        WHERE r.company_id = c.id
+                          AND ((r.outcome <> 'running' AND r.next_run_at <= now())
+                            OR (r.outcome = 'running' AND r.last_started_at < now() - stale_after)))
+         ORDER BY c.id
+    $fn$;
+    GRANT invoice_work_finder TO CURRENT_USER;
+    ALTER FUNCTION companies_with_due_work(interval) OWNER TO invoice_work_finder;
+    REVOKE ALL ON FUNCTION companies_with_due_work(interval) FROM PUBLIC;
+    GRANT EXECUTE ON FUNCTION companies_with_due_work(interval) TO invoice_app;
+  `,
+  // The role is shared by every database on the server, so it is left in place.
+  down: `
+    DROP FUNCTION IF EXISTS companies_with_due_work(interval);
+    DROP POLICY IF EXISTS recurring_work_status_work_finder ON recurring_work_status;
+    DROP POLICY IF EXISTS outbox_messages_work_finder ON outbox_messages;
+    REVOKE ALL ON recurring_work_status, outbox_messages, companies FROM invoice_work_finder;
+    REVOKE USAGE ON SCHEMA public FROM invoice_work_finder;
+  `,
 }];
