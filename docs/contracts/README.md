@@ -27,6 +27,9 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`platform-ports`](./platform-ports.v1.md) | 1.0.0-draft | GPT 2 (#3, #6) | GPT 1, GPT 3 | **Mocked by GPT 1** pending GPT 2 |
 
 | [`platform-command`](./platform-command-v1.md) | 1.0.0 | GPT 2 (#6) | GPT 1, GPT 3 | Published |
+| [`unit-of-work`](./unit-of-work-v1.md) | 1.0.0 | GPT 2 (#363) | Every module that writes to PostgreSQL (#364–#368, #340, #345) | Published |
+| [`database-immutability`](./database-immutability-v1.md) | 1.0.0 | GPT 2 (#368) | Every lane that owns a document table (#365, #366), #340, hosting | Published |
+| [`sales-schema`](./sales-schema-v1.md) | 1.0.0 | GPT 1 (#365) | The repositories of sales, inventory and receivables (#366), #367, #340, and the lanes that later write `document_settlements` | Published |
 | [`connector`](./connector-v1.md) | 1.0.0 | GPT 2 (#8) | GPT 1, GPT 3 | Published |
 | [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
 | [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
@@ -35,7 +38,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`bank-feeds`](./bank-feeds-v1.md) | 1.0.0 | GPT 2 (#24) | Bank reconciliation, API and web | Published |
 | [`collections`](./collections-v1.md) | 1.0.0 | GPT 2 (#23) | API, web, notifications | Published |
 | [`master-data`](./master-data-v1.md) | 1.0.0 | GPT 3 (#5) | GPT 1, GPT 2, GPT 3 | Published |
-| [`purchase-intake`](./purchase-intake-v1.md) | 1.0.0 | GPT 3 (#15) | GPT 2, GPT 3 | Published |
+| [`purchase-intake`](./purchase-intake-v1.md) | 1.1.0 | GPT 3 (#15, #400) | GPT 2, GPT 3 | Published |
 | [`purchase-validation`](./purchase-validation-v1.md) | 1.0.0 | GPT 3 (#16) | GPT 3 (#17, #18, #31), GPT 1 (#45) | Published |
 | [`einvoice`](./einvoice-v1.md) | 1.0.0 | GPT 3 (#26) | GPT 1 (#9), GPT 2 (#38), GPT 3 (#27) | Published |
 | [`eway-bill`](./eway-bill-v1.md) | 1.0.0 | GPT 3 (#27) | GPT 1 (#9), GPT 2 (#38), GPT 3 (#28) | Published |

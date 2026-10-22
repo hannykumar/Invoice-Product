@@ -9,7 +9,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { PlatformError } from "../../platform/src/types.ts";
 import type { CommandRecord, RequestContext } from "../../platform/src/types.ts";
 import type { AuditLog, PlatformCommandService } from "../../platform/src/platform.ts";
-import { VersionedStore, today } from "./effective.ts";
+import { CommandRecordIndex, VersionedStore, today } from "./effective.ts";
 import type { Version } from "./effective.ts";
 import { snapshotFrom } from "./snapshots.ts";
 import type { MasterSnapshot } from "./snapshots.ts";
@@ -109,24 +109,32 @@ function fingerprintOf(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(canonical(value)) ?? "null").digest("hex").slice(0, 32);
 }
 
+/** The kinds `master_records.kind` allows; one store each. */
+export type MasterStoreKind = MasterKind | "opening_stock" | "price_list_entry";
+export type MasterStoreFactory = <T extends { readonly id: Id; readonly companyId: Id }>(kind: MasterStoreKind) => VersionedStore<T>;
+
 export class MasterDataService {
   readonly #commands: PlatformCommandService;
   readonly #audit: AuditLog;
   readonly #stores: Stores;
   /** Command id to the record it wrote, so an idempotent retry can return that record. */
-  readonly #recordByCommand = new Map<Id, Id>();
+  readonly #recordByCommand = new CommandRecordIndex();
   public readonly units: UnitRegistry;
 
-  constructor(commands: PlatformCommandService, audit: AuditLog, units: UnitRegistry = createDefaultUnitRegistry()) {
+  /**
+   * `storeFor` lets the host keep each kind somewhere other than plain memory (issue #340 mirrors
+   * them to PostgreSQL while this service is synchronous). The default is the in-memory store.
+   */
+  constructor(commands: PlatformCommandService, audit: AuditLog, units: UnitRegistry = createDefaultUnitRegistry(), storeFor: MasterStoreFactory = () => new VersionedStore()) {
     this.#commands = commands;
     this.#audit = audit;
     this.units = units;
     this.#stores = {
-      parties: new VersionedStore<Party>(), addresses: new VersionedStore<PartyAddress>(), items: new VersionedStore<Item>(),
-      warehouses: new VersionedStore<Warehouse>(), batches: new VersionedStore<Batch>(), serials: new VersionedStore<SerialNumber>(),
-      openingStock: new VersionedStore<OpeningStock>(), priceLists: new VersionedStore<PriceList>(), priceEntries: new VersionedStore<PriceListEntry>(),
-      taxDefaults: new VersionedStore<TaxDefault>(), transporters: new VersionedStore<Transporter>(), vehicles: new VersionedStore<Vehicle>(),
-      bankAccounts: new VersionedStore<BankAccount>(),
+      parties: storeFor<Party>("party"), addresses: storeFor<PartyAddress>("party_address"), items: storeFor<Item>("item"),
+      warehouses: storeFor<Warehouse>("warehouse"), batches: storeFor<Batch>("batch"), serials: storeFor<SerialNumber>("serial"),
+      openingStock: storeFor<OpeningStock>("opening_stock"), priceLists: storeFor<PriceList>("price_list"), priceEntries: storeFor<PriceListEntry>("price_list_entry"),
+      taxDefaults: storeFor<TaxDefault>("tax_default"), transporters: storeFor<Transporter>("transporter"), vehicles: storeFor<Vehicle>("vehicle"),
+      bankAccounts: storeFor<BankAccount>("bank_account"),
     };
   }
 
@@ -144,7 +152,7 @@ export class MasterDataService {
       idempotencyKey: options.idempotencyKey,
       payload: { effectiveFrom: options.effectiveFrom ?? today(), fingerprint: fingerprintOf(fingerprint) },
     });
-    const existingRecordId = this.#recordByCommand.get(command.id);
+    const existingRecordId = this.#recordByCommand.get(context.companyId, command.id);
     return existingRecordId === undefined ? { command } : { command, existingRecordId };
   }
 
@@ -157,7 +165,7 @@ export class MasterDataService {
     const approved = this.#commands.transition(context, submitted.id, "approved");
     const finalised = this.#commands.transition(context, approved.id, "finalised", options.reason);
     const version = store.append(record, options.effectiveFrom ?? today(), context.actorId, options.reason ?? `command:${finalised.id}`);
-    this.#recordByCommand.set(finalised.id, record.id);
+    this.#recordByCommand.set(context.companyId, finalised.id, record.id);
     return { version, command: finalised };
   }
 

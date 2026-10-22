@@ -9,6 +9,13 @@ Read it, then read `docs/gpt3-handbook.md` — the handbook is the authoritative
 for every GPT 3 issue, and the GitHub issue text is authoritative alongside it. Where they
 disagree, raise it rather than choosing silently.
 
+## Stack, commands and rules
+
+These live in `AGENTS.md` so every agent reads one copy. Stack changes need the owner's approval;
+decisions are recorded in `docs/decisions/`.
+
+@AGENTS.md
+
 ## Who owns what
 
 | Agent | Lane | Issues |
@@ -24,6 +31,26 @@ and holds the GST-compliance lane; `packages/gst-calc` is GPT 1's (#25) and is a
 **Do not reimplement another agent's module.** If an assigned issue needs the ledger,
 authentication, notifications or a generic connector, consume the documented contract or build a
 mock against it, and record the assumption in the pull request.
+
+## Rule 0 — the law decides, before anything else
+
+This comes before ease of use, speed or design, and it binds every agent on this project.
+
+1. Before planning or building anything that touches tax, invoicing, GST returns, e-invoice,
+   e-way bill, credit/debit notes, purchases, stock valuation or any other compliance matter,
+   **check the current law first**, from primary sources: the CGST/IGST Acts and CGST Rules
+   (`taxinformation.cbic.gov.in`), notifications and circulars (`gstcouncil.gov.in`,
+   `cbic-gst.gov.in`), GST Council press releases and official FAQs, and the e-invoice and
+   e-way bill portals' own documents.
+2. **Use the latest version**: check amendments, later notifications and Finance Act changes, and
+   record each effective date.
+3. **Never assume.** When unsure or stuck — while planning or mid-code — stop and check the law.
+   Not a person's opinion, not memory, not what another product does.
+4. If the law allows it, build it. If it does not, do not support it. If there is a lawful way
+   around, build that. List every case: what works, what does not, and why.
+5. Quote the section, rule or notification (number and date) in the issue or pull request, and in
+   a code comment where the rule is applied. Say plainly what was not verified.
+6. Only after that: how it works for the shopkeeper, and how to make it easy.
 
 ## The rules that are not negotiable
 

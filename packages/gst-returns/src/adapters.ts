@@ -17,8 +17,9 @@ import { conflict, invalid, toQuantityString, type CompanyId, type Money, type Q
 import type { JournalLine, UnitOfWork, Voucher } from '@invoice/ledger';
 import type {
   BookTaxPort, GovernmentReturnPort, GovernmentSubmitOutcome, GovernmentSubmitRequest, InwardTaxPort,
-  OutwardSupplyPort, PeriodLockPort, ReturnPolicy, ReturnPolicyPort, ReturnPreparationRepository,
+  OutwardSupplyPort, Page, PeriodLockPort, ReturnPolicy, ReturnPolicyPort, ReturnPreparationRepository,
 } from './ports.ts';
+import { keysetPage, preparationCursor } from './ports.ts';
 import type { BookTaxTotals } from './reconcile.ts';
 import { emptyInward } from './gstr3b.ts';
 import {
@@ -56,7 +57,7 @@ export class InMemoryReturnPreparations implements ReturnPreparationRepository {
 
   async insert(preparation: ReturnPreparation): Promise<void> {
     const key = this.#key(preparation.companyId, preparation.period, preparation.returnType);
-    if (this.#rows.has(key)) {
+    if (this.#rows.has(key) || this.#keyTaken(preparation)) {
       throw conflict('GST_RETURN_EXISTS', `${preparation.period} has already been started.`);
     }
     this.#rows.set(key, preparation);
@@ -75,11 +76,22 @@ export class InMemoryReturnPreparations implements ReturnPreparationRepository {
         'Somebody else changed this return while you were working on it. Open it again so you are looking at their figures before you change anything.',
       );
     }
+    if (this.#keyTaken(preparation)) {
+      throw conflict('GST_RETURN_EXISTS', `${preparation.period} has already been started.`);
+    }
     this.#rows.set(key, preparation);
   }
 
-  async list(companyId: CompanyId): Promise<readonly ReturnPreparation[]> {
-    return [...this.#rows.values()].filter((row) => row.companyId === companyId);
+  async list(companyId: CompanyId, page?: Page): Promise<readonly ReturnPreparation[]> {
+    const rows = [...this.#rows.values()].filter((row) => row.companyId === companyId);
+    return page === undefined ? rows : keysetPage(rows, preparationCursor, page, 'desc');
+  }
+
+  /** Issue #366 — the database's UNIQUE (company_id, idempotency_key): one key, one preparation. */
+  #keyTaken(preparation: ReturnPreparation): boolean {
+    return [...this.#rows.values()].some((row) =>
+      row.companyId === preparation.companyId && row.idempotencyKey === preparation.idempotencyKey
+      && (row.period !== preparation.period || row.returnType !== preparation.returnType));
   }
 }
 
@@ -328,6 +340,8 @@ export interface ReturnNoteLike {
  */
 export interface NoteOriginalFacts {
   readonly placeOfSupplyStateCode: string | null;
+  /** Issue #325 — the bill's own total, which decides whether a consumer note is CDNUR or B2CS. */
+  readonly invoiceValue?: Money;
 }
 
 /**
@@ -396,6 +410,7 @@ export const returnNoteToDocument = (
       number: note.originalDocument.number,
       date: note.originalDocument.date as OutwardDocument['documentDate'],
       ...(facts.original === null ? { missing: true as const } : {}),
+      ...(facts.original?.invoiceValue === undefined ? {} : { invoiceValue: facts.original.invoiceValue }),
     },
     unregisteredConfirmed: gstinOf(counterparty.gstin) !== null || counterparty.unregisteredConfirmed,
   };

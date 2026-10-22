@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PlatformError } from "./types.ts";
 import type { Id, Permission, RequestContext } from "./types.ts";
+import { reportUnexpected } from "./error-reporting.ts";
 
 export type NotificationChannel = "in_app" | "email" | "whatsapp" | "sms";
 export type NotificationStatus = "scheduled" | "delivered" | "failed" | "suppressed";
@@ -136,94 +137,194 @@ const quiet = (preference: NotificationPreference | undefined, at: number): bool
 
 type ScheduleInput = Omit<Notification, "id" | "companyId" | "status" | "attempts" | "payload"> & { payload: Record<string, unknown> };
 
-export class NotificationService {
+/** Issue #366 — one page of a list. `after` is the id of the last row of the previous page. Omitted, a list returns everything. */
+export interface NotificationPage { readonly limit: number; readonly after?: Id; }
+
+/**
+ * Issue #366 — where `NotificationService` keeps its records: `InMemoryNotificationStore` (the
+ * default) or `PostgresNotificationStore` (postgres-notifications.ts). Both pass one contract suite
+ * (test/notification-store-contract.ts).
+ *
+ * Every read names the company and never returns another company's row. `insert` refuses a second
+ * notification with the same id or the same deduplication key (`IDEMPOTENCY_CONFLICT`); `update`
+ * refuses one that was never inserted (`NOT_FOUND`); so does `appendEvent` for an event whose
+ * notification is not this company's. Lists keep the order rows were first written in.
+ */
+export interface NotificationStore {
+  insert(notification: Notification): Promise<void>;
+  update(notification: Notification): Promise<void>;
+  find(companyId: Id, id: Id): Promise<Notification | null>;
+  findByDeduplicationKey(companyId: Id, key: string): Promise<Notification | null>;
+  /** Scheduled notifications whose time has come at `at`, in the order they were first scheduled. */
+  due(companyId: Id, at: number, page?: NotificationPage): Promise<readonly Notification[]>;
+  appendEvent(event: NotificationDeliveryEvent): Promise<void>;
+  events(companyId: Id, notificationId: Id, page?: NotificationPage): Promise<readonly NotificationDeliveryEvent[]>;
+  savePreference(preference: NotificationPreference): Promise<void>;
+  preference(companyId: Id, recipientId: Id, channel: NotificationChannel): Promise<NotificationPreference | null>;
+}
+
+export const notificationDuplicate = (): PlatformError => new PlatformError("IDEMPOTENCY_CONFLICT", "This notification has already been recorded.");
+export const notificationNotFound = (): PlatformError => new PlatformError("NOT_FOUND", "Notification was not found.");
+
+export class InMemoryNotificationStore implements NotificationStore {
   #notifications = new Map<Id, Notification>();
-  #deduplicated = new Map<string, Id>();
-  #preferences = new Map<string, NotificationPreference>();
+  #order = new Map<Id, number>();
   #events: NotificationDeliveryEvent[] = [];
+  #preferences = new Map<string, NotificationPreference>();
+
+  async insert(notification: Notification): Promise<void> {
+    if (this.#notifications.has(notification.id) || await this.findByDeduplicationKey(notification.companyId, notification.deduplicationKey)) throw notificationDuplicate();
+    this.#notifications.set(notification.id, notification);
+    this.#order.set(notification.id, this.#order.size);
+  }
+
+  async update(notification: Notification): Promise<void> {
+    if (!await this.find(notification.companyId, notification.id)) throw notificationNotFound();
+    const clash = await this.findByDeduplicationKey(notification.companyId, notification.deduplicationKey);
+    if (clash && clash.id !== notification.id) throw notificationDuplicate();
+    this.#notifications.set(notification.id, notification);
+  }
+
+  async find(companyId: Id, id: Id): Promise<Notification | null> {
+    const item = this.#notifications.get(id);
+    return item && item.companyId === companyId ? item : null;
+  }
+
+  async findByDeduplicationKey(companyId: Id, key: string): Promise<Notification | null> {
+    return [...this.#notifications.values()].find((item) => item.companyId === companyId && item.deduplicationKey === key) ?? null;
+  }
+
+  async due(companyId: Id, at: number, page?: NotificationPage): Promise<readonly Notification[]> {
+    // The cursor is a place in the order of writing, so a row whose status changed since still marks it.
+    const from = page?.after === undefined ? -1 : (await this.find(companyId, page.after)) ? this.#order.get(page.after)! : Infinity;
+    const due = [...this.#notifications.values()].filter((item) => item.companyId === companyId && item.status === "scheduled" && item.scheduledAt <= at && this.#order.get(item.id)! > from);
+    return page ? due.slice(0, page.limit) : due;
+  }
+
+  async appendEvent(event: NotificationDeliveryEvent): Promise<void> {
+    if (this.#events.some((item) => item.id === event.id)) throw notificationDuplicate();
+    if (!await this.find(event.companyId, event.notificationId)) throw notificationNotFound();
+    this.#events.push(event);
+  }
+
+  async events(companyId: Id, notificationId: Id, page?: NotificationPage): Promise<readonly NotificationDeliveryEvent[]> {
+    const events = this.#events.filter((event) => event.companyId === companyId && event.notificationId === notificationId);
+    if (!page) return events;
+    const start = page.after === undefined ? 0 : events.findIndex((event) => event.id === page.after) + 1;
+    return page.after !== undefined && start === 0 ? [] : events.slice(start, start + page.limit);
+  }
+
+  async savePreference(preference: NotificationPreference): Promise<void> {
+    this.#preferences.set(`${preference.companyId}:${preference.recipientId}:${preference.channel}`, preference);
+  }
+
+  async preference(companyId: Id, recipientId: Id, channel: NotificationChannel): Promise<NotificationPreference | null> {
+    return this.#preferences.get(`${companyId}:${recipientId}:${channel}`) ?? null;
+  }
+}
+
+/** How many due notifications one delivery pass reads at a time. */
+const DUE_PAGE = 100;
+
+/**
+ * Issue #366 — the records live in a `NotificationStore`, in memory unless one is passed. On
+ * PostgreSQL every write joins the caller's unit of work, so `setPreference`, `schedule`,
+ * `deliverDue`, `retry` and `markOpened` are actions #340 must wrap in `db.unitOfWork`.
+ * `deliverDue` calls the provider between its reads and writes: #340/#345 must move that call out
+ * of the transaction.
+ */
+export class NotificationService {
+  // ponytail: the rate-limit window lives in this process; count recent delivery events in the store once more than one server sends.
   #attemptTimes = new Map<string, number[]>();
   private readonly transport: NotificationTransport;
   private readonly now: () => number;
   private readonly limits: { maxPerWindow: number; windowMs: number };
+  private readonly store: NotificationStore;
 
   constructor(
     transport: NotificationTransport,
     now: () => number = Date.now,
     limits: { maxPerWindow: number; windowMs: number } = { maxPerWindow: 10, windowMs: 60_000 },
-  ) { this.transport = transport; this.now = now; this.limits = limits; }
+    store: NotificationStore = new InMemoryNotificationStore(),
+  ) { this.transport = transport; this.now = now; this.limits = limits; this.store = store; }
 
-  setPreference(context: RequestContext, preference: Omit<NotificationPreference, "companyId">): void {
+  async setPreference(context: RequestContext, preference: Omit<NotificationPreference, "companyId">): Promise<void> {
     this.require(context, "notification.send");
     if ((preference.quietFromHour !== undefined && (preference.quietFromHour < 0 || preference.quietFromHour > 23)) || (preference.quietToHour !== undefined && (preference.quietToHour < 0 || preference.quietToHour > 23))) throw new Error("Quiet hours must be between 0 and 23.");
     if (preference.timeZone) hourInTimeZone(this.now(), preference.timeZone);
-    this.#preferences.set(`${context.companyId}:${preference.recipientId}:${preference.channel}`, Object.freeze({ ...preference, companyId: context.companyId }));
+    await this.store.savePreference(Object.freeze({ ...preference, companyId: context.companyId }));
   }
 
-  schedule(context: RequestContext, input: ScheduleInput): Notification {
+  async schedule(context: RequestContext, input: ScheduleInput): Promise<Notification> {
     this.require(context, requiredPermission(input.sensitivity));
     if (!allowedChannels[input.sensitivity].includes(input.channel) || !allowedRoles[input.sensitivity].includes(input.recipientRole)) throw new PlatformError("FORBIDDEN", "This notification contains information that cannot be sent to that role or channel.");
-    const key = `${context.companyId}:${input.deduplicationKey}`;
-    const existing = this.#deduplicated.get(key);
-    if (existing) return this.#notifications.get(existing)!;
-    const preference = this.#preferences.get(`${context.companyId}:${input.recipientId}:${input.channel}`);
-    const status: NotificationStatus = quiet(preference, input.scheduledAt) ? "suppressed" : "scheduled";
+    const existing = await this.store.findByDeduplicationKey(context.companyId, input.deduplicationKey);
+    if (existing) return existing;
+    const preference = await this.store.preference(context.companyId, input.recipientId, input.channel);
+    const status: NotificationStatus = quiet(preference ?? undefined, input.scheduledAt) ? "suppressed" : "scheduled";
     const notification = Object.freeze({ ...input, id: randomUUID(), companyId: context.companyId, payload: redact(input.payload), status, attempts: 0 });
-    this.#notifications.set(notification.id, notification);
-    this.#deduplicated.set(key, notification.id);
-    this.record(context.actorId, notification, status === "suppressed" ? "suppressed" : "scheduled");
+    await this.store.insert(notification);
+    await this.record(context.actorId, notification, status === "suppressed" ? "suppressed" : "scheduled");
     return notification;
   }
 
   async deliverDue(context: RequestContext): Promise<readonly Notification[]> {
     this.require(context, "notification.send");
     const processed: Notification[] = [];
-    const due = [...this.#notifications.values()].filter((item) => item.companyId === context.companyId && item.status === "scheduled" && item.scheduledAt <= this.now());
-    for (const item of due) {
-      if (!this.reserveRateLimit(item)) continue;
-      try {
-        await this.transport.send(item);
-        const delivered = Object.freeze({ ...item, status: "delivered" as const, attempts: item.attempts + 1 });
-        this.#notifications.set(item.id, delivered);
-        this.record(context.actorId, delivered, "delivered");
-        processed.push(delivered);
-      } catch {
-        const failed = Object.freeze({ ...item, status: "failed" as const, attempts: item.attempts + 1, lastError: "Delivery could not be completed. Retry is available." });
-        this.#notifications.set(item.id, failed);
-        this.record(context.actorId, failed, "failed", failed.lastError);
-        processed.push(failed);
+    const at = this.now();
+    for (let page = await this.store.due(context.companyId, at, { limit: DUE_PAGE }); page.length > 0; page = await this.store.due(context.companyId, at, { limit: DUE_PAGE, after: page.at(-1)!.id })) {
+      for (const item of page) {
+        if (!this.reserveRateLimit(item)) continue;
+        try {
+          await this.transport.send(item);
+          const delivered = Object.freeze({ ...item, status: "delivered" as const, attempts: item.attempts + 1 });
+          await this.store.update(delivered);
+          await this.record(context.actorId, delivered, "delivered");
+          processed.push(delivered);
+        } catch (error) {
+          // The notification is marked failed and can be retried; why it failed goes to the error report.
+          reportUnexpected("notifications.deliver", error, { notification_id: item.id });
+          const failed = Object.freeze({ ...item, status: "failed" as const, attempts: item.attempts + 1, lastError: "Delivery could not be completed. Retry is available." });
+          await this.store.update(failed);
+          await this.record(context.actorId, failed, "failed", failed.lastError);
+          processed.push(failed);
+        }
       }
     }
     return processed;
   }
 
-  retry(context: RequestContext, id: Id): Notification {
+  async retry(context: RequestContext, id: Id): Promise<Notification> {
     this.require(context, "notification.send");
-    const item = this.get(context, id);
+    const item = await this.get(context, id);
     if (item.status !== "failed") throw new PlatformError("INVALID_TRANSITION", "Only failed notifications can be retried.");
     const { lastError: _lastError, ...base } = item;
     const retry = Object.freeze({ ...base, status: "scheduled" as const, scheduledAt: this.now() });
-    this.#notifications.set(id, retry);
-    this.record(context.actorId, retry, "scheduled", "Manual retry requested.");
+    await this.store.update(retry);
+    await this.record(context.actorId, retry, "scheduled", "Manual retry requested.");
     return retry;
   }
 
-  markOpened(context: RequestContext, id: Id): NotificationDeliveryEvent {
-    const item = this.get(context, id);
+  async markOpened(context: RequestContext, id: Id): Promise<NotificationDeliveryEvent> {
+    const item = await this.get(context, id);
     if (context.actorId !== item.recipientId && !context.permissions.has("notification.send")) throw new PlatformError("FORBIDDEN", "Only the recipient or a notification manager can mark this notification opened.");
     if (item.status !== "delivered") throw new PlatformError("INVALID_TRANSITION", "Only delivered notifications can be marked opened.");
     return this.record(context.actorId, item, "opened");
   }
 
-  eventsFor(context: RequestContext, id: Id): readonly NotificationDeliveryEvent[] {
+  async eventsFor(context: RequestContext, id: Id): Promise<readonly NotificationDeliveryEvent[]> {
     this.require(context, "notification.send");
-    this.get(context, id);
-    return Object.freeze(this.#events.filter((event) => event.companyId === context.companyId && event.notificationId === id));
+    await this.get(context, id);
+    return Object.freeze(await this.store.events(context.companyId, id));
   }
 
-  get(context: RequestContext, id: Id): Notification {
-    const item = this.#notifications.get(id);
-    if (!item) throw new PlatformError("NOT_FOUND", "Notification was not found.");
-    if (item.companyId !== context.companyId) throw new PlatformError("TENANT_ISOLATION", "This notification belongs to another company.");
+  /**
+   * Another company's notification is NOT_FOUND, as a missing one is. Under row-level security the
+   * database cannot tell the two apart, and saying "another company's" would confirm the id exists.
+   */
+  async get(context: RequestContext, id: Id): Promise<Notification> {
+    const item = await this.store.find(context.companyId, id);
+    if (!item) throw notificationNotFound();
     return item;
   }
 
@@ -231,9 +332,9 @@ export class NotificationService {
     if (!context.permissions.has(permission)) throw new PlatformError("FORBIDDEN", "You do not have permission to manage notifications.");
   }
 
-  private record(actorId: Id, notification: Notification, type: NotificationDeliveryEvent["type"], detail?: string): NotificationDeliveryEvent {
+  private async record(actorId: Id, notification: Notification, type: NotificationDeliveryEvent["type"], detail?: string): Promise<NotificationDeliveryEvent> {
     const event = Object.freeze({ id: randomUUID(), notificationId: notification.id, companyId: notification.companyId, actorId, type, occurredAt: this.now(), ...(detail ? { detail } : {}) });
-    this.#events.push(event);
+    await this.store.appendEvent(event);
     return event;
   }
 

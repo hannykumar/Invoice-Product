@@ -16,7 +16,7 @@
  *     supplier-risk module has been saying "GSTR-2B was not checked" on every assessment since it
  *     shipped; plugging this in is what stops it saying that.
  */
-import type { CompanyId, IsoDate } from '@invoice/kernel';
+import { conflict, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext } from '@invoice/ledger';
 import type { InwardTaxPort } from '../../gst-returns/src/ports.ts';
 import type { InwardTaxSummary } from '../../gst-returns/src/types.ts';
@@ -27,6 +27,7 @@ import type {
   ItcClaimRepository,
   ItcDecisionRepository,
   ItcPolicyPort,
+  Page,
   PortalRecordRepository,
   PortalRecordSource,
   PortalFetchOutcome,
@@ -47,6 +48,13 @@ import {
 
 // ---------------------------------------------------------------------------- storage
 
+/** Issue #366 — one page of rows already in the order they were written. See `Page`. */
+const pageOf = <T extends { readonly id: string }>(rows: readonly T[], page?: Page): readonly T[] => {
+  if (page === undefined) return rows;
+  const start = page.after === undefined ? 0 : rows.findIndex((row) => row.id === page.after) + 1;
+  return rows.slice(start, start + page.limit);
+};
+
 const documentKey = (document: PortalDocument): string =>
   `${document.supplierGstin.toUpperCase()}|${normaliseNumber(document.number)}|${document.kind}`;
 
@@ -57,12 +65,12 @@ export class InMemoryPortalRecords implements PortalRecordRepository {
     return `${companyId}|${period}|${key}`;
   }
 
-  async listForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]> {
-    return [...this.#rows.values()].filter((row) => row.companyId === companyId && row.period === period);
+  async listForPeriod(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly PortalDocument[]> {
+    return pageOf([...this.#rows.values()].filter((row) => row.companyId === companyId && row.period === period), page);
   }
 
-  async listThroughPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly PortalDocument[]> {
-    return [...this.#rows.values()].filter((row) => row.companyId === companyId && row.period <= period);
+  async listThroughPeriod(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly PortalDocument[]> {
+    return pageOf([...this.#rows.values()].filter((row) => row.companyId === companyId && row.period <= period), page);
   }
 
   async findByDocument(
@@ -110,6 +118,11 @@ export class InMemoryImportBatches implements ImportBatchRepository {
   readonly #batches: ImportBatch[] = [];
 
   async insert(batch: ImportBatch): Promise<void> {
+    // The same refusal the database's primary key and UNIQUE (company_id, period, checksum) give.
+    if (this.#batches.some((held) => held.id === batch.id
+      || (held.companyId === batch.companyId && held.period === batch.period && held.checksum === batch.checksum))) {
+      throw conflict('ITC_IMPORT_DUPLICATE', 'This file has already been imported for this month.');
+    }
     this.#batches.push(batch);
   }
 
@@ -124,8 +137,8 @@ export class InMemoryImportBatches implements ImportBatchRepository {
     return mine.length === 0 ? null : (mine[mine.length - 1] as ImportBatch);
   }
 
-  async list(companyId: CompanyId, period: TaxPeriod): Promise<readonly ImportBatch[]> {
-    return this.#batches.filter((batch) => batch.companyId === companyId && batch.period === period);
+  async list(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly ImportBatch[]> {
+    return pageOf(this.#batches.filter((batch) => batch.companyId === companyId && batch.period === period), page);
   }
 }
 
@@ -133,19 +146,24 @@ export class InMemoryItcDecisions implements ItcDecisionRepository {
   readonly #decisions: ItcDecision[] = [];
 
   async insert(decision: ItcDecision): Promise<void> {
+    // The same refusal the database's primary key and UNIQUE (company_id, idempotency_key) give.
+    if (this.#decisions.some((held) => held.id === decision.id
+      || (held.companyId === decision.companyId && held.idempotencyKey === decision.idempotencyKey))) {
+      throw conflict('ITC_DECISION_DUPLICATE', 'This answer has already been recorded.');
+    }
     this.#decisions.push(decision);
   }
 
-  async latestForPeriod(companyId: CompanyId, period: TaxPeriod): Promise<readonly ItcDecision[]> {
-    return this.#decisions.filter((decision) => decision.companyId === companyId && decision.period === period);
+  async latestForPeriod(companyId: CompanyId, period: TaxPeriod, page?: Page): Promise<readonly ItcDecision[]> {
+    return pageOf(this.#decisions.filter((decision) => decision.companyId === companyId && decision.period === period), page);
   }
 
   async findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ItcDecision | null> {
     return this.#decisions.find((decision) => decision.companyId === companyId && decision.idempotencyKey === key) ?? null;
   }
 
-  async history(companyId: CompanyId, lineKey: string): Promise<readonly ItcDecision[]> {
-    return this.#decisions.filter((decision) => decision.companyId === companyId && decision.lineKey === lineKey);
+  async history(companyId: CompanyId, lineKey: string, page?: Page): Promise<readonly ItcDecision[]> {
+    return pageOf(this.#decisions.filter((decision) => decision.companyId === companyId && decision.lineKey === lineKey), page);
   }
 }
 
@@ -160,8 +178,8 @@ export class InMemoryItcClaims implements ItcClaimRepository {
     return { claim, inserted: true };
   }
 
-  async listForCompany(companyId: CompanyId): Promise<readonly ItcClaim[]> {
-    return [...this.#claims.values()].filter((claim) => claim.companyId === companyId);
+  async listForCompany(companyId: CompanyId, page?: Page): Promise<readonly ItcClaim[]> {
+    return pageOf([...this.#claims.values()].filter((claim) => claim.companyId === companyId), page);
   }
 }
 
@@ -258,8 +276,10 @@ export interface PostedBillLike {
 
 export const purchaseBillToBookDocument = (
   bill: PostedBillLike,
-  supplier: { readonly gstin: string | null; readonly imported?: boolean; readonly kind?: BookPurchaseDocument['kind'] },
+  supplier: { readonly gstin: string | null; readonly imported?: boolean; readonly kind?: BookPurchaseDocument['kind']; readonly inTable5?: boolean; readonly outsideGstr2b?: true },
 ): BookPurchaseDocument => ({
+  ...(supplier.inTable5 === undefined ? {} : { inTable5: supplier.inTable5 }),
+  ...(supplier.outsideGstr2b === undefined ? {} : { outsideGstr2b: supplier.outsideGstr2b }),
   sourceKind: 'purchase_bill',
   sourceId: bill.id,
   companyId: bill.companyId as CompanyId,

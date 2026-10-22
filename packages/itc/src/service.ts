@@ -24,8 +24,8 @@ import { createHash } from 'node:crypto';
 import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { checksumOf, parsePortalFile, parseTypedRecord, type ParsedPortalRecord, type TypedPortalRecord } from './import.ts';
-import { assessLine, linkageFor, settleReturnsAgainstBills } from './itc.ts';
-import { lineKeyOf, matchDocuments } from './match.ts';
+import { assessLine, linkageFor, SELF_ASSESSED_NOTE, settleReturnsAgainstBills } from './itc.ts';
+import { lineKeyOf, matchDocuments, type MatchPair } from './match.ts';
 import type {
   ImportBatchRepository,
   ItcClaimRepository,
@@ -172,7 +172,18 @@ export class ItcReconciliationService {
       if (held === undefined || held.decidedAt <= decision.decidedAt) latest.set(decision.lineKey, decision);
     }
 
-    const pairs = matchDocuments({ books, portal, policy });
+    // Issue #289 — GSTR-2B is drawn only from suppliers' GSTR-1/1A/IFF, GSTR-5, GSTR-6 and ICEGATE
+    // (GST portal, FAQs on GSTR-2B). A bill from a seller who is not registered, or a composition
+    // dealer's bill of supply, can never appear in it and carries no credit, so it is not compared.
+    // It stays in the books for GSTR-3B Table 5.
+    //
+    // Issue #289, part 2 — except its reverse-charge tax: the buyer pays that in cash and takes the
+    // same amount as credit in the same return (CGST s.49(4); Circular 172/04/2022-GST; GSTR-3B
+    // 4(A)(3)). It is self-assessed, so it is claimed in its own month without a 2B line to wait on.
+    const selfAssessed: MatchPair[] = books
+      .filter((book) => book.outsideGstr2b === true && book.reverseCharge && book.period === period)
+      .map((book) => ({ book, portal: null, status: 'ONLY_IN_BOOKS', evidence: [], matchNote: SELF_ASSESSED_NOTE, fuzzy: false }));
+    const pairs = [...matchDocuments({ books: books.filter((book) => book.outsideGstr2b !== true), portal, policy }), ...selfAssessed];
     const today = indiaDateOf(this.#clock.now());
     // Issue #249 — a supplier's credit note does not say which bill it corrects, so one with no
     // return in our books is shown beside the bills we hold from that supplier, newest first.

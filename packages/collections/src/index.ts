@@ -7,3 +7,4 @@ export * from './plan.ts';
 export * from './repository.ts';
 export * from './adapters.ts';
 export * from './service.ts';
+export * from './postgres-repository.ts';

@@ -336,6 +336,22 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}, so it is not on this month's return.`,
         'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha, isliye yeh is mahine ke return par nahin hai.`,
       };
+  } else if (book !== null && book.reverseCharge && book.outsideGstr2b === true && book.kind === 'INVOICE') {
+    // Issue #289, part 2 — reverse charge on a purchase from a seller with no GST number. The buyer
+    // pays this tax in cash and takes the same amount as credit in the same return (CGST s.49(4);
+    // Circular 172/04/2022-GST; GSTR-3B 4(A)(3)). No supplier reports it, so there is no 2B line
+    // to wait for: it is self-assessed.
+    outcome = refused ? 'HELD_BACK' : 'CLAIM_NOW';
+    claimable = outcome === 'CLAIM_NOW' ? creditable : emptyAmounts();
+    sentence = outcome === 'CLAIM_NOW'
+      ? {
+        'en-IN': `Reverse charge: you pay this ${formatINR(totalTaxOf(creditable))} of GST in cash on this return, and the same amount comes back as credit. ${supplier} has no GST number, so it is never in GSTR-2B.`,
+        'hi-IN': `Reverse charge: yeh ${formatINR(totalTaxOf(creditable))} GST aap is return mein cash se bharenge, aur utna hi credit wapas milega. ${supplier} ka GST number nahin hai, isliye yeh GSTR-2B mein kabhi nahin aata.`,
+      }
+      : {
+        'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}, so its credit is not on this month's return. The tax itself is still owed.`,
+        'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha, isliye iska credit is mahine ke return par nahin hai. Tax phir bhi bharna hai.`,
+      };
   } else if (book !== null && book.kind === 'CREDIT_NOTE') {
     // Issue #249 — goods we sent back to the supplier. The credit on them comes down from the month
     // of the return, at the tax our own books took off (which is what the ledger reversed), whatever
@@ -552,7 +568,8 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
   return {
     key,
     status,
-    statusLabel: MATCH_STATUS_PLAIN[status],
+    // Issue #289 — a self-assessed reverse-charge bill is not "missing" from the portal: it never goes there.
+    statusLabel: input.pair.matchNote === SELF_ASSESSED_NOTE ? SELF_ASSESSED_LABEL : MATCH_STATUS_PLAIN[status],
     lastClaimDate,
     book,
     portal,
@@ -660,7 +677,7 @@ export const linkageFor = (
   const exemptInwardValue: Money = {
     currency: 'INR',
     minor: monthBooks
-      .filter((book) => !book.reversed && book.kind === 'INVOICE' && totalTaxOf(book.amounts).minor === 0n)
+      .filter((book) => !book.reversed && book.kind === 'INVOICE' && totalTaxOf(book.amounts).minor === 0n && book.inTable5 !== false)
       .reduce((total, book) => total + book.amounts.taxableValue.minor, 0n),
   };
 
@@ -796,3 +813,15 @@ export const settleReturnsAgainstBills = (
 
 /** Adds one line's contribution to a running set of totals. Used by the workspace. */
 export const accumulate = (total: TaxAmounts, line: TaxAmounts): TaxAmounts => addAmounts(total, line);
+
+/** Issue #289 — how a self-assessed reverse-charge line is named in place of "not on the portal". */
+const SELF_ASSESSED_LABEL: Bilingual = {
+  'en-IN': 'Reverse charge, self-assessed (not in GSTR-2B)',
+  'hi-IN': 'Reverse charge, khud ka hisaab (GSTR-2B mein nahin)',
+};
+
+/** Issue #289 — the note on a reverse-charge line that is self-assessed rather than matched. */
+export const SELF_ASSESSED_NOTE: Bilingual = {
+  'en-IN': 'Reverse charge from a seller with no GST number: self-assessed, never in GSTR-2B.',
+  'hi-IN': 'Bina GST number wale seller se reverse charge: khud ka hisaab, GSTR-2B mein kabhi nahin.',
+};

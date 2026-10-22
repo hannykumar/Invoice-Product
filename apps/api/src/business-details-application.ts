@@ -46,6 +46,7 @@ import {
 import { STATE_NAMES } from '@invoice/transport';
 import { GST_STATE_CODES } from '../../../packages/masters/src/validation.ts';
 import { masterData, mastersContext } from './master-data.ts';
+import { DurableMap } from './durable.ts';
 
 /**
  * Issue #237 — the one list of states a business, a customer or an address can be in: every
@@ -92,17 +93,17 @@ export interface BusinessPrefill {
   readonly pincode: string;
 }
 
-const details = new Map<string, BusinessDetails>();
-const prefills = new Map<string, BusinessPrefill>();
+const details = new DurableMap<BusinessDetails>('business_details', (companyId) => companyId);
+const prefills = new DurableMap<BusinessPrefill>('business_prefill', (companyId) => companyId);
 /** Issue #187 — the turnover answer, one per financial year, kept apart from the address. */
-const turnoverAnswers = new Map<string, readonly TurnoverAnswer[]>();
+const turnoverAnswers = new DurableMap<readonly TurnoverAnswer[]>('turnover_answers', (companyId) => companyId);
 /**
  * Issue #239 — whether the business is one the e-invoice rules leave out whatever its turnover
  * (a bank, an insurer, a goods transport agency, …). A fact about the kind of business, not about a
  * year, so it is asked once here and never on the E-invoice screen. Unanswered means "no": the
  * rules name a handful of kinds of business, and an ordinary trader is none of them.
  */
-const eInvoiceExemptions = new Map<string, EInvoiceExemption>();
+const eInvoiceExemptions = new DurableMap<EInvoiceExemption>('einvoice_exemption', (companyId) => companyId);
 
 const str = (value: unknown): string => String(value ?? '').trim();
 

@@ -116,6 +116,9 @@ must change in two ways:
 | --- | --- | --- |
 | `InventoryPort` (`reserve`, `release`, `issue`, `returnToStock`) | #12 | Mocked; `permissiveInventory` ships for lanes without stock |
 | `ComplianceHookPort` (`onInvoiceFinalised`, `onInvoiceCancelled`) | #26, #27 | Mocked; `noComplianceHooks` ships |
+
+Since #363, `onInvoiceFinalised` runs **inside** the bill's transaction and must only queue its request
+(the transactional outbox, [`unit-of-work-v1`](./unit-of-work-v1.md)); it must never call a government service from there.
 | `PermissionPort`, `AuditPort` | GPT 2 #3, #6 | Mocked, per `platform-ports.v1.md` |
 | Master data | GPT 3 #5 | Mocked, per `master-data-ports.v1.md` |
 

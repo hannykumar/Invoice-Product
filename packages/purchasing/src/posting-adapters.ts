@@ -1,6 +1,7 @@
 // Issue #17 [E17] — storage for purchase bills, and the joins to the lanes either side.
 
-import { isoDate, money, type CompanyId, type Money, type PartyId } from "@invoice/kernel";
+import { conflict, isoDate, money, notFound, type CompanyId, type Money, type PartyId } from "@invoice/kernel";
+import { pageOf, type Page } from "./paging.ts";
 import { MICRO } from "../../masters/src/units.ts";
 import { divideRoundHalfUp } from "./recompute.ts";
 import type { StockMasterData } from "../../inventory/src/ports.ts";
@@ -30,13 +31,25 @@ export class InMemoryPurchaseBillStore implements PurchaseBillRepository, Transa
     this.#bills = [...(taken as PurchaseBill[])];
   }
 
+  /**
+   * Refuses what the database refuses (#366): the same bill twice, a second live bill for one
+   * approved purchase, or a second live bill with one supplier's bill number. The service checks
+   * first, so this is only ever reached by a mistake in the code calling it.
+   */
   async insert(bill: PurchaseBill): Promise<void> {
+    const clash = this.#bills.some((other) => other.companyId === bill.companyId && (
+      other.id === bill.id
+      || (bill.state === "POSTED" && other.state === "POSTED" && (
+        other.purchaseId === bill.purchaseId
+        || (other.supplierPartyId === bill.supplierPartyId && other.invoiceNumber === bill.invoiceNumber)))));
+    if (clash) throw billAlreadyRecorded();
     this.#bills.push(Object.freeze(bill));
   }
 
   async update(bill: PurchaseBill): Promise<void> {
     const index = this.#bills.findIndex((candidate) => candidate.companyId === bill.companyId && candidate.id === bill.id);
-    if (index >= 0) this.#bills[index] = Object.freeze(bill);
+    if (index < 0) throw billNotFound();
+    this.#bills[index] = Object.freeze(bill);
   }
 
   async findById(companyId: CompanyId, id: string): Promise<PurchaseBill | null> {
@@ -47,14 +60,22 @@ export class InMemoryPurchaseBillStore implements PurchaseBillRepository, Transa
     return this.#bills.find((bill) => bill.companyId === companyId && bill.purchaseId === purchaseId) ?? null;
   }
 
-  async listForParty(companyId: CompanyId, partyId: string): Promise<PurchaseBill[]> {
-    return this.#bills.filter((bill) => bill.companyId === companyId && bill.supplierPartyId === partyId);
+  async listForParty(companyId: CompanyId, partyId: string, page?: Page): Promise<PurchaseBill[]> {
+    return billPage(this.#bills.filter((bill) => bill.companyId === companyId && bill.supplierPartyId === partyId), page);
   }
 
-  async list(companyId: CompanyId): Promise<PurchaseBill[]> {
-    return this.#bills.filter((bill) => bill.companyId === companyId);
+  async list(companyId: CompanyId, page?: Page): Promise<PurchaseBill[]> {
+    return billPage(this.#bills.filter((bill) => bill.companyId === companyId), page);
   }
 }
+
+const billPage = (bills: readonly PurchaseBill[], page: Page | undefined): PurchaseBill[] =>
+  pageOf(bills, page, (bill) => bill.postedAt, (bill) => bill.id);
+
+/** One wording for memory and PostgreSQL, so a caller cannot tell which is underneath. */
+export const billAlreadyRecorded = () =>
+  conflict("PURCHASE_DUPLICATE", "This bill has already been recorded, so it has not been recorded twice.");
+export const billNotFound = () => notFound("PURCHASE_BILL_UNKNOWN", "We could not find that purchase bill.");
 
 /**
  * Issue #12's service behind this module's narrow port.

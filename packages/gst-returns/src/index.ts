@@ -12,3 +12,4 @@ export * from './service.ts';
 export * from './adapters.ts';
 export * from './fixtures.ts';
 export { gstReturnMigrations } from './migrations.ts';
+export * from './postgres-repository.ts';

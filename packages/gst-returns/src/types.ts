@@ -24,6 +24,7 @@
  *      rather than quietly showing different numbers than the ones that were approved.
  */
 import type { CompanyId, IsoDate, Money, UserId } from '@invoice/kernel';
+import { UnreadableValue } from '@invoice/kernel';
 
 /** English and the romanised Hindi this product prints beside it, as everywhere else. */
 export interface Bilingual {
@@ -44,7 +45,7 @@ export type TaxPeriod = string & { readonly __taxPeriod: unique symbol };
 const PERIOD = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 export const taxPeriod = (value: string): TaxPeriod => {
-  if (!PERIOD.test(value)) throw new RangeError(`"${value}" is not a tax period in YYYY-MM form`);
+  if (!PERIOD.test(value)) throw new UnreadableValue(`"${value}" is not a tax period in YYYY-MM form`);
   return value as TaxPeriod;
 };
 
@@ -208,6 +209,11 @@ export interface OutwardDocument {
     readonly date: IsoDate;
     /** Present when the original was itself reported on an earlier return. */
     readonly reportedInPeriod?: TaxPeriod;
+    /**
+     * Issue #325 — the original bill's total. A note to a consumer is listed (CDNUR) when its bill
+     * was large enough to be listed (B2CL), however small the note itself is.
+     */
+    readonly invoiceValue?: Money;
     /**
      * Issue #232 — the bill the note corrects could not be found. The note takes its place of
      * supply from that bill, so without it the state is unknown and the return asks.
@@ -416,6 +422,12 @@ export interface Gstr3bHead {
   readonly credit: Money;
   /** Liability less credit within the same head. Negative means credit is left over. */
   readonly difference: Money;
+  /** Issue #289 — the reverse-charge part of the liability, which credit cannot pay (s.49(4)). */
+  readonly reverseChargeCash: Money;
+  /** Cash due in this head: the reverse-charge tax plus what credit does not cover of the rest. */
+  readonly cashToPay: Money;
+  /** Credit left in this head after the rest of the liability. */
+  readonly creditLeft: Money;
 }
 
 export interface Gstr3bReturn {

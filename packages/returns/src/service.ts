@@ -388,7 +388,8 @@ export class ReturnService {
     const current = note.supplierCreditNote ?? null;
     if (current !== null && current.number === reference.number && current.date === reference.date) return note;
     await this.#checkSupplierCreditNote(actor, note.partyId, note.originalDocument.date, reference, note.id);
-    const updated = await this.#repo.setSupplierCreditNote(actor.companyId, note.id, reference);
+    // Issue #366 — the change is its own action, so it gets its own transaction.
+    const updated = await this.#store.transaction(actor.companyId, () => this.#repo.setSupplierCreditNote(actor.companyId, note.id, reference));
     await this.#audit.record({
       companyId: actor.companyId, actorId: actor.userId, at: this.#clock.now().toISOString(),
       action: 'return.supplier_credit_note_recorded', subjectType: 'debit_note', subjectId: note.id,

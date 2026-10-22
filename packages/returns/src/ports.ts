@@ -54,12 +54,21 @@ export interface PurchaseReturnSourcePort {
   findPurchaseDocument(companyId: CompanyId, id: string): Promise<OriginalPurchaseDocument | null>;
 }
 
+/**
+ * Issue #366 — one page of a list, in id order. `after` is the last id of the previous page. Leave
+ * the parameter out to get every row, in the order the store has always returned them.
+ */
+export interface Page {
+  readonly limit: number;
+  readonly after?: string;
+}
+
 export interface ReturnNoteRepository {
   insert(note: ReturnNote): Promise<void>;
   findById(companyId: CompanyId, id: string): Promise<ReturnNote | null>;
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ReturnNote | null>;
-  listForOriginal(companyId: CompanyId, originalDocumentId: string): Promise<ReturnNote[]>;
-  list(companyId: CompanyId): Promise<ReturnNote[]>;
+  listForOriginal(companyId: CompanyId, originalDocumentId: string, page?: Page): Promise<ReturnNote[]>;
+  list(companyId: CompanyId, page?: Page): Promise<ReturnNote[]>;
   /**
    * Issue #249 — records the supplier's credit-note number and date on a purchase return. Nothing
    * else about the note changes: its money and its voucher are posted and stay as they are.

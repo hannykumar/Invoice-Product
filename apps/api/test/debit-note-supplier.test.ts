@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -22,7 +23,7 @@ const request = async (method: string, path: string, body: Record<string, unknow
 const text = (html: string): string => html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
 
 test('a debit note to a supplier prints their address, GST number and the place of supply', async () => {
-  const owner = (await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' })).body.sessionId as string;
+  const owner = await signInAs('owner@sampoorna.example.invalid');
   const bought = await request('POST', '/api/purchases/record', {
     supplierId: SHREE_RAM, reference: 'SRS-201', date: '2026-09-27',
     lines: [{ item: 'TMT Steel Bar 12mm', quantity: '500', rate: '64', gst: '1800' }],

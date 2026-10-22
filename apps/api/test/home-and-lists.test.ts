@@ -11,6 +11,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { saveTurnoverBand } from './turnover-helper.ts';
 import { appToday, useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -25,14 +26,12 @@ const seen: { path: string; body: unknown }[] = [];
 const request = async (method: string, path: string, body: Record<string, unknown> = {}, sessionId?: string) => {
   const response = await handleApi(method, path, body, sessionId === undefined ? undefined : `Bearer ${sessionId}`);
   const parsed = JSON.parse(String(response.body)) as Record<string, any>;
-  if (path !== '/api/auth/login') seen.push({ path, body: parsed });
+  if (!path.startsWith('/api/auth/')) seen.push({ path, body: parsed });
   return { status: response.status, body: parsed };
 };
 
 const signIn = async (): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
-  assert.equal(response.status, 200);
-  return response.body.sessionId as string;
+  return signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
 };
 
 /** Buy 500 kg, add Mehta (with a phone of their own), sell Mehta 450 kg at ₹90 with ₹2,000 freight. */

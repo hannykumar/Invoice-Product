@@ -15,9 +15,10 @@ import { distanceFromPortalAlert, longestAllowedDistance, pinPairKey, SAME_PIN_M
 import type {
   ConsolidatedTripRecord, EwayBillAcknowledgement, EwayBillPolicy, EwayBillRecord, VehicleType,
 } from "./types.ts";
+import { DUPLICATES, pageOf } from "./ports.ts";
 import type {
   ConsolidatedTripRepository, EwayBillPolicyPort, EwayBillPort, EwayBillRepository,
-  EwayCancelOutcome, EwayConsolidateOutcome, EwayFetchOutcome, EwayGenerateOutcome, EwayUpdateOutcome,
+  EwayCancelOutcome, EwayConsolidateOutcome, EwayFetchOutcome, EwayGenerateOutcome, EwayUpdateOutcome, Page,
 } from "./ports.ts";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
 
@@ -513,11 +514,16 @@ export class InMemoryEwayBillStore implements EwayBillRepository, TransactionPar
   snapshot(): unknown { return [...this.#rows]; }
   restore(taken: unknown): void { this.#rows = [...(taken as EwayBillRecord[])]; }
 
-  async insert(record: EwayBillRecord): Promise<void> { this.#rows.push(Object.freeze(record)); }
+  async insert(record: EwayBillRecord): Promise<void> {
+    // Issue #366 — the rule the table holds as well: one record per movement.
+    if (this.#rows.some((row) => row.id === record.id || (row.companyId === record.companyId && row.movementId === record.movementId))) throw DUPLICATES.ewayBill();
+    this.#rows.push(Object.freeze(record));
+  }
 
   async update(record: EwayBillRecord): Promise<void> {
     const index = this.#rows.findIndex((row) => row.companyId === record.companyId && row.id === record.id);
-    if (index >= 0) this.#rows[index] = Object.freeze(record);
+    if (index < 0) return;
+    this.#rows[index] = Object.freeze(record);
   }
 
   async findById(companyId: CompanyId, id: Id): Promise<EwayBillRecord | null> {
@@ -532,16 +538,20 @@ export class InMemoryEwayBillStore implements EwayBillRepository, TransactionPar
     return this.#rows.find((row) => row.companyId === companyId && row.acknowledgement?.ewayBillNumber === ewayBillNumber) ?? null;
   }
 
-  async list(companyId: CompanyId): Promise<EwayBillRecord[]> {
-    return this.#rows.filter((row) => row.companyId === companyId);
+  #page(companyId: CompanyId, page: Page | undefined, keep?: (row: EwayBillRecord) => boolean): EwayBillRecord[] {
+    return pageOf(this.#rows.filter((row) => row.companyId === companyId), (row) => row.id, page, keep);
   }
 
-  async listActive(companyId: CompanyId): Promise<EwayBillRecord[]> {
-    return this.#rows.filter((row) => row.companyId === companyId && (row.status === "ACTIVE" || row.status === "PART_A_ONLY"));
+  async list(companyId: CompanyId, page?: Page): Promise<EwayBillRecord[]> {
+    return this.#page(companyId, page);
   }
 
-  async listExpiringBefore(companyId: CompanyId, before: string): Promise<EwayBillRecord[]> {
-    return this.#rows.filter((row) => row.companyId === companyId && row.status === "ACTIVE"
+  async listActive(companyId: CompanyId, page?: Page): Promise<EwayBillRecord[]> {
+    return this.#page(companyId, page, (row) => row.status === "ACTIVE" || row.status === "PART_A_ONLY");
+  }
+
+  async listExpiringBefore(companyId: CompanyId, before: string, page?: Page): Promise<EwayBillRecord[]> {
+    return this.#page(companyId, page, (row) => row.status === "ACTIVE"
       && row.acknowledgement?.validUntil !== undefined && row.acknowledgement.validUntil <= before);
   }
 }
@@ -552,8 +562,13 @@ export class InMemoryConsolidatedTripStore implements ConsolidatedTripRepository
   snapshot(): unknown { return [...this.#rows]; }
   restore(taken: unknown): void { this.#rows = [...(taken as ConsolidatedTripRecord[])]; }
 
-  async insert(record: ConsolidatedTripRecord): Promise<void> { this.#rows.push(Object.freeze(record)); }
-  async list(companyId: CompanyId): Promise<ConsolidatedTripRecord[]> { return this.#rows.filter((row) => row.companyId === companyId); }
+  async insert(record: ConsolidatedTripRecord): Promise<void> {
+    if (this.#rows.some((row) => row.id === record.id || (row.companyId === record.companyId && row.tripNumber === record.tripNumber))) throw DUPLICATES.trip();
+    this.#rows.push(Object.freeze(record));
+  }
+  async list(companyId: CompanyId, page?: Page): Promise<ConsolidatedTripRecord[]> {
+    return pageOf(this.#rows.filter((row) => row.companyId === companyId), (row) => row.id, page);
+  }
   async findByTripNumber(companyId: CompanyId, tripNumber: string): Promise<ConsolidatedTripRecord | null> {
     return this.#rows.find((row) => row.companyId === companyId && row.tripNumber === tripNumber) ?? null;
   }

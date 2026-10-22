@@ -4,8 +4,9 @@
 // tenant-scoped credential reference, and development runs against `SyntheticGstConnector`, whose
 // GST numbers are all built by `syntheticGstin` and belong to nobody.
 
-import type { CompanyId } from "@invoice/kernel";
+import { conflict, type CompanyId } from "@invoice/kernel";
 import type { TransactionParticipant } from "@invoice/ledger";
+import { pageOf, type Page } from "./paging.ts";
 import {
   ConnectorError, type ConnectorGateway, type ConnectorRequest, type ConnectorResponse,
   type ExternalConnector,
@@ -166,6 +167,13 @@ export class SyntheticCredentialVault {
 
 // --------------------------------------------------------------------------- storage
 
+// Issue #366 — refused in memory exactly as the database refuses it. The service looks before it
+// writes, so these are only ever reached by a mistake in the calling code.
+export const assessmentAlreadyRecorded = () =>
+  conflict("SUPPLIER_RISK_ALREADY_RECORDED", "This check on the supplier has already been recorded, so it was not recorded twice.");
+export const warningAlreadyAccepted = () =>
+  conflict("SUPPLIER_RISK_ALREADY_ACCEPTED", "These warnings have already been accepted, so they were not accepted a second time.");
+
 export class InMemoryGstinCache implements GstinCacheRepository {
   readonly #byKey = new Map<string, GstinLookupOutcome>();
 
@@ -186,6 +194,7 @@ export class InMemoryRiskAssessmentStore implements RiskAssessmentRepository, Tr
   restore(taken: unknown): void { this.#rows = [...(taken as SupplierRiskAssessment[])]; }
 
   async insert(assessment: SupplierRiskAssessment): Promise<void> {
+    if (this.#rows.some((row) => row.companyId === assessment.companyId && row.fingerprint === assessment.fingerprint)) throw assessmentAlreadyRecorded();
     this.#rows.push(Object.freeze(assessment));
   }
 
@@ -193,8 +202,8 @@ export class InMemoryRiskAssessmentStore implements RiskAssessmentRepository, Tr
     return this.#rows.find((row) => row.companyId === companyId && row.fingerprint === fingerprint) ?? null;
   }
 
-  async listForParty(companyId: CompanyId, partyId: Id): Promise<SupplierRiskAssessment[]> {
-    return this.#rows.filter((row) => row.companyId === companyId && row.supplierPartyId === partyId);
+  async listForParty(companyId: CompanyId, partyId: Id, page?: Page): Promise<SupplierRiskAssessment[]> {
+    return pageOf(this.#rows.filter((row) => row.companyId === companyId && row.supplierPartyId === partyId), page, (row) => row.assessedAt, (row) => row.fingerprint);
   }
 }
 
@@ -205,6 +214,7 @@ export class InMemoryRiskAcknowledgementStore implements RiskAcknowledgementRepo
   restore(taken: unknown): void { this.#rows = [...(taken as { companyId: CompanyId; acknowledgement: RiskAcknowledgement }[])]; }
 
   async insert(companyId: CompanyId, acknowledgement: RiskAcknowledgement): Promise<void> {
+    if (this.#rows.some((row) => row.companyId === companyId && row.acknowledgement.assessmentFingerprint === acknowledgement.assessmentFingerprint)) throw warningAlreadyAccepted();
     this.#rows.push({ companyId, acknowledgement: Object.freeze(acknowledgement) });
   }
 

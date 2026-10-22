@@ -44,6 +44,7 @@ import {
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort, SystemAccountRole, TransactionParticipant, UnitOfWork } from '@invoice/ledger';
 import type { PreSaleDocument, PreSaleRepository } from '@invoice/sales';
 import { RECEIVABLES_PERMISSIONS, type PaymentMode } from './model.ts';
+import { pageOf, type Page } from './ports.ts';
 import type { PostingLineOut } from './posting.ts';
 import type { ReceivablesService } from './service.ts';
 
@@ -187,7 +188,17 @@ export const unusedOf = (advance: AdvanceReceipt): Money =>
 
 // ------------------------------------------------------------------------------------ storage
 
-export class InMemoryAdvanceRepository implements TransactionParticipant {
+/** Issue #366 — where receipt vouchers are kept: in memory, or in PostgreSQL (`PostgresAdvanceRepository`). */
+export interface AdvanceRepository {
+  findById(companyId: CompanyId, id: string): Promise<AdvanceReceipt | null>;
+  findByIdempotencyKey(companyId: CompanyId, key: string): Promise<AdvanceReceipt | null>;
+  insert(advance: AdvanceReceipt): Promise<void>;
+  /** Only `application`, `refund` and `version` ever change, and each of the first two is set once. */
+  update(advance: AdvanceReceipt, expectedVersion: number): Promise<void>;
+  list(companyId: CompanyId, filter?: { proformaId?: string }, page?: Page): Promise<AdvanceReceipt[]>;
+}
+
+export class InMemoryAdvanceRepository implements AdvanceRepository, TransactionParticipant {
   #advances: AdvanceReceipt[] = [];
 
   snapshot(): unknown {
@@ -224,8 +235,8 @@ export class InMemoryAdvanceRepository implements TransactionParticipant {
     this.#advances = next;
   }
 
-  async list(companyId: CompanyId, filter: { proformaId?: string } = {}): Promise<AdvanceReceipt[]> {
-    return this.#advances.filter((a) => a.companyId === companyId && (filter.proformaId === undefined || a.proformaId === filter.proformaId));
+  async list(companyId: CompanyId, filter: { proformaId?: string } = {}, page?: Page): Promise<AdvanceReceipt[]> {
+    return pageOf(this.#advances.filter((a) => a.companyId === companyId && (filter.proformaId === undefined || a.proformaId === filter.proformaId)), page);
   }
 }
 
@@ -267,7 +278,7 @@ export interface AdvanceServiceDeps {
   readonly ledger: LedgerService;
   readonly receivables: ReceivablesService;
   readonly proformas: Pick<PreSaleRepository, 'findById'>;
-  readonly repository: InMemoryAdvanceRepository;
+  readonly repository: AdvanceRepository;
   readonly permissions: PermissionPort;
   readonly audit: AuditPort;
   readonly clock: Clock;
@@ -297,7 +308,7 @@ export class AdvanceService {
   readonly #ledger: LedgerService;
   readonly #receivables: ReceivablesService;
   readonly #proformas: Pick<PreSaleRepository, 'findById'>;
-  readonly #repo: InMemoryAdvanceRepository;
+  readonly #repo: AdvanceRepository;
   readonly #permissions: PermissionPort;
   readonly #audit: AuditPort;
   readonly #clock: Clock;

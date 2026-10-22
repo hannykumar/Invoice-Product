@@ -193,4 +193,90 @@ export const complianceCalendarMigrations: readonly Migration[] = Object.freeze(
     DROP TABLE IF EXISTS compliance_occurrences;
     DROP TABLE IF EXISTS compliance_obligation_definitions;
   `,
+}, {
+  // Issue #366 — the Postgres repositories (postgres.ts). Nothing has written these tables before
+  // this migration (there was no repository), so the new NOT NULL columns need no default.
+  //
+  // `compliance_obligation_definitions` is left as it is: the built-in catalogue is global
+  // reference data (company_id NULL) and nothing reads it from the database yet.
+  id: "20261014T182249166Z_compliance-calendar_a46c1e3e4e26_postgres_repositories",
+  up: `
+    ALTER TABLE compliance_occurrences ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_occurrences FORCE ROW LEVEL SECURITY;
+    CREATE POLICY compliance_occurrences_tenant ON compliance_occurrences
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE compliance_deadline_revisions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_deadline_revisions FORCE ROW LEVEL SECURITY;
+    CREATE POLICY compliance_deadline_revisions_tenant ON compliance_deadline_revisions
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE compliance_completions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_completions FORCE ROW LEVEL SECURITY;
+    CREATE POLICY compliance_completions_tenant ON compliance_completions
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE compliance_alerts ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_alerts FORCE ROW LEVEL SECURITY;
+    CREATE POLICY compliance_alerts_tenant ON compliance_alerts
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+    ALTER TABLE compliance_calendar_exceptions ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_calendar_exceptions FORCE ROW LEVEL SECURITY;
+    CREATE POLICY compliance_calendar_exceptions_tenant ON compliance_calendar_exceptions
+      USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid)
+      WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+
+    -- What an alert carries that the first schema forgot: the obligation's kind (law or our own
+    -- housekeeping), the period it is about, and the consequence in words.
+    ALTER TABLE compliance_alerts
+      ADD COLUMN obligation_kind text NOT NULL CHECK (obligation_kind IN ('STATUTORY','POLICY')),
+      ADD COLUMN period jsonb NOT NULL,
+      ADD COLUMN consequence jsonb NOT NULL;
+
+    -- Each missing fact with its own question, as the exception queue shows it. missing_facts stays
+    -- for queries by fact name.
+    ALTER TABLE compliance_calendar_exceptions ADD COLUMN missing jsonb NOT NULL;
+
+    -- A revision's place in the occurrence's history. Revisions are append-only, so a repeated save
+    -- adds only the ones it has not seen (ON CONFLICT DO NOTHING) and they read back in order.
+    ALTER TABLE compliance_deadline_revisions
+      ADD COLUMN position integer NOT NULL CHECK (position >= 0),
+      ADD CONSTRAINT compliance_deadline_revisions_position_key UNIQUE (occurrence_id, position);
+
+    -- The calendar window: list() filters on period_to >= from AND period_from <= to.
+    CREATE INDEX compliance_occurrences_window_idx ON compliance_occurrences(company_id, period_to, period_from);
+    -- Foreign keys PostgreSQL does not index on its own.
+    CREATE INDEX compliance_alerts_occurrence_id_idx ON compliance_alerts(occurrence_id);
+    CREATE INDEX compliance_alerts_raised_by_idx ON compliance_alerts(raised_by);
+    CREATE INDEX compliance_occurrences_snoozed_by_idx ON compliance_occurrences(snoozed_by) WHERE snoozed_by IS NOT NULL;
+    CREATE INDEX compliance_deadline_revisions_company_idx ON compliance_deadline_revisions(company_id);
+    CREATE INDEX compliance_completions_company_idx ON compliance_completions(company_id);
+  `,
+  down: `
+    DROP INDEX IF EXISTS compliance_completions_company_idx;
+    DROP INDEX IF EXISTS compliance_deadline_revisions_company_idx;
+    DROP INDEX IF EXISTS compliance_occurrences_snoozed_by_idx;
+    DROP INDEX IF EXISTS compliance_alerts_raised_by_idx;
+    DROP INDEX IF EXISTS compliance_alerts_occurrence_id_idx;
+    DROP INDEX IF EXISTS compliance_occurrences_window_idx;
+    ALTER TABLE compliance_deadline_revisions DROP CONSTRAINT IF EXISTS compliance_deadline_revisions_position_key, DROP COLUMN IF EXISTS position;
+    ALTER TABLE compliance_calendar_exceptions DROP COLUMN IF EXISTS missing;
+    ALTER TABLE compliance_alerts DROP COLUMN IF EXISTS consequence, DROP COLUMN IF EXISTS period, DROP COLUMN IF EXISTS obligation_kind;
+    DROP POLICY IF EXISTS compliance_occurrences_tenant ON compliance_occurrences;
+    ALTER TABLE compliance_occurrences NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_occurrences DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS compliance_deadline_revisions_tenant ON compliance_deadline_revisions;
+    ALTER TABLE compliance_deadline_revisions NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_deadline_revisions DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS compliance_completions_tenant ON compliance_completions;
+    ALTER TABLE compliance_completions NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_completions DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS compliance_alerts_tenant ON compliance_alerts;
+    ALTER TABLE compliance_alerts NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_alerts DISABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS compliance_calendar_exceptions_tenant ON compliance_calendar_exceptions;
+    ALTER TABLE compliance_calendar_exceptions NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE compliance_calendar_exceptions DISABLE ROW LEVEL SECURITY;
+  `,
 }]);

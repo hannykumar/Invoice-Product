@@ -13,6 +13,7 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -31,7 +32,7 @@ const ok = async (method: string, path: string, body: Record<string, unknown>, s
 };
 
 const signIn = async (): Promise<string> =>
-  (await ok('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' }, '')).sessionId as string;
+  await signInAs('owner@sampoorna.example.invalid');
 
 const approve = async (session: string, period: string) => {
   await ok('POST', '/api/gst-returns/prepare', { period }, session);

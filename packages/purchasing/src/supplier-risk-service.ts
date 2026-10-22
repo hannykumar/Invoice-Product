@@ -18,6 +18,7 @@ import type {
   RiskPolicyPort, SupplierHistoryPort,
 } from "./supplier-risk-ports.ts";
 import type { Id, IsoDate } from "../../masters/src/types.ts";
+import { reportUnexpected } from "../../platform/src/error-reporting.ts";
 
 /** Seeing a supplier's government record is its own permission: it is data about someone else. */
 export const SUPPLIER_RISK_VIEW_PERMISSION = "supplier.risk.view";
@@ -101,7 +102,9 @@ export class SupplierRiskService {
         gstr2b = (await this.#gstr2b.signalFor(actor.companyId, {
           supplierGstin: input.gstin, invoiceNumber: input.invoiceNumber, invoiceDate: input.invoiceDate,
         })) ?? undefined;
-      } catch {
+      } catch (error) {
+        // The assessment then says the government's purchase record could not be read; why is reported.
+        reportUnexpected("supplierRisk.gstr2bSignal", error);
         gstr2b = undefined;
       }
     }
@@ -127,7 +130,7 @@ export class SupplierRiskService {
     // day records one assessment rather than a row per page refresh.
     const existing = await this.#assessments.findByFingerprint(actor.companyId, assessment.fingerprint);
     if (existing === null) {
-      await this.#assessments.insert(assessment);
+      await this.#assessments.insert(assessment, actor.userId);
       await this.#audit.record({
         companyId: actor.companyId,
         actorId: actor.userId,

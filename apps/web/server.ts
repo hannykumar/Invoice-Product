@@ -4,6 +4,11 @@ import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveApi } from "../api/src/server.ts";
+import { applySecurityHeaders, applyTimeouts } from "../api/src/http-hardening.ts";
+import { log } from "../api/src/log.ts";
+import { installErrorReporting } from "../api/src/error-reporting.ts";
+import { openPersistence } from "../api/src/persistence.ts";
+import { startRuntime } from "../api/src/runtime.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 // `PORT` is honoured too, so a tool that assigns a free port can start this without a clash.
@@ -51,6 +56,7 @@ export async function loadWebAsset(pathname: string): Promise<WebAsset> {
   try {
     body = relative === "index.html" ? await shell() : await readFile(path);
   } catch {
+    // Not one of the app's files: the address is a screen inside the app, which index.html opens.
     contentType = types[".html"]!;
     body = await shell();
   }
@@ -59,9 +65,11 @@ export async function loadWebAsset(pathname: string): Promise<WebAsset> {
   return { status: 200, contentType, body, cacheControl: hashed?.[2] === hash ? IMMUTABLE : REVALIDATE, etag: `"${hash}"` };
 }
 
-export const webServer = createServer(async (request, response) => {
+// Issue #349: the same headers and time limits as the API, on the page and every file it loads.
+export const webServer = applyTimeouts(createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
   if (url.pathname.startsWith('/api/')) return serveApi(request, response);
+  applySecurityHeaders(response);
   const asset = await loadWebAsset(url.pathname);
   const headers = { "content-type": asset.contentType, "cache-control": asset.cacheControl, ...(asset.etag ? { etag: asset.etag } : {}) };
   // A CDN that compresses may weaken the tag to W/"…", so compare without the W/ and across a list.
@@ -69,8 +77,13 @@ export const webServer = createServer(async (request, response) => {
   if (asset.etag && sent.includes(asset.etag)) return void response.writeHead(304, headers).end();
   response.writeHead(asset.status, headers);
   response.end(asset.body);
-});
+}));
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  webServer.listen(port, "127.0.0.1", () => console.log(`Karobar web preview: http://127.0.0.1:${port}`));
+  installErrorReporting();
+  // Issue #340 — the same choice as the API: PostgreSQL when DATABASE_URL is set, and no start in production without it.
+  const persistence = await openPersistence();
+  startRuntime(persistence);
+  log.info("The app keeps its books", { in: persistence.kind });
+  webServer.listen(port, "127.0.0.1", () => log.info("The web preview is listening", { url: `http://127.0.0.1:${port}` }));
 }

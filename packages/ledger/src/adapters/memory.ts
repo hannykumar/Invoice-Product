@@ -29,6 +29,7 @@ import type {
   VoucherFilter,
   VoucherRepository,
 } from '../ports.ts';
+import { pageLimit } from '../ports.ts';
 
 interface State {
   accounts: Account[];
@@ -84,8 +85,14 @@ const makeUnitOfWork = (state: State): UnitOfWork => {
     async findByPartyId(companyId, partyId) {
       return state.accounts.find((a) => a.companyId === companyId && a.partyId === partyId) ?? null;
     },
-    async listAll(companyId) {
-      return state.accounts.filter((a) => a.companyId === companyId);
+    async listAll(companyId, page) {
+      const all = state.accounts.filter((a) => a.companyId === companyId);
+      if (page === undefined) return all;
+      const limit = pageLimit(page.limit);
+      return all
+        .filter((a) => page.afterCode === undefined || a.code > page.afterCode)
+        .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+        .slice(0, limit);
     },
     async insertMany(toInsert) {
       state.accounts = [...state.accounts, ...toInsert];
@@ -111,7 +118,7 @@ const makeUnitOfWork = (state: State): UnitOfWork => {
       );
     },
     async list(companyId, filter: VoucherFilter) {
-      return state.vouchers.filter((v) => {
+      const matching = state.vouchers.filter((v) => {
         if (v.companyId !== companyId) return false;
         if (filter.from !== undefined && v.date < filter.from) return false;
         if (filter.to !== undefined && v.date > filter.to) return false;
@@ -121,6 +128,15 @@ const makeUnitOfWork = (state: State): UnitOfWork => {
         if (filter.partyId !== undefined && !v.lines.some((l) => l.partyId === filter.partyId)) return false;
         return true;
       });
+      const { page } = filter;
+      if (page === undefined) return matching;
+      const limit = pageLimit(page.limit);
+      const key = (v: { date: string; number: string }): string => `${v.date}\u0000${v.number}`;
+      const after = page.after === undefined ? undefined : key(page.after);
+      return matching
+        .filter((v) => after === undefined || key(v) > after)
+        .sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))
+        .slice(0, limit);
     },
   };
 
@@ -280,8 +296,15 @@ export const permissionPortFromActor: PermissionPort = {
 };
 
 /** GPT 2 issue #6 mock: keeps every event so tests can assert what was recorded. */
-export class InMemoryAuditPort implements AuditPort {
+export class InMemoryAuditPort implements AuditPort, TransactionParticipant {
   readonly events: AuditEvent[] = [];
+  /** Issue #363 — joined to a store, a rolled-back action leaves no audit record behind. */
+  snapshot(): unknown {
+    return this.events.length;
+  }
+  restore(taken: unknown): void {
+    this.events.length = taken as number;
+  }
   async record(event: AuditEvent): Promise<void> {
     this.events.push(event);
   }

@@ -7,3 +7,4 @@ export * from './balances.ts';
 export * from './service.ts';
 export * from './sales-adapter.ts';
 export * from './ledger-adapter.ts';
+export * from './postgres-store.ts';
