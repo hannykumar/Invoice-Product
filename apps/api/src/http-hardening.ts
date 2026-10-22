@@ -52,7 +52,12 @@ export const MAX_JSON_BODY_BYTES = 1024 * 1024;
 export const MAX_FILE_BODY_BYTES = 5 * 1024 * 1024;
 const FILE_ROUTES: ReadonlySet<string> = new Set(['/api/migration/analyse', '/api/itc/import']);
 
-export const bodyLimitFor = (pathname: string): number => FILE_ROUTES.has(pathname) ? MAX_FILE_BODY_BYTES : MAX_JSON_BODY_BYTES;
+/** Issue #341 — the local store's upload address takes a whole file, up to the largest kind (25 MB). */
+export const STORED_FILE_ROUTE = '/api/files/blob';
+export const MAX_STORED_FILE_BODY_BYTES = 25 * 1024 * 1024;
+
+export const bodyLimitFor = (pathname: string): number =>
+  pathname === STORED_FILE_ROUTE ? MAX_STORED_FILE_BODY_BYTES : FILE_ROUTES.has(pathname) ? MAX_FILE_BODY_BYTES : MAX_JSON_BODY_BYTES;
 
 export class BodyTooLarge extends Error {
   readonly limit: number;
