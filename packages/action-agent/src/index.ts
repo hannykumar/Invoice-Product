@@ -5,6 +5,7 @@ export * from './fingerprint.ts';
 export * from './registry.ts';
 export * from './ports.ts';
 export * from './store.ts';
+export * from './postgres-store.ts';
 export * from './recipes.ts';
 export * from './tools.ts';
 export * from './service.ts';

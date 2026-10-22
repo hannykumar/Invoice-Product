@@ -15,6 +15,7 @@ import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import test, { after, before } from 'node:test';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import { signInOverHttp } from './sign-in-helper.ts';
 
 const url = process.env.DATABASE_URL;
 if (url === undefined && process.env.CI !== undefined) throw new Error('DATABASE_URL must be set in CI so the restart test runs.');
@@ -61,11 +62,15 @@ const stop = async (): Promise<void> => {
 const call = async (method: string, path: string, body?: unknown, token?: string): Promise<Record<string, any>> => {
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
-    headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${port}`, ...(token === undefined ? {} : { authorization: `Bearer ${token}` }) },
+    headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${port}`, ...(token === undefined ? {} : { cookie: `__Host-karobar_session=${token}` }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, ...(await response.json() as Record<string, unknown>) };
 };
+
+/** Signs in by code (#342) against the running server; the session token from its cookie. */
+const signInHere = async (address: string, companyId: string): Promise<string> =>
+  (await signInOverHttp(`http://127.0.0.1:${port}`, address, companyId)).split('=')[1]!;
 
 before(async () => {
   if (url === undefined) return;
@@ -97,9 +102,7 @@ after(async () => {
 test('a bill made before a restart is still there after it, with its copy, its customer and the next number', { skip }, async () => {
   const run = randomBytes(3).toString('hex');
   await start();
-  const signedIn = await call('POST', '/api/auth/login', { email: 'owner@sampoorna.example.invalid', password: 'karobar-demo', companyId: COMPANY });
-  assert.equal(signedIn.status, 200);
-  const token = String(signedIn.sessionId);
+  const token = await signInHere('owner@sampoorna.example.invalid', COMPANY);
   const details = await call('POST', '/api/business-details', { legalName: 'Sampoorna Traders', address1: 'Plot 14, 2nd Phase, Peenya Industrial Area', city: 'Bengaluru', pincode: '560058', stateCode: '29' }, token);
   assert.equal(details.status, 200);
   const customer = await call('POST', '/api/customers', { name: `Lakshmi Stores ${run}`, registration: 'unregistered', stateCode: '29', pincode: '560058', city: 'Bengaluru', address1: '12 MG Road', acknowledgeSimilar: true }, token);
@@ -146,12 +149,11 @@ test('a bill made before a restart is still there after it, with its copy, its c
 test('a company on PostgreSQL is never given demo data, and cannot open another company\'s bill', { skip }, async () => {
   await stop();
   await start();
-  const signedIn = await call('POST', '/api/auth/login', { email: 'owner@konkan.example.invalid', password: 'karobar-demo', companyId: '00000000-0000-4000-8000-000000000011' });
-  assert.equal(signedIn.status, 200);
-  assert.equal((await call('GET', '/api/dashboard', undefined, String(signedIn.sessionId))).status, 200);
+  const session = await signInHere('owner@konkan.example.invalid', '00000000-0000-4000-8000-000000000011');
+  assert.equal((await call('GET', '/api/dashboard', undefined, session)).status, 200);
   if (sampoornaBill !== undefined) {
     // Row-level security answers for another company's id exactly as for an id that does not exist.
-    assert.equal((await call('GET', `/api/sales/${sampoornaBill}/preview`, undefined, String(signedIn.sessionId))).status, 404);
+    assert.equal((await call('GET', `/api/sales/${sampoornaBill}/preview`, undefined, session)).status, 404);
   }
   const konkan = '00000000-0000-4000-8000-000000000011';
   const counts = (await owner.query(
@@ -160,4 +162,21 @@ test('a company on PostgreSQL is never given demo data, and cannot open another 
             (SELECT count(*) FROM master_records WHERE company_id = $1 AND kind <> 'warehouse') AS records,
             (SELECT count(*) FROM app_records WHERE company_id = $1) AS app_records`, [konkan])).rows[0]!;
   assert.deepEqual({ ...counts }, { bills: '0', movements: '0', records: '0', app_records: '0' });
+});
+
+test('#342: on PostgreSQL a CA switches business without signing in again; the old session ends', { skip }, async () => {
+  if (server === undefined) await start();
+  const inSampoorna = await signInHere('ca@example.invalid', COMPANY);
+  const switched = await fetch(`http://127.0.0.1:${port}/api/session/company`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: `http://127.0.0.1:${port}`, cookie: `__Host-karobar_session=${inSampoorna}` },
+    body: JSON.stringify({ companyId: '00000000-0000-4000-8000-000000000011' }),
+  });
+  assert.equal(switched.status, 200, await switched.clone().text());
+  const inKonkan = /__Host-karobar_session=([^;]+)/.exec(switched.headers.get('set-cookie') ?? '')?.[1];
+  assert.ok(inKonkan);
+  assert.equal((await call('GET', '/api/session', undefined, inKonkan)).company.id, '00000000-0000-4000-8000-000000000011');
+  assert.equal((await call('GET', '/api/session', undefined, inSampoorna)).status, 401);
+  assert.equal((await call('POST', '/api/auth/sign-out', {}, inKonkan)).status, 200);
+  assert.equal((await call('GET', '/api/session', undefined, inKonkan)).status, 401);
 });

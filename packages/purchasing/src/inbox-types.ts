@@ -28,19 +28,30 @@ export type QuarantineReason =
   | "PASSWORD_PROTECTED"
   | "ACTIVE_CONTENT"
   | "MALWARE_SUSPECTED"
+  // #401: a file no virus scanner has answered for yet. A hold, not a pass.
+  | "AWAITING_SCAN"
   | "COMPANY_NOT_IDENTIFIED"
   | "COMPANY_MISMATCH"
   | "NOT_AN_INVOICE"
   | "UNREADABLE"
-  | "EXTRACTION_TOO_UNCERTAIN";
+  | "EXTRACTION_TOO_UNCERTAIN"
+  // #400: an e-invoice file whose government signature does not match its contents.
+  | "SIGNATURE_INVALID";
 
 export interface Attachment {
   readonly id: Id;
   readonly fileName: string;
   /** What the sender claimed. Screening compares it against the actual bytes. */
   readonly declaredMimeType: string;
+  /**
+   * On a stored document this is the measured size; on input the caller's claim is
+   * accepted but discarded — the inbox measures the real bytes before trusting it (#401).
+   */
   readonly sizeBytes: number;
-  /** SHA-256 of the file, the primary duplicate key. */
+  /**
+   * On a stored document this is the SHA-256 measured at intake, the duplicate key.
+   * On input the caller's claim is discarded the same way (#401).
+   */
   readonly sha256: string;
   /** Reference in object storage. Never the bytes themselves. */
   readonly storageKey: string;
@@ -75,7 +86,8 @@ export interface InboundDocument {
   readonly routing?: RoutingDecision;
 }
 
-export type RoutingBasis = "buyer_gstin" | "channel_binding" | "explicit_company" | "sender_known_supplier";
+// #400: "buyer_gstin" was removed. A GST number printed in a file is public and never routes.
+export type RoutingBasis = "channel_binding" | "explicit_company" | "sender_known_supplier";
 
 export interface RoutingDecision {
   readonly basis: RoutingBasis;
@@ -125,6 +137,11 @@ export interface ExtractionDraft {
   readonly companyId: Id;
   readonly documentId: Id;
   readonly source: "einvoice_json" | "ocr" | "manual";
+  /**
+   * e-invoice JSON only (#400): whether the government's signature was verified. Anything but
+   * "verified" means the values were read at review confidence, not trusted.
+   */
+  readonly signature?: "verified" | "unverified" | "unsigned" | "invalid";
   readonly supplierGstin?: ExtractedField<string>;
   readonly supplierName?: ExtractedField<string>;
   readonly buyerGstin?: ExtractedField<string>;

@@ -12,6 +12,7 @@ import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { apiRuntime } from '../src/runtime.ts';
 import { stockEverything } from './stock-helper.ts';
+import { signIn as signInAs } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
 
@@ -23,10 +24,8 @@ const request = async (method: string, path: string, body: Record<string, unknow
   return { status: response.status, body: JSON.parse(String(response.body)) as Record<string, any> };
 };
 
-const signIn = async (email = 'owner@sampoorna.example.invalid', password = 'karobar-demo'): Promise<string> => {
-  const response = await request('POST', '/api/auth/login', { companyId: SAMPOORNA, email, password });
-  assert.equal(response.status, 200, JSON.stringify(response.body));
-  return response.body.sessionId as string;
+const signIn = async (email = 'owner@sampoorna.example.invalid'): Promise<string> => {
+  return signInAs(email, SAMPOORNA);
 };
 
 const internals = async (owner: string) => {
@@ -193,7 +192,7 @@ test('#306: what would stop the bill comes back as data, in both languages', asy
 
 test('#306: estimating needs the permission to start a bill — a viewer is refused', async () => {
   const { customers, items } = await setUpCompany();
-  const viewer = await signIn('viewer@sampoorna.example.invalid', 'viewer-demo');
+  const viewer = await signIn('viewer@sampoorna.example.invalid');
   const body = { customerId: customers[0], date: DATE, lines: JSON.stringify([{ itemId: items[0]!.id, quantity: '1', rate: '10' }]) };
   assert.equal((await request('POST', '/api/sales/estimate', body, viewer)).status, 403);
   assert.equal((await request('POST', '/api/sales/estimate', {}, viewer)).status, 403, 'refused before anything is read');

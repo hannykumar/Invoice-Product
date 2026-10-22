@@ -19,9 +19,9 @@
     "web": "node --experimental-strip-types apps/web/server.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tests/e2e/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
-    "test:integration": "node --experimental-strip-types --test \"packages/*/test/*.integration.test.ts\" \"apps/*/test/*.integration.test.ts\"",
-    "test:coverage": "node --test --experimental-strip-types --experimental-test-coverage --test-coverage-include=\"packages/*/src/**\" --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=75 \"packages/*/test/**/*.test.ts\"",
+    "test": "NODE_ENV=test node --test --experimental-strip-types \"apps/*/test/**/*.test.ts\" \"ops/*/test/**/*.test.ts\" \"packages/*/test/**/*.test.ts\" \"tests/e2e/**/*.test.ts\" \"tools/test/**/*.test.ts\"",
+    "test:integration": "NODE_ENV=test node --experimental-strip-types --test \"packages/*/test/*.integration.test.ts\" \"apps/*/test/*.integration.test.ts\"",
+    "test:coverage": "NODE_ENV=test node --test --experimental-strip-types --experimental-test-coverage --test-coverage-include=\"packages/*/src/**\" --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=75 \"packages/*/test/**/*.test.ts\"",
     "security:drill": "node --test --experimental-strip-types ops/security/test/security.test.ts",
     "vendor:readiness": "node --experimental-strip-types ops/vendor-onboarding/src/cli.ts",
     "bank:route": "node --experimental-strip-types ops/bank-feed-selection/src/cli.ts",
@@ -66,7 +66,7 @@
     "fflate": "^0.8.3",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.1",
-    "puppeteer": "^25.13.0",
+    "puppeteer": "^25.14.0",
     "read-excel-file": "^9.3.12",
     "zod": "^3.25.76"
   },
@@ -74,6 +74,6 @@
     "@tabler/icons": "^3.49.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.5",
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   }
 }

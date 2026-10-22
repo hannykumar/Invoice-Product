@@ -17,6 +17,8 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { handleApi } from '../../api/src/server.ts';
 import { stockEverything } from '../../api/test/stock-helper.ts';
+import { signIn as signInAs } from '../../api/test/sign-in-helper.ts';
+import { DEMO_SIGN_IN_CODE } from '../../../packages/platform/src/seed.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const read = (name: string) => readFile(resolve(root, name), 'utf8');
@@ -99,10 +101,13 @@ const walk = (where: string, value: unknown, onReports: boolean) => {
 
 test('#312: what the API says on the screens of a trade uses shop words too', async () => {
   findings.length = 0;
-  const signedIn = await call('POST', '/api/auth/login', { companyId: SAMPOORNA, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' });
+  // What the sign-in screen is told: the code step and the business it opens.
+  const sent = await call('POST', '/api/auth/code', { address: 'owner@sampoorna.example.invalid' });
+  walk('sign-in', sent.body, false);
+  const signedIn = await call('POST', '/api/auth/sign-in', { address: 'owner@sampoorna.example.invalid', code: DEMO_SIGN_IN_CODE, companyId: SAMPOORNA });
   assert.equal(signedIn.status, 200);
   walk('sign-in', signedIn.body, false);
-  authorization = `Bearer ${signedIn.body.sessionId as string}`;
+  authorization = `Bearer ${await signInAs('owner@sampoorna.example.invalid', SAMPOORNA)}`;
   await stockEverything(authorization);
 
   const today = (await call('GET', '/api/dashboard')).body.today as string;

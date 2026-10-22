@@ -12,3 +12,4 @@ export * from "./environments.ts";
 export * from "./whitebooks-connector.ts";
 export * from "./einvoice-migrations.ts";
 export * from "./export-supply.ts";
+export * from "./irp-signature.ts";

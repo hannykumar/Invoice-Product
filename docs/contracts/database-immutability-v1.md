@@ -73,6 +73,8 @@ does.
 | `payment_allocations` | always | `released_at` (once), `updated_at` | — |
 | `document_settlements` | always | `allocated_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
 | `advance_receipts` | always | `updated_at`, `version` | — |
+| `agent_plans` (#47, #366) | `EXECUTED` | `updated_at` | none: an executed plan is only ever saved again unchanged |
+| `agent_reports` | always | nothing | — |
 
 Each row was checked against the module's service and repository before it was frozen. The list
 lives in one place, `FROZEN` in `immutability-migrations.ts`.
@@ -99,7 +101,7 @@ re-creates its trigger, and name the reason in the PR.
 
 Append-only by their schema comments but not verified against a repository, so left to their own
 lanes: `master_versions`, `master_snapshots`, `master_merges`, `bank_statement_transactions`,
-`bank_feed_transactions`, `subscription_payment_events`, `subscription_usage_events`,
+`subscription_payment_events`, `subscription_usage_events`,
 `notification_delivery_events`, `collection_communications`, `compliance_alerts`,
 `privacy_consents`, `restore_drills`, `status_incident_updates`, `government_calls` (freezable
 once its outcome is settled). `stock_balances` is not frozen because it is not a record: it is the

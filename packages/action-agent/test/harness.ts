@@ -42,7 +42,7 @@ import {
   sendReminderTool,
   stopRemindingTool,
 } from '../src/index.ts';
-import type { PartyDirectoryPort } from '../src/ports.ts';
+import type { AgentPlanStore, PartyDirectoryPort } from '../src/ports.ts';
 
 export const AGENT_PERMISSION_LIST = [
   'agent.plan',
@@ -79,7 +79,9 @@ export class ScriptedProvider implements NotificationTransport {
   }
 }
 
-export const makeAgentDesk = async (options: { permissions?: readonly string[]; deadlineMs?: number } = {}) => {
+export const makeAgentDesk = async (
+  options: { permissions?: readonly string[]; deadlineMs?: number; store?: AgentPlanStore; idFactory?: () => string } = {},
+) => {
   const business = await aBusyMonth();
   const actor: ActorContext = {
     ...business.actor,
@@ -159,11 +161,11 @@ export const makeAgentDesk = async (options: { permissions?: readonly string[]; 
     commands,
     contextFor,
     parties,
-    store: new InMemoryAgentPlanStore(),
+    store: options.store ?? new InMemoryAgentPlanStore(),
     permissions: permissionPortFromActor,
     clock: { now: () => new Date('2026-06-01T10:00:00.000Z') },
     ...(options.deadlineMs === undefined ? {} : { toolDeadlineMs: options.deadlineMs }),
-    idFactory: (() => {
+    idFactory: options.idFactory ?? (() => {
       let n = 0;
       return () => `plan-${String((n += 1)).padStart(3, '0')}`;
     })(),

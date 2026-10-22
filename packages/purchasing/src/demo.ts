@@ -25,7 +25,22 @@ const invoicePage = (buyer: string, number: string, total: string) => pageFromLi
   "Taxable Value: 32,000.00", "IGST 18%: 5,760.00", `Grand Total: ${total}`,
 ]);
 
-const pdfHead = new Uint8Array(Buffer.from("%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n", "latin1"));
+// A small but real one-page PDF — screening now parses the whole file, so a bare
+// "%PDF-" line no longer passes. `tag` varies the bytes so two "files" differ.
+const demoPdf = (tag: string): Uint8Array => {
+  const objects = [
+    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+    `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >> endobj`,
+    `4 0 obj << /Length 20 >> stream\n% ${tag}\nendstream endobj`,
+  ];
+  let pdf = "%PDF-1.7\n";
+  const offsets: number[] = [];
+  for (const object of objects) { offsets.push(pdf.length); pdf += `${object}\n`; }
+  const xrefAt = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((at) => `${String(at).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`;
+  return new Uint8Array(Buffer.from(pdf, "latin1"));
+};
 const line = (text = "") => console.log(text);
 
 export async function runDemo(): Promise<void> {
@@ -55,26 +70,32 @@ export async function runDemo(): Promise<void> {
     }
   };
 
-  line("Purchase inbox — five documents, four channels. Nothing is posted anywhere.");
+  // The channel adapter passes the whole file and the virus scanner's verdict; the
+  // inbox measures size and hash itself rather than trusting what was declared (#401).
+  const billOne = demoPdf("bill-one");
+  const billTwo = demoPdf("bill-two");
+  const photo = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+
+  line("Purchase inbox — six documents, four channels. Nothing is posted anywhere.");
 
   show("1. A supplier's PDF on WhatsApp", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", displayName: "Shree Ram Steels", providerMessageId: "wamid.1" },
-    attachment: attachment("sha-a", "s3://a"), head: pdfHead, deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.1",
+    attachment: attachment("sha-a", "s3://a"), bytes: billOne, scanVerdict: "clean", deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.1",
   }));
 
   show("2. The same invoice emailed as well (same file)", await inbox.receive({
     channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: "mail.7" },
-    attachment: attachment("sha-a", "s3://b"), head: pdfHead, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "mail.7",
+    attachment: attachment("sha-a", "s3://b"), bytes: billOne, scanVerdict: "clean", deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "mail.7",
   }));
 
   show("3. An invoice addressed to a different business", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", providerMessageId: "wamid.2" },
-    attachment: attachment("sha-c", "s3://c"), head: pdfHead, deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.2",
+    attachment: attachment("sha-c", "s3://c"), bytes: billTwo, scanVerdict: "clean", deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.2",
   }));
 
   show("4. A blurred photo of a bill", await inbox.receive({
     channel: "camera", sender: { channel: "camera", address: "owner@sampoorna.example", providerMessageId: "cam.1" },
-    attachment: attachment("sha-d", "s3://d", "photo.jpg", "image/jpeg"), head: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), explicitCompanyId: "sampoorna", idempotencyKey: "cam.1",
+    attachment: attachment("sha-d", "s3://d", "photo.jpg", "image/jpeg"), bytes: photo, scanVerdict: "clean", uploader: { companyId: "sampoorna", branchId: "sampoorna", actorId: "owner", permissions: new Set(), sessionId: "demo" }, idempotencyKey: "cam.1",
   }));
 
   const eInvoice = JSON.stringify({
@@ -84,11 +105,19 @@ export async function runDemo(): Promise<void> {
     ItemList: [{ SlNo: "1", PrdDesc: "OPC Cement 53 Grade", HsnCd: "25232930", Qty: 100, Unit: "BAG", UnitPrice: 380, AssAmt: 38000, GstRt: 28 }],
     ValDtls: { AssVal: 38000, IgstVal: 10640, TotInvVal: 48640 },
   });
-  show("5. A signed e-invoice JSON, delivered to the wrong number", await inbox.receive({
+  show("5. An unsigned e-invoice JSON naming Sampoorna, sent to Konkan's number: held at Konkan, never moved", await inbox.receive({
     channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", providerMessageId: "wamid.3" },
     attachment: attachment("sha-e", "s3://e", "einvoice.json", "application/json"),
-    head: new Uint8Array(Buffer.from(eInvoice.slice(0, 512), "latin1")), jsonBody: eInvoice, deliveredTo: "+91 98220 11122", idempotencyKey: "wamid.3",
+    bytes: new Uint8Array(Buffer.from(eInvoice, "utf-8")), scanVerdict: "clean", deliveredTo: "+91 98220 11122", idempotencyKey: "wamid.3",
   }));
+
+  // A file that arrives before the virus scanner has answered is held, not passed.
+  const held = await inbox.receive({
+    channel: "whatsapp", sender: { channel: "whatsapp", address: "+919822011122", providerMessageId: "wamid.4" },
+    attachment: attachment("sha-f", "s3://a"), bytes: demoPdf("awaiting-scan"), deliveredTo: "+91 98450 12345", idempotencyKey: "wamid.4",
+  });
+  show("6. A file that arrived before its virus check (held, then released when the scan answers clean)", held);
+  show("   the same document after the scanner answered clean", await inbox.scanAnswered(held.document.id, "clean"));
 
   line();
   line(`Audit: ${audit.forCompany({ companyId: "sampoorna" } as never).length} events for Sampoorna Traders, ${audit.forCompany({ companyId: "konkan" } as never).length} for Konkan Metals.`);
