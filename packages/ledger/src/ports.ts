@@ -7,6 +7,7 @@
  * parallel-work protocol requires. When GPT 2's implementations land, the mocks are replaced and
  * nothing in this module changes.
  */
+import { invalid } from '@invoice/kernel';
 import type { AccountId, CompanyId, BranchId, IsoDate, UserId, VoucherId } from '@invoice/kernel';
 import type { Account } from './domain/account.ts';
 import type { FiscalPeriod, PeriodState } from './domain/period.ts';
@@ -60,7 +61,8 @@ export interface AccountRepository {
   findBySystemRole(companyId: CompanyId, role: string): Promise<Account | null>;
   /** The account that belongs to one customer or supplier, so party balances fold from lines. */
   findByPartyId(companyId: CompanyId, partyId: string): Promise<Account | null>;
-  listAll(companyId: CompanyId): Promise<Account[]>;
+  /** Every account, or with `page` one page of them in code order (issue #366). */
+  listAll(companyId: CompanyId, page?: AccountPage): Promise<Account[]>;
   insertMany(accounts: readonly Account[]): Promise<void>;
 }
 
@@ -79,6 +81,28 @@ export interface VoucherFilter {
   readonly accountId?: AccountId;
   readonly partyId?: string;
   readonly includeStates?: readonly Voucher['state'][];
+  /** Issue #366 — one page in date-then-number order. Omitted, every matching entry comes back as before. */
+  readonly page?: VoucherPage;
+}
+
+/**
+ * Issue #366 — keyset pages. `after` is the last row of the previous page; codes and entry numbers
+ * compare by character code, the same on every store, so a page never skips or repeats a row.
+ */
+export interface AccountPage {
+  readonly limit: number;
+  readonly afterCode?: string;
+}
+
+/** A page holds 1 to 1,000 rows. */
+export const pageLimit = (limit: number): number => {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw invalid('LEDGER_PAGE_SIZE', 'A page holds between 1 and 1,000 rows.');
+  return limit;
+};
+
+export interface VoucherPage {
+  readonly limit: number;
+  readonly after?: { readonly date: IsoDate; readonly number: string };
 }
 
 export interface PeriodRepository {

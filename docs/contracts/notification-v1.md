@@ -19,3 +19,12 @@ Preferences can disable a channel or define quiet hours in an IANA time zone suc
 ## Demonstration scenario
 
 Schedule `gst_deadline` once for an owner with `recipientRole: "owner"`, `sensitivity: "internal"`, locale `en-IN`, and a company-scoped key such as `gst-deadline:2026-08-20`. Repeating the same business event returns the original notification. Delivery records `scheduled` then `delivered`; an unavailable provider records `failed`, and `retry` reschedules the same notification without creating a duplicate.
+
+## Storage (issue #366)
+
+Every `NotificationService` method that reads or writes a record returns a promise: `schedule`, `setPreference`, `retry`, `markOpened`, `eventsFor` and `get`, as `deliverDue` already did. The records live behind `NotificationStore`: `InMemoryNotificationStore` by default, or `PostgresNotificationStore` (`packages/platform/src/postgres-notifications.ts`), passed as the fourth constructor argument. One contract suite runs on both (`packages/platform/test/notification-store-contract.ts`).
+
+- On PostgreSQL every write joins the caller's unit of work (`db.unitOfWork`); outside one it is refused with `NO_UNIT_OF_WORK`. Reads use `tenantTransaction`. All three tables force row-level security.
+- Another company's notification is `NOT_FOUND`, exactly like a missing one (it was `TENANT_ISOLATION`): under row-level security the two cannot be told apart, and naming the other company would confirm the id exists.
+- A `delivered` or `suppressed` notification is frozen in the database; the delivery timeline is append-only. Neither can be deleted.
+- The rate-limit window is still counted in the server's memory, per process.

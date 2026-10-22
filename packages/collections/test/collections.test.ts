@@ -372,7 +372,7 @@ describe('when delivery goes wrong', () => {
 
   it('records a suppression as a fact when the recipient has silenced the channel', async () => {
     const desk = await lateDesk({ channels: new Map([[ABC as string, ['email'] as const]]) });
-    desk.notifications.setPreference(desk.contextFor(desk.actor), {
+    await desk.notifications.setPreference(desk.contextFor(desk.actor), {
       recipientId: 'abc-traders@example.invalid',
       channel: 'email',
       enabled: false,
@@ -465,7 +465,7 @@ describe('the guarantees that do not depend on anyone being careful', () => {
       daysOverdue: 10,
     });
     assert.ok(reminder.notificationId !== null);
-    const events = desk.notifications.eventsFor(desk.contextFor(desk.actor), reminder.notificationId as string);
+    const events = await desk.notifications.eventsFor(desk.contextFor(desk.actor), reminder.notificationId as string);
     assert.deepEqual(events.map((e) => e.type), ['scheduled', 'delivered']);
   });
 
