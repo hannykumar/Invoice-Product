@@ -81,7 +81,7 @@ export const notificationReminderTransport = (
   async send(actor, message) {
     const context = contextFor(actor);
     const owner = message.audience === 'OWNER';
-    const notification = notifications.schedule(context, {
+    const notification = await notifications.schedule(context, {
       recipientId: message.recipientId,
       recipientRole: owner ? 'owner' : 'customer',
       channel: message.channel,
@@ -102,7 +102,7 @@ export const notificationReminderTransport = (
     if (notification.status === 'suppressed') return { notificationId: notification.id, state: 'SUPPRESSED' };
     // The deduplication key means a retry finds the same notification, still marked failed from
     // last time. Reviving it is what keeps a retry one message rather than two.
-    if (notification.status === 'failed') notifications.retry(context, notification.id);
+    if (notification.status === 'failed') await notifications.retry(context, notification.id);
     if (notification.status === 'delivered') return { notificationId: notification.id, state: 'SENT' };
 
     const processed = await notifications.deliverDue(context);

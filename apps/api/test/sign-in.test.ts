@@ -187,6 +187,9 @@ test('#342: the demo sign-in and the in-memory store never run outside developme
   assert.equal(identityProviderFor({ NODE_ENV: 'test' }, DEMO_SIGN_IN_CODE).kind, 'mock');
   // A deployment that forgot NODE_ENV still has its database: it is not mistaken for a developer's machine.
   assert.throws(() => identityProviderFor({ DATABASE_URL: 'postgresql://db.example.invalid/books' }, DEMO_SIGN_IN_CODE), /demo sign-in only runs/);
+  // The owner's own Mac: the database on this machine, no NODE_ENV, no Supabase — the stand-in signs in.
+  assert.equal(identityProviderFor({ DATABASE_URL: 'postgresql://invoice:invoice@localhost:55460/invoice' }, DEMO_SIGN_IN_CODE).kind, 'mock');
+  assert.equal(identityProviderFor({ DATABASE_URL: 'postgresql://invoice:invoice@127.0.0.1:5432/invoice' }, DEMO_SIGN_IN_CODE).kind, 'mock');
   assert.equal(identityProviderFor({}, DEMO_SIGN_IN_CODE).kind, 'mock', 'no NODE_ENV and no database: a developer running it bare');
 });
 

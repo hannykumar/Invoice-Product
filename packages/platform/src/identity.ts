@@ -164,13 +164,18 @@ export class SupabaseIdentityProvider implements IdentityProvider {
 }
 
 /**
- * Issue #342 — a developer's machine or a test run: `NODE_ENV` says so, or is unset with no database
- * configured. A deployment that forgot `NODE_ENV` still has a `DATABASE_URL`, so it is never mistaken
- * for one and never gets the demo sign-in or the in-memory store.
+ * Issue #342 — a developer's machine or a test run: `NODE_ENV` says so, or is unset and the database
+ * (if any) is on this machine. A deployment that forgot `NODE_ENV` points at a database somewhere
+ * else, so it is never mistaken for one and never gets the demo sign-in.
  */
 export const isDeveloperMachine = (env: Readonly<Record<string, string | undefined>>): boolean => {
   const environment = (env.NODE_ENV ?? "").trim().toLowerCase();
-  return environment === "development" || environment === "test" || (environment === "" && !env.DATABASE_URL?.trim());
+  if (environment === "development" || environment === "test") return true;
+  if (environment !== "") return false;
+  const url = env.DATABASE_URL?.trim();
+  if (!url) return true;
+  const host = URL.parse(url)?.hostname ?? "";
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
 };
 
 /** The provider for this process. With `SUPABASE_URL` set, Supabase; without it, the mock — and only on a developer's machine. */
