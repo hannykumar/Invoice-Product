@@ -91,6 +91,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `payments.write_off` | ✓ | ✓ | ✓ |  |  |
 | `proforma.cancel` | ✓ | ✓ | ✓ |  |  |
 | `proforma.issue` | ✓ | ✓ | ✓ | ✓ |  |
+| `purchase.inbox.manage` | ✓ | ✓ | ✓ |  |  |
 | `purchase.match.approve` | ✓ | ✓ | ✓ |  |  |
 | `purchase.order.cancel` | ✓ | ✓ | ✓ |  |  |
 | `purchase.order.write` | ✓ | ✓ | ✓ |  |  |
