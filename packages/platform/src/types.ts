@@ -153,7 +153,9 @@ export type Permission =
   | "sales.view"
   | "purchases.view"
   | "masters.read"
-  | "business.settings.read";
+  | "business.settings.read"
+  // Handing the whole business to someone else: the owner's alone, never an admin's.
+  | "business.transfer";
 
 export interface RequestContext {
   companyId: Id;

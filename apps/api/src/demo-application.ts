@@ -5843,6 +5843,8 @@ export class DemoApplication {
   async checkVehicle(actor: ActorContext, input: Record<string, unknown>) {
     const movementId = String(input.invoice ?? '').trim();
     if (movementId === '') throw invalid('API_MOVEMENT_REQUIRED', 'Choose which bill is being sent out.');
+    // Issue #343 — the bill must be this business's own: another company's bill id is "not found", never checked against.
+    if ((await this.salesRepository.findById(this.companyOf(actor), movementId)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
     const weight = String(input.weightKg ?? '').trim();
     const distance = String(input.distanceKm ?? '').trim();
 

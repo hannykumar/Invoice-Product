@@ -11,7 +11,7 @@ import { currentStates, readBusinessDetails } from '../business-details-applicat
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from '../migration-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
 import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, REFERENCE, type Route } from './route.ts';
-import { clearedSessionCookie, sessionCookie } from '../sign-in.ts';
+import { canonicalAddress, clearedSessionCookie, sessionCookie } from '../sign-in.ts';
 import { outsideUnitOfWork } from '../../../../packages/platform/src/database.ts';
 import type { ApiRuntime } from '../runtime.ts';
 import type { RequestContext } from '../../../../packages/platform/src/index.ts';
@@ -20,6 +20,7 @@ const PARTIES = need('add or change customers, suppliers or transporters', 'mast
 const ITEMS = need('add or change items and the GST rate on them', 'masters.item.write', 'masters.item.rate.declare');
 const BRANDING = need('change how your bills look', 'branding.write');
 const MIGRATE = need('bring in books from another program', 'migration.run');
+const TEAM = need('manage who can use this business', 'access.review');
 
 /** A customer, supplier, transporter or address form: every field is read and checked by the master-data service. */
 const partyForm = fields({ name: text, legalName: text, gstin: text, stateCode: text, pincode: text, reference: text });
@@ -44,9 +45,9 @@ export const CORE_ROUTES: readonly Route[] = [
   // comes back only as an HttpOnly cookie (ADR D2): the reply body never carries it.
   post('/api/auth/code', { access: publicRoute('asking for a sign-in code: there is no session yet'), input: fields({ address: text }) },
     ({ runtime, input }) => runtime.signIn.sendCode(String(input.address ?? ''))),
-  post('/api/auth/sign-in', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ address: text, code: text, companyId: text }) },
+  post('/api/auth/sign-in', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ address: text, code: text, companyId: text, invitation: text }) },
     async ({ runtime, input, authorization }) => {
-      const opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId));
+      const opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId), input.invitation === undefined ? undefined : String(input.invitation));
       await runtime.signIn.replaceSession(/^Bearer\s+(\S+)$/i.exec(authorization ?? '')?.[1]);
       return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
     }),
@@ -71,6 +72,23 @@ export const CORE_ROUTES: readonly Route[] = [
       const received = await receiveGovernmentWebhook(params.kind!, delivery?.rawBody ?? '', delivery?.signature ?? '');
       return replyJson(received.status, { state: 'received', outcome: received.outcome });
     }),
+
+  // Issue #343 — the people in this business. Inviting, changing a role, removing and handing over
+  // need `access.review`; the team service adds the owner-only rules. Leaving is anyone's own choice.
+  get('/api/team', { access: TEAM, input: nothing }, ({ runtime, context }) => runtime.team.list(context)),
+  post('/api/team/invite', { access: TEAM, input: fields({ address: text, role: text }) }, async ({ runtime, context, input }) => {
+    const { invitation, token } = await runtime.team.invite(context, canonicalAddress(String(input.address ?? '')).value, String(input.role ?? ''));
+    // The link is shown once, to the person inviting, who sends it on; only its hash is kept.
+    return { state: 'invited', invitation, link: `/#join=${encodeURIComponent(token)}` };
+  }),
+  post('/api/team/role', { access: TEAM, input: fields({ userId: text, role: text }) },
+    async ({ runtime, context, input }) => { await runtime.team.changeRole(context, String(input.userId ?? ''), String(input.role ?? '')); return runtime.team.list(context); }),
+  post('/api/team/remove', { access: TEAM, input: fields({ userId: text }) },
+    async ({ runtime, context, input }) => { await runtime.team.remove(context, String(input.userId ?? '')); return runtime.team.list(context); }),
+  post('/api/team/transfer', { access: need('hand the business over', 'business.transfer'), input: fields({ userId: text }) },
+    async ({ runtime, context, input }) => { await runtime.team.transfer(context, String(input.userId ?? '')); return runtime.team.list(context); }),
+  post('/api/team/leave', { access: signedIn('anyone may leave a business they belong to; the last owner is refused by the team service'), input: nothing },
+    async ({ runtime, context }) => { await runtime.team.leave(context); await runtime.signIn.signOut(context); return replyWithCookie({ left: true }, clearedSessionCookie()); }),
 
   get('/api/session', { access: signedIn('who is signed in, where, and their own businesses: every member may see their own'), input: nothing }, ({ runtime, context }) => sessionView(runtime, context)),
   get('/api/dashboard', { access: need('see the Home page', 'dashboard.read'), input: nothing }, ({ app, actor }) => app.dashboard(actor)),

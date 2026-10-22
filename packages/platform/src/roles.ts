@@ -43,7 +43,7 @@ const EVERYTHING: readonly Permission[] = [
   "business.settings.write", "branding.write", "payments.upi.write",
   "masters.party.write", "masters.item.write", "masters.item.rate.declare",
   "onboarding.run", "onboarding.finish", "migration.run", "migration.commit", "migration.rollback",
-  "sales.view", "purchases.view", "masters.read", "business.settings.read",
+  "sales.view", "purchases.view", "masters.read", "business.settings.read", "business.transfer",
 ];
 
 const without = (base: readonly Permission[], ...removed: Permission[]): readonly Permission[] => base.filter((permission) => !removed.includes(permission));
@@ -57,14 +57,14 @@ export const ROLES: Readonly<Record<RoleName, { readonly title: string; readonly
   admin: {
     title: "Admin",
     sentence: "Runs the business day to day and manages the team, but cannot change the plan or hand the business over.",
-    permissions: without(EVERYTHING, "subscription.manage", "feature-flags.manage", "support.access.grant"),
+    permissions: without(EVERYTHING, "subscription.manage", "feature-flags.manage", "support.access.grant", "business.transfer"),
   },
   accountant: {
     title: "Accountant (or CA)",
     sentence: "The books, bills, GST returns and payments. Not who may sign in, the plan, or the business's own particulars.",
     permissions: without(EVERYTHING,
       "access.review", "subscription.manage", "business.settings.write", "branding.write", "payments.upi.write",
-      "support.access.grant", "feature-flags.manage", "incident.manage", "operations.manage", "migration.commit", "migration.rollback"),
+      "support.access.grant", "feature-flags.manage", "incident.manage", "operations.manage", "migration.commit", "migration.rollback", "business.transfer"),
   },
   staff: {
     // The handbook's cashier (#3): may make a sale, but not see bank balances, file GST or override negative stock.

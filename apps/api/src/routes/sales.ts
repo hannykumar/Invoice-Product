@@ -11,7 +11,7 @@ const PRESALE = needAny('make quotations or proforma invoices', 'quotation.issue
 const MONEY = need('record money received or paid', 'payments.record');
 const RETURNS = need('record returns', 'returns.create');
 const SALES_VIEW = need('see bills, quotations and challans', 'sales.view');
-const RETURNS_VIEW = needAny('see returns and credit or debit notes', 'sales.view', 'purchases.view');
+const RETURNS_VIEW = need('see returns and credit or debit notes', 'returns.create');
 
 const safeFileName = (number: string): string => `${number.replace(/[^a-zA-Z0-9._-]/g, '_')}.pdf`;
 

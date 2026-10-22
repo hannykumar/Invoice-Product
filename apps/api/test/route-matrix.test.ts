@@ -29,7 +29,9 @@ const ADDRESS: Readonly<Record<RoleName, string>> = {
 };
 
 /** Routes that end or move the session they are called with: the caller signs in again afterwards. */
-const ENDS_SESSION = new Set(['/api/auth/sign-out', '/api/session/company', '/api/team/leave']);
+const ENDS_SESSION = new Set(['/api/auth/sign-out', '/api/session/company']);
+/** Open to every member and acts at once with no input to refuse: leaving the business. Its rules are team.test.ts's. */
+const NOT_WALKED = new Set(['/api/team/leave']);
 
 const call = async (route: Pick<Route, 'method' | 'path'>, token: string | undefined, path = route.path.replace(/:\w+/g, 'probe'), body: unknown = {}) => {
   const reply = await handleApi(route.method, path, body, token === undefined ? undefined : `Bearer ${token}`);
@@ -72,7 +74,7 @@ for (const role of ROLE_NAMES) {
     let token = await signIn(ADDRESS[role], SAMPOORNA);
     const refusedWrongly: string[] = [];
     const allowedWrongly: string[] = [];
-    for (const route of SESSIONS) {
+    for (const route of SESSIONS.filter((candidate) => !NOT_WALKED.has(candidate.path))) {
       const reply = await call(route, token);
       const allowed = permits(route, held);
       if (allowed && reply.status === 403) refusedWrongly.push(`${route.method} ${route.path}: ${reply.body.message}`);
@@ -97,18 +99,21 @@ before(async () => {
   fixtures.customer = bills[0]!.customer;
   const catalogue = (await call({ method: 'GET', path: '/api/catalogue' }, owner)).body;
   const steel = catalogue.items.find((item: { name: string }) => item.name === 'TMT Steel Bar 12mm');
+  const today = (await call({ method: 'GET', path: '/api/dashboard' }, owner)).body.today as string;
   const purchase = await call({ method: 'POST', path: '/api/purchases/record' }, owner, '/api/purchases/record', {
-    supplierId: 'sampoorna:party:supplier', reference: 'MATRIX-343', date: (await call({ method: 'GET', path: '/api/dashboard' }, owner)).body.today,
+    supplierId: 'sampoorna:party:supplier', reference: 'MATRIX-343', date: today,
     lines: [{ itemId: steel.id, item: steel.name, quantity: '10', rate: '64', gst: '1800' }],
   });
   assert.equal(purchase.status, 200, purchase.text);
   fixtures.id = String(purchase.body.purchase?.id ?? purchase.body.id ?? purchase.body.bill?.id);
-  const documents = (await call({ method: 'GET', path: '/api/returns/documents' }, owner)).body.documents as { id: string; lines: { id: string; quantity: string }[] }[];
+  const documents = (await call({ method: 'GET', path: '/api/returns/documents' }, owner)).body.documents as { id: string; lines: { id: string; unit?: string }[] }[];
   const sold = documents.find((document) => document.id === fixtures.invoice) ?? documents[0]!;
   const returned = await call({ method: 'POST', path: '/api/returns/record' }, owner, '/api/returns/record', {
-    documentId: sold.id, lines: JSON.stringify([{ lineId: sold.lines[0]!.id, quantity: '1', condition: 'usable' }]), reason: 'Matrix test', idempotencyKey: 'matrix-343',
+    kind: 'SALES_RETURN', documentId: sold.id, lineId: sold.lines[0]!.id, quantity: '1', unit: sold.lines[0]!.unit ?? 'PCS',
+    disposition: 'ACCEPTED', date: today, reference: 'matrix-343-return', reason: 'Matrix test',
   });
-  fixtures.note = String(returned.body.note?.id ?? returned.body.id ?? '');
+  assert.equal(returned.status, 200, returned.text);
+  fixtures.note = String(returned.body.note.id);
 });
 
 /** What each `:param` in a path names. A new kind of param must be added here, with a real fixture. */
@@ -132,7 +137,9 @@ test('#343: another company\'s id in the path is "not found" (404), never its da
 
 test('#343: another company\'s bill id in the body is never acted on or answered with its data', async () => {
   const konkan = await signIn('owner@konkan.example.invalid', KONKAN);
-  const takesBill = SESSIONS.filter((route) => route.method === 'POST' && 'invoice' in ((route.input as { shape?: object }).shape ?? {}));
+  // `/api/vehicles/record` shares the vehicle form's fields but reads only the vehicle number: the bill is not looked at.
+  const IGNORES_BILL = new Set(['/api/vehicles/record']);
+  const takesBill = SESSIONS.filter((route) => route.method === 'POST' && !IGNORES_BILL.has(route.path) && 'invoice' in ((route.input as { shape?: object }).shape ?? {}));
   assert.ok(takesBill.length > 20, `only ${takesBill.length} routes take a bill id`);
   const wrong: string[] = [];
   for (const route of takesBill) {
