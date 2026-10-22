@@ -25,7 +25,7 @@ import { NO_IRP_SIGNING_KEY } from "../../gst/src/irp-signature.ts";
 import type { IrpSignatureVerifier } from "../../gst/src/irp-signature.ts";
 import { screenAttachment } from "./safety.ts";
 import type { ScanVerdict } from "./safety.ts";
-import { assertDistinctChannels, routeDocument } from "./routing.ts";
+import { assertDistinctChannels, deliveryKey, routeDocument } from "./routing.ts";
 import type { CompanyRoutingProfile } from "./routing.ts";
 import { readEInvoiceJson } from "./einvoice.ts";
 import type { EInvoiceReadResult } from "./einvoice.ts";
@@ -99,6 +99,22 @@ const ASSIGNABLE: ReadonlySet<QuarantineReason> = new Set(["COMPANY_NOT_IDENTIFI
 
 const same = (a: string, b: string): boolean => a.trim().toUpperCase() === b.trim().toUpperCase();
 
+/**
+ * The redelivery dedup key, built only from facts the sender cannot write (#406): the company
+ * an upload was made into, or the channel and destination the provider delivered to — plus the
+ * file itself. A provider message id is never trusted on its own: an email `Message-ID` is the
+ * sender's own text and a camera or upload id is the client's, so two different bills can carry
+ * the same id. Scoped this way, a resend of one delivery is still one document, while the same
+ * id on another channel, another destination or another file is a new document — never a
+ * "duplicate" answer that returns a different company's paperwork or drops a real bill.
+ */
+const providerMessageKey = (input: ReceiveInput): string | null => {
+  const id = input.sender.providerMessageId?.trim();
+  if (!id) return null;
+  const scope = input.uploader ? `uploader:${input.uploader.companyId}` : `delivery:${deliveryKey(input.channel, input.deliveredTo) ?? "unbound"}`;
+  return `${input.channel}:${scope}:${id}:${input.attachment.sha256}`;
+};
+
 export class PurchaseInboxService {
   readonly #commands: PlatformCommandService;
   readonly #audit: AuditLog;
@@ -109,7 +125,7 @@ export class PurchaseInboxService {
   readonly #drafts = new Map<Id, ExtractionDraft>();
   /** company + sha256 to document id, the attachment-level duplicate index. */
   readonly #byContent = new Map<string, Id>();
-  /** Provider message id to document id, so a channel redelivery is not a new document. */
+  /** Scoped provider message id to document id, so a channel redelivery is not a new document (#406). */
   readonly #byProviderMessage = new Map<string, Id>();
   /** For an unrouted document, the companies whose channel it arrived on: the only ones who may claim it. */
   readonly #channelOwners = new Map<Id, readonly Id[]>();
@@ -170,8 +186,11 @@ export class PurchaseInboxService {
   // ------------------------------------------------------------------ writing
 
   async receive(input: ReceiveInput): Promise<ReceiveResult> {
-    const existingByMessage = input.sender.providerMessageId ? this.#byProviderMessage.get(input.sender.providerMessageId) : undefined;
+    const messageKey = providerMessageKey(input);
+    const existingByMessage = messageKey ? this.#byProviderMessage.get(messageKey) : undefined;
     if (existingByMessage) {
+      // The key is scoped to this delivery's destination and file, so the document found is
+      // always one that arrived on this same binding — never another company's document (#406).
       const document = this.#documents.get(existingByMessage) as InboundDocument;
       return { document, duplicate: true, ...(this.#draftFor(document.id) ? { draft: this.#draftFor(document.id) as ExtractionDraft } : {}) };
     }
@@ -189,7 +208,7 @@ export class PurchaseInboxService {
     };
     this.#documents.set(id, document);
     this.#intakeKeys.set(id, input.idempotencyKey);
-    if (input.sender.providerMessageId) this.#byProviderMessage.set(input.sender.providerMessageId, id);
+    if (messageKey) this.#byProviderMessage.set(messageKey, id);
 
     // 1. Screening, before anything reads the file.
     document = this.#set(document, { status: "screening" });

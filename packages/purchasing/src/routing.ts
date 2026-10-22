@@ -57,6 +57,22 @@ export const phoneKey = (value: string): string => {
 
 const aliasKey = (value: string): string => value.trim().toLowerCase();
 
+/**
+ * The destination a document arrived on, normalised the way routing compares it — the email
+ * alias or WhatsApp number. The inbox uses it to scope provider-message deduplication (#406):
+ * a message id is only ever meaningful inside the delivery it was reported on.
+ */
+export const deliveryKey = (channel: IntakeChannel, deliveredTo: string | undefined): string | null => {
+  const target = deliveredTo?.trim();
+  if (!target) return null;
+  if (channel === "email") return `email:${aliasKey(target)}`;
+  if (channel === "whatsapp") {
+    const key = phoneKey(target);
+    return key.length >= 10 ? `whatsapp:${key}` : null;
+  }
+  return `${channel}:${target}`;
+};
+
 /** Refuses a set of companies in which one address belongs to two businesses with different owners. */
 export function assertDistinctChannels(companies: readonly CompanyRoutingProfile[]): void {
   const seen = new Map<string, CompanyRoutingProfile>();
