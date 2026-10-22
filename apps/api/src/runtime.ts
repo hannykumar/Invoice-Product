@@ -139,7 +139,7 @@ export class ApiRuntime {
     this.signIn = signIn;
     this.#recurring = persistence.kind === 'postgres' ? new PostgresRecurringWork(persistence.db) : null;
     // A message whose sender died is sent again once its lease has passed (60 s unless set).
-    this.#relay = persistence.kind === 'postgres' ? new OutboxRelay(persistence.db, { leaseSeconds: Number(process.env.WORKER_OUTBOX_LEASE_SECONDS ?? 60) }) : null;
+    this.#relay = persistence.kind === 'postgres' ? new OutboxRelay(persistence.db, { leaseSeconds: Number(process.env.WORKER_OUTBOX_LEASE_SECONDS ?? 60), maxAttempts: OUTBOX_MAX_ATTEMPTS }) : null;
     // The made-up incident below is demo data, which a database never receives.
     if (persistence.kind === 'postgres') return;
     const demo = SYNTHETIC_PLATFORM_COMPANIES[0];
@@ -262,7 +262,7 @@ export class ApiRuntime {
     const { rows } = await db.requireUnitOfWork(context.companyId).sql.query(
       `UPDATE outbox_messages SET dead_at = NULL, attempts = 0, available_at = now(), updated_at = now()
         WHERE company_id = $1 AND id = $2::uuid AND sent_at IS NULL AND (dead_at IS NOT NULL OR last_error IS NOT NULL)
-        RETURNING id`, [context.companyId, /^[0-9a-f-]{36}$/i.test(jobId) ? jobId : null]);
+        RETURNING id`, [context.companyId, /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId) ? jobId : null]);
     if (rows[0] === undefined) throw new Error('ONLY_FAILED_JOBS_CAN_BE_REPLAYED');
     return { id: jobId, state: 'draft', attempts: 0 };
   }
@@ -295,6 +295,9 @@ export class ApiRuntime {
   get database() { return this.#persistence.kind === 'postgres' ? this.#persistence.db : null; }
 }
 
+/** How many times the worker tries a queued job before it is left, dead, for a person. */
+const OUTBOX_MAX_ATTEMPTS = 10;
+
 /** Issue #345 — the work that followed this company's bills, as the Operations screen lists jobs. */
 const outboxJobs = async (db: TransactionalExecutor, context: RequestContext): Promise<readonly QueueJob[]> => {
   if (!context.permissions.has('operations.read')) throw new PlatformError('FORBIDDEN', 'You do not have permission to perform this operational action.');
@@ -304,7 +307,7 @@ const outboxJobs = async (db: TransactionalExecutor, context: RequestContext): P
   return rows.map((r): QueueJob => Object.fromEntries(Object.entries({
     id: String(r.id), companyId: context.companyId, kind: String(r.topic), idempotencyKey: String(r.dedupe_key), idempotent: true,
     state: r.sent_at !== null ? 'success' : r.claim_token !== null ? 'processing' : r.dead_at !== null || r.last_error !== null ? 'failure' : 'draft',
-    attempts: Number(r.attempts), maxAttempts: 10, correlationId: `outbox:${String(r.id)}`,
+    attempts: Number(r.attempts), maxAttempts: OUTBOX_MAX_ATTEMPTS, correlationId: `outbox:${String(r.id)}`,
     // Only a code-like first word of the error, never its text: it can carry a document's contents.
     lastErrorCode: r.last_error === null ? undefined : /^[A-Z0-9_.-]+/.exec(String(r.last_error))?.[0] ?? 'JOB_FAILED',
     createdAt: (r.created_at as Date).toISOString(),

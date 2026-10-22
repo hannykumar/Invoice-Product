@@ -245,6 +245,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // Issue #122: the host supplies the tick; the runner owns schedules, overlap and retry state.
   // Issue #345 — only in memory. With a database the worker (`npm run worker`) runs it, out of the
   // request path, and keeps running it when this process restarts.
+  if (persistence.kind === 'postgres') log.info('E-invoices and recurring work are sent by the worker. Run it beside this server: npm run worker', {});
   if (persistence.kind === 'memory') {
     const recurringTimer = setInterval(() => {
       // Each job's own failure is kept in its queue state for operators; this is the tick itself failing.

@@ -101,14 +101,18 @@ export class PostgresRecurringWork {
       const scheduledFor = row.last_scheduled_for as Date;
       const attempts = Number(row.attempts);
       let outcome: { ok: true; summary?: string | undefined } | { ok: false; code: string };
+      const signal = AbortSignal.timeout(definition.timeoutMs ?? 30_000);
+      const running = asAction(() => definition.run(context, scheduledFor, signal));
       try {
-        const signal = AbortSignal.timeout(definition.timeoutMs ?? 30_000);
-        const aborted = new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(Object.assign(new Error("timed out"), { code: "RECURRING_JOB_TIMED_OUT" })), { once: true }));
-        const result = await Promise.race([asAction(() => definition.run(context, scheduledFor, signal)), aborted]);
-        outcome = { ok: true, summary: result?.summary };
+        const result = await running;
+        outcome = signal.aborted ? { ok: false, code: "RECURRING_JOB_TIMED_OUT" } : { ok: true, summary: result?.summary };
       } catch (error) {
-        outcome = { ok: false, code: errorCodeOf(error) };
+        outcome = { ok: false, code: signal.aborted ? "RECURRING_JOB_TIMED_OUT" : errorCodeOf(error) };
       }
+      // The job is told to stop at its timeout (`signal`), and the row stays claimed until it really
+      // has: a retry never starts while the first run could still commit. A run that never settles is
+      // taken over when the lease runs out, as if its worker had died.
+
       const dead = !outcome.ok && attempts >= Number(row.max_attempts);
       const retryMs = (definition.retryDelayMs ?? MINUTE) * 2 ** Math.max(0, attempts - 1);
       // Recorded only while the row is still this worker's claim; one whose lease ran out may have been taken over.
