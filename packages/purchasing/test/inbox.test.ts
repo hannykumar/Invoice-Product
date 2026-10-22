@@ -266,6 +266,74 @@ test("a channel redelivering the same message returns the original document", as
   assert.equal(ocr.callCount, 1);
 });
 
+test("#406: the same message id on two companies' channels keeps both bills", async () => {
+  const { inbox, ocr } = setup({
+    "s3://inbox/doc-1": [INVOICE_PAGE()],
+    "s3://inbox/doc-2": [INVOICE_PAGE(OTHER_BUYER_GSTIN)],
+  });
+  const first = await inbox.receive({ channel: "whatsapp", sender: whatsapp({ providerMessageId: "wamid.shared" }), attachment: attachment({ sha256: "bill-a", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
+  // A different bill arrives for the other company carrying the same message id. Neither is dropped.
+  const second = await inbox.receive({ channel: "whatsapp", sender: whatsapp({ providerMessageId: "wamid.shared" }), attachment: attachment({ sha256: "bill-b", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "+91 98220 11122", idempotencyKey: "k2" });
+  assert.equal(first.document.status, "draft_ready");
+  assert.equal(first.document.companyId, "company-a");
+  assert.equal(second.duplicate, false);
+  assert.notEqual(second.document.id, first.document.id);
+  assert.equal(second.document.companyId, "company-b");
+  // And the second document was actually read, not silently answered with the first.
+  assert.equal(ocr.callCount, 2);
+});
+
+test("#406: a reused Message-ID carrying a different file to the same address is not a duplicate", async () => {
+  const { inbox } = setup({
+    "s3://inbox/doc-1": [INVOICE_PAGE()],
+    "s3://inbox/doc-2": [INVOICE_PAGE()],
+  });
+  const sender = { channel: "email", address: "accounts@shreeram.example", providerMessageId: "<reused@evil.example>" } as const;
+  const first = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "bill-one", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const second = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "bill-two", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2" });
+  assert.equal(first.document.status, "draft_ready");
+  assert.equal(second.duplicate, false);
+  assert.notEqual(second.document.id, first.document.id);
+  assert.equal(second.document.status, "draft_ready");
+});
+
+test("#406: a redelivery of the same message with the same file still returns the original", async () => {
+  const { inbox, ocr } = setup();
+  const sender = { channel: "email", address: "accounts@shreeram.example", providerMessageId: "<real@shreeram.example>" } as const;
+  const first = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "bill-x", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const again = await inbox.receive({ channel: "email", sender, attachment: attachment({ sha256: "bill-x", storageKey: "s3://inbox/doc-1" }), head: PDF_HEAD, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  assert.equal(again.duplicate, true);
+  assert.equal(again.document.id, first.document.id);
+  assert.equal(ocr.callCount, 1);
+});
+
+test("#406: a message id on one channel never collides with the same text on another", async () => {
+  const { inbox } = setup({ "s3://inbox/doc-2": [INVOICE_PAGE()] });
+  const signed = signedEinvoice({ number: "SRS/2026/0061" });
+  const first = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example", providerMessageId: "same-text" }, attachment: jsonAttachment("json-one"), head: bytes(signed.slice(0, 512)), jsonBody: signed, deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
+  const second = await inbox.receive({ channel: "whatsapp", sender: whatsapp({ providerMessageId: "same-text" }), attachment: attachment({ sha256: "pdf-two", storageKey: "s3://inbox/doc-2" }), head: PDF_HEAD, deliveredTo: "+91 98450 12345", idempotencyKey: "k2" });
+  assert.equal(first.document.status, "draft_ready");
+  assert.equal(second.duplicate, false);
+  assert.equal(second.document.status, "draft_ready");
+});
+
+test("#406: an upload's message id is scoped to the company that uploaded it", async () => {
+  const { inbox } = setup({
+    "s3://inbox/doc-1": [INVOICE_PAGE()],
+    "s3://inbox/doc-2": [INVOICE_PAGE(OTHER_BUYER_GSTIN)],
+  });
+  const upload = (companyId: string, sha256: string, storageKey: string, key: string) => inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: `owner-${companyId}`, providerMessageId: "client.1" }, attachment: attachment({ sha256, storageKey }), head: PDF_HEAD, uploader: contextFor(companyId), idempotencyKey: key });
+  const first = await upload("company-a", "up-a", "s3://inbox/doc-1", "k1");
+  const second = await upload("company-b", "up-b", "s3://inbox/doc-2", "k2");
+  assert.equal(first.document.status, "draft_ready");
+  assert.equal(second.duplicate, false);
+  assert.equal(second.document.status, "draft_ready");
+  // But the same company resending the same upload still dedups.
+  const retry = await upload("company-a", "up-a", "s3://inbox/doc-1", "k1");
+  assert.equal(retry.duplicate, true);
+  assert.equal(retry.document.id, first.document.id);
+});
+
 test("an invoice addressed to another company is held, not filed", async () => {
   const { inbox } = setup({ "s3://inbox/doc-1": [INVOICE_PAGE(OTHER_BUYER_GSTIN)] });
   const result = await inbox.receive({
