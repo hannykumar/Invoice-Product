@@ -30,4 +30,11 @@ export const ledgerMigrations: readonly Migration[] = Object.freeze([{
     DROP POLICY IF EXISTS ${table}_tenant ON ${table};
     ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY;
     ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;`).join(''),
+}, {
+  // Issue #366 — a journal line can only belong to an entry of its own company. Under row-level
+  // security nobody can see such a line, but it should not exist at all. Rests on
+  // voucher_company_id_id_key (#365).
+  id: '20261022T165155765Z_ledger_ddbad2c97938_journal_line_same_company',
+  up: `ALTER TABLE journal_line ADD CONSTRAINT journal_line_same_company_fk FOREIGN KEY (company_id, voucher_id) REFERENCES voucher (company_id, id);`,
+  down: `ALTER TABLE journal_line DROP CONSTRAINT IF EXISTS journal_line_same_company_fk;`,
 }]);
