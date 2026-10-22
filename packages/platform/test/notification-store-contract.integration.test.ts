@@ -123,21 +123,13 @@ test("a delivered notification is finished, and the timeline cannot be rewritten
 test("the migration runs down and up again", { skip }, async () => {
   const { notificationMigrations } = await import("../src/notification-migrations.ts");
   const mine = notificationMigrations.at(-1)!;
-  const name = `notif_updown_${randomBytes(6).toString("hex")}`;
-  await owner.query(`CREATE DATABASE ${name}`);
-  const { createDatabase } = await import("../src/database.ts");
   const { migrate } = await import("../src/migrations.ts");
-  const scratchUrl = new URL(url as string);
-  scratchUrl.pathname = `/${name}`;
-  const scratch = createDatabase(scratchUrl.toString());
-  try {
+  const { withScratchDatabase } = await import("./scratch-database.ts");
+  await withScratchDatabase(owner, url as string, "notif_updown", async (scratch) => {
     await migrate(scratch);
     await scratch.query(mine.down);
     await scratch.query(mine.up);
     await scratch.query(mine.down);
     await scratch.query(mine.up);
-  } finally {
-    await scratch.close();
-    await owner.query(`DROP DATABASE ${name} WITH (FORCE)`);
-  }
+  });
 });
