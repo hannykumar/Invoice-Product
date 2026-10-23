@@ -49,6 +49,8 @@ export interface PdfRendererOptions {
   readonly maxWaiting?: number;
   /** How long one render may take, from opening its page to the finished file. */
   readonly renderTimeoutMs?: number;
+  /** How long starting the browser may take. Kept apart from the render limit because a cold start is slow. */
+  readonly launchTimeoutMs?: number;
   /** How long the browser stays up with nothing to print before it is closed. */
   readonly idleCloseMs?: number;
 }
@@ -85,8 +87,11 @@ export class PdfRenderer {
   readonly #maxConcurrentPages: number;
   readonly #maxWaiting: number;
   readonly #renderTimeoutMs: number;
+  readonly #launchTimeoutMs: number;
   readonly #idleCloseMs: number;
   #browser: Promise<PdfBrowser> | undefined;
+  /** The browser `#browser` resolved to, so a render can tell whether its browser is still the current one. */
+  #current: PdfBrowser | undefined;
   #rendering = 0;
   readonly #waiting: Array<() => void> = [];
   #idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -96,6 +101,7 @@ export class PdfRenderer {
     this.#maxConcurrentPages = positive(options.maxConcurrentPages ?? 2, 'maxConcurrentPages');
     this.#maxWaiting = atLeastZero(options.maxWaiting ?? 16, 'maxWaiting');
     this.#renderTimeoutMs = positive(options.renderTimeoutMs ?? 20_000, 'renderTimeoutMs');
+    this.#launchTimeoutMs = positive(options.launchTimeoutMs ?? 30_000, 'launchTimeoutMs');
     this.#idleCloseMs = atLeastZero(options.idleCloseMs ?? 5_000, 'idleCloseMs');
   }
 
@@ -143,28 +149,51 @@ export class PdfRenderer {
       const current = this.#browser;
       const running = await current.catch(() => undefined);
       if (running?.connected) return running;
-      if (this.#browser === current) this.#browser = undefined;
+      if (this.#browser === current) { this.#browser = undefined; this.#current = undefined; }
     }
-    const starting = this.#launch();
+    const launching = this.#launch();
+    const starting = within(launching, this.#launchTimeoutMs);
     this.#browser = starting;
-    // A failed start is not remembered: the next render tries again.
-    starting.catch(() => { if (this.#browser === starting) this.#browser = undefined; });
+    starting.then(
+      (browser) => { if (this.#browser === starting) this.#current = browser; },
+      () => {
+        // A failed or timed-out start is not remembered: the next render tries again.
+        if (this.#browser === starting) this.#browser = undefined;
+        void launching.then((late) => late.close()).catch(() => undefined);
+      },
+    );
     return starting;
+  }
+
+  /** Shut down a browser found stuck; the shared one is cleared only if it is still that browser. */
+  #retire(browser: PdfBrowser): void {
+    if (this.#current === browser) { this.#browser = undefined; this.#current = undefined; }
+    void browser.close().catch(() => undefined);
   }
 
   async #discardBrowser(): Promise<void> {
     const browser = this.#browser;
     this.#browser = undefined;
+    this.#current = undefined;
     const running = await browser?.catch(() => undefined);
     await running?.close().catch(() => undefined);
   }
 
   async #renderOn(html: string): Promise<Buffer> {
+    const browser = await this.#browserNow();
     const timeout = this.#renderTimeoutMs;
     const deadline = Date.now() + timeout;
     const left = () => Math.max(1, deadline - Date.now());
-    const browser = await within(this.#browserNow(), left());
-    const page = await within(browser.newPage(), left());
+    const opening = browser.newPage();
+    let page: PdfPage;
+    try {
+      page = await within(opening, left());
+    } catch (error) {
+      // A browser that cannot open a page in time is stuck; the page, if it ever arrives, is closed.
+      void opening.then((late) => late.close()).catch(() => undefined);
+      this.#retire(browser);
+      throw error;
+    }
     let timedOut = false;
     try {
       return await within((async () => {
@@ -183,11 +212,7 @@ export class PdfRenderer {
     } finally {
       // A page that cannot even be closed means the browser itself is stuck: start a new one next time.
       const closed = await within(page.close(), timedOut ? 1_000 : timeout).then(() => true, () => false);
-      if (!closed && this.#browser) {
-        const stuck = this.#browser;
-        this.#browser = undefined;
-        void stuck.then((running) => running.close()).catch(() => undefined);
-      }
+      if (!closed) this.#retire(browser);
     }
   }
 }

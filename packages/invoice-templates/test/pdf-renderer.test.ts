@@ -18,16 +18,20 @@ interface FakeOptions {
   readonly hold?: () => Promise<void>;
   readonly setContent?: () => Promise<void>;
   readonly closePage?: () => Promise<void>;
+  readonly beforeLaunch?: () => Promise<void>;
+  readonly beforeNewPage?: () => Promise<void>;
 }
 
 function fakeEngine(options: FakeOptions = {}) {
   const state = { launches: 0, rendering: 0, mostAtOnce: 0, pages: [] as FakePage[], browsers: [] as Array<PdfBrowser & { connected: boolean; closed: boolean }> };
   const launch = async (): Promise<PdfBrowser> => {
     state.launches += 1;
+    await options.beforeLaunch?.();
     const browser = {
       connected: true,
       closed: false,
       async newPage(): Promise<PdfPage> {
+        await options.beforeNewPage?.();
         const page: FakePage = {
           calls: [],
           closed: false,
@@ -150,6 +154,64 @@ test('#398: a browser that cannot even close a page is replaced on the next rend
   await renderer.render('<p>next</p>');
   assert.equal(engine.state.launches, 2);
   assert.equal(engine.state.browsers[0]!.closed, true, 'the stuck browser is shut down');
+  await renderer.close();
+});
+
+test('#398: a page that will not close on an old browser does not throw away the browser that replaced it', async () => {
+  let pagesOpened = 0;
+  const engine = fakeEngine({
+    setContent: () => pagesOpened++ === 0 ? new Promise<void>(() => {}) : Promise.resolve(),
+    closePage: () => pagesOpened === 1 ? new Promise<void>(() => {}) : Promise.resolve(),
+  });
+  const renderer = new PdfRenderer({ launch: engine.launch, maxConcurrentPages: 2, renderTimeoutMs: 30, idleCloseMs: 60_000 });
+  const stuck = assert.rejects(renderer.render('<p>stuck</p>'), PdfRenderingError);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  engine.state.browsers[0]!.connected = false;
+  pagesOpened = 2;
+  await renderer.render('<p>on the new browser</p>');
+  await stuck;
+  await renderer.render('<p>after</p>');
+  assert.equal(engine.state.launches, 2, 'the replacement browser is kept');
+  assert.equal(engine.state.browsers[1]!.closed, false);
+  await renderer.close();
+});
+
+test('#398: a slow browser start has its own time limit and does not eat into the render time', async () => {
+  const engine = fakeEngine({ beforeLaunch: () => new Promise((resolve) => setTimeout(resolve, 80)) });
+  const renderer = new PdfRenderer({ launch: engine.launch, renderTimeoutMs: 50, launchTimeoutMs: 1_000, idleCloseMs: 0 });
+  const file = await renderer.render('<p>first bill of the day</p>');
+  assert.equal(file.subarray(0, 5).toString(), '%PDF-');
+  await renderer.close();
+});
+
+test('#398: a browser start that hangs is given up on, the browser that turns up late is closed, and the next bill tries again', async () => {
+  const late = gate();
+  let launches = 0;
+  const engine = fakeEngine({ beforeLaunch: () => launches++ === 0 ? late.wait() : Promise.resolve() });
+  const renderer = new PdfRenderer({ launch: engine.launch, launchTimeoutMs: 30, idleCloseMs: 0 });
+  await assert.rejects(renderer.render('<p>bill</p>'), PdfRenderingError);
+  const file = await renderer.render('<p>bill</p>');
+  assert.equal(file.subarray(0, 5).toString(), '%PDF-');
+  assert.equal(engine.state.browsers.length, 1, 'the retry started its own browser');
+  late.open();
+  for (let i = 0; i < 5; i += 1) await settle();
+  const lateBrowser = engine.state.browsers[1]!;
+  assert.equal(lateBrowser.closed, true, 'the browser that turned up late is not left running');
+  await renderer.close();
+});
+
+test('#398: a page that takes too long to open is closed when it turns up, and its browser is replaced', async () => {
+  const late = gate();
+  let opened = 0;
+  const engine = fakeEngine({ beforeNewPage: () => opened++ === 0 ? late.wait() : Promise.resolve() });
+  const renderer = new PdfRenderer({ launch: engine.launch, renderTimeoutMs: 30, idleCloseMs: 0 });
+  await assert.rejects(renderer.render('<p>bill</p>'), PdfRenderingError);
+  assert.equal(engine.state.browsers[0]!.closed, true, 'a browser that cannot open a page is treated as stuck');
+  late.open();
+  for (let i = 0; i < 5; i += 1) await settle();
+  assert.equal(engine.state.pages[0]!.closed, true, 'the page that turned up late is closed');
+  await renderer.render('<p>next</p>');
+  assert.equal(engine.state.launches, 2);
   await renderer.close();
 });
 
