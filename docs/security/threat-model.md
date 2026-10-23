@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 156 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 159 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
