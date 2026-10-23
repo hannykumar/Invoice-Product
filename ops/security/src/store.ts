@@ -4,6 +4,7 @@
  * The in-memory stores are the default and what the unit tests use; postgres-store.ts is the same
  * contract on the database. Both run the shared suite in test/security-contract.ts.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { AuditEvent, Id } from "../../../packages/platform/src/index.ts";
 import type { EncryptedPayload } from "./encryption.ts";
 import type { ConsentRecord, LegalHold, PrivacyNotice, PrivacyRequest } from "./privacy.ts";
@@ -54,48 +55,69 @@ export class InMemoryPrivacyStore implements PrivacyStore {
   readonly #requests = new Map<Id, PrivacyRequest>();
   readonly #requestKeys = new Map<string, Id>();
 
-  action<T>(_companyId: Id, work: () => Promise<T>): Promise<T> { return work(); }
+  readonly #undo = new AsyncLocalStorage<(() => void)[]>();
+
+  /** Like the database's unit of work: if `work` throws, every change it made here is undone, so a retry starts clean. */
+  async action<T>(_companyId: Id, work: () => Promise<T>): Promise<T> {
+    const undo: (() => void)[] = [];
+    try {
+      return await this.#undo.run(undo, work);
+    } catch (error) {
+      for (const step of undo.reverse()) step();
+      throw error;
+    }
+  }
+  #onUndo(step: () => void): void { this.#undo.getStore()?.push(step); }
+  #setUndoably<K, V>(map: Map<K, V>, key: K, value: V): void {
+    const had = map.has(key);
+    const prior = map.get(key);
+    map.set(key, value);
+    this.#onUndo(() => { if (had) map.set(key, prior as V); else map.delete(key); });
+  }
   async addNotice(companyId: Id, notice: PrivacyNotice): Promise<PrivacyNotice> {
     const key = `${companyId}:${notice.version}`;
     const kept = this.#notices.get(key) ?? notice;
-    this.#notices.set(key, kept);
+    if (kept === notice) this.#setUndoably(this.#notices, key, kept);
     return kept;
   }
   async notice(companyId: Id, version: string): Promise<PrivacyNotice | null> { return this.#notices.get(`${companyId}:${version}`) ?? null; }
-  async addConsent(consent: ConsentRecord): Promise<void> { this.#consents.push(consent); }
+  async addConsent(consent: ConsentRecord): Promise<void> {
+    this.#consents.push(consent);
+    this.#onUndo(() => { const at = this.#consents.indexOf(consent); if (at >= 0) this.#consents.splice(at, 1); });
+  }
   async consents(companyId: Id, subjectId: Id, page?: Page): Promise<readonly ConsentRecord[]> {
     return after(this.#consents.filter((c) => c.companyId === companyId && c.subjectId === subjectId), page);
   }
   async addHold(hold: LegalHold): Promise<void> {
     if (this.#holds.has(hold.id)) throw new Error("LEGAL_HOLD_EXISTS");
-    this.#holds.set(hold.id, hold);
+    this.#setUndoably(this.#holds, hold.id, hold);
   }
   async releaseHold(companyId: Id, holdId: Id): Promise<{ readonly hold: LegalHold; readonly changed: boolean } | null> {
     const current = sameCompany(this.#holds.get(holdId), companyId);
     if (current === null) return null;
     if (!current.active) return { hold: current, changed: false };
     const released = Object.freeze({ ...current, active: false });
-    this.#holds.set(holdId, released);
+    this.#setUndoably(this.#holds, holdId, released);
     return { hold: released, changed: true };
   }
   async activeHolds(companyId: Id, subjectId: Id): Promise<readonly LegalHold[]> {
     return [...this.#holds.values()].filter((h) => h.companyId === companyId && h.subjectId === subjectId && h.active);
   }
-  async setRetention(companyId: Id, subjectId: Id, retainUntil: string): Promise<void> { this.#retention.set(`${companyId}:${subjectId}`, retainUntil); }
+  async setRetention(companyId: Id, subjectId: Id, retainUntil: string): Promise<void> { this.#setUndoably(this.#retention, `${companyId}:${subjectId}`, retainUntil); }
   async retention(companyId: Id, subjectId: Id): Promise<string | undefined> { return this.#retention.get(`${companyId}:${subjectId}`); }
   async addRequest(request: PrivacyRequest, idempotencyKey: string): Promise<PrivacyRequest> {
     const key = `${request.companyId}:${request.kind}:${idempotencyKey}`;
     const prior = this.#requestKeys.get(key);
     if (prior !== undefined) return this.#requests.get(prior)!;
-    this.#requests.set(request.id, request);
-    this.#requestKeys.set(key, request.id);
+    this.#setUndoably(this.#requests, request.id, request);
+    this.#setUndoably(this.#requestKeys, key, request.id);
     return request;
   }
   async request(companyId: Id, requestId: Id): Promise<PrivacyRequest | null> { return sameCompany(this.#requests.get(requestId), companyId); }
   async settleRequest(settled: PrivacyRequest): Promise<boolean> {
     const current = sameCompany(this.#requests.get(settled.id), settled.companyId);
     if (current === null || current.status !== "requested") return false;
-    this.#requests.set(settled.id, settled);
+    this.#setUndoably(this.#requests, settled.id, settled);
     return true;
   }
 }
@@ -128,7 +150,25 @@ export class MemoryBackupRepository implements BackupRepository {
   readonly #payloads = new Map<string, EncryptedPayload>();
   readonly #drills: RestoreDrill[] = [];
 
-  action<T>(_companyId: Id, work: () => Promise<T>): Promise<T> { return work(); }
+  readonly #undo = new AsyncLocalStorage<(() => void)[]>();
+
+  /** Like the database's unit of work: if `work` throws, every change it made here is undone, so a retry starts clean. */
+  async action<T>(_companyId: Id, work: () => Promise<T>): Promise<T> {
+    const undo: (() => void)[] = [];
+    try {
+      return await this.#undo.run(undo, work);
+    } catch (error) {
+      for (const step of undo.reverse()) step();
+      throw error;
+    }
+  }
+  #onUndo(step: () => void): void { this.#undo.getStore()?.push(step); }
+  #setUndoably<K, V>(map: Map<K, V>, key: K, value: V): void {
+    const had = map.has(key);
+    const prior = map.get(key);
+    map.set(key, value);
+    this.#onUndo(() => { if (had) map.set(key, prior as V); else map.delete(key); });
+  }
   async putPayload(manifest: BackupManifest, payload: EncryptedPayload): Promise<string> {
     const key = `backups/${manifest.companyId}/${manifest.id}`;
     this.#payloads.set(key, structuredClone(payload));

@@ -54,11 +54,18 @@ export class BackupRecoveryService {
     });
     const payload = await this.#encryption.encrypt(snapshot, this.#keyId, associatedData(manifest));
     const objectKey = await this.#repository.putPayload(manifest, payload);
-    const saved = await this.#repository.action(context.companyId, async () => {
-      if (!(await this.#repository.save(manifest, objectKey, { key: idempotencyKey, input }))) return false;
-      await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "backup.created", correlationId: id, before: null, after: { schemaVersion, byteLength: snapshot.byteLength, checksumSha256: manifest.checksumSha256, expiresAt: manifest.expiresAt, keyId: manifest.keyId } });
-      return true;
-    });
+    let saved: boolean;
+    try {
+      saved = await this.#repository.action(context.companyId, async () => {
+        if (!(await this.#repository.save(manifest, objectKey, { key: idempotencyKey, input }))) return false;
+        await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "backup.created", correlationId: id, before: null, after: { schemaVersion, byteLength: snapshot.byteLength, checksumSha256: manifest.checksumSha256, expiresAt: manifest.expiresAt, keyId: manifest.keyId } });
+        return true;
+      });
+    } catch (error) {
+      // Nothing was recorded, so the bytes already written must not be left behind.
+      await this.#repository.deletePayload(objectKey);
+      throw error;
+    }
     if (saved) return manifest;
     // Another run with the same key won the race: its backup is the answer, and these bytes are not kept.
     await this.#repository.deletePayload(objectKey);

@@ -1,5 +1,7 @@
 # Security operations contract v1
 
+Version 1.1.0 (#366).
+
 Owner: GPT 2, issue #40. Consumers: platform composition and production operations.
 
 ## Boundary
@@ -30,3 +32,12 @@ snapshot and restore adapters.
 Expected failures are typed at the platform boundary: `FORBIDDEN`, `TENANT_ISOLATION`, `NOT_FOUND`,
 invalid policy/notice, active retention or legal hold, unavailable key, authentication failure,
 checksum failure and restore schema validation failure.
+
+## 1.1.0 (#366) — persistence
+
+- `PrivacyService` and `BackupRecoveryService` methods are `async` and keep their records through ports: `PrivacyStore` (`InMemoryPrivacyStore`, `PostgresPrivacyStore`) and `BackupRepository` (`MemoryBackupRepository`, `PostgresBackupRepository` with a `BackupObjectStore` for the encrypted bytes). `BackupRepository` is now `action`, `putPayload`, `save`, `get(companyId, backupId)`, `byKey`, `expired`, `prune`, `deletePayload`, `addDrill`, `drills`.
+- Each command runs in one `action`: on PostgreSQL one unit of work; in memory, every change is undone if the action throws. A failed export or deletion therefore leaves the request `requested` and can be retried; it completes and is audited once.
+- Encrypted backup bytes are written outside the unit of work and removed again if the manifest is not recorded.
+- Another company's request, hold or backup is `NOT_FOUND` (it was `TENANT_ISOLATION`), so its existence is not revealed.
+- Retention rules are kept (`privacy_retention_rules`); privacy and backup tables are frozen once settled (see `database-immutability-v1.md`).
+

@@ -77,6 +77,30 @@ export function securityContract(name: string, make: () => SecurityHarness, skip
     await assert.rejects(service.executeDeletion(a, req.id), code("PRIVACY_REQUEST_NOT_EXECUTABLE"));
   });
 
+  test(`${name}: an export or deletion that fails part-way can be retried, and is completed and audited once`, { skip }, async () => {
+    const h = make();
+    const store = subjects();
+    let failures = 2;
+    const flaky: PrivacyDataStore = {
+      exportSubject: async (...args) => { if (failures-- > 0) throw new Error("DATA_STORE_DOWN"); return store.exportSubject(...args); },
+      deleteSubject: async (...args) => { if (failures-- > 0) throw new Error("DATA_STORE_DOWN"); return store.deleteSubject(...args); },
+    };
+    const service = new PrivacyService(h.audit, flaky, () => NOW, h.privacy);
+    const a = ctx(await h.company());
+    const exp = await service.request(a, "cust-1", "export", "exp-1");
+    const del = await service.request(a, "cust-2", "deletion", "del-1");
+    await assert.rejects(service.executeExport(a, exp.id), /DATA_STORE_DOWN/);
+    await assert.rejects(service.executeDeletion(a, del.id), /DATA_STORE_DOWN/);
+    assert.equal((await service.get(a, exp.id)).status, "requested");
+    assert.equal((await service.get(a, del.id)).status, "requested");
+    await service.executeExport(a, exp.id);
+    await service.executeDeletion(a, del.id);
+    assert.deepEqual(store.deleted, ["cust-2"]);
+    assert.equal((await service.get(a, exp.id)).status, "completed");
+    assert.equal((await service.get(a, del.id)).status, "completed");
+    await assert.rejects(service.executeExport(a, exp.id), code("PRIVACY_REQUEST_NOT_EXECUTABLE"));
+  });
+
   test(`${name}: holds and the latest retention date block deletion; a hold is released once`, { skip }, async () => {
     const h = make();
     const store = subjects();
