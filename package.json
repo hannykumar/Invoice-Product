@@ -73,7 +73,7 @@
   },
   "devDependencies": {
     "@tabler/icons": "^3.49.0",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.5",
     "@types/pg": "^8.15.5",
     "typescript": "^7.0.2"
   }
