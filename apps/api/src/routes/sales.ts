@@ -20,6 +20,8 @@ const safeFileName = (number: string): string => `${number.replace(/[^a-zA-Z0-9.
 const sale = fields({
   customerId: text, customer: text, party: text, date: text, terms: text, notes: anything,
   lines: anything, itemId: anything, item: anything, quantity: anything, unit: anything, rate: anything,
+  // Issue #293 — a one-line sale's discount (rupees or percent), and a discount on the whole bill.
+  discount: anything, discountPercent: anything, billDiscount: anything,
   freight: anything, otherCharges: anything, paidBy: text, paidAmount: anything, distanceKm: text,
   requestId: text, replaces: text,
   underLut: anything, approvalReason: text, exportCurrency: text, shippingBillNumber: text, shippingBillDate: text, portCode: text, exportCountry: text, exchangeRate: text,
@@ -47,6 +49,8 @@ const advance = fields({ document: text, advance: text, amount: anything, date: 
 const goodsReturn = fields({
   kind: text, documentId: text, lineId: text, reference: anything, date: text, reason: text, disposition: text,
   quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text, requestId: text,
+  // Issue #293 — "Price correction": the new rate per unit or the amount off, before GST.
+  mode: text, cause: text, newRate: anything, amountOff: anything,
 });
 
 export const SALES_ROUTES: readonly Route[] = [

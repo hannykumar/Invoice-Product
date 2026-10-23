@@ -25,7 +25,7 @@ const placeholders = (from: number, count: number): string => Array.from({ lengt
 const NOTE_COLUMNS = `id, company_id, kind, number, document_date::text AS document_date, original_document_id, original_document_number,
   original_document_date::text AS original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status,
   created_by, created_at, idempotency_key, summary, supplier_credit_note_number,
-  supplier_credit_note_date::text AS supplier_credit_note_date`;
+  supplier_credit_note_date::text AS supplier_credit_note_date, price_correction`;
 const LINE_COLUMNS = `return_note_id, original_line_id, item_id, charge_kind, description, supply_kind, quantity_micro, quantity_unit,
   disposition, warehouse_id, batch_id, serial_numbers, replacement_serial_numbers, ${amountColumns}, hsn_or_sac,
   rate_percent_times100, unit_price_paise`;
@@ -45,12 +45,12 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
       await sql.query(
         `INSERT INTO return_notes (id, company_id, kind, number, document_date, original_document_id, original_document_number,
            original_document_date, party_id, reason, ${amountColumns}, voucher_id, compliance_status, created_by, created_at,
-           idempotency_key, summary, supplier_credit_note_number, supplier_credit_note_date)
-         VALUES (${placeholders(1, 27)})`,
+           idempotency_key, summary, supplier_credit_note_number, supplier_credit_note_date, price_correction)
+         VALUES (${placeholders(1, 28)})`,
         [note.id, note.companyId, note.kind, note.number, note.documentDate, note.originalDocument.id, note.originalDocument.number,
           note.originalDocument.date, note.partyId, note.reason, ...amountValues(note.totals), note.voucherId, note.complianceStatus,
           note.createdBy, note.createdAt, note.idempotencyKey, note.summary,
-          note.supplierCreditNote?.number ?? null, note.supplierCreditNote?.date ?? null],
+          note.supplierCreditNote?.number ?? null, note.supplierCreditNote?.date ?? null, note.priceCorrection === true],
       );
     } catch (error) {
       if ((error as { code?: string }).code === '23505') throw conflict('RETURN_NOTE_DUPLICATE', 'This return note has already been recorded.');
@@ -135,6 +135,8 @@ export class PostgresReturnNoteRepository implements ReturnNoteRepository {
         supplierCreditNote: r.supplier_credit_note_number === null || r.supplier_credit_note_number === undefined
           ? null
           : { number: String(r.supplier_credit_note_number), date: r.supplier_credit_note_date as IsoDate },
+        // Issue #293 — only a price correction carries the mark, so other notes read back as they were saved.
+        ...(r.price_correction === true ? { priceCorrection: true } : {}),
       }));
     });
   }

@@ -71,7 +71,7 @@ does.
 | `stock_reservations` | `CONSUMED`, `RELEASED`, `EXPIRED` | nothing | — |
 | `payments` | always | `allocated_paise` (the database's own figure), `cheque_state`, the reversal fields, `updated_at`, `version` | `RECORDED>REVERSED` |
 | `payment_allocations` | always | `released_at` (once), `updated_at` | — |
-| `document_settlements` | always | `allocated_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
+| `document_settlements` | always | `allocated_paise`, `credited_paise`, `debited_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
 | `advance_receipts` | always | `updated_at`, `version` | — |
 | `agent_plans` (#47, #366) | `EXECUTED` | `updated_at` | none: an executed plan is only ever saved again unchanged |
 | `agent_reports` | always | nothing | — |

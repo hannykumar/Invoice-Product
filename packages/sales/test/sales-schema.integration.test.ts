@@ -406,6 +406,63 @@ test('a credit note cannot take back more than the bill sold on a line, less wha
   assert.equal(Number((await shop.one("SELECT sum(quantity_micro) AS n FROM return_note_lines WHERE company_id = $1 AND original_line_id = 'l1'", [shop.ids.companyId])).n), 3_000_000);
 });
 
+test('#293: a price credit note never uses up what can still come back on a line', { skip }, async () => {
+  const shop = await newShop();
+  const bill = await shop.issueBill('INV/26-27/000001'); // 3 crates on line l1
+  const note = async (number: string, quantity: number, priceCorrection: boolean) => {
+    const id = crypto.randomUUID();
+    await shop.run(async (sql) => {
+      await insert(sql, 'return_notes', { id, company_id: shop.ids.companyId, kind: 'SALES_RETURN', number, document_date: '2026-04-12', original_document_id: bill, original_document_number: 'INV/26-27/000001', original_document_date: '2026-04-10', party_id: shop.ids.partyId, reason: priceCorrection ? 'Wrong price.' : 'Damaged.', taxable_value_paise: 3_000, total_paise: 3_540, voucher_id: shop.vouchers[1], compliance_status: 'NOT_APPLICABLE', created_by: shop.ids.userId, idempotency_key: `return:${id}`, summary: 'Credit note.', price_correction: priceCorrection });
+      await insert(sql, 'return_note_lines', { return_note_id: id, company_id: shop.ids.companyId, original_line_id: 'l1', item_id: shop.itemId, description: 'Plastic crate', supply_kind: 'GOODS', quantity_micro: quantity, quantity_unit: 'PCS', disposition: 'ACCEPTED', warehouse_id: priceCorrection ? null : shop.warehouseId, taxable_value_paise: 3_000, total_paise: 3_540 });
+    });
+  };
+  await note('CN/26-27/000001', 3_000_000, true); // price cut on all three kept crates
+  await note('CN/26-27/000002', 3_000_000, true); // a second price cut on the same line
+  await note('CN/26-27/000003', 1_000_000, false); // then one crate comes back
+  await note('CN/26-27/000004', 2_000_000, true); // a price cut on the two still kept
+  await assert.rejects(note('CN/26-27/000005', 3_000_000, true), refused(CHECK), 'a price note cannot name more than is still kept');
+  await note('CN/26-27/000006', 2_000_000, false); // the last two come back
+  await assert.rejects(note('CN/26-27/000007', 1_000_000, false), refused(CHECK), 'all three came back');
+});
+
+test('#293: a sales debit note raises what the bill is owed, and a price credit note on the same bill nets off', { skip }, async () => {
+  const shop = await newShop();
+  const priceNote = async (bill: string, kind: 'SALES_RETURN' | 'SALES_DEBIT_NOTE', total: number) => {
+    const id = crypto.randomUUID();
+    await shop.run(async (sql) => {
+      await insert(sql, 'return_notes', { id, company_id: shop.ids.companyId, kind, number: `${kind === 'SALES_RETURN' ? 'CN' : 'DN'}/${id.slice(0, 8)}`, document_date: '2026-04-12', original_document_id: bill, original_document_number: 'INV', original_document_date: '2026-04-10', party_id: shop.ids.partyId, reason: 'Wrong price on the bill.', taxable_value_paise: total * 100 / 118, total_paise: total, voucher_id: shop.vouchers[1], compliance_status: 'NOT_APPLICABLE', created_by: shop.ids.userId, idempotency_key: `return:${id}`, summary: 'Price note.', price_correction: true });
+      await insert(sql, 'return_note_lines', { return_note_id: id, company_id: shop.ids.companyId, original_line_id: 'l1', item_id: shop.itemId, description: 'Plastic crate', supply_kind: 'GOODS', quantity_micro: 3_000_000, quantity_unit: 'PCS', disposition: 'ACCEPTED', warehouse_id: null, taxable_value_paise: total * 100 / 118, total_paise: total });
+    });
+  };
+  const pay = async (bill: string, amount: number) => {
+    const paid = shop.payment(amount);
+    await shop.run(async (sql) => { await insert(sql, 'payments', paid); await insert(sql, 'payment_allocations', shop.allocation(paid.id, bill, amount)); });
+  };
+  const settlement = (bill: string) => shop.one('SELECT status, value_paise::int AS value, allocated_paise::int AS allocated FROM document_settlements WHERE document_id = $1', [bill]);
+  const owed = (bill: string) => shop.one('SELECT (value_paise - credited_paise + debited_paise)::int AS owed FROM document_settlements WHERE document_id = $1', [bill]);
+
+  // ₹354.00 bill, then a debit note of ₹11.80: ₹365.80 is owed.
+  const bill = await shop.issueBill('INV/26-27/000001');
+  await priceNote(bill, 'SALES_DEBIT_NOTE', 1_180);
+  assert.deepEqual(await owed(bill), { owed: 36_580 });
+  await pay(bill, 35_400);
+  assert.deepEqual(await settlement(bill), { status: 'PARTLY_PAID', value: 35_400, allocated: 35_400 }, 'paying the bill alone leaves the debit owed');
+  await pay(bill, 1_180);
+  assert.equal((await settlement(bill)).status, 'SETTLED');
+  await assert.rejects(pay(bill, 1), refused(CHECK), 'no more than the bill and its debit note');
+  await assert.rejects(shop.run((sql) => sql.query('UPDATE document_settlements SET debited_paise = 0 WHERE document_id = $1', [bill])), refused(NO_PRIVILEGE));
+
+  // ₹354.00 less a ₹35.40 price credit note, plus a ₹11.80 debit note: ₹330.40 is owed.
+  const second = await shop.issueBill('INV/26-27/000002');
+  await priceNote(second, 'SALES_RETURN', 3_540);
+  await priceNote(second, 'SALES_DEBIT_NOTE', 1_180);
+  assert.deepEqual(await owed(second), { owed: 33_040 });
+  await pay(second, 33_039);
+  assert.equal((await settlement(second)).status, 'PARTLY_PAID');
+  await pay(second, 1);
+  assert.equal((await settlement(second)).status, 'SETTLED');
+});
+
 test('findings of the independent review of #365, each as a test', { skip }, async () => {
   const shop = await newShop();
 
