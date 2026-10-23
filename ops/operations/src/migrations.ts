@@ -90,4 +90,52 @@ export const operationsMigrations: readonly Migration[] = [{
     REVOKE ALL ON recurring_work_status, outbox_messages, companies FROM invoice_work_finder;
     REVOKE USAGE ON SCHEMA public FROM invoice_work_finder;
   `,
+}, {
+  // Issue #366 — operations' own records move to PostgreSQL (postgres-store.ts). A connector
+  // failure and an incident update are final when written; a support grant only ever gains its
+  // revocation time, once. Each timeline entry has its place, so two operators updating one
+  // incident at once cannot both write entry N.
+  id: "20261023T011604991Z_operations_c861f545c7b0_persist_support_failures_incidents",
+  up: `
+    ALTER TABLE status_incident_updates ADD COLUMN position integer CHECK (position >= 0);
+    ALTER TABLE status_incident_updates ADD CONSTRAINT status_incident_updates_place UNIQUE (incident_id, position);
+    CREATE INDEX status_incidents_newest_idx ON status_incidents(started_at DESC, id DESC);
+    CREATE INDEX operational_failures_company_page_idx ON operational_failures(company_id, occurred_at, id);
+    CREATE FUNCTION operations_grant_revoked_once() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+    BEGIN
+      IF OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at THEN
+        RAISE EXCEPTION 'A revoked support grant stays revoked.' USING ERRCODE = 'restrict_violation', TABLE = TG_TABLE_NAME, COLUMN = 'revoked_at';
+      END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER operational_failures_frozen BEFORE UPDATE OR DELETE ON operational_failures
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    CREATE TRIGGER operational_failures_no_truncate BEFORE TRUNCATE ON operational_failures
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+    CREATE TRIGGER support_access_grants_frozen BEFORE UPDATE OR DELETE ON support_access_grants
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'revoked_at', '');
+    CREATE TRIGGER support_access_grants_revoked_once BEFORE UPDATE ON support_access_grants
+      FOR EACH ROW EXECUTE FUNCTION operations_grant_revoked_once();
+    CREATE TRIGGER support_access_grants_no_truncate BEFORE TRUNCATE ON support_access_grants
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+    CREATE TRIGGER status_incident_updates_frozen BEFORE UPDATE OR DELETE ON status_incident_updates
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    CREATE TRIGGER status_incident_updates_no_truncate BEFORE TRUNCATE ON status_incident_updates
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();
+    REVOKE DELETE ON operational_failures, support_access_grants, status_incidents, status_incident_updates FROM invoice_app;
+  `,
+  down: `
+    DROP TRIGGER IF EXISTS status_incident_updates_no_truncate ON status_incident_updates;
+    DROP TRIGGER IF EXISTS status_incident_updates_frozen ON status_incident_updates;
+    DROP TRIGGER IF EXISTS support_access_grants_no_truncate ON support_access_grants;
+    DROP TRIGGER IF EXISTS support_access_grants_revoked_once ON support_access_grants;
+    DROP TRIGGER IF EXISTS support_access_grants_frozen ON support_access_grants;
+    DROP TRIGGER IF EXISTS operational_failures_no_truncate ON operational_failures;
+    DROP TRIGGER IF EXISTS operational_failures_frozen ON operational_failures;
+    DROP FUNCTION IF EXISTS operations_grant_revoked_once();
+    DROP INDEX IF EXISTS operational_failures_company_page_idx;
+    DROP INDEX IF EXISTS status_incidents_newest_idx;
+    ALTER TABLE status_incident_updates DROP CONSTRAINT IF EXISTS status_incident_updates_place;
+    ALTER TABLE status_incident_updates DROP COLUMN IF EXISTS position;
+  `,
 }];

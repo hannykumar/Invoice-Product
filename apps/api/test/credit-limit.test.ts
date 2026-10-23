@@ -154,7 +154,7 @@ test('#235: owing ₹52,510 after a credit note, a ₹63,720 bill is over a ₹5
   const line = documents.body.documents.find((document: any) => document.id === first.id).lines[0];
   const returned = await request('POST', '/api/returns/record', {
     kind: 'SALES_RETURN', documentId: first.id, lineId: line.id, quantity: '450', unit: 'KGS',
-    disposition: 'ACCEPTED', date: DATE, reference: 'credit-235-return', reason: 'Wrong grade delivered.',
+    disposition: 'ACCEPTED', date: DATE, reference: 'credit-235-return', requestId: 'credit-235-return', reason: 'Wrong grade delivered.',
   }, owner);
   assert.equal(returned.status, 200, JSON.stringify(returned.body));
   assert.equal(returned.body.note.amount, 47790);

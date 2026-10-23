@@ -108,7 +108,7 @@ test('#131 — on the printed bill, quantity × rate is the amount on every good
     assert.equal(
       amount,
       BigInt(Math.round(quantity * Number(rate))) - discount,
-      `${text(cells[columns['Description of Goods'] as number] ?? '')}: quantity × rate less discount must be the printed amount`,
+      `${text(cells[columns['Description of Goods / Services'] as number] ?? '')}: quantity × rate less discount must be the printed amount`,
     );
   }
   assert.ok(html.includes('₹10,000.00'), '100 × ₹100 prints as ₹10,000.00, with no freight folded in');

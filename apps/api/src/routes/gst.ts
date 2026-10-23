@@ -25,7 +25,7 @@ const vehicle = fields({
 });
 const period = fields({ period: text });
 const itc = fields({
-  period: text, content: text, fileName: text, decision: text, lineKey: text, reason: text, reference: text,
+  period: text, content: text, fileName: text, decision: text, lineKey: text, reason: text, reference: text, requestId: text,
   gstin: text, supplierName: text, kind: text, number: text, date: text, taxableValue: text, cgst: text, sgst: text, igst: text, invoiceValue: text, itcAvailable: text,
 });
 const gstReturn = fields({ period: text, reference: text, note: text, reason: text, returnType: text });

@@ -86,6 +86,7 @@ import {
 import type { Vehicle, Warehouse as MasterWarehouse } from '../../../packages/masters/src/types.ts';
 import { billingAddressOf, items as catalogueItems, suppliers, type CatalogueSeed } from './catalogue-application.ts';
 import { businessDetailsOf, turnoverAnswerForYear } from './business-details-application.ts';
+import { BOOKS_ENTRY_CODES } from './books-entry-application.ts';
 
 // Read once when the application starts. An absent file keeps local development synthetic.
 const whitebooksVault = openWhitebooksCredentialVault();
@@ -570,6 +571,15 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
         { id: warehouseId, companyId: seed.companyId, code: 'MAIN', name: seed.location, addressLine: '', city: seed.location, stateCode: seed.gstin.slice(0, 2), pincode: '', active: true },
         isoDate('2026-04-01'), seed.setupUserId, 'The main godown, set up with the books',
       );
+    });
+    // Issue #294 — the expense heads and drawings, added once to a company whose books were set up
+    // before they existed. Only missing codes are added; a code already there is left as it is.
+    await store.transaction(seed.companyId, async (uow) => {
+      const missing: Account[] = [];
+      for (const account of chart.filter((a) => BOOKS_ENTRY_CODES.includes(a.code))) {
+        if ((await uow.accounts.findByCode(seed.companyId, account.code)) === null) missing.push(account);
+      }
+      if (missing.length > 0) await uow.accounts.insertMany(missing);
     });
     // Issue #292 — the damaged / not-for-sale location, added once, including to a company whose
     // books were set up before it existed.

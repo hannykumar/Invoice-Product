@@ -59,14 +59,14 @@ const steel = (session: string) => ensure(session, 'items', {
 const settle = async () => { await new Promise((resolve) => setImmediate(resolve)); await new Promise((resolve) => setTimeout(resolve, 50)); };
 
 const sell = (session: string, customerId: string, itemId: string, date: string, reference: string) =>
-  request('POST', '/api/sales/record', { customerId, lines: [{ itemId, quantity: '600', rate: '95' }], date, terms: '30', reference }, session);
+  request('POST', '/api/sales/record', { customerId, lines: [{ itemId, quantity: '600', rate: '95' }], date, terms: '30', reference, requestId: reference }, session);
 
 const returnTen = async (session: string, invoiceId: string, reference: string) => {
   const documents = (await request('GET', '/api/returns/documents', {}, session)).body.documents;
   const line = documents.find((d: { id: string }) => d.id === invoiceId).lines[0];
   return request('POST', '/api/returns/record', {
     kind: 'SALES_RETURN', documentId: invoiceId, lineId: line.id, quantity: '10', unit: 'KGS',
-    disposition: 'ACCEPTED', date: '2026-09-28', reference, reason: 'Ten kilograms were bent in transit.',
+    disposition: 'ACCEPTED', date: '2026-09-28', reference, requestId: reference, reason: 'Ten kilograms were bent in transit.',
   }, session);
 };
 

@@ -45,6 +45,14 @@ and no other state exists.
 `finalise` on an already-final bill returns it with `deduplicated: true`. That is success, not an
 error.
 
+**A key is one bill (v1.4.0, issue #392).** `createDraft` with a key it has seen returns that bill
+only when the input is the same bill (customer, kind, date, lines, freight and charges, narration,
+zero-rating; a due date, rounding or place of supply only when given). Anything else is
+`SALES_KEY_REUSED` (`CONFLICT`, HTTP 409), and nothing is saved. `POST /api/sales/preview` and
+`POST /api/sales/record` need the screen's own `requestId`; without one they answer
+`SALE_REQUEST_ID_REQUIRED` (422). The server never makes a key up, and never uses the typed
+`reference` as one.
+
 ## Policy — configuration, not code
 
 ```ts
@@ -135,6 +143,8 @@ never unmakes a bill; it comes back as a retryable status, worded by `gov.servic
 | `SALE_APPROVAL_REQUIRED` | (API, v1.3.0, #301) The sale review needs approval (a price or credit beyond the business's terms); give a reason if you may approve it |
 | `SALE_APPROVAL_NOT_ALLOWED` | (API, v1.3.0, #301) A reason was given by someone who may not approve this bill |
 | `SALE_APPROVAL_REASON_REQUIRED`, `SALE_NOT_WAITING` | (API, v1.3.0, #301) Approving a held bill needs a reason, and a bill that is waiting |
+| `SALES_KEY_REUSED` | (v1.4.0, #392) This key already started a different bill |
+| `SALE_REQUEST_ID_REQUIRED` | (API, v1.4.0, #392) The sale review was sent without the screen's key |
 | `SALES_PRICING_CHANGED` | The total moved while the bill was open |
 | `SALES_NOT_EDITABLE` | The bill has been issued (`messageId: final.cannot_edit`) |
 | `SALES_CANCEL_WINDOW_CLOSED` | Too late to cancel; make a return note |

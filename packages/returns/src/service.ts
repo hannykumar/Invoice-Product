@@ -45,6 +45,26 @@ export interface SalesReturnCommand {
   readonly wholeBillWarehouseId?: string;
 }
 
+/**
+ * Issue #392 — the same key is a retry only when it carries the same return: the same bill, date,
+ * reason and goods. A key that comes back with anything else is refused, never answered with the
+ * earlier note as if the new return had been recorded.
+ */
+const sameReturnRequest = (
+  note: ReturnNote,
+  kind: ReturnNote['kind'],
+  originalId: string,
+  command: { readonly documentDate: IsoDate; readonly reason: string; readonly lines: readonly SalesReturnLineInput[]; readonly wholeBill?: boolean },
+): ReturnNote => {
+  const linesOf = (lines: readonly { originalLineId: string; quantity: Quantity; disposition: ReturnDisposition }[]) => lines
+    .map((line) => `${line.originalLineId}|${line.quantity.scaled}|${line.quantity.unit}|${line.disposition}`).sort().join(',');
+  const same = note.kind === kind && note.originalDocument.id === originalId && note.documentDate === command.documentDate
+    && note.reason === command.reason
+    && (command.wholeBill === true || linesOf(note.lines.filter((line) => !isChargeLine(line))) === linesOf(command.lines));
+  if (!same) throw conflict('RETURN_KEY_REUSED', 'This entry was already used for a different return. Nothing new was recorded; start the return again.');
+  return note;
+};
+
 export interface SalesReturnPreview {
   readonly originalNumber: string;
   readonly lines: readonly ReturnNoteLine[];
@@ -243,7 +263,7 @@ export class ReturnService {
 
   async postSales(actor: ActorContext, command: SalesReturnCommand): Promise<{ note: ReturnNote; deduplicated: boolean }> {
     const existing = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
-    if (existing !== null) return { note: existing, deduplicated: true };
+    if (existing !== null) return { note: sameReturnRequest(existing, 'SALES_RETURN', command.originalInvoiceId, command), deduplicated: true };
     const preview = await this.previewSales(actor, command);
     const original = await this.#sales.findSalesDocument(actor.companyId, command.originalInvoiceId);
     if (original === null) throw notFound('RETURN_ORIGINAL_NOT_FOUND', 'We could not find that issued bill in this business.');
@@ -488,7 +508,7 @@ export class ReturnService {
 
   async postPurchase(actor: ActorContext, command: PurchaseReturnCommand): Promise<{ note: ReturnNote; deduplicated: boolean }> {
     const existing = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
-    if (existing !== null) return { note: existing, deduplicated: true };
+    if (existing !== null) return { note: sameReturnRequest(existing, 'PURCHASE_RETURN', command.originalBillId, command), deduplicated: true };
     await this.previewPurchase(actor, command);
     if (this.#purchases === undefined) throw invalid('PURCHASE_RETURN_UNAVAILABLE', 'Purchase returns are not connected in this workspace.');
     const original = await this.#purchases.findPurchaseDocument(actor.companyId, command.originalBillId);

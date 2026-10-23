@@ -344,7 +344,7 @@ const copy = {
     draftReady: "Your draft is ready to review", keepEditing: "Keep editing", understand: "I understand",
     // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
     mainNavigation: "Main menu", tabHome: "Home", tabKhata: "Khata", tabBill: "Bill", tabItems: "Items", tabMore: "More",
-    billSheetTitle: "Make a new…", otherBills: "Other bills", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.",
+    billSheetTitle: "Make a new…", otherBills: "Other bills", navQuotation: "Quotation", navReturn: "Return", navExpense: "Expense", expenseSoon: "Expenses are coming soon.", booksTitle: "Expenses and the owner's money", booksHelp: "Rent, wages and other costs paid, cash put into or taken out of the bank, and money the owner put in or took out. Check each entry, then save it. A saved entry is never changed: undo it and enter it again.", booksExpense: "An expense paid", booksHead: "What was it for?", booksPaidFrom: "Paid from", booksCash: "Cash", booksBank: "Bank", booksAmount: "Amount before GST", booksConsignment: "Transport only: did the transporter give a consignment note (bilty / LR)?", booksConsignmentNo: "No (bus, train, taxi, auto, tempo hire)", booksConsignmentYes: "Yes", booksGstNote: "Bill shows GST, or rent with no GST? Enter it on Purchases, so the GST reaches your returns.", booksBill: "Bill number", booksNote: "Note", booksDate: "Date", booksOwner: "The owner's money", booksOwnerIn: "The owner put money in", booksOwnerOut: "The owner took money out for home", booksContra: "Cash and bank", booksDeposit: "Cash put into the bank", booksWithdraw: "Cash taken out of the bank", booksJournal: "Journal entry (accountant)", booksJournalHelp: "For adjustments and corrections. Both sides must be equal, and the note must say why.", booksAccount: "Account", booksDebit: "Debit", booksCreditSide: "Credit", booksWhat: "What happened?", booksAmountPlain: "Amount", booksCheck: "Check the entry", booksSave: "Save this entry", booksBookTitle: "Cash book and bank book", booksShowCash: "Cash book", booksShowBank: "Bank book", booksOpening: "Opening", booksClosing: "Closing", booksIn: "In", booksOut: "Out", booksBalance: "Balance", booksAgainst: "Against", booksEntries: "Entries made here", booksUndo: "Undo", booksUndoReason: "Why is this entry being undone?", booksOwedNote: "Not paid yet? Enter it as the supplier's bill on Purchases.",
     navGroupPeople: "People", navGroupBusiness: "Business settings", navGroupReports: "Reports",
     moreTitle: "More", moreHelp: "Everything else in your shop, in one place.",
     itemsTitle: "Items", itemsHelp: "What you sell and buy, and how much is left in the godown.", itemsAdd: "Add item", itemsEdit: "Change", itemsNone: "No items yet. Add the first thing you sell.",
@@ -695,7 +695,7 @@ const copy = {
     draftReady: "Draft review ke liye taiyar hai", keepEditing: "Badlav karen", understand: "Samajh gaya",
     // Issues #304 and #310 — the five tabs, the + Bill sheet, More, Items, and the new Home.
     mainNavigation: "मुख्य मेन्यू", tabHome: "होम", tabKhata: "खाता", tabBill: "बिल", tabItems: "सामान", tabMore: "और",
-    billSheetTitle: "नया बनाइए…", otherBills: "दूसरे बिल", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।",
+    billSheetTitle: "नया बनाइए…", otherBills: "दूसरे बिल", navQuotation: "कोटेशन", navReturn: "वापसी", navExpense: "ख़र्च", expenseSoon: "ख़र्च जल्द आ रहा है।", booksTitle: "ख़र्च और मालिक का पैसा", booksHelp: "किराया, मज़दूरी और दूसरे ख़र्च, बैंक में जमा या बैंक से निकाला नकद, और मालिक का लगाया या निकाला पैसा। हर एंट्री पहले जाँचें, फिर सेव करें। सेव हुई एंट्री कभी बदली नहीं जाती: उसे रद्द करके दोबारा डालें।", booksExpense: "चुकाया गया ख़र्च", booksHead: "किस चीज़ का?", booksPaidFrom: "कहाँ से दिया", booksCash: "नकद", booksBank: "बैंक", booksAmount: "GST से पहले रकम", booksConsignment: "सिर्फ़ भाड़ा: क्या ट्रांसपोर्टर ने बिल्टी / LR दी?", booksConsignmentNo: "नहीं (बस, रेल, टैक्सी, ऑटो, टेम्पो)", booksConsignmentYes: "हाँ", booksGstNote: "बिल पर GST है, या किराया बिना GST? इसे Purchases में डालें, ताकि GST रिटर्न में आए।", booksBill: "बिल नंबर", booksNote: "नोट", booksDate: "तारीख़", booksOwner: "मालिक का पैसा", booksOwnerIn: "मालिक ने पैसा लगाया", booksOwnerOut: "मालिक ने घर के लिए पैसा निकाला", booksContra: "नकद और बैंक", booksDeposit: "नकद बैंक में जमा किया", booksWithdraw: "बैंक से नकद निकाला", booksJournal: "जर्नल एंट्री (अकाउंटेंट)", booksJournalHelp: "समायोजन और सुधार के लिए। दोनों तरफ़ बराबर हों, और नोट में कारण लिखें।", booksAccount: "खाता", booksDebit: "डेबिट", booksCreditSide: "क्रेडिट", booksWhat: "क्या हुआ?", booksAmountPlain: "रकम", booksCheck: "एंट्री जाँचें", booksSave: "यह एंट्री सेव करें", booksBookTitle: "कैश बुक और बैंक बुक", booksShowCash: "कैश बुक", booksShowBank: "बैंक बुक", booksOpening: "शुरुआती बाक़ी", booksClosing: "आख़िरी बाक़ी", booksIn: "आया", booksOut: "गया", booksBalance: "बाक़ी", booksAgainst: "किसके सामने", booksEntries: "यहाँ की गई एंट्रियाँ", booksUndo: "रद्द करें", booksUndoReason: "यह एंट्री क्यों रद्द की जा रही है?", booksOwedNote: "अभी चुकाया नहीं? इसे Purchases में सप्लायर के बिल की तरह डालें।",
     navGroupPeople: "लोग", navGroupBusiness: "कारोबार की सेटिंग", navGroupReports: "रिपोर्ट",
     moreTitle: "और", moreHelp: "आपकी दुकान का बाक़ी सब कुछ, एक जगह।",
     itemsTitle: "सामान", itemsHelp: "आप क्या बेचते और ख़रीदते हैं, और गोदाम में कितना बचा है।", itemsAdd: "सामान जोड़िए", itemsEdit: "बदलिए", itemsNone: "अभी कोई सामान नहीं। जो बेचते हैं, पहले वह जोड़िए।",
@@ -911,6 +911,8 @@ function openView(view, section = null) {
   if (target === "reports") loadReports().then(() => { if (section && state.view === "reports") document.querySelector(`#${section}`)?.scrollIntoView({ block: "start" }); });
   if (target === "migration") startMigration();
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
+  // Issue #294 — expenses, contra and journal entries, and the cash and bank books.
+  if (target === "books") import("/books.js").then((books) => books.openBooks({ api, words: copy[state.locale] })).catch((error) => console.error("The expenses screen could not open.", error));
   if (target === "reminders") loadReminders();
   if (target === "plan") loadPlan();
   if (target === "vehicle") loadVehiclesHeld();
@@ -4334,6 +4336,8 @@ document.querySelector("#return-form")?.addEventListener("submit", async (event)
   event.preventDefault();
   const form = event.currentTarget;
   const input = formValues(form);
+  // Issue #392 — one key per checked return, sent again with Record, so pressing it twice records one note.
+  input.requestId = newPaymentRequestId();
   state.pendingForm = null;
   state.pendingInput = null;
   state.pendingReturnInput = input;
@@ -6539,7 +6543,7 @@ function itcDecisionControls(line) {
       try {
         renderItc(await api("/api/itc/decide", {
           method: "POST",
-          body: JSON.stringify({ period: itcPeriodValue(), lineKey: line.key, decision, reason: reason.value, reference: Date.now() }),
+          body: JSON.stringify({ period: itcPeriodValue(), lineKey: line.key, decision, reason: reason.value, requestId: newPaymentRequestId() }),
         }));
       } catch (error) {
         document.querySelector("#itc-summary").textContent = error.message;

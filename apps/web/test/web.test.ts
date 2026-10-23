@@ -203,8 +203,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
   // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six;
-  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 29);
+  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine;
+  // #294's expenses screen makes thirty.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 30);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -386,10 +387,11 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
     { main: false, view: "paid", disabled: false, label: "Money paid" },
     { main: false, view: "presale", disabled: false, label: "Quotation" },
     { main: false, view: "returns", disabled: false, label: "Return" },
-    { main: false, view: null, disabled: true, label: "Expense" },
+    { main: false, view: "books", disabled: false, label: "Expense" },
   ]);
   assert.match(sheet, /data-view="sale" autofocus/);
-  assert.match(sheet, /aria-describedby="expense-soon"[\s\S]*id="expense-soon" data-i18n="expenseSoon"/);
+  // Issue #294 — the expense button opens the expenses screen; it is no longer "coming soon".
+  assert.doesNotMatch(sheet, /expense-soon/);
   // Any screen reaches a new sale in one tap: the tab, F2 and Alt+N all open the sale itself.
   assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openNewSale\)/);
   assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)\) \{\s*event\.preventDefault\(\);\s*openNewSale\(\);/);

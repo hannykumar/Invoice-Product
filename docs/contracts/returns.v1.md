@@ -1,4 +1,4 @@
-# Returns and transaction adjustments v1
+# Returns and transaction adjustments v1.1
 
 Version 1.1.0 (issue #293: price corrections and sales debit notes).
 
@@ -117,3 +117,9 @@ row-level security. `GET /api/returns/documents` lists eligible originals. The p
 commands are `POST /api/returns/preview` and `POST /api/returns/record`; both derive company and
 permissions from the authenticated session. Preview is read-only and record is atomic and
 idempotent.
+
+**A key is one return (v1.1, issue #392).** Both routes need the screen's own `requestId`; without
+one they answer `RETURN_REQUEST_ID_REQUIRED` (422). The typed note `reference` is never the key. A
+key seen before returns its note (`deduplicated: true`) only for the same kind, original document,
+date, reason and lines; anything else is `RETURN_KEY_REUSED` (`CONFLICT`, HTTP 409) and nothing is
+recorded.

@@ -23,6 +23,7 @@ const sale = fields({
   // Issue #293 — a one-line sale's discount (rupees or percent), and a discount on the whole bill.
   discount: anything, discountPercent: anything, billDiscount: anything,
   freight: anything, otherCharges: anything, paidBy: text, paidAmount: anything, distanceKm: text,
+  requestId: text, replaces: text,
   underLut: anything, approvalReason: text, exportCurrency: text, shippingBillNumber: text, shippingBillDate: text, portCode: text, exportCountry: text, exchangeRate: text,
 });
 const cancel = fields({ invoice: text, reason: text, cancelGovernmentDocuments: anything });
@@ -37,7 +38,7 @@ const challan = fields({
   challan: text, customerId: text, customer: text, party: text, reason: text, reasonNote: text, deliveryState: text, deliveryPlace: text,
   itemId: text, item: text, date: text, quantity: text, unit: text, rate: anything, reference: anything,
   invoice: text, ewayBillNumber: text, vehicle: text, transporter: text, locale: anything, format: anything, copy: text,
-  terms: text, ewayBillCancelledOnPortal: anything, approvalReason: text,
+  terms: text, ewayBillCancelledOnPortal: anything, approvalReason: text, requestId: text,
 });
 const presale = fields({
   kind: text, document: text, customerId: text, customer: text, party: text, itemId: text, item: text, date: text, validUntil: anything,
@@ -47,7 +48,7 @@ const presale = fields({
 const advance = fields({ document: text, advance: text, amount: anything, date: text, mode: text, utr: anything, reason: text, reference: anything, which: anything });
 const goodsReturn = fields({
   kind: text, documentId: text, lineId: text, reference: anything, date: text, reason: text, disposition: text,
-  quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text,
+  quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text, requestId: text,
   // Issue #293 — "Price correction": the new rate per unit or the amount off, before GST.
   mode: text, cause: text, newRate: anything, amountOff: anything,
 });

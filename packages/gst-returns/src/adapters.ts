@@ -119,6 +119,8 @@ export interface SalesInvoiceLike {
   readonly documentDate: string;
   readonly partyId: string;
   readonly customerType: 'B2B' | 'B2C';
+  /** Issue #287 — optional for callers that only ever had goods; such a bill is goods. */
+  readonly supplyKind?: 'GOODS' | 'SERVICES';
   readonly placeOfSupplyStateCode: string | null;
   readonly voucherId: string | null;
   readonly pricing: {
@@ -254,7 +256,8 @@ export const salesInvoiceToDocument = (
     description: line.itemName,
     hsnOrSac: line.hsnOrSac,
     lineKind: line.kind ?? 'GOODS',
-    supplyKind: 'GOODS',
+    // Issue #287 — the bill's own kind: a service bill's rows are services, not goods.
+    supplyKind: invoice.supplyKind ?? 'GOODS',
     unit: line.quantity.unit,
     quantity: toQuantityString(line.quantity),
     ratePercentTimes100: line.ratePercentTimes100,

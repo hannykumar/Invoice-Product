@@ -89,7 +89,7 @@ test('a customer’s address is corrected from the Sale screen, and the next bil
   assert.match(String(corrected.body.message), /Plot 19, IDA Kukatpally, Hyderabad 500037/);
 
   const sale = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '10', rate: '100' }], date: '2026-09-17', terms: '30', reference: 'pin-224-corrected',
+    customerId, lines: [{ itemId, quantity: '10', rate: '100' }], date: '2026-09-17', terms: '30', reference: 'pin-224-corrected', requestId: 'pin-224-corrected',
   }, session);
   assert.equal(sale.status, 200, sale.body.message);
   const printed = await request('POST', '/api/sales/print', { invoice: sale.body.invoice.id }, session);

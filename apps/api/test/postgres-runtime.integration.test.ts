@@ -60,7 +60,7 @@ test('a bill made before a restart is still there after it, with its copy, its c
   const item = await call('POST', '/api/items', { name: `Shop repair visit ${run}`, hsn: '998729', unit: 'NOS', price: '500', kind: 'service', ratePercent: '18', basis: 'Rate this business charges', effectiveFrom: '2026-04-01', acknowledgeSimilar: true }, token);
   assert.equal(item.status, 200, JSON.stringify(item));
   const sale = { customerId: customer.customer.id, itemId: item.item.id, rate: '500', date: '2026-10-16', terms: '0' };
-  const first = await call('POST', '/api/sales/record', { ...sale, quantity: '2', reference: `restart-${run}-1` }, token);
+  const first = await call('POST', '/api/sales/record', { ...sale, quantity: '2', reference: `restart-${run}-1`, requestId: `restart-${run}-1` }, token);
   assert.equal(first.status, 200, JSON.stringify(first));
   const number = String(first.invoice.number);
   sampoornaBill = String(first.invoice.id);
@@ -74,7 +74,7 @@ test('a bill made before a restart is still there after it, with its copy, its c
   assert.ok(dashboard.activity.some((row: { title: string }) => row.title === `${number} · Lakshmi Stores ${run}`), 'the bill and its customer are listed');
   const reprint = await call('GET', `/api/sales/${first.invoice.id}/preview`, undefined, token);
   assert.equal(reprint.status, 200, 'the frozen print copy came back');
-  const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2` }, token);
+  const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2`, requestId: `restart-${run}-2` }, token);
   assert.equal(second.status, 200, 'business details and the item rate came back');
   // Later than the first, never the same: another test file may bill this company at the same time.
   assert.ok(Number(String(second.invoice.number).slice(-6)) > Number(number.slice(-6)), 'numbering continues; no number is used again');
@@ -130,4 +130,35 @@ test('#342: on PostgreSQL a CA switches business without signing in again; the o
   assert.equal((await call('GET', '/api/session', undefined, inSampoorna)).status, 401);
   assert.equal((await call('POST', '/api/auth/sign-out', {}, inKonkan)).status, 200);
   assert.equal((await call('GET', '/api/session', undefined, inKonkan)).status, 401);
+});
+
+test('#294: on PostgreSQL an expense and the owner\'s money are in the books after a restart, balanced, under their own heads', { skip }, async () => {
+  const run = randomBytes(3).toString('hex');
+  await stop();
+  await start();
+  const token = await signInHere('owner@sampoorna.example.invalid', COMPANY);
+  const save = async (kind: string, body: Record<string, unknown>) => {
+    const checked = await call('POST', `/api/books/${kind}/preview`, body, token);
+    assert.equal(checked.status, 200, JSON.stringify(checked));
+    const saved = await call('POST', `/api/books/${kind}/record`, { ...body, check: checked.check, requestId: `pg-${run}-${kind}` }, token);
+    assert.equal(saved.status, 200, JSON.stringify(saved));
+    return saved;
+  };
+  await save('owner', { direction: 'capital', paidFrom: 'cash', amount: '5000', date: '2026-10-16', narration: `Owner's money ${run}` });
+  const rent = await save('expense', { head: 'repairs', paidFrom: 'cash', amount: '1200', date: '2026-10-16', narration: `Rent ${run}` });
+
+  await stop();
+  await start();
+
+  const entries = await call('GET', '/api/books/entries?limit=500', undefined, token);
+  assert.equal(entries.status, 200, JSON.stringify(entries));
+  assert.ok(entries.entries.some((entry: { id: string }) => entry.id === rent.entry.id), 'the rent entry came back');
+  const cash = await call('GET', '/api/books/book?book=cash', undefined, token);
+  assert.ok(cash.rows.some((row: { narration: string; moneyOut: number }) => row.narration.endsWith(`Rent ${run}`) && row.moneyOut === 1200), `it is in the cash book: ${JSON.stringify(cash.rows.slice(-3))}`);
+  const reports = await call('GET', '/api/reports', undefined, token);
+  assert.equal(reports.trialBalance.balanced, true);
+  assert.ok(reports.profitAndLoss.expenses.rows.some((row: { name: string; amount: number }) => row.name === 'Repairs and upkeep' && row.amount >= 1200), 'Repairs is its own line');
+  const imbalance = (await owner.query(
+    'SELECT sum(debit_minor) - sum(credit_minor) AS imbalance FROM journal_line WHERE voucher_id = $1', [rent.entry.id])).rows[0]!;
+  assert.equal(String(imbalance.imbalance), '0');
 });
