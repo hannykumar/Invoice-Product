@@ -47,6 +47,12 @@ import type { MasterDataReader, TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
 import type { DeclaredRateReader } from './declared-rates.ts';
 
+/** Basis points as a shopkeeper writes a rate: 500n is "5", 1250n is "12.5". */
+const percentOf = (rate: bigint): string => {
+  const hundredths = String(rate % 100n).padStart(2, '0').replace(/0$/, '');
+  return rate % 100n === 0n ? String(rate / 100n) : `${rate / 100n}.${hundredths}`;
+};
+
 export type PriceBasis = 'EXCLUSIVE' | 'INCLUSIVE';
 
 /**
@@ -545,6 +551,7 @@ export class GstCalculator {
     const resolved = this.#resolveRate(input, item);
     if (resolved === null) {
       const lookup = this.#rates.find(item.hsnOrSac, item.kind, input.documentDate, this.#mode);
+      const later = this.#ownRateStartingAfter(input, item);
       reasons.push(
         !lookup.found && lookup.reason === 'NOT_REVIEWED'
           ? blocked(
@@ -554,6 +561,14 @@ export class GstCalculator {
               undefined,
               line.lineId,
             )
+          : later !== undefined
+            ? blocked(
+                'RATE_NOT_FOUND',
+                `The ${percentOf(later.ratePercentTimes100)}% saved for "${item.name}" applies from ${later.effectiveFrom}, and this bill is dated ${input.documentDate}, before then. Date the bill on or after ${later.effectiveFrom}, or enter the rate you charge.`,
+                `"${item.name}" ka ${percentOf(later.ratePercentTimes100)}% rate ${later.effectiveFrom} se lagu hai, aur yeh bill ${input.documentDate} ka hai, usse pehle ka. Bill ${later.effectiveFrom} ya uske baad ki tareekh ka banayein, ya apna rate bharein.`,
+                undefined,
+                line.lineId,
+              )
           : blocked(
               'RATE_NOT_FOUND',
               `We do not have a GST rate for "${item.name}". You can enter the rate you charge.`,
@@ -674,6 +689,21 @@ export class GstCalculator {
       declaredBy: declared.declaredBy,
       declaredBasis: declared.basis,
     };
+  }
+
+  /**
+   * Issue #281 — an item's own rate starts on the day it was declared, so a bill dated before then
+   * finds none. The person is told which day it starts from, rather than that there is no rate.
+   */
+  #ownRateStartingAfter(
+    input: ComputeInput,
+    item: import('./master-data-port.ts').ItemTaxClassification,
+  ): import('./declared-rates.ts').DeclaredRate | undefined {
+    if (this.#declaredRates === undefined) return undefined;
+    return this.#declaredRates
+      .list(input.companyId)
+      .filter((rate) => rate.itemId === item.itemId && rate.kind === item.kind && rate.effectiveFrom > input.documentDate)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0];
   }
 
   #cess(rule: import('./rate-table.ts').CessRule | undefined, taxableValue: Money, quantity: Quantity): Money {

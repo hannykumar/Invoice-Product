@@ -117,7 +117,7 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
 test('a service is sold without any stock, and never touches the godown', async () => {
   const owner = await signIn();
   const item = await request('POST', '/api/items', {
-    name: 'Site measurement visit', kind: 'service', hsnSac: '998346', unit: 'NOS', ratePercent: '18',
+    name: 'Site measurement visit', kind: 'service', hsnSac: '998346', unit: 'NOS', ratePercent: '18', effectiveFrom: '2026-04-01',
   }, owner);
   assert.equal(item.status, 200, JSON.stringify(item.body));
   const before = (await request('GET', '/api/reports', {}, owner)).body.stock.rows;

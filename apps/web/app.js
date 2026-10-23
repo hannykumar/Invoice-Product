@@ -111,7 +111,7 @@ const copy = {
     itemHsn: "HSN or SAC code", itemHsnHelp: "Goods carry an HSN code of 2, 4, 6 or 8 digits; bills to GST-registered customers need at least 4, and at least 6 above ₹5 crore turnover. A service carries a 6-digit SAC starting 99.",
     itemUnit: "How is it counted?", itemTax: "The GST you charge on it", itemTaxHelp: "This is the rate your business charges. We record it as yours and the bill says so; we never pick one for you.",
     itemExempt: "Exempt or nil-rated", itemOtherRateChoice: "Another rate", itemOtherRate: "What rate, in per cent?",
-    itemBasis: "Where does the rate come from?", itemBasisHelp: "For example: our accountant, or the rate printed on our supplier's bills.", saveItem: "Save item",
+    itemBasis: "Where does the rate come from?", itemBasisHelp: "For example: our accountant, or the rate printed on our supplier's bills.", itemRateFrom: "Rate applies from", itemRateFromHelp: "Leave empty for today. Pick an earlier day if you have already sold this item at this rate.", saveItem: "Save item",
     challanConsignee: "Who the goods are going to", challanConsigneeHelp: "The challan prints their saved name, address and GST number.",
     billTitle: "The bill", billReady: "This is the bill your customer gets. Print it, or save it as PDF from the print box.",
     billNoAddress: "No customer address was typed, so the bill prints without one. A GST-registered customer's bill should carry their address.",
@@ -463,7 +463,7 @@ const copy = {
     itemHsn: "HSN ya SAC code", itemHsnHelp: "Maal ka HSN 2, 4, 6 ya 8 ank ka hota hai; GST-registered customer ke bill par kam se kam 4, aur ₹5 crore se zyada turnover par kam se kam 6. Seva ka SAC 6 ank ka, 99 se shuru.",
     itemUnit: "Kaise gina jata hai?", itemTax: "Aap ispar kitna GST lete hain", itemTaxHelp: "Yeh aapke vyapar ka rate hai. Hum ise aapka rate likhte hain aur bill par bhi yahi likha jata hai; hum khud koi rate nahin chunte.",
     itemExempt: "Chhoot ya shunya rate", itemOtherRateChoice: "Koi aur rate", itemOtherRate: "Kitne pratishat?",
-    itemBasis: "Yeh rate kahan se aaya?", itemBasisHelp: "Jaise: hamare accountant se, ya supplier ke bill par chhape rate se.", saveItem: "Saman save karen",
+    itemBasis: "Yeh rate kahan se aaya?", itemBasisHelp: "Jaise: hamare accountant se, ya supplier ke bill par chhape rate se.", itemRateFrom: "Rate kab se lagu", itemRateFromHelp: "Khaali chhodein to aaj se. Agar yeh saman isi rate par pehle bech chuke hain, to pehle ki tareekh chunein.", saveItem: "Saman save karen",
     challanConsignee: "Maal kiske paas ja raha hai", challanConsigneeHelp: "Challan par unka save kiya naam, pata aur GST number chhapta hai.",
     billTitle: "Bill", billReady: "Yehi bill aapke customer ko milega. Print karein, ya print box se PDF save karein.",
     billNoAddress: "Customer ka pata nahin likha gaya, isliye bill bina pate ke chhapega. GST wale customer ke bill par uska pata hona chahiye.",
@@ -7739,6 +7739,8 @@ document.querySelector("#item-form")?.addEventListener("submit", async (event) =
     hsnSac: values.hsnSac,
     unit: values.unit,
     basis: values.basis,
+    // Issue #281 — the day the rate starts; empty means the day it is saved.
+    effectiveFrom: values.effectiveFrom,
     // Issue #308 — optional: found by scanning, starts at its usual price, found by another name.
     barcode: values.barcode, price: values.price, otherName: values.otherName,
     ...(choice === "exempt"

@@ -55,7 +55,7 @@ const CUSTOMER = {
 };
 const GOODS = {
   name: 'PVC Sheets', kind: 'goods', hsnSac: '39204900', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for PVC',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for PVC',
 };
 
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;

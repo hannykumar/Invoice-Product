@@ -98,7 +98,7 @@ test('#281: a new rate starts the day it is declared, or the day picked, never b
     requestId: 'item-rate-281-earlier', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(earlier.status, 400, JSON.stringify(earlier.body));
-  assert.match(String(earlier.body.message), /rate/i);
+  assert.match(String(earlier.body.message), /The 18% saved for "Shaving foam 200g" applies from 2026-08-29, and this bill is dated 2026-08-28, before then\. Date the bill on or after 2026-08-29/);
 
   const picked = await request('POST', '/api/items', { name: 'Shaving gel 100g', kind: 'goods', hsnSac: '33071010', unit: 'PCS', taxKind: 'taxable', ratePercent: '18', effectiveFrom: '2026-04-01' }, owner);
   assert.equal(picked.status, 200, JSON.stringify(picked.body));
