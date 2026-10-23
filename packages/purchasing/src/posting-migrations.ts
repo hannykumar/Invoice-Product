@@ -157,4 +157,29 @@ export const purchasePostingMigrations: readonly Migration[] = Object.freeze([{
       DROP COLUMN IF EXISTS batch_id,
       DROP COLUMN IF EXISTS warehouse_id;
   `,
+}, {
+  // Issue #289, part 3 — credit blocked by CGST s.17(5): which clause, on the line, and the blocked
+  // tax by head on the bill, because GSTR-3B reports it head by head in Table 4(B)(1) (Circular
+  // 170/02/2022-GST, para 4 B). Old bills had nothing blocked, so 0 and no clause are right for them.
+  id: "20261021T210946011Z_purchasing_c17039d84ac6_blocked_credit_heads",
+  up: `
+    ALTER TABLE purchase_bills
+      ADD COLUMN ineligible_cgst_paise bigint NOT NULL DEFAULT 0 CHECK (ineligible_cgst_paise >= 0),
+      ADD COLUMN ineligible_sgst_paise bigint NOT NULL DEFAULT 0 CHECK (ineligible_sgst_paise >= 0),
+      ADD COLUMN ineligible_igst_paise bigint NOT NULL DEFAULT 0 CHECK (ineligible_igst_paise >= 0),
+      ADD COLUMN ineligible_cess_paise bigint NOT NULL DEFAULT 0 CHECK (ineligible_cess_paise >= 0),
+      ADD CONSTRAINT purchase_bills_ineligible_heads_add_up
+        CHECK (ineligible_cgst_paise + ineligible_sgst_paise + ineligible_igst_paise + ineligible_cess_paise IN (0, ineligible_itc_paise));
+    ALTER TABLE purchase_bill_lines ADD COLUMN blocked_credit_clause text
+      CHECK (blocked_credit_clause IS NULL OR blocked_credit_clause ~ '^17\\(5\\)\\([a-z]{1,2}\\)$');
+  `,
+  down: `
+    ALTER TABLE purchase_bill_lines DROP COLUMN IF EXISTS blocked_credit_clause;
+    ALTER TABLE purchase_bills
+      DROP CONSTRAINT IF EXISTS purchase_bills_ineligible_heads_add_up,
+      DROP COLUMN IF EXISTS ineligible_cess_paise,
+      DROP COLUMN IF EXISTS ineligible_igst_paise,
+      DROP COLUMN IF EXISTS ineligible_sgst_paise,
+      DROP COLUMN IF EXISTS ineligible_cgst_paise;
+  `,
 }]);

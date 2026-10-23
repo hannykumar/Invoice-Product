@@ -349,6 +349,9 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/purchases/:param` | service |
 | POST | `/api/purchases/preview` | `ledger.post.purchase` |
 | POST | `/api/purchases/record` | `ledger.post.purchase` |
+| POST | `/api/purchases/self-invoice` | `ledger.post.purchase` |
+| POST | `/api/purchases/self-invoice/print` | `ledger.post.purchase` |
+| GET | `/api/purchases/self-invoices` | service |
 | GET | `/api/subscription` | service |
 | POST | `/api/subscription/plan` | `subscription.manage` |
 | POST | `/api/subscription/pay` | `subscription.manage` |

@@ -530,9 +530,12 @@ test('the credit side of GSTR-3B is built from these decisions and nothing else'
   const linkage = workspace.returnLinkage;
 
   // ₹18,000 steel + ₹7,200 packaging. Nothing for the paint, the paper or the car.
-  // Issue #286 — the ₹1,800 credit note comes off 4(A)(5), as GSTR-2B nets it; 4(B) stays empty.
-  assert.equal(totalTaxOf(linkage.allOtherItc).minor, 2_340_000n);
-  assert.equal(totalTaxOf(linkage.reversedItc).minor, 0n);
+  // Issue #286 — the ₹1,800 credit note comes off 4(A)(5), as GSTR-2B nets it.
+  // Issue #289, part 3 — the car's ₹2,24,000 is blocked by s.17(5)(a): it is in 4(A)(5) as GSTR-2B
+  // shows it and taken back out in 4(B)(1) (Circular 170/02/2022-GST, para 4 A and B), so the
+  // credit left (4(C)) is still ₹23,400.
+  assert.equal(totalTaxOf(linkage.allOtherItc).minor, 2_340_000n + 22_400_000n);
+  assert.equal(totalTaxOf(linkage.reversedItc).minor, 22_400_000n);
   assert.equal(totalTaxOf(workspace.claimable).minor, 2_340_000n);
   assert.equal(totalTaxOf(workspace.heldBack).minor, 1_620_000n);
   assert.match(linkage.caution['en-IN'], /deliberately not in this figure/);
@@ -548,8 +551,11 @@ test('the return workspace reads the reconciliation through #30\'s own port', as
   });
   const ordinary = gstr3b.credit.find((line) => line.boxId === '4A(5)');
   const givenBack = gstr3b.credit.find((line) => line.boxId === '4B');
-  assert.equal(totalTaxOf(ordinary?.amounts ?? inward.allOtherItc).minor, 2_340_000n);
-  assert.equal(totalTaxOf(givenBack?.amounts ?? inward.reversedItc).minor, 0n);
+  const left = gstr3b.credit.find((line) => line.boxId === '4C');
+  // Issue #289, part 3 — the blocked car credit in 4(A)(5) and out again in 4(B)(1).
+  assert.equal(totalTaxOf(ordinary?.amounts ?? inward.allOtherItc).minor, 2_340_000n + 22_400_000n);
+  assert.equal(totalTaxOf(givenBack?.amounts ?? inward.reversedItc).minor, 22_400_000n);
+  assert.equal(totalTaxOf(left?.amounts ?? inward.allOtherItc).minor, 2_340_000n);
 });
 
 test("#19's GSTR-2B signal answers about one bill, and says nothing when we have not looked", async () => {

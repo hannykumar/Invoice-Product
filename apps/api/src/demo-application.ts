@@ -120,6 +120,9 @@ import type { ApprovedPurchase, ApprovedPurchaseLine, PurchaseBill, PurchasePost
 import { validatePurchase } from '../../../packages/purchasing/src/validate.ts';
 import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adapter.ts';
 import { citeReverseChargeEntry, reverseChargeDecisionFor, type ReverseChargeDecision } from '../../../packages/purchasing/src/reverse-charge-notified.ts';
+import { checkReverseChargeEntry, type RegisterParty, type ReverseChargeLine, type SelfInvoice } from '../../../packages/purchasing/src/reverse-charge-register.ts';
+import { rcmTimeOfSupply, selfInvoiceDue, type RcmSupplyKind } from '../../../packages/purchasing/src/reverse-charge-timing.ts';
+import { BLOCKED_CREDIT_REASONS, blockedCreditReasonFor } from '../../../packages/purchasing/src/blocked-credit.ts';
 import type { Party } from '../../../packages/masters/src/types.ts';
 import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
@@ -418,8 +421,9 @@ const modeWords = (payment: Payment): string => {
  * an advance payment and nothing invented: what it is against (the purchase order, or goods to be
  * supplied), the supplier's receipt voucher when entered, the narration "Being advance paid to …
  * against …", and, once the advance has been adjusted against their bill, the bill it was adjusted
- * against. It is our own accounts voucher; it is not the reverse-charge payment voucher of CGST
- * Rule 52, and the heading does not say it is.
+ * against. It is our own accounts voucher. Issue #289, part 2b — when the payment pays a
+ * reverse-charge bill, the voucher also carries CGST Rule 52's particulars for it, so it is the
+ * payment voucher s.31(3)(g) requires at the time of payment.
  */
 const paymentVoucherHtml = (input: {
   readonly payment: Payment;
@@ -427,8 +431,21 @@ const paymentVoucherHtml = (input: {
   readonly seller: RenderableParty;
   readonly party: RenderableParty;
   readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint; adjusted: boolean }[];
+  /**
+   * Issue #289, part 2b — the reverse-charge bills this payment pays. When there are any, this is
+   * also the payment voucher of CGST s.31(3)(g), and carries Rule 52's particulars for them:
+   * (e) description, (g) rate, (h) tax payable, (i) place of supply for an inter-State supply, and
+   * (j) the supplier's signature. (a)-(d) and (f) are the voucher's own fields above.
+   */
+  readonly reverseCharge?: readonly { readonly bill: string; readonly interState: boolean; readonly placeOfSupply: string; readonly lines: readonly ReverseChargeLine[] }[];
 }): string => {
-  const { payment, number, seller, party } = input;
+  const { payment, seller, party } = input;
+  const rcm = input.reverseCharge ?? [];
+  // Rule 52(b): at most sixteen characters, unique for the financial year. The books' own number
+  // ("PAYMENT/2026-27/000001", 22 characters) is too long, so a reverse-charge voucher shows the same
+  // sequence in a short form ("PV/2627/000001") and names the books' number beside it.
+  const short = rcm.length === 0 ? null : rule52VoucherNumber(input.number);
+  const number = short ?? input.number;
   const receipt = payment.direction === 'RECEIPT';
   const advance = payment.advanceToSupplier === true;
   // Bills paid by this payment when it was made, and bills a later bill's entry adjusted the advance against.
@@ -443,6 +460,7 @@ const paymentVoucherHtml = (input: {
   const particulars = payment.advanceParticulars;
   const facts: [string, string][] = [
     [receipt ? 'Receipt number' : 'Voucher number', number],
+    ...(short !== null && short !== input.number ? [['Books voucher', input.number] as [string, string]] : []),
     ['Date', printDate(payment.date)],
     [receipt ? 'Received from' : 'Paid to', party.name],
     ['Amount', formatPaise(payment.amount.minor)],
@@ -476,7 +494,72 @@ ${billTable}
 ${adjustedTable}
 ${!advance && onAccount > 0n ? `<p>On account, not yet put against a bill: ${formatPaise(onAccount)}</p>` : ''}
 ${narration}
+${rcm.length === 0 ? '' : `<h2 style="font-size:16px">Supplies on which tax is payable on reverse charge</h2>
+<p><small>Payment voucher under CGST section 31(3)(g) and Rule 52: the tax below is paid by ${escapeHtml(seller.name)}, the recipient, not by ${escapeHtml(party.name)}.</small></p>
+<table><tr><th>Bill</th><th>Description</th><th>HSN/SAC</th><th>Taxable value</th><th>Rate</th><th>Tax payable</th>${rcm.some((bill) => bill.interState) ? '<th>Place of supply</th>' : ''}</tr>
+${rcm.flatMap((bill) => bill.lines.map((line) => {
+    const heads = bill.interState
+      ? `IGST ${line.gstRateBasisPoints / 100}%`
+      : `CGST ${line.gstRateBasisPoints / 200}% + SGST ${line.gstRateBasisPoints / 200}%`;
+    const tax = bill.interState ? formatPaise(line.igstPaise) : `${formatPaise(line.cgstPaise)} + ${formatPaise(line.sgstPaise)}`;
+    return `<tr><td>${escapeHtml(bill.bill)}</td><td>${escapeHtml(line.description)}</td><td>${escapeHtml(line.hsnSac)}</td><td>${formatPaise(line.taxableValuePaise)}</td><td>${heads}</td><td>${tax}</td>${rcm.some((other) => other.interState) ? `<td>${bill.interState ? escapeHtml(bill.placeOfSupply) : ''}</td>` : ''}</tr>`;
+  })).join('')}</table>
+<p style="margin-top:36px">Signature of the supplier or authorised representative: ____________________</p>`}
 <p style="margin-top:48px;text-align:right">For ${escapeHtml(seller.name)}<br><br>Authorised signatory</p></body></html>`;
+};
+
+/**
+ * Issue #289, part 2b — a books voucher number ("PAYMENT/2026-27/000001") in the short form CGST
+ * Rule 52(b) allows: at most sixteen characters of letters, digits, hyphen and slash, unique for the
+ * financial year. The sequence is the books' own, which is unique for the year, so the short form is
+ * too. `null` when the number is not in the books' form, so nothing is invented for it.
+ */
+export const rule52VoucherNumber = (number: string): string | null => {
+  const parts = /^[A-Z_]+\/(\d{2})(\d{2})-(\d{2})\/(\d+)$/.exec(number);
+  if (parts === null) return /^[A-Za-z0-9/-]{1,16}$/.test(number) ? number : null;
+  const short = `PV/${parts[2]}${parts[3]}/${parts[4]}`;
+  return short.length <= 16 ? short : null;
+};
+
+/**
+ * Issue #289, part 2b — the self-invoice: the tax invoice a registered buyer issues for a purchase
+ * from a supplier who is not registered, on which the buyer pays the GST (CGST s.31(3)(f), within
+ * 30 days — Rule 47A). It carries the particulars of CGST Rule 46 that apply to it, each from the
+ * register, nothing invented: (a) the supplier's name and address (and GSTIN only if it has one),
+ * (b) the number, (c) the date, (d) our name, address and GSTIN, (g) HSN/SAC, (h) description,
+ * (i) quantity and unit, (j)/(k) value and taxable value, (l) rate, (m) tax by head, (n) place of
+ * supply with the State, (p) that the tax is payable on reverse charge, and (q) a signature line.
+ */
+const selfInvoiceHtml = (invoice: SelfInvoice, bill: { number: string; date: string }): string => {
+  const party = (title: string, who: RegisterParty) =>
+    `<td><strong>${escapeHtml(title)}</strong><br>${escapeHtml(who.name)}${who.addressLines.map((line) => `<br>${escapeHtml(line)}`).join('')}<br>GSTIN: ${who.gstin === null ? 'Not registered' : escapeHtml(who.gstin)}${who.stateCode === '' ? '' : `<br>State: ${escapeHtml(who.stateName)} (${escapeHtml(who.stateCode)})`}</td>`;
+  const heads = invoice.interState ? ['IGST'] : ['CGST', 'SGST'];
+  const row = (line: SelfInvoice['lines'][number]) => {
+    const rate = line.gstRateBasisPoints / 100;
+    const taxCells = invoice.interState
+      ? `<td>${rate}%</td><td>${formatPaise(line.igstPaise)}</td>`
+      : `<td>${rate / 2}%</td><td>${formatPaise(line.cgstPaise)}</td><td>${rate / 2}%</td><td>${formatPaise(line.sgstPaise)}</td>`;
+    return `<tr><td>${line.lineNumber}</td><td>${escapeHtml(line.description)}</td><td>${escapeHtml(line.hsnSac)}</td><td>${escapeHtml(line.quantity)}</td><td>${formatPaise(line.taxableValuePaise)}</td>${taxCells}</tr>`;
+  };
+  const tax = invoice.cgstPaise + invoice.sgstPaise + invoice.igstPaise + invoice.cessPaise;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(invoice.number)}</title>
+<style>body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px;text-align:left;vertical-align:top}h1{font-size:20px;margin:0}small{color:#444}</style></head><body>
+<h1>TAX INVOICE</h1>
+<p><small>Issued by the recipient for a supply received from a supplier who is not registered (CGST section 31(3)(f), Rule 47A).</small></p>
+<table><tr>${party('Supplier', invoice.supplier)}${party('Recipient (issuer of this invoice)', invoice.recipient)}</tr></table>
+<table>
+<tr><th>Invoice number</th><td>${escapeHtml(invoice.number)}</td></tr>
+<tr><th>Invoice date</th><td>${escapeHtml(formatDate(invoice.issuedOn))}</td></tr>
+<tr><th>Date of receipt of the supply</th><td>${escapeHtml(formatDate(invoice.receivedOn))}</td></tr>
+<tr><th>Supplier's document</th><td>${escapeHtml(bill.number)} dated ${escapeHtml(formatDate(isoDate(bill.date)))}</td></tr>
+<tr><th>Place of supply</th><td>${escapeHtml(invoice.placeOfSupply.stateName)} (${escapeHtml(invoice.placeOfSupply.stateCode)})</td></tr>
+<tr><th>Whether tax is payable on reverse charge</th><td>Yes</td></tr>
+</table>
+<table><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th>Quantity</th><th>Taxable value</th>${heads.map((head) => `<th>${head} rate</th><th>${head}</th>`).join('')}</tr>
+${invoice.lines.map(row).join('')}
+<tr><th colspan="4">Total</th><th>${formatPaise(invoice.taxableValuePaise)}</th>${invoice.interState ? `<th></th><th>${formatPaise(invoice.igstPaise)}</th>` : `<th></th><th>${formatPaise(invoice.cgstPaise)}</th><th></th><th>${formatPaise(invoice.sgstPaise)}</th>`}</tr></table>
+<p>Total value of supply: ${formatPaise(invoice.taxableValuePaise)}. Tax payable by the recipient on reverse charge: ${formatPaise(tax)} (${amountInWords(money(tax))}).</p>
+<p style="margin-top:48px;text-align:right">For ${escapeHtml(invoice.recipient.name)}<br><br>Authorised signatory</p></body></html>`;
 };
 
 /** An optional amount on a sale: blank and zero both mean no charge. */
@@ -592,6 +675,16 @@ const livePurchaseReadPort = (shop: Awaited<ReturnType<typeof createCompanyShop>
   },
 });
 
+/** Issue #289, part 2b — what a reverse-charge bill adds to the register once it is posted. */
+interface ReverseChargeEntryDraft {
+  readonly receivedOn: IsoDate;
+  readonly supplyKind: RcmSupplyKind;
+  /** The lines on which we pay the GST: what the self-invoice covers. */
+  readonly lineNumbers: readonly number[];
+  readonly supplierRegistered: boolean;
+  readonly notes: readonly string[];
+}
+
 /** The three things a purchase will do, taken from the preview rather than written by hand. */
 const previewEffects = (preview: PurchasePostingPreview, location: string): string[] => {
   const tax = preview.tax;
@@ -600,9 +693,11 @@ const previewEffects = (preview: PurchasePostingPreview, location: string): stri
   if (effects.length === 0) effects.push('Stock: nothing, this is a service');
   effects.push(
     tax.reverseCharge
-      ? `GST: ${formatPaise(claimable)} payable by you under reverse charge`
+      ? `GST: ${formatPaise(claimable + tax.ineligibleItcPaise)} payable by you under reverse charge`
       : `GST you can claim back: ${formatPaise(claimable)} (${tax.intraState ? 'CGST + SGST' : 'IGST'})`,
   );
+  // Issue #289, part 3 — tax CGST s.17(5) blocks: in the cost, not claimed.
+  if (tax.ineligibleItcPaise > 0n) effects.push(`GST that cannot be claimed (CGST s.17(5)), added to cost: ${formatPaise(tax.ineligibleItcPaise)}`);
   effects.push(`Supplier due: ${formatPaise(preview.totalPaise)}`);
   effects.push(`Due date: ${preview.dueDate}`);
   if (preview.roundOffPaise !== 0n) effects.push(`Rounding recorded separately: ${formatPaise(preview.roundOffPaise < 0n ? -preview.roundOffPaise : preview.roundOffPaise)}`);
@@ -757,6 +852,16 @@ export class DemoApplication {
     // Issue #249 — the shop holds the notes, so the purchase comparison reads the same ones.
     const returnNotes = shop.returnNotes;
     participate(salesRepository, paymentRepository);
+    // Issue #289, part 2b — the first payment against a reverse-charge bill can bring its GST forward
+    // (CGST s.12(3)(b), s.13(3)(a): the date the payment is entered in the books). An advance taken
+    // off the bill counts from the day the advance was paid. A reversed payment counts for nothing.
+    shop.setPaidOn(async (companyId, billId) => {
+      const dates = (await paymentRepository.list(companyId))
+        .filter((payment) => payment.direction === 'PAYMENT' && payment.state === 'RECORDED' && payment.allocations.some((allocation) => allocation.documentId === billId))
+        .map((payment) => payment.date)
+        .sort();
+      return dates[0] ?? null;
+    });
     // Issue #181 — the customers and items this company actually keeps, in `packages/masters`.
     // The screens add to the same records, so a customer added at the counter is a customer the
     // bill can be made out to a moment later. Only the demo company is given any to start with.
@@ -1888,8 +1993,11 @@ export class DemoApplication {
     // Issue #289 — a supplier who may not charge GST: the bill carries none, whatever the states.
     const registration = resolveSupplier(this.companyOf(actor), approved.supplierPartyId).gstRegistrationType;
     const reverseCharge = approved.taxLiability === 'REVERSE_CHARGE';
+    // Issue #289, part 3 — under reverse charge the blocked tax is still owed (s.9(3)); only its credit goes.
+    const rcmPayable = claimable + (reverseCharge ? preview.tax.ineligibleItcPaise : 0n);
+    const blockedNotes = DemoApplication.blockedCreditNotes(approved, preview.tax.intraState);
     const why = reverseCharge
-      ? `This bill is under reverse charge: ${approved.supplierName} charges no GST on it, and you pay ${formatPaise(claimable)} of GST to the government yourself (CGST s.9(3)).`
+      ? `This bill is under reverse charge: ${approved.supplierName} charges no GST on it, and you pay ${formatPaise(rcmPayable)} of GST to the government yourself (CGST s.9(3)).`
       : registration === 'unregistered'
       ? `The supplier is not registered for GST, so their bill carries no GST (CGST s.32(1)) and none can be claimed back (s.16(2)(a)).`
       : registration === 'composition'
@@ -1909,14 +2017,14 @@ export class DemoApplication {
       message: advance !== null && advance.used > 0n
         ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} for ${formatPaise(preview.totalPaise)} will take the ${formatPaise(advance.used)} advance already paid off it, so you will owe them ${formatPaise(preview.totalPaise - advance.used)}, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`
         : reverseCharge
-          ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST under reverse charge that you pay the government in cash and then claim back as credit.`
+          ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(rcmPayable)} of GST under reverse charge that you pay the government in cash${claimable === rcmPayable ? ' and then claim back as credit' : `, of which ${formatPaise(claimable)} comes back as credit`}.`
           : `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`,
       amount: jsonAmount(preview.totalPaise),
       supplier: approved.supplierName,
       taxType: intra ? 'CGST_SGST' : 'IGST',
       tax: { cgst: jsonAmount(preview.tax.cgstPaise), sgst: jsonAmount(preview.tax.sgstPaise), igst: jsonAmount(preview.tax.igstPaise), total: jsonAmount(claimable) },
       // Issue #261 — with an advance taken off, the bill's total is not what is due; the sum below says what is.
-      effects: [why, ...reverseChargeNotes, ...lines, ...sumLine,
+      effects: [why, ...reverseChargeNotes, ...blockedNotes, ...lines, ...sumLine,
         ...previewEffects(preview, this.config.location).map((line) => advance !== null && advance.used > 0n && line.startsWith('Supplier due: ') ? `Bill total: ${formatPaise(preview.totalPaise)}` : line),
         ...preview.warnings, ...(advance === null ? [] : advance.effects)],
       token: approved.id,
@@ -1958,19 +2066,17 @@ export class DemoApplication {
     if ('alreadyRecorded' in draft) {
       // Pressing Record twice, or typing the same bill in again, records it once.
       const dashboard = await state();
-      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded) };
+      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded), reverseCharge: await this.reverseChargeJson(actor, draft.alreadyRecorded) };
     }
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: approved.supplierPartyId, name: approved.supplierName, kind: 'SUPPLIER' });
     // Issue #261 — worked out before the bill is posted, so it is the advance the review showed.
     const advance = await this.supplierAdvanceFor(actor, approved, input);
-    if (advance !== null && advance.used > 0n && approved.taxLiability === 'REVERSE_CHARGE') {
-      // Tax on a reverse-charge service falls due when it is paid, so an advance would have moved
-      // that date. This screen does not handle reverse charge, so it says so rather than mis-tax it.
-      throw notAllowed('PURCHASE_ADVANCE_REVERSE_CHARGE', 'This bill is under reverse charge, and an advance paid on it changes when its GST was due. That is not handled here yet, so nothing was recorded.');
-    }
+    // Issue #289, part 2b — an advance on a reverse-charge bill is allowed now: the day it was paid is
+    // a payment date under CGST s.12(3)(b) / s.13(3)(a), so the bill's GST falls due from then.
     const result = await this.shop.posting.post(actor, approved, `web:${approved.id}`);
+    if (draft.reverseChargeEntry !== null) await this.recordReverseCharge(actor, approved, result.bill, draft.reverseChargeEntry);
     const used = advance !== null && advance.used > 0n
       ? await this.payments.useSupplierAdvance(actor, {
         partyId: approved.supplierPartyId as PartyId, documentId: result.bill.id, documentNumber: result.bill.invoiceNumber,
@@ -2001,6 +2107,127 @@ export class DemoApplication {
       advanceAdjustments: adjustments.map((a) => ({ paymentId: a.paymentId, voucherNumber: a.voucherNumber, paidOn: a.paidOn, amount: jsonAmount(a.amount) })),
       bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier,
       purchaseCheck: await this.purchaseCheckFor(actor, result.bill),
+      reverseCharge: await this.reverseChargeJson(actor, result.bill),
+    };
+  }
+
+  /**
+   * Issue #289, part 2b — puts a posted reverse-charge bill in the register: the date it reached the
+   * business, its reverse-charge lines as a self-invoice must print them (Rule 46), and the supplier.
+   */
+  private async recordReverseCharge(actor: ActorContext, approved: ApprovedPurchase, bill: PurchaseBill, entry: ReverseChargeEntryDraft) {
+    const companyId = this.companyOf(actor);
+    const lines = bill.lines.filter((line) => entry.lineNumbers.includes(line.lineNumber)).map((line) => {
+      const typed = approved.lines.find((candidate) => candidate.lineNumber === line.lineNumber);
+      return {
+        lineNumber: line.lineNumber, description: line.description, hsnSac: typed?.hsnSac ?? '',
+        quantity: formatQuantity(line.quantity), unit: line.quantity.unit,
+        taxableValuePaise: line.taxableValuePaise, gstRateBasisPoints: typed?.gstRateBasisPoints ?? 0,
+        cgstPaise: line.cgstPaise, sgstPaise: line.sgstPaise, igstPaise: line.igstPaise, cessPaise: line.cessPaise,
+      };
+    });
+    await this.shop.reverseCharge.recordPurchase(actor, {
+      billId: bill.id, supplierPartyId: bill.supplierPartyId, supplier: this.registerParty(companyId, bill.supplierPartyId),
+      supplierRegistered: entry.supplierRegistered, supplyKind: entry.supplyKind,
+      invoiceNumber: bill.invoiceNumber, invoiceDate: isoDate(bill.invoiceDate), receivedOn: entry.receivedOn,
+      enteredOn: indiaDateOf(bill.postedAt), interState: !bill.tax.intraState, lines,
+    });
+  }
+
+  /**
+   * Issue #289, part 2b — issue the self-invoice for one purchase from an unregistered supplier
+   * (CGST s.31(3)(f), Rule 47A). Once per purchase: pressing again returns the one issued.
+   */
+  async issueSelfInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const billId = String(input.billId ?? '').trim();
+    if (billId === '') throw invalid('SELF_INVOICE_BILL_REQUIRED', 'Choose the purchase to issue the self-invoice for.');
+    const bill = await this.shop.bills.findById(companyId, billId);
+    if (bill === null) throw notFound('PURCHASE_BILL_UNKNOWN', 'That supplier bill was not found.');
+    const typed = String(input.date ?? '').trim();
+    let issuedOn: IsoDate;
+    try {
+      issuedOn = typed === '' ? appToday() : isoDate(typed);
+    } catch {
+      throw invalid('SELF_INVOICE_DATE', 'Enter the self-invoice date as a date.');
+    }
+    const key = String(input.idempotencyKey ?? '').trim() || `self-invoice:${bill.id}`;
+    const { invoice, deduplicated } = await this.shop.reverseCharge.issueSelfInvoice(actor, {
+      billId: bill.id, issuedOn, idempotencyKey: key, billReversed: bill.state === 'REVERSED',
+      recipient: (() => {
+        const seller = sellerPrint(companyId, { name: this.config.name, gstin: this.config.gstin }).seller;
+        return { name: seller.name, addressLines: seller.addressLines, gstin: seller.gstin ?? this.config.gstin, stateCode: seller.stateCode, stateName: seller.stateName };
+      })(),
+    });
+    const point = await this.shop.taxPointOf(companyId, bill.id);
+    const due = selfInvoiceDue(invoice.receivedOn, appToday(), invoice.issuedOn);
+    return {
+      state: 'recorded', deduplicated,
+      title: deduplicated ? 'Self-invoice already issued' : 'Self-invoice issued',
+      message: deduplicated
+        ? `Self-invoice ${invoice.number} was already issued for bill ${bill.invoiceNumber} from ${bill.supplierName}. A second one was not made.`
+        : `Self-invoice ${invoice.number} dated ${formatDate(invoice.issuedOn)} is issued for bill ${bill.invoiceNumber} from ${bill.supplierName}.`,
+      effects: [due.words, ...(point === null ? [] : [point.words])],
+      number: invoice.number, issuedOn: invoice.issuedOn, billId: bill.id,
+      html: selfInvoiceHtml(invoice, { number: bill.invoiceNumber, date: bill.invoiceDate }),
+    };
+  }
+
+  /** Issue #289, part 2b — the self-invoice of one purchase, as a printable page. */
+  async selfInvoicePrint(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const billId = String(input.billId ?? '').trim();
+    const invoice = await this.shop.reverseCharge.selfInvoiceFor(companyId, billId);
+    if (invoice === null) throw notFound('SELF_INVOICE_UNKNOWN', 'No self-invoice has been issued for that purchase yet.');
+    const bill = await this.shop.bills.findById(companyId, billId);
+    return { state: 'print' as const, number: invoice.number, html: selfInvoiceHtml(invoice, { number: bill?.invoiceNumber ?? '', date: bill?.invoiceDate ?? invoice.receivedOn }) };
+  }
+
+  /**
+   * Issue #289, part 2b — every purchase from an unregistered supplier on reverse charge, with its
+   * self-invoice: issued, or how many of the 30 days are left. The ones needing action come first.
+   */
+  async selfInvoiceList(actor: ActorContext) {
+    const companyId = this.companyOf(actor);
+    const live = new Set((await this.shop.bills.list(companyId)).filter((bill) => bill.state === 'POSTED').map((bill) => bill.id));
+    const rows = await this.shop.reverseCharge.reminders(companyId, appToday(), (billId) => live.has(billId));
+    const order: Record<string, number> = { OVERDUE: 0, LAST_DAY: 1, DUE_SOON: 2, NOT_YET_DUE: 3, ISSUED: 4 };
+    const sorted = [...rows].sort((a, b) => (order[a.due.state] ?? 9) - (order[b.due.state] ?? 9));
+    return {
+      toIssue: sorted.filter((row) => row.due.state !== 'ISSUED').length,
+      items: sorted.map((row) => ({
+        billId: row.billId, supplier: row.supplierName, bill: row.invoiceNumber, receivedOn: row.receivedOn,
+        tax: jsonAmount(row.taxPaise), state: row.due.state, lastDay: row.due.lastDay, daysLeft: row.due.daysLeft,
+        words: row.due.words, number: row.selfInvoiceNumber,
+      })),
+    };
+  }
+
+  /** A party as a self-invoice or payment voucher prints it: name, address, GSTIN if any, State. */
+  private registerParty(companyId: CompanyId, partyId: string): RegisterParty {
+    const printed = this.paymentPartyPrint(companyId, partyId);
+    return { name: printed.name, addressLines: printed.addressLines, gstin: printed.gstin ?? null, stateCode: printed.stateCode, stateName: printed.stateName };
+  }
+
+  /**
+   * Issue #289, part 2b — where a reverse-charge bill stands: when its GST falls due and in which
+   * return, and (for an unregistered supplier) its self-invoice. `null` for any other bill.
+   */
+  private async reverseChargeJson(actor: ActorContext, bill: PurchaseBill) {
+    const companyId = this.companyOf(actor);
+    const purchase = await this.shop.reverseCharge.purchaseFor(companyId, bill.id);
+    if (purchase === null) return null;
+    const point = await this.shop.taxPointOf(companyId, bill.id);
+    const invoice = await this.shop.reverseCharge.selfInvoiceFor(companyId, bill.id);
+    const due = purchase.supplierRegistered ? null : selfInvoiceDue(purchase.receivedOn, appToday(), invoice?.issuedOn ?? null);
+    return {
+      billId: bill.id,
+      receivedOn: purchase.receivedOn,
+      timeOfSupply: point === null ? null : { date: point.date, clause: point.clause, settled: point.settled, period: taxPeriodOf(point.date), words: point.words },
+      selfInvoice: purchase.supplierRegistered ? null : {
+        state: due?.state ?? 'NOT_YET_DUE', lastDay: due?.lastDay ?? null, daysLeft: due?.daysLeft ?? null, words: due?.words ?? '',
+        number: invoice?.number ?? null, issuedOn: invoice?.issuedOn ?? null,
+      },
     };
   }
 
@@ -3812,6 +4039,14 @@ export class DemoApplication {
         const bill = documents.find((d) => d.documentId === allocation.documentId);
         return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor, adjusted: allocation.adjustedFromAdvance === true };
       }),
+      // Issue #289, part 2b — s.31(3)(g): paying a reverse-charge bill, this voucher is the payment voucher.
+      reverseCharge: payment.direction !== 'PAYMENT' ? [] : (await Promise.all(payment.allocations.map(async (allocation) => {
+        const purchase = await this.shop.reverseCharge.purchaseFor(companyId, allocation.documentId);
+        return purchase === null ? null : {
+          bill: purchase.invoiceNumber, interState: purchase.interState, lines: purchase.lines,
+          placeOfSupply: `${seller.stateName} (${seller.stateCode})`,
+        };
+      }))).filter((entry) => entry !== null),
     });
     return { state: 'print' as const, number: voucher?.number ?? payment.id, html };
   }
@@ -4044,6 +4279,13 @@ export class DemoApplication {
         outward: workspace.gstr3b.outward.map((box) => ({
           boxId: box.boxId, label: box.label['en-IN'],
           taxableValue: jsonAmount(box.amounts.taxableValue.minor),
+          tax: jsonAmount(totalTaxOf(box.amounts).minor),
+        })),
+        // Issue #289, part 3 — Table 4 box by box, so 4(A) and the s.17(5) credit taken out in 4(B)(1) can be seen.
+        credit: workspace.gstr3b.credit.map((box) => ({
+          boxId: box.boxId, label: box.label['en-IN'],
+          cgst: jsonAmount(box.amounts.cgst.minor), sgst: jsonAmount(box.amounts.sgst.minor),
+          igst: jsonAmount(box.amounts.igst.minor), cess: jsonAmount(box.amounts.cess.minor),
           tax: jsonAmount(totalTaxOf(box.amounts).minor),
         })),
         heads: workspace.gstr3b.heads.map((head) => ({
@@ -6109,7 +6351,7 @@ export class DemoApplication {
    * Anything it does not clear is refused with its own words; nothing is marked "checked" here.
    */
   private async purchaseInput(actor: ActorContext, input: Record<string, unknown>): Promise<
-    | { readonly approved: ApprovedPurchase; readonly supplierState: string; readonly godownState: string; readonly reverseChargeNotes: readonly string[] }
+    | { readonly approved: ApprovedPurchase; readonly supplierState: string; readonly godownState: string; readonly reverseChargeNotes: readonly string[]; readonly reverseChargeEntry: ReverseChargeEntryDraft | null }
     | { readonly alreadyRecorded: PurchaseBill; readonly message: string }
   > {
     const companyId = this.companyOf(actor);
@@ -6129,6 +6371,11 @@ export class DemoApplication {
     const reverseCharge = this.reverseChargeOf(companyId, supplier, supplierGstin !== undefined, typedLines, input, date);
     // What the supplier's bill shows: a reverse-charge or exempt line carries no GST from them.
     const lines = typedLines.map((line, index) => reverseCharge.lines[index]?.kind === 'NONE' ? line : { ...line, gstRateBasisPoints: 0 });
+    // Issue #289, part 2b — the facts a reverse-charge bill's time of supply turns on (CGST s.12(3),
+    // s.13(3)), checked before anything is posted so the register never refuses a posted bill.
+    const reverseChargeEntry = reverseCharge.any
+      ? this.reverseChargeEntryOf(supplier, supplierGstin !== undefined, typedLines, reverseCharge.lines, input, date)
+      : null;
     const typedTotal = String(input.amount ?? '').trim() === '' ? null : paise(input.amount);
     const linesTotal = lines.reduce((total, line) => total + line.taxableValuePaise + taxOn(line.taxableValuePaise, line.gstRateBasisPoints), 0n);
     const total = typedTotal ?? linesTotal;
@@ -6204,6 +6451,16 @@ export class DemoApplication {
       const shown = verdict.findings.filter((finding) => finding.severity !== 'MINOR');
       throw invalid('PURCHASE_NEEDS_CHECKING', shown.length === 0 ? verdict.summary : shown.map((finding) => finding.message).join(' '), { details: { status: verdict.status } });
     }
+    // Issue #289, part 3 — a line with no GST at all (unregistered seller, exempt freight) has no
+    // credit to block. Checked on the final rates, after reverse charge has set the law's rate.
+    const finalLines = lines.map((line, index) => {
+      const decided = reverseCharge.lines[index];
+      return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+    });
+    const untaxedBlocked = finalLines.find((line) => line.itcEligibility === 'INELIGIBLE' && line.gstRateBasisPoints === 0);
+    if (untaxedBlocked !== undefined) {
+      throw invalid('PURCHASE_BLOCKED_NO_GST', `Line ${untaxedBlocked.lineNumber} (${untaxedBlocked.description}) carries no GST, so there is no credit to mark as not available. Leave it as "GST can be claimed".`);
+    }
     return {
       approved: {
         id: `web-purchase:${draftId}`,
@@ -6215,10 +6472,7 @@ export class DemoApplication {
         invoiceNumber: reference,
         invoiceDate: date,
         // Issue #289 — on a reverse-charge line the GST is the law's rate for the supply, owed by us.
-        lines: lines.map((line, index) => {
-          const decided = reverseCharge.lines[index];
-          return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
-        }),
+        lines: finalLines,
         invoiceTotalPaise: total,
         taxLiability: reverseCharge.any ? 'REVERSE_CHARGE' : 'SUPPLIER',
         creditDays: 30,
@@ -6227,8 +6481,43 @@ export class DemoApplication {
       },
       supplierState,
       godownState,
-      reverseChargeNotes: reverseCharge.notes,
+      reverseChargeNotes: reverseChargeEntry === null ? reverseCharge.notes : [...reverseCharge.notes, ...reverseChargeEntry.notes],
+      reverseChargeEntry,
     };
+  }
+
+  /**
+   * Issue #289, part 2b — when the goods or service reached the business (typed as `receivedOn`,
+   * else the bill's date), which reverse-charge lines the self-invoice covers, and what the review
+   * says about the date the tax falls due and the self-invoice's 30 days.
+   */
+  private reverseChargeEntryOf(
+    supplier: Party, registered: boolean, lines: readonly ApprovedPurchaseLine[],
+    decided: readonly { readonly kind: string }[], input: Record<string, unknown>, date: IsoDate,
+  ): ReverseChargeEntryDraft {
+    const typed = String(input.receivedOn ?? '').trim();
+    let receivedOn: IsoDate;
+    try {
+      receivedOn = typed === '' ? date : isoDate(typed);
+    } catch {
+      throw invalid('PURCHASE_RECEIVED_ON', 'Enter the date the goods or the service reached you, as a date.');
+    }
+    const lineNumbers = lines.filter((_, index) => decided[index]?.kind === 'REVERSE_CHARGE').map((line) => line.lineNumber);
+    const supplyKind = checkReverseChargeEntry({
+      receivedOn, today: appToday(),
+      supplyKinds: lines.filter((line) => lineNumbers.includes(line.lineNumber)).map((line) => line.supplyKind),
+    });
+    // The time of supply as it stands on the day of recording: nothing has been paid yet.
+    const point = rcmTimeOfSupply({
+      supplyKind, supplierDocumentDate: date, supplierIssuesInvoice: registered, receivedOn, paidOn: null, selfInvoiceOn: null, enteredInBooksOn: appToday(),
+    });
+    const notes = [
+      supplyKind === 'SERVICES' && !registered
+        ? `The GST on this falls due on the date of your self-invoice, or the day you pay ${supplier.legalName} if that is earlier (CGST s.13(3)(a) and (c)). It goes on the GST return for that month.`
+        : `${point.words} It goes on the GST return for ${formatTaxPeriod(taxPeriodOf(point.date))}, and moves earlier if you pay ${supplier.legalName} before then.`,
+      ...(registered ? [] : [`${supplier.legalName} has no GST number, so you issue the invoice for this purchase yourself — a self-invoice (CGST s.31(3)(f)). ${selfInvoiceDue(receivedOn, appToday(), null).words} The app makes it for you once the bill is recorded.`]),
+    ];
+    return { receivedOn, supplyKind, lineNumbers, supplierRegistered: registered, notes };
   }
 
   /** The reviewed GST rules, which answer IGST against CGST and SGST from the two states (#228). */
@@ -6305,9 +6594,21 @@ export class DemoApplication {
     });
     if (any) {
       notes.push('You pay this GST to the government in cash with your GSTR-3B (Table 3.1(d)); credit cannot be used to pay it (CGST s.49(4), Circular 172/04/2022-GST). The same amount comes back as credit in that return (Table 4(A)(3)).');
-      if (!registered) notes.push(`${supplier.legalName} has no GST number, so you must issue a self-invoice for this purchase within 30 days of receiving it (CGST s.31(3)(f), Rule 47A). The app does not make the self-invoice yet: make it on paper for now.`);
     }
     return { lines: result, any, notes };
+  }
+
+  /**
+   * Issue #289, part 3 — one sentence per line whose credit CGST s.17(5) blocks: the clause, the
+   * tax, and where it went instead.
+   */
+  private static blockedCreditNotes(approved: ApprovedPurchase, intraState: boolean): string[] {
+    return approved.lines.filter((line) => line.itcEligibility === 'INELIGIBLE').map((line) => {
+      const tax = taxOn(line.taxableValuePaise, line.gstRateBasisPoints);
+      const reason = BLOCKED_CREDIT_REASONS.find((candidate) => candidate.clause === line.blockedCreditClause);
+      const owed = approved.taxLiability === 'REVERSE_CHARGE' ? ' You still pay this GST to the government under reverse charge; only the credit is lost.' : '';
+      return `${line.description}: credit not available — ${reason?.label.toLowerCase() ?? 'blocked'} (CGST s.${line.blockedCreditClause ?? '17(5)'}). Its ${formatPaise(tax)} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you, not to the GST you claim back.${owed}`;
+    });
   }
 
   /** Issue #289 — answers to the reverse-charge questions, from `rcm_<id>` form fields or an object. */
@@ -6374,7 +6675,14 @@ export class DemoApplication {
         throw invalid('PURCHASE_GST_RATE', `${label}: choose the GST rate printed on the supplier's bill.`);
       }
       const goods = item.kind === 'goods';
+      // Issue #289, part 3 — credit blocked by CGST s.17(5): the person names the clause; the app
+      // never decides it. A bill with no GST has nothing to block.
+      const blocked = blockedCreditReasonFor(row.blocked ?? row.creditBlocked);
+      if (blocked === undefined) {
+        throw invalid('PURCHASE_BLOCKED_REASON', `${label}: choose why the GST on it cannot be claimed from the list, or leave it as "GST can be claimed".`);
+      }
       return {
+        ...(blocked === null ? {} : { blockedCreditClause: blocked.clause }),
         lineNumber: index + 1,
         itemId: item.id,
         description: item.name,
@@ -6385,7 +6693,7 @@ export class DemoApplication {
         ratePaise: rate,
         taxableValuePaise: lineTaxableValue(qty.scaled, rate),
         gstRateBasisPoints: gstBasisPoints,
-        itcEligibility: 'ELIGIBLE' as const,
+        itcEligibility: blocked === null ? 'ELIGIBLE' as const : 'INELIGIBLE' as const,
       };
     });
   }
