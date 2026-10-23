@@ -3,6 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
+import { BooksDesk } from './books-entry-application.ts';
 import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
@@ -353,6 +354,17 @@ const paymentKeyOf = (input: Record<string, unknown>): string => {
     throw invalid('PAYMENT_REQUEST_ID_REQUIRED', 'This payment has no entry number, so a second press could record it twice. Reload the page and enter it again.');
   }
   return `web-payment:${direction}:${request}`;
+};
+
+/**
+ * Issue #392 — the key a screen sends for one bill, return or answer, so a retry is recognised. It is
+ * never invented here and never taken from what the shopkeeper typed: an invented key turns a retry
+ * into a second document, and a typed reference can belong to two real sales.
+ */
+const requestKeyOf = (input: Record<string, unknown>, code: string, what: string): string => {
+  const request = String(input.requestId ?? '').trim();
+  if (request === '') throw invalid(code, `This ${what} has no entry number, so a second press could record it twice. Reload the page and enter it again.`);
+  return request;
 };
 
 // Money by UPI or bank transfer goes into, or comes out of, the business's current account.
@@ -773,6 +785,7 @@ export class DemoApplication {
   private readonly notifications: NotificationService;
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
+  private readonly booksDesk: BooksDesk;
   private readonly agent: ActionAgentService;
   private readonly gstReturns: GstReturnService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
@@ -833,6 +846,7 @@ export class DemoApplication {
     this.notifications = notifications;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
+    this.booksDesk = new BooksDesk({ ledger: shop.ledger, store: shop.store, companyId: config.companyId, gstin: config.gstin });
     this.gstReturns = gstReturns;
   }
 
@@ -1596,9 +1610,9 @@ export class DemoApplication {
     await this.clearOpeningStockSuspense();
     // Issue #299 — the bills are recorded oldest first so bill numbers climb with the dates:
     // 000001 is two months past its due date, 000002 is ten days past, 000003 is the newest.
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', requestId: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', requestId: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', requestId: 'seed-sale', notes: 'Synthetic opening demo sale' });
   }
 
   /**
@@ -1888,6 +1902,21 @@ export class DemoApplication {
   static assistantExamples() {
     return AssistantService.supportedIntents().map((intent) => ({ intent, label: describeIntent(intent) }));
   }
+
+  // Issue #294 — expenses, journal and contra entries, the owner's money, and the cash and bank books.
+  booksHeads(actor: ActorContext) { this.companyOf(actor); return this.booksDesk.heads(); }
+  async booksJournalAccounts(actor: ActorContext) { this.companyOf(actor); return this.booksDesk.journalAccounts(); }
+  async booksPreview(actor: ActorContext, kind: 'expense' | 'journal' | 'contra' | 'owner', input: Record<string, unknown>) {
+    this.companyOf(actor);
+    return this.booksDesk.preview(actor, kind, input);
+  }
+  async booksRecord(actor: ActorContext, kind: 'expense' | 'journal' | 'contra' | 'owner', input: Record<string, unknown>) {
+    this.companyOf(actor);
+    return this.booksDesk.record(actor, kind, input);
+  }
+  async booksUndo(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.undo(actor, input); }
+  async booksEntries(actor: ActorContext) { this.companyOf(actor); return { entries: await this.booksDesk.entries(actor) }; }
+  async booksBook(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.book(actor, input); }
 
   async reports(actor: ActorContext) {
     this.companyOf(actor);
@@ -2674,14 +2703,16 @@ export class DemoApplication {
     // Issue #233 — one key per review, sent by the screen with the review and again with Record, so
     // pressing Record twice issues one bill. The screen never uses the customer's own reference as
     // the key: two real sales can carry the same order number, and the second must not come back as
-    // the first. (Callers without a review key still fall back to it, as before.)
+    // the first. Issue #392 — a review without a key is refused rather than given an invented one.
     // Issue #256 — this review replaces the one the same sale form showed before it. That earlier
     // review was never issued, so it is forgotten rather than left behind as "a bill waiting".
     const replaced = String(input.replaces ?? '').trim();
     if (replaced !== '' && replaced !== String(input.requestId ?? '')) {
       await this.discardReview(actor, `web-sale:${replaced}`, 'a later review of the same sale replaced it');
     }
-    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.requestId || input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
+    // The bill is read before its key, so a form that cannot be read is answered as that.
+    const saleInput = { ...this.saleInput(input), ...zeroRated };
+    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${requestKeyOf(input, 'SALE_REQUEST_ID_REQUIRED', 'bill')}`, input: saleInput });
     try {
       if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
       // Issue #266 — the date the bill will carry, said plainly when it is not today.
@@ -2704,9 +2735,11 @@ export class DemoApplication {
         effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === BALANCE_WILL_INCREASE ? paidNow.sentence : effect)),
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
-        placeOfSupply: walkIn === null
-          ? delivery.placeOfSupplyReason
-          : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
+        placeOfSupply: draft.supplyKind === 'SERVICES'
+          ? DemoApplication.servicePlaceOfSupplyReason(draft.pricing?.placeOfSupplyStateCode ?? null, customer, walkIn !== null)
+          : walkIn === null
+            ? delivery.placeOfSupplyReason
+            : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
           kind: exportSale.kind,
@@ -2788,7 +2821,9 @@ export class DemoApplication {
           stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
           'en-IN': `${state} sale · ${taxes}`,
           'hi-IN': `${state} ki bikri · ${taxes}`,
-          reason: walkIn === null
+          reason: bill.supplyKind === 'SERVICES'
+            ? DemoApplication.servicePlaceOfSupplyReason(pricing.placeOfSupplyStateCode, customer, walkIn !== null)
+            : walkIn === null
             ? delivery.placeOfSupplyReason
             : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         },
@@ -2960,6 +2995,8 @@ export class DemoApplication {
         terms: String(input.terms ?? '30'),
         reference: String(input.reference ?? '') || `challan-bill:${challan.id}`,
         approvalReason: String(input.approvalReason ?? ''),
+        // One bill per challan: the challan itself is what a retry repeats.
+        requestId: String(input.requestId ?? '') || `challan-bill:${challan.id}`,
       }, false);
       // Issue #301 — a challan is billed or refused, never held: the goods are already with them.
       if (!('invoice' in recorded)) throw new Error('A challan bill was held for approval.');
@@ -2975,6 +3012,9 @@ export class DemoApplication {
   private ewayDecisionOf(draft: SalesInvoice, delivery: DeliveryDetails | null) {
     const pricing = draft.pricing;
     if (pricing === null) return null;
+    // Issue #287 — CGST Rule 138(1): an e-way bill is for the movement of goods. A service moves
+    // none, so its bill is never checked or reminded for one.
+    if (draft.supplyKind === 'SERVICES') return null;
     try {
       const consignor = dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
       const billTo = this.movementParty(draft.partyId);
@@ -4641,7 +4681,7 @@ export class DemoApplication {
       lineKey: String(input.lineKey ?? ''),
       kind: kind === 'ACCEPT' ? 'ACCEPT' : kind === 'REJECT' ? 'REJECT' : 'PENDING',
       reason: String(input.reason ?? ''),
-      idempotencyKey: `web-itc:${period}:${String(input.lineKey ?? '')}:${kind}:${String(input.reference ?? Date.now())}`,
+      idempotencyKey: `web-itc:${period}:${requestKeyOf(input, 'ITC_REQUEST_ID_REQUIRED', 'answer')}`,
     });
     return this.itcWorkspaceJson(workspace);
   }
@@ -5638,6 +5678,10 @@ export class DemoApplication {
     }
     const pricing = invoice.pricing;
     if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
+    // Issue #287 — CGST Rule 138(1): e-way bills are for goods that move.
+    if (invoice.supplyKind === 'SERVICES') {
+      throw invalid('EWAY_NOT_FOR_SERVICES', 'This bill is for a service. An e-way bill is only for goods that move (CGST Rule 138), so this bill never needs one.');
+    }
 
     const lines = consignmentLinesOf(pricing.lines);
     const document: ConsignmentDocument = {
@@ -5950,7 +5994,8 @@ export class DemoApplication {
     const records = await this.shop.ewayBill.list(actor);
     const rows = [];
     for (const invoice of invoices) {
-      if (invoice.number === null) continue;
+      // Issue #287 — a service bill moves no goods, so it is not one to choose an e-way bill for.
+      if (invoice.number === null || invoice.supplyKind === 'SERVICES') continue;
       let customer: string | null = null;
       try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch (error) { reportUnexpected('api.listCustomerName', error); customer = null; }
       let outcome: string = 'CANNOT_DECIDE';
@@ -6896,6 +6941,34 @@ export class DemoApplication {
     return particulars;
   }
 
+  /**
+   * Issue #287 — goods or services, from the items on the bill. A bill carries one kind (its
+   * copies, e-way bill, income account and GSTR-1 rows all follow it), and goods and services count
+   * in a state by different rules (IGST Act s. 10 against s. 12), so a bill mixing the two is
+   * refused until each line can carry its own.
+   */
+  private saleSupplyKind(lines: readonly { readonly itemId: string }[], input: Record<string, unknown>): 'GOODS' | 'SERVICES' {
+    const kinds = new Set(lines.map((line) => itemView(this.config.companyId, line.itemId).kind));
+    if (kinds.size > 1) {
+      throw invalid('SALE_MIXES_GOODS_AND_SERVICES', 'This bill has goods and a service on it. Make one bill for the goods and another for the service: GST decides where goods and services count by different rules, and one bill cannot carry both yet.');
+    }
+    if (!kinds.has('service')) return 'GOODS';
+    if (!['', 'same'].includes(String(input.shipTo ?? '').trim().toLowerCase())) {
+      throw invalid('SERVICE_NO_SHIP_TO', 'A service is not sent anywhere, so a service bill has no delivery address. Choose "Same as billing address".');
+    }
+    return 'SERVICES';
+  }
+
+  /** Issue #287 — IGST Act s. 12(2): why a service counts in this state, said as plainly as goods are. */
+  private static servicePlaceOfSupplyReason(stateCode: string | null, customer: { readonly legalName: string; readonly gstRegistrationType: string }, walkIn: boolean): string {
+    const code = stateCode ?? '';
+    const where = `Place of supply: ${STATE_NAMES[code] ?? code} (${code})`;
+    if (walkIn) return `${where} — the service is supplied at your counter, so it counts in your own state.`;
+    return customer.gstRegistrationType === 'unregistered'
+      ? `${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`
+      : `${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`;
+  }
+
   private saleInput(input: Record<string, unknown>) {
     const date = isoDate(String(input.date));
     const terms = Number(input.terms ?? 0);
@@ -6912,16 +6985,23 @@ export class DemoApplication {
     // Issue #182 — where the goods go decides which state this sale counts in, and the two cases
     // differ in law: a customer's own godown moves the supply to that state, while goods handed to
     // a third party on the customer's instructions stay where the customer is.
+    const lines = this.saleLines(input);
+    const supplyKind = this.saleSupplyKind(lines, input);
     const delivery = deliveryDetails(this.config.companyId, customer, input);
     return {
       partyId: customer.id as PartyId,
       customerType: customer.gstRegistrationType === 'unregistered' ? 'B2C' as const : 'B2B' as const,
-      supplyKind: 'GOODS' as const,
+      supplyKind,
       documentDate: date,
       dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)),
-      deliveryStateCode: delivery.placeOfSupplyStateCode,
-      placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
-      lines: this.saleLines(input),
+      // Issue #287 — where goods are delivered is IGST Act s. 10. A service is not delivered
+      // anywhere: s. 12(2) decides it in the calculator, from the customer (or from us, when an
+      // unregistered customer has no address on record).
+      ...(supplyKind === 'SERVICES' ? {} : {
+        deliveryStateCode: delivery.placeOfSupplyStateCode,
+        placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
+      }),
+      lines,
       ...(freight === undefined ? {} : { freight }),
       ...(otherCharges === undefined ? {} : { otherCharges }),
       narration: String(input.notes || '') || null,
@@ -6938,7 +7018,7 @@ export class DemoApplication {
       return {
         kind,
         command: {
-          idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:whole:${input.date}`)}`,
+          idempotencyKey: `web-return:${kind}:${requestKeyOf(input, 'RETURN_REQUEST_ID_REQUIRED', 'return')}`,
           documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
           originalInvoiceId: documentId, lines: [], wholeBill: true,
           wholeBillDisposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT',
@@ -6949,7 +7029,7 @@ export class DemoApplication {
     const quantity = quantityFromString(String(input.quantity ?? ''), String(input.unit ?? 'PCS'));
     const disposition = String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT';
     const shared = {
-      idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,
+      idempotencyKey: `web-return:${kind}:${requestKeyOf(input, 'RETURN_REQUEST_ID_REQUIRED', 'return')}`,
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
       // Issue #292 — goods a customer sends back damaged go to the damaged / not-for-sale location,
       // never into the godown they can be sold from. Goods sent back to a supplier leave the main godown.

@@ -180,7 +180,7 @@ test('preview remains read-only and posting remains duplicate-safe', async () =>
 
 test('authenticated sales and customer payments still reach their service modules', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '100', date: '2026-08-29', terms: '7', reference: 'AUTH-SALE-80', approvalReason: 'Agreed with the owner' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '100', date: '2026-08-29', terms: '7', reference: 'AUTH-SALE-80', requestId: 'AUTH-SALE-80', approvalReason: 'Agreed with the owner' };
   const salePreview = await request('POST', '/api/sales/preview', sale, owner);
   assert.equal(salePreview.body.state, 'preview');
   const recorded = await request('POST', '/api/sales/record', sale, owner);
@@ -204,12 +204,12 @@ test('authenticated sales and customer payments still reach their service module
 
 test('authenticated customer and supplier returns preview and post through real domain services', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-08-29', terms: '7', reference: 'RETURN-SALE-45', approvalReason: 'Agreed with the owner' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-08-29', terms: '7', reference: 'RETURN-SALE-45', requestId: 'RETURN-SALE-45', approvalReason: 'Agreed with the owner' };
   const recordedSale = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recordedSale.status, 200);
   const saleReturn = {
     kind: 'SALES_RETURN', documentId: recordedSale.body.invoice.id, lineId: 'line-1', unit: 'PCS', quantity: '2',
-    disposition: 'SCRAPPED', reason: 'Customer returned two unusable pieces.', date: '2026-08-30', reference: 'CN-API-45',
+    disposition: 'SCRAPPED', reason: 'Customer returned two unusable pieces.', date: '2026-08-30', reference: 'CN-API-45', requestId: 'CN-API-45',
   };
   const salePreview = await request('POST', '/api/returns/preview', saleReturn, owner);
   assert.equal(salePreview.body.state, 'preview');
@@ -230,7 +230,7 @@ test('authenticated customer and supplier returns preview and post through real 
   assert.ok(bill);
   const purchaseReturn = {
     kind: 'PURCHASE_RETURN', documentId: bill.id, lineId: '1', unit: 'KGS', quantity: '2',
-    disposition: 'DAMAGED', reason: 'Bent bars accepted back by the supplier.', date: '2026-08-30', reference: 'DN-API-45',
+    disposition: 'DAMAGED', reason: 'Bent bars accepted back by the supplier.', date: '2026-08-30', reference: 'DN-API-45', requestId: 'DN-API-45',
   };
   const purchasePreview = await request('POST', '/api/returns/preview', purchaseReturn, owner);
   assert.equal(purchasePreview.body.amount, 236);
@@ -238,7 +238,7 @@ test('authenticated customer and supplier returns preview and post through real 
   assert.equal(postedPurchaseReturn.body.note.kind, 'PURCHASE_RETURN');
   assert.match(postedPurchaseReturn.body.note.number, /^DN\//);
 
-  const excessive = await request('POST', '/api/returns/preview', { ...purchaseReturn, reference: 'DN-TOO-MUCH-45', quantity: '9' }, owner);
+  const excessive = await request('POST', '/api/returns/preview', { ...purchaseReturn, reference: 'DN-TOO-MUCH-45', requestId: 'DN-TOO-MUCH-45', quantity: '9' }, owner);
   assert.equal(excessive.status, 409);
   assert.equal(excessive.body.code, 'RETURN_QUANTITY_EXCEEDS_ELIGIBLE');
 });
@@ -246,14 +246,14 @@ test('authenticated customer and supplier returns preview and post through real 
 test('issue #292: a customer return marked damaged goes to the not-for-sale location, not back on the shelf', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const soap = 'Herbal Bath Soap 100g';
-  const recordedSale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: soap, quantity: '3', rate: '100', date: '2026-08-29', terms: '7', reference: 'DAMAGED-SALE-292', approvalReason: 'Agreed with the owner' }, owner);
+  const recordedSale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: soap, quantity: '3', rate: '100', date: '2026-08-29', terms: '7', reference: 'DAMAGED-SALE-292', requestId: 'DAMAGED-SALE-292', approvalReason: 'Agreed with the owner' }, owner);
   assert.equal(recordedSale.status, 200, JSON.stringify(recordedSale.body));
   const soapRows = async () => (await request('GET', '/api/reports', {}, owner)).body.stock.rows.filter((row: any) => row.item === soap);
   const shelf = (rows: any[]) => rows.find((row: any) => row.sellable === true);
   const before = await soapRows();
   const damagedReturn = {
     kind: 'SALES_RETURN', documentId: recordedSale.body.invoice.id, lineId: 'line-1', unit: 'PCS', quantity: '1',
-    disposition: 'DAMAGED', reason: 'Customer returned a crushed bar.', date: '2026-08-30', reference: 'CN-DAMAGED-292',
+    disposition: 'DAMAGED', reason: 'Customer returned a crushed bar.', date: '2026-08-30', reference: 'CN-DAMAGED-292', requestId: 'CN-DAMAGED-292',
   };
   const posted = await request('POST', '/api/returns/record', damagedReturn, owner);
   assert.equal(posted.status, 200, JSON.stringify(posted.body));
@@ -269,7 +269,7 @@ test('issue #292: a customer return marked damaged goes to the not-for-sale loca
   assert.equal(Number(damaged.available), 0, 'damaged stock is never available to sell');
   assert.ok(damaged.value > 0, 'the damaged bar is still counted at its value');
 
-  const accepted = await request('POST', '/api/returns/record', { ...damagedReturn, quantity: '1', disposition: 'ACCEPTED', reference: 'CN-ACCEPTED-292' }, owner);
+  const accepted = await request('POST', '/api/returns/record', { ...damagedReturn, quantity: '1', disposition: 'ACCEPTED', reference: 'CN-ACCEPTED-292', requestId: 'CN-ACCEPTED-292' }, owner);
   assert.equal(accepted.status, 200);
   const afterAccepted = await soapRows();
   assert.equal(Number(shelf(afterAccepted).closing), Number(shelf(before).closing) + 1, 'an accepted return goes back on the shelf');
@@ -291,7 +291,7 @@ test('reports require a session and are computed from that company alone', async
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   // Record a real purchase and a real sale into this company, then read the reports.
   await request('POST', '/api/purchases/record', { supplierId: 'sampoorna:party:supplier', reference: 'REPORTS-35-BUY', date: '2026-08-29', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '25', rate: '60', gst: '1800' }] }, owner);
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '3', rate: '400', date: '2026-08-29', terms: '15', reference: 'WEB-REPORTS-35' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '3', rate: '400', date: '2026-08-29', terms: '15', reference: 'WEB-REPORTS-35', requestId: 'WEB-REPORTS-35' };
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.body.state, 'recorded');
 
@@ -430,7 +430,7 @@ test('a sale preview carries the agreed price and the credit warning from the re
   // The company is seeded with one issued sale, so this customer has a price on record.
   const small = await request('POST', '/api/sales/preview', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250',
-    date: '2026-08-29', terms: '30', reference: 'TERMS-11-SMALL',
+    date: '2026-08-29', terms: '30', reference: 'TERMS-11-SMALL', requestId: 'TERMS-11-SMALL',
   }, owner);
   assert.equal(small.status, 200);
   assert.equal(small.body.terms.lines[0].priceSource, 'LAST_AGREED', 'what they last paid, not a guess');
@@ -449,7 +449,7 @@ test('a sale preview carries the agreed price and the credit warning from the re
   assert.equal(limited.status, 200, JSON.stringify(limited.body));
   const big = await request('POST', '/api/sales/preview', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '40', rate: '250',
-    date: '2026-08-29', terms: '30', reference: 'TERMS-11-BIG',
+    date: '2026-08-29', terms: '30', reference: 'TERMS-11-BIG', requestId: 'TERMS-11-BIG',
   }, owner);
   assert.equal(big.body.terms.credit.outcome, 'WARN');
   assert.equal(big.body.terms.credit.limit, 5000);
@@ -488,7 +488,7 @@ test('the HTTP surface holds a bill that charges for more than the godown kept',
   assert.match(receipt.body.message, /90 BOX went into your stock/);
 
   const match = await request('POST', '/api/purchases/match', {
-    reference: 'SRS/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
+    reference: 'SRS/TEST/0001', requestId: 'SRS/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
     quantity: '100', rate: '240', gst: 1800, date: '2026-08-22',
   }, session);
   assert.equal(match.body.outcome, 'HOLD_FOR_APPROVAL');
@@ -511,7 +511,7 @@ test('the HTTP surface holds a bill that charges for more than the godown kept',
   assert.equal(overcharge.invoiceSays, '100 BOX');
 
   const approved = await request('POST', '/api/purchases/match/approve', {
-    reference: 'SRS/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
+    reference: 'SRS/TEST/0001', requestId: 'SRS/TEST/0001', orderNumber: 'PO/TEST/0001', item: 'SOAP',
     quantity: '100', rate: '240', gst: 1800, date: '2026-08-22',
     reason: 'Supplier agreed to send the 10 boxes free next week',
   }, session);
@@ -549,7 +549,7 @@ test('the HTTP surface never forces a purchase order on a small business', async
   assert.equal(receipt.body.order, null, 'no order should be involved at all');
 
   const match = await request('POST', '/api/purchases/match', {
-    reference: 'SRS/TEST/0002', orderNumber: '', item: 'SOAP',
+    reference: 'SRS/TEST/0002', requestId: 'SRS/TEST/0002', orderNumber: '', item: 'SOAP',
     quantity: '102', rate: '240', gst: 1800, date: '2026-08-26',
   }, session);
   assert.equal(match.body.kind, 'TWO_WAY_RECEIPT');
@@ -590,7 +590,7 @@ test('the HTTP surface explains a cancelled GST number with its evidence', async
 
   const checked = await request('POST', '/api/suppliers/check', {
     party: 'Deccan Hardware Traders', gstin: '29AAFCD1234K1ZN',
-    reference: 'DHW/2026/114', date: '2026-07-04',
+    reference: 'DHW/2026/114', requestId: 'DHW/2026/114', date: '2026-07-04',
   }, session);
   assert.equal(checked.status, 200);
   assert.equal(checked.body.level, 'SERIOUS');
@@ -621,7 +621,7 @@ test('the HTTP surface explains a cancelled GST number with its evidence', async
 
   const accepted = await request('POST', '/api/suppliers/check/acknowledge', {
     party: 'Deccan Hardware Traders', gstin: '29AAFCD1234K1ZN',
-    reference: 'DHW/2026/114', date: '2026-07-04',
+    reference: 'DHW/2026/114', requestId: 'DHW/2026/114', date: '2026-07-04',
     reason: 'Spoke to the owner; they are re-registering',
   }, session);
   assert.equal(accepted.body.cleared, true);
@@ -860,14 +860,14 @@ test('the plan is enforced on a real write path, and counted only when the work 
   for (let i = 0; i < remaining; i += 1) {
     const filled = await request('POST', '/api/sales/record', {
       party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-      date: '2026-08-29', terms: '30', reference: `PLAN-42-${i}`, approvalReason: 'Agreed with the owner',
+      date: '2026-08-29', terms: '30', reference: `PLAN-42-${i}`, requestId: `PLAN-42-${i}`, approvalReason: 'Agreed with the owner',
     }, owner);
     assert.equal(filled.status, 200, 'bills inside the plan are issued normally');
   }
 
   const overLimit = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-    date: '2026-08-29', terms: '30', reference: 'PLAN-42-OVER', approvalReason: 'Agreed with the owner',
+    date: '2026-08-29', terms: '30', reference: 'PLAN-42-OVER', requestId: 'PLAN-42-OVER', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(overLimit.status, 403);
   assert.equal(overLimit.body.code, 'ENTITLEMENT_LIMIT_REACHED');
@@ -875,7 +875,7 @@ test('the plan is enforced on a real write path, and counted only when the work 
 
   const backdated = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-    date: '2026-07-01', terms: '30', reference: 'PLAN-42-BACKDATED', approvalReason: 'Agreed with the owner',
+    date: '2026-07-01', terms: '30', reference: 'PLAN-42-BACKDATED', requestId: 'PLAN-42-BACKDATED', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(backdated.status, 403, 'a document date cannot bypass the current subscription limit');
   assert.equal(backdated.body.code, 'ENTITLEMENT_LIMIT_REACHED');
@@ -902,7 +902,7 @@ test('the plan is enforced on a real write path, and counted only when the work 
   );
   const allowedAgain = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-    date: '2026-08-29', terms: '30', reference: 'PLAN-42-AFTER', approvalReason: 'Agreed with the owner',
+    date: '2026-08-29', terms: '30', reference: 'PLAN-42-AFTER', requestId: 'PLAN-42-AFTER', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(allowedAgain.status, 200);
 });
@@ -950,7 +950,7 @@ test('the assistant plans against the real books and does nothing until it is ap
   // A bill old enough to be chased, issued through the real sales service.
   const sale = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250',
-    date: '2026-07-01', terms: '15', reference: 'AGENT-47-BILL',
+    date: '2026-07-01', terms: '15', reference: 'AGENT-47-BILL', requestId: 'AGENT-47-BILL',
   }, owner);
   assert.equal(sale.body.state, 'recorded');
 
@@ -1060,7 +1060,7 @@ test('the GST return workspace is prepared from this company\'s own books', asyn
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
 
   // A bill in a month of its own, so this test does not depend on what other tests recorded.
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-05-14', terms: '15', reference: 'GSTR-30-SALE' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-05-14', terms: '15', reference: 'GSTR-30-SALE', requestId: 'GSTR-30-SALE' };
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.status, 200);
 
@@ -1082,7 +1082,7 @@ test('the GST return workspace is prepared from this company\'s own books', asyn
 
 test('a GST return cannot be exported before it is approved, and approving fixes the figures', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-04-18', terms: '15', reference: 'GSTR-30-APPROVE' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-04-18', terms: '15', reference: 'GSTR-30-APPROVE', requestId: 'GSTR-30-APPROVE' };
   assert.equal((await request('POST', '/api/sales/record', sale, owner)).status, 200);
   await request('POST', '/api/gst-returns/prepare', { period: '2026-04' }, owner);
 
@@ -1098,7 +1098,7 @@ test('a GST return cannot be exported before it is approved, and approving fixes
   // And the books cannot move under it quietly: a new April bill is reported, not absorbed.
   // Issue #266 — the review of that bill says the approved return has to be approved again.
   const before = approved.body.sections.reduce((total: number, section: any) => total + section.taxableValue, 0);
-  const late = { ...sale, reference: 'GSTR-30-LATE', quantity: '1' };
+  const late = { ...sale, reference: 'GSTR-30-LATE', requestId: 'GSTR-30-LATE', quantity: '1' };
   const lateReview = await request('POST', '/api/sales/preview', late, owner);
   assert.match(lateReview.body.dateNotice, /The GST return for April 2026 is already approved without it/);
   assert.equal((await request('POST', '/api/sales/record', late, owner)).status, 200);
@@ -1114,7 +1114,7 @@ test('a GST return cannot be exported before it is approved, and approving fixes
   assert.match(file.body.message, /Nothing has been sent from here/);
 
   // Issue #266 — once the file has been downloaded for filing, no new bill can be dated in April.
-  const refused = await request('POST', '/api/sales/record', { ...sale, reference: 'GSTR-30-AFTER-EXPORT', quantity: '1' }, owner);
+  const refused = await request('POST', '/api/sales/record', { ...sale, reference: 'GSTR-30-AFTER-EXPORT', requestId: 'GSTR-30-AFTER-EXPORT', quantity: '1' }, owner);
   assert.equal(refused.status, 409);
   assert.equal(refused.body.code, 'SALE_DATE_MONTH_CLOSED');
 });
@@ -1194,7 +1194,7 @@ test('a callback address for something that is not a government connector does n
 
 test('#141 — a delivery challan is issued, printed, carried on an e-way bill and billed later', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const jobWork = { reason: 'JOB_WORK', date: '2026-08-28', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '500', rate: '40', reference: 'api-141-jw' };
+  const jobWork = { reason: 'JOB_WORK', date: '2026-08-28', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '500', rate: '40', reference: 'api-141-jw', requestId: 'api-141-jw' };
 
   const checked = await request('POST', '/api/challans/preview', jobWork, owner);
   assert.equal(checked.status, 200);
@@ -1228,12 +1228,12 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   assert.equal(afterEway.ewayBill.source, 'PORTAL');
 
   // A sale challan, then the invoice after delivery, linked back.
-  const sale = { ...jobWork, reason: 'SUPPLY_INVOICE_TO_FOLLOW', quantity: '4', rate: '250', reference: 'api-141-sale' };
+  const sale = { ...jobWork, reason: 'SUPPLY_INVOICE_TO_FOLLOW', quantity: '4', rate: '250', reference: 'api-141-sale', requestId: 'api-141-sale' };
   const saleChallan = await request('POST', '/api/challans/issue', sale, owner);
   assert.equal(saleChallan.body.challan.number, 'DC/26-27/0000002');
   assert.equal(saleChallan.body.challan.showsTax, true);
   assert.equal(saleChallan.body.challan.tax, 50, '5% on ₹1,000 of soap, the rate this business declares');
-  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'api-141-bill' }, owner);
+  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'api-141-bill', requestId: 'api-141-bill' }, owner);
   assert.equal(bill.status, 200, JSON.stringify(bill.body));
   const linked = await request('POST', '/api/challans/link-invoice', { challan: saleChallan.body.challan.id, invoice: bill.body.invoice.id }, owner);
   assert.equal(linked.status, 200, JSON.stringify(linked.body));
@@ -1244,12 +1244,12 @@ test('#141 — a delivery challan is issued, printed, carried on an e-way bill a
   assert.equal(refused.status, 409, 'no invoice follows goods sent for job work');
 
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
-  assert.equal((await request('POST', '/api/challans/issue', { ...jobWork, reference: 'viewer' }, viewer)).status, 403);
+  assert.equal((await request('POST', '/api/challans/issue', { ...jobWork, reference: 'viewer', requestId: 'viewer' }, viewer)).status, 403);
 });
 
 test('#142 — a quotation becomes a sale without retyping, and a proforma is linked to the bill that followed it', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const quote = { kind: 'QUOTATION', date: '2026-08-28', validUntil: '2026-09-30', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', terms: 'Prices ex-godown.', reference: 'api-142-q' };
+  const quote = { kind: 'QUOTATION', date: '2026-08-28', validUntil: '2026-09-30', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', terms: 'Prices ex-godown.', reference: 'api-142-q', requestId: 'api-142-q' };
 
   const checked = await request('POST', '/api/presale/preview', quote, owner);
   assert.equal(checked.status, 200, JSON.stringify(checked.body));
@@ -1295,7 +1295,7 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.doesNotMatch(piPrinted.body.html, /Advance for 100 soap/, 'what it was for is kept, not printed');
 
   // Only 80 went: the bill is linked, and the difference is noted rather than refused.
-  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '80', rate: '25', date: '2026-08-29', terms: '0', reference: 'api-142-bill', approvalReason: 'Agreed with the owner' }, owner);
+  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '80', rate: '25', date: '2026-08-29', terms: '0', reference: 'api-142-bill', requestId: 'api-142-bill', approvalReason: 'Agreed with the owner' }, owner);
   assert.equal(bill.status, 200, JSON.stringify(bill.body));
   const linked = await request('POST', '/api/presale/link-invoice', { document: pi.body.document.id, invoice: bill.body.invoice.id }, owner);
   assert.equal(linked.status, 200, JSON.stringify(linked.body));
@@ -1307,27 +1307,27 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.deepEqual(listed.sort(), ['PI/26-27/00001:INVOICED', 'QTN/26-27/00001:CONVERTED']);
 
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');
-  assert.equal((await request('POST', '/api/presale/issue', { ...quote, reference: 'viewer' }, viewer)).status, 403);
+  assert.equal((await request('POST', '/api/presale/issue', { ...quote, reference: 'viewer', requestId: 'viewer' }, viewer)).status, 403);
 });
 
 test('#165 — money against a proforma gets a receipt voucher, GST on a services advance, set-off on the bill, and a refund voucher', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const item = await request('POST', '/api/items', { name: 'Soap-press servicing', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', effectiveFrom: '2026-04-01', reference: 'api-165-item' }, owner);
+  const item = await request('POST', '/api/items', { name: 'Soap-press servicing', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', effectiveFrom: '2026-04-01', reference: 'api-165-item', requestId: 'api-165-item' }, owner);
   assert.equal(item.status, 200, JSON.stringify(item.body));
 
   // A service: ₹10,000 + 18% GST asked for up front.
-  const service = { kind: 'PROFORMA', date: '2026-08-28', customerId: 'ABC Traders', item: 'Soap-press servicing', quantity: '1', rate: '10000', purpose: 'Advance for the annual servicing', reference: 'api-165-p1' };
+  const service = { kind: 'PROFORMA', date: '2026-08-28', customerId: 'ABC Traders', item: 'Soap-press servicing', quantity: '1', rate: '10000', purpose: 'Advance for the annual servicing', reference: 'api-165-p1', requestId: 'api-165-p1' };
   const pi = await request('POST', '/api/presale/issue', service, owner);
   assert.equal(pi.status, 200, JSON.stringify(pi.body));
   assert.equal(pi.body.document.total, 11800);
 
-  const taken = await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '11800', date: '2026-08-28', mode: 'UPI', utr: 'UTR165', reference: 'api-165-a1' }, owner);
+  const taken = await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '11800', date: '2026-08-28', mode: 'UPI', utr: 'UTR165', reference: 'api-165-a1', requestId: 'api-165-a1' }, owner);
   assert.equal(taken.status, 200, JSON.stringify(taken.body));
   assert.match(taken.body.title, /^Receipt voucher RV\/26-27\/\d{5} issued$/);
   assert.equal(taken.body.advance.tax.taxableValue, 10000, 'the advance includes its tax');
   assert.equal(taken.body.advance.tax.total, 1800);
   assert.equal(taken.body.advance.noTax, null);
-  const again = await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '11800', date: '2026-08-28', mode: 'UPI', reference: 'api-165-a1' }, owner);
+  const again = await request('POST', '/api/presale/advance', { document: pi.body.document.id, amount: '11800', date: '2026-08-28', mode: 'UPI', reference: 'api-165-a1', requestId: 'api-165-a1' }, owner);
   assert.equal(again.body.advance.number, taken.body.advance.number, 'a double press records the money once');
 
   const receipt = await request('POST', '/api/presale/voucher', { document: pi.body.document.id, advance: taken.body.advance.id, which: 'RECEIPT' }, owner);
@@ -1339,7 +1339,7 @@ test('#165 — money against a proforma gets a receipt voucher, GST on a service
   assert.match(receipt.body.html, /No. 3, Avenue Road/, 'the recipient’s own address');
 
   // The bill follows and is linked: the advance settles it and its GST is set off, not charged twice.
-  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Soap-press servicing', quantity: '1', rate: '10000', date: '2026-08-29', terms: '0', reference: 'api-165-bill' }, owner);
+  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Soap-press servicing', quantity: '1', rate: '10000', date: '2026-08-29', terms: '0', reference: 'api-165-bill', requestId: 'api-165-bill' }, owner);
   assert.equal(bill.status, 200, JSON.stringify(bill.body));
   const linked = await request('POST', '/api/presale/link-invoice', { document: pi.body.document.id, invoice: bill.body.invoice.id }, owner);
   assert.equal(linked.status, 200, JSON.stringify(linked.body));
@@ -1351,15 +1351,15 @@ test('#165 — money against a proforma gets a receipt voucher, GST on a service
   assert.equal(applied.unused, 0);
 
   // Goods: no GST on the advance. The customer calls it off, and the money is paid back.
-  const goods = await request('POST', '/api/presale/issue', { ...service, item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', purpose: 'Advance for 100 soap', reference: 'api-165-p2' }, owner);
-  const goodsAdvance = await request('POST', '/api/presale/advance', { document: goods.body.document.id, amount: '1000', date: '2026-08-28', mode: 'CASH', reference: 'api-165-a2' }, owner);
+  const goods = await request('POST', '/api/presale/issue', { ...service, item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', purpose: 'Advance for 100 soap', reference: 'api-165-p2', requestId: 'api-165-p2' }, owner);
+  const goodsAdvance = await request('POST', '/api/presale/advance', { document: goods.body.document.id, amount: '1000', date: '2026-08-28', mode: 'CASH', reference: 'api-165-a2', requestId: 'api-165-a2' }, owner);
   assert.equal(goodsAdvance.status, 200, JSON.stringify(goodsAdvance.body));
   assert.equal(goodsAdvance.body.advance.tax, null);
   assert.match(goodsAdvance.body.advance.noTax['en-IN'], /Notification 66\/2017-Central Tax/);
-  const tooMuch = await request('POST', '/api/presale/advance', { document: goods.body.document.id, amount: '5000', date: '2026-08-28', mode: 'CASH', reference: 'api-165-a3' }, owner);
+  const tooMuch = await request('POST', '/api/presale/advance', { document: goods.body.document.id, amount: '5000', date: '2026-08-28', mode: 'CASH', reference: 'api-165-a3', requestId: 'api-165-a3' }, owner);
   assert.equal(tooMuch.status, 422, 'no more than the proforma asked for');
   await request('POST', '/api/presale/cancel', { document: goods.body.document.id, reason: 'Customer called it off' }, owner);
-  const refunded = await request('POST', '/api/presale/refund-advance', { advance: goodsAdvance.body.advance.id, date: '2026-08-30', mode: 'CASH', reason: 'Order called off', reference: 'api-165-r1' }, owner);
+  const refunded = await request('POST', '/api/presale/refund-advance', { advance: goodsAdvance.body.advance.id, date: '2026-08-30', mode: 'CASH', reason: 'Order called off', reference: 'api-165-r1', requestId: 'api-165-r1' }, owner);
   assert.equal(refunded.status, 200, JSON.stringify(refunded.body));
   assert.match(refunded.body.title, /^Refund voucher RFV\/26-27\/\d{5} issued$/);
   const printed = await request('POST', '/api/presale/voucher', { document: goods.body.document.id, advance: goodsAdvance.body.advance.id, which: 'REFUND' }, owner);
@@ -1376,7 +1376,7 @@ test('#132 — a recorded sale can be seen and printed, in Hindi, on the paper i
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const sale = {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30',
-    reference: 'api-132-sale',
+    reference: 'api-132-sale', requestId: 'api-132-sale',
   };
   const recorded = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
@@ -1422,7 +1422,7 @@ test('sale freight is reviewed, issued and printed under the goods HSN codes', a
   assert.ok(catalogue.body.items.every((item: { name: string }) => item.name !== 'Inward freight'));
 
   const sale = {
-    party: 'ABC Traders', date: '2026-08-29', terms: '7', reference: 'FREIGHT-SALE-205', freight: '500.00', otherCharges: '', approvalReason: 'Agreed with the owner',
+    party: 'ABC Traders', date: '2026-08-29', terms: '7', reference: 'FREIGHT-SALE-205', requestId: 'FREIGHT-SALE-205', freight: '500.00', otherCharges: '', approvalReason: 'Agreed with the owner',
     lines: JSON.stringify([
       { itemId: 'sampoorna:item:SOAP', quantity: '10', unit: 'PCS', rate: '100' },
       { itemId: 'sampoorna:item:TMT12', quantity: '50', unit: 'KGS', rate: '100' },

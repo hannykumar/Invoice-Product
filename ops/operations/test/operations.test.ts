@@ -8,19 +8,19 @@ import type { SafeLogEvent } from "../../security/src/index.ts";
 const permissions = new Set<Permission>(["operations.read", "operations.manage", "support.access.grant", "queue.replay", "incident.manage", "feature-flags.manage"]);
 const context = (companyId: string, actorId = `${companyId}-owner`, allowed: ReadonlySet<Permission> = permissions): RequestContext => ({ companyId, branchId: `${companyId}-branch`, actorId, sessionId: `${companyId}-session`, permissions: allowed });
 
-test("every external failure is correlated, counted, traced and safely logged", () => {
+test("every external failure is correlated, counted, traced and safely logged", async () => {
   const logs: SafeLogEvent[] = [];
   const telemetry = new OperationsTelemetry((event) => logs.push(event), () => new Date("2026-08-30T10:00:00.000Z"));
   const actor = context("company-a");
   const span = telemetry.startSpan(actor, "irp.register", "corr-irp-1");
-  const failure = telemetry.externalFailure(actor, { correlationId: "corr-irp-1", connector: "irp", operation: "register", errorCode: "IRP_2150", details: { token: "secret", invoiceNumber: "INV-41" } });
+  const failure = await telemetry.externalFailure(actor, { correlationId: "corr-irp-1", connector: "irp", operation: "register", errorCode: "IRP_2150", details: { token: "secret", invoiceNumber: "INV-41" } });
   telemetry.finishSpan(actor, span.spanId, "failure");
   assert.equal(failure.correlationId, "corr-irp-1");
   assert.equal(telemetry.metric(actor, "external.irp.failure"), 1);
   assert.equal(telemetry.metric(actor, "irp.register.failure"), 1);
   assert.equal(JSON.stringify(logs).includes("secret"), false);
   assert.equal(JSON.stringify(logs).includes("INV-41"), true);
-  assert.throws(() => telemetry.externalFailure(actor, { correlationId: "", connector: "irp", operation: "register", errorCode: "DOWN" }), /CORRELATION/);
+  await assert.rejects(telemetry.externalFailure(actor, { correlationId: "", connector: "irp", operation: "register", errorCode: "DOWN" }), /CORRELATION/);
 });
 
 test("health checks report degraded state under injected failure", async () => {
@@ -30,28 +30,29 @@ test("health checks report degraded state under injected failure", async () => {
   assert.deepEqual(await telemetry.health(), { state: "degraded", checks: { database: "up", queue: "down" } });
 });
 
-test("support access is consent-based, time-bound, tenant-scoped and audited", () => {
+test("support access is consent-based, time-bound, tenant-scoped and audited", async () => {
   let now = new Date("2026-08-30T10:00:00.000Z");
   const audit = new AuditLog();
   const support = new SupportAccessService(audit, () => now);
   const telemetry = new OperationsTelemetry(() => {}, () => now);
   const companyA = context("company-a");
-  telemetry.externalFailure(companyA, { correlationId: "corr-1", connector: "irp", operation: "register", errorCode: "IRP_DOWN" });
-  telemetry.externalFailure(context("company-b"), { correlationId: "corr-2", connector: "bank", operation: "sync", errorCode: "BANK_DOWN" });
-  const grant = support.grant(companyA, { supportActorId: "support-1", reason: "Customer approved IRP failure diagnosis", scopes: ["external-failures"], durationMs: 30 * 60 * 1000 });
-  const visible = telemetry.failuresForSupport(support, { grantId: grant.id, supportActorId: "support-1", companyId: "company-a" });
+  await telemetry.externalFailure(companyA, { correlationId: "corr-1", connector: "irp", operation: "register", errorCode: "IRP_DOWN" });
+  await telemetry.externalFailure(context("company-b"), { correlationId: "corr-2", connector: "bank", operation: "sync", errorCode: "BANK_DOWN" });
+  const grant = await support.grant(companyA, { supportActorId: "support-1", reason: "Customer approved IRP failure diagnosis", scopes: ["external-failures"], durationMs: 30 * 60 * 1000 });
+  const visible = await telemetry.failuresForSupport(support, { grantId: grant.id, supportActorId: "support-1", companyId: "company-a" });
   assert.deepEqual(visible.map((item) => item.errorCode), ["IRP_DOWN"]);
   assert.equal(audit.forCompany(companyA).some((event) => event.action === "support.diagnostic.viewed"), true);
-  assert.throws(() => telemetry.failuresForSupport(support, { grantId: grant.id, supportActorId: "support-1", companyId: "company-b" }), (error: unknown) => error instanceof PlatformError && error.code === "TENANT_ISOLATION");
+  // Another company's grant is never read: to company B it does not exist.
+  await assert.rejects(telemetry.failuresForSupport(support, { grantId: grant.id, supportActorId: "support-1", companyId: "company-b" }), (error: unknown) => error instanceof PlatformError && error.code === "NOT_FOUND");
   now = new Date("2026-08-30T10:31:00.000Z");
-  assert.throws(() => telemetry.failuresForSupport(support, { grantId: grant.id, supportActorId: "support-1", companyId: "company-a" }), /expired/);
+  await assert.rejects(telemetry.failuresForSupport(support, { grantId: grant.id, supportActorId: "support-1", companyId: "company-a" }), /expired/);
 });
 
-test("support permissions and consent scope are enforced server-side", () => {
+test("support permissions and consent scope are enforced server-side", async () => {
   const support = new SupportAccessService(new AuditLog());
-  assert.throws(() => support.grant(context("company-a", "cashier", new Set()), { supportActorId: "support-1", reason: "help", scopes: ["health"], durationMs: 1000 }), (error: unknown) => error instanceof PlatformError && error.code === "FORBIDDEN");
-  const grant = support.grant(context("company-a"), { supportActorId: "support-1", reason: "queue check", scopes: ["queue-state"], durationMs: 1000 });
-  assert.throws(() => support.authorize(grant.id, "support-1", "company-a", "external-failures"), /outside the approved/);
+  await assert.rejects(support.grant(context("company-a", "cashier", new Set()), { supportActorId: "support-1", reason: "help", scopes: ["health"], durationMs: 1000 }), (error: unknown) => error instanceof PlatformError && error.code === "FORBIDDEN");
+  const grant = await support.grant(context("company-a"), { supportActorId: "support-1", reason: "queue check", scopes: ["queue-state"], durationMs: 1000 });
+  await assert.rejects(support.authorize(grant.id, "support-1", "company-a", "external-failures"), /outside the approved/);
 });
 
 test("queue recovery replays only failed idempotent jobs and never duplicates enqueue", () => {
@@ -71,13 +72,13 @@ test("queue recovery replays only failed idempotent jobs and never duplicates en
   assert.equal(queue.list(context("company-b")).some((item) => item.id === job.id), false);
 });
 
-test("customer status timeline and staged feature controls are explicit and audited", () => {
+test("customer status timeline and staged feature controls are explicit and audited", async () => {
   const audit = new AuditLog();
   const service = new StatusService(audit, () => new Date("2026-08-30T10:00:00.000Z"));
   const operator = context("company-a");
-  const incident = service.openIncident(operator, "E-invoice registration delayed", "IRP", "Some registrations are failing. Invoices remain unchanged.");
-  service.updateIncident(operator, incident.id, "resolved", "IRP calls are succeeding and queued registrations are being retried safely.");
-  assert.deepEqual(service.publicStatus()[0]?.timeline.map((entry) => entry.state), ["investigating", "resolved"]);
+  const incident = await service.openIncident(operator, "E-invoice registration delayed", "IRP", "Some registrations are failing. Invoices remain unchanged.");
+  await service.updateIncident(operator, incident.id, "resolved", "IRP calls are succeeding and queued registrations are being retried safely.");
+  assert.deepEqual((await service.publicStatus())[0]?.timeline.map((entry) => entry.state), ["investigating", "resolved"]);
   service.defineFlag("irp-registration", "Allow new IRP registration jobs");
   service.setFlag(operator, "irp-registration", true, ["company-a"]);
   assert.equal(service.enabled("irp-registration", "company-a"), true);
@@ -85,10 +86,10 @@ test("customer status timeline and staged feature controls are explicit and audi
   assert.equal(audit.forCompany(operator).some((event) => event.action === "feature_flag.changed"), true);
 });
 
-test("operations factory exposes one audit trail across material controls", () => {
+test("operations factory exposes one audit trail across material controls", async () => {
   const operations = createOperations();
   const actor = context("company-a");
-  operations.support.grant(actor, { supportActorId: "support-1", reason: "diagnose", scopes: ["health"], durationMs: 1000 });
+  await operations.support.grant(actor, { supportActorId: "support-1", reason: "diagnose", scopes: ["health"], durationMs: 1000 });
   assert.equal(operations.audit.forCompany(actor).length, 1);
 });
 

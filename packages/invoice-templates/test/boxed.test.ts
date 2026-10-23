@@ -124,7 +124,7 @@ test('the India-standard design prints a ruled grid, not an airy page with a col
 
 test('the item table reads like a bill: a serial column, the unit beside the rate, an amount', () => {
   const html = renderIndia(doc());
-  for (const heading of ['>Sl No.<', '>Description of Goods<', '>HSN / SAC<', '>Quantity<', '>Rate<', '>per<', '>Amount<']) {
+  for (const heading of ['>Sl No.<', '>Description of Goods / Services<', '>HSN / SAC<', '>Quantity<', '>Rate<', '>per<', '>Amount<']) {
     assert.ok(html.includes(heading), `the item table must have a ${heading} column`);
   }
   // "40 PCS" is split so the unit sits in its own column, exactly as a real bill prints it. The
