@@ -119,7 +119,7 @@ const copy = {
     billFrame: "The printed bill", openBill: "Open the bill", billLoadFailed: "Could not bring up the bill.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "How {company} is doing today.", salesLessReturns: "{billed} billed − {returned} returned by customers", purchasesLessReturns: "{billed} billed − {returned} sent back to suppliers", customerDocumentsOne: "1 bill still to collect", customerDocumentsMany: "{count} bills still to collect", supplierBillsOne: "1 supplier bill", supplierBillsMany: "{count} supplier bills", physicalBalance: "Physical balance in {location}", stockLeastFirst: "In {location}, least left first. {count} need attention.", supplierPaymentActivity: "Money paid to the supplier", supplierDue: "{supplier}: {amount} due", supplierDocumentsOne: "1 supplier bill still to pay", supplierDocumentsMany: "{count} supplier bills still to pay", noActivity: "No recorded activity yet.", purchaseActivity: "Supplier bill entered, stock updated", paymentActivity: "Money received from the customer", saleActivity: "Bill made",
-    checking: "Checking this entry…", checkingBody: "Checking the figures…", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "That did not work, and nothing was changed. Please try again.", signInAgain: "Sign in again to continue.", close: "Close", recordOnce: "Record once", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…", enterPurchaseBill: "Enter the purchase bill", backToSale: "Back to the sale", purchaseForSale: "For the sale you were making: it asks for {required} {unit} of {item}, and {warehouse} has {available} {unit}. Type the quantity printed on the supplier's bill. The goods go into {warehouse}.", purchaseForSaleDone: "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.",
+    checking: "Checking this entry…", checkingBody: "Checking the figures…", nothingSaved: "Nothing was saved", signInRequired: "Sign in required.", requestFailed: "That did not work, and nothing was changed. Please try again.", signInAgain: "Sign in again to continue.", close: "Close", recordOnce: "Record once", sendForApproval: "Send for approval", approveBill: "Approve and issue", saleWaitingTitle: "Bills waiting for approval", approvalReasonLabel: "Why are you allowing it?", approvalYours: "This bill needs approval, and you may give it. Say why you are allowing it: your name and reason are kept with the bill.", approvalSomeoneElse: "This bill needs approval from {who}. The button sends it to them. It is not issued until they approve it.", approvalReasonNeeded: "Say why you are allowing it first.", approvalMadeByYou: "You made this bill, so someone else has to approve it.", recording: "Recording…", downloadPdf: "Download PDF", draftRestored: "Draft restored from this device", draftSaleDateMoved: "This sale was started on {started}. Its date is now today, {today}. Change it only if the goods really left on another day.", draftPurchaseDateKept: "This supplier bill was started on {started}. Its bill date is kept as {date}, because it is the supplier's date. Check it against their bill.", draftMoneyDateKept: "This entry was started on {started}. Its date is kept as {date}. Change it if the money moved on another day.", draftCleared: "Draft discarded", working: "Working…", enterPurchaseBill: "Enter the purchase bill", backToSale: "Back to the sale", purchaseForSale: "For the sale you were making: it asks for {required} {unit} of {item}, and {warehouse} has {available} {unit}. Type the quantity printed on the supplier's bill. The goods go into {warehouse}.", purchaseForSaleDone: "The goods are in stock now. Go back to the sale: everything you typed is still there. Review it again to issue the bill.",
     navAsk: "Ask",
     agentLegend: "Ask me to do it", agentHint: "Tell me what to do in your own words. I show you exactly what I would do — which customer, which bill, how much — and nothing happens until you say yes.",
     agentRequest: "What should I do?", agentRequestPlaceholder: "Find ABC Traders' unpaid invoices and send reminders",
@@ -471,7 +471,7 @@ const copy = {
     billFrame: "Chhapa hua bill", openBill: "Bill kholen", billLoadFailed: "Bill nahin aa paya.",
     saleCustomerPlaceholder: "Mehta Stores", saleItemPlaceholder: "Apple box, 10 kg", supplierPlaceholder: "Fresh Farms Pvt Ltd", supplierBillPlaceholder: "FF-2048", paymentCustomerPlaceholder: "ABC Traders",
     liveCompany: "Aaj {company} ka haal.", salesLessReturns: "{billed} ke bill − {returned} customers ne lautaya", purchasesLessReturns: "{billed} ke bill − {returned} suppliers ko lautaya", customerDocumentsOne: "1 bill ka paisa aana baaki", customerDocumentsMany: "{count} bills ka paisa aana baaki", supplierBillsOne: "1 supplier ka bill", supplierBillsMany: "{count} supplier ke bill", physicalBalance: "{location} mein physical balance", stockLeastFirst: "{location} mein, sabse kam pehle. {count} par dhyan dena hai.", supplierPaymentActivity: "Supplier ko paisa diya", supplierDue: "{supplier}: {amount} dena hai", supplierDocumentsOne: "1 supplier bill chukana baaki", supplierDocumentsMany: "{count} supplier bill chukana baaki", noActivity: "Abhi koi darj kaam nahin hai.", purchaseActivity: "Supplier ka bill darj, stock badha", paymentActivity: "Customer se paisa mila", saleActivity: "Bill bana",
-    checking: "Entry jaanch rahe hain…", checkingBody: "Aankde jaanch rahe hain…", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Yeh nahin ho paya, aur kuch nahin badla. Dobara koshish karein.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", close: "Band karen", recordOnce: "Ek baar darj karen", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…", enterPurchaseBill: "Purchase bill darj karen", backToSale: "Bikri par wapas jayen", purchaseForSale: "Jo bikri aap bana rahe the: usmein {item} ke {required} {unit} hain, aur {warehouse} mein {available} {unit} hain. Supplier ke bill par chhapi matra likhen. Saman {warehouse} mein jayega.", purchaseForSaleDone: "Saman ab stock mein hai. Bikri par wapas jayen: aapka likha sab wahin hai. Bill jaari karne ke liye use dobara dekhen.",
+    checking: "Entry jaanch rahe hain…", checkingBody: "Aankde jaanch rahe hain…", nothingSaved: "Kuch save nahin hua", signInRequired: "Sign in zaroori hai.", requestFailed: "Yeh nahin ho paya, aur kuch nahin badla. Dobara koshish karein.", signInAgain: "Jaari rakhne ke liye dobara sign in karen.", close: "Band karen", recordOnce: "Ek baar darj karen", sendForApproval: "Manzoori ke liye bhejen", approveBill: "Manzoor karke jaari karen", saleWaitingTitle: "Manzoori ka intezaar kar rahe bill", approvalReasonLabel: "Aap ise kyon de rahe hain?", approvalYours: "Is bill ko manzoori chahiye, aur aap de sakte hain. Kaaran likhen: aapka naam aur kaaran bill ke saath rahega.", approvalSomeoneElse: "Is bill ko {who} ki manzoori chahiye. Button ise unhe bhejta hai. Manzoori milne tak bill jaari nahin hota.", approvalReasonNeeded: "Pehle kaaran likhen.", approvalMadeByYou: "Yeh bill aapne banaya hai, isliye manzoori koi aur dega.", recording: "Darj ho raha hai…", downloadPdf: "PDF download karen", draftRestored: "Is device se draft wapas mila", draftSaleDateMoved: "Yeh sale {started} ko shuru hui thi. Iski date ab aaj ki hai, {today}. Ise tabhi badlen jab maal sach mein kisi aur din gaya ho.", draftPurchaseDateKept: "Yeh supplier bill {started} ko shuru hua tha. Iski bill date {date} hi rakhi gayi hai, kyonki yeh supplier ki date hai. Unke bill se mila len.", draftMoneyDateKept: "Yeh entry {started} ko shuru hui thi. Iski date {date} hi rakhi gayi hai. Agar paisa kisi aur din aaya ya gaya ho to ise badlen.", draftCleared: "Draft hata diya", working: "Kaam ho raha hai…", enterPurchaseBill: "Purchase bill darj karen", backToSale: "Bikri par wapas jayen", purchaseForSale: "Jo bikri aap bana rahe the: usmein {item} ke {required} {unit} hain, aur {warehouse} mein {available} {unit} hain. Supplier ke bill par chhapi matra likhen. Saman {warehouse} mein jayega.", purchaseForSaleDone: "Saman ab stock mein hai. Bikri par wapas jayen: aapka likha sab wahin hai. Bill jaari karne ke liye use dobara dekhen.",
     navAsk: "Poochein",
     agentLegend: "Mujhe karne ko kahein", agentHint: "Apne shabdon mein bataiye kya karna hai. Main aapko theek dikhata hoon ki kya karunga — kaunsa grahak, kaunsa bill, kitna — aur aapke haan kahe bina kuch nahin hota.",
     agentRequest: "Main kya karun?", agentRequestPlaceholder: "ABC Traders ke baaki bill dekh kar reminder bhej do",
@@ -1408,7 +1408,52 @@ async function refreshDocumentLists() {
     quietly(loadReminders),
     // Issue #308 — the most-sold chips and last prices count the bill just made.
     quietly(loadSelling),
+    quietly(loadSalesWaiting),
   ]);
+}
+
+/** Issue #301 — sales held for approval; someone who may approve gives a reason and issues it here. */
+async function loadSalesWaiting() {
+  const panel = document.querySelector("#sale-waiting");
+  if (!panel) return;
+  const { bills } = await apiList("/api/sales/waiting", "bills");
+  panel.hidden = bills.length === 0;
+  panel.querySelector("#sale-waiting-list").replaceChildren(...bills.map((bill) => {
+    const item = document.createElement("li");
+    const what = document.createElement("p");
+    what.textContent = `${bill.customer} · ${money(bill.amount)} · ${bill.why.map(t).join(" ")}`;
+    item.append(what);
+    if (bill.madeByYou) {
+      const note = document.createElement("p");
+      note.textContent = text("approvalMadeByYou");
+      item.append(note);
+    } else if (bill.canApprove) {
+      const reason = document.createElement("input");
+      reason.type = "text";
+      reason.maxLength = 300;
+      reason.setAttribute("aria-label", text("approvalReasonLabel"));
+      reason.placeholder = text("approvalReasonLabel");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary-button";
+      button.textContent = text("approveBill");
+      button.addEventListener("click", async () => {
+        if (reason.value.trim() === "") { reason.placeholder = text("approvalReasonNeeded"); reason.focus(); return; }
+        button.disabled = true;
+        try {
+          const result = await api("/api/sales/approve", { method: "POST", body: JSON.stringify({ token: bill.token, reason: reason.value.trim() }) });
+          await openDoneScreen(result);
+          await showSaleBill(result.invoice.id);
+          await refreshDocumentLists();
+        } catch (error) {
+          button.disabled = false;
+          showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed");
+        }
+      });
+      item.append(reason, button);
+    }
+    return item;
+  }));
 }
 
 async function loadDashboard() {
@@ -1891,6 +1936,16 @@ function showDialog(result, mode) {
     document.querySelector("#review-advance-use").checked = result.advance.use === true;
     document.querySelector("#review-advance-label").textContent = text("useAdvanceOnBill", { amount: money(Math.min(result.advance.available, result.amount)), supplier: result.supplier });
   }
+  // Issue #301 — a sale that needs approval: this person approves it with a reason, or it goes to someone who may.
+  const approval = document.querySelector("#review-approval");
+  const asked = mode === "preview" && state.pendingForm?.dataset.draft === "sale" && result.approval?.required === true;
+  approval.hidden = !asked;
+  if (asked) {
+    document.querySelector("#review-approval-text").textContent = result.approval.canApprove ? text("approvalYours") : text("approvalSomeoneElse", { who: result.approval.who });
+    document.querySelector("#review-approval-field").hidden = !result.approval.canApprove;
+    document.querySelector("#review-approval-reason").value = "";
+  }
+  if (mode === "preview") confirm.textContent = asked && !result.approval.canApprove ? copy[state.locale].sendForApproval : copy[state.locale].recordOnce;
   // Issue #239 — when the app cannot yet tell whether e-invoices apply, one button to the question.
   document.querySelector("#review-turnover").hidden = !(result.askTurnover === true && mode !== "loading");
   const download = document.querySelector("#review-download");
@@ -3712,6 +3767,16 @@ document.querySelector("#review-confirm").addEventListener("click", async (event
     }
     return;
   }
+  const approval = document.querySelector("#review-approval");
+  if (!approval.hidden && !document.querySelector("#review-approval-field").hidden) {
+    const reason = document.querySelector("#review-approval-reason");
+    if (reason.value.trim() === "") {
+      document.querySelector("#review-approval-text").textContent = text("approvalReasonNeeded");
+      reason.focus();
+      return;
+    }
+    state.pendingInput = { ...state.pendingInput, approvalReason: reason.value.trim() };
+  }
   await recordPending(event.currentTarget);
 });
 
@@ -3735,10 +3800,14 @@ async function recordPending(button) {
     // Issue #262 — a purchase entered for a sale that was stopped: the goods are in, so the way back.
     const forSale = form.dataset.draft === "purchase" && saleWaitingForStock() !== null;
     if (form.dataset.draft === "purchase") resetPurchaseForm(form);
+    // Issue #301 — a sale held for approval is not a bill yet: the form is cleared, and it waits in the list.
+    const saleWaiting = form.dataset.draft === "sale" && result.state === "waiting";
     if (form.dataset.draft === "sale" && result.invoice) resetSaleForm(form);
+    if (saleWaiting) resetSaleForm(form);
     // Issue #307 — a sale finishes on the done screen; everything else in the recorded box.
     const saleDone = form.dataset.draft === "sale" && Boolean(result.invoice);
     if (saleDone) document.querySelector("#review-dialog").close();
+    else if (saleWaiting) showDialog({ title: result.title, message: result.message, effects: [] }, "recorded");
     else showDialog(withPurchaseCheck(forSale ? purchaseForSaleRecorded(localizeResult(result, form.dataset.draft, "recorded")) : localizeResult(result, form.dataset.draft, "recorded")), "recorded");
     if (forSale) showPurchaseForSaleNote(true);
     // Issue #230 — the receipt or payment voucher is ready behind the dialog, and the form is empty for the next one.
@@ -7033,6 +7102,8 @@ async function makeSaleBill(button) {
     if (review === null) return;
     // A warning the owner has not seen yet is shown before any bill is made.
     if (saleReviewState.warning && saleReviewState.warning !== shownWarning) { saleSlides.show("payment"); return; }
+    // Issue #301 — someone who may approve it says why first, in the review box; Record once issues it.
+    if (review.approval?.required && review.approval.canApprove) { showDialog({ ...localizeResult(review, "sale", "preview"), approval: review.approval }, "preview"); return; }
   } finally { button.disabled = false; }
   await recordPending(button);
 }

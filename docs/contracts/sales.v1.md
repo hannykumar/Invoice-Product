@@ -1,4 +1,4 @@
-# Contract: `sales` v1.2.0
+# Contract: `sales` v1.3.0
 
 | | |
 | --- | --- |
@@ -132,6 +132,9 @@ never unmakes a bill; it comes back as a retryable status, worded by `gov.servic
 | `SALES_NEEDS_INFO` | Something must be answered before the bill can be issued |
 | `SALES_APPROVAL_REQUIRED` | Above the business's limit; send it for approval first |
 | `SALES_SELF_APPROVAL` | The maker of a bill cannot approve it |
+| `SALE_APPROVAL_REQUIRED` | (API, v1.3.0, #301) The sale review needs approval (a price or credit beyond the business's terms); give a reason if you may approve it |
+| `SALE_APPROVAL_NOT_ALLOWED` | (API, v1.3.0, #301) A reason was given by someone who may not approve this bill |
+| `SALE_APPROVAL_REASON_REQUIRED`, `SALE_NOT_WAITING` | (API, v1.3.0, #301) Approving a held bill needs a reason, and a bill that is waiting |
 | `SALES_PRICING_CHANGED` | The total moved while the bill was open |
 | `SALES_NOT_EDITABLE` | The bill has been issued (`messageId: final.cannot_edit`) |
 | `SALES_CANCEL_WINDOW_CLOSED` | Too late to cancel; make a return note |
@@ -142,6 +145,23 @@ never unmakes a bill; it comes back as a retryable status, worded by `gov.servic
 | `SALES_SERIES_EXHAUSTED` | Every number this series can issue this financial year has been used |
 | `SALES_PREFIX_REQUIRED` | An invoice series needs a prefix, such as `INV` |
 | `SALES_SERIES_CHARACTERS` | A number may contain only letters, digits, `-` and `/` |
+
+## The sale review's approval gate (v1.3.0, issue #301)
+
+When the trade-terms quote for a bill is not `ALLOW` (a price more than the business's threshold
+below the last price or the price list, or a credit position that holds the bill), `POST
+/api/sales/record` never issues it silently:
+
+- someone with `sales.approve` and the trade-terms permission for what is allowed
+  (`sales.approve_discount`, `sales.override_credit_limit`) gives `approvalReason`; the reason and
+  their name go to the audit trail (`trade_terms.overridden`) and the bill is issued (the owner role
+  holds all three; `sales.override_credit_limit` is a platform permission since v1.3.0);
+- anyone else gets the bill held as `PENDING_APPROVAL` (`state: "waiting"`), listed at
+  `GET /api/sales/waiting` and issued by `POST /api/sales/approve { token, reason }` by someone else
+  who may approve it. A challan is never held: billing it is refused instead.
+
+CGST Act 2017 s.31(1) (in force 1 July 2017): the tax invoice for goods is issued before or at the
+removal of the goods. A held bill is not an invoice, so goods should not leave until it is approved.
 
 ## Known limitations
 

@@ -3,7 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { asId, conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
@@ -90,8 +90,10 @@ import { ChallanDesk, type ChallanFacts, type ChallanHooks } from './challan-app
 import { PreSaleDesk } from './presale-application.ts';
 import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode, type AdvanceParticulars, type DocumentReference } from '@invoice/receivables';
 import {
+  TRADE_TERMS_PERMISSIONS,
   TradeTermsService,
   noPriceList,
+  type TradeTermsQuote,
   type CreditPositionPort,
   type PartyTermsPort,
   type SalesHistoryPort,
@@ -2952,7 +2954,10 @@ export class DemoApplication {
         date: String(input.date ?? '') || appToday(),
         terms: String(input.terms ?? '30'),
         reference: String(input.reference ?? '') || `challan-bill:${challan.id}`,
-      });
+        approvalReason: String(input.approvalReason ?? ''),
+      }, false);
+      // Issue #301 — a challan is billed or refused, never held: the goods are already with them.
+      if (!('invoice' in recorded)) throw new Error('A challan bill was held for approval.');
     } catch (error) {
       await this.challans.hooks.hold(actor, challan);
       throw error;
@@ -3000,6 +3005,130 @@ export class DemoApplication {
    * their credit. Issue #142 — a draft made from a quotation is checked here too, so a converted
    * quotation meets exactly the checks a typed sale does.
    */
+  /** Issue #11 / #301 — the trade-terms verdict on a draft, with an approval's reason when one is given. */
+  private termsQuote(actor: ActorContext, draft: SalesInvoice, override?: { readonly reason: string }): Promise<TradeTermsQuote> {
+    const pricing = draft.pricing;
+    if (pricing === null) throw invalid('SALES_NOT_PRICED', 'This bill has not been worked out yet.');
+    return this.terms.quote(actor, {
+      // The customer and the goods this bill is actually for, so "last time you charged them" is
+      // about them and about these goods, not about a demo party's soap.
+      partyId: draft.partyId,
+      documentDate: draft.documentDate,
+      documentId: draft.id,
+      // Issue #235 — the whole bill, GST, freight and other charges included: what they will owe.
+      billValue: pricing.totals.invoiceValue,
+      lines: draft.lines.map((line) => ({
+        lineId: line.lineId,
+        itemId: line.itemId,
+        itemName: pricing.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? itemView(this.config.companyId, line.itemId).name,
+        unit: line.quantity.unit,
+        quantity: String(Number(line.quantity.scaled) / 1_000_000),
+        unitPrice: line.unitPrice,
+      })),
+      ...(override === undefined ? {} : { override }),
+    });
+  }
+
+  /**
+   * Issue #301 — whether this person may approve what the sale review asked approval for: approving a
+   * bill (`sales.approve`), plus the credit or discount permission for what is being allowed.
+   */
+  private static approvalFor(actor: ActorContext, quote: TradeTermsQuote) {
+    if (quote.outcome === 'ALLOW') return { required: false, canApprove: true, who: '' };
+    const credit = quote.credit.outcome !== 'ALLOW' && quote.reasons.includes(quote.credit.sentence);
+    const discount = quote.lines.some((line) => line.discount?.outcome === 'NEEDS_APPROVAL');
+    const needed: string[] = [SALES_PERMISSIONS.approve];
+    if (credit) needed.push(TRADE_TERMS_PERMISSIONS.overrideCreditLimit);
+    if (discount) needed.push(TRADE_TERMS_PERMISSIONS.approveDiscount);
+    const who = credit
+      ? 'someone allowed to approve bills past a customer’s credit limit'
+      : 'the owner, or someone allowed to approve discounts';
+    return { required: true, canApprove: needed.every((permission) => actor.permissions.includes(permission)), who };
+  }
+
+  /**
+   * Issue #301 — a sale whose review needs approval is never issued without one. The person issuing it
+   * either approves it, giving a reason that is kept with their name in the audit trail, or, when they
+   * cannot, the bill is held as waiting for approval (`hold`), or refused when there is nowhere to hold it.
+   * Returns the held result, or `null` when the bill may be issued.
+   *
+   * A held bill is not a tax invoice: CGST Act 2017 s.31(1) (in force 1 July 2017) wants the invoice
+   * issued before or at the removal of the goods, so they should not leave until it is approved.
+   */
+  private async approvalGate(actor: ActorContext, token: string, approval: { readonly reason: string; readonly hold: boolean }) {
+    const draft = await this.salesRepository.findById(this.companyOf(actor), token);
+    // A bill already issued or cancelled is for `finalise` to answer, as a repeat or a refusal.
+    if (draft === null || draft.pricing === null || draft.state === 'FINAL' || draft.state === 'CANCELLED') return null;
+    const quote = await this.termsQuote(actor, draft);
+    const gate = DemoApplication.approvalFor(actor, quote);
+    if (!gate.required) return null;
+    const why = quote.reasons.map((reason) => reason['en-IN']).join(' ');
+    const reason = approval.reason.trim();
+    if (reason !== '' && gate.canApprove) {
+      // Writes the approval, who gave it and why, to the audit trail; refuses an empty reason.
+      await this.termsQuote(actor, draft, { reason });
+      return null;
+    }
+    if (reason !== '') {
+      throw forbidden('SALE_APPROVAL_NOT_ALLOWED', `You cannot approve this bill. It needs ${gate.who}. Nothing was issued.`, { details: { approver: gate.who } });
+    }
+    if (gate.canApprove) {
+      throw notAllowed('SALE_APPROVAL_REQUIRED', `${why} Nothing was issued. Say why you are allowing it, and it is issued with your name on the approval.`, { details: { approver: gate.who, canApprove: 'true' } });
+    }
+    if (!approval.hold) {
+      throw notAllowed('SALE_APPROVAL_REQUIRED', `${why} Nothing was issued. Ask ${gate.who} to make this bill.`, { details: { approver: gate.who, canApprove: 'false' } });
+    }
+    const held = draft.state === 'PENDING_APPROVAL' ? draft : await this.sales.submitForApproval(actor, token);
+    if (held.state === 'NEEDS_INFO') {
+      throw notAllowed('SALES_NEEDS_INFO', 'This bill needs more information before it can be sent for approval.');
+    }
+    return {
+      state: 'waiting',
+      title: 'Waiting for approval',
+      message: `${why} The bill was not issued. It is waiting for approval from ${gate.who}.`,
+      amount: jsonAmount(held.pricing?.totals.invoiceValue.minor ?? 0n),
+      token: held.id,
+      approver: gate.who,
+    };
+  }
+
+  /** Issue #301 — bills held for approval, with why, for someone who may approve them. */
+  async salesWaitingForApproval(actor: ActorContext) {
+    const held = await this.salesRepository.list(this.companyOf(actor), { state: 'PENDING_APPROVAL' });
+    const bills = await Promise.all(held.map(async (bill) => {
+      const quote = bill.pricing === null ? null : await this.termsQuote(actor, bill);
+      return {
+        token: bill.id,
+        date: bill.documentDate,
+        customer: this.partyName(this.companyOf(actor), String(bill.partyId)),
+        amount: jsonAmount(bill.pricing?.totals.invoiceValue.minor ?? 0n),
+        why: quote === null ? [] : quote.reasons,
+        madeByYou: bill.createdBy === actor.userId,
+        canApprove: quote !== null && DemoApplication.approvalFor(actor, quote).canApprove && bill.createdBy !== actor.userId,
+      };
+    }));
+    return { bills };
+  }
+
+  /** Issue #301 — someone allowed to approves a held bill, with their reason, and it is issued. */
+  async approveSale(actor: ActorContext, input: Record<string, unknown>) {
+    const usageDate = appToday();
+    requireIssuable(this.config.companyId);
+    await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
+    const token = String(input.token ?? '');
+    const bill = await this.salesRepository.findById(this.companyOf(actor), token);
+    if (bill === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    if (bill.state !== 'PENDING_APPROVAL') throw notAllowed('SALE_NOT_WAITING', 'This bill is not waiting for approval.');
+    if (String(input.reason ?? '').trim() === '') {
+      throw invalid('SALE_APPROVAL_REASON_REQUIRED', 'Please say why this is being allowed, so anyone looking at the bill later understands.');
+    }
+    // Checked before the approval is written down, so a refused approval leaves no trace of one.
+    if (bill.createdBy === actor.userId) {
+      throw forbidden('SALES_SELF_APPROVAL', 'The person who made a bill cannot approve it. Ask someone else to look at it.');
+    }
+    return this.issueCheckedSale(actor, token, usageDate, null, '', { reason: String(input.reason), hold: false });
+  }
+
   private async checkSale(actor: ActorContext, draft: SalesInvoice) {
     if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
     // Issue #229 — no selling more than is in the godown. Checked here, at the review, for every
@@ -3024,23 +3153,7 @@ export class DemoApplication {
 
     // Issue #11: what was last agreed, what the discount is, and whether this customer should be
     // given more credit. The draft is excluded from its own pending value.
-    const quote = await this.terms.quote(actor, {
-      // The customer and the goods this bill is actually for, so "last time you charged them" is
-      // about them and about these goods, not about a demo party's soap.
-      partyId: draft.partyId,
-      documentDate: draft.documentDate,
-      documentId: draft.id,
-      // Issue #235 — the whole bill, GST, freight and other charges included: what they will owe.
-      billValue: draft.pricing.totals.invoiceValue,
-      lines: draft.lines.map((line) => ({
-        lineId: line.lineId,
-        itemId: line.itemId,
-        itemName: draft.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? itemView(this.config.companyId, line.itemId).name,
-        unit: line.quantity.unit,
-        quantity: String(Number(line.quantity.scaled) / 1_000_000),
-        unitPrice: line.unitPrice,
-      })),
-    });
+    const quote = await this.termsQuote(actor, draft);
 
     const effects = ['A numbered invoice will be issued.', BALANCE_WILL_INCREASE];
     for (const reason of quote.reasons) effects.push(reason['en-IN']);
@@ -3082,6 +3195,8 @@ export class DemoApplication {
           margin: line.margin === null ? null : { sentence: line.margin.sentence },
         })),
       },
+      // Issue #301 — what Record will do: issue it, ask this person to approve it, or hold it.
+      approval: DemoApplication.approvalFor(actor, quote),
     };
   }
 
@@ -3106,7 +3221,7 @@ export class DemoApplication {
     };
   }
 
-  async recordSale(actor: ActorContext, input: Record<string, unknown>) {
+  async recordSale(actor: ActorContext, input: Record<string, unknown>, hold = true) {
     // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
     // In that order, because a bill that failed to post is not a bill, and charging somebody's
     // allowance for the product's own failure would be the wrong way round.
@@ -3122,7 +3237,7 @@ export class DemoApplication {
     const preview = await this.previewSale(actor, input);
     // Issue #284 — refused here first, so the review this request made is not left behind as a draft.
     await this.refuseIfTooLateForPortal(actor, preview.token, true);
-    return this.issueCheckedSale(actor, preview.token, usageDate, paid, String(input.distanceKm ?? '').trim());
+    return this.issueCheckedSale(actor, preview.token, usageDate, paid, String(input.distanceKm ?? '').trim(), { reason: String(input.approvalReason ?? ''), hold });
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
@@ -3249,9 +3364,11 @@ export class DemoApplication {
     );
   }
 
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null, ewayDistanceKm = '') {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null, ewayDistanceKm = '', approval = { reason: '', hold: true }) {
     requireIssuable(this.config.companyId);
     await this.refuseIfTooLateForPortal(actor, token, false);
+    const held = await this.approvalGate(actor, token, approval);
+    if (held !== null) return held;
     const finalise = () => this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
     // Issue #288 — "Paid now": the bill and its receipt in one unit of work. Both vouchers post, or
     // neither does and no bill number is used. Keyed on the bill, so a second press records neither again.
@@ -3514,7 +3631,7 @@ export class DemoApplication {
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const token = String(input.token ?? '');
     if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
-    return this.issueCheckedSale(actor, token, usageDate);
+    return this.issueCheckedSale(actor, token, usageDate, null, '', { reason: String(input.approvalReason ?? ''), hold: true });
   }
 
   /**
