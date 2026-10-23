@@ -319,8 +319,8 @@ export class ReturnService {
     // the tax was passed on; Circular 92/11/2019-GST (7 Mar 2019) allows a commercial credit note
     // that leaves GST alone; Circular 212/6/2024-GST (26 Jun 2024) wants evidence that the buyer
     // reversed its credit. None of that is recorded here yet, so such a note is refused rather
-    // than cutting GST without the conditions. (Any Finance Act 2025 change to s.15(3)(b) is not
-    // verified.)
+    // than cutting GST without the conditions. (Any Finance Act 2025 change to s.15(3)(b) or to the
+    // s.34(2) proviso is not verified.)
     if (command.cause === 'DISCOUNT_AFTER_SALE') {
       throw invalid('PRICE_CORRECTION_DISCOUNT_AFTER_SALE', 'A discount agreed after the sale cannot reduce GST here yet: the law asks for the agreement made before the sale and proof that the buyer gave back their GST credit. Nothing was recorded. If the bill simply had the wrong price, choose "The bill had the wrong price".');
     }

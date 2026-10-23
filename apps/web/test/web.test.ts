@@ -920,3 +920,18 @@ test("#402: the page the bank sends the customer back to is the app, and the app
   assert.match(script, /sessionStorage/);
   assert.match(script, /finishBankReturn\(\);/);
 });
+
+test("#293: the Sale screen reaches every discount, and a price correction asks why before it can lower GST", async () => {
+  const [html, script, copy] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
+  // A line discount in rupees or per cent, and one on the whole bill, all sent with the sale.
+  assert.match(html, /id="sale-line-template"[\s\S]*?data-line-field="discount" type="number" min="0"/);
+  assert.match(html, /id="sale-line-template"[\s\S]*?data-line-field="discountPercent" type="number" min="0" max="100"/);
+  assert.match(html, /name="billDiscount" type="number" min="0" step="0\.01"/);
+  assert.match(script, /\.\.\.draftData\(form\), lines: JSON\.stringify\(lines\)/, "the estimate and the sale send every named field and every line field");
+  // Nothing is chosen for the shopkeeper: a wrong bill and a discount after the sale are told apart
+  // (CGST Act s.34(1) against s.15(3)(b)), and the choice is off when nothing is being re-priced.
+  assert.match(html, /<fieldset class="full-field field-grid" id="return-price" hidden disabled>/);
+  assert.match(html, /<select name="cause" required><option value="" data-i18n="causeChoose"><\/option><option value="INVOICE_ERROR"/);
+  assert.match(script, /if \(fields\) fields\.disabled = !price;/);
+  for (const locale of ["en-IN", "hi-IN"]) assert.ok(copy[locale]?.causeChoose, `${locale} names the blank choice`);
+});
