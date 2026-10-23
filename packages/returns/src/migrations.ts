@@ -164,9 +164,70 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
     ALTER TABLE return_notes ADD COLUMN price_correction boolean NOT NULL DEFAULT false;
     -- A sales debit note only ever corrects a price; goods do not come back on one.
     ALTER TABLE return_notes ADD CONSTRAINT return_notes_debit_note_is_price_check CHECK (kind <> 'SALES_DEBIT_NOTE' OR price_correction);
+    -- #365's quantity check, now counting only goods that came back: a price credit note's line
+    -- names the quantity still kept, so it must fit what is left but never uses any of it up.
+    CREATE OR REPLACE FUNCTION sales_return_within_original() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+    DECLARE
+      note_kind text;
+      original text;
+      sold bigint;
+      taken_back bigint;
+    BEGIN
+      SELECT kind, original_document_id INTO note_kind, original FROM return_notes WHERE id = NEW.return_note_id;
+      IF note_kind IS DISTINCT FROM 'SALES_RETURN' OR original !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
+        RETURN NEW;
+      END IF;
+      SELECT quantity_micro INTO sold FROM sales_invoice_lines
+        WHERE company_id = NEW.company_id AND invoice_id = original::uuid AND line_id = NEW.original_line_id FOR UPDATE;
+      IF sold IS NULL THEN
+        IF EXISTS (SELECT FROM sales_invoices WHERE company_id = NEW.company_id AND id = original::uuid) THEN
+          RAISE EXCEPTION 'This credit note names a line that is not on the bill.'
+            USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+        END IF;
+        RETURN NEW;
+      END IF;
+      SELECT COALESCE(sum(l.quantity_micro), 0) INTO taken_back FROM return_note_lines l JOIN return_notes n ON n.id = l.return_note_id
+        WHERE l.company_id = NEW.company_id AND n.kind = 'SALES_RETURN' AND NOT n.price_correction AND n.original_document_id = original AND l.original_line_id = NEW.original_line_id;
+      IF taken_back + NEW.quantity_micro > sold THEN
+        RAISE EXCEPTION 'This credit note takes back more than the bill sold on that line.'
+          USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
   `,
   // Fails while a sales debit note is stored, rather than losing it.
-  down: `ALTER TABLE return_notes DROP CONSTRAINT IF EXISTS return_notes_debit_note_is_price_check;
+  down: `
+    CREATE OR REPLACE FUNCTION sales_return_within_original() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+    DECLARE
+      note_kind text;
+      original text;
+      sold bigint;
+      taken_back bigint;
+    BEGIN
+      SELECT kind, original_document_id INTO note_kind, original FROM return_notes WHERE id = NEW.return_note_id;
+      IF note_kind IS DISTINCT FROM 'SALES_RETURN' OR original !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
+        RETURN NEW;
+      END IF;
+      SELECT quantity_micro INTO sold FROM sales_invoice_lines
+        WHERE company_id = NEW.company_id AND invoice_id = original::uuid AND line_id = NEW.original_line_id FOR UPDATE;
+      IF sold IS NULL THEN
+        IF EXISTS (SELECT FROM sales_invoices WHERE company_id = NEW.company_id AND id = original::uuid) THEN
+          RAISE EXCEPTION 'This credit note names a line that is not on the bill.'
+            USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+        END IF;
+        RETURN NEW;
+      END IF;
+      SELECT COALESCE(sum(l.quantity_micro), 0) INTO taken_back FROM return_note_lines l JOIN return_notes n ON n.id = l.return_note_id
+        WHERE l.company_id = NEW.company_id AND n.kind = 'SALES_RETURN' AND n.original_document_id = original AND l.original_line_id = NEW.original_line_id;
+      IF taken_back + NEW.quantity_micro > sold THEN
+        RAISE EXCEPTION 'This credit note takes back more than the bill sold on that line.'
+          USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    ALTER TABLE return_notes DROP CONSTRAINT IF EXISTS return_notes_debit_note_is_price_check;
     ALTER TABLE return_notes DROP COLUMN IF EXISTS price_correction;
     ALTER TABLE return_notes DROP CONSTRAINT return_notes_kind_check;
     ALTER TABLE return_notes ADD CONSTRAINT return_notes_kind_check CHECK (kind IN ('SALES_RETURN','PURCHASE_RETURN'));`,

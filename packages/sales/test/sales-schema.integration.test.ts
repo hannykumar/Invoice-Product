@@ -406,6 +406,25 @@ test('a credit note cannot take back more than the bill sold on a line, less wha
   assert.equal(Number((await shop.one("SELECT sum(quantity_micro) AS n FROM return_note_lines WHERE company_id = $1 AND original_line_id = 'l1'", [shop.ids.companyId])).n), 3_000_000);
 });
 
+test('#293: a price credit note never uses up what can still come back on a line', { skip }, async () => {
+  const shop = await newShop();
+  const bill = await shop.issueBill('INV/26-27/000001'); // 3 crates on line l1
+  const note = async (number: string, quantity: number, priceCorrection: boolean) => {
+    const id = crypto.randomUUID();
+    await shop.run(async (sql) => {
+      await insert(sql, 'return_notes', { id, company_id: shop.ids.companyId, kind: 'SALES_RETURN', number, document_date: '2026-04-12', original_document_id: bill, original_document_number: 'INV/26-27/000001', original_document_date: '2026-04-10', party_id: shop.ids.partyId, reason: priceCorrection ? 'Wrong price.' : 'Damaged.', taxable_value_paise: 3_000, total_paise: 3_540, voucher_id: shop.vouchers[1], compliance_status: 'NOT_APPLICABLE', created_by: shop.ids.userId, idempotency_key: `return:${id}`, summary: 'Credit note.', price_correction: priceCorrection });
+      await insert(sql, 'return_note_lines', { return_note_id: id, company_id: shop.ids.companyId, original_line_id: 'l1', item_id: shop.itemId, description: 'Plastic crate', supply_kind: 'GOODS', quantity_micro: quantity, quantity_unit: 'PCS', disposition: 'ACCEPTED', warehouse_id: priceCorrection ? null : shop.warehouseId, taxable_value_paise: 3_000, total_paise: 3_540 });
+    });
+  };
+  await note('CN/26-27/000001', 3_000_000, true); // price cut on all three kept crates
+  await note('CN/26-27/000002', 3_000_000, true); // a second price cut on the same line
+  await note('CN/26-27/000003', 1_000_000, false); // then one crate comes back
+  await note('CN/26-27/000004', 2_000_000, true); // a price cut on the two still kept
+  await assert.rejects(note('CN/26-27/000005', 3_000_000, true), refused(CHECK), 'a price note cannot name more than is still kept');
+  await note('CN/26-27/000006', 2_000_000, false); // the last two come back
+  await assert.rejects(note('CN/26-27/000007', 1_000_000, false), refused(CHECK), 'all three came back');
+});
+
 test('findings of the independent review of #365, each as a test', { skip }, async () => {
   const shop = await newShop();
 
