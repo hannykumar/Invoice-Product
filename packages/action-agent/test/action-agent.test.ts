@@ -8,7 +8,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { DomainError, isoDate } from '@invoice/kernel';
+import { DomainError, asId, isoDate } from '@invoice/kernel';
 import { PlatformError } from '../../platform/src/index.ts';
 import { ToolRegistry, fingerprintOf, understandRequest } from '../src/index.ts';
 import { ABC, EVERY_PERMISSION, TODAY, makeAgentDesk } from './harness.ts';
@@ -357,7 +357,7 @@ describe('the record', () => {
     await desk.agent.approve(desk.actor, planned.id, preview.fingerprint as string);
     await desk.agent.execute(desk.actor, planned.id, { fingerprint: preview.fingerprint as string, idempotencyKey: 'k' });
 
-    const actions = desk.audit.forCompany(desk.contextFor(desk.actor)).map((event) => event.action);
+    const actions = desk.audit.events.filter((event) => event.companyId === desk.actor.companyId).map((event) => event.action);
     for (const expected of ['agent.requested', 'agent.previewed', 'agent.approved', 'agent.step_done', 'agent.reported']) {
       assert.ok(actions.includes(expected), `${expected} is on the record`);
     }
@@ -366,12 +366,42 @@ describe('the record', () => {
     assert.ok(actions.includes('agent.run.finalised'));
   });
 
+  it('#404: writes to the company trail, beside the reminders it sent, under the person who approved', async () => {
+    const desk = await makeAgentDesk();
+    const approver = { ...desk.actor, userId: asId<'User'>('approver-404') };
+    const planned = await ask(desk, 'Send reminders to ABC Traders');
+    const preview = await desk.agent.preview(desk.actor, planned.id);
+    await desk.agent.approve(approver, planned.id, preview.fingerprint as string);
+    await desk.agent.execute(desk.actor, planned.id, { fingerprint: preview.fingerprint as string, idempotencyKey: 'k' });
+
+    // The trail the owner and their CA read is the one collections writes to: nothing is kept apart.
+    const trail = desk.audit.events.filter((event) => event.companyId === desk.actor.companyId);
+    assert.ok(trail.some((event) => event.action === 'collections.reminder_sent'), 'the reminder is on the company trail');
+
+    const requested = trail.find((event) => event.action === 'agent.requested');
+    assert.equal(requested?.actorId, desk.actor.userId, 'who asked');
+    assert.equal(requested?.subjectId, planned.id);
+
+    const approved = trail.find((event) => event.action === 'agent.approved');
+    assert.equal(approved?.actorId, approver.userId, 'who approved, not who asked');
+    assert.equal(approved?.details.fingerprint, preview.fingerprint, 'which list was approved');
+    assert.equal(approved?.details.commandId, preview.commandId);
+    assert.equal(approved?.subjectId, planned.id);
+
+    const platformApproval = trail.find((event) => event.action === 'agent.run.approved');
+    assert.equal(platformApproval?.actorId, approver.userId, 'the command lifecycle is on the same trail');
+    assert.equal(platformApproval?.subjectId, preview.commandId);
+
+    const done = trail.filter((event) => event.action === 'agent.step_done');
+    assert.ok(done.length > 0 && done.every((event) => event.subjectId === planned.id && event.actorId === desk.actor.userId));
+  });
+
   it('keeps the words that matched out of the audit, not the whole request', async () => {
     const desk = await makeAgentDesk();
     await ask(desk, 'Send reminders to ABC Traders, my account number is 123456789');
-    const requested = desk.audit.forCompany(desk.contextFor(desk.actor)).find((event) => event.action === 'agent.requested');
+    const requested = desk.audit.events.find((event) => event.action === 'agent.requested');
     assert.ok(requested !== undefined);
-    assert.doesNotMatch(JSON.stringify(requested.after), /123456789/, 'an audit trail records what was asked of the product, not what was typed');
+    assert.doesNotMatch(JSON.stringify(requested), /123456789/, 'an audit trail records what was asked of the product, not what was typed');
   });
 
   it('refuses an approval from somebody who may not approve', async () => {
