@@ -3106,7 +3106,8 @@ export class DemoApplication {
     const position = await this.payments.position(actor, invoice.partyId as PartyId, invoice.documentDate);
     const due = position.documents.find((d) => d.document.documentId === invoice.id)?.outstanding.minor
       ?? invoice.pricing?.totals.invoiceValue.minor ?? 0n;
-    const upiId = upiIdOf(companyId);
+    // Issue #390 — the payee frozen on this bill when it was issued, never the id saved since.
+    const upiId = this.invoicePrints.get(invoice.id)?.document.upiId ?? null;
     const payee = sellerPrint(companyId, { name: this.config.name, gstin: this.config.gstin }).seller.name;
     const voucher = receipt?.voucherId == null ? null : await this.shop.ledger.getVoucher(actor, receipt.voucherId);
     return {
@@ -3285,8 +3286,14 @@ export class DemoApplication {
     // from the business's own saved particulars. Frozen here with everything else, so changing the
     // address tomorrow never alters a bill issued today.
     const us = sellerPrint(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
+    // Issue #390 — the UPI id customers pay into is frozen with the bill, like the bank details.
+    // A reprint must never re-point an issued bill's pay-by-scan square at a different payee:
+    // CGST Rule 56(8) (in force since 1 July 2017) forbids overwriting an entry in a document once
+    // made, and the invoice issued under Section 31 / Rule 46 is the document the customer holds.
+    // A new payee reaches a customer only on a new bill or payment request.
+    const upiId = upiIdOf(invoice.companyId);
     this.invoicePrints.set(invoice.id, {
-      document: toInvoiceDocument(invoice, {
+      document: { ...toInvoiceDocument(invoice, {
         title: 'TAX_INVOICE',
         seller: us.seller,
         bank: us.bank,
@@ -3310,7 +3317,7 @@ export class DemoApplication {
         ...(delivery?.poReference == null ? {} : { poReference: delivery.poReference }),
         logoDataUri: branding.logoDataUri,
         tradeMark: branding.tradeMark,
-      }),
+      }), upiId },
       snapshot: brandedSnapshot(template, 'en-IN', String(invoice.documentDate), branding),
     });
   }
@@ -3358,7 +3365,9 @@ export class DemoApplication {
     // business or an export is judged here exactly as there.
     const eInvoiceExpected =
       eInvoiceRecords.length > 0 || this.eInvoiceDecisionFor(invoice).needed === 'YES';
-    const upiId = upiIdOf(companyId);
+    // Issue #390 — the UPI square pays the id frozen on the bill at issue (it rides in on
+    // `facts.document`). A bill frozen before #390 carries none and prints no square, rather than
+    // the id saved today: its original payee is not known, and guessing could send money elsewhere.
     // Issue #182 — the e-way bill number is raised against the issued invoice, so it only exists
     // after the bill is frozen. It is layered on here exactly as the government's IRN is: the
     // stored document is untouched, and every later reprint carries the number.
@@ -3373,7 +3382,7 @@ export class DemoApplication {
       cancelled: invoice.state === 'CANCELLED'
         ? { on: invoice.cancelledAt === null ? invoice.documentDate : DemoApplication.indiaDate(invoice.cancelledAt), reason: invoice.cancelReason ?? '' }
         : null,
-      ...(upiId === null ? {} : { upiId }),
+      upiId: facts.document.upiId ?? null,
       ...(ewayBillNumber === null || transport?.eWayBillNumber != null
         ? {}
         : { transport: { ...(transport ?? {}), eWayBillNumber: ewayBillNumber } }),
