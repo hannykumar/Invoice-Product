@@ -321,7 +321,7 @@ export class GstCalculator {
     const mayChargeGst = composition.computed.mayChargeGst === 'true';
 
     // 2. Where does this sale count?
-    const placeOfSupply = this.#resolvePlaceOfSupply(input, party, decisions, reasons);
+    const placeOfSupply = this.#resolvePlaceOfSupply(input, party, company.stateCode, decisions, reasons);
     if (placeOfSupply === null) return this.#refuse(input, reasons, decisions);
 
     // 3. Which taxes apply?
@@ -447,6 +447,7 @@ export class GstCalculator {
   #resolvePlaceOfSupply(
     input: ComputeInput,
     party: { stateCode: string | null; registration: import('./master-data-port.ts').PartyRegistration },
+    supplierStateCode: string,
     decisions: Decision[],
     reasons: BlockedReason[],
   ): string | null {
@@ -462,6 +463,9 @@ export class GstCalculator {
         ...(deliveryState === null || deliveryState === undefined ? {} : { 'supply.deliveryStateCode': deliveryState }),
         ...(registered === undefined ? {} : { 'supply.recipientRegistered': registered }),
         ...(party.stateCode === null ? {} : { 'supply.recipientStateCode': party.stateCode }),
+        // Issue #287 — IGST Act s. 12(2)(b)(ii): a service to an unregistered customer with no
+        // address on record is supplied where the supplier is.
+        'supply.supplierStateCode': supplierStateCode,
       },
       'MASTER_DATA',
     );

@@ -58,7 +58,7 @@ export const DECISION_LOG: readonly DecisionLogEntry[] = [
     id: 'dl-place-of-supply-services-scope',
     question: 'Which place-of-supply cases for services does the product support?',
     decision:
-      'Only the general rule in section 12(2): the location of a registered recipient, or the recorded address of an unregistered one. Every specific service in sections 12(3) to 12(14) is refused.',
+      'Only the general rule in section 12(2): the location of a registered recipient, the recorded address of an unregistered one, or the supplier’s location when an unregistered one has no address on record (issue #287). Every specific service in sections 12(3) to 12(14) is refused.',
     rationale:
       'Immovable property, transport, events, training, telecommunications, banking and insurance each have their own rule and their own facts. A general answer applied to them would be wrong, and wrong in a way nobody would notice until a return was filed.',
     kind: 'UNSUPPORTED_SCENARIO',

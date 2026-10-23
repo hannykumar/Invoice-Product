@@ -32,7 +32,7 @@ Three further gates apply to every source, each with a test:
 | Rule | Provision | Source |
 | --- | --- | --- |
 | `gst.place_of_supply.goods@2026.08.29` | IGST Act 2017, s. 10(1)(a) | `igst-act-2017-s10-1-a` |
-| `gst.place_of_supply.services@2026.08.29` | IGST Act 2017, s. 12(2) | `igst-act-2017-s12-2` |
+| `gst.place_of_supply.services@2026.10.23` | IGST Act 2017, s. 12(2) | `igst-act-2017-s12-2` |
 | `gst.tax_split@2026.08.29` | IGST Act 2017, ss. 7 and 8; UTGST Act 2017, s. 7 | three entries |
 
 These are the rules that decide whether a supply is inter-State or intra-State, and therefore
