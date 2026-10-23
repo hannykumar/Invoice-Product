@@ -15,7 +15,7 @@ export type Persistence =
   | { readonly kind: 'postgres'; readonly db: TransactionalExecutor };
 
 const LOCAL_ENVIRONMENTS = new Set(['', 'development', 'test']);
-const isLocal = (environment: string | undefined): boolean => LOCAL_ENVIRONMENTS.has((environment ?? '').trim().toLowerCase());
+export const isLocal = (environment: string | undefined): boolean => LOCAL_ENVIRONMENTS.has((environment ?? '').trim().toLowerCase());
 
 /** Chooses the persistence for this process from its environment. Throws instead of falling back. */
 export async function openPersistence(env: NodeJS.ProcessEnv = process.env): Promise<Persistence> {

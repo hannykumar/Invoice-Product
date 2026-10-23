@@ -106,7 +106,7 @@ const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 const parseOrigins = (value: string | undefined): ReadonlySet<string> => new Set(
   (value ?? '').split(',').map((origin) => origin.trim().replace(/\/+$/, '')).filter((origin) => origin !== ''),
 );
-const PUBLIC_ORIGINS = parseOrigins(process.env.KAROBAR_PUBLIC_ORIGINS);
+export const PUBLIC_ORIGINS = parseOrigins(process.env.KAROBAR_PUBLIC_ORIGINS);
 
 /**
  * True when a state-changing request came from another website. A browser always sends `Origin`
