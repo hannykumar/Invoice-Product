@@ -145,7 +145,7 @@ test('#294: on PostgreSQL an expense and the owner\'s money are in the books aft
     return saved;
   };
   await save('owner', { direction: 'capital', paidFrom: 'cash', amount: '5000', date: '2026-10-16', narration: `Owner's money ${run}` });
-  const rent = await save('expense', { head: 'rent', paidFrom: 'cash', amount: '1200', date: '2026-10-16', narration: `Rent ${run}` });
+  const rent = await save('expense', { head: 'repairs', paidFrom: 'cash', amount: '1200', date: '2026-10-16', narration: `Rent ${run}` });
 
   await stop();
   await start();
@@ -157,7 +157,7 @@ test('#294: on PostgreSQL an expense and the owner\'s money are in the books aft
   assert.ok(cash.rows.some((row: { narration: string; moneyOut: number }) => row.narration.endsWith(`Rent ${run}`) && row.moneyOut === 1200), `it is in the cash book: ${JSON.stringify(cash.rows.slice(-3))}`);
   const reports = await call('GET', '/api/reports', undefined, token);
   assert.equal(reports.trialBalance.balanced, true);
-  assert.ok(reports.profitAndLoss.expenses.rows.some((row: { name: string; amount: number }) => row.name === 'Rent' && row.amount >= 1200), 'Rent is its own line');
+  assert.ok(reports.profitAndLoss.expenses.rows.some((row: { name: string; amount: number }) => row.name === 'Repairs and upkeep' && row.amount >= 1200), 'Repairs is its own line');
   const imbalance = (await owner.query(
     'SELECT sum(debit_minor) - sum(credit_minor) AS imbalance FROM journal_line WHERE voucher_id = $1', [rent.entry.id])).rows[0]!;
   assert.equal(String(imbalance.imbalance), '0');

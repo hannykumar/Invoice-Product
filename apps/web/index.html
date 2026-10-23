@@ -403,13 +403,10 @@
                 <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="booksPaidFrom"></span><select name="paidFrom"><option value="cash" data-i18n="booksCash"></option><option value="bank" data-i18n="booksBank"></option><option value="upi">UPI</option></select></label>
                 <label><span data-i18n="booksAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
-                <label><span data-i18n="booksGst"></span><span class="input-with-prefix"><span>₹</span><input name="gst" inputmode="decimal" value="0" /></span></label>
-                <label><span data-i18n="booksGstin"></span><input name="gstin" maxlength="15" autocomplete="off" /></label>
-                <label><span data-i18n="booksCreditChoice"></span><select name="credit"><option value=""></option><option value="claim" data-i18n="booksClaim"></option><option value="blocked" data-i18n="booksBlocked"></option></select></label>
-                <label><span data-i18n="booksBlockedReason"></span><select name="blockedReason" data-books-blocked><option value=""></option></select></label>
+                <label><span data-i18n="booksConsignment"></span><select name="consignmentNote"><option value=""></option><option value="no" data-i18n="booksConsignmentNo"></option><option value="yes" data-i18n="booksConsignmentYes"></option></select></label>
                 <label><span data-i18n="booksBill"></span><input name="billNumber" maxlength="40" /></label>
                 <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
-              </div><small data-i18n="booksOwedNote"></small></form>
+              </div><small data-i18n="booksGstNote"></small> <small data-i18n="booksOwedNote"></small></form>
             </article>
             <article class="panel form-panel"><h2 data-i18n="booksOwner"></h2>
               <form data-books-kind="owner"><div class="field-grid">

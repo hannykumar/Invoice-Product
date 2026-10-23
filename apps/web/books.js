@@ -102,9 +102,8 @@ async function refresh(api, words) {
 export async function openBooks({ api, words }) {
   setDates();
   ready ??= (async () => {
-    const { heads, blockedReasons } = await api("/api/books/heads");
+    const { heads } = await api("/api/books/heads");
     document.querySelector("[data-books-heads]").replaceChildren(...heads.map((head) => option(head.id, `${head.label} · ${head.hindi}`)));
-    document.querySelector("[data-books-blocked]").append(...blockedReasons.map((reason) => option(reason.id, `${reason.clause} — ${reason.label}`)));
     const journal = await api("/api/books/journal/accounts").catch(() => ({ accounts: [] }));
     document.querySelectorAll("[data-journal-account]").forEach((select) => select.replaceChildren(option("", ""), ...journal.accounts.map((a) => option(a.code, `${a.code} ${a.name}`))));
     document.querySelectorAll("#view-books form[data-books-kind]").forEach((form) => wire(form, api, words));

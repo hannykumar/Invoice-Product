@@ -61,68 +61,90 @@ const expenseRow = async (name: string, token: string): Promise<number> =>
   ((await request('GET', '/api/reports', {}, token)).body.profitAndLoss.expenses.rows as { name: string; amount: number }[])
     .find((row) => row.name === name)?.amount ?? 0;
 
-test('#294: rent paid in cash with a GST bill from this state is a cost under Rent, credit in CGST and SGST, and leaves the cash book', async () => {
+/** Table 4 of September's GSTR-3B, box by box (tax only). */
+const table4 = async (token: string) => {
+  const month = (await request('POST', '/api/gst-returns', { period: '2026-09' }, token)).body;
+  const threeB = month.gstr3b ?? month.workspace?.gstr3b;
+  const box = (id: string): number => threeB.credit.find((row: any) => row.boxId === id)?.tax ?? 0;
+  return { a5: box('4A(5)'), b: box('4B') };
+};
+
+test('#294: a bill with GST is sent to Purchases; entered there it is in the GSTR-2B check and in GSTR-3B Table 4', async () => {
   const { owner } = await sessions();
-  const rentBefore = await expenseRow('Rent', owner);
-  const cashBefore = (await book('cash', owner)).closing as number;
-  const body = { head: 'rent', date: DATE, paidFrom: 'cash', amount: '10000', gst: '1800', gstin: IN_STATE, billNumber: 'R-09', credit: 'claim', narration: 'September shop rent' };
-  const checked = await request('POST', '/api/books/expense/preview', body, owner);
-  assert.equal(checked.status, 200, JSON.stringify(checked.body));
-  assert.deepEqual(lines(checked), [['5610', 10000, 0], ['1410', 900, 0], ['1420', 900, 0], ['1110', 0, 11800]]);
-  assert.equal((await expenseRow('Rent', owner)), rentBefore, 'checking an entry saves nothing');
+  const refused = async (body: Record<string, unknown>, code: string) => {
+    const reply = await request('POST', '/api/books/expense/preview', { date: DATE, paidFrom: 'cash', amount: '10000', ...body }, owner);
+    assert.equal(reply.status, 422, JSON.stringify(reply.body));
+    assert.equal(codeOf(reply), code, JSON.stringify(reply.body));
+    return reply;
+  };
+  const sent = await refused({ head: 'rent', gst: '1800', gstin: IN_STATE, credit: 'claim' }, 'BOOKS_EXPENSE_GST_PURCHASES');
+  assert.match(String(sent.body.message ?? sent.body.error?.message), /Purchases/);
+  await refused({ head: 'repairs', gst: '720', gstin: IN_STATE, credit: 'blocked', blockedReason: 'vehicle_insurance_repair' }, 'BOOKS_EXPENSE_GST_PURCHASES');
+  await refused({ head: 'telephone', gst: '90' }, 'BOOKS_EXPENSE_GST_PURCHASES');
+  await refused({ head: 'wages', gst: '90' }, 'BOOKS_EXPENSE_NO_GST');
+  await refused({ head: 'electricity', gst: '90' }, 'BOOKS_EXPENSE_NO_GST');
 
-  const saved = await request('POST', '/api/books/expense/record', { ...body, check: checked.body.check, requestId: nextRequest() }, owner);
-  assert.equal(saved.status, 200, JSON.stringify(saved.body));
-  assert.equal(saved.body.entry.kind, 'expense');
-  assert.equal(saved.body.entry.total, 11800);
-  assert.equal(await expenseRow('Rent', owner), rentBefore + 10000, 'Rent is its own line in what you spent');
-
-  const cash = await book('cash', owner);
-  assert.equal(cash.closing, cashBefore - 11800);
-  const row = (cash.rows as { number: string; moneyOut: number; against: string }[]).find((r) => r.number === saved.body.entry.number);
-  assert.ok(row, 'the payment is in the cash book');
-  assert.equal(row.moneyOut, 11800);
-  assert.match(row.against, /Rent/);
+  const ok = async (path: string, body: Record<string, unknown>) => {
+    const reply = await request('POST', path, body, owner);
+    assert.equal(reply.status, 200, `${path}: ${JSON.stringify(reply.body)}`);
+    return reply.body;
+  };
+  const before = await table4(owner);
+  const landlord = (await ok('/api/suppliers', { legalName: 'Lakshmi Estates', registration: 'regular', gstin: IN_STATE, line1: '12, Market Road', city: 'Bengaluru', pincode: '560002' })).supplier.id;
+  await ok('/api/items', { name: 'Shop rent', kind: 'service', hsnSac: '997212', unit: 'NOS', taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'Rate schedule' });
+  const bill = await ok('/api/purchases/record', { supplierId: landlord, reference: 'LE-R09', date: DATE, lines: [{ item: 'Shop rent', quantity: '1', rate: '10000', gst: '1800' }] });
+  assert.equal(bill.bill.cgst + bill.bill.sgst, 1800);
+  const held = await ok('/api/itc', { period: '2026-09' });
+  assert.equal((held.lines as { number: string; outcome: string }[]).find((line) => line.number === 'LE-R09')?.outcome, 'HELD_BACK', 'the rent bill is in the GSTR-2B check, held until 2B carries it (s.16(2)(aa))');
+  // The landlord's bill arrives in GSTR-2B: now the credit is claimed in GSTR-3B Table 4(A)(5).
+  const matched = await ok('/api/itc/typed', { period: '2026-09', gstin: IN_STATE, supplierName: 'Lakshmi Estates', number: 'LE-R09', date: DATE, taxableValue: '10000', cgst: '900', sgst: '900', invoiceValue: '11800' });
+  assert.equal((matched.lines as { number: string; outcome: string }[]).find((line) => line.number === 'LE-R09')?.outcome, 'CLAIM_NOW', JSON.stringify(matched.lines));
+  assert.equal((await table4(owner)).a5 - before.a5, 1800, 'and its GST is in GSTR-3B Table 4(A)(5)');
 });
 
-test('#294: a bill from another state is IGST credit; blocked credit under s.17(5) is part of the cost', async () => {
+test('#294: rent with no GST, and a GTA\'s freight, are reverse charge: sent to Purchases, never posted as a bare cost', async () => {
   const { owner } = await sessions();
-  const igst = await request('POST', '/api/books/expense/preview', { head: 'transport', date: DATE, paidFrom: 'upi', amount: '1000', gst: '50', gstin: OTHER_STATE, credit: 'claim' }, owner);
-  assert.equal(igst.status, 200, JSON.stringify(igst.body));
-  assert.deepEqual(lines(igst), [['5640', 1000, 0], ['1430', 50, 0], ['1121', 0, 1050]]);
+  const preview = (body: Record<string, unknown>) => request('POST', '/api/books/expense/preview', { date: DATE, paidFrom: 'cash', amount: '6000', ...body }, owner);
+  const rent = await preview({ head: 'rent' });
+  assert.equal(rent.status, 422);
+  assert.equal(codeOf(rent), 'BOOKS_EXPENSE_RENT_REVERSE_CHARGE');
+  assert.match(String(rent.body.message ?? rent.body.error?.message), /5AB/);
+  assert.equal(codeOf(await preview({ head: 'transport' })), 'BOOKS_EXPENSE_CONSIGNMENT_NOTE');
+  assert.equal(codeOf(await preview({ head: 'transport', consignmentNote: 'maybe' })), 'BOOKS_EXPENSE_CONSIGNMENT_NOTE');
+  assert.equal(codeOf(await preview({ head: 'transport', consignmentNote: 'yes' })), 'BOOKS_EXPENSE_GTA');
 
-  const blocked = await save('expense', { head: 'repairs', date: DATE, paidFrom: 'bank', amount: '4000', gst: '720', gstin: IN_STATE, credit: 'blocked', blockedReason: 'vehicle_insurance_repair' }, owner);
-  assert.equal(blocked.status, 200, JSON.stringify(blocked.body));
-  assert.deepEqual(lines(blocked), [['5650', 4720, 0], ['1121', 0, 4720]]);
-  assert.ok((blocked.body.effects as string[]).some((effect) => effect.includes('17(5)(ab)')));
+  // An auto fare is no GTA: a plain cost under Transport, out of the drawer.
+  const before = await expenseRow('Transport and travel', owner);
+  const fare = await save('expense', { head: 'transport', consignmentNote: 'no', date: DATE, paidFrom: 'cash', amount: '150', narration: 'Auto to the bank' }, owner);
+  assert.equal(fare.status, 200, JSON.stringify(fare.body));
+  assert.deepEqual(lines(fare), [['5640', 150, 0], ['1110', 0, 150]]);
+  assert.equal(await expenseRow('Transport and travel', owner), before + 150);
+  // "Other" may be a notified reverse-charge service; the shopkeeper is told so.
+  const other = await preview({ head: 'other', amount: '300' });
+  assert.equal(other.status, 200, JSON.stringify(other.body));
+  assert.ok((other.body.effects as string[]).some((effect) => /reverse charge/.test(effect)));
 });
 
-test('#294: GST the law does not allow, or a bill that cannot carry it, is refused with the reason', async () => {
+test('#294: wrong input is refused with the reason', async () => {
   const { owner } = await sessions();
   const refused = async (body: Record<string, unknown>, code: string) => {
     const reply = await request('POST', '/api/books/expense/preview', { date: DATE, paidFrom: 'cash', amount: '500', ...body }, owner);
     assert.equal(reply.status, 422, JSON.stringify(reply.body));
     assert.equal(codeOf(reply), code, JSON.stringify(reply.body));
   };
-  await refused({ head: 'wages', gst: '90', gstin: IN_STATE, credit: 'claim' }, 'BOOKS_EXPENSE_NO_GST');
-  await refused({ head: 'electricity', gst: '90', gstin: IN_STATE, credit: 'claim' }, 'BOOKS_EXPENSE_NO_GST');
-  await refused({ head: 'rent', gst: '90', credit: 'claim' }, 'BOOKS_EXPENSE_GSTIN_NEEDED');
-  await refused({ head: 'rent', gst: '90', gstin: `${IN_STATE.slice(0, 14)}0` === IN_STATE ? `${IN_STATE.slice(0, 14)}1` : `${IN_STATE.slice(0, 14)}0`, credit: 'claim' }, 'BOOKS_EXPENSE_GSTIN');
-  await refused({ head: 'rent', gst: '90', gstin: '29AAAAA0000A1ZY', credit: 'claim' }, 'BOOKS_EXPENSE_OWN_GSTIN');
-  await refused({ head: 'rent', gst: '90', gstin: IN_STATE }, 'BOOKS_EXPENSE_CREDIT_CHOICE');
-  await refused({ head: 'rent', gst: '90', gstin: IN_STATE, credit: 'blocked' }, 'BOOKS_EXPENSE_BLOCKED_REASON');
-  await refused({ head: 'rent', gst: '90.01', gstin: IN_STATE, credit: 'claim' }, 'BOOKS_EXPENSE_GST_HALVES');
   await refused({ head: 'pizza' }, 'BOOKS_EXPENSE_HEAD');
-  await refused({ head: 'rent', amount: '-5' }, 'BOOKS_AMOUNT');
-  await refused({ head: 'rent', amount: '12.345' }, 'BOOKS_AMOUNT');
-  await refused({ head: 'rent', amount: '0' }, 'BOOKS_AMOUNT');
-  await refused({ head: 'rent', date: '2026-10-05' }, 'BOOKS_DATE_AHEAD');
-  await refused({ head: 'rent', date: '2026-02-30' }, 'BOOKS_DATE');
+  await refused({ head: 'repairs', amount: '-5' }, 'BOOKS_AMOUNT');
+  await refused({ head: 'repairs', amount: '12.345' }, 'BOOKS_AMOUNT');
+  await refused({ head: 'repairs', amount: '0' }, 'BOOKS_AMOUNT');
+  await refused({ head: 'repairs', gst: '-1' }, 'BOOKS_AMOUNT');
+  await refused({ head: 'repairs', date: '2026-10-05' }, 'BOOKS_DATE_AHEAD');
+  await refused({ head: 'repairs', date: '2026-02-30' }, 'BOOKS_DATE');
   // Owed to a supplier is followed bill by bill, so it goes in as the supplier's bill.
   await refused({ head: 'repairs', paidFrom: 'supplier' }, 'BOOKS_EXPENSE_OWED');
-  // Wages without GST are fine.
+  // Wages paid in cash, from the drawer.
   const wages = await save('expense', { head: 'wages', date: DATE, paidFrom: 'cash', amount: '8000' }, owner);
   assert.equal(wages.status, 200, JSON.stringify(wages.body));
+  assert.deepEqual(lines(wages), [['5620', 8000, 0], ['1110', 0, 8000]]);
 });
 
 test('#294: only what was checked is saved; a changed entry or a missing check is refused', async () => {
@@ -224,10 +246,10 @@ test('#294: journal and contra entries are the accountant\'s and owner\'s; the c
 
 test('#294: a saved entry is never edited; it is undone in full with a reason, once, and only inside its own business', async () => {
   const { owner, konkan } = await sessions();
-  const rentBefore = await expenseRow('Rent', owner);
-  const saved = await save('expense', { head: 'rent', date: DATE, paidFrom: 'cash', amount: '700' }, owner);
+  const repairsBefore = await expenseRow('Repairs and upkeep', owner);
+  const saved = await save('expense', { head: 'repairs', date: DATE, paidFrom: 'cash', amount: '700' }, owner);
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
-  assert.equal(await expenseRow('Rent', owner), rentBefore + 700);
+  assert.equal(await expenseRow('Repairs and upkeep', owner), repairsBefore + 700);
 
   const elsewhere = await request('POST', '/api/books/undo', { entryId: saved.body.entry.id, reason: 'Not ours', requestId: nextRequest() }, konkan);
   assert.equal(elsewhere.status, 404, JSON.stringify(elsewhere.body));
@@ -241,7 +263,7 @@ test('#294: a saved entry is never edited; it is undone in full with a reason, o
   const twice = await request('POST', '/api/books/undo', { entryId: saved.body.entry.id, reason: 'Typed the wrong month', requestId }, owner);
   assert.equal(twice.body.duplicate, true);
   assert.equal(twice.body.reversal.id, undone.body.reversal.id);
-  assert.equal(await expenseRow('Rent', owner), rentBefore);
+  assert.equal(await expenseRow('Repairs and upkeep', owner), repairsBefore);
   const entry = ((await request('GET', '/api/books/entries', {}, owner)).body.entries as { id: string; state: string }[]).find((e) => e.id === saved.body.entry.id);
   assert.equal(entry?.state, 'REVERSED');
   const again = await request('POST', '/api/books/undo', { entryId: saved.body.entry.id, reason: 'Again', requestId: nextRequest() }, owner);
@@ -251,14 +273,13 @@ test('#294: a saved entry is never edited; it is undone in full with a reason, o
   assert.equal(sale.status, 404);
 });
 
-test('#294: the heads list says which heads cannot carry GST, and the s.17(5) cases', async () => {
+test('#294: the heads list says which heads cannot carry GST', async () => {
   const { owner } = await sessions();
   const reply = await request('GET', '/api/books/heads', {}, owner);
   assert.equal(reply.status, 200);
   const heads = reply.body.heads as { id: string; gstAllowed: boolean }[];
   assert.deepEqual(heads.map((h) => h.id), ['rent', 'wages', 'electricity', 'transport', 'repairs', 'bank_charges', 'telephone', 'other']);
   assert.deepEqual(heads.filter((h) => !h.gstAllowed).map((h) => h.id), ['wages', 'electricity']);
-  assert.ok((reply.body.blockedReasons as { clause: string }[]).some((r) => r.clause === '17(5)(b)'));
 });
 
 test('#294: a phone bill paid by UPI is its own line in what you spent and leaves the bank book', async () => {

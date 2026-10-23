@@ -14,8 +14,6 @@
 import { createHash } from 'node:crypto';
 import { conflict, invalid, isoDate, money, notFound, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { Account, ActorContext, LedgerService, LedgerStore, Voucher, VoucherType } from '@invoice/ledger';
-import { gstinStateCode, normaliseIdentifier, validateGstin } from '../../../packages/masters/src/validation.ts';
-import { BLOCKED_CREDIT_REASONS, blockedCreditReasonFor } from '../../../packages/purchasing/src/blocked-credit.ts';
 import { appToday } from './app-clock.ts';
 
 const CASH = '1110';
@@ -23,9 +21,6 @@ const BANK_GROUP = '1120';
 const CURRENT_ACCOUNT = '1121';
 const CAPITAL = '3100';
 const DRAWINGS = '3150';
-const INPUT_CGST = '1410';
-const INPUT_SGST = '1420';
-const INPUT_IGST = '1430';
 const SOURCE_PREFIX = 'books.';
 
 export interface ExpenseHead {
@@ -119,56 +114,60 @@ const fingerprint = (plan: Plan): string =>
 const debit = (code: string, amount: bigint, note: string | null = null): PlannedLine => ({ code, debit: amount, credit: 0n, note });
 const credit = (code: string, amount: bigint, note: string | null = null): PlannedLine => ({ code, debit: 0n, credit: amount, note });
 
-/** The tax an expense bill charged, and whether the business takes it back as credit. */
-const expenseGst = (input: Input, head: ExpenseHead, companyGstin: string, gst: bigint): { lines: PlannedLine[]; intoCost: bigint; effects: string[] } => {
-  if (gst === 0n) return { lines: [], intoCost: 0n, effects: [] };
-  if (head.noGst !== null) throw invalid('BOOKS_EXPENSE_NO_GST', head.noGst);
-  // Only a registered supplier may charge GST, on a tax invoice carrying their GSTIN: CGST Act
-  // s.31(1) with CGST Rules r.46(a)-(b); and credit needs that invoice, s.16(2)(a) with r.36(1)(a).
-  const gstin = normaliseIdentifier(said(input.gstin));
-  if (gstin === '') throw invalid('BOOKS_EXPENSE_GSTIN_NEEDED', 'A bill that charges GST shows the seller\'s GST number. Please type it, or leave GST at zero if the bill has none.');
-  const checked = validateGstin(gstin);
-  if (!checked.ok) throw invalid('BOOKS_EXPENSE_GSTIN', checked.problems[0]?.message ?? 'This GST number does not look right.');
-  if (gstin === normaliseIdentifier(companyGstin)) throw invalid('BOOKS_EXPENSE_OWN_GSTIN', 'That is your own GST number. Please type the GST number printed on the seller\'s bill.');
-  const choice = said(input.credit).toLowerCase();
-  if (choice !== 'claim' && choice !== 'blocked') throw invalid('BOOKS_EXPENSE_CREDIT_CHOICE', 'Please say whether you will claim this GST back, or whether the law does not let you (section 17(5)).');
-  if (choice === 'blocked') {
-    // CGST Act s.17(5): the tax is part of what the expense cost. Clauses, amendments and their
-    // effective dates as read on 21 Oct 2026 are listed in packages/purchasing/src/blocked-credit.ts.
-    const reason = blockedCreditReasonFor(input.blockedReason);
-    if (reason === null || reason === undefined) throw invalid('BOOKS_EXPENSE_BLOCKED_REASON', 'Please choose which of the section 17(5) cases this is.');
-    return { lines: [], intoCost: gst, effects: [`GST ${rupees(gst)} is not claimed back (s.${reason.clause}: ${reason.label}), so it is part of the cost.`] };
+const TO_PURCHASES = 'Please enter it on the Purchases screen as that seller\'s bill, with a service item such as "Shop rent", then pay it from Payments.';
+
+/**
+ * What this screen may take: a cost whose bill carries no GST and on which no GST is owed by the
+ * shop itself. Everything else goes through a purchase bill, because that is where the law is
+ * applied and where the returns read from:
+ *  - GST on a bill is credit only once the bill shows in GSTR-2B (CGST Act s.16(2)(aa)); credit the
+ *    law blocks (s.17(5)) is still reported in GSTR-3B Table 4. The 2B check (#31) and GSTR-3B's
+ *    credit both read posted purchase bills, so a GST bill entered here would never reach either.
+ *  - Reverse charge: the registered shop pays the GST itself and issues a self-invoice (s.9(3),
+ *    s.31(3)(f)). The purchase bill applies Notification 13/2017-CT(R) through
+ *    packages/purchasing/src/reverse-charge-notified.ts (S.No. 1 GTA, 5AA, 5AB and the rest).
+ */
+const reverseChargeCheck = (head: ExpenseHead, input: Input): string[] => {
+  if (head.id === 'rent') {
+    // Rent with no GST on the bill: a shop, godown or office let by an unregistered owner is S.No. 5AB
+    // (inserted by 09/2024-CT(R), from 10.10.2024; amended by 07/2025-CT(R) so that a composition
+    // recipient is outside it); a house let to a registered person is S.No. 5AA (05/2022-CT(R), from 18.07.2022).
+    throw invalid('BOOKS_EXPENSE_RENT_REVERSE_CHARGE', `Rent with no GST on the bill: you, the GST-registered tenant, usually pay that GST yourself under reverse charge (Notification 13/2017-CT(R), S.No. 5AB for a shop or godown from an unregistered owner; S.No. 5AA for a house). ${TO_PURCHASES} It works out whether that applies and makes the self-invoice.`);
   }
-  // Same state: CGST and SGST in equal halves (IGST Act s.8(1)); another state: IGST (s.7(1)).
-  if (gstinStateCode(gstin) === gstinStateCode(companyGstin)) {
-    if (gst % 2n !== 0n) throw invalid('BOOKS_EXPENSE_GST_HALVES', 'Within your state the bill shows CGST and SGST in two equal halves, so the total GST is an even number of paise. Please check the bill.');
-    return {
-      lines: [debit(INPUT_CGST, gst / 2n, `Bill from ${gstin}`), debit(INPUT_SGST, gst / 2n, `Bill from ${gstin}`)], intoCost: 0n,
-      effects: [`GST ${rupees(gst)} (CGST ${rupees(gst / 2n)} + SGST ${rupees(gst / 2n)}) is credit you can take back, in the month the bill shows in your GSTR-2B (s.16(2)(aa)).`],
-    };
+  if (head.id === 'transport') {
+    // S.No. 1 and its Explanation: a transporter that issues a consignment note is a GTA, and its
+    // freight is taxed on the registered recipient unless the GTA opted to pay it.
+    const note = said(input.consignmentNote).toLowerCase();
+    if (note === 'yes') throw invalid('BOOKS_EXPENSE_GTA', `A transporter who gave a consignment note (bilty / LR) is a goods transport agency; GST on its freight is usually paid by you under reverse charge (Notification 13/2017-CT(R), S.No. 1). ${TO_PURCHASES}`);
+    if (note !== 'no') throw invalid('BOOKS_EXPENSE_CONSIGNMENT_NOTE', 'Did the transporter give a consignment note (bilty / LR)? Please answer yes or no. A bus, train, taxi or auto fare is "no".');
+    return [];
   }
-  return {
-    lines: [debit(INPUT_IGST, gst, `Bill from ${gstin}`)], intoCost: 0n,
-    effects: [`IGST ${rupees(gst)} is credit you can take back, in the month the bill shows in your GSTR-2B (s.16(2)(aa)).`],
-  };
+  if (head.id === 'other') {
+    return ['If this was an advocate\'s fee, a security agency, a director\'s fee or another service the government lists for reverse charge (Notification 13/2017-CT(R)), undo it and enter it on Purchases instead, so the GST you owe on it is worked out.'];
+  }
+  return [];
 };
 
-const planExpense = (input: Input, companyGstin: string): Plan => {
+const planExpense = (input: Input): Plan => {
   const head = EXPENSE_HEADS.find((h) => h.id === said(input.head).toLowerCase() || h.code === said(input.head));
   if (head === undefined) throw invalid('BOOKS_EXPENSE_HEAD', `Please choose what it was for: ${EXPENSE_HEADS.map((h) => h.label).join(', ')}.`);
   const date = dateOf(input.date);
   const paid = paidFromOf(input.paidFrom, true);
   const amount = amountOf(input.amount, 'amount before GST');
   const gst = amountOf(input.gst, 'GST', true);
-  const tax = expenseGst(input, head, companyGstin, gst);
-  const total = amount + gst;
+  if (gst > 0n) {
+    if (head.noGst !== null) throw invalid('BOOKS_EXPENSE_NO_GST', head.noGst);
+    throw invalid('BOOKS_EXPENSE_GST_PURCHASES', `This bill shows GST. ${TO_PURCHASES} That way its GST is checked against your GSTR-2B and reaches your GSTR-3B.`);
+  }
+  const warnings = reverseChargeCheck(head, input);
+  const total = amount;
   const bill = said(input.billNumber);
   const note = said(input.narration);
   const narration = [`${head.label} paid${bill === '' ? '' : `, bill ${bill}`}`, note].filter((part) => part !== '').join(': ');
   return {
     kind: 'expense', type: 'PAYMENT', date, narration,
-    lines: [debit(head.code, amount + tax.intoCost, tax.intoCost > 0n ? 'Includes GST that cannot be claimed back' : null), ...tax.lines, credit(moneyAccount(paid), total)],
-    effects: [`${rupees(amount + tax.intoCost)} is a cost under "${head.label}" in what you spent.`, ...tax.effects, `${rupees(total)} goes out of ${paid === 'cash' ? 'the cash drawer' : 'the bank account'}.`],
+    lines: [debit(head.code, amount), credit(moneyAccount(paid), total)],
+    effects: [`${rupees(amount)} is a cost under "${head.label}" in what you spent.`, `${rupees(total)} goes out of ${paid === 'cash' ? 'the cash drawer' : 'the bank account'}.`, ...warnings],
     cashOut: paid === 'cash' ? total : 0n,
   };
 };
@@ -230,7 +229,6 @@ export class BooksDesk {
   heads() {
     return {
       heads: EXPENSE_HEADS.map((head) => ({ id: head.id, label: head.label, hindi: head.hindi, gstAllowed: head.noGst === null, noGst: head.noGst })),
-      blockedReasons: BLOCKED_CREDIT_REASONS.map((reason) => ({ id: reason.id, clause: reason.clause, label: reason.label, unless: reason.unless })),
     };
   }
 
@@ -333,7 +331,7 @@ export class BooksDesk {
   }
 
   async #plan(actor: ActorContext, kind: Kind, input: Input, checkCash = true): Promise<Plan> {
-    const plan = kind === 'expense' ? planExpense(input, this.#config.gstin)
+    const plan = kind === 'expense' ? planExpense(input)
       : kind === 'contra' ? planContra(input)
         : kind === 'owner' ? planOwner(input)
           : await this.#planJournal(input);
