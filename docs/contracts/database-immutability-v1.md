@@ -75,6 +75,8 @@ does.
 | `advance_receipts` | always | `updated_at`, `version` | — |
 | `agent_plans` (#47, #366) | `EXECUTED` | `updated_at` | none: an executed plan is only ever saved again unchanged |
 | `agent_reports` | always | nothing | — |
+| `bank_reconciliation_candidates`, `bank_reconciliation_events` (#366) | always | nothing | — |
+| `bank_reconciliation_matches` (#366) | always | `unmatched_at`, `unmatched_by`, `unmatch_reason`, once (`bank_reconciliation_unmatched_once`) | `AUTO_MATCHED`/`CONFIRMED` → `UNMATCHED` |
 
 Each row was checked against the module's service and repository before it was frozen. The list
 lives in one place, `FROZEN` in `immutability-migrations.ts`.
