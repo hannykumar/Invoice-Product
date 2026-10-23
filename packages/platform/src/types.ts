@@ -91,6 +91,8 @@ export type Permission =
   | "feature-flags.manage"
   // Approving a discount larger than the business allows (issue #11, GPT 1).
   | "sales.approve_discount"
+  // Issue #301 — approving a bill past the customer's credit limit, which the sale review holds.
+  | "sales.override_credit_limit"
   // Reports (issue #35, GPT 1). Added to the union so an owner's session can be granted them.
   | "reports.view.financial"
   | "reports.view.sales"

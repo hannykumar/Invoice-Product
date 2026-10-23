@@ -178,7 +178,7 @@ test('preview remains read-only and posting remains duplicate-safe', async () =>
 
 test('authenticated sales and customer payments still reach their service modules', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '100', date: '2026-08-29', terms: '7', reference: 'AUTH-SALE-80' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '100', date: '2026-08-29', terms: '7', reference: 'AUTH-SALE-80', approvalReason: 'Agreed with the owner' };
   const salePreview = await request('POST', '/api/sales/preview', sale, owner);
   assert.equal(salePreview.body.state, 'preview');
   const recorded = await request('POST', '/api/sales/record', sale, owner);
@@ -202,7 +202,7 @@ test('authenticated sales and customer payments still reach their service module
 
 test('authenticated customer and supplier returns preview and post through real domain services', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-08-29', terms: '7', reference: 'RETURN-SALE-45' };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-08-29', terms: '7', reference: 'RETURN-SALE-45', approvalReason: 'Agreed with the owner' };
   const recordedSale = await request('POST', '/api/sales/record', sale, owner);
   assert.equal(recordedSale.status, 200);
   const saleReturn = {
@@ -825,14 +825,14 @@ test('the plan is enforced on a real write path, and counted only when the work 
   for (let i = 0; i < remaining; i += 1) {
     const filled = await request('POST', '/api/sales/record', {
       party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-      date: '2026-08-29', terms: '30', reference: `PLAN-42-${i}`,
+      date: '2026-08-29', terms: '30', reference: `PLAN-42-${i}`, approvalReason: 'Agreed with the owner',
     }, owner);
     assert.equal(filled.status, 200, 'bills inside the plan are issued normally');
   }
 
   const overLimit = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-    date: '2026-08-29', terms: '30', reference: 'PLAN-42-OVER',
+    date: '2026-08-29', terms: '30', reference: 'PLAN-42-OVER', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(overLimit.status, 403);
   assert.equal(overLimit.body.code, 'ENTITLEMENT_LIMIT_REACHED');
@@ -840,7 +840,7 @@ test('the plan is enforced on a real write path, and counted only when the work 
 
   const backdated = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-    date: '2026-07-01', terms: '30', reference: 'PLAN-42-BACKDATED',
+    date: '2026-07-01', terms: '30', reference: 'PLAN-42-BACKDATED', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(backdated.status, 403, 'a document date cannot bypass the current subscription limit');
   assert.equal(backdated.body.code, 'ENTITLEMENT_LIMIT_REACHED');
@@ -867,7 +867,7 @@ test('the plan is enforced on a real write path, and counted only when the work 
   );
   const allowedAgain = await request('POST', '/api/sales/record', {
     party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '1',
-    date: '2026-08-29', terms: '30', reference: 'PLAN-42-AFTER',
+    date: '2026-08-29', terms: '30', reference: 'PLAN-42-AFTER', approvalReason: 'Agreed with the owner',
   }, owner);
   assert.equal(allowedAgain.status, 200);
 });
@@ -1216,7 +1216,7 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.equal(converted.body.title, 'Bill ready from QTN/26-27/00001');
   assert.equal(converted.body.amount, 2625);
   assert.equal(converted.body.quotation.state, 'CONVERTED');
-  const sold = await request('POST', '/api/presale/issue-sale', { token: converted.body.token }, owner);
+  const sold = await request('POST', '/api/presale/issue-sale', { token: converted.body.token, approvalReason: 'Agreed with the owner' }, owner);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   assert.match(sold.body.invoice.number, /^INV\//);
   assert.equal(sold.body.invoice.amount, 2625, 'the bill charges what was quoted');
@@ -1236,7 +1236,7 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
   assert.doesNotMatch(piPrinted.body.html, /Advance for 100 soap/, 'what it was for is kept, not printed');
 
   // Only 80 went: the bill is linked, and the difference is noted rather than refused.
-  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '80', rate: '25', date: '2026-08-29', terms: '0', reference: 'api-142-bill' }, owner);
+  const bill = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '80', rate: '25', date: '2026-08-29', terms: '0', reference: 'api-142-bill', approvalReason: 'Agreed with the owner' }, owner);
   assert.equal(bill.status, 200, JSON.stringify(bill.body));
   const linked = await request('POST', '/api/presale/link-invoice', { document: pi.body.document.id, invoice: bill.body.invoice.id }, owner);
   assert.equal(linked.status, 200, JSON.stringify(linked.body));
@@ -1363,7 +1363,7 @@ test('sale freight is reviewed, issued and printed under the goods HSN codes', a
   assert.ok(catalogue.body.items.every((item: { name: string }) => item.name !== 'Inward freight'));
 
   const sale = {
-    party: 'ABC Traders', date: '2026-08-29', terms: '7', reference: 'FREIGHT-SALE-205', freight: '500.00', otherCharges: '',
+    party: 'ABC Traders', date: '2026-08-29', terms: '7', reference: 'FREIGHT-SALE-205', freight: '500.00', otherCharges: '', approvalReason: 'Agreed with the owner',
     lines: JSON.stringify([
       { itemId: 'sampoorna:item:SOAP', quantity: '10', unit: 'PCS', rate: '100' },
       { itemId: 'sampoorna:item:TMT12', quantity: '50', unit: 'KGS', rate: '100' },
