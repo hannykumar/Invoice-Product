@@ -220,10 +220,12 @@ export class PostgresBackupRepository implements BackupRepository {
       [companyId, at])).rows.map(record));
   }
 
-  async prune(companyId: Id, backupId: Id, at: string): Promise<boolean> {
+  async prune(companyId: Id, backupIds: readonly Id[], at: string): Promise<readonly string[]> {
+    if (backupIds.length === 0) return [];
     const pruned = await this.#write(companyId).query(
-      `UPDATE backup_records b SET pruned_at = $3 WHERE b.company_id = $1 AND b.id = $2 AND b.pruned_at IS NULL RETURNING b.id`, [companyId, backupId, at]);
-    return pruned.rows.length > 0;
+      `UPDATE backup_records b SET pruned_at = $3 WHERE b.company_id = $1 AND b.id = ANY($2::uuid[]) AND b.pruned_at IS NULL RETURNING b.object_key`,
+      [companyId, backupIds, at]);
+    return pruned.rows.map((r) => String(r.object_key));
   }
 
   deletePayload(objectKey: string): Promise<void> { return this.#objects.delete(objectKey); }

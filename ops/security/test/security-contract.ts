@@ -99,6 +99,9 @@ export function securityContract(name: string, make: () => SecurityHarness, skip
     assert.equal((await service.get(a, exp.id)).status, "completed");
     assert.equal((await service.get(a, del.id)).status, "completed");
     await assert.rejects(service.executeExport(a, exp.id), code("PRIVACY_REQUEST_NOT_EXECUTABLE"));
+    const actions = await h.auditActions(a.companyId);
+    assert.equal(actions.filter((x) => x === "privacy.export.completed").length, 1);
+    assert.equal(actions.filter((x) => x === "privacy.deletion.completed").length, 1);
   });
 
   test(`${name}: holds and the latest retention date block deletion; a hold is released once`, { skip }, async () => {
@@ -135,6 +138,31 @@ export function securityContract(name: string, make: () => SecurityHarness, skip
     await assert.rejects(service.setRetention(a, "cust-1", "soon"), code("INVALID_RETENTION_DATE"));
     await assert.rejects(service.request(ctx(a, new Set()), "cust-1", "export", "k"), code("FORBIDDEN"));
     assert.deepEqual(await h.auditActions(a.companyId), []);
+  });
+
+  test(`${name}: a backup, restore drill or prune whose audit fails once is undone and can be retried`, { skip }, async () => {
+    const h = make();
+    let now = NOW;
+    const failOnce = new Set(["backup.created", "backup.restore.passed", "backup.retention.pruned"]);
+    const audit: SecurityAudit = { append: async (event) => { if (failOnce.delete(event.action)) throw new Error("AUDIT_DOWN"); return h.audit.append(event); } };
+    const recovery = new BackupRecoveryService(audit, h.backups, encryption(), "backup-v1", () => now);
+    const a = ctx(await h.company());
+    const source = { snapshot: async (companyId: string) => Buffer.from(JSON.stringify({ companyId })) };
+    await assert.rejects(recovery.create(a, source, "s1", 1, "nightly"), /AUDIT_DOWN/);
+    const made = await recovery.create(a, source, "s1", 1, "nightly");
+    assert.equal((await recovery.create(a, source, "s1", 1, "nightly")).id, made.id);
+    const target = { validate: async () => {}, replace: async () => {} };
+    await assert.rejects(recovery.restore(a, made.id, target), /AUDIT_DOWN/);
+    assert.deepEqual(await recovery.drills(a), []);
+    assert.equal((await recovery.restore(a, made.id, target)).status, "passed");
+    assert.equal((await recovery.drills(a)).length, 1);
+    now = new Date(NOW.getTime() + 2 * 86_400_000);
+    await assert.rejects(recovery.pruneExpired(a), /AUDIT_DOWN/);
+    assert.ok(await h.backups.get(a.companyId, made.id), "a prune that was not recorded keeps the backup");
+    assert.equal(await recovery.pruneExpired(a), 1);
+    assert.equal(await h.backups.get(a.companyId, made.id), undefined);
+    const actions = await h.auditActions(a.companyId);
+    for (const action of ["backup.created", "backup.restore.passed", "backup.retention.pruned"]) assert.equal(actions.filter((x) => x === action).length, 1, action);
   });
 
   test(`${name}: a backup is made once per key, restored only by its company, and pruned once`, { skip }, async () => {

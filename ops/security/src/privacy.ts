@@ -129,8 +129,7 @@ export class PrivacyService {
     return this.#records.action(context.companyId, async () => {
       const request = await this.get(context, requestId);
       if (request.kind !== "export" || request.status !== "requested") throw new Error("PRIVACY_REQUEST_NOT_EXECUTABLE");
-      await this.#complete(context, request);
-      const exported = await this.#store.exportSubject(context.companyId, request.subjectId);
+      const { result: exported } = await this.#complete(context, request, () => this.#store.exportSubject(context.companyId, request.subjectId));
       return Object.freeze({ notice: "This export contains the data held for the requested person.", generatedAt: this.#now().toISOString(), subjectId: request.subjectId, data: exported });
     });
   }
@@ -150,8 +149,8 @@ export class PrivacyService {
         await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "privacy.deletion.blocked", correlationId: request.id, before: { status: request.status }, after: { status: blocked.status, blockers } });
         return { request: blocked };
       }
-      const completed = await this.#complete(context, request, () => this.#store.deleteSubject(context.companyId, request.subjectId, retainUntil));
-      return completed;
+      return this.#complete(context, request, () => this.#store.deleteSubject(context.companyId, request.subjectId, retainUntil),
+        (result) => ({ deletedRecords: result.deletedRecords, retainedRecords: result.retainedRecords }));
     });
   }
 
@@ -160,13 +159,16 @@ export class PrivacyService {
     return this.#records.consents(context.companyId, subjectId, page);
   }
 
-  /** Claims the request first, so two executions at once cannot both export or delete. */
-  async #complete(context: RequestContext, request: PrivacyRequest, run?: () => Promise<SubjectDeletionResult>): Promise<{ readonly request: PrivacyRequest; readonly result?: SubjectDeletionResult }> {
+  /**
+   * Claims the request first, so two executions at once cannot both export or delete; audits it
+   * only after `run` succeeds, so a failed export or deletion is never recorded as done.
+   */
+  async #complete<R>(context: RequestContext, request: PrivacyRequest, run: () => Promise<R>, summary: (result: R) => Readonly<Record<string, unknown>> = () => ({})): Promise<{ readonly request: PrivacyRequest; readonly result: R }> {
     const completed = Object.freeze({ ...request, status: "completed" as const, completedAt: this.#now().toISOString() });
     if (!(await this.#records.settleRequest(completed))) throw new Error("PRIVACY_REQUEST_NOT_EXECUTABLE");
-    const result = run === undefined ? undefined : await run();
-    await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: `privacy.${request.kind}.completed`, correlationId: request.id, before: { status: request.status }, after: { status: completed.status, ...(result ? { deletedRecords: result.deletedRecords, retainedRecords: result.retainedRecords } : {}) } });
-    return result === undefined ? { request: completed } : { request: completed, result };
+    const result = await run();
+    await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: `privacy.${request.kind}.completed`, correlationId: request.id, before: { status: request.status }, after: { status: completed.status, ...summary(result) } });
+    return { request: completed, result };
   }
 }
 

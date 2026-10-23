@@ -136,8 +136,8 @@ export interface BackupRepository {
   byKey(companyId: Id, idempotencyKey: string): Promise<{ readonly backupId: Id; readonly input: string } | undefined>;
   /** Backups not yet pruned whose expiry is at or before `at`, oldest first, at most 500. */
   expired(companyId: Id, at: string): Promise<readonly BackupRecord[]>;
-  /** Marks a backup pruned, once. False when it already was. */
-  prune(companyId: Id, backupId: Id, at: string): Promise<boolean>;
+  /** Marks these backups pruned, once each, in one write. Returns the object keys of the ones pruned now. */
+  prune(companyId: Id, backupIds: readonly Id[], at: string): Promise<readonly string[]>;
   /** Removes the bytes from object storage. Called after the prune is committed. */
   deletePayload(objectKey: string): Promise<void>;
   addDrill(drill: RestoreDrill): Promise<void>;
@@ -176,7 +176,7 @@ export class MemoryBackupRepository implements BackupRepository {
   }
   async save(manifest: BackupManifest, objectKey: string, idempotency: { readonly key: string; readonly input: string }): Promise<boolean> {
     if ([...this.#records.values()].some((r) => r.manifest.companyId === manifest.companyId && r.key === idempotency.key)) return false;
-    this.#records.set(manifest.id, { manifest, objectKey, key: idempotency.key, input: idempotency.input });
+    this.#setUndoably(this.#records, manifest.id, { manifest, objectKey, key: idempotency.key, input: idempotency.input });
     return true;
   }
   async get(companyId: Id, backupId: Id): Promise<StoredBackup | undefined> {
@@ -194,13 +194,20 @@ export class MemoryBackupRepository implements BackupRepository {
       .filter((r) => r.manifest.companyId === companyId && r.prunedAt === undefined && Date.parse(r.manifest.expiresAt) <= Date.parse(at))
       .slice(0, 500).map((r) => ({ manifest: r.manifest, objectKey: r.objectKey }));
   }
-  async prune(companyId: Id, backupId: Id, at: string): Promise<boolean> {
-    const record = this.#records.get(backupId);
-    if (record === undefined || record.manifest.companyId !== companyId || record.prunedAt !== undefined) return false;
-    this.#records.set(backupId, { ...record, prunedAt: at });
-    return true;
+  async prune(companyId: Id, backupIds: readonly Id[], at: string): Promise<readonly string[]> {
+    const pruned: string[] = [];
+    for (const backupId of backupIds) {
+      const record = this.#records.get(backupId);
+      if (record === undefined || record.manifest.companyId !== companyId || record.prunedAt !== undefined) continue;
+      this.#setUndoably(this.#records, backupId, { ...record, prunedAt: at });
+      pruned.push(record.objectKey);
+    }
+    return pruned;
   }
   async deletePayload(objectKey: string): Promise<void> { this.#payloads.delete(objectKey); }
-  async addDrill(drill: RestoreDrill): Promise<void> { this.#drills.push(drill); }
+  async addDrill(drill: RestoreDrill): Promise<void> {
+    this.#drills.push(drill);
+    this.#onUndo(() => { const at = this.#drills.indexOf(drill); if (at >= 0) this.#drills.splice(at, 1); });
+  }
   async drills(companyId: Id, page?: Page): Promise<readonly RestoreDrill[]> { return after(this.#drills.filter((d) => d.companyId === companyId), page); }
 }

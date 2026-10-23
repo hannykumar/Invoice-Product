@@ -98,8 +98,7 @@ export class BackupRecoveryService {
     const at = this.#now().toISOString();
     const expired = await this.#repository.expired(context.companyId, at);
     const pruned = await this.#repository.action(context.companyId, async () => {
-      const done: string[] = [];
-      for (const record of expired) if (await this.#repository.prune(context.companyId, record.manifest.id, at)) done.push(record.objectKey);
+      const done = await this.#repository.prune(context.companyId, expired.map((record) => record.manifest.id), at);
       if (done.length > 0) await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "backup.retention.pruned", correlationId: randomUUID(), before: null, after: { deletedBackups: done.length } });
       return done;
     });
