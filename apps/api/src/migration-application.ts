@@ -9,7 +9,7 @@
  * Each visitor gets their own freshly opened company, so one person's half-finished migration can
  * never touch another's, exactly as tenancy requires.
  */
-import { asId, isoDate, type CompanyId } from '@invoice/kernel';
+import { asId, isoDate, notAllowed, type CompanyId } from '@invoice/kernel';
 import { appClock } from './app-clock.ts';
 import {
   InMemoryAuditPort,
@@ -58,12 +58,52 @@ interface Workspace {
   usedAt: number;
 }
 
-/** A handful of live migrations at a time; the oldest is dropped when a new one arrives. */
+/**
+ * Issue #396 — live migrations, kept apart per business. A workspace closes when it has gone unused
+ * for `WORKSPACE_IDLE_MS`; a session that opens more than `WORKSPACES_PER_SESSION` closes its own
+ * oldest; and a business with `WORKSPACES_PER_COMPANY` open is told to finish one first. Nothing one
+ * company does can close another company's import, or another person's in the same company.
+ */
 const workspaces = new Map<string, Workspace>();
-const MAX_WORKSPACES = 8;
+export const WORKSPACE_IDLE_MS = 2 * 60 * 60 * 1000;
+export const WORKSPACES_PER_SESSION = 3;
+export const WORKSPACES_PER_COMPANY = 8;
 let counter = 0;
 
+const nowMs = (): number => appClock.now().getTime();
+
+const closeIdleWorkspaces = (at: number): void => {
+  for (const [id, workspace] of workspaces) {
+    if (at - workspace.usedAt >= WORKSPACE_IDLE_MS) workspaces.delete(id);
+  }
+};
+
+const sameSession = (workspace: Workspace, owner: RequestContext): boolean =>
+  workspace.ownerCompanyId === owner.companyId && workspace.ownerActorId === owner.actorId && workspace.ownerSessionId === owner.sessionId;
+
+/** Makes room for one more of this owner's workspaces, touching nobody else's. */
+const makeRoomFor = (owner: RequestContext, at: number): void => {
+  closeIdleWorkspaces(at);
+  const mine = [...workspaces.values()].filter((workspace) => sameSession(workspace, owner)).sort((left, right) => left.usedAt - right.usedAt);
+  for (const workspace of mine.slice(0, Math.max(0, mine.length - WORKSPACES_PER_SESSION + 1))) workspaces.delete(workspace.id);
+  const company = [...workspaces.values()].filter((workspace) => workspace.ownerCompanyId === owner.companyId).length;
+  if (company >= WORKSPACES_PER_COMPANY) {
+    throw notAllowed(
+      'MIGRATION_TOO_MANY_OPEN',
+      `Your business already has ${WORKSPACES_PER_COMPANY} imports open on other screens. Finish one of them, or wait: an import nobody has touched for 2 hours closes by itself.`,
+      {
+        details: {
+          open: String(company),
+          limit: String(WORKSPACES_PER_COMPANY),
+          'hi-IN': `Aapke business ke ${WORKSPACES_PER_COMPANY} import doosri screen par pehle se khule hain. Unmein se ek poora karein, ya ruk jaayein: jis import ko 2 ghante tak kisi ne nahin chhua, wo apne aap band ho jaata hai.`,
+        },
+      },
+    );
+  }
+};
+
 const openWorkspace = async (owner: RequestContext): Promise<Workspace> => {
+  makeRoomFor(owner, nowMs());
   counter += 1;
   const id = `migration-${counter}-${Date.now()}`;
   const companyId = asId<'Company'>(id);
@@ -125,25 +165,22 @@ const openWorkspace = async (owner: RequestContext): Promise<Workspace> => {
     ownerSessionId: owner.sessionId,
     companyId, actor, context, service, masters, inventory, store,
     warehouseId: warehouse.record.id,
-    usedAt: Date.now(),
+    usedAt: nowMs(),
   };
   workspaces.set(id, workspace);
-  while (workspaces.size > MAX_WORKSPACES) {
-    const oldest = [...workspaces.values()].sort((left, right) => left.usedAt - right.usedAt)[0];
-    if (oldest === undefined) break;
-    workspaces.delete(oldest.id);
-  }
   return workspace;
 };
 
 const workspaceOf = async (owner: RequestContext, body: Record<string, unknown>): Promise<Workspace> => {
   const id = String(body.workspaceId ?? '');
+  const at = nowMs();
+  closeIdleWorkspaces(at);
   const existing = workspaces.get(id);
   if (existing === undefined) throw new PlatformError('NOT_FOUND', 'That migration workspace expired or was not found. Start again with a fresh workspace.');
-  if (existing.ownerCompanyId !== owner.companyId || existing.ownerActorId !== owner.actorId || existing.ownerSessionId !== owner.sessionId) {
+  if (!sameSession(existing, owner)) {
     throw new PlatformError('TENANT_ISOLATION', 'That migration workspace belongs to another signed-in session.');
   }
-  existing.usedAt = Date.now();
+  existing.usedAt = at;
   return existing;
 };
 
