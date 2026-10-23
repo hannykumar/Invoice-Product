@@ -50,7 +50,7 @@ test('June: every kind of paper is made through the app', async () => {
   session = await signIn();
   const consumer = await ok('POST', '/api/customers', { legalName: 'Lakshmi Stores', registration: 'unregistered', stateCode: '29', line1: '12, 4th Cross', city: 'Bengaluru', pincode: '560011' }, session);
   const abroad = await ok('POST', '/api/customers', { legalName: 'Gulf Steel LLC', registration: 'overseas', line1: 'Plot 9, Industrial Area 4', city: 'Sharjah, United Arab Emirates' }, session);
-  await ok('POST', '/api/items', { name: 'Press servicing 286', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', reference: 'item-286', requestId: 'item-286' }, session);
+  await ok('POST', '/api/items', { name: 'Press servicing 286', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', effectiveFrom: '2026-04-01', reference: 'item-286', requestId: 'item-286' }, session);
 
   const sale = (body: Record<string, unknown>) => ok('POST', '/api/sales/record', { terms: '0', ...body }, session);
   numbers.b2b = (await sale({ party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '10', rate: '100', date: '2026-06-10', reference: 'b2b-286', requestId: 'b2b-286' })).invoice.number;

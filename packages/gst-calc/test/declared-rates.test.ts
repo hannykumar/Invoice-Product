@@ -177,3 +177,37 @@ test('the longest matching code wins, so a specific declaration beats a general 
   const result = computed(productionCalculator(rates).compute(bill()));
   assert.equal(result.lines[0]?.ratePercentTimes100, 500n);
 });
+
+test('#281: a rate declared for one item is that item’s alone, however alike the codes', () => {
+  const rates = new InMemoryDeclaredRates()
+    .declare(declared({ itemId: 'CRATE-P', ratePercentTimes100: 500n }))
+    .declare(declared({ itemId: 'TUB-P', ratePercentTimes100: 1800n, declaredOn: isoDate('2026-04-05') }));
+  const result = computed(productionCalculator(rates).compute(bill()));
+  assert.equal(result.lines[0]?.ratePercentTimes100, 500n, 'the later declaration for another item under 3923 changes nothing');
+  assert.equal(rates.find(SHARMA, '3923', 'GOODS', on('2026-04-10'), 'TUB-P')?.ratePercentTimes100, 1800n);
+  assert.equal(rates.find(SHARMA, '3923', 'GOODS', on('2026-04-10'), 'BOWL-P'), undefined, 'an item with no rate of its own borrows none from another item');
+  assert.equal(rates.find(SHARMA, '3923', 'GOODS', on('2026-04-10')), undefined);
+});
+
+test('#281: the item’s own rate comes before a declaration for its whole code', () => {
+  const rates = new InMemoryDeclaredRates()
+    .declare(declared({ itemId: 'CRATE-P', ratePercentTimes100: 500n }))
+    .declare(declared({ code: '392310', ratePercentTimes100: 1800n, declaredOn: isoDate('2026-04-09') }));
+  assert.equal(computed(productionCalculator(rates).compute(bill())).lines[0]?.ratePercentTimes100, 500n);
+  assert.equal(rates.find(SHARMA, '39231090', 'GOODS', on('2026-04-10'), 'BOWL-P')?.ratePercentTimes100, 1800n, 'an item with none of its own falls back to the code');
+});
+
+test('#281: an item’s later rate takes over from its start date, and the earlier one still covers the days before', () => {
+  const rates = new InMemoryDeclaredRates()
+    .declare(declared({ itemId: 'CRATE-P', ratePercentTimes100: 1800n, effectiveFrom: isoDate('2026-04-01') }))
+    .declare(declared({ itemId: 'CRATE-P', ratePercentTimes100: 500n, effectiveFrom: isoDate('2026-07-01'), declaredOn: isoDate('2026-06-20') }))
+    .declare(declared({ itemId: 'CRATE-P', ratePercentTimes100: 1200n, effectiveFrom: isoDate('2026-07-01'), declaredOn: isoDate('2026-06-20') }));
+  const calculator = productionCalculator(rates);
+  assert.equal(computed(calculator.compute({ ...bill(), documentDate: on('2026-06-30') })).lines[0]?.ratePercentTimes100, 1800n);
+  assert.equal(computed(calculator.compute({ ...bill(), documentDate: on('2026-07-01') })).lines[0]?.ratePercentTimes100, 1200n, 'on a tie, the declaration made last');
+});
+
+test('#281: one business’s rate for an item never reaches another business’s item of the same id', () => {
+  const rates = new InMemoryDeclaredRates().declare(declared({ companyId: 'someone-else', itemId: 'CRATE-P' }));
+  assert.equal(productionCalculator(rates).compute(bill()).status, 'CANNOT_COMPUTE');
+});

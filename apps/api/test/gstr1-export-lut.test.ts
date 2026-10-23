@@ -36,7 +36,7 @@ const create = async (session: string, kind: 'customers' | 'items', body: Record
 const GULF = { legalName: 'Gulf Steel LLC', registration: 'overseas', line1: 'Plot 9, Industrial Area 4', city: 'Sharjah, United Arab Emirates' };
 const STEEL = {
   name: 'Export TMT Bar 16mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for steel bar',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for steel bar',
 };
 
 test('a month with an export under LUT approves, and the export is reported as zero-rated', async () => {

@@ -30,7 +30,7 @@ const signIn = async (): Promise<string> => {
 
 const GRANULES = {
   name: 'LDPE Granules', kind: 'goods', hsnSac: '39011000', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for granules',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for granules',
 };
 
 test('a new customer whose PIN code is in another state is refused', async () => {
