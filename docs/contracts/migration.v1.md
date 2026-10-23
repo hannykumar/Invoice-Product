@@ -1,4 +1,4 @@
-# Contract: `migration` v1.1.0
+# Contract: `migration` v1.2.0
 
 | | |
 | --- | --- |
@@ -127,11 +127,26 @@ posted visibly to `3900 Opening balance difference` with that reason.
 The reconciliation reads the posted voucher **back out of the ledger**, and the stock reconciliation
 reads the change in stock value **back out of the stock ledger**, rather than repeating the input.
 
+**One file holds at most 5,000 rows, and is read once (v1.2.0, issue #396).** `analyse` refuses a
+file with more than `MAX_ROWS_PER_FILE` data rows (title and blank lines do not count) with
+`MIGRATION_TOO_MANY_ROWS`, before any batch is kept; the message says to split the export, and
+`details` carries `rows`, `limit` and the Hindi sentence under `hi-IN`. The sheet `analyse` read is
+kept by the service (keyed by company, batch and digest) and reused by `preview` and `commit`; a
+service that never saw the analyse reads the stored text once and keeps that. `sniffDelimiter`
+compares only the first 64 KB of the file.
+
+In the running app (`apps/api/src/migration-application.ts`) each migration workspace belongs to one
+signed-in session. A session keeps at most 3 (a fourth closes that session's own oldest), a business
+at most 8 across all its sessions (a ninth is refused with `MIGRATION_TOO_MANY_OPEN`, 409, and
+nothing closes), and a workspace closes after 2 hours unused. One business can never close
+another's workspace.
+
 ## Errors
 
 | Code | Kind | Meaning |
 | --- | --- | --- |
 | `MIGRATION_NO_HEADINGS` | INVALID | No heading row could be found. |
+| `MIGRATION_TOO_MANY_ROWS` | INVALID | The file has more than `MAX_ROWS_PER_FILE` (5,000) data rows. Nothing is kept. |
 | `MIGRATION_TRANSACTIONS_NOT_SUPPORTED` | NOT_ALLOWED | The file is a bill register. |
 | `MIGRATION_MAPPING_NOT_APPROVED` | NOT_ALLOWED | Nobody has approved the columns. |
 | `MIGRATION_MAPPING_CHANGED` | CONFLICT | The columns and the fingerprint disagree. |

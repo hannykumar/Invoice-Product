@@ -101,7 +101,7 @@ export const SOURCES: readonly ComplianceSource[] = [
     url: 'https://cbic-gst.gov.in/hindi/IGST-bill-e.html',
     provision: 'Section 12(2)',
     quotedText:
-      'Services made to a registered person shall be the location of such person; made to any person other than a registered person shall be the location of the recipient where the address on record exists.',
+      'The place of supply of services, except the services specified in sub-sections (3) to (14),–– made to a registered person shall be the location of such person; made to any person other than a registered person shall be,–– (i) the location of the recipient where the address on record exists; and (ii) the location of the supplier of services in other cases.',
     effectiveFrom: isoDate('2017-07-01'),
     effectiveTo: null,
     retrievedOn: isoDate('2026-08-29'),
@@ -111,7 +111,7 @@ export const SOURCES: readonly ComplianceSource[] = [
     reviewedBy: GPT1,
     reviewedOn: isoDate('2026-08-29'),
     notes:
-      'The general rule for domestic services. Sections 12(3) to 12(14) carve out specific services — immovable property, transport, events, telecom and others — none of which are implemented; those are refused.',
+      'The general rule for domestic services. Sections 12(3) to 12(14) carve out specific services — immovable property, transport, events, telecom and others — none of which are implemented; those are refused. Clause (b) was re-read in full from the same page on 2026-10-23 for issue #287, which added limb (ii), the supplier’s location when no address is on record.',
   }),
   source({
     id: 'utgst-act-2017-s1-2',

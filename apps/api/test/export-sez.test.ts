@@ -71,13 +71,13 @@ test('an export under LUT: no tax, the endorsement, the shipping bill and the do
     shippingBillNumber: '4455667', shippingBillDate: '2026-09-19', portCode: 'innsa1',
   };
 
-  const checked = await request('POST', '/api/sales/preview', { ...sale, reference: 'export-143-lut' }, session);
+  const checked = await request('POST', '/api/sales/preview', { ...sale, reference: 'export-143-lut', requestId: 'export-143-lut' }, session);
   assert.equal(checked.status, 200, checked.body.message);
   assert.match(String(checked.body.exportSupply.endorsement), /UNDER BOND OR LETTER OF UNDERTAKING WITHOUT PAYMENT/);
   assert.match(String(checked.body.message), /no GST is charged/);
   assert.equal(checked.body.amount, 100000);
 
-  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'export-143-lut-2' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'export-143-lut-2', requestId: 'export-143-lut-2' }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const invoiceId = recorded.body.invoice.id as string;
   const html = await printOf(session, invoiceId);
@@ -105,7 +105,7 @@ test('an export on payment of IGST charges integrated tax and says so', async ()
   const itemId = await ensure(session, 'items', GRANULES);
   const recorded = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '10', rate: '1000' }], date: '2026-09-17', terms: '30',
-    underLut: 'no', exportCountry: 'US', reference: 'export-143-igst',
+    underLut: 'no', exportCountry: 'US', reference: 'export-143-igst', requestId: 'export-143-igst',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const html = await printOf(session, recorded.body.invoice.id);
@@ -120,7 +120,7 @@ test('a sale to an SEZ unit under LUT prints as a supply to SEZ, with no tax', a
   const customerId = await ensure(session, 'customers', SEZ);
   const itemId = await ensure(session, 'items', GRANULES);
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '10', rate: '1000' }], date: '2026-09-17', terms: '30', reference: 'sez-143',
+    customerId, lines: [{ itemId, quantity: '10', rate: '1000' }], date: '2026-09-17', terms: '30', reference: 'sez-143', requestId: 'sez-143',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const html = await printOf(session, recorded.body.invoice.id);
@@ -135,7 +135,7 @@ test('a wrong export form is refused before anything is drafted, every problem a
   const itemId = await ensure(session, 'items', GRANULES);
   const refused = await request('POST', '/api/sales/preview', {
     customerId, lines: [{ itemId, quantity: '1', rate: '100' }], date: '2026-09-17', terms: '30',
-    exportCountry: '', exportCurrency: 'USD', exchangeRate: '', portCode: 'NHAVA', reference: 'export-143-bad',
+    exportCountry: '', exportCurrency: 'USD', exchangeRate: '', portCode: 'NHAVA', reference: 'export-143-bad', requestId: 'export-143-bad',
   }, session);
   assert.equal(refused.status, 422);
   assert.match(refused.body.message, /which country/);
@@ -150,7 +150,7 @@ test('GSTR-1 reports the export and the SEZ sale the way their bills were printe
   const itemId = await ensure(session, 'items', GRANULES);
   const sell = async (customerId: string, reference: string, extra: Record<string, unknown> = {}) => {
     const recorded = await request('POST', '/api/sales/record', {
-      customerId, lines: [{ itemId, quantity: '5', rate: '1000' }], date: '2026-08-12', terms: '0', reference, ...extra,
+      customerId, lines: [{ itemId, quantity: '5', rate: '1000' }], date: '2026-08-12', terms: '0', reference, requestId: reference, ...extra,
     }, session);
     assert.equal(recorded.status, 200, recorded.body.message);
     return String(recorded.body.invoice.number);

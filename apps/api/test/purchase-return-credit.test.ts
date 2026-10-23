@@ -51,7 +51,7 @@ const bought = (async () => {
   assert.ok(document, JSON.stringify(bill));
   const recorded = await application.recordReturn(actor, {
     kind: 'PURCHASE_RETURN', documentId: document.id, lineId: document.lines[0].id,
-    quantity: '50', unit: 'KGS', disposition: 'ACCEPTED', date: DATE, reference: 'srs-back-50',
+    quantity: '50', unit: 'KGS', disposition: 'ACCEPTED', date: DATE, reference: 'srs-back-50', requestId: 'srs-back-50',
     reason: 'Bent bars',
     // The screen's date field starts at today; an empty number means the note has not come yet.
     supplierNoteNumber: '', supplierNoteDate: DATE,

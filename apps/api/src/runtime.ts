@@ -8,8 +8,10 @@ import { businessDetailsOf, saveBusinessDetails } from './business-details-appli
 import type { CompanySeed } from './company-shop.ts';
 import type { CatalogueSeed } from './catalogue-application.ts';
 import { createOperations, type QueueJob, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
+import { PostgresOperationsStore } from '../../../ops/operations/src/postgres-store.ts';
 import { PostgresRecurringWork } from '../../../ops/operations/src/recurring-postgres.ts';
 import { OutboxRelay } from '../../../packages/platform/src/outbox.ts';
+import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
 import { MEMORY, recordId, type Persistence } from './persistence.ts';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { recordMasterDataAs } from './master-data.ts';
@@ -123,7 +125,10 @@ const storedSeed = (persistence: Persistence, companyId: string, details: Omit<C
 export class ApiRuntime {
   readonly #persistence: Persistence;
   readonly #applications = new Map<string, Promise<DemoApplication>>();
-  readonly #operations = createOperations();
+  /** Issue #366 — on PostgreSQL, failures, support grants and incidents are rows (`PostgresOperationsStore`). */
+  readonly #operations: ReturnType<typeof createOperations>;
+  /** The made-up incident, written once in memory; read only after it is there. */
+  readonly #demoIncident: Promise<unknown> = Promise.resolve();
   readonly #operationsSeeded = new Set<string>();
   readonly #recurringRegistered = new Set<string>();
   /** Issue #342 — codes, sessions, signing out and switching company. */
@@ -137,6 +142,9 @@ export class ApiRuntime {
   constructor(persistence: Persistence = MEMORY, signIn: SignIn = createSignIn(persistence)) {
     this.#persistence = persistence;
     this.signIn = signIn;
+    this.#operations = persistence.kind === 'postgres'
+      ? createOperations(undefined, undefined, { store: new PostgresOperationsStore(persistence.db), audit: new PostgresAuditLog(persistence.db) })
+      : createOperations();
     this.#recurring = persistence.kind === 'postgres' ? new PostgresRecurringWork(persistence.db) : null;
     // A message whose sender died is sent again once its lease has passed (60 s unless set).
     this.#relay = persistence.kind === 'postgres' ? new OutboxRelay(persistence.db, { leaseSeconds: Number(process.env.WORKER_OUTBOX_LEASE_SECONDS ?? 60), maxAttempts: OUTBOX_MAX_ATTEMPTS }) : null;
@@ -144,8 +152,9 @@ export class ApiRuntime {
     if (persistence.kind === 'postgres') return;
     const demo = SYNTHETIC_PLATFORM_COMPANIES[0];
     const incidentActor: RequestContext = { companyId: demo.companyId, branchId: demo.branchId, actorId: demo.userId, sessionId: 'operations-seed', permissions: new Set(PRODUCT_OWNER_PERMISSIONS) };
-    const incident = this.#operations.status.openIncident(incidentActor, 'E-invoice registration delay', 'Invoice Registration Portal', 'Some registrations were delayed. Customer invoices remained unchanged.');
-    this.#operations.status.updateIncident(incidentActor, incident.id, 'resolved', 'The portal recovered. Safe queued registrations can now be replayed by an authorised operator.');
+    const status = this.#operations.status;
+    this.#demoIncident = status.openIncident(incidentActor, 'E-invoice registration delay', 'Invoice Registration Portal', 'Some registrations were delayed. Customer invoices remained unchanged.')
+      .then((incident) => status.updateIncident(incidentActor, incident.id, 'resolved', 'The portal recovered. Safe queued registrations can now be replayed by an authorised operator.'));
   }
 
   /** The signed-in context, from the session alone (rule 6). */
@@ -192,7 +201,7 @@ export class ApiRuntime {
       const seedContext: RequestContext = { companyId: context.companyId, branchId: context.branchId, actorId: `demo-seed:${context.companyId}`, sessionId: `demo-seed:${context.companyId}`, permissions: new Set<Permission>(['operations.read']) };
       this.#operations.telemetry.registerHealthCheck('api', () => true);
       this.#operations.telemetry.registerHealthCheck('queue', () => true);
-      this.#operations.telemetry.externalFailure(seedContext, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
+      await this.#operations.telemetry.externalFailure(seedContext, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
       const job = this.#operations.queue.enqueue(seedContext, { kind: 'irp-register', idempotencyKey: `demo-invoice-${context.companyId}`, idempotent: true, maxAttempts: 1, correlationId: `irp-demo-${context.companyId}` });
       this.#operations.queue.begin(seedContext, job.id);
       this.#operations.queue.fail(seedContext, job.id, 'IRP_TEMPORARILY_UNAVAILABLE');
@@ -243,7 +252,8 @@ export class ApiRuntime {
     const [jobs, recurring] = db === null || this.#recurring === null
       ? [this.#operations.queue.list(context), this.#operations.recurring.status(context)]
       : [await outboxJobs(db, context), await this.#recurring.status(context)];
-    return { health: await this.#operations.telemetry.health(), failures: this.#operations.telemetry.failures(context), jobs, recurring, incidents: this.#operations.status.publicStatus() };
+    const { incidents } = await this.publicStatus();
+    return { health: await this.#operations.telemetry.health(), failures: await this.#operations.telemetry.failures(context), jobs, recurring, incidents };
   }
 
   /** In memory: the in-process schedule. On PostgreSQL the worker runs it (`workOn`). */
@@ -286,13 +296,16 @@ export class ApiRuntime {
     return true;
   }
 
-  grantSupportAccess(context: RequestContext, input: Record<string, unknown>) {
+  async grantSupportAccess(context: RequestContext, input: Record<string, unknown>) {
     const scopes = Array.isArray(input.scopes) ? input.scopes.filter((scope): scope is 'external-failures' | 'queue-state' | 'health' => scope === 'external-failures' || scope === 'queue-state' || scope === 'health') : [];
-    const grant = this.#operations.support.grant(context, { supportActorId: String(input.supportActorId ?? ''), reason: String(input.reason ?? ''), scopes, durationMs: Number(input.durationMinutes ?? 30) * 60 * 1000 });
+    const grant = await this.#operations.support.grant(context, { supportActorId: String(input.supportActorId ?? ''), reason: String(input.reason ?? ''), scopes, durationMs: Number(input.durationMinutes ?? 30) * 60 * 1000 });
     return { ...grant, scopes: [...grant.scopes] };
   }
 
-  publicStatus() { return { incidents: this.#operations.status.publicStatus() }; }
+  async publicStatus() {
+    await this.#demoIncident;
+    return { incidents: await this.#operations.status.publicStatus() };
+  }
 
   /** Whether write requests run as one unit of work, and on which database. */
   get database() { return this.#persistence.kind === 'postgres' ? this.#persistence.db : null; }

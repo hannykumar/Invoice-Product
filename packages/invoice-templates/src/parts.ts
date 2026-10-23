@@ -71,7 +71,8 @@ const T = {
   // brackets; it never replaces it, because a buyer's accountant and an officer both read the term.
   reverseCharge: w('Reverse Charge', 'Reverse Charge (GST customer khud bharega)'),
   gstin: w('GSTIN', 'GST number'),
-  item: w('Description of Goods', 'Item'),
+  // Issue #287 — CGST Rule 46(g): the bill describes goods or services.
+  item: w('Description of Goods / Services', 'Item'),
   hsn: w('HSN / SAC', 'HSN / SAC'),
   qty: w('Quantity', 'Kitna'),
   rate: w('Rate', 'Rate'),

@@ -50,28 +50,28 @@ test('June: every kind of paper is made through the app', async () => {
   session = await signIn();
   const consumer = await ok('POST', '/api/customers', { legalName: 'Lakshmi Stores', registration: 'unregistered', stateCode: '29', line1: '12, 4th Cross', city: 'Bengaluru', pincode: '560011' }, session);
   const abroad = await ok('POST', '/api/customers', { legalName: 'Gulf Steel LLC', registration: 'overseas', line1: 'Plot 9, Industrial Area 4', city: 'Sharjah, United Arab Emirates' }, session);
-  await ok('POST', '/api/items', { name: 'Press servicing 286', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', reference: 'item-286' }, session);
+  await ok('POST', '/api/items', { name: 'Press servicing 286', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', reference: 'item-286', requestId: 'item-286' }, session);
 
   const sale = (body: Record<string, unknown>) => ok('POST', '/api/sales/record', { terms: '0', ...body }, session);
-  numbers.b2b = (await sale({ party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '10', rate: '100', date: '2026-06-10', reference: 'b2b-286' })).invoice.number;
-  numbers.b2c = (await sale({ customerId: consumer.customer.id, item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-06-11', reference: 'b2c-286' })).invoice.number;
-  numbers.service = (await sale({ party: 'ABC Traders', item: 'Press servicing 286', quantity: '1', rate: '2000', date: '2026-06-12', reference: 'svc-286' })).invoice.number;
+  numbers.b2b = (await sale({ party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '10', rate: '100', date: '2026-06-10', reference: 'b2b-286', requestId: 'b2b-286' })).invoice.number;
+  numbers.b2c = (await sale({ customerId: consumer.customer.id, item: 'Herbal Bath Soap 100g', quantity: '5', rate: '100', date: '2026-06-11', reference: 'b2c-286', requestId: 'b2c-286' })).invoice.number;
+  numbers.service = (await sale({ party: 'ABC Traders', item: 'Press servicing 286', quantity: '1', rate: '2000', date: '2026-06-12', reference: 'svc-286', requestId: 'svc-286' })).invoice.number;
   numbers.export = (await sale({
     customerId: abroad.customer.id, item: 'Herbal Bath Soap 100g', quantity: '50', rate: '100', date: '2026-06-15',
     underLut: 'yes', exportCountry: 'AE', exportCurrency: 'USD', exchangeRate: '84',
-    shippingBillNumber: '1234567', shippingBillDate: '2026-06-16', portCode: 'INMAA1', reference: 'exp-286',
+    shippingBillNumber: '1234567', shippingBillDate: '2026-06-16', portCode: 'INMAA1', reference: 'exp-286', requestId: 'exp-286',
   })).invoice.number;
 
   // A services advance: GST is due when the money arrives. Not billed in June.
-  const pi = await ok('POST', '/api/presale/issue', { kind: 'PROFORMA', date: '2026-06-20', customerId: 'ABC Traders', item: 'Press servicing 286', quantity: '1', rate: '10000', purpose: 'Advance for servicing', reference: 'pi-286' }, session);
-  const advance = await ok('POST', '/api/presale/advance', { document: pi.document.id, amount: '11800', date: '2026-06-20', mode: 'UPI', reference: 'adv-286' }, session);
+  const pi = await ok('POST', '/api/presale/issue', { kind: 'PROFORMA', date: '2026-06-20', customerId: 'ABC Traders', item: 'Press servicing 286', quantity: '1', rate: '10000', purpose: 'Advance for servicing', reference: 'pi-286', requestId: 'pi-286' }, session);
+  const advance = await ok('POST', '/api/presale/advance', { document: pi.document.id, amount: '11800', date: '2026-06-20', mode: 'UPI', reference: 'adv-286', requestId: 'adv-286' }, session);
   numbers.advance = advance.advance.number;
   numbers.proforma = pi.document.id;
   // A goods advance: no GST, but the receipt voucher's number is counted.
-  const goodsPi = await ok('POST', '/api/presale/issue', { kind: 'PROFORMA', date: '2026-06-21', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', purpose: 'Advance for soap', reference: 'pi-286-goods' }, session);
-  numbers.goodsAdvance = (await ok('POST', '/api/presale/advance', { document: goodsPi.document.id, amount: '1000', date: '2026-06-21', mode: 'CASH', reference: 'adv-286-goods' }, session)).advance.number;
+  const goodsPi = await ok('POST', '/api/presale/issue', { kind: 'PROFORMA', date: '2026-06-21', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '100', rate: '25', purpose: 'Advance for soap', reference: 'pi-286-goods', requestId: 'pi-286-goods' }, session);
+  numbers.goodsAdvance = (await ok('POST', '/api/presale/advance', { document: goodsPi.document.id, amount: '1000', date: '2026-06-21', mode: 'CASH', reference: 'adv-286-goods', requestId: 'adv-286-goods' }, session)).advance.number;
   // A job-work challan.
-  numbers.challan = (await ok('POST', '/api/challans/issue', { reason: 'JOB_WORK', date: '2026-06-22', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '20', rate: '40', reference: 'dc-286' }, session)).challan.number;
+  numbers.challan = (await ok('POST', '/api/challans/issue', { reason: 'JOB_WORK', date: '2026-06-22', customerId: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '20', rate: '40', reference: 'dc-286', requestId: 'dc-286' }, session)).challan.number;
 
   await approve(session, '2026-06');
   june = await file(session, '2026-06', 'GSTR1');
@@ -123,7 +123,7 @@ test('table 11A carries the June services advance, by place of supply and rate',
 });
 
 test('July: the June advance used against its bill goes in table 11B', async () => {
-  const bill = await ok('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Press servicing 286', quantity: '1', rate: '10000', date: '2026-07-05', terms: '0', reference: 'svc-286-july' }, session);
+  const bill = await ok('POST', '/api/sales/record', { party: 'ABC Traders', item: 'Press servicing 286', quantity: '1', rate: '10000', date: '2026-07-05', terms: '0', reference: 'svc-286-july', requestId: 'svc-286-july' }, session);
   await ok('POST', '/api/presale/link-invoice', { document: numbers.proforma, invoice: bill.invoice.id }, session);
   await approve(session, '2026-07');
   const july = await file(session, '2026-07', 'GSTR1');

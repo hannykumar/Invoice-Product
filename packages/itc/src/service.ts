@@ -350,6 +350,10 @@ export class ItcReconciliationService {
     this.#require(actor, ITC_PERMISSIONS.decide);
     const existing = await this.#decisions.findByIdempotencyKey(actor.companyId, input.idempotencyKey);
     if (existing !== null) {
+      // Issue #392 — the same key is a retry only when it carries the same answer for the same bill.
+      if (existing.period !== input.period || existing.lineKey !== input.lineKey || existing.kind !== input.kind || existing.reason !== input.reason.trim()) {
+        throw conflict('ITC_KEY_REUSED', 'This entry was already used for a different answer. Nothing new was recorded; choose the answer again.');
+      }
       const repeated = await this.workspace(actor, input.period);
       const accepted = repeated.lines.find((candidate) => candidate.key === existing.lineKey);
       if (

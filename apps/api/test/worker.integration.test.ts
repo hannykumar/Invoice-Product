@@ -65,7 +65,7 @@ test('a worker killed after the portal answered, before it saved the answer: the
   assert.equal(customer.status, 200, JSON.stringify(customer));
   const item = await call('POST', '/api/items', { name: `Machine servicing ${run}`, hsn: '998719', unit: 'NOS', kind: 'service', ratePercent: '18', basis: 'Rate this business charges', effectiveFrom: '2026-04-01', acknowledgeSimilar: true }, token);
   assert.equal(item.status, 200, JSON.stringify(item));
-  const sale = await call('POST', '/api/sales/record', { customerId: customer.customer.id, itemId: item.item.id, quantity: '1', rate: '10000', date: new Date().toISOString().slice(0, 10), terms: '30', reference: `worker-${run}` }, token);
+  const sale = await call('POST', '/api/sales/record', { customerId: customer.customer.id, itemId: item.item.id, quantity: '1', rate: '10000', date: new Date().toISOString().slice(0, 10), terms: '30', reference: `worker-${run}`, requestId: `worker-${run}` }, token);
   assert.equal(sale.status, 200, JSON.stringify(sale));
   assert.equal(sale.eInvoice?.needed, 'YES', JSON.stringify(sale.eInvoice));
   const bill = String(sale.invoice.id);
