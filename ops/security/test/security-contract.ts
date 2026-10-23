@@ -189,6 +189,7 @@ export function securityContract(name: string, make: () => SecurityHarness, skip
     await assert.rejects(recovery.restore(a, made[0].id, target));
     assert.equal(replaced, 1);
     const drills = await recovery.drills(a, { limit: 1 });
+    assert.equal((await recovery.drills(a, { limit: Number.NaN })).length, 2);
     assert.deepEqual([...drills, ...(await recovery.drills(a, { after: drills[0]!.id }))].map((d) => d.status).sort(), ["failed", "passed"]);
     now = new Date(NOW.getTime() + 2 * 86_400_000);
     assert.equal(await recovery.pruneExpired(b), 0);

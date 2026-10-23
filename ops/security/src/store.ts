@@ -11,7 +11,10 @@ import type { ConsentRecord, LegalHold, PrivacyNotice, PrivacyRequest } from "./
 import type { BackupManifest, RestoreDrill, StoredBackup } from "./recovery.ts";
 
 export interface Page { readonly limit?: number; readonly after?: string }
-export const pageLimit = (page?: Page): number => Math.min(Math.max(Math.trunc(page?.limit ?? 100), 1), 500);
+export const pageLimit = (page?: Page): number => {
+  const limit = Number(page?.limit ?? 100);
+  return Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 100;
+};
 
 /** The audit trail: the in-memory `AuditLog`, or `PostgresAuditLog` joining the same unit of work. */
 export interface SecurityAudit { append(event: Omit<AuditEvent, "id" | "occurredAt">): unknown }
