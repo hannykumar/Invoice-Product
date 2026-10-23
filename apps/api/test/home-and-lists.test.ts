@@ -141,9 +141,11 @@ test('a promise and a dispute about Mehta\'s bill are recorded against Mehta, an
   const unknown = await request('POST', '/api/reminders/promise', { documentId: 'no-such-bill', amount: '1', promisedOn: '2026-10-15' }, owner);
   assert.equal(unknown.status, 404);
 
-  // Forty days on, Mehta's bill is late; the reminder is Mehta's and goes to Mehta's phone.
-  const later = '2026-11-20';
-  const sent = await request('POST', '/api/reminders/send', { documentId: bill.id, today: later }, owner);
+  // Fifty-three days on by the server's clock (#403), Mehta's bill is late; the reminder is Mehta's
+  // and goes to Mehta's phone.
+  useFixedAppClock('2026-11-20T10:00:00.000Z');
+  const sent = await request('POST', '/api/reminders/send', { documentId: bill.id }, owner)
+    .finally(() => useFixedAppClock('2026-09-28T10:00:00.000Z'));
   assert.equal(sent.status, 200, JSON.stringify(sent.body));
   assert.equal(sent.body.reminder.partyId, mehta);
   const outbox = (await request('GET', '/api/reminders', {}, owner)).body.outbox;
