@@ -75,6 +75,8 @@ does.
 | `advance_receipts` | always | `updated_at`, `version` | — |
 | `agent_plans` (#47, #366) | `EXECUTED` | `updated_at` | none: an executed plan is only ever saved again unchanged |
 | `agent_reports` | always | nothing | — |
+| `operational_failures`, `status_incident_updates` (#366) | always | nothing | — |
+| `support_access_grants` (#366) | always | `revoked_at`, once (`operations_grant_revoked_once`) | — |
 
 Each row was checked against the module's service and repository before it was frozen. The list
 lives in one place, `FROZEN` in `immutability-migrations.ts`.
@@ -103,7 +105,7 @@ Append-only by their schema comments but not verified against a repository, so l
 lanes: `master_versions`, `master_snapshots`, `master_merges`, `bank_statement_transactions`,
 `subscription_payment_events`, `subscription_usage_events`,
 `notification_delivery_events`, `collection_communications`, `compliance_alerts`,
-`privacy_consents`, `restore_drills`, `status_incident_updates`, `government_calls` (freezable
+`privacy_consents`, `restore_drills`, `government_calls` (freezable
 once its outcome is settled). `stock_balances` is not frozen because it is not a record: it is the
 sum of `stock_movements`, written only by the database (see [`sales-schema-v1`](./sales-schema-v1.md)).
 

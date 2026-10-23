@@ -682,6 +682,35 @@ test('a sales invoice that is not final is refused rather than reported', () => 
   );
 });
 
+test('#287: a service bill reports its rows as services, and a bill with no kind stays goods', () => {
+  const bill = (supplyKind?: 'GOODS' | 'SERVICES') => salesInvoiceToDocument(
+    {
+      id: 'inv-svc', companyId: SUNRISE_COMPANY, state: 'FINAL', number: 'INV-SVC', documentDate: '2026-07-05',
+      partyId: 'p', customerType: 'B2B', placeOfSupplyStateCode: '27', voucherId: 'vch-svc',
+      ...(supplyKind === undefined ? {} : { supplyKind }),
+      pricing: {
+        lines: [{
+          lineId: 'l1', itemId: 'CUT', itemName: 'Steel cutting service', hsnOrSac: '998898', quantity: quantityFromString('1', 'NOS'),
+          ratePercentTimes100: 1800n,
+          taxableValue: { currency: 'INR', minor: 6_000_000n },
+          cgst: { currency: 'INR', minor: 0n },
+          sgst: { currency: 'INR', minor: 0n },
+          utgst: { currency: 'INR', minor: 0n },
+          igst: { currency: 'INR', minor: 1_080_000n },
+          cess: { currency: 'INR', minor: 0n },
+          reverseCharge: false, rateBasis: 'BUSINESS_DECLARED',
+        }],
+        totals: { invoiceValue: { currency: 'INR', minor: 7_080_000n } },
+      },
+    },
+    { name: 'Pune customer', gstin: null, stateCode: '27', unregisteredConfirmed: true },
+    { gstin: SUNRISE_GSTIN, stateCode: SUNRISE_STATE },
+  );
+  assert.deepEqual(bill('SERVICES').lines.map((line) => line.supplyKind), ['SERVICES']);
+  assert.deepEqual(bill('GOODS').lines.map((line) => line.supplyKind), ['GOODS']);
+  assert.deepEqual(bill().lines.map((line) => line.supplyKind), ['GOODS']);
+});
+
 test('union-territory tax is folded into the state column, because the form has no other', () => {
   const document = salesInvoiceToDocument(
     {

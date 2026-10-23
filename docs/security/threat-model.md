@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 159 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 172 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -87,7 +87,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | Sales and returns | `/api/sales/*`, `/api/returns/*`, PDFs and previews | §4.6 |
 | Government | `/api/einvoices/*`, `/api/eway/*`, `/api/challans/*`, `/api/gst-returns/*`, `/api/itc/*`, `/api/vehicles/*` | Adapters mocked; WhiteBooks sandbox |
 | Purchasing | `/api/purchase-orders`, `/api/goods-receipts`, `/api/purchases/*`, `/api/suppliers/check*` | |
-| Money | `/api/payments/*`, `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
+| Money | `/api/payments/*`, `/api/books/*` (expenses, journal, contra, owner's money, cash and bank books), `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
 | Agent and reminders | `/api/agent/*`, `/api/reminders/*` | §4.7 |
 | Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves only the page's own files (`index.html`, its `*.js`, `*.css`, `*.svg`); everything else is 404 (#393) |
 
@@ -159,8 +159,8 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF`; such cells are prefixed with `'` in the error file and report CSVs | — | Low | #394 |
-| M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | — | Body limit, row limit | Medium | #349 + #396 |
-| M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session | Per-company slots | Low | #396 |
+| M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | 5 MB body limit (#349); `MAX_ROWS_PER_FILE` (5,000 data rows) refused at analyse with `MIGRATION_TOO_MANY_ROWS`; the file is split once at analyse and that reading is reused by preview and commit; the separator is sniffed from the first 64 KB only | — | Low | #349 + #396 |
+| M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session; a session's extra workspaces close only its own oldest (3 per session); each business has its own cap of 8 and is refused (`MIGRATION_TOO_MANY_OPEN`) rather than evicting; a workspace closes after 2 hours unused | — | Low | #396 |
 | M4 | XLSX zip bomb, or a bank-statement PDF bomb, once those parsers are routed (A04/A06) | Low | Medium | Not routed | Size, sheet, page and row limits before parsing | Low | — |
 | E1 | GST return and offline JSON exports leak another company's data (A01) | Low | High | Permission and `actor.companyId` in the service | — | Low | — |
 | E2 | Header injection through a PDF filename (A03) | Low | Low | Filenames sanitised | — | Low | — |
@@ -168,14 +168,14 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 ### 4.6 PDF generation and printed bills
 
 Bills, notes, challans, quotations and e-way bills are rendered as HTML on the server, shown in the
-browser in `<iframe srcdoc>` frames, and turned into PDFs by launching headless Chromium
-(`packages/invoice-templates/src/pdf.ts`) with JavaScript enabled and every request but `data:`
-blocked.
+browser in `<iframe srcdoc>` frames, and turned into PDFs by one shared headless Chromium (`packages/invoice-templates/src/pdf.ts`, #398):
+at most two pages render together, sixteen more may wait, each render has a 20-second limit,
+JavaScript is off in the page and every request but `data:` is blocked.
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | P1 | An escaping miss in any template becomes same-origin XSS: the bill frames share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked); the #349 CSP is inherited by `srcdoc` and blocks inline script; every bill frame has `sandbox="allow-same-origin allow-modals"` (no `allow-scripts`), so nothing in a bill can run even without the CSP (#399) | — | Low | #349 (CSP) + #399 |
-| P2 | One Chromium per PDF request: repeated GETs exhaust the server; JavaScript is on in the renderer (A04) | Medium | Medium | Network blocked | A shared browser, JavaScript off, a rate limit | Medium | #350 + #398 |
+| P2 | Repeated PDF GETs exhaust the server (A04) | Medium | Medium | Network blocked; one shared browser, bounded pages and queue, a per-render time limit, JavaScript off (#398) | A per-user rate limit | Low | #350 |
 
 ### 4.7 Voice and text assistant, action agent — prompt injection
 
@@ -407,3 +407,16 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/returns/notes` | service |
 | POST | `/api/returns/supplier-note` | `returns.create` |
 | POST | `/api/returns/print` | `returns.create` |
+| GET | `/api/books/heads` | service |
+| GET | `/api/books/journal/accounts` | service |
+| POST | `/api/books/expense/preview` | `ledger.post.payment` |
+| POST | `/api/books/expense/record` | `ledger.post.payment` |
+| POST | `/api/books/journal/preview` | `ledger.post.journal` |
+| POST | `/api/books/journal/record` | `ledger.post.journal` |
+| POST | `/api/books/contra/preview` | `ledger.post.journal` |
+| POST | `/api/books/contra/record` | `ledger.post.journal` |
+| POST | `/api/books/owner/preview` | `ledger.post.receipt` or `ledger.post.payment` |
+| POST | `/api/books/owner/record` | `ledger.post.receipt` or `ledger.post.payment` |
+| POST | `/api/books/undo` | `ledger.reverse` |
+| GET | `/api/books/entries` | service |
+| GET | `/api/books/book` | service |

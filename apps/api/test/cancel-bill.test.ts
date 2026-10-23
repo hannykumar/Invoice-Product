@@ -162,7 +162,7 @@ test('#233: a bill made twice is cancelled — number kept, balance, stock and G
   const original = documents.body.documents.find((document: any) => document.number === first.number);
   assert.equal(original.leftToCredit, 50150);
   assert.equal(documents.body.documents.some((document: any) => document.number === twice.number), false, 'a cancelled bill takes no return');
-  const whole = { kind: 'SALES_RETURN', documentId: original.id, lineId: '__whole__', date: DATE, reason: 'Order withdrawn after filing', disposition: 'ACCEPTED', reference: 'cancel-233-whole' };
+  const whole = { kind: 'SALES_RETURN', documentId: original.id, lineId: '__whole__', date: DATE, reason: 'Order withdrawn after filing', disposition: 'ACCEPTED', reference: 'cancel-233-whole', requestId: 'cancel-233-whole' };
   const notePreview = await request('POST', '/api/returns/preview', whole, owner);
   assert.equal(notePreview.status, 200, JSON.stringify(notePreview.body));
   assert.equal(notePreview.body.amount, 50150);

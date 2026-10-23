@@ -3,3 +3,4 @@ export * from "./operations.ts";
 export * from "./migrations.ts";
 export * from "./recurring.ts";
 export * from "./recurring-adapters.ts";
+export * from "./store.ts";

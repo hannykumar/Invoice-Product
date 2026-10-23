@@ -53,6 +53,8 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
 
   { code: '3000', name: "The owner's money in the business", type: 'EQUITY', parentCode: null, isGroup: true, systemRole: null },
   { code: '3100', name: 'Capital', type: 'EQUITY', parentCode: '3000', isGroup: false, systemRole: null },
+  // Issue #294 — what the owner takes out for home; it reduces capital, it is not a business cost.
+  { code: '3150', name: 'Money the owner took out (drawings)', type: 'EQUITY', parentCode: '3000', isGroup: false, systemRole: null },
   { code: '3200', name: 'Profit kept in the business', type: 'EQUITY', parentCode: '3000', isGroup: false, systemRole: 'RETAINED_EARNINGS' },
   { code: '3900', name: 'Opening balance difference', type: 'EQUITY', parentCode: '3000', isGroup: false, systemRole: 'OPENING_BALANCE_DIFFERENCE' },
 
@@ -74,6 +76,14 @@ export const DEFAULT_CHART: readonly SeedAccount[] = [
   { code: '5300', name: 'Freight paid on sales', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'FREIGHT_OUTWARD' },
   { code: '5400', name: 'Discount given', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'DISCOUNT_ALLOWED' },
   { code: '5500', name: 'Money we could not collect', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: 'BAD_DEBTS' },
+  // Issue #294 — the running costs a shop pays, each its own line on "What you earned and what you spent".
+  { code: '5610', name: 'Rent', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
+  { code: '5620', name: 'Wages and salaries', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
+  { code: '5630', name: 'Electricity', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
+  { code: '5640', name: 'Transport and travel', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
+  { code: '5650', name: 'Repairs and upkeep', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
+  { code: '5660', name: 'Bank charges', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
+  { code: '5670', name: 'Telephone and internet', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
   { code: '5900', name: 'Other business costs', type: 'EXPENSE', parentCode: '5000', isGroup: false, systemRole: null },
 ];
 

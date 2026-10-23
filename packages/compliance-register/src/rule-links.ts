@@ -19,11 +19,12 @@ export const RULE_SOURCE_LINKS: readonly RuleSourceLink[] = [
   },
   {
     ruleId: 'gst.place_of_supply.services',
-    ruleVersion: '2026.08.29',
+    ruleVersion: '2026.10.23',
     sourceIds: ['igst-act-2017-s12-2'],
     tests: [
       'packages/rules-engine/test/approved-gst.test.ts › services to a registered person take that person’s location',
       'packages/rules-engine/test/approved-gst.test.ts › services to an unregistered person need a recorded address',
+      'packages/rules-engine/test/approved-gst.test.ts › #287: services to an unregistered person with no address on record take the supplier’s state',
     ],
   },
   {

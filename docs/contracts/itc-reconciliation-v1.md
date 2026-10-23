@@ -123,6 +123,10 @@ Each of the four repositories has an in-memory store (`adapters.ts`) and a Postg
   `ITC_DECISION_DUPLICATE` (both `CONFLICT`). The service looks first, so a person never sees either;
   they are what two simultaneous requests get. A second claim for the same bill is not an error: the
   first is returned with `inserted: false`.
+- **A key is one answer (issue #392).** A decision key seen before is a retry only for the same
+  month, line, decision and reason; anything else is `ITC_KEY_REUSED` (`CONFLICT`, HTTP 409).
+  `POST /api/itc/decide` needs the screen's own `requestId` (`ITC_REQUEST_ID_REQUIRED`, 422
+  without one); the server no longer makes one from the clock.
 - Nothing is deleted. Import batches, decisions and claims are only ever added to (#368); a portal
   row is replaced in place by a later reading of the same document.
 

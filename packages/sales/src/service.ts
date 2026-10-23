@@ -77,6 +77,36 @@ export interface SalesServiceDeps {
   readonly cancellationGuard?: CancellationGuardPort;
 }
 
+/** Key order and absent-versus-null set aside, so a draft read back from the database compares equal. */
+const canonical = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => {
+  if (typeof item === 'bigint') return item.toString();
+  if (item === null || typeof item !== 'object' || Array.isArray(item)) return item;
+  return Object.fromEntries(Object.entries(item).filter(([, v]) => v !== undefined && v !== null).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+});
+
+/** What a caller asked for when it started a bill, read the same way from a request and from a stored draft. */
+const draftRequestOf = (input: DraftInvoiceInput | SalesInvoice): string => canonical({
+  partyId: input.partyId, customerType: input.customerType, supplyKind: input.supplyKind, documentDate: input.documentDate,
+  deliveryStateCode: input.deliveryStateCode,
+  lines: input.lines, freight: input.freight?.minor ?? 0n, otherCharges: input.otherCharges?.minor ?? 0n,
+  narration: input.narration, zeroRated: input.zeroRated,
+});
+
+/**
+ * Issue #392 — the same key is a retry only when it carries the same bill. A key that comes back
+ * with a different customer, date or lines is refused, never answered with the earlier bill.
+ */
+const requireSameDraftRequest = (existing: SalesInvoice, input: DraftInvoiceInput): void => {
+  const same = draftRequestOf(existing) === draftRequestOf(input)
+    && (input.dueDate == null || input.dueDate === existing.dueDate)
+    // Worked out and written on the draft when it is priced, so only a confirmed one is compared.
+    && (input.placeOfSupplyStateCode == null || input.placeOfSupplyStateCode === existing.placeOfSupplyStateCode)
+    && (input.roundToWholeRupee === undefined || input.roundToWholeRupee === existing.roundToWholeRupee);
+  if (!same) {
+    throw conflict('SALES_KEY_REUSED', 'This entry was already used for a different bill. Nothing new was saved; start the bill again.');
+  }
+};
+
 export interface CreateDraftCommand {
   readonly idempotencyKey: string;
   readonly input: DraftInvoiceInput;
@@ -153,7 +183,10 @@ export class SalesService {
     const existing = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
     // Issue #367 — a first attempt can save the draft and then fail before pricing it (TRY_AGAIN);
     // its retry finishes the job rather than handing back a bill with no figures.
-    if (existing !== null) return existing.state === 'DRAFT' && existing.pricing === null ? this.#priceInternal(actor, existing) : existing;
+    if (existing !== null) {
+      requireSameDraftRequest(existing, command.input);
+      return existing.state === 'DRAFT' && existing.pricing === null ? this.#priceInternal(actor, existing) : existing;
+    }
 
     const input = command.input;
     const invoice = this.#newDraft(actor, input, command.idempotencyKey);
@@ -168,6 +201,7 @@ export class SalesService {
       if (!(error instanceof DomainError && error.code === 'SALES_DUPLICATE_INVOICE')) throw error;
       const saved = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
       if (saved === null) throw error;
+      requireSameDraftRequest(saved, command.input);
       return saved;
     }
     await this.#audit.record({

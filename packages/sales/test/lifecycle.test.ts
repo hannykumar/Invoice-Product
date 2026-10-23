@@ -169,6 +169,20 @@ test('starting the same bill twice returns the bill that was already started', a
   assert.equal((await till.repository.list(till.actor.companyId)).length, 1);
 });
 
+test('#392: the same key with a different bill is refused, never answered with the earlier bill', async () => {
+  const till = await makeTill();
+  await till.service.createDraft(till.actor, { idempotencyKey: 'k392', input: crateBill() });
+  await assert.rejects(
+    till.service.createDraft(till.actor, { idempotencyKey: 'k392', input: crateBill({ lines: [{ ...crateBill().lines[0]!, quantity: qty('5', 'PCS') }] }) }),
+    (error: unknown) => error instanceof DomainError && error.code === 'SALES_KEY_REUSED' && error.kind === 'CONFLICT',
+  );
+  await assert.rejects(
+    till.service.createDraft(till.actor, { idempotencyKey: 'k392', input: crateBill({ partyId: WALK_IN }) }),
+    (error: unknown) => error instanceof DomainError && error.code === 'SALES_KEY_REUSED',
+  );
+  assert.equal((await till.repository.list(till.actor.companyId)).length, 1);
+});
+
 test('a bill whose tax cannot be worked out waits, and recovers when the fact arrives', async () => {
   const till = await makeTill();
   const draft = await till.service.createDraft(till.actor, {

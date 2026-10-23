@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  asId, fixedClock, isoDate, money, quantityFromString, rupees, toDecimalString,
+  DomainError, asId, fixedClock, isoDate, money, quantityFromString, rupees, toDecimalString,
   type AccountId, type CompanyId, type PartyId,
 } from '@invoice/kernel';
 import {
@@ -140,6 +140,19 @@ test('a retry returns the same note and never doubles stock or credit', async ()
   assert.equal(retried.note.id, first.note.id);
   const stock = await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'shop' });
   assert.equal(stock.physical.scaled, quantityFromString('10', 'BOX').scaled);
+  assert.equal((await f.notes.listForOriginal(COMPANY, 'invoice-70')).length, 1);
+});
+
+test('#392: the same key with a different return is refused, never answered with the earlier note', async () => {
+  const f = await setup();
+  await f.service.postSales(actor, command());
+  for (const changed of [
+    command({ lines: [{ originalLineId: 'line-apples', quantity: quantityFromString('11', 'BOX'), disposition: 'ACCEPTED' }] }),
+    command({ documentDate: isoDate('2026-08-31') }),
+    command({ reason: 'A different reason' }),
+  ]) {
+    await assert.rejects(f.service.postSales(actor, changed), (error: unknown) => error instanceof DomainError && error.code === 'RETURN_KEY_REUSED' && error.kind === 'CONFLICT');
+  }
   assert.equal((await f.notes.listForOriginal(COMPANY, 'invoice-70')).length, 1);
 });
 

@@ -54,7 +54,7 @@ test('#234 on 27 Sep 2026: a sale due in 30 days is 0 days late, ABC Traders is 
   assert.equal(mehta.status, 200, mehta.body.message);
   const sold = await request('POST', '/api/sales/record', {
     customerId: mehta.body.customer.id, lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '450', rate: '90' }],
-    freight: '2000', date: '2026-09-27', terms: '30', reference: 'real-today-234',
+    freight: '2000', date: '2026-09-27', terms: '30', reference: 'real-today-234', requestId: 'real-today-234',
   }, session);
   assert.equal(sold.status, 200, sold.body.message);
 
