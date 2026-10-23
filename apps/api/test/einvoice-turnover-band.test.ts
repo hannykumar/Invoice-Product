@@ -65,7 +65,7 @@ const sell = async (session: string, itemId: string, date: string) => {
   sales += 1;
   const customerId = await registeredBuyer(session);
   return request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '10', rate: '100' }], date, terms: '30', reference: `band-236-${sales}`,
+    customerId, lines: [{ itemId, quantity: '10', rate: '100' }], date, terms: '30', reference: `band-236-${sales}`, requestId: `band-236-${sales}`,
   }, session);
 };
 

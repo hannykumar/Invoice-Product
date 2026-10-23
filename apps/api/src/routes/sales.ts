@@ -21,6 +21,7 @@ const sale = fields({
   customerId: text, customer: text, party: text, date: text, terms: text, notes: anything,
   lines: anything, itemId: anything, item: anything, quantity: anything, unit: anything, rate: anything,
   freight: anything, otherCharges: anything, paidBy: text, paidAmount: anything, distanceKm: text,
+  requestId: text, replaces: text,
   underLut: anything, approvalReason: text, exportCurrency: text, shippingBillNumber: text, shippingBillDate: text, portCode: text, exportCountry: text, exchangeRate: text,
 });
 const cancel = fields({ invoice: text, reason: text, cancelGovernmentDocuments: anything });
@@ -45,7 +46,7 @@ const presale = fields({
 const advance = fields({ document: text, advance: text, amount: anything, date: text, mode: text, utr: anything, reason: text, reference: anything, which: anything });
 const goodsReturn = fields({
   kind: text, documentId: text, lineId: text, reference: anything, date: text, reason: text, disposition: text,
-  quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text,
+  quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text, requestId: text,
 });
 
 export const SALES_ROUTES: readonly Route[] = [

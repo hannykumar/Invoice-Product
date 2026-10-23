@@ -34,7 +34,7 @@ test('a bill waiting to go out is explained only to someone who may see bills an
   const accountant = await signedIn(ACCOUNTANT);
   await stockEverything(`Bearer ${accountant.token}`);
   const reviewed = await handleApi('POST', '/api/sales/preview', {
-    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '100', date: '2026-09-27', terms: '7', reference: 'ASSIST-397',
+    party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '2', rate: '100', date: '2026-09-27', terms: '7', reference: 'ASSIST-397', requestId: 'ASSIST-397',
   }, `Bearer ${accountant.token}`);
   assert.equal(reviewed.status, 200, String(reviewed.body));
   const draftId = (JSON.parse(String(reviewed.body)) as { token: string }).token;

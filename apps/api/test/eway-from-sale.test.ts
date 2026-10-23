@@ -51,7 +51,7 @@ const sell = async (session: string, customer: typeof PUNE, reference: string, q
   const customerId = await ensure(session, '/api/customers', customer, 'customers', 'customer', customer.legalName);
   const itemId = await ensure(session, '/api/items', GRANULES, 'items', 'item', GRANULES.name);
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity, rate: '60' }], date: '2026-09-28', terms: '30', reference, ...extra,
+    customerId, lines: [{ itemId, quantity, rate: '60' }], date: '2026-09-28', terms: '30', reference, requestId: reference, ...extra,
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   return recorded.body;

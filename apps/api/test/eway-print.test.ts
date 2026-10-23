@@ -49,7 +49,7 @@ const raisedBill = async (session: string, reference: string) => {
     taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for steel bar',
   }, 'TMT Steel Bar 12mm');
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference,
+    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference, requestId: reference,
   }, session);
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
   return recorded.body.invoice.id as string;

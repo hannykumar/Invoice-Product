@@ -46,7 +46,7 @@ test('a month with an export under LUT approves, and the export is reported as z
   const sold = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '100', rate: '100' }], date: '2026-07-10', terms: '30',
     underLut: 'yes', exportCountry: 'AE', exportCurrency: 'USD', exchangeRate: '84',
-    shippingBillNumber: '1234567', shippingBillDate: '2026-07-11', portCode: 'INMAA1', reference: 'lut-285',
+    shippingBillNumber: '1234567', shippingBillDate: '2026-07-11', portCode: 'INMAA1', reference: 'lut-285', requestId: 'lut-285',
   }, session);
   assert.equal(sold.status, 200, sold.body.message);
   const number = String(sold.body.invoice.number);

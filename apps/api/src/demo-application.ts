@@ -355,6 +355,17 @@ const paymentKeyOf = (input: Record<string, unknown>): string => {
   return `web-payment:${direction}:${request}`;
 };
 
+/**
+ * Issue #392 — the key a screen sends for one bill, return or answer, so a retry is recognised. It is
+ * never invented here and never taken from what the shopkeeper typed: an invented key turns a retry
+ * into a second document, and a typed reference can belong to two real sales.
+ */
+const requestKeyOf = (input: Record<string, unknown>, code: string, what: string): string => {
+  const request = String(input.requestId ?? '').trim();
+  if (request === '') throw invalid(code, `This ${what} has no entry number, so a second press could record it twice. Reload the page and enter it again.`);
+  return request;
+};
+
 // Money by UPI or bank transfer goes into, or comes out of, the business's current account.
 const CURRENT_ACCOUNT = '1121';
 
@@ -1596,9 +1607,9 @@ export class DemoApplication {
     await this.clearOpeningStockSuspense();
     // Issue #299 — the bills are recorded oldest first so bill numbers climb with the dates:
     // 000001 is two months past its due date, 000002 is ten days past, 000003 is the newest.
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', requestId: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', requestId: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', requestId: 'seed-sale', notes: 'Synthetic opening demo sale' });
   }
 
   /**
@@ -2674,14 +2685,16 @@ export class DemoApplication {
     // Issue #233 — one key per review, sent by the screen with the review and again with Record, so
     // pressing Record twice issues one bill. The screen never uses the customer's own reference as
     // the key: two real sales can carry the same order number, and the second must not come back as
-    // the first. (Callers without a review key still fall back to it, as before.)
+    // the first. Issue #392 — a review without a key is refused rather than given an invented one.
     // Issue #256 — this review replaces the one the same sale form showed before it. That earlier
     // review was never issued, so it is forgotten rather than left behind as "a bill waiting".
     const replaced = String(input.replaces ?? '').trim();
     if (replaced !== '' && replaced !== String(input.requestId ?? '')) {
       await this.discardReview(actor, `web-sale:${replaced}`, 'a later review of the same sale replaced it');
     }
-    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.requestId || input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
+    // The bill is read before its key, so a form that cannot be read is answered as that.
+    const saleInput = { ...this.saleInput(input), ...zeroRated };
+    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${requestKeyOf(input, 'SALE_REQUEST_ID_REQUIRED', 'bill')}`, input: saleInput });
     try {
       if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
       // Issue #266 — the date the bill will carry, said plainly when it is not today.
@@ -2960,6 +2973,8 @@ export class DemoApplication {
         terms: String(input.terms ?? '30'),
         reference: String(input.reference ?? '') || `challan-bill:${challan.id}`,
         approvalReason: String(input.approvalReason ?? ''),
+        // One bill per challan: the challan itself is what a retry repeats.
+        requestId: String(input.reference ?? '') || `challan-bill:${challan.id}`,
       }, false);
       // Issue #301 — a challan is billed or refused, never held: the goods are already with them.
       if (!('invoice' in recorded)) throw new Error('A challan bill was held for approval.');
@@ -4641,7 +4656,7 @@ export class DemoApplication {
       lineKey: String(input.lineKey ?? ''),
       kind: kind === 'ACCEPT' ? 'ACCEPT' : kind === 'REJECT' ? 'REJECT' : 'PENDING',
       reason: String(input.reason ?? ''),
-      idempotencyKey: `web-itc:${period}:${String(input.lineKey ?? '')}:${kind}:${String(input.reference ?? Date.now())}`,
+      idempotencyKey: `web-itc:${period}:${requestKeyOf(input, 'ITC_REQUEST_ID_REQUIRED', 'answer')}`,
     });
     return this.itcWorkspaceJson(workspace);
   }
@@ -6938,7 +6953,7 @@ export class DemoApplication {
       return {
         kind,
         command: {
-          idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:whole:${input.date}`)}`,
+          idempotencyKey: `web-return:${kind}:${requestKeyOf(input, 'RETURN_REQUEST_ID_REQUIRED', 'return')}`,
           documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
           originalInvoiceId: documentId, lines: [], wholeBill: true,
           wholeBillDisposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT',
@@ -6949,7 +6964,7 @@ export class DemoApplication {
     const quantity = quantityFromString(String(input.quantity ?? ''), String(input.unit ?? 'PCS'));
     const disposition = String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT';
     const shared = {
-      idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,
+      idempotencyKey: `web-return:${kind}:${requestKeyOf(input, 'RETURN_REQUEST_ID_REQUIRED', 'return')}`,
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
       // Issue #292 — goods a customer sends back damaged go to the damaged / not-for-sale location,
       // never into the godown they can be sold from. Goods sent back to a supplier leave the main godown.

@@ -60,7 +60,7 @@ test('a bill made before a restart is still there after it, with its copy, its c
   const item = await call('POST', '/api/items', { name: `Shop repair visit ${run}`, hsn: '998729', unit: 'NOS', price: '500', kind: 'service', ratePercent: '18', basis: 'Rate this business charges', effectiveFrom: '2026-04-01', acknowledgeSimilar: true }, token);
   assert.equal(item.status, 200, JSON.stringify(item));
   const sale = { customerId: customer.customer.id, itemId: item.item.id, rate: '500', date: '2026-10-16', terms: '0' };
-  const first = await call('POST', '/api/sales/record', { ...sale, quantity: '2', reference: `restart-${run}-1` }, token);
+  const first = await call('POST', '/api/sales/record', { ...sale, quantity: '2', reference: `restart-${run}-1`, requestId: `restart-${run}-1` }, token);
   assert.equal(first.status, 200, JSON.stringify(first));
   const number = String(first.invoice.number);
   sampoornaBill = String(first.invoice.id);
@@ -74,7 +74,7 @@ test('a bill made before a restart is still there after it, with its copy, its c
   assert.ok(dashboard.activity.some((row: { title: string }) => row.title === `${number} · Lakshmi Stores ${run}`), 'the bill and its customer are listed');
   const reprint = await call('GET', `/api/sales/${first.invoice.id}/preview`, undefined, token);
   assert.equal(reprint.status, 200, 'the frozen print copy came back');
-  const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2` }, token);
+  const second = await call('POST', '/api/sales/record', { ...sale, quantity: '1', reference: `restart-${run}-2`, requestId: `restart-${run}-2` }, token);
   assert.equal(second.status, 200, 'business details and the item rate came back');
   // Later than the first, never the same: another test file may bill this company at the same time.
   assert.ok(Number(String(second.invoice.number).slice(-6)) > Number(number.slice(-6)), 'numbering continues; no number is used again');

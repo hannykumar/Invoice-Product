@@ -41,7 +41,7 @@ const notYetDue = (() => {
     assert.equal(customer.status, 200, JSON.stringify(customer.body));
     const sold = await request('POST', '/api/sales/record', {
       customerId: customer.body.customer.id, lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '10', rate: '90' }],
-      date: SERVER_TODAY, terms: '30', reference: 'server-today-403',
+      date: SERVER_TODAY, terms: '30', reference: 'server-today-403', requestId: 'server-today-403',
     }, owner);
     assert.equal(sold.status, 200, JSON.stringify(sold.body));
     return { owner, bill: { id: sold.body.invoice.id as string, number: sold.body.invoice.number as string } };

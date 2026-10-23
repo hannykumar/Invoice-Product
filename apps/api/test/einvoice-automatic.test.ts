@@ -81,7 +81,7 @@ test('a bill that must be registered is sent by itself, and the person is told o
   const itemId = await anItem(session);
 
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-yes',
+    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-yes', requestId: 'auto-irn-yes',
   }, session);
 
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
@@ -109,7 +109,7 @@ test('a bill that does not have to be registered is never sent', async () => {
 
   // A sale to somebody with no GST number is never given an IRN, however large the bill.
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-b2c',
+    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-b2c', requestId: 'auto-irn-b2c',
   }, session);
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
 
@@ -126,7 +126,7 @@ test('a business under the limit sends nothing at all', async () => {
   const itemId = await anItem(session);
 
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '100', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-under',
+    customerId, lines: [{ itemId, quantity: '100', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-under', requestId: 'auto-irn-under',
   }, session);
 
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
@@ -142,7 +142,7 @@ test('sending the same bill again produces no second IRN', async () => {
   const customerId = await registeredBuyer(session);
   const itemId = await anItem(session);
   const recorded = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-twice',
+    customerId, lines: [{ itemId, quantity: '2000', rate: '40' }], date: '2026-09-17', terms: '30', reference: 'auto-irn-twice', requestId: 'auto-irn-twice',
   }, session);
   await settle();
   const first = await acknowledgementOf(session, recorded.body.invoice.id);

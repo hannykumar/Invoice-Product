@@ -396,7 +396,7 @@ test('Step 9. 50 KGS come back, usable: credit note ₹4,500 + IGST ₹810 = ₹
   assert.ok(original, 'the bill from step 3 can be returned against');
   const back = {
     kind: original.kind, documentId: original.id, lineId: original.lines[0].id, unit: original.lines[0].unit,
-    quantity: '50', disposition: 'ACCEPTED', date: TODAY, reference: 'full-trade-238-return', reason: 'Bent bars',
+    quantity: '50', disposition: 'ACCEPTED', date: TODAY, reference: 'full-trade-238-return', requestId: 'full-trade-238-return', reason: 'Bent bars',
   };
   assert.equal(back.kind, 'SALES_RETURN');
   const review = await ok('POST', '/api/returns/preview', back);
