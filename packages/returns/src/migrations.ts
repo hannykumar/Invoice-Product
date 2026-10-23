@@ -195,9 +195,54 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
       RETURN NEW;
     END;
     $$;
+    -- A sales debit note adds to what its bill is owed (#365's settlement row, kept by the database
+    -- as credit notes are), so the extra can be paid against the bill and the bill is not settled
+    -- until it is. A payment may go up to the bill plus its debit notes; credit notes are left out
+    -- of that cap, as before, so a credit note after the bill is paid still goes in.
+    ALTER TABLE document_settlements ADD COLUMN debited_paise bigint NOT NULL DEFAULT 0 CHECK (debited_paise >= 0);
+    ALTER TABLE document_settlements DROP CONSTRAINT document_settlements_allocated_within_value,
+      ADD CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise BETWEEN 0 AND value_paise + debited_paise);
+    -- PostgreSQL 16 cannot change a generated column's expression: the column (and the two indexes
+    -- on it) are made again.
+    ALTER TABLE document_settlements DROP COLUMN status;
+    ALTER TABLE document_settlements ADD COLUMN status text NOT NULL GENERATED ALWAYS AS (CASE
+        WHEN cancelled THEN 'CANCELLED'
+        WHEN allocated_paise >= value_paise - credited_paise + debited_paise THEN 'SETTLED'
+        WHEN allocated_paise > 0 THEN 'PARTLY_PAID'
+        ELSE 'OPEN' END) STORED;
+    CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    DROP TRIGGER document_settlements_frozen ON document_settlements;
+    CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,debited_paise,cancelled,status,updated_at', '');
+    CREATE FUNCTION debit_note_raises_bill() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+    BEGIN
+      UPDATE document_settlements SET debited_paise = debited_paise + NEW.total_paise, updated_at = now()
+        WHERE company_id = NEW.company_id AND document_kind = 'SALES_INVOICE' AND document_id = NEW.original_document_id;
+      RETURN NULL;
+    END;
+    $$;
+    CREATE TRIGGER return_notes_raise_bill AFTER INSERT ON return_notes
+      FOR EACH ROW WHEN (NEW.kind = 'SALES_DEBIT_NOTE') EXECUTE FUNCTION debit_note_raises_bill();
   `,
   // Fails while a sales debit note is stored, rather than losing it.
   down: `
+    DROP TRIGGER IF EXISTS return_notes_raise_bill ON return_notes;
+    DROP FUNCTION IF EXISTS debit_note_raises_bill();
+    DROP TRIGGER document_settlements_frozen ON document_settlements;
+    CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,cancelled,status,updated_at', '');
+    ALTER TABLE document_settlements DROP COLUMN status;
+    ALTER TABLE document_settlements ADD COLUMN status text NOT NULL GENERATED ALWAYS AS (CASE
+        WHEN cancelled THEN 'CANCELLED'
+        WHEN allocated_paise >= value_paise - credited_paise THEN 'SETTLED'
+        WHEN allocated_paise > 0 THEN 'PARTLY_PAID'
+        ELSE 'OPEN' END) STORED;
+    CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    ALTER TABLE document_settlements DROP CONSTRAINT document_settlements_allocated_within_value,
+      ADD CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise BETWEEN 0 AND value_paise);
+    ALTER TABLE document_settlements DROP COLUMN debited_paise;
     CREATE OR REPLACE FUNCTION sales_return_within_original() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
     DECLARE
       note_kind text;
