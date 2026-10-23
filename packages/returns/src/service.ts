@@ -41,6 +41,8 @@ export interface SalesReturnCommand {
    */
   readonly wholeBill?: boolean;
   readonly wholeBillDisposition?: ReturnDisposition;
+  /** Issue #292 — where the goods of a whole-bill return go. Required when they come back damaged. */
+  readonly wholeBillWarehouseId?: string;
 }
 
 export interface SalesReturnPreview {
@@ -157,6 +159,7 @@ export class ReturnService {
           originalLineId: line.lineId,
           quantity: { ...line.quantity, scaled: line.quantity.scaled - (already.get(line.lineId) ?? 0n) },
           disposition: command.wholeBillDisposition ?? 'ACCEPTED',
+          ...(command.wholeBillWarehouseId === undefined || isChargeLine(line) ? {} : { warehouseId: command.wholeBillWarehouseId }),
         }))
       : command.lines;
     if (inputs.length === 0) {
@@ -176,8 +179,18 @@ export class ReturnService {
       if (source.supplyKind === 'GOODS' && !charge && warehouseId === null) {
         throw invalid('RETURN_WAREHOUSE_REQUIRED', 'Choose the godown where the returned goods will be checked.');
       }
-      if (!charge && input.disposition === 'DAMAGED' && input.warehouseId === undefined) {
-        throw invalid('RETURN_DAMAGED_WAREHOUSE_REQUIRED', 'Choose the damaged or quarantine godown for these goods.');
+      if (!charge && input.disposition === 'DAMAGED') {
+        if (input.warehouseId === undefined || input.warehouseId === null) {
+          throw invalid('RETURN_DAMAGED_WAREHOUSE_REQUIRED', 'Choose the damaged or quarantine godown for these goods.');
+        }
+        // Issue #292 — damaged goods must not become stock that can be sold. CGST Rule 56(1) keeps
+        // goods "lost, stolen, destroyed, written off" as their own entries in the stock account,
+        // and AS 2 / Ind AS 2 (and ICDS II) value damaged stock separately, at the lower of cost
+        // and net realisable value. So a damaged return goes only to a location the business has
+        // marked not for sale; an ordinary godown, or one we cannot identify, is refused.
+        if (this.#inventory.sellableLocation !== undefined && await this.#inventory.sellableLocation(actor, input.warehouseId) !== false) {
+          throw invalid('RETURN_DAMAGED_INTO_SELLABLE_STOCK', 'Damaged goods cannot go back into stock that can be sold. Put them in the damaged / not for sale location.');
+        }
       }
       if (input.disposition === 'REPLACEMENT' && (input.replacementSerialNumbers?.length ?? 0) > 0 &&
           (input.replacementSerialNumbers?.length ?? 0) !== (input.serialNumbers?.length ?? 0)) {

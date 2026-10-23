@@ -21,6 +21,16 @@ compliance state.
   original period is never reopened. A note dated inside a hard-locked period is refused; the
   ledger's reasoned override rules apply only to soft locks.
 
+## Damaged goods never re-enter sellable stock (issue #292)
+
+A `DAMAGED` sales-return line must name a location the inventory port reports as not for sale
+(`ReturnInventoryPort.sellableLocation` returns `false`). An ordinary godown, or a place the
+company does not have, is refused with `RETURN_DAMAGED_INTO_SELLABLE_STOCK` and nothing is posted.
+A whole-bill return names its location in `wholeBillWarehouseId`. `ACCEPTED` goods go back to the
+godown they can be sold from; `SCRAPPED` goods are received and written off in linked movements.
+Every company in the app has a "Damaged / not for sale" location, and the web return form sends
+damaged goods there. Goods sent back to a supplier leave the godown as before.
+
 ## Note numbers (issue #185)
 
 Credit notes are numbered `CN/26-27/0000001` and debit notes `DN/26-27/0000001`: sixteen characters,
