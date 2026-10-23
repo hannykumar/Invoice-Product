@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn } from './sign-in-helper.ts';
 import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
@@ -48,7 +49,7 @@ let furniture = '';
 let guards = '';
 
 test('suppliers and items', async () => {
-  owner = (await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' })).body.sessionId;
+  owner = await signIn('owner@sampoorna.example.invalid', COMPANY_A);
   garage = (await ok('/api/suppliers', { legalName: 'Speedy Motor Works', registration: 'regular', gstin: syntheticGstin('29', 'MMMMM7777M'), line1: '8, Garage Road', city: 'Bengaluru', pincode: '560034' })).supplier.id;
   furniture = (await ok('/api/suppliers', { legalName: 'Ashoka Furniture Mart', registration: 'regular', gstin: syntheticGstin('29', 'FFFFF8888F'), line1: '2, Timber Yard', city: 'Bengaluru', pincode: '560053' })).supplier.id;
   guards = (await ok('/api/suppliers', { legalName: 'Shankar Watch and Ward', registration: 'unregistered', unregisteredBasis: 'BELOW_THRESHOLD', line1: '5, Gate Street', city: 'Bengaluru', pincode: '560011' })).supplier.id;

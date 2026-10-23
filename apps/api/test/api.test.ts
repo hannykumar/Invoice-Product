@@ -246,8 +246,8 @@ test('authenticated customer and supplier returns preview and post through real 
 test('issue #292: a customer return marked damaged goes to the not-for-sale location, not back on the shelf', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
   const soap = 'Herbal Bath Soap 100g';
-  const recordedSale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: soap, quantity: '3', rate: '100', date: '2026-08-29', terms: '7', reference: 'DAMAGED-SALE-292' }, owner);
-  assert.equal(recordedSale.status, 200);
+  const recordedSale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: soap, quantity: '3', rate: '100', date: '2026-08-29', terms: '7', reference: 'DAMAGED-SALE-292', approvalReason: 'Agreed with the owner' }, owner);
+  assert.equal(recordedSale.status, 200, JSON.stringify(recordedSale.body));
   const soapRows = async () => (await request('GET', '/api/reports', {}, owner)).body.stock.rows.filter((row: any) => row.item === soap);
   const shelf = (rows: any[]) => rows.find((row: any) => row.sellable === true);
   const before = await soapRows();
