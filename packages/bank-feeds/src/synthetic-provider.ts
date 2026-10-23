@@ -14,7 +14,7 @@ export class SyntheticBankFeedProvider implements BankFeedProviderAdapter {
   addTransaction(accountId: string, transaction: ProviderTransaction): void { this.#transactions.set(accountId, [...(this.#transactions.get(accountId) ?? []), transaction]); }
   get syncCount(): number { return this.#syncCount; }
 
-  async startConsent(input: { companyId: string; connectionId: string; redirectUri: string }): Promise<ConsentStart> { return { providerConsentId: `consent-${input.companyId}-${input.connectionId}`, consentUrl: `https://sandbox.bank.example/authorise/${input.connectionId}`, expiresAt: '2027-08-30T00:00:00.000Z' }; }
+  async startConsent(input: { companyId: string; connectionId: string; redirectUri: string; state: string }): Promise<ConsentStart> { return { providerConsentId: `consent-${input.companyId}-${input.connectionId}`, consentUrl: `https://sandbox.bank.example/authorise/${input.connectionId}`, expiresAt: '2027-08-30T00:00:00.000Z' }; }
   async completeConsent(input: { companyId: string; providerConsentId: string; authorizationCode: string }): Promise<{ consentExpiresAt: string; accounts: readonly ProviderAccount[] }> {
     if (input.authorizationCode !== 'sandbox-approved') throw new ConnectorError('UNAUTHORIZED', false);
     return { consentExpiresAt: '2027-08-30T00:00:00.000Z', accounts: [{ providerAccountId: `current-${input.companyId}`, displayName: 'Business current account', maskedAccountNumber: 'XXXXXX1234', accountType: 'CURRENT', currency: 'INR' }] };

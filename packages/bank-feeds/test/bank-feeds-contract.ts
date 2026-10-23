@@ -97,6 +97,20 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     assert.deepEqual(await h.store.transactions(other.companyId, connection.id), []);
   });
 
+  test(`${name}: #402 a consent request is used once, only by its own company, person and state, and only in time`, { skip }, async () => {
+    const { h, companyId, userId, connection } = await setup();
+    const hash = 'a'.repeat(64);
+    await h.write(companyId, () => h.store.saveConsentState({ companyId, connectionId: connection.id, stateHash: hash, startedBy: userId, expiresAt: '2026-08-30T12:30:00.000Z' }));
+    const use = (company: string, stateHash: string, actorId: string, when: string) => h.write(company, () => h.store.useConsentState(company, connection.id, stateHash, actorId, when));
+    const other = await h.company();
+    assert.equal(await use(other.companyId, hash, userId, at), false, 'another company');
+    assert.equal(await use(companyId, 'b'.repeat(64), userId, at), false, 'another state');
+    assert.equal(await use(companyId, hash, 'someone-else', at), false, 'another person');
+    assert.equal(await use(companyId, hash, userId, '2026-08-30T12:30:00.000Z'), false, 'run out');
+    assert.equal(await use(companyId, hash, userId, at), true, 'wrong tries do not spend it');
+    assert.equal(await use(companyId, hash, userId, at), false, 'used once');
+  });
+
   test(`${name}: an account keeps its exact balance and cursor, and a save replaces it`, { skip }, async () => {
     const { h, companyId, connection, account } = await setup();
     assert.deepEqual(await h.store.accounts(companyId, connection.id), [account]);
@@ -176,12 +190,12 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
     const provider = new GuardedProvider(h);
-    const service = new BankFeedService([provider], () => new Date(at), h.store);
+    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/bank-feed-return' });
     // Not wrapped: the service opens its own short units of work around each call to the bank.
     const run = <T>(work: () => Promise<T>) => work();
 
-    const pending = await run(() => service.startConsent(context, { provider: provider.provider, redirectUri: 'https://app.example/bank/callback' }));
-    const connection = await run(() => service.completeConsent(context, pending.id, 'sandbox-approved'));
+    const pending = await run(() => service.startConsent(context, { provider: provider.provider }));
+    const connection = await run(() => service.completeConsent(context, pending.connection.id, 'sandbox-approved', pending.state));
     assert.equal(connection.status, 'CONNECTED');
     assert.equal((await service.connections(context))[0]?.consentUrl, null);
     provider.addTransaction(`current-${companyId}`, { providerTransactionId: 'txn-1', bookedOn: '2026-08-29', description: 'UPI settlement', amountMinor: 12_345n, direction: 'CREDIT', reference: 'UTR-1' });
@@ -229,11 +243,11 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
     const provider = new GuardedProvider(h);
-    const service = new BankFeedService([provider], () => new Date(at), h.store);
+    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/bank-feed-return' });
     // Not wrapped: the service opens its own short units of work around each call to the bank.
     const run = <T>(work: () => Promise<T>) => work();
-    const pending = await run(() => service.startConsent(context, { provider: provider.provider, redirectUri: 'https://app.example/bank/callback' }));
-    const connection = await run(() => service.completeConsent(context, pending.id, 'sandbox-approved'));
+    const pending = await run(() => service.startConsent(context, { provider: provider.provider }));
+    const connection = await run(() => service.completeConsent(context, pending.connection.id, 'sandbox-approved', pending.state));
     provider.addTransaction(`current-${companyId}`, { providerTransactionId: 'txn-1', bookedOn: '2026-08-30', description: 'Rent', amountMinor: 25_000n, direction: 'DEBIT' });
     await run(() => service.sync(context, connection.id, 'first'));
     provider.setMode('expired');
@@ -252,9 +266,9 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
     const provider = new GuardedProvider(h);
-    const service = new BankFeedService([provider], () => new Date(at), h.store);
-    const pending = await service.startConsent(context, { provider: provider.provider, redirectUri: 'https://app.example/bank/callback' });
-    const connection = await service.completeConsent(context, pending.id, 'sandbox-approved');
+    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/bank-feed-return' });
+    const pending = await service.startConsent(context, { provider: provider.provider });
+    const connection = await service.completeConsent(context, pending.connection.id, 'sandbox-approved', pending.state);
     return { h, companyId, context, provider, service, connection };
   };
 

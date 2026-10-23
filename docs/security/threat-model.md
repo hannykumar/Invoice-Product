@@ -216,7 +216,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | O1 | SSRF through a user-supplied URL (A10) | Low | High | No user-controlled outbound URL; government hosts allow-listed | The #348 review checks every new `fetch` | Low | — |
-| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Synthetic provider | Allow-listed redirect; `state` bound to the session | Medium | #402 |
+| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Return address only this app's origins and `/bank-feed-return`; random `state` stored hashed, bound to company and person, single-use, 30 minutes | — | Low | #402 |
 | O3 | One WhiteBooks credential and GSTIN shared by every company (A01/A02) | High at launch | High | Sandbox only; production hard-off | A per-company credential in a vault | **High** | #210 |
 | O4 | Secrets committed, or leaked through a dependency (A06) | Medium | High | `.env` gitignored, mode 0600 | gitleaks, Dependabot | **High** | #351 |
 | O5 | Personal data in logs (A09) | Medium | Medium | Recursive redaction | Structured logs with a request id | Medium | #357, #352 |

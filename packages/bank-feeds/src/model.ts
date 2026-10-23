@@ -56,6 +56,34 @@ export interface BankFeedTransaction {
   readonly importedAt: string;
 }
 
+/**
+ * Issue #402 — what ties the bank's reply to the request that asked for it. `state` itself is
+ * handed to the person who started the request once and never stored; only its SHA-256 is kept.
+ * It belongs to one connection, one company and one person, runs out at `expiresAt`, and is used once.
+ */
+export interface BankFeedConsentState {
+  readonly companyId: string;
+  readonly connectionId: string;
+  readonly stateHash: string;
+  readonly startedBy: string;
+  readonly expiresAt: string;
+}
+
+/** A started request and the `state` the bank must send back with its answer. */
+export interface BankFeedConsentRequest {
+  readonly connection: BankFeedConnection;
+  readonly state: string;
+}
+
+/**
+ * Issue #402 — where the bank may send the customer back to: this app's own origins and one fixed
+ * page. Origins are `https://…`, or `http://localhost` / `http://127.0.0.1` for development.
+ */
+export interface ConsentReturnPolicy {
+  readonly origins: readonly string[];
+  readonly path: string;
+}
+
 export interface ConsentStart {
   readonly providerConsentId: string;
   readonly consentUrl: string;
@@ -94,7 +122,8 @@ export interface ProviderSyncPage {
 
 export interface BankFeedProviderAdapter {
   readonly provider: string;
-  startConsent(input: { readonly companyId: string; readonly connectionId: string; readonly redirectUri: string }): Promise<ConsentStart>;
+  /** `redirectUri` is one of the service's allowed return addresses; `state` must come back with the bank's answer. */
+  startConsent(input: { readonly companyId: string; readonly connectionId: string; readonly redirectUri: string; readonly state: string }): Promise<ConsentStart>;
   completeConsent(input: { readonly companyId: string; readonly providerConsentId: string; readonly authorizationCode: string }): Promise<{ readonly consentExpiresAt: string; readonly accounts: readonly ProviderAccount[] }>;
   sync(input: { readonly companyId: string; readonly providerConsentId: string; readonly cursors: Readonly<Record<string, string | null>>; readonly idempotencyKey: string }): Promise<ProviderSyncPage>;
   revoke(input: { readonly companyId: string; readonly providerConsentId: string; readonly idempotencyKey: string }): Promise<void>;

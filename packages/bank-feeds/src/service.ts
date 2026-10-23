@@ -1,7 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { ConnectorError } from '../../platform/src/connectors.ts';
 import { PlatformError } from '../../platform/src/types.ts';
-import type { BankFeedAccount, BankFeedAuditEvent, BankFeedConnection, BankFeedContext, BankFeedProviderAdapter, BankFeedTransaction, ConsentStart, ProviderAccount, ProviderAccountPage, SyncResult } from './model.ts';
+import type { BankFeedAccount, BankFeedAuditEvent, BankFeedConnection, BankFeedConsentRequest, BankFeedContext, ConsentReturnPolicy, BankFeedProviderAdapter, BankFeedTransaction, ConsentStart, ProviderAccount, ProviderAccountPage, SyncResult } from './model.ts';
 import { InMemoryBankFeedStore, providerKey, type BankFeedStore, type Page } from './store.ts';
 
 const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
@@ -9,11 +9,28 @@ const frozen = <T>(value: T): T => Object.freeze(value);
 const validDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
 const safeMask = (value: string): boolean => /[*xX•]/.test(value) && !/\d{9,}/.test(value.replace(/\D/g, ''));
 const CHANGED = 'This bank connection changed while the bank was answering. Open it again and retry.';
+const RETURN_REFUSED = 'The bank can only send you back to this app\'s own Bank feeds page. Start again from Bank feeds.';
+const NOT_SET_UP = 'Bank connections are not set up on this server yet, so no bank was asked.';
+const STATE_REFUSED = 'This bank reply does not belong to a request you started here, or it was already used or has run out of time. Start again from Bank feeds.';
+/** Issue #402 — how long the bank's reply may take to come back after a request starts. */
+const CONSENT_STATE_LIFETIME_MS = 30 * 60 * 1000;
+const loopback = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/;
+
+/** Each allowed origin joined to the fixed return page. Refuses an origin that is not https or loopback. */
+const returnAddresses = (policy: ConsentReturnPolicy): readonly string[] => {
+  if (!/^\/[A-Za-z0-9/_-]*$/.test(policy.path)) throw new Error('The bank return page must be a plain path on this app.');
+  return Object.freeze(policy.origins.map((value) => {
+    const origin = new URL(value).origin;
+    if (origin !== value.replace(/\/+$/, '') || (!origin.startsWith('https://') && !loopback.test(origin))) throw new Error(`The bank return origin ${value} must be https, or localhost for development.`);
+    return `${origin}${policy.path}`;
+  }));
+};
 
 export class BankFeedService {
   readonly #adapters: ReadonlyMap<string, BankFeedProviderAdapter>;
   readonly #store: BankFeedStore;
   readonly #now: () => Date;
+  readonly #returnAddresses: readonly string[];
 
   /**
    * Issue #366: `store` is where the records live — memory by default, or PostgresBankFeedStore.
@@ -24,25 +41,38 @@ export class BankFeedService {
    * (the connection's state, the sync key, the cursors). A provider failure is written in an action
    * of its own, so it is committed before the error reaches the caller. The caller must therefore
    * not wrap these commands in a unit of work of its own (apps/api: `postCallingOut`).
+   *
+   * Issue #402: `consentReturn` is the only place the bank may send the customer back to. With no
+   * origins, no consent can start.
    */
-  constructor(adapters: readonly BankFeedProviderAdapter[], now: () => Date = () => new Date(), store: BankFeedStore = new InMemoryBankFeedStore()) {
+  constructor(adapters: readonly BankFeedProviderAdapter[], now: () => Date = () => new Date(), store: BankFeedStore = new InMemoryBankFeedStore(), consentReturn: ConsentReturnPolicy = { origins: [], path: '/bank-feed-return' }) {
     this.#adapters = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
     this.#now = now;
     this.#store = store;
+    this.#returnAddresses = returnAddresses(consentReturn);
   }
 
-  async startConsent(context: BankFeedContext, input: { provider: string; redirectUri: string }): Promise<BankFeedConnection> {
+  /**
+   * Issue #402: the return address is one of the server's own (`redirectUri` may only name one of
+   * them; left out, the first is used), and a fresh random `state` is bound to this connection, this
+   * company and this person. The caller gets `state` once; the bank must send it back.
+   */
+  async startConsent(context: BankFeedContext, input: { provider: string; redirectUri?: string }): Promise<BankFeedConsentRequest> {
     this.#require(context, 'bank.feed.manage');
     const adapter = this.#adapters.get(input.provider);
     if (!adapter) throw new PlatformError('NOT_FOUND', 'This bank connection provider is not supported.');
-    if (!/^https:\/\//.test(input.redirectUri) && !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\//.test(input.redirectUri)) throw new Error('Use a secure return address for bank permission.');
+    const redirectUri = this.#returnAddress(input.redirectUri);
     const id = randomUUID();
+    const state = randomBytes(32).toString('base64url');
     const pending: BankFeedConnection = frozen({ id, companyId: context.companyId, provider: input.provider, providerConsentId: null, consentUrl: null, status: 'PENDING_CONSENT', consentExpiresAt: null, connectedAt: null, disconnectedAt: null, lastSyncedAt: null, syncStatus: 'IDLE', lastError: null, createdAt: this.#now().toISOString() });
-    await this.#act(context, () => this.#store.saveConnection(pending));
+    await this.#act(context, async () => {
+      await this.#store.saveConnection(pending);
+      await this.#store.saveConsentState(frozen({ companyId: context.companyId, connectionId: id, stateHash: digest(state), startedBy: context.actorId, expiresAt: new Date(this.#now().getTime() + CONSENT_STATE_LIFETIME_MS).toISOString() }));
+    });
     // Only the provider's answer is caught. A database error is never caught and carried on from.
     let consent: ConsentStart;
     try {
-      consent = await adapter.startConsent({ companyId: context.companyId, connectionId: id, redirectUri: input.redirectUri });
+      consent = await adapter.startConsent({ companyId: context.companyId, connectionId: id, redirectUri, state });
     } catch (error) {
       await this.#act(context, async () => {
         const current = await this.#get(context, id);
@@ -50,7 +80,7 @@ export class BankFeedService {
       });
       throw error;
     }
-    return this.#act(context, async () => {
+    const connection = await this.#act(context, async () => {
       const current = await this.#get(context, id);
       if (current.status !== 'PENDING_CONSENT' || current.providerConsentId !== null) throw new PlatformError('INVALID_TRANSITION', CHANGED);
       const result = frozen({ ...current, providerConsentId: consent.providerConsentId, consentUrl: consent.consentUrl, consentExpiresAt: consent.expiresAt });
@@ -58,19 +88,33 @@ export class BankFeedService {
       await this.#record(context, result, 'bank_feed.consent_started', { provider: result.provider, consentExpiresAt: result.consentExpiresAt });
       return result;
     });
+    return frozen({ connection, state });
   }
 
-  async completeConsent(context: BankFeedContext, connectionId: string, authorizationCode: string): Promise<BankFeedConnection> {
+  /**
+   * Issue #402: `state` must be the one handed out when this connection's request started, by the
+   * same person in the same company, unused and in time. It is spent before the bank is asked, so a
+   * reply can be used once; if the bank then refuses, the request ends in ERROR and starts again.
+   */
+  async completeConsent(context: BankFeedContext, connectionId: string, authorizationCode: string, state: string): Promise<BankFeedConnection> {
     this.#require(context, 'bank.feed.manage');
-    const connection = await this.#get(context, connectionId);
-    if (connection.status !== 'PENDING_CONSENT' || !connection.providerConsentId) throw new PlatformError('INVALID_TRANSITION', 'This bank permission request cannot be completed.');
     if (!authorizationCode.trim()) throw new Error('The bank permission response is missing.');
-    const result = await this.#adapter(connection).completeConsent({ companyId: context.companyId, providerConsentId: connection.providerConsentId, authorizationCode });
-    const seen = new Set<string>();
-    for (const account of result.accounts) {
-      this.#validateAccount(account);
-      if (seen.has(account.providerAccountId)) throw new Error('The provider returned the same bank account twice.');
-      seen.add(account.providerAccountId);
+    const connection = await this.#act(context, async () => {
+      const current = await this.#get(context, connectionId);
+      if (current.status !== 'PENDING_CONSENT' || !current.providerConsentId) throw new PlatformError('INVALID_TRANSITION', 'This bank permission request cannot be completed.');
+      if (!state.trim() || !(await this.#store.useConsentState(context.companyId, connectionId, digest(state), context.actorId, this.#now().toISOString()))) throw new PlatformError('FORBIDDEN', STATE_REFUSED);
+      return current;
+    });
+    let result: Awaited<ReturnType<BankFeedProviderAdapter['completeConsent']>>;
+    try {
+      result = await this.#adapter(connection).completeConsent({ companyId: context.companyId, providerConsentId: connection.providerConsentId!, authorizationCode });
+      this.#validateConsent(result.accounts);
+    } catch (error) {
+      await this.#act(context, async () => {
+        const current = await this.#get(context, connectionId);
+        if (current.status === 'PENDING_CONSENT' && current.providerConsentId === connection.providerConsentId) await this.#store.saveConnection(frozen({ ...current, status: 'ERROR', consentUrl: null, lastError: this.#message(error) }));
+      });
+      throw error;
     }
     return this.#act(context, async () => {
       // Completed, disconnected or revoked while the bank was answering: nothing is written twice.
@@ -222,6 +266,21 @@ export class BankFeedService {
 
   #act<T>(context: BankFeedContext, work: () => Promise<T>): Promise<T> { return this.#store.action(context.companyId, work); }
   async #saveAccount(connection: BankFeedConnection, existing: readonly BankFeedAccount[], account: ProviderAccount): Promise<void> { const current = existing.find((item) => item.providerAccountId === account.providerAccountId); const saved = frozen({ id: current?.id ?? randomUUID(), companyId: connection.companyId, connectionId: connection.id, providerAccountId: account.providerAccountId, displayName: account.displayName, maskedAccountNumber: account.maskedAccountNumber, accountType: account.accountType, currency: 'INR' as const, balancePaise: current?.balancePaise ?? null, balanceAsOf: current?.balanceAsOf ?? null, cursor: current?.cursor ?? null, active: true }); await this.#store.saveAccount(saved); }
+  #validateConsent(accounts: readonly ProviderAccount[]): void {
+    const seen = new Set<string>();
+    for (const account of accounts) {
+      this.#validateAccount(account);
+      if (seen.has(account.providerAccountId)) throw new Error('The provider returned the same bank account twice.');
+      seen.add(account.providerAccountId);
+    }
+  }
+  #returnAddress(requested: string | undefined): string {
+    const [first] = this.#returnAddresses;
+    if (first === undefined) throw new PlatformError('FORBIDDEN', NOT_SET_UP);
+    if (requested === undefined || requested === '') return first;
+    if (!this.#returnAddresses.includes(requested)) throw new Error(RETURN_REFUSED);
+    return requested;
+  }
   #validateAccount(account: ProviderAccount): void { if (!account.providerAccountId || !account.displayName.trim() || account.currency !== 'INR' || !['CURRENT', 'SAVINGS', 'CASH_CREDIT', 'OTHER'].includes(account.accountType) || !safeMask(account.maskedAccountNumber)) throw new Error('The provider returned an unsupported or unsafe bank account.'); }
   async #deactivateAccounts(context: BankFeedContext, connectionId: string): Promise<void> { for (const account of await this.#store.accounts(context.companyId, connectionId)) await this.#store.saveAccount(frozen({ ...account, active: false })); }
   async #get(context: BankFeedContext, id: string): Promise<BankFeedConnection> { const connection = await this.#store.connection(context.companyId, id); if (!connection) throw new PlatformError('NOT_FOUND', 'Bank connection was not found.'); if (connection.companyId !== context.companyId) throw new PlatformError('TENANT_ISOLATION', 'This bank connection belongs to another company.'); return connection; }

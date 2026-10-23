@@ -21,8 +21,8 @@ export class ConnectorBankFeedAdapter implements BankFeedProviderAdapter {
   readonly #gateway: ConnectorGateway;
   constructor(provider: string, gateway: ConnectorGateway) { this.provider = provider; this.#gateway = gateway; }
 
-  async startConsent(input: { companyId: string; connectionId: string; redirectUri: string }): Promise<ConsentStart> {
-    const response = await this.#gateway.execute('banking', { tenantId: input.companyId, operation: 'start_consent', payload: { provider: this.provider, redirectUri: input.redirectUri }, idempotencyKey: `consent:${input.connectionId}`, correlationId: input.connectionId });
+  async startConsent(input: { companyId: string; connectionId: string; redirectUri: string; state: string }): Promise<ConsentStart> {
+    const response = await this.#gateway.execute('banking', { tenantId: input.companyId, operation: 'start_consent', payload: { provider: this.provider, redirectUri: input.redirectUri, state: input.state }, idempotencyKey: `consent:${input.connectionId}`, correlationId: input.connectionId });
     return { providerConsentId: text(response.payload.providerConsentId), consentUrl: text(response.payload.consentUrl), expiresAt: text(response.payload.expiresAt) };
   }
 

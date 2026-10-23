@@ -3,7 +3,7 @@
  * the service; this port is the smallest seam that lets the same service run on memory or on
  * PostgreSQL (postgres-store.ts) without changing what it does.
  */
-import type { BankFeedAccount, BankFeedAuditEvent, BankFeedConnection, BankFeedTransaction, SyncResult } from './model.ts';
+import type { BankFeedAccount, BankFeedAuditEvent, BankFeedConnection, BankFeedConsentState, BankFeedTransaction, SyncResult } from './model.ts';
 
 /** Keyset page: at most `limit` rows after the row whose id is `after`, in the order they were written. */
 export interface Page { readonly limit?: number; readonly after?: string }
@@ -37,6 +37,14 @@ export interface BankFeedStore {
   countTransactions(companyId: string, connectionId: string): Promise<number>;
   syncResult(companyId: string, connectionId: string, idempotencyKey: string): Promise<SyncResult | null>;
   saveSyncResult(companyId: string, connectionId: string, idempotencyKey: string, result: SyncResult): Promise<void>;
+  /** Issue #402 — kept with a pending connection when its request starts. */
+  saveConsentState(state: BankFeedConsentState): Promise<void>;
+  /**
+   * Issue #402 — marks the connection's request used and answers true only when it is this
+   * company's, has this hash, was started by `actorId`, is unused and has not run out at `at`.
+   * Anything else answers false and changes nothing, so a wrong guess cannot spend it.
+   */
+  useConsentState(companyId: string, connectionId: string, stateHash: string, actorId: string, at: string): Promise<boolean>;
   record(event: BankFeedAuditEvent): Promise<void>;
   audit(companyId: string, connectionId?: string, page?: Page): Promise<readonly BankFeedAuditEvent[]>;
 }
@@ -54,6 +62,7 @@ export class InMemoryBankFeedStore implements BankFeedStore {
   readonly #providerTransactionKeys = new Set<string>();
   readonly #syncKeys = new Map<string, SyncResult>();
   readonly #audit: BankFeedAuditEvent[] = [];
+  readonly #consentStates = new Map<string, BankFeedConsentState & { usedAt: string | null }>();
 
   #tail: Promise<unknown> = Promise.resolve();
   /**
@@ -84,6 +93,13 @@ export class InMemoryBankFeedStore implements BankFeedStore {
   async countTransactions(companyId: string, connectionId: string) { return (await this.transactions(companyId, connectionId)).length; }
   async syncResult(companyId: string, connectionId: string, idempotencyKey: string) { return this.#syncKeys.get(`${companyId}:${connectionId}:${idempotencyKey}`) ?? null; }
   async saveSyncResult(companyId: string, connectionId: string, idempotencyKey: string, result: SyncResult) { this.#syncKeys.set(`${companyId}:${connectionId}:${idempotencyKey}`, result); }
+  async saveConsentState(state: BankFeedConsentState) { this.#consentStates.set(state.connectionId, { ...state, usedAt: null }); }
+  async useConsentState(companyId: string, connectionId: string, stateHash: string, actorId: string, at: string) {
+    const kept = this.#consentStates.get(connectionId);
+    if (!kept || kept.companyId !== companyId || kept.stateHash !== stateHash || kept.startedBy !== actorId || kept.usedAt !== null || Date.parse(kept.expiresAt) <= Date.parse(at)) return false;
+    this.#consentStates.set(connectionId, { ...kept, usedAt: at });
+    return true;
+  }
   async record(event: BankFeedAuditEvent) { this.#audit.push(event); }
   async audit(companyId: string, connectionId?: string, page?: Page) { return paged(this.#audit.filter((event) => event.companyId === companyId && (!connectionId || event.connectionId === connectionId)), page); }
 }

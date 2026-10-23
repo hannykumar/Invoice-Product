@@ -117,11 +117,21 @@ test('operations API exposes tenant-safe failures and replays only safe jobs', a
 
 test('live bank feed API requires consent, syncs once and preserves history on disconnect', async () => {
   const owner = await signIn(COMPANY_B, 'owner@konkan.example.invalid');
-  const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa', redirectUri: 'https://app.example/bank/callback' }, owner);
+  // #402: the bank sends the customer, and the code, only to this app — never to an address the caller names.
+  const outside = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa', redirectUri: 'https://example.invalid/collect' }, owner);
+  assert.equal(outside.status, 400);
+  const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa' }, owner);
   assert.equal(started.status, 200);
   assert.equal(started.body.connection.status, 'PENDING_CONSENT');
+  assert.equal(typeof started.body.consentState, 'string');
   const connectionId = started.body.connection.id;
-  const completed = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved' }, owner);
+  // #402: a reply without this request's state, or from someone else who did not start it, is refused.
+  assert.equal((await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved' }, owner)).status, 403);
+  const accountant = await signIn(COMPANY_B, 'accounts@konkan.example.invalid');
+  const borrowed = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved', consentState: started.body.consentState }, accountant);
+  assert.notEqual(borrowed.status, 200);
+  const completed = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved', consentState: started.body.consentState }, owner);
+  assert.equal((await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved', consentState: started.body.consentState }, owner)).status, 409, 'used once');
   assert.equal(completed.body.connection.status, 'CONNECTED');
   const synced = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'api-sync-once' }, owner);
   assert.equal(synced.body.imported, 2);

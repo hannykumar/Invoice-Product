@@ -3539,6 +3539,7 @@ document.querySelector("#company-switch").addEventListener("change", async (even
 // ------------------------------------------------ issue #24: authorised live bank feeds
 
 let pendingBankConnectionId = null;
+let pendingBankConsentState = null;
 
 function bankActivityRow(iconText, title, detail, tone = "green") {
   const row = document.createElement("div"); row.className = "activity-row";
@@ -3572,8 +3573,9 @@ async function loadBankFeeds() {
 
 document.querySelector("#bank-feed-connect")?.addEventListener("click", async () => {
   try {
-    const result = await api("/api/bank-feeds/consent", { method: "POST", body: JSON.stringify({ provider: "sandbox-aa", redirectUri: `${location.origin}/bank-feed-return` }) });
+    const result = await api("/api/bank-feeds/consent", { method: "POST", body: JSON.stringify({ provider: "sandbox-aa" }) });
     pendingBankConnectionId = result.connection.id;
+    pendingBankConsentState = result.consentState;
     document.querySelector("#bank-feed-approve").hidden = false;
     showDialog({ title: copy[state.locale].giveBankPermission, message: copy[state.locale].bankConsentHelp, effects: [result.connection.provider] }, "preview");
     await loadBankFeeds();
@@ -3583,8 +3585,8 @@ document.querySelector("#bank-feed-connect")?.addEventListener("click", async ()
 document.querySelector("#bank-feed-approve")?.addEventListener("click", async (event) => {
   if (!pendingBankConnectionId) return;
   try {
-    await api("/api/bank-feeds/consent/complete", { method: "POST", body: JSON.stringify({ connectionId: pendingBankConnectionId, authorizationCode: "sandbox-approved" }) });
-    pendingBankConnectionId = null; event.currentTarget.hidden = true;
+    await api("/api/bank-feeds/consent/complete", { method: "POST", body: JSON.stringify({ connectionId: pendingBankConnectionId, authorizationCode: "sandbox-approved", consentState: pendingBankConsentState }) });
+    pendingBankConnectionId = null; pendingBankConsentState = null; event.currentTarget.hidden = true;
     showDialog({ title: copy[state.locale].bankConnected, message: copy[state.locale].bankFeedSafety }, "recorded");
     await loadBankFeeds();
   } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }

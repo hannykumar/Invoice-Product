@@ -15,7 +15,7 @@ const reminder = fields({
   documentId: anything, reminderId: text, partyId: text, reason: text, amount: anything, promisedOn: text, note: anything,
   disputeId: text, resolution: text,
 });
-const bankFeed = fields({ provider: text, redirectUri: text, connectionId: text, authorizationCode: text, idempotencyKey: text });
+const bankFeed = fields({ provider: text, redirectUri: text, connectionId: text, authorizationCode: text, consentState: text, idempotencyKey: text });
 
 export const MONEY_ROUTES: readonly Route[] = [
   // Issue #42 — what this business's plan covers, what it has used, and paying for it.

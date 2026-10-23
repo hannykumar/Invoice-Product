@@ -127,7 +127,8 @@ import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/s
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
-import { MEMORY, type Persistence } from './persistence.ts';
+import { PUBLIC_ORIGINS } from './http-hardening.ts';
+import { isLocal, MEMORY, type Persistence } from './persistence.ts';
 import { PostgresSalesRepository, PostgresChallanRepository, PostgresPreSaleRepository } from '../../../packages/sales/src/postgres-repository.ts';
 import { PostgresAdvanceRepository, PostgresPaymentRepository } from '../../../packages/receivables/src/postgres-repository.ts';
 import { PostgresReturnPreparations } from '../../../packages/gst-returns/src/postgres-repository.ts';
@@ -1144,7 +1145,12 @@ export class DemoApplication {
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
     }
-    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)));
+    // Issue #402: the bank sends the customer back only to this app's own Bank feeds page — on the
+    // public origins in KAROBAR_PUBLIC_ORIGINS, or on this machine in development. Never to an
+    // address the browser names.
+    const webPort = process.env.WEB_PORT ?? process.env.PORT ?? '4173';
+    const bankReturnOrigins = PUBLIC_ORIGINS.size > 0 ? [...PUBLIC_ORIGINS] : isLocal(process.env.NODE_ENV) ? [`http://localhost:${webPort}`, `http://127.0.0.1:${webPort}`] : [];
+    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)), { origins: bankReturnOrigins, path: '/bank-feed-return' });
 
     // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
     // is the mock one — no production credential is needed to run any of this — and the limits it
@@ -3918,12 +3924,13 @@ export class DemoApplication {
   }
 
   async startBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
-    const connection = await this.bankFeeds.startConsent(this.bankContext(actor), { provider: String(input.provider ?? ''), redirectUri: String(input.redirectUri ?? '') });
-    return { state: 'draft', connection: this.bankConnectionJson(connection) };
+    const { connection, state } = await this.bankFeeds.startConsent(this.bankContext(actor), { provider: String(input.provider ?? ''), ...(input.redirectUri ? { redirectUri: String(input.redirectUri) } : {}) });
+    // Issue #402: `consentState` comes back once, to the person who started the request; the bank returns it.
+    return { state: 'draft', connection: this.bankConnectionJson(connection), consentState: state };
   }
 
   async completeBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
-    const connection = await this.bankFeeds.completeConsent(this.bankContext(actor), String(input.connectionId ?? ''), String(input.authorizationCode ?? ''));
+    const connection = await this.bankFeeds.completeConsent(this.bankContext(actor), String(input.connectionId ?? ''), String(input.authorizationCode ?? ''), String(input.consentState ?? ''));
     return { state: 'success', connection: this.bankConnectionJson(connection) };
   }
 
