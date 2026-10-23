@@ -37,7 +37,7 @@ const setUpi = async (session: string, body: Record<string, unknown>) => {
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
 };
 
-const sale = (requestId: string) => ({ party: 'ABC Traders', item: SOAP, quantity: '3', rate: '40', date: '2026-09-28', terms: '7', requestId });
+const sale = (requestId: string) => ({ party: 'ABC Traders', item: SOAP, quantity: '3', rate: '40', date: '2026-09-28', terms: '7', requestId, approvalReason: 'Agreed with the owner' });
 
 const sell = async (session: string, requestId: string) => {
   const sold = await request('POST', '/api/sales/record', sale(requestId), session);
