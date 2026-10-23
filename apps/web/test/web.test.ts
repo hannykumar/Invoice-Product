@@ -226,7 +226,7 @@ test("the local web preview serves the application shell", async () => {
   assert.equal(asset.status, 200);
   assert.match(asset.contentType, /text\/html/);
   assert.match(asset.body.toString("utf8"), /id="view-dashboard"/);
-  assert.equal((await loadWebAsset("/../../private-file")).status, 403);
+  assert.equal((await loadWebAsset("/../../private-file")).status, 404);
 });
 
 test("#360: scripts and styles are named by their content and cached for a year; the shell and the API are not", async () => {

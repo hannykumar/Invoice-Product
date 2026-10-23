@@ -89,7 +89,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | Purchasing | `/api/purchase-orders`, `/api/goods-receipts`, `/api/purchases/*`, `/api/suppliers/check*` | |
 | Money | `/api/payments/*`, `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
 | Agent and reminders | `/api/agent/*`, `/api/reminders/*` | §4.7 |
-| Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves files under `apps/web` |
+| Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves only the page's own files (`index.html`, its `*.js`, `*.css`, `*.svg`); everything else is 404 (#393) |
 
 | # | Threat (OWASP) | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -103,7 +103,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | H8 | Session token in `localStorage` is stolen by any XSS; no sign-out route (A07) | Low | High | No `innerHTML` from data | HttpOnly cookie, sign-out | Medium | #342 (+ #349 CSP) |
 | H9 | CSRF once the session is a cookie (A01) | Low today, High after #342 | High | Bearer header | `SameSite` cookie + Origin/Host check on every non-GET | **High** | #349 (Origin check), #342 (cookie) |
 | H10 | A retry creates a second document when the client sends no idempotency key: the server invents one (`randomUUID()`, `Date.now()`, or an empty key) (A04/A08) | Medium | High | Idempotency on every command | Refuse a write that has no client key | **High** | #392 |
-| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked | Allow-list of served files | Medium | #393 |
+| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked; allow-list of served files, 404 for the rest (#393) | — | Low | #393 |
 | H12 | Cross-company access on any route (A01) | Low | High | Session tenancy, `companyOf` | Generated 401 / 403 / 404 tests for every route; RLS in use | Medium | #343, #340 |
 
 ### 4.2 File uploads — logos, signatures, migration files, ITC files
