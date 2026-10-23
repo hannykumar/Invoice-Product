@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
+import { signIn } from './sign-in-helper.ts';
 import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
 
 useFixedAppClock('2026-09-28T10:00:00.000Z');
@@ -48,7 +49,7 @@ const scrap = (reference: string, date: string, extra: Record<string, unknown> =
 const GTA_ANSWERS = { gta_consignment_note: 'yes', gta_exempt: 'no', gta_forward_charge: 'no' };
 
 test('suppliers and items', async () => {
-  owner = (await request('POST', '/api/auth/login', { companyId: COMPANY_A, email: 'owner@sampoorna.example.invalid', password: 'karobar-demo' })).body.sessionId;
+  owner = await signIn('owner@sampoorna.example.invalid', COMPANY_A);
   kabadi = (await ok('/api/suppliers', { legalName: 'Mehta Kabadi Stores', registration: 'unregistered', unregisteredBasis: 'BELOW_THRESHOLD', line1: '4, Scrap Lane', city: 'Bengaluru', pincode: '560026' })).supplier.id;
   landlord = (await ok('/api/suppliers', { legalName: 'R. Shetty (landlord)', registration: 'unregistered', unregisteredBasis: 'BELOW_THRESHOLD', line1: '9, Temple Street', city: 'Bengaluru', pincode: '560004' })).supplier.id;
   transporter = (await ok('/api/suppliers', { legalName: 'Kaveri Roadlines', registration: 'regular', gstin: syntheticGstin('29', 'KKKKK5555K'), line1: '3, Lorry Stand', city: 'Bengaluru', pincode: '560023' })).supplier.id;
