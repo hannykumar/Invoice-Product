@@ -393,6 +393,56 @@
           </article>
         </section>
 
+        <!-- Issue #294 — expenses, contra and journal entries, the owner's money, and the cash and bank books. Filled by books.js. -->
+        <section class="view" id="view-books" aria-labelledby="books-title">
+          <div class="page-heading compact"><div><h1 id="books-title" tabindex="-1" data-i18n="booksTitle"></h1><p data-i18n="booksHelp"></p></div></div>
+          <div class="dashboard-grid">
+            <article class="panel form-panel"><h2 data-i18n="booksExpense"></h2>
+              <form data-books-kind="expense"><div class="field-grid">
+                <label><span data-i18n="booksHead"></span><select name="head" data-books-heads required></select></label>
+                <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="booksPaidFrom"></span><select name="paidFrom"><option value="cash" data-i18n="booksCash"></option><option value="bank" data-i18n="booksBank"></option><option value="upi">UPI</option></select></label>
+                <label><span data-i18n="booksAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
+                <label><span data-i18n="booksGst"></span><span class="input-with-prefix"><span>₹</span><input name="gst" inputmode="decimal" value="0" /></span></label>
+                <label><span data-i18n="booksGstin"></span><input name="gstin" maxlength="15" autocomplete="off" /></label>
+                <label><span data-i18n="booksCreditChoice"></span><select name="credit"><option value=""></option><option value="claim" data-i18n="booksClaim"></option><option value="blocked" data-i18n="booksBlocked"></option></select></label>
+                <label><span data-i18n="booksBlockedReason"></span><select name="blockedReason" data-books-blocked><option value=""></option></select></label>
+                <label><span data-i18n="booksBill"></span><input name="billNumber" maxlength="40" /></label>
+                <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
+              </div><small data-i18n="booksOwedNote"></small></form>
+            </article>
+            <article class="panel form-panel"><h2 data-i18n="booksOwner"></h2>
+              <form data-books-kind="owner"><div class="field-grid">
+                <label><span data-i18n="booksWhat"></span><select name="direction"><option value="capital" data-i18n="booksOwnerIn"></option><option value="drawings" data-i18n="booksOwnerOut"></option></select></label>
+                <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="booksPaidFrom"></span><select name="paidFrom"><option value="cash" data-i18n="booksCash"></option><option value="bank" data-i18n="booksBank"></option><option value="upi">UPI</option></select></label>
+                <label><span data-i18n="booksAmountPlain"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
+                <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
+              </div></form>
+            </article>
+            <article class="panel form-panel"><h2 data-i18n="booksContra"></h2>
+              <form data-books-kind="contra"><div class="field-grid">
+                <label><span data-i18n="booksWhat"></span><select name="direction"><option value="deposit" data-i18n="booksDeposit"></option><option value="withdraw" data-i18n="booksWithdraw"></option></select></label>
+                <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="booksAmountPlain"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
+                <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
+              </div></form>
+            </article>
+            <article class="panel form-panel"><h2 data-i18n="booksJournal"></h2><p data-i18n="booksJournalHelp"></p>
+              <form data-books-kind="journal">
+                <div class="field-grid"><label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label><label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" required /></label></div>
+                <div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account1" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit1" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit1" inputmode="decimal" /></label></div><div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account2" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit2" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit2" inputmode="decimal" /></label></div><div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account3" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit3" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit3" inputmode="decimal" /></label></div><div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account4" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit4" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit4" inputmode="decimal" /></label></div>
+              </form>
+            </article>
+          </div>
+          <article class="panel"><h2 data-i18n="booksBookTitle"></h2>
+            <div class="sheet-choices"><button type="button" class="secondary-button" data-books-book="cash" data-i18n="booksShowCash"></button><button type="button" class="secondary-button" data-books-book="bank" data-i18n="booksShowBank"></button></div>
+            <p data-books-book-summary></p>
+            <table class="data-table"><thead><tr><th data-i18n="booksDate"></th><th>#</th><th data-i18n="booksAgainst"></th><th data-i18n="booksIn"></th><th data-i18n="booksOut"></th><th data-i18n="booksBalance"></th></tr></thead><tbody data-books-book-rows></tbody></table>
+          </article>
+          <article class="panel"><h2 data-i18n="booksEntries"></h2><ul data-books-entries></ul></article>
+        </section>
+
         <section class="view" id="view-bank-feeds" aria-labelledby="bank-feeds-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="bank-feeds-title" tabindex="-1" data-i18n="bankFeedsTitle"></h1><p data-i18n="bankFeedsHelp"></p></div></div>
           <div class="dashboard-grid">
@@ -1554,8 +1604,7 @@
         <button type="button" class="secondary-button" data-view="paid"><span aria-hidden="true">₹</span> <span data-i18n="navPaid"></span></button>
         <button type="button" class="secondary-button" data-view="presale"><span aria-hidden="true">✎</span> <span data-i18n="navQuotation"></span></button>
         <button type="button" class="secondary-button" data-view="returns"><span aria-hidden="true">↩</span> <span data-i18n="navReturn"></span></button>
-        <button type="button" class="secondary-button" disabled aria-describedby="expense-soon"><span aria-hidden="true">₹</span> <span data-i18n="navExpense"></span></button>
-        <small class="sheet-soon" id="expense-soon" data-i18n="expenseSoon"></small>
+        <button type="button" class="secondary-button" data-view="books"><span aria-hidden="true">₹</span> <span data-i18n="navExpense"></span></button>
       </div>
       <button type="button" class="text-button sheet-close" data-close-dialog data-i18n="close"></button>
     </dialog>

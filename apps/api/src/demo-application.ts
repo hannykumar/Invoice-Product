@@ -3,6 +3,7 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
+import { BooksDesk } from './books-entry-application.ts';
 import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
@@ -773,6 +774,7 @@ export class DemoApplication {
   private readonly notifications: NotificationService;
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
+  private readonly booksDesk: BooksDesk;
   private readonly agent: ActionAgentService;
   private readonly gstReturns: GstReturnService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
@@ -833,6 +835,7 @@ export class DemoApplication {
     this.notifications = notifications;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
+    this.booksDesk = new BooksDesk({ ledger: shop.ledger, store: shop.store, companyId: config.companyId, gstin: config.gstin });
     this.gstReturns = gstReturns;
   }
 
@@ -1888,6 +1891,21 @@ export class DemoApplication {
   static assistantExamples() {
     return AssistantService.supportedIntents().map((intent) => ({ intent, label: describeIntent(intent) }));
   }
+
+  // Issue #294 — expenses, journal and contra entries, the owner's money, and the cash and bank books.
+  booksHeads(actor: ActorContext) { this.companyOf(actor); return this.booksDesk.heads(); }
+  async booksJournalAccounts(actor: ActorContext) { this.companyOf(actor); return this.booksDesk.journalAccounts(); }
+  async booksPreview(actor: ActorContext, kind: 'expense' | 'journal' | 'contra' | 'owner', input: Record<string, unknown>) {
+    this.companyOf(actor);
+    return this.booksDesk.preview(actor, kind, input);
+  }
+  async booksRecord(actor: ActorContext, kind: 'expense' | 'journal' | 'contra' | 'owner', input: Record<string, unknown>) {
+    this.companyOf(actor);
+    return this.booksDesk.record(actor, kind, input);
+  }
+  async booksUndo(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.undo(actor, input); }
+  async booksEntries(actor: ActorContext) { this.companyOf(actor); return { entries: await this.booksDesk.entries(actor) }; }
+  async booksBook(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.book(actor, input); }
 
   async reports(actor: ActorContext) {
     this.companyOf(actor);

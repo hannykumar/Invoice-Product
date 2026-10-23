@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 156 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 172 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -87,7 +87,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | Sales and returns | `/api/sales/*`, `/api/returns/*`, PDFs and previews | §4.6 |
 | Government | `/api/einvoices/*`, `/api/eway/*`, `/api/challans/*`, `/api/gst-returns/*`, `/api/itc/*`, `/api/vehicles/*` | Adapters mocked; WhiteBooks sandbox |
 | Purchasing | `/api/purchase-orders`, `/api/goods-receipts`, `/api/purchases/*`, `/api/suppliers/check*` | |
-| Money | `/api/payments/*`, `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
+| Money | `/api/payments/*`, `/api/books/*` (expenses, journal, contra, owner's money, cash and bank books), `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
 | Agent and reminders | `/api/agent/*`, `/api/reminders/*` | §4.7 |
 | Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves only the page's own files (`index.html`, its `*.js`, `*.css`, `*.svg`); everything else is 404 (#393) |
 
@@ -407,3 +407,16 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/returns/notes` | service |
 | POST | `/api/returns/supplier-note` | `returns.create` |
 | POST | `/api/returns/print` | `returns.create` |
+| GET | `/api/books/heads` | service |
+| GET | `/api/books/journal/accounts` | service |
+| POST | `/api/books/expense/preview` | `ledger.post.payment` |
+| POST | `/api/books/expense/record` | `ledger.post.payment` |
+| POST | `/api/books/journal/preview` | `ledger.post.journal` |
+| POST | `/api/books/journal/record` | `ledger.post.journal` |
+| POST | `/api/books/contra/preview` | `ledger.post.journal` |
+| POST | `/api/books/contra/record` | `ledger.post.journal` |
+| POST | `/api/books/owner/preview` | `ledger.post.receipt` or `ledger.post.payment` |
+| POST | `/api/books/owner/record` | `ledger.post.receipt` or `ledger.post.payment` |
+| POST | `/api/books/undo` | `ledger.reverse` |
+| GET | `/api/books/entries` | service |
+| GET | `/api/books/book` | service |
