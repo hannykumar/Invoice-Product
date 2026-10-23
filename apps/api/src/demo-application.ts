@@ -2053,8 +2053,13 @@ export class DemoApplication {
 
   // ------------------------------------------------------- issue #23: chasing what is still owed
 
-  private reminderDate(input: Record<string, unknown>): IsoDate {
-    return input.today === undefined || input.today === '' ? appToday() : isoDate(String(input.today));
+  /**
+   * Issue #403 — the day a reminder is worked out for is the server's today, never a date the request
+   * names: a future "today" would chase bills that are not yet due, in stronger words, and log a day
+   * that never happened. Tests move the day with `useFixedAppClock(...)`.
+   */
+  private static reminderDate(): IsoDate {
+    return appToday();
   }
 
   private candidateJson(candidate: ReminderCandidate) {
@@ -2097,7 +2102,7 @@ export class DemoApplication {
   /** Everything the Reminders screen shows: the plan, what was sent, promises and disputes. */
   async reminders(actor: ActorContext, input: Record<string, unknown> = {}) {
     const companyId = this.companyOf(actor);
-    const today = this.reminderDate(input);
+    const today = DemoApplication.reminderDate();
     const plan = await this.collections.plan(actor, today);
     return {
       asOf: today,
@@ -2127,7 +2132,7 @@ export class DemoApplication {
     this.companyOf(actor);
     const reminder = await this.collections.send(actor, {
       documentId: String(input.documentId ?? ''),
-      today: this.reminderDate(input),
+      today: DemoApplication.reminderDate(),
     });
     return {
       state: reminder.state === 'SENT' ? 'recorded' : 'recorded',
@@ -2141,7 +2146,7 @@ export class DemoApplication {
 
   async sendAllReminders(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const sent = await this.collections.sendPlanned(actor, this.reminderDate(input));
+    const sent = await this.collections.sendPlanned(actor, DemoApplication.reminderDate());
     return {
       state: 'recorded',
       title: sent.length === 0 ? 'Nothing needed sending' : `${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`,
@@ -2154,7 +2159,7 @@ export class DemoApplication {
 
   async retryReminder(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), this.reminderDate(input));
+    const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), DemoApplication.reminderDate());
     return { state: 'recorded', title: `Reminder ${reminder.state.toLowerCase()}`, message: reminder.failureReason ?? reminder.message['en-IN'], reminder: this.reminderJson(reminder) };
   }
 
@@ -3472,7 +3477,8 @@ export class DemoApplication {
     this.companyOf(actor);
     const plan = await this.agent.plan(actor, {
       text: String(input.request ?? ''),
-      today: input.today === undefined || input.today === '' ? appToday() : isoDate(String(input.today)),
+      // Issue #403 — the server's today, never one the request names.
+      today: appToday(),
     });
     // Planning looks at nothing; the preview is where the request meets the books, so both run
     // together for the screen. Neither of them writes anything.

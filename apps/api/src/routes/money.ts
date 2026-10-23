@@ -10,9 +10,9 @@ const DISPUTES = need('handle a disputed bill', 'collections.dispute.manage');
 const BANK = need('connect a bank account', 'bank.feed.manage');
 
 const subscription = fields({ planId: text, reason: text });
-const agent = fields({ request: text, today: anything, planId: text, fingerprint: text, idempotencyKey: text });
+const agent = fields({ request: text, planId: text, fingerprint: text, idempotencyKey: text });
 const reminder = fields({
-  today: anything, documentId: anything, reminderId: text, partyId: text, reason: text, amount: anything, promisedOn: text, note: anything,
+  documentId: anything, reminderId: text, partyId: text, reason: text, amount: anything, promisedOn: text, note: anything,
   disputeId: text, resolution: text,
 });
 const bankFeed = fields({ provider: text, redirectUri: text, connectionId: text, authorizationCode: text, idempotencyKey: text });
