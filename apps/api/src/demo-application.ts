@@ -1466,6 +1466,8 @@ export class DemoApplication {
   }
 
   private async seed(): Promise<void> {
+    // Issue #395 — the demo company's address is seeded before it opens, so its walk-in customer is too.
+    if (businessDetailsOf(this.config.companyId) !== null) await this.walkIn(this.shop.setupActor);
     // Issue #229 — a sale takes its goods out of stock, so the three old soap bills below need the
     // soap they sold. It is entered as the count on the day the books begin: 4 + 2 + 1 = 7 pieces,
     // at a made-up cost of ₹200 each, and all of it is sold by those bills, so no soap is left.
@@ -2240,18 +2242,19 @@ export class DemoApplication {
    * be billed: the master record is written, and the customer's own account is opened in the
    * ledger. Both or neither.
    */
-  async catalogue(actor: ActorContext) {
-    const companyId = this.companyOf(actor);
-    // Issue #288 — the walk-in customer is on the list from the start, once there is a shop address
-    // to bill a counter sale at. Without one, no bill can be issued at all, and the list says nothing.
-    if (businessDetailsOf(companyId) !== null) await this.walkIn(actor);
-    return readCatalogue(companyId);
+  catalogue(actor: ActorContext) {
+    // Issue #395 — a read only reads. The walk-in customer (#288) is made when the shop's address
+    // is saved (`saveBusinessDetails`), so it is on the list from then on.
+    return readCatalogue(this.companyOf(actor));
   }
 
-  /** Issue #288 — the company's walk-in customer, with its account in the books. */
-  private async walkIn(actor: ActorContext) {
+  /**
+   * Issue #288 — the company's walk-in customer, with its account in the books, opened by `openedBy`.
+   * Issue #395: never from a read.
+   */
+  private async walkIn(actor: ActorContext, openedBy: ActorContext = this.shop.setupActor) {
     const party = walkInCustomer(this.companyOf(actor));
-    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id, name: party.legalName, kind: 'CUSTOMER' });
+    await this.shop.ledger.openPartyAccount(openedBy, { partyId: party.id, name: party.legalName, kind: 'CUSTOMER' });
     return party;
   }
 
@@ -2355,6 +2358,11 @@ export class DemoApplication {
     const before = describe(readBusinessDetails(companyId, company).bank);
     const saved = saveBusinessDetails(companyId, company, input);
     await this.recordPayeeChange(actor, 'bank account', before, describe(saved.bank));
+    // Issue #395 — the walk-in customer (#288) needs the shop's address, so it is made, or moved to
+    // the new town and PIN code, here, and its account opened as the person saving. Without
+    // `ledger.setup` the account waits for the first counter sale.
+    if (actor.permissions.includes('ledger.setup')) await this.walkIn(actor, actor);
+    else walkInCustomer(companyId);
     return saved;
   }
 
