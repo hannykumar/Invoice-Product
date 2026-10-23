@@ -3,6 +3,7 @@ import { AuditLog, PlatformError, type Id, type Permission, type RequestContext 
 import { SecureLogger, type SafeLogEvent } from "../../security/src/index.ts";
 import type { DiagnosticScope, ExternalFailure, FeatureFlag, Incident, IncidentUpdate, OperationState, QueueJob, SupportGrant, TraceSpan } from "./types.ts";
 import { RecurringWorkRunner } from "./recurring.ts";
+import { InMemoryOperationsStore, type OperationsAudit, type OperationsStore, type Page } from "./store.ts";
 
 const HOUR = 60 * 60 * 1000;
 const requirePermission = (context: RequestContext, permission: Permission): void => {
@@ -11,16 +12,17 @@ const requirePermission = (context: RequestContext, permission: Permission): voi
 const freeze = <T>(value: T): T => Object.freeze(value);
 
 export class OperationsTelemetry {
-  readonly #failures: ExternalFailure[] = [];
+  readonly #store: OperationsStore;
   readonly #spans = new Map<string, TraceSpan>();
   readonly #metrics = new Map<string, number>();
   readonly #checks = new Map<string, () => Promise<boolean> | boolean>();
   readonly #logger: SecureLogger;
   readonly #now: () => Date;
 
-  constructor(sink: (event: SafeLogEvent) => void = () => {}, now: () => Date = () => new Date()) {
+  constructor(sink: (event: SafeLogEvent) => void = () => {}, now: () => Date = () => new Date(), store: OperationsStore = new InMemoryOperationsStore()) {
     this.#logger = new SecureLogger(sink);
     this.#now = now;
+    this.#store = store;
   }
 
   startSpan(context: RequestContext, name: string, correlationId: string): TraceSpan {
@@ -41,24 +43,24 @@ export class OperationsTelemetry {
     return completed;
   }
 
-  externalFailure(context: RequestContext, input: { correlationId: string; connector: string; operation: string; errorCode: string; details?: Record<string, unknown> }): ExternalFailure {
+  async externalFailure(context: RequestContext, input: { correlationId: string; connector: string; operation: string; errorCode: string; details?: Record<string, unknown> }): Promise<ExternalFailure> {
     if (!input.correlationId.trim()) throw new Error("CORRELATION_ID_REQUIRED");
     if (![input.connector, input.operation, input.errorCode].every((value) => value.trim())) throw new Error("EXTERNAL_FAILURE_FIELDS_REQUIRED");
     const failure = freeze({ id: randomUUID(), companyId: context.companyId, correlationId: input.correlationId, connector: input.connector, operation: input.operation, errorCode: input.errorCode, state: "failure" as const, occurredAt: this.#now().toISOString() });
-    this.#failures.push(failure);
+    await this.#store.action(context.companyId, () => this.#store.addFailure(failure));
     this.increment(context.companyId, `external.${input.connector}.failure`);
     this.#logger.write("error", "External operation failed", { ...input, companyId: context.companyId });
     return failure;
   }
 
-  failures(context: RequestContext): readonly ExternalFailure[] {
+  async failures(context: RequestContext, page?: Page): Promise<readonly ExternalFailure[]> {
     requirePermission(context, "operations.read");
-    return this.#failures.filter((failure) => failure.companyId === context.companyId);
+    return this.#store.failures(context.companyId, page);
   }
 
-  failuresForSupport(access: SupportAccessService, input: { grantId: Id; supportActorId: Id; companyId: Id }): readonly ExternalFailure[] {
-    access.authorize(input.grantId, input.supportActorId, input.companyId, "external-failures");
-    return this.#failures.filter((failure) => failure.companyId === input.companyId);
+  async failuresForSupport(access: SupportAccessService, input: { grantId: Id; supportActorId: Id; companyId: Id }, page?: Page): Promise<readonly ExternalFailure[]> {
+    await access.authorize(input.grantId, input.supportActorId, input.companyId, "external-failures");
+    return this.#store.failures(input.companyId, page);
   }
 
   metric(context: RequestContext, name: string): number {
@@ -77,41 +79,52 @@ export class OperationsTelemetry {
 }
 
 export class SupportAccessService {
-  readonly #grants = new Map<Id, SupportGrant>();
-  readonly audit: AuditLog;
+  readonly #store: OperationsStore;
+  readonly audit: OperationsAudit;
   readonly now: () => Date;
-  constructor(audit: AuditLog, now: () => Date = () => new Date()) { this.audit = audit; this.now = now; }
+  constructor(audit: OperationsAudit, now: () => Date = () => new Date(), store: OperationsStore = new InMemoryOperationsStore()) { this.audit = audit; this.now = now; this.#store = store; }
 
-  grant(context: RequestContext, input: { supportActorId: Id; reason: string; scopes: readonly DiagnosticScope[]; durationMs: number }): SupportGrant {
+  async grant(context: RequestContext, input: { supportActorId: Id; reason: string; scopes: readonly DiagnosticScope[]; durationMs: number }): Promise<SupportGrant> {
     requirePermission(context, "support.access.grant");
     if (!input.reason.trim() || input.scopes.length === 0) throw new Error("CONSENT_REASON_AND_SCOPE_REQUIRED");
-    if (input.durationMs <= 0 || input.durationMs > 24 * HOUR) throw new Error("SUPPORT_ACCESS_DURATION_INVALID");
+    if (!Number.isFinite(input.durationMs) || input.durationMs <= 0 || input.durationMs > 24 * HOUR) throw new Error("SUPPORT_ACCESS_DURATION_INVALID");
+    if (!input.supportActorId.trim()) throw new Error("SUPPORT_ACTOR_REQUIRED");
     const grant = freeze({ id: randomUUID(), companyId: context.companyId, supportActorId: input.supportActorId, grantedBy: context.actorId, reason: input.reason, scopes: new Set(input.scopes), createdAt: this.now().toISOString(), expiresAt: new Date(this.now().getTime() + input.durationMs).toISOString() });
-    this.#grants.set(grant.id, grant);
-    this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "support.access.granted", correlationId: grant.id, before: null, after: { supportActorId: grant.supportActorId, scopes: [...grant.scopes], expiresAt: grant.expiresAt, reason: grant.reason } });
-    return grant;
+    return this.#store.action(context.companyId, async () => {
+      await this.#store.addGrant(grant);
+      await this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "support.access.granted", correlationId: grant.id, before: null, after: { supportActorId: grant.supportActorId, scopes: [...grant.scopes], expiresAt: grant.expiresAt, reason: grant.reason } });
+      return grant;
+    });
   }
 
-  revoke(context: RequestContext, grantId: Id): SupportGrant {
+  /** Revoking twice is a retry: the first revocation stands and is audited once. */
+  async revoke(context: RequestContext, grantId: Id): Promise<SupportGrant> {
     requirePermission(context, "support.access.grant");
-    const current = this.tenantGrant(context.companyId, grantId);
-    const revoked = freeze({ ...current, revokedAt: this.now().toISOString() });
-    this.#grants.set(grantId, revoked);
-    this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "support.access.revoked", correlationId: grantId, before: { expiresAt: current.expiresAt }, after: { revokedAt: revoked.revokedAt } });
-    return revoked;
+    return this.#store.action(context.companyId, async () => {
+      const current = await this.tenantGrant(context.companyId, grantId);
+      if (current.revokedAt !== undefined) return current;
+      const result = await this.#store.revokeGrant(context.companyId, grantId, this.now().toISOString());
+      if (result === null) throw new PlatformError("NOT_FOUND", "Support grant was not found.");
+      // Someone else revoked it first (two clicks at once): theirs stands and was audited once.
+      if (!result.changed) return result.grant;
+      await this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "support.access.revoked", correlationId: grantId, before: { expiresAt: current.expiresAt }, after: { revokedAt: result.grant.revokedAt } });
+      return result.grant;
+    });
   }
 
-  authorize(grantId: Id, supportActorId: Id, companyId: Id, scope: DiagnosticScope): SupportGrant {
-    const grant = this.tenantGrant(companyId, grantId);
-    if (grant.supportActorId !== supportActorId || grant.revokedAt || Date.parse(grant.expiresAt) <= this.now().getTime() || !grant.scopes.has(scope)) throw new PlatformError("FORBIDDEN", "Support access is missing, expired, revoked, or outside the approved diagnostic scope.");
-    this.audit.append({ companyId, actorId: supportActorId, action: "support.diagnostic.viewed", correlationId: grant.id, before: null, after: { scope } });
-    return grant;
+  async authorize(grantId: Id, supportActorId: Id, companyId: Id, scope: DiagnosticScope): Promise<SupportGrant> {
+    return this.#store.action(companyId, async () => {
+      const grant = await this.tenantGrant(companyId, grantId);
+      if (grant.supportActorId !== supportActorId || grant.revokedAt || Date.parse(grant.expiresAt) <= this.now().getTime() || !grant.scopes.has(scope)) throw new PlatformError("FORBIDDEN", "Support access is missing, expired, revoked, or outside the approved diagnostic scope.");
+      await this.audit.append({ companyId, actorId: supportActorId, action: "support.diagnostic.viewed", correlationId: grant.id, before: null, after: { scope } });
+      return grant;
+    });
   }
 
-  private tenantGrant(companyId: Id, grantId: Id): SupportGrant {
-    const grant = this.#grants.get(grantId);
-    if (!grant) throw new PlatformError("NOT_FOUND", "Support grant was not found.");
-    if (grant.companyId !== companyId) throw new PlatformError("TENANT_ISOLATION", "Support grant belongs to another company.");
+  /** Another company's grant is never read, so it is "not found", exactly like a grant that never existed. */
+  private async tenantGrant(companyId: Id, grantId: Id): Promise<SupportGrant> {
+    const grant = await this.#store.grant(companyId, grantId);
+    if (grant === null) throw new PlatformError("NOT_FOUND", "Support grant was not found.");
     return grant;
   }
 }
@@ -156,22 +169,54 @@ export class OperationalQueue {
   private save(job: QueueJob): QueueJob { const stored = freeze(job); this.#jobs.set(stored.id, stored); return stored; }
 }
 
+const INCIDENT_STATES: ReadonlySet<string> = new Set(["investigating", "identified", "monitoring", "resolved"]);
+
 export class StatusService {
-  readonly #incidents = new Map<Id, Incident>();
+  readonly #store: OperationsStore;
   readonly #flags = new Map<string, FeatureFlag>();
-  readonly audit: AuditLog;
+  readonly audit: OperationsAudit;
   readonly now: () => Date;
-  constructor(audit: AuditLog, now: () => Date = () => new Date()) { this.audit = audit; this.now = now; }
-  openIncident(context: RequestContext, title: string, affectedService: string, message: string): Incident { requirePermission(context, "incident.manage"); const at = this.now().toISOString(); const update = freeze({ at, state: "investigating" as const, message }); const incident = freeze({ id: randomUUID(), title, affectedService, state: update.state, startedAt: at, timeline: [update] }); this.#incidents.set(incident.id, incident); this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "incident.opened", correlationId: incident.id, before: null, after: { title, affectedService } }); return incident; }
-  updateIncident(context: RequestContext, id: Id, state: IncidentUpdate["state"], message: string): Incident { requirePermission(context, "incident.manage"); const current = this.#incidents.get(id); if (!current) throw new PlatformError("NOT_FOUND", "Incident was not found."); const at = this.now().toISOString(); const updated = freeze({ ...current, state, timeline: [...current.timeline, freeze({ at, state, message })], ...(state === "resolved" ? { resolvedAt: at } : {}) }); this.#incidents.set(id, updated); this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "incident.updated", correlationId: id, before: { state: current.state }, after: { state } }); return updated; }
-  publicStatus(): readonly Incident[] { return [...this.#incidents.values()].map((incident) => ({ ...incident, timeline: [...incident.timeline] })); }
+  constructor(audit: OperationsAudit, now: () => Date = () => new Date(), store: OperationsStore = new InMemoryOperationsStore()) { this.audit = audit; this.now = now; this.#store = store; }
+  async openIncident(context: RequestContext, title: string, affectedService: string, message: string): Promise<Incident> {
+    requirePermission(context, "incident.manage");
+    if (![title, affectedService, message].every((value) => value.trim())) throw new Error("INCIDENT_FIELDS_REQUIRED");
+    const at = this.now().toISOString();
+    const update = freeze({ at, state: "investigating" as const, message });
+    const incident = freeze({ id: randomUUID(), title, affectedService, state: update.state, startedAt: at, timeline: [update] });
+    return this.#store.action(context.companyId, async () => {
+      await this.#store.saveIncident(context.companyId, incident);
+      await this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "incident.opened", correlationId: incident.id, before: null, after: { title, affectedService } });
+      return incident;
+    });
+  }
+  async updateIncident(context: RequestContext, id: Id, state: IncidentUpdate["state"], message: string): Promise<Incident> {
+    requirePermission(context, "incident.manage");
+    if (!message.trim()) throw new Error("INCIDENT_MESSAGE_REQUIRED");
+    if (!INCIDENT_STATES.has(state)) throw new Error("INCIDENT_STATE_INVALID");
+    return this.#store.action(context.companyId, async () => {
+      const current = await this.#store.incident(id);
+      if (!current) throw new PlatformError("NOT_FOUND", "Incident was not found.");
+      const at = this.now().toISOString();
+      const updated = freeze({ ...current, state, timeline: [...current.timeline, freeze({ at, state, message })], ...(state === "resolved" ? { resolvedAt: at } : {}) });
+      await this.#store.saveIncident(context.companyId, updated);
+      await this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "incident.updated", correlationId: id, before: { state: current.state }, after: { state } });
+      return updated;
+    });
+  }
+  async publicStatus(page?: Page): Promise<readonly Incident[]> { return (await this.#store.incidents(page)).map((incident) => ({ ...incident, timeline: [...incident.timeline] })); }
   defineFlag(key: string, description: string): FeatureFlag { const existing = this.#flags.get(key); if (existing) return existing; const flag = freeze({ key, description, enabled: false, allowedCompanyIds: new Set<Id>(), updatedAt: this.now().toISOString() }); this.#flags.set(key, flag); return flag; }
   setFlag(context: RequestContext, key: string, enabled: boolean, allowedCompanyIds: readonly Id[] = []): FeatureFlag { requirePermission(context, "feature-flags.manage"); const current = this.#flags.get(key); if (!current) throw new PlatformError("NOT_FOUND", "Feature flag was not found."); if (allowedCompanyIds.length > 100) throw new Error("FEATURE_FLAG_ROLLOUT_TOO_LARGE"); const updated = freeze({ ...current, enabled, allowedCompanyIds: new Set(allowedCompanyIds), updatedAt: this.now().toISOString() }); this.#flags.set(key, updated); this.audit.append({ companyId: context.companyId, actorId: context.actorId, action: "feature_flag.changed", correlationId: key, before: { enabled: current.enabled, allowedCompanyIds: [...current.allowedCompanyIds] }, after: { enabled, allowedCompanyIds } }); return updated; }
   enabled(key: string, companyId: Id): boolean { const flag = this.#flags.get(key); return flag?.enabled === true && (flag.allowedCompanyIds.size === 0 || flag.allowedCompanyIds.has(companyId)); }
 }
 
-export function createOperations(now: () => Date = () => new Date(), sink: (event: SafeLogEvent) => void = () => {}) {
+/**
+ * `persistence` puts failures, support grants and incidents (and their audit) somewhere durable —
+ * `PostgresOperationsStore` with `PostgresAuditLog` on the database. Without it they stay in memory.
+ */
+export function createOperations(now: () => Date = () => new Date(), sink: (event: SafeLogEvent) => void = () => {}, persistence: { store: OperationsStore; audit: OperationsAudit } | null = null) {
   const audit = new AuditLog();
   const queue = new OperationalQueue(audit, now);
-  return { audit, telemetry: new OperationsTelemetry(sink, now), support: new SupportAccessService(audit, now), queue, recurring: new RecurringWorkRunner(queue, now), status: new StatusService(audit, now) };
+  const store = persistence?.store ?? new InMemoryOperationsStore();
+  const trail = persistence?.audit ?? audit;
+  return { audit, store, telemetry: new OperationsTelemetry(sink, now, store), support: new SupportAccessService(trail, now, store), queue, recurring: new RecurringWorkRunner(queue, now), status: new StatusService(trail, now, store) };
 }
