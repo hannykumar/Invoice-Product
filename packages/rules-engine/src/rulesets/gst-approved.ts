@@ -77,12 +77,14 @@ export const placeOfSupplyGoodsApproved: Rule = {
 };
 
 /**
- * IGST Act section 12(2): services to a registered person are supplied at that person's location;
- * to anyone else, at the recipient's recorded address.
+ * IGST Act section 12(2) (in force 1 July 2017): services to a registered person are supplied at
+ * that person's location (clause (a)); to anyone else, at the recipient's location where the address
+ * on record exists (clause (b)(i)), and at the location of the supplier in other cases (clause
+ * (b)(ii)). Issue #287 added clause (b)(ii), so this rule carries its own version.
  */
 export const placeOfSupplyServicesApproved: Rule = {
   id: 'gst.place_of_supply.services',
-  version: APPROVED_VERSION,
+  version: '2026.10.23',
   topic: 'gst.place_of_supply',
   kind: 'COMPLIANCE',
   jurisdiction: { country: 'IN' },
@@ -94,8 +96,8 @@ export const placeOfSupplyServicesApproved: Rule = {
   reviewState: 'APPROVED',
   appliesWhen: (facts) => facts.value('supply.type') === 'SERVICES',
   explanation: {
-    'en-IN': 'This is a service for {recipientKind}, so it counts where the customer is, which is state {placeOfSupply}.',
-    'hi-IN': 'Yeh {recipientKind} ke liye service hai, isliye yeh wahin maani jaati hai jahan customer hai, yaani rajya {placeOfSupply}.',
+    'en-IN': 'This is a service for {recipientKind}, so it counts {where}, which is state {placeOfSupply}.',
+    'hi-IN': 'Yeh {recipientKind} ke liye service hai, isliye yeh rajya {placeOfSupply} ki maani jaati hai ({where}).',
   },
   evaluate: (facts): RuleOutcome => {
     if (facts.value('supply.type') !== 'SERVICES') {
@@ -107,8 +109,22 @@ export const placeOfSupplyServicesApproved: Rule = {
       };
     }
     const registered = facts.value('supply.recipientRegistered') === true;
-    // Both limbs of the sub-section need the customer's state: their location if registered, the
-    // address we hold if not. Without it there is nothing to answer with.
+    // Clause (b)(ii): a customer who is not registered and has no address on record is supplied
+    // where the supplier is.
+    if (!registered && !facts.has('supply.recipientStateCode') && facts.has('supply.supplierStateCode')) {
+      const ours = String(facts.value('supply.supplierStateCode'));
+      return {
+        outcome: 'ALLOW',
+        usedFacts: ['supply.type', 'supply.recipientRegistered', 'supply.supplierStateCode'],
+        explanationValues: {
+          placeOfSupply: ours,
+          recipientKind: 'a customer who is not registered for GST',
+          where: 'where you are, because no address is on record for the customer',
+        },
+        computed: { placeOfSupplyStateCode: ours, basis: 'IGST Act section 12(2)(b)(ii)' },
+      };
+    }
+    // Clause (a) needs a registered customer's state; nothing stands in for it.
     if (!facts.has('supply.recipientStateCode')) {
       return {
         outcome: 'CANNOT_DECIDE',
@@ -124,8 +140,9 @@ export const placeOfSupplyServicesApproved: Rule = {
       explanationValues: {
         placeOfSupply: state,
         recipientKind: registered ? 'a customer registered for GST' : 'a customer who is not registered for GST',
+        where: 'where the customer is',
       },
-      computed: { placeOfSupplyStateCode: state, basis: 'IGST Act section 12(2)' },
+      computed: { placeOfSupplyStateCode: state, basis: registered ? 'IGST Act section 12(2)(a)' : 'IGST Act section 12(2)(b)(i)' },
     };
   },
 };

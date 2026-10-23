@@ -2717,9 +2717,11 @@ export class DemoApplication {
         effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === BALANCE_WILL_INCREASE ? paidNow.sentence : effect)),
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
-        placeOfSupply: walkIn === null
-          ? delivery.placeOfSupplyReason
-          : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
+        placeOfSupply: draft.supplyKind === 'SERVICES'
+          ? DemoApplication.servicePlaceOfSupplyReason(draft.pricing?.placeOfSupplyStateCode ?? null, customer, walkIn !== null)
+          : walkIn === null
+            ? delivery.placeOfSupplyReason
+            : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
           kind: exportSale.kind,
@@ -2801,7 +2803,9 @@ export class DemoApplication {
           stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
           'en-IN': `${state} sale · ${taxes}`,
           'hi-IN': `${state} ki bikri · ${taxes}`,
-          reason: walkIn === null
+          reason: bill.supplyKind === 'SERVICES'
+            ? DemoApplication.servicePlaceOfSupplyReason(pricing.placeOfSupplyStateCode, customer, walkIn !== null)
+            : walkIn === null
             ? delivery.placeOfSupplyReason
             : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         },
@@ -2990,6 +2994,9 @@ export class DemoApplication {
   private ewayDecisionOf(draft: SalesInvoice, delivery: DeliveryDetails | null) {
     const pricing = draft.pricing;
     if (pricing === null) return null;
+    // Issue #287 — CGST Rule 138(1): an e-way bill is for the movement of goods. A service moves
+    // none, so its bill is never checked or reminded for one.
+    if (draft.supplyKind === 'SERVICES') return null;
     try {
       const consignor = dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
       const billTo = this.movementParty(draft.partyId);
@@ -5653,6 +5660,10 @@ export class DemoApplication {
     }
     const pricing = invoice.pricing;
     if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
+    // Issue #287 — CGST Rule 138(1): e-way bills are for goods that move.
+    if (invoice.supplyKind === 'SERVICES') {
+      throw invalid('EWAY_NOT_FOR_SERVICES', 'This bill is for a service. An e-way bill is only for goods that move (CGST Rule 138), so this bill never needs one.');
+    }
 
     const lines = consignmentLinesOf(pricing.lines);
     const document: ConsignmentDocument = {
@@ -5965,7 +5976,8 @@ export class DemoApplication {
     const records = await this.shop.ewayBill.list(actor);
     const rows = [];
     for (const invoice of invoices) {
-      if (invoice.number === null) continue;
+      // Issue #287 — a service bill moves no goods, so it is not one to choose an e-way bill for.
+      if (invoice.number === null || invoice.supplyKind === 'SERVICES') continue;
       let customer: string | null = null;
       try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch (error) { reportUnexpected('api.listCustomerName', error); customer = null; }
       let outcome: string = 'CANNOT_DECIDE';
@@ -6911,6 +6923,34 @@ export class DemoApplication {
     return particulars;
   }
 
+  /**
+   * Issue #287 — goods or services, from the items on the bill. A bill carries one kind (its
+   * copies, e-way bill, income account and GSTR-1 rows all follow it), and goods and services count
+   * in a state by different rules (IGST Act s. 10 against s. 12), so a bill mixing the two is
+   * refused until each line can carry its own.
+   */
+  private saleSupplyKind(lines: readonly { readonly itemId: string }[], input: Record<string, unknown>): 'GOODS' | 'SERVICES' {
+    const kinds = new Set(lines.map((line) => itemView(this.config.companyId, line.itemId).kind));
+    if (kinds.size > 1) {
+      throw invalid('SALE_MIXES_GOODS_AND_SERVICES', 'This bill has goods and a service on it. Make one bill for the goods and another for the service: GST decides where goods and services count by different rules, and one bill cannot carry both yet.');
+    }
+    if (!kinds.has('service')) return 'GOODS';
+    if (!['', 'same'].includes(String(input.shipTo ?? '').trim().toLowerCase())) {
+      throw invalid('SERVICE_NO_SHIP_TO', 'A service is not sent anywhere, so a service bill has no delivery address. Choose "Same as billing address".');
+    }
+    return 'SERVICES';
+  }
+
+  /** Issue #287 — IGST Act s. 12(2): why a service counts in this state, said as plainly as goods are. */
+  private static servicePlaceOfSupplyReason(stateCode: string | null, customer: { readonly legalName: string; readonly gstRegistrationType: string }, walkIn: boolean): string {
+    const code = stateCode ?? '';
+    const where = `Place of supply: ${STATE_NAMES[code] ?? code} (${code})`;
+    if (walkIn) return `${where} — the service is supplied at your counter, so it counts in your own state.`;
+    return customer.gstRegistrationType === 'unregistered'
+      ? `${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`
+      : `${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`;
+  }
+
   private saleInput(input: Record<string, unknown>) {
     const date = isoDate(String(input.date));
     const terms = Number(input.terms ?? 0);
@@ -6927,16 +6967,23 @@ export class DemoApplication {
     // Issue #182 — where the goods go decides which state this sale counts in, and the two cases
     // differ in law: a customer's own godown moves the supply to that state, while goods handed to
     // a third party on the customer's instructions stay where the customer is.
+    const lines = this.saleLines(input);
+    const supplyKind = this.saleSupplyKind(lines, input);
     const delivery = deliveryDetails(this.config.companyId, customer, input);
     return {
       partyId: customer.id as PartyId,
       customerType: customer.gstRegistrationType === 'unregistered' ? 'B2C' as const : 'B2B' as const,
-      supplyKind: 'GOODS' as const,
+      supplyKind,
       documentDate: date,
       dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)),
-      deliveryStateCode: delivery.placeOfSupplyStateCode,
-      placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
-      lines: this.saleLines(input),
+      // Issue #287 — where goods are delivered is IGST Act s. 10. A service is not delivered
+      // anywhere: s. 12(2) decides it in the calculator, from the customer (or from us, when an
+      // unregistered customer has no address on record).
+      ...(supplyKind === 'SERVICES' ? {} : {
+        deliveryStateCode: delivery.placeOfSupplyStateCode,
+        placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
+      }),
+      lines,
       ...(freight === undefined ? {} : { freight }),
       ...(otherCharges === undefined ? {} : { otherCharges }),
       narration: String(input.notes || '') || null,

@@ -80,6 +80,34 @@ test('services to an unregistered person need a recorded address', () => {
   assert.deepEqual(without.missingFacts.map((m) => m.factId), ['supply.recipientStateCode']);
 });
 
+test('#287: services to an unregistered person with no address on record take the supplier’s state', () => {
+  const walkIn = production().evaluate({
+    topic: 'gst.place_of_supply',
+    facts: FactSet.of({ 'supply.type': 'SERVICES', 'supply.recipientRegistered': false, 'supply.supplierStateCode': '24' }, 'MASTER_DATA'),
+    documentDate: APRIL,
+  }).decision;
+  assert.equal(walkIn.outcome, 'ALLOW');
+  assert.equal(walkIn.computed.placeOfSupplyStateCode, '24');
+  assert.equal(walkIn.computed.basis, 'IGST Act section 12(2)(b)(ii)');
+  assert.match(walkIn.explanation['en-IN'], /where you are, because no address is on record/);
+
+  // A recorded address still wins over the supplier's state (clause (b)(i)).
+  const recorded = production().evaluate({
+    topic: 'gst.place_of_supply',
+    facts: FactSet.of({ 'supply.type': 'SERVICES', 'supply.recipientRegistered': false, 'supply.recipientStateCode': '27', 'supply.supplierStateCode': '24' }, 'MASTER_DATA'),
+    documentDate: APRIL,
+  }).decision;
+  assert.equal(recorded.computed.placeOfSupplyStateCode, '27');
+
+  // A registered customer's location is never replaced by the supplier's (clause (a)).
+  const registered = production().evaluate({
+    topic: 'gst.place_of_supply',
+    facts: FactSet.of({ 'supply.type': 'SERVICES', 'supply.recipientRegistered': true, 'supply.supplierStateCode': '24' }, 'MASTER_DATA'),
+    documentDate: APRIL,
+  }).decision;
+  assert.equal(registered.outcome, 'CANNOT_DECIDE');
+});
+
 test('same state means two taxes, different states mean one', () => {
   const intra = production().evaluate({
     topic: 'gst.tax_split',
