@@ -243,6 +243,39 @@ test('authenticated customer and supplier returns preview and post through real 
   assert.equal(excessive.body.code, 'RETURN_QUANTITY_EXCEEDS_ELIGIBLE');
 });
 
+test('issue #292: a customer return marked damaged goes to the not-for-sale location, not back on the shelf', async () => {
+  const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
+  const soap = 'Herbal Bath Soap 100g';
+  const recordedSale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: soap, quantity: '3', rate: '100', date: '2026-08-29', terms: '7', reference: 'DAMAGED-SALE-292' }, owner);
+  assert.equal(recordedSale.status, 200);
+  const soapRows = async () => (await request('GET', '/api/reports', {}, owner)).body.stock.rows.filter((row: any) => row.item === soap);
+  const shelf = (rows: any[]) => rows.find((row: any) => row.sellable === true);
+  const before = await soapRows();
+  const damagedReturn = {
+    kind: 'SALES_RETURN', documentId: recordedSale.body.invoice.id, lineId: 'line-1', unit: 'PCS', quantity: '1',
+    disposition: 'DAMAGED', reason: 'Customer returned a crushed bar.', date: '2026-08-30', reference: 'CN-DAMAGED-292',
+  };
+  const posted = await request('POST', '/api/returns/record', damagedReturn, owner);
+  assert.equal(posted.status, 200, JSON.stringify(posted.body));
+  assert.equal(posted.body.note.kind, 'SALES_RETURN');
+
+  const after = await soapRows();
+  assert.equal(shelf(after).closing, shelf(before).closing, 'the shelf did not grow');
+  assert.equal(shelf(after).available, shelf(before).available, 'nothing more can be sold');
+  const damaged = after.find((row: any) => row.sellable === false);
+  assert.ok(damaged, 'damaged stock is shown on its own line');
+  assert.match(damaged.warehouse, /Damaged \/ not for sale/);
+  assert.equal(Number(damaged.closing), 1);
+  assert.equal(Number(damaged.available), 0, 'damaged stock is never available to sell');
+  assert.ok(damaged.value > 0, 'the damaged bar is still counted at its value');
+
+  const accepted = await request('POST', '/api/returns/record', { ...damagedReturn, quantity: '1', disposition: 'ACCEPTED', reference: 'CN-ACCEPTED-292' }, owner);
+  assert.equal(accepted.status, 200);
+  const afterAccepted = await soapRows();
+  assert.equal(Number(shelf(afterAccepted).closing), Number(shelf(before).closing) + 1, 'an accepted return goes back on the shelf');
+  assert.equal(Number(afterAccepted.find((row: any) => row.sellable === false).closing), 1);
+});
+
 test('return APIs require both a session and the dedicated permission', async () => {
   assert.equal((await request('GET', '/api/returns/documents')).status, 401);
   const viewer = await signIn(COMPANY_A, 'viewer@sampoorna.example.invalid');

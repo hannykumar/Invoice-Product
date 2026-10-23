@@ -33,6 +33,10 @@ export const returnInventoryAdapter = (inventory: InventoryService): ReturnInven
     return ids;
   },
 
+  async sellableLocation(actor: ActorContext, warehouseId: string): Promise<boolean | null> {
+    return inventory.sellable(actor, warehouseId);
+  },
+
   async applyPurchaseReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]> {
     const movement = await inventory.recordMovementIn(actor, {
       idempotencyKey: `purchase-return:${line.noteId}:${line.originalLineId}:out`,

@@ -116,10 +116,15 @@ const ITEMS: readonly StockItem[] = [
 
 class CompanyMasters implements StockMasterData {
   readonly #units = createDefaultUnitRegistry();
-  readonly #warehouse: Warehouse;
+  readonly #warehouses: readonly Warehouse[];
 
-  constructor(location: string, warehouseId: string, soapIds: readonly string[]) {
-    this.#warehouse = { warehouseId, name: location };
+  constructor(location: string, warehouseId: string, damagedWarehouseId: string, soapIds: readonly string[]) {
+    // Issue #292 — every company also has a place for goods that came back damaged. They are
+    // counted and valued there, and none of them can be sold.
+    this.#warehouses = [
+      { warehouseId, name: location },
+      { warehouseId: damagedWarehouseId, name: damagedLocationName(location), sellable: false },
+    ];
     // One box of this soap is 24 pieces, whichever of its ids a screen names it by.
     for (const itemId of ['SOAP', ...soapIds]) {
       this.#units.registerConversion({ fromUnit: 'BOX', toUnit: 'PCS', numerator: 24n, denominator: 1n, itemId });
@@ -138,7 +143,7 @@ class CompanyMasters implements StockMasterData {
     }
     return ITEMS.find((item) => item.itemId === itemId);
   }
-  warehouse(_companyId: CompanyId, warehouseId: string): Warehouse | undefined { return warehouseId === this.#warehouse.warehouseId ? this.#warehouse : undefined; }
+  warehouse(_companyId: CompanyId, warehouseId: string): Warehouse | undefined { return this.#warehouses.find((warehouse) => warehouse.warehouseId === warehouseId); }
   units(): UnitRegistry { return this.#units; }
 }
 
@@ -210,6 +215,11 @@ const OWN_VEHICLES: readonly Omit<Vehicle, 'companyId'>[] = [
 /** The main godown's id: `wh-main` in memory, a stable UUID in PostgreSQL. */
 export const mainWarehouseId = (persistence: Persistence, companyId: string): string => recordId(persistence, companyId, 'wh-main');
 
+/** Issue #292 — the damaged / not-for-sale location's id: `wh-damaged` in memory, a stable UUID in PostgreSQL. */
+export const damagedWarehouseId = (persistence: Persistence, companyId: string): string => recordId(persistence, companyId, 'wh-damaged');
+
+export const damagedLocationName = (location: string): string => `${location} · Damaged / not for sale`;
+
 export async function createCompanyShop(seed: CompanySeed, persistence: Persistence = MEMORY) {
   // Issue #340 — every store with a PostgreSQL repository uses it when the app has a database. The
   // in-memory ledger store rolls its participants back together; on PostgreSQL the unit of work does.
@@ -239,10 +249,11 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   let sequence = 0;
   const nextId = (kind: string): string => db === null ? `${seed.companyId}:${kind}:${sequence += 1}` : randomUUID();
   const warehouseId = mainWarehouseId(persistence, seed.companyId);
+  const damagedId = damagedWarehouseId(persistence, seed.companyId);
   // Issue #234 — the real clock (tests pin it through app-clock.ts). It used to be frozen at
   // 29 Aug 2026, so an e-way bill raised in September was "valid until" a day in August.
   const clock = appClock;
-  const masters = new CompanyMasters(seed.location, warehouseId,
+  const masters = new CompanyMasters(seed.location, warehouseId, damagedId,
     seed.catalogue.items.filter((item) => item.id.endsWith(':item:SOAP') || item.name === 'Herbal Bath Soap 100g').map((item) => item.id));
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock });
   const inventoryService = new InventoryService({
@@ -560,6 +571,15 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
         isoDate('2026-04-01'), seed.setupUserId, 'The main godown, set up with the books',
       );
     });
+    // Issue #292 — the damaged / not-for-sale location, added once, including to a company whose
+    // books were set up before it existed.
+    await db.unitOfWork(seed.companyId, async ({ sql }) => {
+      if ((await sql.query('SELECT 1 FROM master_records WHERE company_id = $1 AND id = $2', [seed.companyId, damagedId])).rows.length > 0) return;
+      await new PostgresVersionedStore<MasterWarehouse>(db, 'warehouse').append(
+        { id: damagedId, companyId: seed.companyId, code: 'DAMAGED', name: damagedLocationName(seed.location), addressLine: '', city: seed.location, stateCode: seed.gstin.slice(0, 2), pincode: '', active: true },
+        isoDate('2026-04-01'), seed.setupUserId, 'Goods that came back damaged are kept here, not for sale',
+      );
+    });
   }
   if (db === null) await ledger.initialiseCompany(setupActor, { booksStartDate: isoDate('2026-04-01'), accounts: [...chart, ...additions] });
   if (db === null) {
@@ -567,7 +587,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
     await ledger.openPartyAccount(setupActor, { partyId: seed.customerId, name: seed.customerName, kind: 'CUSTOMER' });
   }
   return {
-    persistence, warehouseId, nextId,
+    persistence, warehouseId, damagedWarehouseId: damagedId, nextId,
     reverseCharge, reverseChargeRegister, taxPointOf,
     /** Issue #289, part 2b — how the shop learns when a bill was first paid (s.12(3)(b), s.13(3)(a)). */
     setPaidOn(read: (companyId: CompanyId, billId: string) => Promise<IsoDate | null>) { paidOnOf = read; },

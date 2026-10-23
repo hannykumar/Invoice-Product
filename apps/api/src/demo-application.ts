@@ -638,11 +638,12 @@ const party = (stateCode: string, name: string, gstin: string, addressLines_: re
  * from `namesFrom` in the report service; this only has to satisfy the interface and supply a unit
  * registry, so it returns the ids and lets the names layer do the naming.
  */
-const demoStockMasterData = (): StockMasterData => {
+const demoStockMasterData = (godowns: Pick<StockMasterData, 'warehouse'>): StockMasterData => {
   const registry = createDefaultUnitRegistry();
   return {
     item(_companyId, _itemId): StockItem | undefined { return undefined; },
-    warehouse(_companyId, _warehouseId): Warehouse | undefined { return undefined; },
+    // Issue #292 — the company's own godowns, so the report knows which one is not for sale.
+    warehouse(companyId, warehouseId): Warehouse | undefined { return godowns.warehouse(companyId, warehouseId); },
     units() { return registry; },
   };
 };
@@ -1014,7 +1015,7 @@ export class DemoApplication {
       store: shop.store,
       sales: salesRepository,
       inventory: shop.inventory,
-      stockMasterData: demoStockMasterData(),
+      stockMasterData: demoStockMasterData(shop.masters),
       dues: duesFrom(documents, payments),
       purchases: livePurchaseReadPort(shop),
       // Names are read from master data as they stand, so a customer or an item added today is
@@ -1026,7 +1027,7 @@ export class DemoApplication {
         // Purchases keep their own short item ids, so those fall back to the purchase catalogue.
         item: (companyId, itemId) => catalogueItems(companyId).find((item) => item.id === itemId)?.name
           ?? DemoApplication.CATALOGUE[itemId]?.description,
-        warehouse: (_companyId, warehouseId) => warehouseId === shop.warehouseId ? config.location : undefined,
+        warehouse: (companyId, warehouseId) => shop.masters.warehouse(companyId, warehouseId)?.name,
         branch: () => undefined,
       },
       permissions: permissionPortFromActor,
@@ -1953,7 +1954,7 @@ export class DemoApplication {
         title: pack.stock.header.title,
         sentence: pack.stock.body.sentence,
         value: jsonAmount(pack.stock.body.value.amount.minor),
-        rows: pack.stock.body.rows.map((r) => ({ item: r.itemName, warehouse: r.warehouseName, unit: r.unitCode, closing: r.closing, available: r.available, value: jsonAmount(r.value.minor) })),
+        rows: pack.stock.body.rows.map((r) => ({ item: r.itemName, warehouse: r.warehouseName, unit: r.unitCode, closing: r.closing, available: r.available, sellable: r.sellable, value: jsonAmount(r.value.minor) })),
       },
       dues: {
         receivables: { title: pack.receivables.header.title, sentence: pack.receivables.body.sentence, total: jsonAmount(pack.receivables.body.total.amount.minor), rows: pack.receivables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), onAccount: jsonAmount(r.onAccount.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
@@ -6937,14 +6938,21 @@ export class DemoApplication {
           documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
           originalInvoiceId: documentId, lines: [], wholeBill: true,
           wholeBillDisposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT',
+          ...(String(input.disposition) === 'DAMAGED' ? { wholeBillWarehouseId: this.shop.damagedWarehouseId } : {}),
         },
       };
     }
     const quantity = quantityFromString(String(input.quantity ?? ''), String(input.unit ?? 'PCS'));
+    const disposition = String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT';
     const shared = {
       idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
-      lines: [{ originalLineId: lineId, quantity, disposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT', warehouseId: this.shop.warehouseId }],
+      // Issue #292 — goods a customer sends back damaged go to the damaged / not-for-sale location,
+      // never into the godown they can be sold from. Goods sent back to a supplier leave the main godown.
+      lines: [{
+        originalLineId: lineId, quantity, disposition,
+        warehouseId: kind === 'SALES_RETURN' && disposition === 'DAMAGED' ? this.shop.damagedWarehouseId : this.shop.warehouseId,
+      }],
     };
     // Issue #249 — the supplier's credit note, when it is already in hand. Both or neither.
     const supplierNoteNumber = String(input.supplierNoteNumber ?? '').trim();
