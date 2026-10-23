@@ -12,7 +12,7 @@
  * reverses it in full, with a reason, through the ledger's own reversal.
  */
 import { createHash } from 'node:crypto';
-import { conflict, invalid, isoDate, money, notFound, type CompanyId, type IsoDate } from '@invoice/kernel';
+import { conflict, forbidden, invalid, isoDate, money, notFound, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { Account, ActorContext, LedgerService, LedgerStore, Voucher, VoucherType } from '@invoice/ledger';
 import { appToday } from './app-clock.ts';
 
@@ -35,6 +35,13 @@ const SOURCE_PREFIX = 'books.';
 const GST_CREDIT = 'comes only from a supplier\'s bill on Purchases, so it is checked against your GSTR-2B and reaches your GSTR-3B.';
 const GST_COLLECTED = 'comes only from a sale bill or a credit/debit note, so it reaches your GSTR-1 and GSTR-3B.';
 const PURCHASE_SIDE = 'comes only from a supplier\'s bill or a return to the supplier on Purchases.';
+/** Undoing an entry needs the right to make that kind of entry as well as `ledger.reverse`. */
+const MAKES: Readonly<Record<string, readonly string[]>> = {
+  expense: ['ledger.post.payment'],
+  journal: ['ledger.post.journal'],
+  contra: ['ledger.post.journal'],
+  owner: ['ledger.post.receipt', 'ledger.post.payment'],
+};
 const DOCUMENT_BACKED: Readonly<Partial<Record<NonNullable<Account['systemRole']>, string>>> = {
   INPUT_CGST: GST_CREDIT, INPUT_SGST: GST_CREDIT, INPUT_IGST: GST_CREDIT, INPUT_CESS: GST_CREDIT,
   GST_ON_ADVANCES: 'comes only from an advance receipt and is set off when its bill is made.',
@@ -308,12 +315,16 @@ export class BooksDesk {
     if (voucher === null || !voucher.source?.kind.startsWith(SOURCE_PREFIX)) {
       throw notFound('BOOKS_ENTRY_NOT_FOUND', 'There is no such expense, journal, contra or owner entry in this business.');
     }
+    const may = MAKES[voucher.source.kind.slice(SOURCE_PREFIX.length)] ?? [];
+    if (!may.some((permission) => actor.permissions.includes(permission))) {
+      throw forbidden('BOOKS_UNDO_NOT_ALLOWED', 'You are not allowed to make this kind of entry, so you cannot undo it either.');
+    }
     const today = appToday();
     if (voucher.state === 'FINAL') {
       // Undoing cash that came in takes it back out of the drawer, which cannot go below nothing.
       const cash = (await this.#accounts()).find((a) => a.code === CASH);
       const cashBack = voucher.lines.filter((l) => l.accountId === cash?.id).reduce((sum, l) => sum + l.debit.minor - l.credit.minor, 0n);
-      const inDrawer = cashBack > 0n ? await this.#cashOn(actor.companyId, today) : 0n;
+      const inDrawer = cashBack > 0n ? await this.#lowestCashFrom(actor.companyId, today) : 0n;
       if (cashBack > 0n && inDrawer < cashBack) {
         throw invalid('BOOKS_CASH_SHORT', `Undoing this takes ${rupees(cashBack)} back out of the cash drawer, but the books show only ${rupees(inDrawer < 0n ? 0n : inDrawer)} in it today. Record the cash that went out first.`);
       }
@@ -376,10 +387,13 @@ export class BooksDesk {
 
   async #checkCash(actor: ActorContext, plan: Plan): Promise<void> {
     if (plan.cashOut > 0n) {
-      // The drawer cannot hand over money it does not have; a missing cash sale or receipt comes first.
-      const inDrawer = await this.#cashOn(actor.companyId, plan.date);
+      // The drawer cannot hand over money it does not have, on that day or any day after it: a
+      // back-dated payment also takes the money out of every later day. A missing cash sale or
+      // receipt comes first. (Read, then post: two different requests at the same moment can both
+      // pass, as on the ledger's other cash paths.)
+      const inDrawer = await this.#lowestCashFrom(actor.companyId, plan.date);
       if (inDrawer < plan.cashOut) {
-        throw invalid('BOOKS_CASH_SHORT', `The books show only ${rupees(inDrawer < 0n ? 0n : inDrawer)} in the cash drawer on ${plan.date}, less than ${rupees(plan.cashOut)}. Record the cash that came in first, or choose bank.`);
+        throw invalid('BOOKS_CASH_SHORT', `The books show only ${rupees(inDrawer < 0n ? 0n : inDrawer)} in the cash drawer on ${plan.date} or a later day, less than ${rupees(plan.cashOut)}. Record the cash that came in first, or choose bank.`);
       }
     }
   }
@@ -419,6 +433,10 @@ export class BooksDesk {
    * Why a journal may not touch an account, or null. Cash and bank move through contra, expense and
    * owner entries so the cash book always says why; a customer's or supplier's balance moves through
    * bills, payments and notes so what is owed stays bill by bill; stock moves with the goods.
+   * Expense heads stay open (e.g. "the owner paid the rent personally": Dr 5610 / Cr 3100). That is
+   * lawful bookkeeping, but it skips the expense screen's reverse-charge refusal for rent and GTA
+   * freight (Notif 13/2017-CT(R) S.No. 1, 5AA, 5AB), so the accountant must put such a bill on
+   * Purchases instead.
    */
   #journalRefusal(account: Account, accounts: readonly Account[]): string | null {
     if (account.isGroup) return `"${account.name}" is a heading; choose one of the accounts under it.`;
@@ -432,13 +450,26 @@ export class BooksDesk {
     return null;
   }
 
-  async #cashOn(companyId: CompanyId, date: IsoDate): Promise<bigint> {
+  /** The least cash the drawer holds at the end of `date` or of any later day with an entry. */
+  async #lowestCashFrom(companyId: CompanyId, date: IsoDate): Promise<bigint> {
     const accounts = await this.#accounts();
     const cash = accounts.find((a) => a.code === CASH);
     if (cash === undefined) return 0n;
-    const vouchers = await this.#config.store.read().vouchers.list(companyId, { to: date, accountId: cash.id });
-    return vouchers.filter((v) => v.state !== 'DRAFT').flatMap((v) => v.lines).filter((l) => l.accountId === cash.id)
-      .reduce((sum, l) => sum + l.debit.minor - l.credit.minor, 0n);
+    const byDay = new Map<string, bigint>();
+    for (const voucher of await this.#config.store.read().vouchers.list(companyId, { accountId: cash.id })) {
+      if (voucher.state === 'DRAFT') continue;
+      const day = voucher.date < date ? date : voucher.date;
+      const moved = voucher.lines.filter((l) => l.accountId === cash.id).reduce((sum, l) => sum + l.debit.minor - l.credit.minor, 0n);
+      byDay.set(day, (byDay.get(day) ?? 0n) + moved);
+    }
+    let balance = 0n;
+    let lowest: bigint | null = null;
+    for (const day of [...byDay.keys(), date].sort()) {
+      balance += byDay.get(day) ?? 0n;
+      byDay.delete(day);
+      if (day >= date && (lowest === null || balance < lowest)) lowest = balance;
+    }
+    return lowest ?? 0n;
   }
 
   async #accounts(): Promise<Account[]> {

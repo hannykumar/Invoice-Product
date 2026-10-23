@@ -294,6 +294,20 @@ test('#294: undoing cash that came in cannot take the drawer below nothing', asy
   assert.equal((await undo(capital.body.entry.id)).status, 200, 'and then the capital can be undone');
 });
 
+test('#294: a back-dated cash payment cannot empty a later day\'s drawer', async () => {
+  const { owner } = await sessions();
+  const inDrawer = Number((await book('cash', owner)).closing);
+  const out = await save('owner', { direction: 'drawings', paidFrom: 'cash', amount: String(inDrawer - 500), date: '2026-09-28' }, owner);
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  // On 10 September there was plenty, but today only ₹500 is left, so ₹1,000 cannot have gone.
+  const late = await save('expense', { head: 'wages', date: '2026-09-10', paidFrom: 'cash', amount: '1000' }, owner);
+  assert.equal(late.status, 422, JSON.stringify(late.body));
+  assert.equal(codeOf(late), 'BOOKS_CASH_SHORT');
+  assert.equal((await save('expense', { head: 'wages', date: '2026-09-10', paidFrom: 'cash', amount: '100' }, owner)).status, 200);
+  const undone = await request('POST', '/api/books/undo', { entryId: out.body.entry.id, reason: 'Wrong amount', requestId: nextRequest() }, owner);
+  assert.equal(undone.status, 200, JSON.stringify(undone.body));
+});
+
 test('#294: the heads list says which heads cannot carry GST', async () => {
   const { owner } = await sessions();
   const reply = await request('GET', '/api/books/heads', {}, owner);
