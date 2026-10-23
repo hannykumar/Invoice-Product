@@ -162,7 +162,9 @@ import {
   type AgentReport,
   type PartyDirectoryPort,
 } from '@invoice/action-agent';
-import { AuditLog, PlatformCommandService } from '../../../packages/platform/src/index.ts';
+import { CompanyTrailAuditLog, PlatformCommandService } from '../../../packages/platform/src/index.ts';
+import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
+import { PostgresCommandService } from '../../../packages/platform/src/postgres-platform.ts';
 import {
   InMemoryServiceInvoiceRepository,
   InMemorySubscriptionRepository,
@@ -769,7 +771,6 @@ export class DemoApplication {
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
   private readonly agent: ActionAgentService;
-  private readonly agentAudit: AuditLog;
   private readonly gstReturns: GstReturnService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
   readonly challans: ChallanDesk;
@@ -795,7 +796,6 @@ export class DemoApplication {
     bankFeeds: BankFeedService,
     subscriptions: SubscriptionService,
     agent: ActionAgentService,
-    agentAudit: AuditLog,
     gstReturns: GstReturnService,
     challans: ChallanDesk,
     presale: PreSaleDesk,
@@ -826,7 +826,6 @@ export class DemoApplication {
     this.returnNotes = returnNotes;
     this.subscriptions = subscriptions;
     this.agent = agent;
-    this.agentAudit = agentAudit;
     this.collections = collections;
     this.notifications = notifications;
     this.outbox = outbox;
@@ -1273,10 +1272,14 @@ export class DemoApplication {
     // already composed above — #23 decides what a reminder should be and re-checks the bill at the
     // moment of sending, #34 grounds the total in one of #35's reports and carries its snapshot id,
     // and cancelling a bill is registered as prepare-only, so the assistant can never finish it.
-    const agentAudit = new AuditLog();
-    const agentCommands = new PlatformCommandService(agentAudit, [
-      { action: 'agent.run', minimumRisk: 'medium', requiredPermission: 'approval.decide' },
-    ]);
+    // Issue #404 — over the company's own audit trail, so what the assistant was asked, who approved
+    // which list and its command's lifecycle sit beside the reminders it sent. On PostgreSQL the
+    // command records are kept with every other command of the company.
+    const agentPolicies = [{ action: 'agent.run', minimumRisk: 'medium', requiredPermission: 'approval.decide' }] as const;
+    const companyAudit = shop.audit;
+    const agentCommands = companyAudit instanceof PostgresAuditLog
+      ? new PostgresCommandService((persistence as Extract<Persistence, { kind: 'postgres' }>).db, companyAudit, agentPolicies)
+      : new PlatformCommandService(new CompanyTrailAuditLog(companyAudit), agentPolicies);
     const agentRegistry = new ToolRegistry()
       .register(findUnpaidTool(collections))
       .register(totalOwedTool(assistant))
@@ -1297,6 +1300,7 @@ export class DemoApplication {
     const agent = new ActionAgentService({
       registry: agentRegistry,
       commands: agentCommands,
+      audit: shop.audit,
       contextFor: (from: ActorContext) => ({
         companyId: from.companyId,
         branchId: from.branchId ?? config.branchId,
@@ -1522,7 +1526,7 @@ export class DemoApplication {
       advances,
     }), advances);
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale, exportSales);
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, gstReturns, challans, presale, exportSales);
     app.cancelGuard = cancellationGuard;
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
@@ -3755,12 +3759,22 @@ export class DemoApplication {
         ...this.agentPlanJson(plan),
         report: await this.agent.report(actor, plan.id).then((report) => (report === null ? null : this.agentReportJson(report))),
       }))),
-      // The trail is GPT 2's audit log, not a second copy kept for the screen.
-      audit: this.agentAudit
-        .forCompany({ companyId: actor.companyId, branchId: String(actor.branchId ?? ''), actorId: actor.userId, permissions: new Set(), sessionId: 'read' })
-        .slice(-20)
-        .map((event) => ({ action: event.action, at: event.occurredAt, detail: event.after ?? {} })),
+      audit: await this.agentTrail(actor.companyId),
     };
+  }
+
+  /** Issue #404 — the assistant's last twenty lines, read from the company's own audit trail. */
+  private async agentTrail(companyId: CompanyId): Promise<readonly { readonly action: string; readonly at: string; readonly detail: unknown }[]> {
+    const audit = this.shop.audit;
+    if (audit instanceof InMemoryAuditPort) {
+      return audit.events.filter((event) => event.companyId === companyId && event.action.startsWith('agent.'))
+        .slice(-20).map((event) => ({ action: event.action, at: event.at, detail: event.details }));
+    }
+    const db = (this.shop.persistence as Extract<Persistence, { kind: 'postgres' }>).db;
+    const { rows } = await db.tenantTransaction(companyId, (sql) => sql.query(
+      `SELECT action, occurred_at, COALESCE(after_json -> 'details', after_json, '{}'::jsonb) AS detail FROM audit_events
+        WHERE company_id = $1 AND action LIKE 'agent.%' ORDER BY seq DESC LIMIT 20`, [companyId]));
+    return rows.reverse().map((row) => ({ action: String(row.action), at: (row.occurred_at as Date).toISOString(), detail: row.detail }));
   }
 
   // ------------------------------------------------------------ issue #42: the plan and its use
