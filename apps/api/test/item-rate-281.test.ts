@@ -149,3 +149,31 @@ test('#281: a rate kept against a code alone, from before the fix, still bills e
   });
   assert.equal(Number((await gstOn(owner, ABC_TRADERS, SOAP)).totals.totalTax), 20);
 });
+
+test('#281: a rate picked to start later keeps its day when the code changes, and an old code-wide rate never fills the gap', async () => {
+  const owner = await signIn(undefined, SAMPOORNA);
+  // The test before this one left a code-wide 28% for 3401 from 2017, as a database from before the fix would.
+  const created = await request('POST', '/api/items', { name: 'Rose soap 75g', kind: 'goods', hsnSac: '34011110', unit: 'PCS', taxKind: 'taxable', ratePercent: '5', effectiveFrom: '2026-09-15' }, owner);
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  const rose = created.body.item.id as string;
+
+  const moved = await request('POST', '/api/items/edit', { itemId: rose, hsnSac: '34011190' }, owner);
+  assert.equal(moved.status, 200, JSON.stringify(moved.body));
+  assert.deepEqual(
+    declaredRatesOf(SAMPOORNA).list(SAMPOORNA).filter((rate) => rate.itemId === rose).map((rate) => rate.effectiveFrom),
+    ['2026-09-15'],
+  );
+
+  const before = await request('POST', '/api/sales/preview', {
+    customerId: ABC_TRADERS, date: '2026-08-29', terms: '0', lines: JSON.stringify([{ itemId: rose, quantity: '10', unit: 'PCS', rate: '40' }]),
+    requestId: 'item-rate-281-rose-before', approvalReason: 'Agreed with the owner',
+  }, owner);
+  assert.equal(before.status, 400, JSON.stringify(before.body));
+  assert.match(String(before.body.message), /The 5% saved for "Rose soap 75g" applies from 2026-09-15, and this bill is dated 2026-08-29, before then/);
+  useFixedAppClock('2026-09-15T10:00:00.000Z');
+  try {
+    assert.equal(Number((await gstOn(owner, ABC_TRADERS, rose, '2026-09-15')).totals.totalTax), 20);
+  } finally {
+    useFixedAppClock('2026-08-29T10:00:00.000Z');
+  }
+});

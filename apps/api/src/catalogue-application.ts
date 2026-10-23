@@ -149,12 +149,14 @@ class KeptDeclaredRates extends InMemoryDeclaredRates {
   /**
    * Issue #281 — a declaration kept before rates were tied to items names no item, so it would
    * still reach every item under its code. For an item, the figure is the one typed for that item
-   * (`itemTaxes`), whoever's declaration it rides on.
+   * (`itemTaxes`), whoever's declaration it rides on. An item with a rate of its own that starts
+   * later has no rate before that day, so the old row does not stand in for it.
    */
   override find(...args: Parameters<InMemoryDeclaredRates['find']>) {
     const found = this.#rates.find(...args);
-    const [companyId, , , , itemId] = args;
+    const [companyId, , kind, , itemId] = args;
     if (found === undefined || found.itemId !== undefined || itemId === undefined) return found;
+    if (this.#rates.list(companyId).some((rate) => rate.itemId === itemId && rate.kind === kind)) return undefined;
     const own = itemTaxes.get(taxKey(companyId, itemId))?.ratePercentTimes100;
     return own === null || own === undefined || own === found.ratePercentTimes100 ? found : { ...found, ratePercentTimes100: own };
   }
@@ -824,8 +826,11 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
 
   const tax = itemTaxes.get(taxKey(companyId, current.id));
   const taxKind = current.kind === 'service' ? 'SERVICES' : 'GOODS';
-  const earlier = declaredRatesOf(companyId).find(String(companyId), current.hsnSac, taxKind, today, current.id);
-  if (tax?.ratePercentTimes100 != null && earlier?.itemId !== current.id) {
+  // The item's own declarations apply whatever its code, from the day each was given, so they are
+  // left exactly as typed, including one that starts later.
+  const hasOwn = declaredRatesOf(companyId).list(String(companyId)).some((rate) => rate.itemId === current.id && rate.kind === taxKind);
+  const earlier = hasOwn ? undefined : declaredRatesOf(companyId).find(String(companyId), current.hsnSac, taxKind, today, current.id);
+  if (tax?.ratePercentTimes100 != null && !hasOwn) {
     declaredRatesOf(companyId).declare({
       companyId: String(companyId),
       itemId: current.id,
