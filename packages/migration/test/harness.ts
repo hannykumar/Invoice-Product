@@ -42,6 +42,7 @@ export interface Harness {
   readonly inventory: InventoryService;
   readonly inventoryStore: InMemoryInventoryStore;
   readonly store: InMemoryLedgerStore;
+  readonly migrationStore: InMemoryMigrationStore;
   readonly warehouseId: string;
 }
 
@@ -106,7 +107,7 @@ export const buildHarness = async (options: { permissions?: readonly string[] } 
     clock,
   });
 
-  return { companyId, actor, context, service, ledger, masters, inventory, inventoryStore, store, warehouseId: warehouse.record.id };
+  return { companyId, actor, context, service, ledger, masters, inventory, inventoryStore, store, migrationStore, warehouseId: warehouse.record.id };
 };
 
 /** analyse → approve the proposed mapping → commit, which is the ordinary path. */
