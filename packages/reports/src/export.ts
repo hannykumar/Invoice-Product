@@ -9,7 +9,7 @@
  * same file, so a retry after a failed download cannot produce a second, subtly different
  * document.
  */
-import { formatDate, toDecimalString, type Money } from '@invoice/kernel';
+import { formatDate, neutraliseSpreadsheetCell, toDecimalString, type Money } from '@invoice/kernel';
 import type { Locale } from '@invoice/ux-vocabulary';
 import type { Figure, Report, ReportHeader } from './model.ts';
 import type { TrialBalanceBody, ProfitAndLossBody, BalanceSheetBody } from './financial.ts';
@@ -198,7 +198,11 @@ export const drillTable = (figure: Figure, locale: Locale = 'en-IN'): ReportTabl
   rows: figure.contributors.map((c) => [formatDate(c.date), c.sourceNumber ?? '', c.description, amount(c.amount)]),
 });
 
-const csvCell = (value: string): string => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+/** A cell that would run as a formula in a spreadsheet is marked as text first (#394). */
+const csvCell = (raw: string): string => {
+  const value = neutraliseSpreadsheetCell(raw);
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+};
 
 const headerLines = (header: ReportHeader, locale: Locale): string[] => [
   header.title[locale],
