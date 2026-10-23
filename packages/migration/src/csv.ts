@@ -91,6 +91,15 @@ const splitRecords = (text: string, delimiter: string): string[][] => {
   return records;
 };
 
+const SNIFF_CHARACTERS = 64 * 1024;
+
+/** The start of the file, ending at a line break, which holds the twenty lines the sniff compares. */
+const sniffHead = (text: string): string => {
+  if (text.length <= SNIFF_CHARACTERS) return text;
+  const end = text.lastIndexOf('\n', SNIFF_CHARACTERS);
+  return end <= 0 ? text.slice(0, SNIFF_CHARACTERS) : text.slice(0, end);
+};
+
 /**
  * Works out which character separates the columns.
  *
@@ -99,10 +108,13 @@ const splitRecords = (text: string, delimiter: string): string[][] => {
  * count, but it does not beat consistency.
  */
 export const sniffDelimiter = (text: string): string => {
+  // Issue #396 — only the first lines are compared, so only the start of the file is split; each
+  // candidate used to split the whole file, four full reads before the real one.
+  const head = sniffHead(text);
   let best = ',';
   let bestScore = -1;
   for (const delimiter of CANDIDATE_DELIMITERS) {
-    const sample = splitRecords(text, delimiter).slice(0, 20).filter((record) => record.some((c) => c.trim() !== ''));
+    const sample = splitRecords(head, delimiter).slice(0, 20).filter((record) => record.some((c) => c.trim() !== ''));
     if (sample.length === 0) continue;
     const widths = sample.map((record) => record.length);
     const widest = Math.max(...widths);

@@ -44,7 +44,7 @@ const trade = (() => {
     assert.equal(customer.status, 200, JSON.stringify(customer.body));
     const sold = await request('POST', '/api/sales/record', {
       customerId: customer.body.customer.id, item: 'TMT Steel Bar 12mm', quantity: '450', rate: '90',
-      freight: '2000', vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'payments-230-sale',
+      freight: '2000', vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'payments-230-sale', requestId: 'payments-230-sale',
     }, owner);
     assert.equal(sold.status, 200, JSON.stringify(sold.body));
     assert.equal(sold.body.invoice.total ?? sold.body.amount ?? 50150, 50150);

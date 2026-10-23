@@ -52,7 +52,7 @@ test('a challan on approval holds its goods, and the sale of more than is left i
   assert.equal(customer.status, 200, JSON.stringify(customer.body));
   mehta = customer.body.customer.id;
 
-  const onApproval = { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-21', customerId: mehta, item: STEEL, quantity: '700', rate: '90', reference: 'dc-290' };
+  const onApproval = { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-21', customerId: mehta, item: STEEL, quantity: '700', rate: '90', reference: 'dc-290', requestId: 'dc-290' };
   // Part 2: ₹63,000 + IGST ₹11,340 = ₹74,340 from Karnataka to Maharashtra needs an e-way bill.
   const checked = await request('POST', '/api/challans/preview', onApproval, owner);
   assert.equal(checked.status, 200, JSON.stringify(checked.body));
@@ -68,18 +68,18 @@ test('a challan on approval holds its goods, and the sale of more than is left i
   const row = await steelRow(owner);
   assert.equal(row.closing, '1000.000', 'the goods are still the business\'s own');
 
-  const sale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '900', rate: '95', date: '2026-09-22', terms: '30', reference: 'sale-290-900' }, owner);
+  const sale = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '900', rate: '95', date: '2026-09-22', terms: '30', reference: 'sale-290-900', requestId: 'sale-290-900' }, owner);
   assert.equal(sale.status, 409, JSON.stringify(sale.body));
   assert.equal(sale.body.code, 'SALES_STOCK_NOT_ENOUGH');
   assert.match(sale.body.message, /300/);
   assert.match(sale.body.message, new RegExp(`700 KGS is out on ${challan.number.replace(/\//g, '\\/')}`));
 
-  const allowed = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '300', rate: '95', date: '2026-09-22', terms: '30', reference: 'sale-290-300' }, owner);
+  const allowed = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '300', rate: '95', date: '2026-09-22', terms: '30', reference: 'sale-290-300', requestId: 'sale-290-300' }, owner);
   assert.equal(allowed.status, 200, JSON.stringify(allowed.body));
 });
 
 test('a challan for goods that are not in the godown is refused, and no number is used', async () => {
-  const refused = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-23', customerId: mehta, item: STEEL, quantity: '50', rate: '90', reference: 'dc-290-short' }, owner);
+  const refused = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-23', customerId: mehta, item: STEEL, quantity: '50', rate: '90', reference: 'dc-290-short', requestId: 'dc-290-short' }, owner);
   assert.equal(refused.status, 422, JSON.stringify(refused.body));
   assert.equal(refused.body.code, 'CHALLAN_STOCK_NOT_ENOUGH');
   const numbers = (await request('GET', '/api/challans', {}, owner)).body.challans.map((c: any) => c.number);
@@ -99,22 +99,36 @@ test('Mehta approves: Make the bill bills exactly the challan, takes the goods o
 test('a cancelled challan puts its goods back on sale', async () => {
   const more = await request('POST', '/api/purchases/record', { supplierId: SHREE_RAM, reference: 'SRS-290-2', date: '2026-09-24', lines: [{ item: STEEL, quantity: '100', rate: '64', gst: '1800' }] }, owner);
   assert.equal(more.status, 200, JSON.stringify(more.body));
-  const out = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-24', customerId: mehta, item: STEEL, quantity: '100', rate: '90', reference: 'dc-290-cancel' }, owner);
+  const out = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-24', customerId: mehta, item: STEEL, quantity: '100', rate: '90', reference: 'dc-290-cancel', requestId: 'dc-290-cancel' }, owner);
   assert.equal(out.status, 200, JSON.stringify(out.body));
-  const blocked = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '100', rate: '95', date: '2026-09-25', terms: '30', reference: 'sale-290-blocked' }, owner);
+  const blocked = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '100', rate: '95', date: '2026-09-25', terms: '30', reference: 'sale-290-blocked', requestId: 'sale-290-blocked' }, owner);
   assert.equal(blocked.status, 409);
   const cancelled = await request('POST', '/api/challans/cancel', { challan: out.body.challan.id, reason: 'Mehta did not want it after all' }, owner);
   assert.equal(cancelled.status, 200, JSON.stringify(cancelled.body));
-  const sold = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '100', rate: '95', date: '2026-09-25', terms: '30', reference: 'sale-290-freed' }, owner);
+  const sold = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: STEEL, quantity: '100', rate: '95', date: '2026-09-25', terms: '30', reference: 'sale-290-freed', requestId: 'sale-290-freed' }, owner);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
 });
 
 test('goods on approval near their six months are on Home', async () => {
   const purchase = await request('POST', '/api/purchases/record', { supplierId: SHREE_RAM, reference: 'SRS-290-3', date: '2026-04-01', lines: [{ item: STEEL, quantity: '10', rate: '64', gst: '1800' }] }, owner);
   assert.equal(purchase.status, 200, JSON.stringify(purchase.body));
-  const old = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-04-10', customerId: mehta, item: STEEL, quantity: '10', rate: '90', reference: 'dc-290-old' }, owner);
+  const old = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-04-10', customerId: mehta, item: STEEL, quantity: '10', rate: '90', reference: 'dc-290-old', requestId: 'dc-290-old' }, owner);
   assert.equal(old.status, 200, JSON.stringify(old.body));
   const home = (await request('GET', '/api/dashboard', {}, owner)).body;
   const tasks = JSON.stringify(home.home?.tasks ?? home.tasks ?? home);
   assert.match(tasks, new RegExp(`${old.body.challan.number.replace(/\//g, '\\/')} must be billed by 10\\/10\\/2026`));
+});
+
+test('issue #392: two challans billed with the same typed order number are two bills, not a reused key', async () => {
+  const more = await request('POST', '/api/purchases/record', { supplierId: SHREE_RAM, reference: 'SRS-392', date: '2026-09-26', lines: [{ item: STEEL, quantity: '20', rate: '64', gst: '1800' }] }, owner);
+  assert.equal(more.status, 200, JSON.stringify(more.body));
+  const invoices: string[] = [];
+  for (const requestId of ['dc-392-a', 'dc-392-b']) {
+    const out = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-26', customerId: mehta, item: STEEL, quantity: '10', rate: '90', reference: requestId, requestId }, owner);
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    const billed = await request('POST', '/api/challans/bill', { challan: out.body.challan.id, date: '2026-09-28', terms: '30', reference: 'MEHTA-PO-392' }, owner);
+    assert.equal(billed.status, 200, JSON.stringify(billed.body));
+    invoices.push(billed.body.invoice.number);
+  }
+  assert.notEqual(invoices[0], invoices[1], 'each challan has its own bill');
 });

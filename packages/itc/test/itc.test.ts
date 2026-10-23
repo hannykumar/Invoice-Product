@@ -511,6 +511,18 @@ test('a decision replayed with the same idempotency key is not recorded twice', 
   assert.equal(history.length, 1);
 });
 
+test('#392: the same key with a different answer is refused, not taken as already done', async () => {
+  const desk = await importedDesk();
+  const workspace = await desk.service.workspace(owner, SUNRISE_PERIOD);
+  const paper = lineFor(workspace, 'MP-9');
+  await desk.service.decide(owner, { period: SUNRISE_PERIOD, lineKey: paper.key, kind: 'PENDING', reason: 'Asked them.', idempotencyKey: 'k392' });
+  await assert.rejects(
+    desk.service.decide(owner, { period: SUNRISE_PERIOD, lineKey: paper.key, kind: 'REJECT', reason: 'Wrong figure.', idempotencyKey: 'k392' }),
+    (error: unknown) => error instanceof DomainError && error.code === 'ITC_KEY_REUSED' && error.kind === 'CONFLICT',
+  );
+  assert.equal((await desk.service.decisionHistory(owner, paper.key)).length, 1);
+});
+
 test('changing your mind is two events, both visible', async () => {
   const desk = await importedDesk();
   const workspace = await desk.service.workspace(owner, SUNRISE_PERIOD);
