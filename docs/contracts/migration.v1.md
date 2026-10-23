@@ -1,4 +1,4 @@
-# Contract: `migration` v1.0.0
+# Contract: `migration` v1.1.0
 
 | | |
 | --- | --- |
@@ -74,6 +74,12 @@ and the report title Tally writes above the headings. `SpreadsheetReader` is the
 nothing else in the module depends on it.
 
 Row numbers in every message are the line numbers the person sees in Excel.
+
+**The rows-to-fix file never runs a formula (v1.1.0, issue #394).** `toCsv`, which writes the error
+file, puts a `'` in front of any cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage
+return, unless it is a plain number. `readDelimited` takes that mark off again, so a corrected file
+brought back in reads as the person's own cells. `workbookToCsv` feeds the import itself and uses
+`toRawCsv`, which writes cells unchanged.
 
 ## Mapping
 

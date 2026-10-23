@@ -156,7 +156,7 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF` | Neutralise such cells | Medium | #394 |
+| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF`; such cells are prefixed with `'` in the error file and report CSVs | — | Low | #394 |
 | M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | — | Body limit, row limit | Medium | #349 + #396 |
 | M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session | Per-company slots | Low | #396 |
 | M4 | XLSX zip bomb, or a bank-statement PDF bomb, once those parsers are routed (A04/A06) | Low | Medium | Not routed | Size, sheet, page and row limits before parsing | Low | — |
