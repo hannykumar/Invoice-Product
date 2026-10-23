@@ -153,4 +153,21 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
     ALTER TABLE return_note_lines DROP CONSTRAINT IF EXISTS return_note_lines_item_or_charge_check;
     ALTER TABLE return_note_lines DROP COLUMN IF EXISTS charge_kind;
     ALTER TABLE return_note_lines ALTER COLUMN item_id SET NOT NULL;`,
+}, {
+  // Issue #293 — a price changed after the sale, with nothing coming back: a credit note for a lower
+  // price (CGST Act s.34(1)) or a debit note to the customer for a higher one (s.34(3)). Such a note
+  // is marked \`price_correction\`; its lines carry the quantity the new price applies to.
+  id: '20261023T011610860Z_returns_d50ad1d404d0_sales_debit_notes_and_price_corrections',
+  up: `
+    ALTER TABLE return_notes DROP CONSTRAINT return_notes_kind_check;
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_kind_check CHECK (kind IN ('SALES_RETURN','PURCHASE_RETURN','SALES_DEBIT_NOTE'));
+    ALTER TABLE return_notes ADD COLUMN price_correction boolean NOT NULL DEFAULT false;
+    -- A sales debit note only ever corrects a price; goods do not come back on one.
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_debit_note_is_price_check CHECK (kind <> 'SALES_DEBIT_NOTE' OR price_correction);
+  `,
+  // Fails while a sales debit note is stored, rather than losing it.
+  down: `ALTER TABLE return_notes DROP CONSTRAINT IF EXISTS return_notes_debit_note_is_price_check;
+    ALTER TABLE return_notes DROP COLUMN IF EXISTS price_correction;
+    ALTER TABLE return_notes DROP CONSTRAINT return_notes_kind_check;
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_kind_check CHECK (kind IN ('SALES_RETURN','PURCHASE_RETURN'));`,
 }]);

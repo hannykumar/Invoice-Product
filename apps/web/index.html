@@ -308,6 +308,8 @@
             <small class="line-facts" data-line-facts></small>
             <div class="line-stepper"><button type="button" class="secondary-button" data-step="-1" aria-label="One less" data-i18n-aria="oneLess">−</button><label><span class="sr-only" data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" inputmode="decimal" required /><span data-line-unit>—</span></span></label><button type="button" class="secondary-button" data-step="1" aria-label="One more" data-i18n-aria="oneMore">＋</button></div>
             <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" inputmode="decimal" required /></span><small data-line-price-note></small></label>
+            <!-- Issue #293 — rupees off this line, before GST; printed in the bill's Discount column. -->
+            <label><span data-i18n="lineDiscount"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="discount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -420,6 +422,13 @@
                 <label class="full-field"><span data-i18n="returnItem"></span><select name="lineId" id="return-line" required></select><small id="return-remaining" data-i18n="returnRemaining"></small></label>
                 <input name="kind" id="return-kind" type="hidden" />
                 <input name="unit" id="return-unit" type="hidden" />
+                <!-- Issue #293 — a price corrected after the sale: a credit or debit note, nothing comes back. -->
+                <label class="full-field" id="return-mode-field"><span data-i18n="returnMode"></span><select name="mode" id="return-mode"><option value="" data-i18n="returnModeGoods"></option><option value="PRICE" data-i18n="returnModePrice"></option></select></label>
+                <fieldset class="full-field field-grid" id="return-price" hidden>
+                  <label><span data-i18n="returnNewRate"></span><input name="newRate" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+                  <label><span data-i18n="returnAmountOff"></span><input name="amountOff" type="number" min="0.01" step="0.01" inputmode="decimal" /></label>
+                  <small class="full-field" data-i18n="returnPriceHelp"></small>
+                </fieldset>
                 <label><span data-i18n="returnQuantity"></span><input name="quantity" type="number" min="0.000001" step="0.000001" required /></label>
                 <label><span data-i18n="disposition"></span><select name="disposition"><option value="ACCEPTED" data-i18n="dispAccepted"></option><option value="DAMAGED" data-i18n="dispDamaged"></option><option value="SCRAPPED" data-i18n="dispScrapped"></option><option value="REPLACEMENT" data-i18n="dispReplacement"></option></select></label>
                 <label><span data-i18n="returnDate"></span><input name="date" type="date" required /></label>

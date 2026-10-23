@@ -326,6 +326,8 @@ export interface ReturnNoteLike {
     };
   }[];
   readonly totals: { readonly total: Money };
+  /** Issue #293 — the note changes only the price: no goods came back, so no quantity is reported. */
+  readonly priceCorrection?: boolean;
 }
 
 /**
@@ -356,7 +358,10 @@ export const returnNoteToDocument = (
   supplier: SupplierFacts,
   facts: { readonly original: NoteOriginalFacts | null; readonly hsnByItem?: Readonly<Record<string, string>>; readonly rateByLine?: Readonly<Record<string, bigint>> },
 ): OutwardDocument => {
-  if (note.kind !== 'SALES_RETURN') {
+  // Issue #293 — a debit note to a customer who was under-charged (CGST Act s.34(3)) is an outward
+  // note too: GSTR-1 Table 9B, reported like a credit note against the same bill, with type "D".
+  const debit = note.kind === 'SALES_DEBIT_NOTE';
+  if (note.kind !== 'SALES_RETURN' && !debit) {
     throw invalid(
       'GSTR1_NOT_AN_OUTWARD_NOTE',
       `Note ${note.number} is a purchase return. It changes the credit you claim on your purchases, which is a different part of the return, so it does not go on GSTR-1.`,
@@ -374,7 +379,8 @@ export const returnNoteToDocument = (
     lineKind: line.itemId.startsWith('charge:') ? 'CHARGE' : 'GOODS',
     supplyKind: line.supplyKind,
     unit: line.quantity.unit,
-    quantity: toQuantityString(line.quantity),
+    // Issue #293 — a change of price moves no goods, so the HSN summary counts none.
+    quantity: note.priceCorrection === true ? '0' : toQuantityString(line.quantity),
     ratePercentTimes100: facts.rateByLine?.[line.originalLineId] ?? line.ratePercentTimes100 ?? null,
     amounts: {
       taxableValue: line.amounts.taxableValue,
@@ -389,10 +395,10 @@ export const returnNoteToDocument = (
 
   return {
     companyId: note.companyId,
-    sourceKind: 'credit_note',
+    sourceKind: debit ? 'debit_note' : 'credit_note',
     sourceId: note.id,
     voucherId: note.voucherId,
-    kind: 'CREDIT_NOTE',
+    kind: debit ? 'DEBIT_NOTE' : 'CREDIT_NOTE',
     number: note.number,
     documentDate: note.documentDate as OutwardDocument['documentDate'],
     treatment: 'REGULAR',

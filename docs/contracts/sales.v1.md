@@ -1,4 +1,4 @@
-# Contract: `sales` v1.3.0
+# Contract: `sales` v1.4.0
 
 | | |
 | --- | --- |
@@ -171,3 +171,15 @@ removal of the goods. A held bill is not an invoice, so goods should not leave u
   asks a person rather than guessing.
 - Recurring invoices, part-delivery and proforma conversion are out of scope for this issue.
 - The posting template covers domestic sales only; exports and SEZ are refused upstream in #25.
+
+## Discounts on the sale (v1.4.0, issue #293)
+
+`POST /api/sales/estimate|preview|record` take, on each line (or at the top level for a one-line
+sale), `discount` (rupees off the line) or `discountPercent` (e.g. `5` or `7.5`), never both, and
+optionally `billDiscount` (rupees off the whole bill). The bill discount is shared over the item
+lines in proportion to their value after their own discounts, the last line taking any paise left
+over, and each line then carries one `AMOUNT` discount. The calculator takes discounts off before
+tax (CGST Act s.15(3)(a)) and the printed bill shows them in its Discount column. Refusals:
+`SALE_DISCOUNT_TWICE`, `SALE_DISCOUNT_PERCENT_INVALID`, `SALE_DISCOUNT_TOO_LARGE` (over 100% or
+more than the line), `SALE_BILL_DISCOUNT_TOO_LARGE`. The trade-terms quote (#11) judges each line at
+its rate after discount, so a discount past the limit needs approval exactly as a lowered rate does.

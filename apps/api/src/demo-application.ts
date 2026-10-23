@@ -6,7 +6,7 @@
 import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
-import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
+import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine, type Discount } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { reportError, reportUnexpected } from '../../../packages/platform/src/error-reporting.ts';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SALES_PERMISSIONS, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type ReservationRequest, type SalesInvoice } from '@invoice/sales';
@@ -223,7 +223,7 @@ import type {
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
-  InMemoryReturnNoteRepository, ReturnService, isChargeLine, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
+  InMemoryReturnNoteRepository, ReturnService, isChargeLine, isGoodsReturn, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote, type SalesReturnSourcePort,
 } from '../../../packages/returns/src/index.ts';
 import { BANK_RETURN_PATH, BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
@@ -241,6 +241,21 @@ import { DurableMap, persist } from './durable.ts';
 /** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
 const WHOLE_BILL = '__whole__';
+/**
+ * Issue #293 — a bill's service lines are services on a credit note too: never put back in a godown,
+ * never told "goods will go back into stock". A bill is made as goods; the item list says which of
+ * its lines are services.
+ */
+const servicesKeptOutOfStock = (source: SalesReturnSourcePort): SalesReturnSourcePort => ({
+  async findSalesDocument(companyId, id) {
+    const found = await source.findSalesDocument(companyId, id);
+    if (found === null) return null;
+    const services = new Set(catalogueItems(companyId).filter((item) => item.kind === 'service').map((item) => item.id));
+    return { ...found, lines: found.lines.map((line) => (services.has(line.itemId) ? { ...line, supplyKind: 'SERVICES' as const, warehouseId: null } : line)) };
+  },
+});
+/** Issue #293 — the Returns screen's "Price correction": a new price on a line, nothing coming back. */
+const PRICE_CORRECTION = 'PRICE';
 const LOCKED_RETURN_STATES: ReadonlySet<string> = new Set(['APPROVED', 'EXPORTED', 'SUBMITTING', 'FILED', 'SUBMISSION_FAILED']);
 /** Issue #266 — a return in one of these states has left for the government; the words say how far. */
 const SENT_RETURN_STATES: Readonly<Record<string, string>> = { EXPORTED: 'downloaded for filing', SUBMITTING: 'sent for filing', FILED: 'filed' };
@@ -583,6 +598,63 @@ const daysAfter = (date: string, days: number): string => {
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
 
+/**
+ * Issue #293 — a sale line's discount, typed as rupees off the line (`discount`) or as a percentage
+ * (`discountPercent`). CGST Act 2017 s.15(3)(a) (in force 1 July 2017): a discount given before or
+ * at the time of supply and recorded on the invoice is not part of the value GST is charged on, so
+ * the calculator takes it off before tax and the bill prints it in its Discount column.
+ */
+const lineDiscountOf = (row: Record<string, unknown>, gross: bigint): Discount | undefined => {
+  const amountText = String(row.discount ?? '').replace(/,/g, '').trim();
+  const percentText = String(row.discountPercent ?? '').trim();
+  const amount = optionalMoney(amountText);
+  if (percentText !== '' && !/^\d+(?:\.\d{1,2})?$/.test(percentText)) {
+    throw invalid('SALE_DISCOUNT_PERCENT_INVALID', 'Type the discount as a percentage, like 5 or 7.5.');
+  }
+  const [whole = '0', fraction = ''] = percentText.split('.');
+  const percent = percentText === '' ? 0n : BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+  if (amount !== undefined && amount.minor > 0n && percent > 0n) {
+    throw invalid('SALE_DISCOUNT_TWICE', 'Give the discount either in rupees or as a percentage, not both.');
+  }
+  if (percent > 10000n) throw invalid('SALE_DISCOUNT_TOO_LARGE', 'A discount cannot be more than 100%.');
+  if (percent > 0n) return { kind: 'PERCENT', percentTimes100: percent };
+  if (amount === undefined || amount.minor === 0n) return undefined;
+  if (amount.minor > gross) {
+    throw invalid('SALE_DISCOUNT_TOO_LARGE', `The discount (${formatPaise(amount.minor)}) is more than the line is worth (${formatPaise(gross)}).`);
+  }
+  return { kind: 'AMOUNT', amount };
+};
+
+/**
+ * Issue #293 — a discount on the whole bill (`billDiscount`, in rupees), shared over the item lines
+ * in proportion to what each is worth after its own discount, so each line's GST is worked on its
+ * own reduced value (s.15(3)(a)). The last line takes the paise left over, so the shares add up.
+ */
+const withBillDiscount = <L extends { readonly quantity: { readonly scaled: bigint }; readonly unitPrice: { readonly minor: bigint }; readonly discount?: Discount }>(
+  lines: readonly L[], billDiscount: unknown,
+): L[] => {
+  const off = optionalMoney(billDiscount);
+  if (off === undefined || off.minor === 0n) return [...lines];
+  const worth = lines.map((line) => {
+    const gross = mulDiv(money(line.unitPrice.minor), line.quantity.scaled, 1_000_000n).minor;
+    const own = line.discount === undefined ? 0n
+      : line.discount.kind === 'AMOUNT' ? line.discount.amount.minor : mulDiv(money(gross), line.discount.percentTimes100, 10000n).minor;
+    return { gross, own, net: gross - own };
+  });
+  const total = worth.reduce((sum, line) => sum + line.net, 0n);
+  if (off.minor > total) {
+    throw invalid('SALE_BILL_DISCOUNT_TOO_LARGE', `The items come to ${formatPaise(total)} before GST, so the discount on the bill cannot be more than that.`);
+  }
+  let left = off.minor;
+  return lines.map((line, index) => {
+    const facts = worth[index]!;
+    const share = index === lines.length - 1 ? left : (off.minor * facts.net) / total;
+    left -= share;
+    const amount = facts.own + share;
+    return amount === 0n ? line : { ...line, discount: { kind: 'AMOUNT' as const, amount: money(amount) } };
+  });
+};
+
 /** Issue #306 — something that would stop a bill, said in both languages, as the live total carries it. */
 interface Refusal {
   readonly code: string;
@@ -924,11 +996,12 @@ export class DemoApplication {
         }
         // A credit note already points at this bill. Cancelling the bill would leave that note
         // reducing tax on a sale that was never reported.
-        const notes = (await returnNotes.listForOriginal(invoice.companyId, invoice.id)).filter((note) => note.kind === 'SALES_RETURN');
+        // Issue #293 — a debit note for a higher price points at the bill just the same.
+        const notes = (await returnNotes.listForOriginal(invoice.companyId, invoice.id)).filter((note) => note.kind !== 'PURCHASE_RETURN');
         if (notes.length > 0) {
           found.push({
             code: 'SALES_CANCEL_HAS_CREDIT_NOTE',
-            message: `${number} cannot be cancelled: credit note ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`,
+            message: `${number} cannot be cancelled: ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`,
             clearable: null,
           });
         }
@@ -993,7 +1066,10 @@ export class DemoApplication {
           ...document, value: money(document.value.minor - returnedValue(document.documentId, 'PURCHASE_RETURN')),
         }));
         const invoices = await salesRepository.list(companyId, { partyId, state: 'FINAL' });
-        const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: money((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - returnedValue(invoice.id, 'SALES_RETURN')), side: 'RECEIVABLE' }));
+        // Issue #293 — a debit note for a higher price adds to what is due on its bill.
+        const debitedValue = (documentId: string) => notes.filter((note) => note.kind === 'SALES_DEBIT_NOTE' && note.originalDocument.id === documentId)
+          .reduce((total, note) => total + note.totals.total.minor, 0n);
+        const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: money((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - returnedValue(invoice.id, 'SALES_RETURN') + debitedValue(invoice.id)), side: 'RECEIVABLE' }));
         return [...purchaseDocuments, ...saleDocuments];
       },
       async parties(companyId) {
@@ -1108,8 +1184,8 @@ export class DemoApplication {
 
     const returns = new ReturnService({
       store: shop.store, ledger: shop.ledger, repository: returnNotes,
-      sales: salesReturnSource(salesRepository, async (companyId, documentId) =>
-        (await shop.eInvoices.findByDocumentId(companyId, documentId))?.status === 'REGISTERED'),
+      sales: servicesKeptOutOfStock(salesReturnSource(salesRepository, async (companyId, documentId) =>
+        (await shop.eInvoices.findByDocumentId(companyId, documentId))?.status === 'REGISTERED')),
       // Issue #186 — a supplier's bill line has no HSN of its own; the item list supplies it.
       purchases: purchaseReturnSource(shop.bills, (companyId, itemId) =>
         catalogueItems(companyId).find((item) => item.id === itemId)?.hsnSac ?? DemoApplication.CATALOGUE[itemId]?.hsnSac ?? null),
@@ -1441,7 +1517,8 @@ export class DemoApplication {
         // inter-state note carrying IGST was flagged as a local sale and filed under Karnataka.
         const hsnByItem = Object.fromEntries(catalogueItems(companyId).map((item) => [item.id, item.hsnSac]));
         const notes = await Promise.all((await returnNotes.list(companyId))
-          .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
+          // Issue #293 — a sales debit note goes to GSTR-1 beside the credit notes (Table 9B, type "D").
+          .filter((note) => (note.kind === 'SALES_RETURN' || note.kind === 'SALES_DEBIT_NOTE') && taxPeriodOf(note.documentDate) === period)
           .map(async (note) => {
             const original = await salesRepository.findById(companyId, note.originalDocument.id);
             return returnNoteToDocument(note, customerOn(String(note.partyId)), supplier, {
@@ -3010,6 +3087,13 @@ export class DemoApplication {
    * their credit. Issue #142 — a draft made from a quotation is checked here too, so a converted
    * quotation meets exactly the checks a typed sale does.
    */
+  /** Issue #293 — a line's rate per unit after its discount, rounded to the paisa. */
+  private static priceAfterDiscount(line: SalesInvoice['lines'][number], priced: { readonly grossAmount: { readonly minor: bigint }; readonly discountAmount: { readonly minor: bigint } } | undefined) {
+    if (line.discount === undefined || priced === undefined || line.quantity.scaled <= 0n) return line.unitPrice;
+    const net = priced.grossAmount.minor - priced.discountAmount.minor;
+    return money((net * 1_000_000n + line.quantity.scaled / 2n) / line.quantity.scaled);
+  }
+
   /** Issue #11 / #301 — the trade-terms verdict on a draft, with an approval's reason when one is given. */
   private termsQuote(actor: ActorContext, draft: SalesInvoice, override?: { readonly reason: string }): Promise<TradeTermsQuote> {
     const pricing = draft.pricing;
@@ -3028,7 +3112,9 @@ export class DemoApplication {
         itemName: pricing.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? itemView(this.config.companyId, line.itemId).name,
         unit: line.quantity.unit,
         quantity: String(Number(line.quantity.scaled) / 1_000_000),
-        unitPrice: line.unitPrice,
+        // Issue #293 — what each unit is really sold for after its discount, so #11's discount limit
+        // and approval apply to a typed discount exactly as to a lowered rate.
+        unitPrice: DemoApplication.priceAfterDiscount(line, pricing.lines.find((priced) => priced.lineId === line.lineId)),
       })),
       ...(override === undefined ? {} : { override }),
     });
@@ -4696,7 +4782,7 @@ export class DemoApplication {
     const companyId = this.companyOf(actor);
     permissionPortFromActor.require(actor, 'returns.create', 'view bills eligible for return');
     const returned = async (id: string, kind: 'SALES_RETURN' | 'PURCHASE_RETURN', lineId: string) =>
-      (await this.returnNotes.listForOriginal(companyId, id)).filter((note) => note.kind === kind)
+      (await this.returnNotes.listForOriginal(companyId, id)).filter((note) => isGoodsReturn(note, kind))
         .flatMap((note) => note.lines).filter((line) => line.originalLineId === lineId)
         .reduce((total, line) => total + line.quantity.scaled, 0n);
     const sales = await this.salesRepository.list(companyId, { state: 'FINAL' });
@@ -4707,10 +4793,14 @@ export class DemoApplication {
           kind: 'SALES_RETURN', id: invoice.id, number: invoice.number, party: this.invoicePrints.get(invoice.id)?.document.buyer.name ?? this.config.customerName,
           date: invoice.documentDate,
           // Issue #233 — what a credit note for the whole bill would still credit, charges included.
-          leftToCredit: jsonAmount((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - (await this.returnNotes.listForOriginal(companyId, invoice.id))
-            .filter((note) => note.kind === 'SALES_RETURN').reduce((total, note) => total + note.totals.total.minor, 0n)),
+          // Issue #293 — a debit note for a higher price adds to it.
+          leftToCredit: jsonAmount((invoice.pricing?.totals.invoiceValue.minor ?? 0n) + (await this.returnNotes.listForOriginal(companyId, invoice.id))
+            .filter((note) => note.kind !== 'PURCHASE_RETURN')
+            .reduce((total, note) => total + (note.kind === 'SALES_DEBIT_NOTE' ? 1n : -1n) * note.totals.total.minor, 0n)),
           lines: await Promise.all(invoice.lines.map(async (line) => ({
             id: line.lineId, item: invoice.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? line.note ?? line.itemId,
+            // Issue #293 — the rate the bill charged, so a price correction can start from it.
+            rate: jsonAmount(line.unitPrice.minor),
             quantity: Number(line.quantity.scaled) / 1_000_000, unit: line.quantity.unit,
             returned: Number(await returned(invoice.id, 'SALES_RETURN', line.lineId)) / 1_000_000,
           }))),
@@ -4729,16 +4819,21 @@ export class DemoApplication {
   }
 
   async previewReturn(actor: ActorContext, input: Record<string, unknown>) {
+    if (String(input.mode ?? '') === PRICE_CORRECTION) return this.previewPriceCorrection(actor, input);
     const command = this.returnInput(input);
     const preview = command.kind === 'SALES_RETURN'
       ? await this.returns.previewSales(actor, command.command)
       : await this.returns.previewPurchase(actor, command.command);
+    // Issue #293 — services and charges never go into or out of a godown, so the sentence says so.
+    const stockMoves = preview.lines.some((line) => line.supplyKind === 'GOODS' && !isChargeLine(line));
     return {
       state: 'preview', title: command.kind === 'SALES_RETURN' ? 'Customer return checked' : 'Supplier return checked',
       message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.command.idempotencyKey,
+      stockMoves,
       effects: [
         command.kind === 'SALES_RETURN' ? 'A credit note will reduce what the customer owes.' : 'A debit note will reduce what you owe the supplier.',
-        command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
+        !stockMoves ? 'Nothing goes into or out of stock: this is for services, not goods.'
+          : command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
         preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
         ...preview.warnings,
       ],
@@ -4748,22 +4843,71 @@ export class DemoApplication {
   }
 
   async recordReturn(actor: ActorContext, input: Record<string, unknown>) {
-    const command = this.returnInput(input);
-    const result = command.kind === 'SALES_RETURN'
-      ? await this.returns.postSales(actor, command.command)
-      : await this.returns.postPurchase(actor, command.command);
+    // Issue #293 — a price correction is recorded through the same door, with nothing coming back.
+    const price = String(input.mode ?? '') === PRICE_CORRECTION;
+    const command = price ? null : this.returnInput(input);
+    const result = command === null
+      ? await this.returns.postPriceCorrection(actor, this.priceCorrectionInput(input))
+      : command.kind === 'SALES_RETURN'
+        ? await this.returns.postSales(actor, command.command)
+        : await this.returns.postPurchase(actor, command.command);
     await this.freezeNotePrint(result.note);
     // Issue #284 — a credit note to a registered buyer is reported like a bill: sent by itself,
-    // never awaited, and only when the rules say this note needs an e-invoice number.
-    const eInvoice = result.note.kind === 'SALES_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
+    // never awaited, and only when the rules say this note needs an e-invoice number. Issue #293 —
+    // so is a debit note to a customer (CGST Rule 48(4), Notification 13/2020-Central Tax).
+    const eInvoice = result.note.kind !== 'PURCHASE_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
     if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
+    const noteWords = result.note.kind === 'SALES_DEBIT_NOTE' ? 'This debit note' : 'This credit note';
     return {
       state: 'recorded', deduplicated: result.deduplicated,
-      title: result.deduplicated ? 'Return already recorded once' : 'Return recorded',
+      title: price
+        ? (result.deduplicated ? 'Price correction already recorded once' : 'Price correction recorded')
+        : (result.deduplicated ? 'Return already recorded once' : 'Return recorded'),
       message: eInvoice?.needed === 'YES'
-        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? eInvoice.message.replace('This bill', 'This credit note') : 'This credit note has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.'}`
+        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? eInvoice.message.replace('This bill', noteWords) : `${noteWords} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`}`
         : result.note.summary,
-      note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor) },
+      note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor), priceCorrection: result.note.priceCorrection === true },
+    };
+  }
+
+  /** Issue #293 — the check before a price correction: what note it makes, for how much, saving nothing. */
+  private async previewPriceCorrection(actor: ActorContext, input: Record<string, unknown>) {
+    const command = this.priceCorrectionInput(input);
+    const preview = await this.returns.previewPriceCorrection(actor, command);
+    const credit = preview.kind === 'SALES_RETURN';
+    return {
+      state: 'preview', title: credit ? 'Lower price checked' : 'Higher price checked',
+      message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.idempotencyKey,
+      noteKind: preview.kind, stockMoves: false,
+      effects: [
+        credit ? 'A credit note will reduce what the customer owes.' : 'A debit note will add to what the customer owes.',
+        'Nothing goes into or out of stock: only the price changes.',
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
+        ...preview.warnings,
+      ],
+      warnings: preview.warnings,
+    };
+  }
+
+  /**
+   * Issue #293 — a price correction as typed on the Returns screen: the bill, the line, and either the
+   * new rate per unit (`newRate`) or the amount off (`amountOff`), both before GST.
+   */
+  private priceCorrectionInput(input: Record<string, unknown>) {
+    if (String(input.kind ?? 'SALES_RETURN') === 'PURCHASE_RETURN') {
+      throw invalid('PRICE_CORRECTION_SALES_ONLY', "A supplier's change of price comes on the supplier's own credit or debit note. Enter it from their paper.");
+    }
+    const documentId = String(input.documentId ?? '').trim();
+    const lineId = String(input.lineId ?? '').trim();
+    if (documentId === '' || lineId === '' || lineId === WHOLE_BILL) throw invalid('RETURN_DOCUMENT_REQUIRED', 'Choose the bill and the item whose price changes.');
+    const newUnitPrice = optionalMoney(input.newRate);
+    const amountOff = optionalMoney(input.amountOff);
+    return {
+      idempotencyKey: `web-price:${String(input.reference || `${documentId}:${lineId}:${input.date}`)}`,
+      originalInvoiceId: documentId, originalLineId: lineId,
+      documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
+      ...(newUnitPrice === undefined ? {} : { newUnitPrice }),
+      ...(amountOff === undefined ? {} : { amountOff }),
     };
   }
 
@@ -4773,7 +4917,7 @@ export class DemoApplication {
     if (bill === null) return null;
     return this.eInvoiceDecisionFor({
       id: bill.id, partyId: bill.partyId, customerType: bill.customerType,
-      documentDate: note.documentDate, documentType: 'CREDIT_NOTE',
+      documentDate: note.documentDate, documentType: note.kind === 'SALES_DEBIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE',
     });
   }
 
@@ -4790,7 +4934,7 @@ export class DemoApplication {
     if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
     const branding = brandingOf(note.companyId);
     const us = sellerPrint(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
-    const bill = note.kind === 'SALES_RETURN' ? this.invoicePrints.get(note.originalDocument.id) : undefined;
+    const bill = note.kind !== 'PURCHASE_RETURN' ? this.invoicePrints.get(note.originalDocument.id) : undefined;
     const original = bill !== undefined
       ? noteOriginalFromInvoice(bill.document)
       : await this.noteOriginalFromPurchase(note);
@@ -4844,6 +4988,8 @@ export class DemoApplication {
           printable: this.notePrints.has(note.id),
           // Issue #249 — the supplier's own credit note, once known, for goods sent back to them.
           supplierCreditNote: note.supplierCreditNote ?? null,
+          // Issue #293 — a note that changed only the price.
+          priceCorrection: note.priceCorrection === true,
         })),
     };
   }
@@ -5163,7 +5309,7 @@ export class DemoApplication {
     if (invoice === null) {
       // Issue #284 — a credit note is reported to the government exactly as a bill is.
       const note = await this.returnNotes.findById(companyId, invoiceId);
-      if (note !== null && note.kind === 'SALES_RETURN') return this.noteEInvoiceDocument(actor, note);
+      if (note !== null && note.kind !== 'PURCHASE_RETURN') return this.noteEInvoiceDocument(actor, note);
       throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
     }
     if (invoice.state !== 'FINAL' || invoice.number === null) {
@@ -5287,7 +5433,7 @@ export class DemoApplication {
     return {
       ...bill,
       documentId: note.id,
-      documentType: 'CREDIT_NOTE',
+      documentType: note.kind === 'SALES_DEBIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE',
       documentNumber: note.number,
       documentDate: note.documentDate,
       lines,
@@ -5474,11 +5620,12 @@ export class DemoApplication {
     records: readonly EInvoiceRecord[],
     now: string,
   ) {
-    const notes = (await this.returnNotes.list(this.companyOf(actor))).filter((note) => note.kind === 'SALES_RETURN');
+    const notes = (await this.returnNotes.list(this.companyOf(actor))).filter((note) => note.kind !== 'PURCHASE_RETURN');
     return notes.flatMap((note) => {
       const bill = invoices.find((invoice) => invoice.id === note.originalDocument.id);
       if (bill === undefined) return [];
-      const decision = this.eInvoiceDecisionFor({ id: bill.id, partyId: bill.partyId, customerType: bill.customerType, documentDate: note.documentDate, documentType: 'CREDIT_NOTE' });
+      const debit = note.kind === 'SALES_DEBIT_NOTE';
+      const decision = this.eInvoiceDecisionFor({ id: bill.id, partyId: bill.partyId, customerType: bill.customerType, documentDate: note.documentDate, documentType: debit ? 'DEBIT_NOTE' : 'CREDIT_NOTE' });
       if (decision.needed !== 'YES') return [];
       const record = records.find((candidate) => candidate.documentId === note.id);
       let customer: string | null = null;
@@ -5490,13 +5637,13 @@ export class DemoApplication {
         date: note.documentDate,
         customer,
         amount: jsonAmount(note.totals.total.minor),
-        kind: 'CREDIT_NOTE' as const,
+        kind: debit ? 'DEBIT_NOTE' as const : 'CREDIT_NOTE' as const,
         against: note.originalDocument.number,
         eInvoiceStatus: status,
         needed: decision.needed,
         decision: decision.lateForPortal === true
-          ? decision.message.replace('This bill', 'This credit note')
-          : `This credit note against ${note.originalDocument.number} needs a government e-invoice number.`,
+          ? decision.message.replace('This bill', debit ? 'This debit note' : 'This credit note')
+          : `This ${debit ? 'debit' : 'credit'} note against ${note.originalDocument.number} needs a government e-invoice number.`,
         askTurnover: false,
         statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
         canRetry: status === 'FAILED' && record?.failure?.retryable === true,
@@ -6855,19 +7002,24 @@ export class DemoApplication {
     const parsed: unknown = typeof raw === 'string' && raw.trim() !== '' ? JSON.parse(raw) : raw;
     const rows: Record<string, unknown>[] = Array.isArray(parsed) && parsed.length > 0
       ? parsed as Record<string, unknown>[]
-      : [{ item: input.itemId ?? input.item, quantity: input.quantity, unit: input.unit, rate: input.rate }];
-    return rows.map((row, index) => {
+      : [{ item: input.itemId ?? input.item, quantity: input.quantity, unit: input.unit, rate: input.rate, discount: input.discount, discountPercent: input.discountPercent }];
+    return withBillDiscount(rows.map((row, index) => {
       const item = resolveItem(this.config.companyId, String(row.itemId ?? row.item ?? ''));
       const unit = String(row.unit ?? '').trim().toUpperCase() || item.baseUnit;
+      const quantity = quantityFromString(String(row.quantity ?? ''), unit);
+      const unitPrice = money(paise(row.rate));
+      // Issue #293 — the line's own discount, taken off before GST.
+      const discount = lineDiscountOf(row, mulDiv(unitPrice, quantity.scaled, 1_000_000n).minor);
       return {
         lineId: `line-${index + 1}`,
         itemId: item.id,
         warehouseId: this.shop.warehouseId,
-        quantity: quantityFromString(String(row.quantity ?? ''), unit),
-        unitPrice: money(paise(row.rate)),
+        quantity,
+        unitPrice,
         priceBasis: 'EXCLUSIVE' as const,
+        ...(discount === undefined ? {} : { discount }),
       };
-    });
+    }), input.billDiscount);
   }
 
   /**

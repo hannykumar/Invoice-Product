@@ -416,7 +416,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
           .filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) <= period)
           .map(async (note) => {
             const bill = await bills.findById(companyId, note.originalDocument.id);
-            return purchaseReturnToBookDocument(note, {
+            return purchaseReturnToBookDocument({ ...note, kind: 'PURCHASE_RETURN' as const }, {
               gstin: gstinOfParty(String(note.partyId)),
               name: bill?.supplierName ?? String(note.partyId),
             });

@@ -69,6 +69,8 @@ export interface CreditNoteDocument {
   readonly issuer: RenderableParty;
   /** The customer (credit note) or the supplier (debit note), as on the original bill. */
   readonly counterparty: RenderableParty;
+  /** Issue #293 — a debit note we issue to our own customer (CGST Act s.34(3)), against our own bill. */
+  readonly toCustomer?: boolean;
   /** Rule 53(1A)(f) — where the goods went, for an unregistered recipient. */
   readonly deliveryAddress: RenderableParty | null;
   /** Rule 53(1A)(g) — one or more invoices. Never empty. */
@@ -136,6 +138,7 @@ export const toCreditNoteDocument = (note: ReturnNote, original: NoteOriginal, i
   const totalTax = sum([note.totals.cgst, note.totals.sgst, note.totals.utgst, note.totals.igst, note.totals.cess]);
   return {
     title: note.kind === 'SALES_RETURN' ? 'CREDIT_NOTE' : 'DEBIT_NOTE',
+    ...(note.kind === 'SALES_DEBIT_NOTE' ? { toCustomer: true } : {}),
     number: note.number,
     date: note.documentDate,
     issuer: issuer.seller,
@@ -174,13 +177,15 @@ export const toCreditNoteDocument = (note: ReturnNote, original: NoteOriginal, i
 };
 
 const isCredit = (doc: CreditNoteDocument): boolean => doc.title === 'CREDIT_NOTE';
+/** Issue #293 — addressed to our customer, against our own bill: every credit note, and a sales debit note. */
+const isToCustomer = (doc: CreditNoteDocument): boolean => isCredit(doc) || doc.toCustomer === true;
 
 /** "INV/26-27/000004 dated 15 Sep 2026", one per invoice, joined. */
 const againstText = (doc: CreditNoteDocument, locale: Locale): string =>
   doc.against.map((a) => `${escapeHtml(a.number)} ${escapeHtml(t('dated', locale))} ${escapeHtml(formatDate(a.date))}`).join('; ');
 
 const againstLabel = (doc: CreditNoteDocument, locale: Locale): string =>
-  t(isCredit(doc) ? 'againstInvoice' : 'againstSupplierInvoice', locale);
+  t(isToCustomer(doc) ? 'againstInvoice' : 'againstSupplierInvoice', locale);
 
 const placeOfSupply = (doc: CreditNoteDocument): string =>
   doc.placeOfSupplyStateCode === null ? '' : `${escapeHtml(doc.placeOfSupplyStateName ?? '')} (${escapeHtml(doc.placeOfSupplyStateCode)})`;
@@ -267,7 +272,7 @@ export const renderCreditNoteBoxed = (
     })
     .join('');
 
-  const counterpartyHeading = t(isCredit(doc) ? 'recipient' : 'supplierParty', locale);
+  const counterpartyHeading = t(isToCustomer(doc) ? 'recipient' : 'supplierParty', locale);
   const partiesRow = doc.deliveryAddress === null
     ? `<tr>${partyCell(doc.counterparty, counterpartyHeading, locale, shows, 2)}</tr>`
     : `<tr>${partyCell(doc.counterparty, counterpartyHeading, locale, shows)}${partyCell(doc.deliveryAddress, t('shipTo', locale), locale, shows)}</tr>`;
@@ -318,7 +323,7 @@ export const renderCreditNoteNarrow = (doc: CreditNoteDocument, locale: Locale):
   <div><span class="k">${escapeHtml(t(isCredit(doc) ? 'creditNoteNo' : 'debitNoteNo', locale))}:</span> <strong>${escapeHtml(doc.number)}</strong></div>
   <div><span class="k">${escapeHtml(t('noteDate', locale))}:</span> ${escapeHtml(formatDate(doc.date))}</div>
   <div><span class="k">${escapeHtml(againstLabel(doc, locale))}:</span> <strong>${againstText(doc, locale)}</strong></div>
-  <div class="ship-line"><span class="k">${escapeHtml(t(isCredit(doc) ? 'recipient' : 'supplierParty', locale))}:</span> ${escapeHtml(
+  <div class="ship-line"><span class="k">${escapeHtml(t(isToCustomer(doc) ? 'recipient' : 'supplierParty', locale))}:</span> ${escapeHtml(
     [doc.counterparty.name, ...doc.counterparty.addressLines, doc.counterparty.stateCode === '' ? '' : `${doc.counterparty.stateName} (${doc.counterparty.stateCode})`, doc.counterparty.gstin ?? ''].filter((v) => v !== '').join(', '),
   )}</div>
   ${doc.deliveryAddress === null ? '' : `<div class="ship-line"><span class="k">${escapeHtml(t('shipTo', locale))}:</span> ${escapeHtml(

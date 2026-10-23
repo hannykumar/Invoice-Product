@@ -46,6 +46,45 @@ export const buildSalesReturnPosting = async (
   return lines;
 };
 
+/**
+ * Issue #293 — a price corrected after the sale, with nothing coming back.
+ *
+ * A lower price (credit note): the reduction is a discount given, GST comes off, and the customer
+ * owes less. A higher price (debit note): more sales, more GST, and the customer owes more.
+ */
+export const buildSalesPriceCorrectionPosting = async (
+  accounts: AccountRepository,
+  companyId: CompanyId,
+  partyId: PartyId,
+  totals: ReturnTaxAmounts,
+  how: { readonly direction: 'DOWN' | 'UP'; readonly supplyKind: 'GOODS' | 'SERVICES' },
+): Promise<ReturnPostingLine[]> => {
+  const need = async (role: string): Promise<AccountId> => {
+    const account = await accounts.findBySystemRole(companyId, role);
+    if (account === null) throw invalid('RETURN_ACCOUNT_MISSING', `There is no account set up for ${role.toLowerCase().replace(/_/g, ' ')}.`);
+    return account.id;
+  };
+  const customer = await accounts.findByPartyId(companyId, partyId);
+  if (customer === null) throw invalid('RETURN_PARTY_ACCOUNT_MISSING', 'This customer does not have an account in the books.');
+  const down = how.direction === 'DOWN';
+  const side = (amount: Money, debit: boolean) => (debit ? { debit: amount, credit: nil() } : { debit: nil(), credit: amount });
+  const lines: ReturnPostingLine[] = [{
+    accountId: await need(down ? 'DISCOUNT_ALLOWED' : how.supplyKind === 'SERVICES' ? 'SALES_SERVICES' : 'SALES_GOODS'), partyId: null,
+    ...side(totals.taxableValue, down), narration: down ? 'Price reduced after the sale' : 'Price raised after the sale',
+  }];
+  const taxes: readonly [Money, string][] = [
+    [totals.cgst, 'OUTPUT_CGST'], [add(totals.sgst, totals.utgst), 'OUTPUT_SGST'],
+    [totals.igst, 'OUTPUT_IGST'], [totals.cess, 'OUTPUT_CESS'],
+  ];
+  for (const [amount, role] of taxes) {
+    if (!isZero(amount)) lines.push({ accountId: await need(role), partyId: null, ...side(amount, down), narration: down ? 'GST reduced with the price' : 'GST on the higher price' });
+  }
+  lines.push({ accountId: customer.id, partyId, ...side(totals.total, !down), narration: down ? 'Credit given to the customer' : 'Added to what the customer owes' });
+  const difference = subtract(sum(lines.map((line) => line.debit)), sum(lines.map((line) => line.credit)));
+  if (!isZero(difference)) throw invalid('RETURN_POSTING_UNBALANCED', 'The price correction does not add up, so nothing has been recorded.');
+  return lines;
+};
+
 export const buildPurchaseReturnPosting = async (
   accounts: AccountRepository,
   companyId: CompanyId,
