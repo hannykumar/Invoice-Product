@@ -3,7 +3,9 @@ import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { saveTurnoverBand } from './turnover-helper.ts';
 import { sells, stockEverything } from './stock-helper.ts';
-import { useFixedAppClock } from '../src/app-clock.ts';
+import { appClock, useFixedAppClock } from '../src/app-clock.ts';
+import { DEVELOPMENT_WEBHOOK_SECRET } from '../src/government-webhooks.ts';
+import { signWebhook } from '../../../packages/platform/src/connectors.ts';
 import { signIn as signInAs } from './sign-in-helper.ts';
 
 // Issue #234 — the running app reads the real clock; this file pins it so its dates do not drift.
@@ -1117,19 +1119,43 @@ test('a provider callback needs no session, but does need a signature over the b
   const unsigned = await postCallback('irp', body, '');
   assert.equal(unsigned.status, 401);
 
-  const accepted = await postCallback('irp', body, 'test-signature');
+  const accepted = await postCallback('irp', body, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, appClock.now()));
   assert.equal(accepted.status, 202);
   // This process made no such call, so the callback matched nothing — recorded, not acted on.
   assert.equal(accepted.body.outcome.kind, 'UNMATCHED');
 
   // The provider resending is ordinary, and must not be treated as a second acknowledgement.
-  const again = await postCallback('irp', body, 'test-signature');
+  const again = await postCallback('irp', body, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, appClock.now()));
   assert.equal(again.status, 202);
   assert.equal(again.body.outcome.kind, 'DUPLICATE');
 });
 
+test('#389 — the old fixed signature, a forged one, a stale one and a malformed body are all refused', async () => {
+  const body = JSON.stringify({ eventId: 'evt-api-389', providerRequestId: 'p-389', occurredAt: '2026-08-17T04:30:00.000Z', payload: { Irn: 'attacker-irn' } });
+  const now = appClock.now();
+
+  // The exploit from the issue: anyone on the internet sending the literal string.
+  assert.equal((await postCallback('irp', body, 'test-signature')).status, 401);
+  // Signed with a secret that is not this provider's.
+  assert.equal((await postCallback('irp', body, signWebhook('a-guessed-secret', body, now))).status, 401);
+  // A genuine signature on different bytes.
+  const tampered = body.replace('attacker-irn', 'other-irn');
+  assert.equal((await postCallback('irp', tampered, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, now))).status, 401);
+  // A captured delivery replayed after the window, or dated in the future.
+  assert.equal((await postCallback('irp', body, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, new Date(now.getTime() - 301_000)))).status, 401);
+  assert.equal((await postCallback('irp', body, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, new Date(now.getTime() + 301_000)))).status, 401);
+  // Correctly signed, but not a callback.
+  const shapeless = JSON.stringify({ providerRequestId: 'p-389', payload: {} });
+  assert.equal((await postCallback('irp', shapeless, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, shapeless, now))).status, 401);
+
+  // None of those was taken delivery of, so the genuine one still lands for the first time.
+  const genuine = await postCallback('irp', body, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, now));
+  assert.equal(genuine.status, 202);
+  assert.equal(genuine.body.outcome.kind, 'UNMATCHED');
+});
+
 test('a callback address for something that is not a government connector does not exist', async () => {
-  const response = await postCallback('banking', JSON.stringify({ eventId: 'evt-api-2' }), 'test-signature');
+  const response = await postCallback('banking', JSON.stringify({ eventId: 'evt-api-2' }), signWebhook(DEVELOPMENT_WEBHOOK_SECRET, JSON.stringify({ eventId: 'evt-api-2' }), appClock.now()));
   assert.equal(response.status, 404);
 });
 

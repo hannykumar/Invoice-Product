@@ -52,7 +52,7 @@ import {
   InMemoryGstinCache, InMemoryRiskAcknowledgementStore, InMemoryRiskAssessmentStore,
   SyntheticCredentialVault, SyntheticGstConnector, gstinStatusAdapter,
 } from '../../../packages/purchasing/src/supplier-risk-adapters.ts';
-import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platform/src/connectors.ts';
+import { ConnectorGateway, NoWebhooksVerifier } from '../../../packages/platform/src/connectors.ts';
 import { ItcReconciliationService } from '../../../packages/itc/src/service.ts';
 import {
   InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
@@ -424,7 +424,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
 
   const risk = new SupplierRiskService({
     gstin: gstinStatusAdapter({
-      gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new NoWebhooksVerifier()),
       cache: pick(() => new InMemoryGstinCache(), (db) => new PostgresGstinCache(db)),
       clock: () => clock.now(),
     }),
@@ -447,7 +447,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   const eInvoicePolicies = pick(() => new InMemoryEInvoicePolicies(), (db) => new PostgresEInvoicePolicies(db));
   participate(eInvoices);
   const irp = irpAdapter({
-    gateway: new ConnectorGateway([irpPortal], irpVault, new StaticWebhookVerifier()),
+    gateway: new ConnectorGateway([irpPortal], irpVault, new NoWebhooksVerifier()),
     clock: () => clock.now(),
   });
   // Issue #345 — for the worker's crash test only, and only against the synthetic portal: wait
@@ -472,7 +472,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   participate(ewayBills, ewayTrips);
   const ewayBill = new EwayBillService({
     portal: ewayBillAdapter({
-      gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new NoWebhooksVerifier()),
       clock: () => clock.now(),
     }),
     records: ewayBills,
@@ -494,7 +494,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   const vehicleRecordFreshness = pick(() => new InMemoryVehicleRecordFreshness(), (db) => new PostgresVehicleRecordFreshness(db));
   const vehicleRecords = new VehicleRecordService({
     provider: apiSetuVehicleAdapter({
-      gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new NoWebhooksVerifier()),
       clock: () => clock.now(),
     }),
     cache: vehicleRecordCache,

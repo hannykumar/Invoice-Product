@@ -123,16 +123,18 @@ run script.
 ### 4.3 Government and payment webhooks
 
 One inbound webhook exists: `POST /api/webhooks/government/:kind` (`irp`, `eway_bill`, `gst`). It
-is matched before authentication and verified by `StaticWebhookVerifier`
-(`packages/platform/src/connectors.ts:48`), which accepts any body whose `x-provider-signature`
-header is the literal string `test-signature`. There is no HMAC, secret, timestamp or replay
-window, the payload is not schema-checked, and redelivery protection is an in-memory set. No
+is matched before authentication and verified by `HmacWebhookVerifier`
+(`packages/platform/src/connectors.ts`, #389): an HMAC-SHA256 over the raw bytes with the
+provider's own secret, compared in constant time, inside a five-minute timestamp window, on a body
+that must pass a schema. Outside development a connector with no secret refuses every callback,
+and the `test-signature` verifier cannot be constructed. Seen events are kept in
+`government_webhook_events` (unique `(connector, event_id)`) when the app has a database. No
 payment webhook is routed yet (#346).
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; the call log is empty until #51 | HMAC over the raw bytes with a per-provider secret from the vault, constant-time compare, timestamp window, schema check, and a refusal to start with the test verifier outside development | **High** | #389 |
-| W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | In-memory dedup | Durable unique `(kind, eventId)` — the SQL index exists but the app does not use it | Medium | same issue as W1 |
+| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; HMAC over the raw bytes with a per-provider secret, constant-time compare, 5-minute timestamp window, schema check; the test verifier cannot be built outside development (#389) | Secrets in a managed vault rather than environment variables (#51) | Low | #389 |
+| W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | Durable unique `(kind, eventId)` in `government_webhook_events`; replay outside the 5-minute window refused; in-memory set capped (#389) | — | Low | same issue as W1 |
 | W3 | Forged subscription "paid" event (A08) | — | High | Not routed | Signed webhook as the only source of truth | **High** | #346 |
 
 ### 4.4 WhatsApp, email, camera and upload purchase intake
