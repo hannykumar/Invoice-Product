@@ -223,7 +223,7 @@ import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages
 import {
   InMemoryReturnNoteRepository, ReturnService, isChargeLine, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
 } from '../../../packages/returns/src/index.ts';
-import { BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
+import { BANK_RETURN_PATH, BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
 import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
 import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
@@ -1249,12 +1249,12 @@ export class DemoApplication {
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
     }
-    // Issue #402: the bank sends the customer back only to this app's own Bank feeds page — on the
+    // Issue #402: the bank sends the customer back only to this app's start page — on the
     // public origins in KAROBAR_PUBLIC_ORIGINS, or on this machine in development. Never to an
     // address the browser names.
     const webPort = process.env.WEB_PORT ?? process.env.PORT ?? '4173';
     const bankReturnOrigins = PUBLIC_ORIGINS.size > 0 ? [...PUBLIC_ORIGINS] : isLocal(process.env.NODE_ENV) ? [`http://localhost:${webPort}`, `http://127.0.0.1:${webPort}`] : [];
-    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)), { origins: bankReturnOrigins, path: '/bank-feed-return' });
+    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)), { origins: bankReturnOrigins, path: BANK_RETURN_PATH });
 
     // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
     // is the mock one — no production credential is needed to run any of this — and the limits it

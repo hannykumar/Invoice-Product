@@ -9,11 +9,16 @@ const frozen = <T>(value: T): T => Object.freeze(value);
 const validDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
 const safeMask = (value: string): boolean => /[*xX•]/.test(value) && !/\d{9,}/.test(value.replace(/\D/g, ''));
 const CHANGED = 'This bank connection changed while the bank was answering. Open it again and retry.';
-const RETURN_REFUSED = 'The bank can only send you back to this app\'s own Bank feeds page. Start again from Bank feeds.';
+const RETURN_REFUSED = 'The bank can only send you back to this app. Start again from Bank feeds.';
 const NOT_SET_UP = 'Bank connections are not set up on this server yet, so no bank was asked.';
 const STATE_REFUSED = 'This bank reply does not belong to a request you started here, or it was already used or has run out of time. Start again from Bank feeds.';
 /** Issue #402 — how long the bank's reply may take to come back after a request starts. */
 const CONSENT_STATE_LIFETIME_MS = 30 * 60 * 1000;
+/**
+ * Issue #402 — the page the bank sends the customer back to: the app's start page, the one address
+ * the web server always serves the app on (#393). The app reads the bank's `code` and `state` there.
+ */
+export const BANK_RETURN_PATH = '/';
 const loopback = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/;
 
 /** Each allowed origin joined to the fixed return page. Refuses an origin that is not https or loopback. */
@@ -45,7 +50,7 @@ export class BankFeedService {
    * Issue #402: `consentReturn` is the only place the bank may send the customer back to. With no
    * origins, no consent can start.
    */
-  constructor(adapters: readonly BankFeedProviderAdapter[], now: () => Date = () => new Date(), store: BankFeedStore = new InMemoryBankFeedStore(), consentReturn: ConsentReturnPolicy = { origins: [], path: '/bank-feed-return' }) {
+  constructor(adapters: readonly BankFeedProviderAdapter[], now: () => Date = () => new Date(), store: BankFeedStore = new InMemoryBankFeedStore(), consentReturn: ConsentReturnPolicy = { origins: [], path: BANK_RETURN_PATH }) {
     this.#adapters = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
     this.#now = now;
     this.#store = store;
