@@ -16,12 +16,14 @@ import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
 import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
 import { openPersistence } from './persistence.ts';
+import { configureGovernmentWebhooks } from './government-webhooks.ts';
 import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
 import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, readLimitedBody } from './http-hardening.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
+import { asMasterDataCaller } from './master-data.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
 
 export type { ApiResult, WebhookDelivery } from './routes/route.ts';
@@ -147,7 +149,7 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
       if (route.access.kind === 'gate') requirePermission(actor, route.access);
       const input = await route.input.parseAsync(raw);
       const app = await runtime.application(context);
-      const handle = async (): Promise<unknown> => route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      const handle = async (): Promise<unknown> => asMasterDataCaller(context, () => route.handle({ input, params, runtime, requestId, delivery, context, actor, app }));
       // Issue #340 — one request that changes something is one business action, and so one
       // transaction (#363): the bill, its entry in the books, its stock movement and its audit record
       // are saved together or not at all. Reads need none; their repositories read on their own.
@@ -239,6 +241,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // Issue #340 — the database is chosen before the first request, and production without one stops here.
   const persistence = await openPersistence();
   startRuntime(persistence);
+  configureGovernmentWebhooks(persistence.kind === 'postgres' ? persistence.db : null, process.env, (message) => log.warn(message, {}));
   log.info('The API keeps its books', { in: persistence.kind });
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));

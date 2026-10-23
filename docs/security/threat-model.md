@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 154 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 156 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -89,7 +89,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | Purchasing | `/api/purchase-orders`, `/api/goods-receipts`, `/api/purchases/*`, `/api/suppliers/check*` | |
 | Money | `/api/payments/*`, `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
 | Agent and reminders | `/api/agent/*`, `/api/reminders/*` | §4.7 |
-| Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves files under `apps/web` |
+| Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves only the page's own files (`index.html`, its `*.js`, `*.css`, `*.svg`); everything else is 404 (#393) |
 
 | # | Threat (OWASP) | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -103,7 +103,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | H8 | Session token in `localStorage` is stolen by any XSS; no sign-out route (A07) | Low | High | No `innerHTML` from data | HttpOnly cookie, sign-out | Medium | #342 (+ #349 CSP) |
 | H9 | CSRF once the session is a cookie (A01) | Low today, High after #342 | High | Bearer header | `SameSite` cookie + Origin/Host check on every non-GET | **High** | #349 (Origin check), #342 (cookie) |
 | H10 | A retry creates a second document when the client sends no idempotency key: the server invents one (`randomUUID()`, `Date.now()`, or an empty key) (A04/A08) | Medium | High | Idempotency on every command | Refuse a write that has no client key | **High** | #392 |
-| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked | Allow-list of served files | Medium | #393 |
+| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked; allow-list of served files, 404 for the rest (#393) | — | Low | #393 |
 | H12 | Cross-company access on any route (A01) | Low | High | Session tenancy, `companyOf` | Generated 401 / 403 / 404 tests for every route; RLS in use | Medium | #343, #340 |
 
 ### 4.2 File uploads — logos, signatures, migration files, ITC files
@@ -123,16 +123,18 @@ run script.
 ### 4.3 Government and payment webhooks
 
 One inbound webhook exists: `POST /api/webhooks/government/:kind` (`irp`, `eway_bill`, `gst`). It
-is matched before authentication and verified by `StaticWebhookVerifier`
-(`packages/platform/src/connectors.ts:48`), which accepts any body whose `x-provider-signature`
-header is the literal string `test-signature`. There is no HMAC, secret, timestamp or replay
-window, the payload is not schema-checked, and redelivery protection is an in-memory set. No
+is matched before authentication and verified by `HmacWebhookVerifier`
+(`packages/platform/src/connectors.ts`, #389): an HMAC-SHA256 over the raw bytes with the
+provider's own secret, compared in constant time, inside a five-minute timestamp window, on a body
+that must pass a schema. Outside development a connector with no secret refuses every callback,
+and the `test-signature` verifier cannot be constructed. Seen events are kept in
+`government_webhook_events` (unique `(connector, event_id)`) when the app has a database. No
 payment webhook is routed yet (#346).
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; the call log is empty until #51 | HMAC over the raw bytes with a per-provider secret from the vault, constant-time compare, timestamp window, schema check, and a refusal to start with the test verifier outside development | **High** | #389 |
-| W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | In-memory dedup | Durable unique `(kind, eventId)` — the SQL index exists but the app does not use it | Medium | same issue as W1 |
+| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; HMAC over the raw bytes with a per-provider secret, constant-time compare, 5-minute timestamp window, schema check; the test verifier cannot be built outside development (#389) | Secrets in a managed vault rather than environment variables (#51) | Low | #389 |
+| W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | Durable unique `(kind, eventId)` in `government_webhook_events`; replay outside the 5-minute window refused; in-memory set capped (#389) | — | Low | same issue as W1 |
 | W3 | Forged subscription "paid" event (A08) | — | High | Not routed | Signed webhook as the only source of truth | **High** | #346 |
 
 ### 4.4 WhatsApp, email, camera and upload purchase intake
@@ -156,7 +158,7 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF` | Neutralise such cells | Medium | #394 |
+| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF`; such cells are prefixed with `'` in the error file and report CSVs | — | Low | #394 |
 | M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | — | Body limit, row limit | Medium | #349 + #396 |
 | M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session | Per-company slots | Low | #396 |
 | M4 | XLSX zip bomb, or a bank-statement PDF bomb, once those parsers are routed (A04/A06) | Low | Medium | Not routed | Size, sheet, page and row limits before parsing | Low | — |
@@ -216,7 +218,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | O1 | SSRF through a user-supplied URL (A10) | Low | High | No user-controlled outbound URL; government hosts allow-listed | The #348 review checks every new `fetch` | Low | — |
-| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Return address only this app's origins and `/bank-feed-return`; random `state` stored hashed, bound to company and person, single-use, 30 minutes | — | Low | #402 |
+| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Return address only this app's origins and its start page `/`; random `state` stored hashed, bound to company and person, single-use, 30 minutes | — | Low | #402 |
 | O3 | One WhiteBooks credential and GSTIN shared by every company (A01/A02) | High at launch | High | Sandbox only; production hard-off | A per-company credential in a vault | **High** | #210 |
 | O4 | Secrets committed, or leaked through a dependency (A06) | Medium | High | `.env` gitignored, mode 0600 | gitleaks, Dependabot | **High** | #351 |
 | O5 | Personal data in logs (A09) | Medium | Medium | Recursive redaction | Structured logs with a request id | Medium | #357, #352 |
@@ -349,12 +351,17 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/purchases/:param` | service |
 | POST | `/api/purchases/preview` | `ledger.post.purchase` |
 | POST | `/api/purchases/record` | `ledger.post.purchase` |
+| POST | `/api/purchases/self-invoice` | `ledger.post.purchase` |
+| POST | `/api/purchases/self-invoice/print` | `ledger.post.purchase` |
+| GET | `/api/purchases/self-invoices` | service |
 | GET | `/api/subscription` | service |
 | POST | `/api/subscription/plan` | `subscription.manage` |
 | POST | `/api/subscription/pay` | `subscription.manage` |
 | POST | `/api/sales/estimate` | `sales.draft.write` |
 | POST | `/api/sales/preview` | `sales.draft.write` |
 | POST | `/api/sales/record` | `sales.draft.write` + `sales.finalise` |
+| GET | `/api/sales/waiting` | service |
+| POST | `/api/sales/approve` | `sales.approve` + `sales.finalise` |
 | POST | `/api/sales/cancel/preview` | `sales.cancel` |
 | POST | `/api/sales/cancel` | `sales.cancel` |
 | POST | `/api/sales/print` | `sales.draft.write` |

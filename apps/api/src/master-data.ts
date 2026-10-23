@@ -14,6 +14,7 @@
  * request's unit of work, and a company's records are read back from there when it is first opened.
  * A bill's customer, items and godown are therefore rows the bill's own row can point to.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { CompanyId } from '@invoice/kernel';
 import {
   AccessControl,
@@ -92,16 +93,34 @@ const masters = () => {
 /** The one master-data service this process keeps. */
 export const masterData = (): MasterDataService => masters().service;
 
-/** A request context for this company's own master data. Granted once, then reused. */
+/** Issue #391 — the signed-in person a request's master-data writes are made by. */
+const caller = new AsyncLocalStorage<RequestContext>();
+
+/**
+ * Issue #391 — runs `work` with master-data writes made by the signed-in caller: their own id,
+ * session and permissions. The API's dispatcher wraps every signed-in request in this.
+ */
+export const asMasterDataCaller = <T>(context: RequestContext, work: () => T): T => caller.run(context, work);
+
+/**
+ * A request context for this company's own master data.
+ *
+ * Inside a signed-in request for this company it is the caller's own context, so the version
+ * history, the audit trail and any approval are theirs (#391). Outside one (seeding, first opening)
+ * it is the company's system identity, which holds no permissions: it can make an ordinary change
+ * but can never approve one, so a merge or any other approval-gated change keeps its maker-checker.
+ */
 export const mastersContext = (companyId: CompanyId | string): RequestContext => {
-  const { access } = masters();
   const company = String(companyId);
+  const signedIn = caller.getStore();
+  if (signedIn !== undefined && signedIn.companyId === company) return signedIn;
+  const { access } = masters();
   access.grant({
     companyId: company,
     userId: `${company}:master-data`,
     branchIds: new Set([`${company}:main`]),
     active: true,
-    permissions: new Set(['approval.decide', 'access.review']),
+    permissions: new Set(),
   });
   return access.context(company, `${company}:main`, `${company}:master-data`, `${company}:master-data-session`);
 };

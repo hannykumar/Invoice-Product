@@ -186,6 +186,18 @@ export class ApiRuntime {
       this.#applications.set(context.companyId, application);
     }
     const resolved = await application;
+    // The made-up portal failure is demo data: written in memory when the company opens (#395: never
+    // by the Operations screen, which only reads), never written for a real company.
+    if (this.#persistence.kind === 'memory' && !this.#operationsSeeded.has(context.companyId)) {
+      const seedContext: RequestContext = { companyId: context.companyId, branchId: context.branchId, actorId: `demo-seed:${context.companyId}`, sessionId: `demo-seed:${context.companyId}`, permissions: new Set<Permission>(['operations.read']) };
+      this.#operations.telemetry.registerHealthCheck('api', () => true);
+      this.#operations.telemetry.registerHealthCheck('queue', () => true);
+      this.#operations.telemetry.externalFailure(seedContext, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
+      const job = this.#operations.queue.enqueue(seedContext, { kind: 'irp-register', idempotencyKey: `demo-invoice-${context.companyId}`, idempotent: true, maxAttempts: 1, correlationId: `irp-demo-${context.companyId}` });
+      this.#operations.queue.begin(seedContext, job.id);
+      this.#operations.queue.fail(seedContext, job.id, 'IRP_TEMPORARILY_UNAVAILABLE');
+      this.#operationsSeeded.add(context.companyId);
+    }
     if (!this.#recurringRegistered.has(context.companyId)) {
       const serviceContext: RequestContext = {
         companyId: context.companyId,
@@ -226,16 +238,7 @@ export class ApiRuntime {
   }
 
   async operationsWorkspace(context: RequestContext) {
-    // The made-up portal failure is demo data: shown in memory, never written for a real company.
-    if (this.#persistence.kind === 'memory' && !this.#operationsSeeded.has(context.companyId)) {
-      this.#operations.telemetry.registerHealthCheck('api', () => true);
-      this.#operations.telemetry.registerHealthCheck('queue', () => true);
-      this.#operations.telemetry.externalFailure(context, { correlationId: `irp-demo-${context.companyId}`, connector: 'irp', operation: 'register-einvoice', errorCode: 'IRP_TEMPORARILY_UNAVAILABLE' });
-      const job = this.#operations.queue.enqueue(context, { kind: 'irp-register', idempotencyKey: `demo-invoice-${context.companyId}`, idempotent: true, maxAttempts: 1, correlationId: `irp-demo-${context.companyId}` });
-      this.#operations.queue.begin(context, job.id);
-      this.#operations.queue.fail(context, job.id, 'IRP_TEMPORARILY_UNAVAILABLE');
-      this.#operationsSeeded.add(context.companyId);
-    }
+    if (!context.permissions.has('operations.read')) throw new PlatformError('FORBIDDEN', 'You do not have permission to perform this operational action.');
     const db = this.database;
     const [jobs, recurring] = db === null || this.#recurring === null
       ? [this.#operations.queue.list(context), this.#operations.recurring.status(context)]

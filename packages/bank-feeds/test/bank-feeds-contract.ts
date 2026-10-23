@@ -190,7 +190,7 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
     const provider = new GuardedProvider(h);
-    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/bank-feed-return' });
+    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/' });
     // Not wrapped: the service opens its own short units of work around each call to the bank.
     const run = <T>(work: () => Promise<T>) => work();
 
@@ -243,7 +243,7 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
     const provider = new GuardedProvider(h);
-    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/bank-feed-return' });
+    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/' });
     // Not wrapped: the service opens its own short units of work around each call to the bank.
     const run = <T>(work: () => Promise<T>) => work();
     const pending = await run(() => service.startConsent(context, { provider: provider.provider }));
@@ -266,7 +266,7 @@ export const bankFeedContract = (name: string, make: () => BankFeedHarness, skip
     const { companyId, userId } = await h.company();
     const context: BankFeedContext = { companyId, actorId: userId, permissions: new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read']) };
     const provider = new GuardedProvider(h);
-    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/bank-feed-return' });
+    const service = new BankFeedService([provider], () => new Date(at), h.store, { origins: ['https://app.example'], path: '/' });
     const pending = await service.startConsent(context, { provider: provider.provider });
     const connection = await service.completeConsent(context, pending.connection.id, 'sandbox-approved', pending.state);
     return { h, companyId, context, provider, service, connection };

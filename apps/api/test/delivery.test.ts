@@ -162,7 +162,7 @@ test('the transporter, vehicle, LR number, destination and order number all prin
     vehicleNumber: 'ka 01 ab 1234',
     lrNumber: 'SRL/2026/44120', lrDate: '2026-09-20', destination: 'Pune',
     buyerOrderNumber: 'DP/PO/188', termsOfDelivery: 'Ex-godown', otherReferences: 'Trial lot',
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-transport',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-transport', approvalReason: 'Agreed with the owner',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
 
@@ -196,7 +196,7 @@ test('an e-way bill raised after the bill was issued prints on every later copy,
 
   const recorded = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-late',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-late', approvalReason: 'Agreed with the owner',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const before = await printOf(session, recorded.body.invoice.id);

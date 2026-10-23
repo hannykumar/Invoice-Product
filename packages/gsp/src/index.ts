@@ -8,5 +8,6 @@ export * from './service.ts';
 export * from './reconcile.ts';
 export * from './webhooks.ts';
 export * from './adapters.ts';
+export * from './webhook-events-postgres.ts';
 export * from './fixtures.ts';
 export { gspMigrations } from './migrations.ts';

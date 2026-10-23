@@ -103,7 +103,8 @@ const cursorIsUsable = (page: Page | undefined): boolean => page?.after === unde
 const BILL = `id, company_id, purchase_id, source_document_id, supplier_party_id, supplier_name, invoice_number,
   invoice_date::text AS invoice_date, due_date::text AS due_date, total_paise, taxable_value_paise, cgst_paise, sgst_paise,
   igst_paise, cess_paise, ineligible_itc_paise, intra_state, reverse_charge, rule_set_version, rule_id, state, voucher_id,
-  reversed_by_voucher_id, reversal_reason, summary, posted_by, posted_at, idempotency_key, received_by_receipt_ids`;
+  reversed_by_voucher_id, reversal_reason, summary, posted_by, posted_at, idempotency_key, received_by_receipt_ids,
+  ineligible_cgst_paise, ineligible_sgst_paise, ineligible_igst_paise, ineligible_cess_paise`;
 
 export class PostgresPurchaseBillRepository implements PurchaseBillRepository {
   readonly #db: TransactionalExecutor;
@@ -116,23 +117,27 @@ export class PostgresPurchaseBillRepository implements PurchaseBillRepository {
       `INSERT INTO purchase_bills (id, company_id, purchase_id, source_document_id, supplier_party_id, supplier_name, invoice_number,
          invoice_date, due_date, total_paise, taxable_value_paise, cgst_paise, sgst_paise, igst_paise, cess_paise, ineligible_itc_paise,
          intra_state, reverse_charge, rule_set_version, rule_id, state, voucher_id, reversed_by_voucher_id, reversal_reason, summary,
-         posted_by, posted_at, idempotency_key, received_by_receipt_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29::jsonb)`,
+         posted_by, posted_at, idempotency_key, received_by_receipt_ids,
+         ineligible_cgst_paise, ineligible_sgst_paise, ineligible_igst_paise, ineligible_cess_paise)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29::jsonb,
+         $30, $31, $32, $33)`,
       [bill.id, bill.companyId, bill.purchaseId, bill.sourceDocumentId, bill.supplierPartyId, bill.supplierName, bill.invoiceNumber,
         bill.invoiceDate, bill.dueDate, bill.totalPaise.toString(), bill.tax.taxableValuePaise.toString(), bill.tax.cgstPaise.toString(),
         bill.tax.sgstPaise.toString(), bill.tax.igstPaise.toString(), bill.tax.cessPaise.toString(), bill.tax.ineligibleItcPaise.toString(),
         bill.tax.intraState, bill.tax.reverseCharge, bill.tax.ruleSetVersion ?? null, bill.tax.ruleId ?? null, bill.state, bill.voucherId,
         bill.reversedByVoucherId ?? null, bill.reversalReason ?? null, bill.summary, bill.postedBy, bill.postedAt, bill.idempotencyKey,
-        json(bill.receivedByReceiptIds)],
+        json(bill.receivedByReceiptIds),
+        (bill.tax.ineligibleHeads?.cgstPaise ?? 0n).toString(), (bill.tax.ineligibleHeads?.sgstPaise ?? 0n).toString(),
+        (bill.tax.ineligibleHeads?.igstPaise ?? 0n).toString(), (bill.tax.ineligibleHeads?.cessPaise ?? 0n).toString()],
     ).catch(refuse(billAlreadyRecorded));
     await insertRows(sql, "purchase_bill_lines",
       ["bill_id", "line_number", "company_id", "item_id", "description", "supply_kind", "quantity_micro", "quantity_unit", "warehouse_id",
         "batch_id", "serial_numbers::jsonb", "taxable_value_paise", "cgst_paise", "sgst_paise", "igst_paise", "cess_paise",
-        "ineligible_itc_paise", "supplier_value_paise"],
+        "ineligible_itc_paise", "supplier_value_paise", "blocked_credit_clause"],
       bill.lines.map((line) => [bill.id, line.lineNumber, bill.companyId, line.itemId, line.description, line.supplyKind,
         line.quantity.scaled.toString(), line.quantity.unit, line.warehouseId ?? null, line.batchId ?? null, json(line.serialNumbers),
         line.taxableValuePaise.toString(), line.cgstPaise.toString(), line.sgstPaise.toString(), line.igstPaise.toString(),
-        line.cessPaise.toString(), line.ineligibleItcPaise.toString(), line.supplierValuePaise.toString()]));
+        line.cessPaise.toString(), line.ineligibleItcPaise.toString(), line.supplierValuePaise.toString(), line.blockedCreditClause ?? null]));
     await insertRows(sql, "purchase_bill_receipts",
       ["bill_id", "line_number", "company_id", "stock_movement_id", "item_id", "warehouse_id", "batch_id", "serial_numbers::jsonb",
         "quantity_micro", "quantity_unit", "value_paise"],
@@ -183,7 +188,8 @@ export class PostgresPurchaseBillRepository implements PurchaseBillRepository {
       const ids = bills.map((row) => row.id);
       const lines = byParent((await sql.query(
         `SELECT bill_id, line_number, item_id, description, supply_kind, quantity_micro, quantity_unit, warehouse_id, batch_id,
-                serial_numbers, taxable_value_paise, cgst_paise, sgst_paise, igst_paise, cess_paise, ineligible_itc_paise, supplier_value_paise
+                serial_numbers, taxable_value_paise, cgst_paise, sgst_paise, igst_paise, cess_paise, ineligible_itc_paise, supplier_value_paise,
+                blocked_credit_clause
            FROM purchase_bill_lines WHERE company_id = $1 AND bill_id = ANY($2::uuid[]) ORDER BY bill_id, line_number`,
         [companyId, ids],
       )).rows, "bill_id");
@@ -199,6 +205,10 @@ export class PostgresPurchaseBillRepository implements PurchaseBillRepository {
         tax: {
           taxableValuePaise: big(r.taxable_value_paise), cgstPaise: big(r.cgst_paise), sgstPaise: big(r.sgst_paise),
           igstPaise: big(r.igst_paise), cessPaise: big(r.cess_paise), ineligibleItcPaise: big(r.ineligible_itc_paise),
+          ...(big(r.ineligible_itc_paise) === 0n ? {} : { ineligibleHeads: {
+            cgstPaise: big(r.ineligible_cgst_paise), sgstPaise: big(r.ineligible_sgst_paise),
+            igstPaise: big(r.ineligible_igst_paise), cessPaise: big(r.ineligible_cess_paise),
+          } }),
           intraState: r.intra_state === true, reverseCharge: r.reverse_charge === true,
           ...opt("ruleSetVersion", text(r.rule_set_version)), ...opt("ruleId", text(r.rule_id)),
         },
@@ -210,7 +220,7 @@ export class PostgresPurchaseBillRepository implements PurchaseBillRepository {
           ...opt("warehouseId", text(l.warehouse_id)), ...opt("batchId", text(l.batch_id)), ...opt("serialNumbers", some<string>(l.serial_numbers)),
           taxableValuePaise: big(l.taxable_value_paise), cgstPaise: big(l.cgst_paise), sgstPaise: big(l.sgst_paise),
           igstPaise: big(l.igst_paise), cessPaise: big(l.cess_paise), ineligibleItcPaise: big(l.ineligible_itc_paise),
-          supplierValuePaise: big(l.supplier_value_paise),
+          supplierValuePaise: big(l.supplier_value_paise), ...opt("blockedCreditClause", text(l.blocked_credit_clause)),
         })),
         receipts: (receipts.get(String(r.id)) ?? []).map((m): PurchaseBillReceipt => ({
           lineNumber: Number(m.line_number), itemId: String(m.item_id), warehouseId: String(m.warehouse_id),

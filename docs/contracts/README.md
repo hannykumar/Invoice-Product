@@ -15,7 +15,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`inventory`](./inventory.v1.md) | 1.1.0 | GPT 1 (#12) | GPT 1 (#9, #35, #36, #37), GPT 3 (#17, #18, #45) | Published |
 | [`onboarding`](./onboarding.v1.md) | 1.0.0 | GPT 1 (#36) | GPT 2 (#38, #3), GPT 1 (#37) | Published |
 | [`migration`](./migration.v1.md) | 1.0.0 | GPT 1 (#37) | GPT 2 (#38) | Published |
-| [`assistant`](./assistant.v1.md) | 1.0.0 | GPT 1 (#34) | GPT 2 (#38, #47), GPT 3 (#32) | Published |
+| [`assistant`](./assistant.v1.md) | 1.1.0 | GPT 1 (#34) | GPT 2 (#38, #47), GPT 3 (#32) | Published |
 | [`invoice-templates`](./invoice-templates.v1.md) | 1.0.0 | GPT 1 (#13) | GPT 1 (#9, #36), GPT 2 (#14, #38), GPT 3 (#26, #45) | Published |
 | [`delivery-challan`](./delivery-challan-v1.md) | 1.0.0 | GPT 3 (#141) | GPT 3 (#27 e-way bill), GPT 1 (#13 printing), GPT 2 (#132 showing a document) | Published |
 | [`quotation-proforma`](./quotation-proforma-v1.md) | 1.0.0 | GPT 3 (#142) | GPT 1 (#9 sales, #13 printing), GPT 1 (#20 receipts against a proforma) | Published |
@@ -35,7 +35,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
 | [`bank-import`](./bank-import-v1.md) | 1.0.0 | GPT 2 (#21) | GPT 2 (#22, #38) | Published |
 | [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.0.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
-| [`bank-feeds`](./bank-feeds-v1.md) | 1.1.0 | GPT 2 (#24) | Bank reconciliation, API and web | Published |
+| [`bank-feeds`](./bank-feeds-v1.md) | 1.1.1 | GPT 2 (#24) | Bank reconciliation, API and web | Published |
 | [`collections`](./collections-v1.md) | 1.0.0 | GPT 2 (#23) | API, web, notifications | Published |
 | [`master-data`](./master-data-v1.md) | 1.0.0 | GPT 3 (#5) | GPT 1, GPT 2, GPT 3 | Published |
 | [`purchase-intake`](./purchase-intake-v1.md) | 1.2.0 | GPT 3 (#15, #400, #401, #406) | GPT 2, GPT 3 | Published |

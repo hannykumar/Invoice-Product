@@ -98,9 +98,8 @@ export const asOneAction = async <T>(db: TransactionalExecutor, companyId: strin
 };
 
 /**
- * A request that only reads. A read may still create something the first time (the walk-in
- * customer), as its own small unit of work; the answer is sent only once that write has committed,
- * so the next request can rely on it.
+ * A request that only reads. Issue #395: a GET writes nothing (`get-never-writes.test.ts`); should a
+ * write slip in, the answer is still sent only once it has committed, so the next request can rely on it.
  */
 export const asOneRead = async <T>(work: () => Promise<T>): Promise<T> => {
   if (durability === null) return work();

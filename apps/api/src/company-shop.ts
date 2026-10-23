@@ -3,7 +3,7 @@
  * tests) or over PostgreSQL (issue #340), behind the same ports either way.
  */
 import { randomUUID } from 'node:crypto';
-import { asId, isoDate, type CompanyId } from '@invoice/kernel';
+import { asId, isoDate, type CompanyId, type IsoDate } from '@invoice/kernel';
 import { appClock } from './app-clock.ts';
 import {
   InMemoryAuditPort,
@@ -46,11 +46,13 @@ import {
   InMemoryGoodsReceiptStore, InMemoryMatchApprovalStore, InMemoryMatchTolerances, InMemoryPurchaseOrderStore,
 } from '../../../packages/purchasing/src/matching-adapters.ts';
 import { SupplierRiskService } from '../../../packages/purchasing/src/supplier-risk-service.ts';
+import { InMemoryReverseChargeRegister, ReverseChargeService } from '../../../packages/purchasing/src/reverse-charge-register.ts';
+import { PostgresReverseChargeRegister } from '../../../packages/purchasing/src/reverse-charge-postgres.ts';
 import {
   InMemoryGstinCache, InMemoryRiskAcknowledgementStore, InMemoryRiskAssessmentStore,
   SyntheticCredentialVault, SyntheticGstConnector, gstinStatusAdapter,
 } from '../../../packages/purchasing/src/supplier-risk-adapters.ts';
-import { ConnectorGateway, StaticWebhookVerifier } from '../../../packages/platform/src/connectors.ts';
+import { ConnectorGateway, NoWebhooksVerifier } from '../../../packages/platform/src/connectors.ts';
 import { ItcReconciliationService } from '../../../packages/itc/src/service.ts';
 import {
   InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
@@ -238,6 +240,10 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   participate(inventory, bills, orders, receipts, approvals, returnNotes);
   const audit = pick(() => new InMemoryAuditPort(), (db) => new PostgresAuditLog(db));
   participate(audit);
+  // Issue #289, part 2b — the reverse-charge register: when each reverse-charge bill's GST falls
+  // due, and the self-invoices issued for purchases from unregistered suppliers.
+  const reverseChargeRegister = pick(() => new InMemoryReverseChargeRegister(), (db) => new PostgresReverseChargeRegister(db));
+  participate(reverseChargeRegister);
   // Memory keeps readable ids (`<company>:bill:7`); the database keeps UUIDs, and a counter that
   // restarts at 1 with the process would hand out an id already in the books.
   let sequence = 0;
@@ -353,12 +359,35 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
     const party = suppliers(seed.companyId).find((candidate) => candidate.id === partyId);
     return party === undefined ? null : party.gstRegistrationType === 'unregistered' && party.unregisteredBasis === 'EXEMPT_ONLY' ? 'exempt_only' : party.gstRegistrationType;
   };
+  const reverseCharge = new ReverseChargeService({
+    register: reverseChargeRegister, audit, clock,
+    idFactory: () => `${seed.companyId}:self-invoice:${sequence += 1}`,
+  });
+  // Issue #289, part 2b — the earliest payment against a bill, from the money-paid records. Those
+  // live in the receivables service, which is made after the shop; it plugs itself in here.
+  let paidOnOf: (companyId: CompanyId, billId: string) => Promise<IsoDate | null> = async () => null;
+  /** When a reverse-charge bill's GST falls due (CGST s.12(3) / s.13(3)), or `null` for any other bill. */
+  const taxPointOf = async (companyId: CompanyId, billId: string) =>
+    reverseCharge.timeOfSupply(companyId, billId, await paidOnOf(companyId, billId));
   const itc = new ItcReconciliationService({
     books: {
       async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
         const posted = await bills.list(companyId);
+        // Issue #289, part 2b — a reverse-charge bill's tax belongs to the month of its time of
+        // supply, which can be before the bill's own month (paid in advance) or after it (a service
+        // unpaid for 60 days). It is handed over from whichever month comes first.
+        const taxPoints = new Map<string, IsoDate>();
+        for (const bill of posted) {
+          if (!bill.tax.reverseCharge) continue;
+          const point = await taxPointOf(companyId, bill.id);
+          if (point !== null) taxPoints.set(bill.id, point.date);
+        }
+        const firstMonth = (bill: (typeof posted)[number]) => {
+          const point = taxPoints.get(bill.id);
+          return point !== undefined && point.slice(0, 7) < bill.invoiceDate.slice(0, 7) ? point.slice(0, 7) : bill.invoiceDate.slice(0, 7);
+        };
         const fromBills = posted
-          .filter((bill) => bill.invoiceDate.slice(0, 7) <= period)
+          .filter((bill) => firstMonth(bill) <= period)
           .map((bill) => purchaseBillToBookDocument(
             {
               id: bill.id, companyId: bill.companyId, supplierPartyId: bill.supplierPartyId,
@@ -369,6 +398,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
                 taxableValuePaise: bill.tax.taxableValuePaise, cgstPaise: bill.tax.cgstPaise,
                 sgstPaise: bill.tax.sgstPaise, igstPaise: bill.tax.igstPaise, cessPaise: bill.tax.cessPaise,
                 ineligibleItcPaise: bill.tax.ineligibleItcPaise, reverseCharge: bill.tax.reverseCharge,
+                ...(bill.tax.ineligibleHeads === undefined ? {} : { ineligibleHeads: bill.tax.ineligibleHeads }),
               },
             },
             // Issue #289 — a seller who is not registered sells taxable goods without GST; that is not
@@ -377,6 +407,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
               gstin: gstinOfParty(bill.supplierPartyId),
               ...(registrationOfParty(bill.supplierPartyId) === 'unregistered' ? { inTable5: false } : {}),
               ...(['unregistered', 'exempt_only', 'composition'].includes(registrationOfParty(bill.supplierPartyId) ?? '') ? { outsideGstr2b: true as const } : {}),
+              ...(taxPoints.has(bill.id) ? { taxPointDate: taxPoints.get(bill.id) as string } : {}),
             },
           ));
         // Issue #249 — every return of goods to a supplier, as a credit note linked to its bill, from
@@ -404,7 +435,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
 
   const risk = new SupplierRiskService({
     gstin: gstinStatusAdapter({
-      gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([portal], new SyntheticCredentialVault(), new NoWebhooksVerifier()),
       cache: pick(() => new InMemoryGstinCache(), (db) => new PostgresGstinCache(db)),
       clock: () => clock.now(),
     }),
@@ -427,7 +458,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   const eInvoicePolicies = pick(() => new InMemoryEInvoicePolicies(), (db) => new PostgresEInvoicePolicies(db));
   participate(eInvoices);
   const irp = irpAdapter({
-    gateway: new ConnectorGateway([irpPortal], irpVault, new StaticWebhookVerifier()),
+    gateway: new ConnectorGateway([irpPortal], irpVault, new NoWebhooksVerifier()),
     clock: () => clock.now(),
   });
   // Issue #345 — for the worker's crash test only, and only against the synthetic portal: wait
@@ -452,7 +483,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   participate(ewayBills, ewayTrips);
   const ewayBill = new EwayBillService({
     portal: ewayBillAdapter({
-      gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([ewayPortal], new SyntheticCredentialVault(), new NoWebhooksVerifier()),
       clock: () => clock.now(),
     }),
     records: ewayBills,
@@ -474,7 +505,7 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   const vehicleRecordFreshness = pick(() => new InMemoryVehicleRecordFreshness(), (db) => new PostgresVehicleRecordFreshness(db));
   const vehicleRecords = new VehicleRecordService({
     provider: apiSetuVehicleAdapter({
-      gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new StaticWebhookVerifier()),
+      gateway: new ConnectorGateway([vahan], new SyntheticCredentialVault(), new NoWebhooksVerifier()),
       clock: () => clock.now(),
     }),
     cache: vehicleRecordCache,
@@ -557,6 +588,9 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   }
   return {
     persistence, warehouseId, damagedWarehouseId: damagedId, nextId,
+    reverseCharge, reverseChargeRegister, taxPointOf,
+    /** Issue #289, part 2b — how the shop learns when a bill was first paid (s.12(3)(b), s.13(3)(a)). */
+    setPaidOn(read: (companyId: CompanyId, billId: string) => Promise<IsoDate | null>) { paidOnOf = read; },
     store, inventory, inventoryService, bills, returnNotes, orders, receipts, approvals, audit, clock, ledger, posting,
     matching, masters, risk, portal, riskAssessments, riskAcknowledgements,
     itc, itcRecords, itcBatches, itcDecisions, itcClaims,

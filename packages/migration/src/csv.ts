@@ -7,8 +7,11 @@
  * All of that is a reading problem, and it is solved here so that nothing downstream ever has to
  * think about it.
  *
- * Nothing in this file interprets a value. A cell arrives as the text it was, spaces and all.
+ * Nothing in this file interprets a value. A cell arrives as the text it was, spaces and all — the
+ * one exception is the `'` our own error file puts in front of a would-be formula (#394), which is
+ * taken off again so a corrected row reads exactly as the person typed it.
  */
+import { neutraliseSpreadsheetCell, restoreSpreadsheetCell } from '@invoice/kernel';
 
 export interface Sheet {
   /** The header row, in file order. */
@@ -152,7 +155,7 @@ export const readDelimited = (raw: string, options: ReadOptions = {}): Sheet => 
   for (let index = headerIndex + 1; index < records.length; index += 1) {
     const record = records[index] as string[];
     if (record.every((cell) => cell.trim() === '')) continue;
-    const padded = Array.from({ length: width }, (_unused, column) => record[column] ?? '');
+    const padded = Array.from({ length: width }, (_unused, column) => restoreSpreadsheetCell(record[column] ?? ''));
     rows.push(padded);
     rowNumbers.push(index + 1);
   }
@@ -179,8 +182,17 @@ export const asRecords = (sheet: Sheet): Readonly<Record<string, string>>[] =>
 const quoteIfNeeded = (value: string): string =>
   /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
-/** Writes a CSV, used for the error file the person hands back to whoever made the export. */
+/**
+ * Writes a CSV for a person to open in a spreadsheet: the error file they hand back to whoever made
+ * the export. A cell that would run as a formula is marked as text first (#394).
+ */
 export const toCsv = (headers: readonly string[], rows: readonly (readonly string[])[]): string =>
+  [headers, ...rows]
+    .map((row) => row.map((cell) => quoteIfNeeded(neutraliseSpreadsheetCell(cell ?? ''))).join(','))
+    .join('\r\n');
+
+/** Writes cells exactly as they are, for text that only this module reads back in. */
+export const toRawCsv = (headers: readonly string[], rows: readonly (readonly string[])[]): string =>
   [headers, ...rows].map((row) => row.map((cell) => quoteIfNeeded(cell ?? '')).join(',')).join('\r\n');
 
 /**
