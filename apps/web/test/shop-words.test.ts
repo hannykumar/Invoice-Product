@@ -126,7 +126,7 @@ test('#312: what the API says on the screens of a trade uses shop words too', as
   replies.push(['sale recorded', recorded]);
   replies.push(['return review', await call('POST', '/api/returns/preview', {
     documentId: recorded.body.invoice.id, lineId: 'line-1', kind: 'SALES_RETURN', unit: 'PCS', quantity: '1',
-    disposition: 'ACCEPTED', date: today, reference: 'shop-words-return', reason: 'Wrong soap',
+    disposition: 'ACCEPTED', date: today, reference: 'shop-words-return', requestId: 'shop-words-return', reason: 'Wrong soap',
   })]);
   replies.push(['money received review', await call('POST', '/api/payments/preview', {
     direction: 'RECEIPT', partyId: 'sampoorna:party:customer', amount: '50', date: today, method: 'CASH', bills: '[]', requestId: 'shop-words-receipt',

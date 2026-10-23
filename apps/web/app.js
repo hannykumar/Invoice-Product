@@ -4291,6 +4291,8 @@ document.querySelector("#return-form")?.addEventListener("submit", async (event)
   event.preventDefault();
   const form = event.currentTarget;
   const input = formValues(form);
+  // Issue #392 — one key per checked return, sent again with Record, so pressing it twice records one note.
+  input.requestId = newPaymentRequestId();
   state.pendingForm = null;
   state.pendingInput = null;
   state.pendingReturnInput = input;
@@ -6496,7 +6498,7 @@ function itcDecisionControls(line) {
       try {
         renderItc(await api("/api/itc/decide", {
           method: "POST",
-          body: JSON.stringify({ period: itcPeriodValue(), lineKey: line.key, decision, reason: reason.value, reference: Date.now() }),
+          body: JSON.stringify({ period: itcPeriodValue(), lineKey: line.key, decision, reason: reason.value, requestId: newPaymentRequestId() }),
         }));
       } catch (error) {
         document.querySelector("#itc-summary").textContent = error.message;

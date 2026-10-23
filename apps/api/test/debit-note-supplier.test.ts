@@ -35,7 +35,7 @@ test('a debit note to a supplier prints their address, GST number and the place 
   assert.ok(bill !== undefined, JSON.stringify(documents.map((d: any) => d.label ?? d.number)));
   const returned = await request('POST', '/api/returns/record', {
     kind: 'PURCHASE_RETURN', documentId: bill.id, lineId: bill.lines[0].id, quantity: '100', unit: 'KGS',
-    disposition: 'ACCEPTED', date: '2026-09-28', reference: 'dn-291', reason: 'Rusted',
+    disposition: 'ACCEPTED', date: '2026-09-28', reference: 'dn-291', requestId: 'dn-291', reason: 'Rusted',
   }, owner);
   assert.equal(returned.status, 200, JSON.stringify(returned.body));
   assert.match(returned.body.note.number, /^DN\//);
