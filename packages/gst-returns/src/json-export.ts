@@ -448,7 +448,11 @@ export const toGstr3bJson = (gstr3b: Gstr3bReturn): Record<string, unknown> => {
         { ty: 'ISRC', ...itc(creditBox('4A(3)')) },
         { ty: 'OTH', ...itc(creditBox('4A(5)')) },
       ],
-      itc_rev: [{ ty: 'OTH', ...itc(creditBox('4B')) }],
+      // Issue #289, part 3 — what this app reverses is credit CGST s.17(5) blocks, which belongs in
+      // Table 4(B)(1), "as per rules 38, 42 & 43 of CGST Rules and section 17(5)" (form as amended by
+      // Notification 14/2022-CT; Circular 170/02/2022-GST, para 4 B). In the file that row is `RUL`;
+      // `OTH` is 4(B)(2), the reclaimable reversals, which the app does not post.
+      itc_rev: [{ ty: 'RUL', ...itc(creditBox('4B')) }, { ty: 'OTH', iamt: 0, camt: 0, samt: 0, csamt: 0 }],
       itc_net: itc(creditBox('4C')),
     },
     inward_sup: {

@@ -6,6 +6,7 @@ import test from "node:test";
 import vm from "node:vm";
 import type { AddressInfo } from "node:net";
 import { loadWebAsset, webServer } from "../server.ts";
+import { BANK_RETURN_PATH } from "../../../packages/bank-feeds/src/index.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (name: string) => readFile(resolve(root, name), "utf8");
@@ -226,7 +227,7 @@ test("the local web preview serves the application shell", async () => {
   assert.equal(asset.status, 200);
   assert.match(asset.contentType, /text\/html/);
   assert.match(asset.body.toString("utf8"), /id="view-dashboard"/);
-  assert.equal((await loadWebAsset("/../../private-file")).status, 403);
+  assert.equal((await loadWebAsset("/../../private-file")).status, 404);
 });
 
 test("#360: scripts and styles are named by their content and cached for a year; the shell and the API are not", async () => {
@@ -895,4 +896,27 @@ test("#288/#307: the sale form offers the walk-in customer and paid now by cash,
   assert.match(script, /\["WALK_IN_NAME_REQUIRED", "WALK_IN_DELIVERY"\]\.includes\(error\?\.code\)/);
   // The state is filled in from the PIN code.
   assert.match(script, /"\/api\/pincode\/state"/);
+});
+
+test("#402: the page the bank sends the customer back to is the app, and the app finishes the request there", async () => {
+  const page = await loadWebAsset(BANK_RETURN_PATH);
+  assert.equal(page.status, 200);
+  assert.match(page.contentType, /^text\/html/);
+  assert.match(page.body.toString("utf8"), /id="view-bank-feeds"/);
+  await new Promise<void>((done) => webServer.listen(0, "127.0.0.1", done));
+  try {
+    const base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
+    const returned = await fetch(`${base}${BANK_RETURN_PATH}?code=bank-code&state=bank-state`);
+    assert.equal(returned.status, 200);
+    assert.match(returned.headers.get("content-type") ?? "", /^text\/html/);
+  } finally {
+    await new Promise<void>((done) => webServer.close(() => done()));
+  }
+  const script = await read("app.js");
+  const finish = script.slice(script.indexOf("async function finishBankReturn"), script.indexOf("document.querySelector(\"#bank-feed-connect\")"));
+  assert.match(finish, /new URLSearchParams\(location\.search\)/);
+  assert.match(finish, /returned !== pending\.consentState/, "a reply whose state this tab did not hand out is not sent");
+  assert.ok(finish.indexOf("history.replaceState") < finish.indexOf("completeBankConsent(code)"), "the code leaves the address bar before it is used");
+  assert.match(script, /sessionStorage/);
+  assert.match(script, /finishBankReturn\(\);/);
 });

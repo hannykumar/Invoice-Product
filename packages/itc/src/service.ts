@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { checksumOf, parsePortalFile, parseTypedRecord, type ParsedPortalRecord, type TypedPortalRecord } from './import.ts';
-import { assessLine, linkageFor, SELF_ASSESSED_NOTE, settleReturnsAgainstBills } from './itc.ts';
+import { assessLine, liabilityPeriodOf, linkageFor, SELF_ASSESSED_NOTE, settleReturnsAgainstBills } from './itc.ts';
 import { lineKeyOf, matchDocuments, type MatchPair } from './match.ts';
 import type {
   ImportBatchRepository,
@@ -146,7 +146,10 @@ export class ItcReconciliationService {
       claims.filter((claim) => claim.period < period).map((claim) => `${claim.sourceKind}|${claim.sourceId}`),
     );
     const books = availableBooks.filter((book) => !claimedBefore.has(`${book.sourceKind}|${book.sourceId}`));
-    const bookKeys = new Set(books.map((book) => lineKeyOf(book.supplierGstin, book.number, book.kind)));
+    // Issue #289, part 2b — a reverse-charge bill whose tax falls due before its own month (paid in
+    // advance) is handed over early for its tax alone; it is compared with GSTR-2B from its own month.
+    const comparable = books.filter((book) => book.period <= period);
+    const bookKeys = new Set(comparable.map((book) => lineKeyOf(book.supplierGstin, book.number, book.kind)));
     const carriedPortal = new Map<string, PortalDocument>();
     for (const document of portalHistory) {
       const key = lineKeyOf(document.supplierGstin, document.number, document.kind);
@@ -180,10 +183,13 @@ export class ItcReconciliationService {
     // Issue #289, part 2 — except its reverse-charge tax: the buyer pays that in cash and takes the
     // same amount as credit in the same return (CGST s.49(4); Circular 172/04/2022-GST; GSTR-3B
     // 4(A)(3)). It is self-assessed, so it is claimed in its own month without a 2B line to wait on.
+    //
+    // Issue #289, part 2b — in the month of its time of supply (CGST s.12(3) / s.13(3)), which is
+    // when its tax is paid; not the month of the bill.
     const selfAssessed: MatchPair[] = books
-      .filter((book) => book.outsideGstr2b === true && book.reverseCharge && book.period === period)
+      .filter((book) => book.outsideGstr2b === true && book.reverseCharge && liabilityPeriodOf(book) === period)
       .map((book) => ({ book, portal: null, status: 'ONLY_IN_BOOKS', evidence: [], matchNote: SELF_ASSESSED_NOTE, fuzzy: false }));
-    const pairs = [...matchDocuments({ books: books.filter((book) => book.outsideGstr2b !== true), portal, policy }), ...selfAssessed];
+    const pairs = [...matchDocuments({ books: comparable.filter((book) => book.outsideGstr2b !== true), portal, policy }), ...selfAssessed];
     const today = indiaDateOf(this.#clock.now());
     // Issue #249 — a supplier's credit note does not say which bill it corrects, so one with no
     // return in our books is shown beside the bills we hold from that supplier, newest first.

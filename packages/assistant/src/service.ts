@@ -23,7 +23,7 @@ import type { ActorContext, AuditPort, PermissionPort } from '@invoice/ledger';
 import type { ComplianceRegister } from '@invoice/compliance-register';
 import { FactSet, type RulesEngine } from '@invoice/rules-engine';
 import { REPORT_PERMISSIONS, type Report, type ReportFilter, type ReportId, type ReportService } from '@invoice/reports';
-import { citeFrom, plainSentence, safeSentence } from './citations.ts';
+import { citeFrom, plainSentence, safeSentence, wording } from './citations.ts';
 import { citeCompliance, describeCitation, supportOf } from './compliance.ts';
 import { ASK_INSTEAD, looksLikeAnInstruction, understand, type Understanding } from './language.ts';
 import {
@@ -323,18 +323,18 @@ export class AssistantService {
     draft.sentences.push(
       plainSentence(
         incoming
-          ? `Your customers owe you ${draft.amounts[0]?.formatted ?? ''} across ${plural(body.rows.length, 'customer', 'customers')}.`
-          : `You owe ${draft.amounts[0]?.formatted ?? ''} across ${plural(body.rows.length, 'supplier', 'suppliers')}.`,
+          ? wording`Your customers owe you ${draft.amounts[0]?.formatted ?? ''} across ${plural(body.rows.length, 'customer', 'customers')}.`
+          : wording`You owe ${draft.amounts[0]?.formatted ?? ''} across ${plural(body.rows.length, 'supplier', 'suppliers')}.`,
         incoming
-          ? `Aapke customers se ${draft.amounts[0]?.formatted ?? ''} lena hai, ${plural(body.rows.length, 'customer', 'customers')} se.`
-          : `Aapko ${draft.amounts[0]?.formatted ?? ''} dena hai, ${plural(body.rows.length, 'supplier', 'suppliers')} ko.`,
+          ? wording`Aapke customers se ${draft.amounts[0]?.formatted ?? ''} lena hai, ${plural(body.rows.length, 'customer', 'customers')} se.`
+          : wording`Aapko ${draft.amounts[0]?.formatted ?? ''} dena hai, ${plural(body.rows.length, 'supplier', 'suppliers')} ko.`,
       ),
     );
     if (worst !== undefined && worst.oldestDaysOverdue > 0) {
       draft.sentences.push(
         plainSentence(
-          `The one waiting longest is ${worst.partyName}: ${worst.oldestDaysOverdue} days past due.`,
-          `Sabse purana ${worst.partyName} ka hai: ${worst.oldestDaysOverdue} din se baaki.`,
+          wording`The one waiting longest is ${worst.partyName}: ${worst.oldestDaysOverdue} days past due.`,
+          wording`Sabse purana ${worst.partyName} ka hai: ${worst.oldestDaysOverdue} din se baaki.`,
         ),
       );
     }
@@ -357,8 +357,8 @@ export class AssistantService {
     draft.amounts.push(total, taxable);
     draft.sentences.push(
       plainSentence(
-        `You billed ${total.formatted} ${period.described['en-IN']}, across ${plural(body.rows.length, 'bill', 'bills')}. Before GST that is ${taxable.formatted}.`,
-        `${period.described['hi-IN']} aapne ${total.formatted} ka bill banaya, ${plural(body.rows.length, 'bill', 'bill')} mein. GST se pehle yeh ${taxable.formatted} hai.`,
+        wording`You billed ${total.formatted} ${period.described['en-IN']}, across ${plural(body.rows.length, 'bill', 'bills')}. Before GST that is ${taxable.formatted}.`,
+        wording`${period.described['hi-IN']} aapne ${total.formatted} ka bill banaya, ${plural(body.rows.length, 'bill', 'bill')} mein. GST se pehle yeh ${taxable.formatted} hai.`,
       ),
     );
     draft.nextSteps.push({ label: { 'en-IN': 'Open every bill you gave out', 'hi-IN': 'Kholein: aapke diye hue saare bill' }, action: 'reports:sales_register' });
@@ -384,8 +384,8 @@ export class AssistantService {
     draft.amounts.push(total);
     draft.sentences.push(
       plainSentence(
-        `You were billed ${total.formatted} ${period.described['en-IN']}, across ${plural(body.rows.length, 'supplier bill', 'supplier bills')}.`,
-        `${period.described['hi-IN']} aapko ${total.formatted} ke bill mile, ${plural(body.rows.length, 'bill', 'bill')}.`,
+        wording`You were billed ${total.formatted} ${period.described['en-IN']}, across ${plural(body.rows.length, 'supplier bill', 'supplier bills')}.`,
+        wording`${period.described['hi-IN']} aapko ${total.formatted} ke bill mile, ${plural(body.rows.length, 'bill', 'bill')}.`,
       ),
     );
   }
@@ -403,8 +403,8 @@ export class AssistantService {
 
     draft.sentences.push(
       plainSentence(
-        `${period.described['en-IN']} you earned ${income.formatted} and spent ${expenses.formatted}, so you ${body.madeMoney ? 'kept' : 'were short by'} ${result.formatted}.`,
-        `${period.described['hi-IN']} aapne ${income.formatted} kamaya aur ${expenses.formatted} kharch kiya, isliye ${body.madeMoney ? 'bacha' : 'ghata raha'} ${result.formatted}.`,
+        wording`${period.described['en-IN']} you earned ${income.formatted} and spent ${expenses.formatted}, so you ${body.madeMoney ? 'kept' : 'were short by'} ${result.formatted}.`,
+        wording`${period.described['hi-IN']} aapne ${income.formatted} kamaya aur ${expenses.formatted} kharch kiya, isliye ${body.madeMoney ? 'bacha' : 'ghata raha'} ${result.formatted}.`,
       ),
     );
     if (!body.costOfGoodsInBooks) {
@@ -430,8 +430,8 @@ export class AssistantService {
     draft.amounts.push(assets, claims);
     draft.sentences.push(
       plainSentence(
-        `The business owns ${assets.formatted}, and ${claims.formatted} of that is claimed by others or is your own money in it.`,
-        `Business ke paas ${assets.formatted} hai, aur usmein se ${claims.formatted} par doosron ka ya aapka apna dawa hai.`,
+        wording`The business owns ${assets.formatted}, and ${claims.formatted} of that is claimed by others or is your own money in it.`,
+        wording`Business ke paas ${assets.formatted} hai, aur usmein se ${claims.formatted} par doosron ka ya aapka apna dawa hai.`,
       ),
     );
     if (!body.balanced) {
@@ -462,8 +462,8 @@ export class AssistantService {
       draft.state = 'CANNOT_ANSWER';
       draft.sentences.push(
         plainSentence(
-          `I could not find an item called "${reading.slots.itemText ?? ''}" in your godown. Check the name on the item list.`,
-          `"${reading.slots.itemText ?? ''}" naam ka koi saman aapke godown mein nahin mila. Item list mein naam dekh lein.`,
+          wording`I could not find an item called "${reading.slots.itemText ?? ''}" in your godown. Check the name on the item list.`,
+          wording`"${reading.slots.itemText ?? ''}" naam ka koi saman aapke godown mein nahin mila. Item list mein naam dekh lein.`,
         ),
       );
       return;
@@ -473,8 +473,8 @@ export class AssistantService {
       for (const row of matching.slice(0, 5)) {
         draft.sentences.push(
           plainSentence(
-            `${row.itemName} at ${row.warehouseName}: ${row.closing} ${row.unitCode} in the godown, ${row.available} ${row.unitCode} free to sell${row.reserved === '0' ? '' : ` (${row.reserved} ${row.unitCode} held by unfinished bills)`}.`,
-            `${row.itemName}, ${row.warehouseName}: godown mein ${row.closing} ${row.unitCode}, bechne ke liye ${row.available} ${row.unitCode}${row.reserved === '0' ? '' : ` (${row.reserved} ${row.unitCode} adhoore bill ne rok rakha hai)`}.`,
+            wording`${row.itemName} at ${row.warehouseName}: ${row.closing} ${row.unitCode} in the godown, ${row.available} ${row.unitCode} free to sell${row.reserved === '0' ? '' : wording` (${row.reserved} ${row.unitCode} held by unfinished bills)`}.`,
+            wording`${row.itemName}, ${row.warehouseName}: godown mein ${row.closing} ${row.unitCode}, bechne ke liye ${row.available} ${row.unitCode}${row.reserved === '0' ? '' : wording` (${row.reserved} ${row.unitCode} adhoore bill ne rok rakha hai)`}.`,
           ),
         );
       }
@@ -486,8 +486,8 @@ export class AssistantService {
     draft.amounts.push(value);
     draft.sentences.push(
       plainSentence(
-        `You are holding ${plural(body.rows.length, 'item', 'items')} worth ${value.formatted} at what they cost.`,
-        `Aapke paas ${plural(body.rows.length, 'saman', 'saman')} hai, lagat ke hisaab se ${value.formatted} ka.`,
+        wording`You are holding ${plural(body.rows.length, 'item', 'items')} worth ${value.formatted} at what they cost.`,
+        wording`Aapke paas ${plural(body.rows.length, 'saman', 'saman')} hai, lagat ke hisaab se ${value.formatted} ka.`,
       ),
     );
   }
@@ -504,8 +504,8 @@ export class AssistantService {
 
     draft.sentences.push(
       plainSentence(
-        `${period.described['en-IN']} you collected ${collected.formatted} of GST and had already paid ${paid.formatted} on your own purchases.`,
-        `${period.described['hi-IN']} aapne ${collected.formatted} GST liya aur apni kharid par ${paid.formatted} pehle hi de chuke the.`,
+        wording`${period.described['en-IN']} you collected ${collected.formatted} of GST and had already paid ${paid.formatted} on your own purchases.`,
+        wording`${period.described['hi-IN']} aapne ${collected.formatted} GST liya aur apni kharid par ${paid.formatted} pehle hi de chuke the.`,
       ),
     );
     // The difference is a bookkeeping figure, not a return. Saying what it turns into on a return is
@@ -587,8 +587,8 @@ export class AssistantService {
       draft.state = 'CANNOT_ANSWER';
       draft.sentences.push(
         plainSentence(
-          `I could not find ${reference} in this business.`,
-          `${reference} is business mein nahin mila.`,
+          wording`I could not find ${reference} in this business.`,
+          wording`${reference} is business mein nahin mila.`,
         ),
       );
       return;
@@ -596,8 +596,8 @@ export class AssistantService {
     if (document.reasons.length === 0) {
       draft.sentences.push(
         plainSentence(
-          `${document.number ?? reference} is not blocked by anything. If it still will not go out, open it and try again.`,
-          `${document.number ?? reference} ko kuch rok nahin raha. Phir bhi na jaaye to use kholkar dobara koshish karein.`,
+          wording`${document.number ?? reference} is not blocked by anything. If it still will not go out, open it and try again.`,
+          wording`${document.number ?? reference} ko kuch rok nahin raha. Phir bhi na jaaye to use kholkar dobara koshish karein.`,
         ),
       );
       return;
@@ -606,8 +606,8 @@ export class AssistantService {
     draft.state = 'NEEDS_A_PERSON';
     draft.sentences.push(
       plainSentence(
-        `${document.number ?? reference}${document.partyName === null ? '' : ` for ${document.partyName}`} is held up by ${plural(document.reasons.length, 'thing', 'things')}.`,
-        `${document.number ?? reference}${document.partyName === null ? '' : `, ${document.partyName} ke liye,`} ${plural(document.reasons.length, 'cheez', 'cheezein')} ki wajah se ruka hai.`,
+        wording`${document.number ?? reference}${document.partyName === null ? '' : wording` for ${document.partyName}`} is held up by ${plural(document.reasons.length, 'thing', 'things')}.`,
+        wording`${document.number ?? reference}${document.partyName === null ? '' : wording`, ${document.partyName} ke liye,`} ${plural(document.reasons.length, 'cheez', 'cheezein')} ki wajah se ruka hai.`,
       ),
     );
 
@@ -662,8 +662,8 @@ export class AssistantService {
       draft.state = 'NEEDS_A_PERSON';
       draft.sentences.push(
         plainSentence(
-          `To answer this for one of your bills I need: ${citation.missing.map((fact) => fact.label).join(', ')}. Open the bill and I can answer it exactly.`,
-          `Aapke kisi bill ke liye yeh batane ko chahiye: ${citation.missing.map((fact) => fact.label).join(', ')}. Bill kholein, phir main theek bata sakta hoon.`,
+          wording`To answer this for one of your bills I need: ${citation.missing.map((fact) => fact.label).join(', ')}. Open the bill and I can answer it exactly.`,
+          wording`Aapke kisi bill ke liye yeh batane ko chahiye: ${citation.missing.map((fact) => fact.label).join(', ')}. Bill kholein, phir main theek bata sakta hoon.`,
         ),
       );
     }

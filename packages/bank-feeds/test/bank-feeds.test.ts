@@ -6,7 +6,7 @@ import { BankFeedService, SyntheticBankFeedProvider, type BankFeedContext } from
 
 const now = new Date('2026-08-30T12:00:00.000Z');
 const context = (companyId = 'company-a', permissions = new Set(['bank.feed.manage', 'bank.feed.sync', 'bank.balance.read'])): BankFeedContext => ({ companyId, actorId: `owner-${companyId}`, permissions });
-const RETURN = { origins: ['https://app.example'], path: '/bank-feed-return' };
+const RETURN = { origins: ['https://app.example'], path: '/' };
 const connect = async (service: BankFeedService, actor = context()) => {
   const { connection, state } = await service.startConsent(actor, { provider: 'sandbox-aa' });
   return service.completeConsent(actor, connection.id, 'sandbox-approved', state);
@@ -15,7 +15,7 @@ const connect = async (service: BankFeedService, actor = context()) => {
 test('sandbox onboarding requires explicit consent and stores only masked account details', async () => {
   const provider = new SyntheticBankFeedProvider();
   const service = new BankFeedService([provider], () => now, undefined, RETURN);
-  const { connection: pending, state } = await service.startConsent(context(), { provider: provider.provider, redirectUri: 'https://app.example/bank-feed-return' });
+  const { connection: pending, state } = await service.startConsent(context(), { provider: provider.provider, redirectUri: 'https://app.example/' });
   assert.equal(pending.status, 'PENDING_CONSENT');
   assert.match(pending.consentUrl!, /^https:\/\//);
   const connected = await service.completeConsent(context(), pending.id, 'sandbox-approved', state);
@@ -110,17 +110,17 @@ class WatchedProvider extends SyntheticBankFeedProvider {
 
 test('#402: the bank is only told to send the customer back to this app, never to an address the caller names', async () => {
   const provider = new WatchedProvider();
-  const service = new BankFeedService([provider], () => now, undefined, { origins: ['https://app.example', 'http://localhost:4173'], path: '/bank-feed-return' });
-  for (const redirectUri of ['https://example.invalid/collect', 'https://app.example.invalid/bank-feed-return', 'https://app.example/elsewhere', 'https://app.example/bank-feed-return?next=https://example.invalid', 'http://localhost:9999/bank-feed-return', 'javascript:alert(1)']) {
+  const service = new BankFeedService([provider], () => now, undefined, { origins: ['https://app.example', 'http://localhost:4173'], path: '/' });
+  for (const redirectUri of ['https://example.invalid/collect', 'https://app.example.invalid/', 'https://app.example/bank-feed-return', 'https://app.example/?next=https://example.invalid', 'https://app.example/#https://example.invalid', 'http://localhost:9999/', 'javascript:alert(1)']) {
     await assert.rejects(service.startConsent(context(), { provider: provider.provider, redirectUri }), /only send you back to this app/);
   }
   assert.equal(provider.starts.length, 0, 'the bank is never asked with an outside return address');
   assert.deepEqual(await service.connections(context()), [], 'nothing is saved for a refused return address');
   await service.startConsent(context(), { provider: provider.provider });
-  await service.startConsent(context(), { provider: provider.provider, redirectUri: 'http://localhost:4173/bank-feed-return' });
-  assert.deepEqual(provider.starts.map((start) => start.redirectUri), ['https://app.example/bank-feed-return', 'http://localhost:4173/bank-feed-return']);
+  await service.startConsent(context(), { provider: provider.provider, redirectUri: 'http://localhost:4173/' });
+  assert.deepEqual(provider.starts.map((start) => start.redirectUri), ['https://app.example/', 'http://localhost:4173/']);
   await assert.rejects(new BankFeedService([provider], () => now).startConsent(context(), { provider: provider.provider }), /not set up on this server/);
-  assert.throws(() => new BankFeedService([provider], () => now, undefined, { origins: ['http://app.example'], path: '/bank-feed-return' }), /must be https/);
+  assert.throws(() => new BankFeedService([provider], () => now, undefined, { origins: ['http://app.example'], path: '/' }), /must be https/);
 });
 
 test('#402: each request gets its own random state, sent to the bank and never stored or shown again', async () => {

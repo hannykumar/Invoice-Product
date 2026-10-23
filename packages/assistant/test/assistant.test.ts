@@ -14,7 +14,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isoDate, sum } from '@invoice/kernel';
 import { reconciles } from '@invoice/reports';
-import { makeBusiness, monthFilterFor, OTHER } from './fixture-helpers.ts';
+import { aBusyMonth, makeBusiness, monthFilterFor, OTHER } from './fixture-helpers.ts';
 import type { BlockedDocument } from '../src/ports.ts';
 import { ASSISTANT_PERMISSIONS, RecordingExceptionQueue, ScriptedUnderstanding, StubBlockedDocuments, TODAY, buildAssistant } from './harness.ts';
 
@@ -306,6 +306,77 @@ describe('why a bill is blocked', () => {
     assert.equal(answer.state, 'NEEDS_A_PERSON');
     assert.equal(stub.askedBy.length, 1);
     assert.deepEqual(stub.askedBy[0]?.permissions, ['assistant.ask', 'reports.view.sales', 'reports.view.stock']);
+  });
+});
+
+describe('names in the books are data, not the assistant\'s own wording', () => {
+  // Issue #405 (threat model A4): anyone who can add a party or an item chooses its name. A name
+  // that happens to contain "guaranteed" or "you must" must never stop an answer that quotes it.
+  const renamed = <T>(reports: T, method: string, rename: (row: Record<string, unknown>) => Record<string, unknown>): T =>
+    new Proxy(reports as object, {
+      get(target, property) {
+        const value: unknown = Reflect.get(target, property, target);
+        if (typeof value !== 'function') return value;
+        if (property !== method) return value.bind(target);
+        return async (...args: unknown[]) => {
+          const report = (await value.apply(target, args)) as { body: { rows: Record<string, unknown>[] } };
+          return { ...report, body: { ...report.body, rows: report.body.rows.map(rename) } };
+        };
+      },
+    }) as T;
+
+  it('names a customer called "Guaranteed Traders" as the one waiting longest', async () => {
+    const business = await aBusyMonth();
+    const reports = renamed(business.reports, 'receivablesAgeing', (row) => ({ ...row, partyName: 'Guaranteed Traders', oldestDaysOverdue: 12 }));
+    const harness = await buildAssistant({ business: { ...business, reports } });
+    const answer = await harness.assistant.ask(harness.actor, { question: 'who owes me money?', today: TODAY });
+
+    assert.equal(answer.state, 'ANSWERED');
+    assert.ok(answer.sentences.some((sentence) => /waiting longest is Guaranteed Traders/.test(sentence['en-IN'])));
+    assert.ok(answer.sentences.some((sentence) => /Guaranteed Traders ka hai/.test(sentence['hi-IN'])));
+  });
+
+  it('names an item called "Definitely Fresh Atta" kept at a godown called "You Must Visit"', async () => {
+    const business = await aBusyMonth();
+    const reports = renamed(business.reports, 'stock', (row) =>
+      row['itemName'] === 'Apple box, 10 kg' ? { ...row, itemName: 'Definitely Fresh Atta', warehouseName: 'You Must Visit' } : row,
+    );
+    const harness = await buildAssistant({ business: { ...business, reports } });
+    const answer = await harness.assistant.ask(harness.actor, { question: 'how much stock of Definitely Fresh Atta?', today: TODAY });
+
+    assert.equal(answer.state, 'ANSWERED');
+    assert.ok(answer.sentences.some((sentence) => /^Definitely Fresh Atta at You Must Visit:/.test(sentence['en-IN'])));
+  });
+
+  it('repeats an item name from the question when it is not in the godown', async () => {
+    const { answer } = await ask('how much stock of Guaranteed Pure Ghee?');
+    assert.equal(answer.state, 'CANNOT_ANSWER');
+    assert.match(answer.sentences[0]?.['en-IN'] ?? '', /could not find an item called "Guaranteed Pure Ghee"/);
+  });
+
+  it('names a blocked bill\'s customer called "Guaranteed Traders"', async () => {
+    const blocked = new StubBlockedDocuments([
+      {
+        documentId: 'inv-2001',
+        number: 'INV-2001',
+        kind: 'SALES_INVOICE',
+        date: isoDate('2026-04-20'),
+        partyName: 'Guaranteed Traders',
+        reasons: [
+          {
+            code: 'CREDIT_LIMIT',
+            what: { 'en-IN': 'This customer is over their credit limit.', 'hi-IN': 'Yeh customer apni udhaar seema se upar hai.' },
+            nextStep: { 'en-IN': 'Take a payment first.', 'hi-IN': 'Pehle payment lein.' },
+            action: null,
+          },
+        ],
+      },
+    ]);
+    const harness = await buildAssistant({ blocked });
+    const answer = await harness.assistant.ask(harness.actor, { question: 'why is INV-2001 blocked?', today: TODAY });
+
+    assert.equal(answer.state, 'NEEDS_A_PERSON');
+    assert.match(answer.sentences[0]?.['en-IN'] ?? '', /INV-2001 for Guaranteed Traders is held up by 1 thing/);
   });
 });
 

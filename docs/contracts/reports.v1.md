@@ -1,4 +1,4 @@
-# Contract: `reports` v1.0.0
+# Contract: `reports` v1.1.0
 
 | | |
 | --- | --- |
@@ -117,6 +117,11 @@ was produced, the snapshot id — then the rows. A snapshot id is
 deterministic — the report id, the filter and the as-at instant, folded together — so asking twice
 for the same period as at the same instant produces the same id and the same bytes. Retrying an export
 therefore cannot produce a second, subtly different document.
+
+**No cell runs as a formula (v1.1.0, issue #394).** In a CSV, any cell — heading, header line or
+row — that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written with a leading `'`,
+so a spreadsheet shows it as text. A plain number such as `-1250.00` is left as it is.
+`neutraliseSpreadsheetCell` in `@invoice/kernel` is the one rule; JSON is unchanged.
 
 ## Permissions
 

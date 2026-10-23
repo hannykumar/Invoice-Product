@@ -1,4 +1,4 @@
-# Authorised government access — v1
+# Authorised government access — v1.1
 
 Issue #33 [E33]. Owner: GPT 3. Package: `packages/gsp` (`@invoice/gsp`).
 
@@ -139,11 +139,16 @@ construction because both read the acknowledgement with the same function.
   contract covers.
 - The exception sink is a port; until the queue (#7/#48) is wired in, `RecordingExceptionSink`
   keeps conflicts where a test and the demo can see them.
-- The webhook endpoint is wired with `StaticWebhookVerifier`, GPT 2's development verifier. It is
-  exactly as strong as the provider contract behind it — which is to say not at all until #51
-  supplies a signing secret and a real verifier. That swap is one line in
-  `apps/api/src/government-webhooks.ts`. Until the channel itself is wired into the running app,
-  the endpoint verifies, deduplicates and records every delivery and reports `UNMATCHED`, which is
+- **(v1.1, #389)** The webhook endpoint is wired with connector-v1.1's `HmacWebhookVerifier`. Each
+  provider's secret comes from `GOVERNMENT_WEBHOOK_SECRET_IRP`, `GOVERNMENT_WEBHOOK_SECRET_EWAY_BILL`
+  and `GOVERNMENT_WEBHOOK_SECRET_GST` (comma-separated while rotating). In development and tests a
+  connector without one uses the publicly known `DEVELOPMENT_WEBHOOK_SECRET`; anywhere else it has
+  no secret, every callback for it is refused (`401`), and start-up logs which variables are
+  missing. With a database, seen events and rejected deliveries are written to
+  `government_webhook_events` and `government_webhook_rejections` (`PostgresWebhookEvents`), so a
+  resend after a restart is still `DUPLICATE`. A signed body without the callback's shape is refused
+  with `401` like an unsigned one. Until the channel itself is wired into the running app (#51), the
+  endpoint verifies, deduplicates and records every delivery and reports `UNMATCHED`, which is
   the right answer for a callback about a call that process never made.
 
 ## Demonstration scenario

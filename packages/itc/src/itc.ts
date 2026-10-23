@@ -39,6 +39,7 @@ import {
   OUTCOME_PLAIN,
   addAmounts,
   emptyAmounts,
+  formatTaxPeriod,
   sumAmounts,
   totalTaxOf,
   type Bilingual,
@@ -336,6 +337,16 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}, so it is not on this month's return.`,
         'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha, isliye yeh is mahine ke return par nahin hai.`,
       };
+  } else if (book !== null && book.reverseCharge && book.kind === 'INVOICE' && input.period !== undefined
+    && book.taxPointPeriod !== undefined && book.taxPointPeriod > input.period) {
+    // Issue #289, part 2b — the credit on reverse-charge tax comes from paying that tax, and the tax
+    // is due only in the month of its time of supply (CGST s.12(3) / s.13(3)). Until then there is
+    // nothing paid to take credit for, whatever GSTR-2B shows.
+    outcome = 'HELD_BACK';
+    sentence = {
+      'en-IN': `Reverse charge: the GST on bill ${number} falls due in ${formatTaxPeriod(book.taxPointPeriod)}, its time of supply (CGST s.12(3) for goods, s.13(3) for services). You pay it on that month's return, and the credit comes on the same return. Paying ${supplier} sooner brings it forward.`,
+      'hi-IN': `Reverse charge: bill ${number} ka GST ${formatTaxPeriod(book.taxPointPeriod)} mein bharna hai, yahi iska time of supply hai (CGST s.12(3) maal ke liye, s.13(3) sewa ke liye). Use us mahine ke return par bharein, credit usi return par milega. ${supplier} ko pehle paisa dene se yeh pehle aa jayega.`,
+    };
   } else if (book !== null && book.reverseCharge && book.outsideGstr2b === true && book.kind === 'INVOICE') {
     // Issue #289, part 2 — reverse charge on a purchase from a seller with no GST number. The buyer
     // pays this tax in cash and takes the same amount as credit in the same return (CGST s.49(4);
@@ -655,23 +666,43 @@ export const linkageFor = (
 
   // Issue #286 — a supplier's credit note reduces the credit in the same box its bill was claimed
   // in, as GSTR-2B nets it into 4(A)(5) (or 4(A)(3) under reverse charge). Putting it in 4(B) as well
-  // as 2B's net figure reduced it twice, or disagreed with 2B. 4(B) is kept for real reversals —
-  // Rule 42/43 and section 17(5) — which this module does not post, so it is empty here.
+  // as 2B's net figure reduced it twice, or disagreed with 2B. 4(B)(1) is kept for real reversals:
+  // section 17(5) below (issue #289, part 3); Rules 42/43 are not posted by this module.
   const net = (predicate: (line: ReconciliationLine) => boolean): TaxAmounts =>
     subtract(bucket((line) => !isCreditNote(line) && predicate(line)), bucket((line) => isCreditNote(line) && predicate(line)));
-  const allOtherItc = net((line) => line.book?.reverseCharge !== true && line.book?.imported !== true);
-  const reverseChargeItc = net((line) => line.book?.reverseCharge === true);
-  const importItc = net((line) => line.book?.imported === true);
-  const reversedItc = emptyAmounts();
+  // Issue #289, part 3 — credit CGST s.17(5) blocks. Table 4(A) carries the whole of the credit as
+  // GSTR-2B shows it, eligible and ineligible alike, and the s.17(5) part is taken out in Table
+  // 4(B)(1) (Circular 170/02/2022-GST, 06.07.2022, para 4 A and B; form as amended by Notification
+  // 14/2022-CT). So a bill's blocked tax goes into its 4(A) box and into 4(B)(1), in the month its
+  // credit goes on the return; a bill whose credit is blocked entirely, in the month its tax belongs to.
+  const blockedOf = (line: ReconciliationLine): TaxAmounts => {
+    const book = line.book;
+    if (book === null || book.kind !== 'INVOICE' || book.reversed || book.ineligibleItc.minor === 0n) return emptyAmounts();
+    return { ...subtract(book.amounts, creditableFromBooks(book)), taxableValue: zeroMoney };
+  };
+  const blockedLines = lines.filter((line) => line.outcome === 'CLAIM_NOW' || line.outcome === 'CLAIM_AT_RISK'
+    || (line.outcome === 'BLOCKED_IN_BOOKS' && line.book !== null && liabilityPeriodOf(line.book) === period));
+  const blockedIn = (predicate: (line: ReconciliationLine) => boolean): TaxAmounts =>
+    sumAmounts(blockedLines.filter(predicate).map(blockedOf));
+  const isOther = (line: ReconciliationLine) => line.book?.reverseCharge !== true && line.book?.imported !== true;
+  const isReverse = (line: ReconciliationLine) => line.book?.reverseCharge === true;
+  const isImport = (line: ReconciliationLine) => line.book?.imported === true;
+  const allOtherItc = addAmounts(net(isOther), blockedIn(isOther));
+  const reverseChargeItc = addAmounts(net(isReverse), blockedIn(isReverse));
+  const importItc = addAmounts(net(isImport), blockedIn(isImport));
+  const reversedItc = blockedIn(() => true);
 
   // Issue #249 — the books hand over every unclaimed document up to this month (so late credit can
   // be taken, #222), but tax owed under reverse charge and the value of untaxed purchases belong to
   // the month of the document only. Counting an earlier month's bill again would owe its tax twice.
   const monthBooks = allBooks.filter((book) => book.period === period);
+  // Issue #289, part 2b — a reverse-charge bill's tax goes on the return of its time of supply
+  // (CGST s.12(3) goods, s.13(3) services), which need not be the month of the bill.
+  const liabilityBooks = allBooks.filter((book) => liabilityPeriodOf(book) === period);
   // Issue #249 — goods sent back on a reverse-charge purchase lower the tax owed on it, as the ledger
   // does when it posts the return; the liability here is net of them.
   const reverseChargeLiability = subtract(
-    sumAmounts(monthBooks.filter((book) => book.reverseCharge && !book.reversed && book.kind === 'INVOICE').map((book) => book.amounts)),
+    sumAmounts(liabilityBooks.filter((book) => book.reverseCharge && !book.reversed && book.kind === 'INVOICE').map((book) => book.amounts)),
     sumAmounts(monthBooks.filter((book) => book.reverseCharge && !book.reversed && book.kind === 'CREDIT_NOTE').map((book) => book.amounts)),
   );
   const exemptInwardValue: Money = {
@@ -825,3 +856,10 @@ export const SELF_ASSESSED_NOTE: Bilingual = {
   'en-IN': 'Reverse charge from a seller with no GST number: self-assessed, never in GSTR-2B.',
   'hi-IN': 'Bina GST number wale seller se reverse charge: khud ka hisaab, GSTR-2B mein kabhi nahin.',
 };
+
+/**
+ * Issue #289, part 2b — the month whose GSTR-3B carries a document's reverse-charge tax: its time of
+ * supply for a reverse-charge bill (CGST s.12(3) / s.13(3)), else the document's own month.
+ */
+export const liabilityPeriodOf = (book: BookPurchaseDocument): TaxPeriod =>
+  book.reverseCharge && book.kind === 'INVOICE' && book.taxPointPeriod !== undefined ? book.taxPointPeriod : book.period;

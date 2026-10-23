@@ -45,24 +45,26 @@ async function shell(): Promise<Buffer> {
   }));
 }
 
+// Issue #393: only the page's own files are handed out — one name, no folder, and a page file type.
+// Source code (`server.ts`), tests (`test/`), notes (`README.md`) and anything else dropped into this
+// folder (a `.env`, a backup, a log) answer 404. No folder and no second dot also rules out `..`.
+const pageFile = /^[a-z0-9][a-z0-9-]*\.(?:html|css|js|svg)$/;
+const notFound: WebAsset = { status: 404, contentType: "text/plain; charset=utf-8", body: Buffer.from("Not found"), cacheControl: "no-store" };
+
 export async function loadWebAsset(pathname: string): Promise<WebAsset> {
   const hashed = HASHED.exec(pathname);
   const requested = hashed ? `${hashed[1]}${hashed[3]}` : pathname;
-  const relative = requested === "/" ? "index.html" : requested.replace(/^\/+/, "");
-  const path = resolve(root, relative);
-  if (!path.startsWith(`${root}/`)) return { status: 403, contentType: "text/plain; charset=utf-8", body: Buffer.from("Forbidden"), cacheControl: "no-store" };
-  let contentType = types[extname(path)] ?? "application/octet-stream";
+  const name = requested === "/" ? "index.html" : requested.slice(1);
+  if (!pageFile.test(name)) return notFound;
   let body: Buffer;
   try {
-    body = relative === "index.html" ? await shell() : await readFile(path);
+    body = name === "index.html" ? await shell() : await readFile(resolve(root, name));
   } catch {
-    // Not one of the app's files: the address is a screen inside the app, which index.html opens.
-    contentType = types[".html"]!;
-    body = await shell();
+    return notFound;
   }
   const hash = hashOf(body);
   // A stale hash (a page from the previous deploy) still gets today's file, but never for a year.
-  return { status: 200, contentType, body, cacheControl: hashed?.[2] === hash ? IMMUTABLE : REVALIDATE, etag: `"${hash}"` };
+  return { status: 200, contentType: types[extname(name)]!, body, cacheControl: hashed?.[2] === hash ? IMMUTABLE : REVALIDATE, etag: `"${hash}"` };
 }
 
 // Issue #349: the same headers and time limits as the API, on the page and every file it loads.

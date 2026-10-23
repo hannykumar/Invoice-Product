@@ -74,6 +74,14 @@ three levels:
 approved rule with a legal source is behind the sentence, and speaking for the department or a court
 throws at every level. Every rule answer carries `RULE_DISCLAIMER`.
 
+**Names and figures are not checked as our own words (v1.1, issue #405).** A party, item or
+godown name is typed in by whoever set it up, and an item named in a question comes from the
+asker. A name such as "Guaranteed Traders" or "Definitely Fresh Atta" is data, not the assistant
+making a claim. `plainSentence` therefore takes its text through the `wording` tag
+(`` wording`The one waiting longest is ${name}.` ``): only the literal parts are checked, and every
+filled-in value is shown exactly as stored. A plain string is still checked whole. `safeSentence` is
+unchanged. Additive; nothing existing changed meaning (threat model A4).
+
 ## Prompt injection
 
 The question is data. `looksLikeAnInstruction` flags text that tries to instruct the product; the
