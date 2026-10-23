@@ -324,7 +324,7 @@ const copy = {
     matchSafety: "This only compares. Nothing is recorded in your books and no stock moves.",
     colItem: "Item", colOrdered: "Ordered", colArrived: "Arrived", colKept: "Kept", colTurnedAway: "Turned away", colBilled: "Billed", colAgreedPrice: "Agreed price", colBilledPrice: "Billed price",
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
-    navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected",
+    navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected", bankReturnRefused: "This reply from the bank does not match the request started in this window, so nothing was connected. Start again from Bank feeds.",
     navOperations: "Operations", operationsEyebrow: "Service health", operationsTitle: "Is the service working?", operationsHelp: "See service checks, failed external calls, safe retries and customer incident updates without opening invoices or bank records.", operationsSafetyTitle: "Customer data stays private. ", operationsSafety: "This page shows error codes and correlation IDs only. A retry is offered only for work declared safe and duplicate-proof.", operationsHealth: "Health checks", operationsFailures: "External failures", operationsQueue: "Safe retry queue", operationsRecurring: "Recurring work", operationsIncidents: "Customer status timeline", operationsHealthy: "All checks are working", operationsDegraded: "One or more checks need attention", operationsNoFailures: "No external failures for this company.", operationsNoJobs: "No jobs are waiting.", operationsNoRecurring: "No recurring work is registered.", operationsNextRun: "Next", operationsLastRun: "Last", operationsNeverRun: "Not run yet", operationsRunning: "Running", operationsSucceeded: "Succeeded", operationsFailed: "Failed", operationsDeadLettered: "Stopped after repeated failures", operationsReplay: "Retry safely", operationsNoIncidents: "No current or recent incidents.",
     navBusiness: "Business details", businessEyebrow: "Your business", businessTitle: "Your business, as it prints on every bill", businessHelp: "The law asks every bill to carry your name, your address and your GST number. Type them once here and every bill, challan and quotation carries them.",
     businessNameLegend: "Name", businessLegalName: "Registered name", businessTradeName: "Trading name (optional)", businessTradeNameHint: "If you fill this in, the bill prints it instead of the registered name.",
@@ -675,7 +675,7 @@ const copy = {
     matchSafety: "Yeh sirf milan hai. Bahi mein kuch darj nahi hota aur stock nahi hilta.",
     colItem: "Saman", colOrdered: "Mangaya", colArrived: "Aaya", colKept: "Rakha", colTurnedAway: "Wapas kiya", colBilled: "Bill mein", colAgreedPrice: "Tay daam", colBilledPrice: "Bill ka daam",
     differencesTitle: "Kya nahi mil raha", approveReason: "Yeh antar kyon theek hai?", approveDifferences: "Yeh antar sweekar karen",
-    navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya",
+    navCollections: "Vasooli", collectionsTitle: "Payment yaad dilana", collectionsHelp: "Bhejne se pehle sandesh dekhein, vaade ya vivaad par rok lagayen, aur har sandesh ke saath dekha gaya balance sambhal kar rakhein.", reminderPlan: "Reminder banayen", reminderDate: "Is tareekh ka balance", reminderChannel: "Is zariye bhejen", channelInApp: "App mein", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Review mein joden", sendDueReminders: "Dekhe hue reminder bhejen", scheduledMessages: "Tay sandesh", communicationHistory: "Baat-cheet ka itihaas", collectionSafety: "Bhejne se turant pehle balance dobara dekha jata hai. Chukaye ya vivaad wale bill par reminder nahin jata.", optOutCustomer: "Customer ne reminder band karne ko kaha hai", savePreference: "Pasand save karein", promiseTitle: "Payment ka vaada", promisedAmount: "Vaade ki rakam", promisedDate: "Vaade ki tareekh", savePromise: "Vaada darj karein", disputeTitle: "Customer ka vivaad", disputedInvoice: "Vivaad wala invoice", disputeReason: "Customer kis baat se asahmat hai?", saveDispute: "Is invoice ke reminder roken", noScheduled: "Review ke liye koi reminder nahin hai.", noCommunications: "Abhi koi collection sandesh bhejne ki koshish nahin hui.", navBankFeeds: "Bank feed", bankFeedsTitle: "Bank ke len-den apne aap laayein", bankFeedsHelp: "Provider ko len-den lane ki ijazat dein. Har line pehle review mein jaati hai aur paisa kabhi nahin hilta.", connectBank: "Bank joden", bankConsentHelp: "Provider ke page par ijazat dete hain aur kabhi bhi connection hata sakte hain.", giveBankPermission: "Bank ki ijazat shuru karen", approveSandboxPermission: "Sandbox ijazat manzoor karen", bankFeedSafety: "Hum bank password, PIN ya OTP kabhi nahin maangte ya rakhte. Connection hatane par pehle aaye len-den bahi ke liye bache rehte hain.", connectedAccounts: "Jude bank khate", importedBankTransactions: "Aaye hue len-den", noBankConnections: "Abhi koi bank nahin juda hai.", noBankTransactions: "Abhi bank se koi len-den nahin aaya hai.", syncNow: "Naye len-den laayein", disconnectBank: "Bank hatayein", bankConnected: "Bank jud gaya", bankSynced: "Bank ke len-den aa gaye", bankDisconnected: "Bank hat gaya", bankReturnRefused: "Bank ka yeh jawab is window mein shuru ki gayi request se mel nahin khata, isliye kuch nahin juda. Bank feed se dobara shuru karein.",
     navOperations: "Seva ki sthiti", operationsEyebrow: "Seva ki sehat", operationsTitle: "Kya seva sahi chal rahi hai?", operationsHelp: "Invoice ya bank record khole bina service check, bahari nakaami, surakshit retry aur grahak ko dikhne wali ghatna dekhein.", operationsSafetyTitle: "Grahak ka data niji rehta hai. ", operationsSafety: "Yahan sirf error code aur correlation ID dikhte hain. Retry tabhi milta hai jab kaam surakshit aur duplicate-proof ghoshit ho.", operationsHealth: "Sehat ki jaanch", operationsFailures: "Bahari nakaami", operationsQueue: "Surakshit retry queue", operationsRecurring: "Niyamit kaam", operationsIncidents: "Grahak sthiti ka itihaas", operationsHealthy: "Sabhi jaanch sahi chal rahi hain", operationsDegraded: "Ek ya adhik jaanch par dhyan chahiye", operationsNoFailures: "Is company ke liye koi bahari nakaami nahin.", operationsNoJobs: "Koi kaam intezar mein nahin.", operationsNoRecurring: "Koi niyamit kaam darj nahin hai.", operationsNextRun: "Agli baar", operationsLastRun: "Pichhli baar", operationsNeverRun: "Abhi nahin chala", operationsRunning: "Chal raha hai", operationsSucceeded: "Poora hua", operationsFailed: "Nakaam hua", operationsDeadLettered: "Baar-baar nakaami ke baad roka gaya", operationsReplay: "Surakshit dobara chalayen", operationsNoIncidents: "Koi maujooda ya haal ki ghatna nahin.",
     navBusiness: "Business ki jaankari", businessEyebrow: "Aapka business", businessTitle: "Aapka business, jaisa har bill par chhapta hai", businessHelp: "Kanoon kehta hai ki har bill par aapka naam, aapka pata aur aapka GST number ho. Yahan ek baar likhein, phir har bill, challan aur quotation par yeh aayega.",
     businessNameLegend: "Naam", businessLegalName: "Registered naam", businessTradeName: "Kaam ka naam (optional)", businessTradeNameHint: "Yeh bhar dein to bill par registered naam ki jagah yahi chhapega.",
@@ -3541,6 +3541,46 @@ document.querySelector("#company-switch").addEventListener("change", async (even
 let pendingBankConnectionId = null;
 let pendingBankConsentState = null;
 
+// Issue #402: the bank sends the customer back to the start page "/" with `code` and `state`. The
+// request is kept for this tab only, so it survives the trip to the bank, and a reply is finished
+// only when its `state` is the one this tab was given. The server checks `state` again.
+const BANK_CONSENT_KEY = "karobar.bankConsent";
+const tabStorage = (() => { try { return sessionStorage; } catch { return undefined; } })();
+
+function rememberBankConsent(connectionId, consentState) {
+  pendingBankConnectionId = connectionId; pendingBankConsentState = consentState;
+  try {
+    if (connectionId) tabStorage?.setItem(BANK_CONSENT_KEY, JSON.stringify({ connectionId, consentState }));
+    else tabStorage?.removeItem(BANK_CONSENT_KEY);
+  } catch { /* without tab storage only the in-page approval works */ }
+}
+
+async function completeBankConsent(authorizationCode) {
+  await api("/api/bank-feeds/consent/complete", { method: "POST", body: JSON.stringify({ connectionId: pendingBankConnectionId, authorizationCode, consentState: pendingBankConsentState }) });
+  rememberBankConsent(null, null);
+  document.querySelector("#bank-feed-approve").hidden = true;
+  showDialog({ title: copy[state.locale].bankConnected, message: copy[state.locale].bankFeedSafety }, "recorded");
+  await loadBankFeeds();
+}
+
+async function finishBankReturn() {
+  const reply = new URLSearchParams(location.search);
+  if (!reply.has("code") && !reply.has("state")) return;
+  // The code is spent once; it is taken out of the address bar and history before anything else.
+  history.replaceState(null, "", `${location.pathname}#bank-feeds`);
+  openView("bank-feeds");
+  let pending = null;
+  try { pending = JSON.parse(tabStorage?.getItem(BANK_CONSENT_KEY) ?? "null"); } catch { pending = null; }
+  const code = reply.get("code"); const returned = reply.get("state");
+  if (!pending?.connectionId || !code || !returned || returned !== pending.consentState) {
+    rememberBankConsent(null, null);
+    showDialog({ title: copy[state.locale].nothingSaved, message: copy[state.locale].bankReturnRefused }, "failed");
+    return;
+  }
+  pendingBankConnectionId = pending.connectionId; pendingBankConsentState = pending.consentState;
+  try { await completeBankConsent(code); } catch (error) { rememberBankConsent(null, null); showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
+}
+
 function bankActivityRow(iconText, title, detail, tone = "green") {
   const row = document.createElement("div"); row.className = "activity-row";
   const icon = document.createElement("span"); icon.className = `activity-icon ${tone}`; icon.setAttribute("aria-hidden", "true"); icon.textContent = iconText;
@@ -3574,21 +3614,17 @@ async function loadBankFeeds() {
 document.querySelector("#bank-feed-connect")?.addEventListener("click", async () => {
   try {
     const result = await api("/api/bank-feeds/consent", { method: "POST", body: JSON.stringify({ provider: "sandbox-aa" }) });
-    pendingBankConnectionId = result.connection.id;
-    pendingBankConsentState = result.consentState;
+    rememberBankConsent(result.connection.id, result.consentState);
     document.querySelector("#bank-feed-approve").hidden = false;
     showDialog({ title: copy[state.locale].giveBankPermission, message: copy[state.locale].bankConsentHelp, effects: [result.connection.provider] }, "preview");
     await loadBankFeeds();
   } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
 });
 
-document.querySelector("#bank-feed-approve")?.addEventListener("click", async (event) => {
+document.querySelector("#bank-feed-approve")?.addEventListener("click", async () => {
   if (!pendingBankConnectionId) return;
   try {
-    await api("/api/bank-feeds/consent/complete", { method: "POST", body: JSON.stringify({ connectionId: pendingBankConnectionId, authorizationCode: "sandbox-approved", consentState: pendingBankConsentState }) });
-    pendingBankConnectionId = null; pendingBankConsentState = null; event.currentTarget.hidden = true;
-    showDialog({ title: copy[state.locale].bankConnected, message: copy[state.locale].bankFeedSafety }, "recorded");
-    await loadBankFeeds();
+    await completeBankConsent("sandbox-approved");
   } catch (error) { showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
 });
 
@@ -6091,7 +6127,7 @@ window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
 
 translate();
 openView(state.view);
-if (state.signedIn) { loadSession().catch(() => {}); loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); if (state.view === "operations") loadOperations(); } else showLogin();
+if (state.signedIn) { loadSession().catch(() => {}); loadDashboard(); loadSupplierChoices(); loadIssuedInvoices(); loadReturnDocuments(); loadEwayRoad(); loadEwayStates(); loadVehicleChoices(); loadVehiclesHeld(); loadReminders(); loadBankFeeds(); loadSetupStates(); finishBankReturn(); if (state.view === "operations") loadOperations(); } else showLogin();
 
 // ------------------------------------ issue #30: the month's GST returns
 //
