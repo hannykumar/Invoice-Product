@@ -118,3 +118,17 @@ test('goods on approval near their six months are on Home', async () => {
   const tasks = JSON.stringify(home.home?.tasks ?? home.tasks ?? home);
   assert.match(tasks, new RegExp(`${old.body.challan.number.replace(/\//g, '\\/')} must be billed by 10\\/10\\/2026`));
 });
+
+test('issue #392: two challans billed with the same typed order number are two bills, not a reused key', async () => {
+  const more = await request('POST', '/api/purchases/record', { supplierId: SHREE_RAM, reference: 'SRS-392', date: '2026-09-26', lines: [{ item: STEEL, quantity: '20', rate: '64', gst: '1800' }] }, owner);
+  assert.equal(more.status, 200, JSON.stringify(more.body));
+  const invoices: string[] = [];
+  for (const requestId of ['dc-392-a', 'dc-392-b']) {
+    const out = await request('POST', '/api/challans/issue', { reason: 'SUPPLY_ON_APPROVAL', date: '2026-09-26', customerId: mehta, item: STEEL, quantity: '10', rate: '90', reference: requestId, requestId }, owner);
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    const billed = await request('POST', '/api/challans/bill', { challan: out.body.challan.id, date: '2026-09-28', terms: '30', reference: 'MEHTA-PO-392' }, owner);
+    assert.equal(billed.status, 200, JSON.stringify(billed.body));
+    invoices.push(billed.body.invoice.number);
+  }
+  assert.notEqual(invoices[0], invoices[1], 'each challan has its own bill');
+});

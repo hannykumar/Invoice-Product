@@ -36,7 +36,7 @@ const challan = fields({
   challan: text, customerId: text, customer: text, party: text, reason: text, reasonNote: text, deliveryState: text, deliveryPlace: text,
   itemId: text, item: text, date: text, quantity: text, unit: text, rate: anything, reference: anything,
   invoice: text, ewayBillNumber: text, vehicle: text, transporter: text, locale: anything, format: anything, copy: text,
-  terms: text, ewayBillCancelledOnPortal: anything, approvalReason: text,
+  terms: text, ewayBillCancelledOnPortal: anything, approvalReason: text, requestId: text,
 });
 const presale = fields({
   kind: text, document: text, customerId: text, customer: text, party: text, itemId: text, item: text, date: text, validUntil: anything,

@@ -2974,7 +2974,7 @@ export class DemoApplication {
         reference: String(input.reference ?? '') || `challan-bill:${challan.id}`,
         approvalReason: String(input.approvalReason ?? ''),
         // One bill per challan: the challan itself is what a retry repeats.
-        requestId: String(input.reference ?? '') || `challan-bill:${challan.id}`,
+        requestId: String(input.requestId ?? '') || `challan-bill:${challan.id}`,
       }, false);
       // Issue #301 — a challan is billed or refused, never held: the goods are already with them.
       if (!('invoice' in recorded)) throw new Error('A challan bill was held for approval.');
