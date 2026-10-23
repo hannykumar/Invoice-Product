@@ -146,7 +146,18 @@ class KeptDeclaredRates extends InMemoryDeclaredRates {
     return this;
   }
 
-  override find(...args: Parameters<InMemoryDeclaredRates['find']>) { return this.#rates.find(...args); }
+  /**
+   * Issue #281 — a declaration kept before rates were tied to items names no item, so it would
+   * still reach every item under its code. For an item, the figure is the one typed for that item
+   * (`itemTaxes`), whoever's declaration it rides on.
+   */
+  override find(...args: Parameters<InMemoryDeclaredRates['find']>) {
+    const found = this.#rates.find(...args);
+    const [companyId, , , , itemId] = args;
+    if (found === undefined || found.itemId !== undefined || itemId === undefined) return found;
+    const own = itemTaxes.get(taxKey(companyId, itemId))?.ratePercentTimes100;
+    return own === null || own === undefined || own === found.ratePercentTimes100 ? found : { ...found, ratePercentTimes100: own };
+  }
   override list(companyId: string) { return this.#rates.list(companyId); }
 
   /** A declaration read back from the database: into memory only. */
@@ -686,6 +697,20 @@ const createUnregisteredSupplier = (companyId: CompanyId | string, input: Record
   };
 };
 
+const percentOf = (rate: bigint | null): string => rate === null ? 'no GST' : `${Number(rate) / 100}%`;
+
+/**
+ * Issue #281 — the other items under the same code that are charged a different rate. Nothing
+ * about them changes; the person is only told, so two rates under one code are a choice they saw.
+ */
+const sameCodeRates = (companyId: CompanyId | string, itemId: string, hsnSac: string, rate: bigint | null): string[] =>
+  items(companyId)
+    .filter((other) => other.id !== itemId && other.hsnSac === hsnSac)
+    .flatMap((other) => {
+      const theirs = itemTaxes.get(taxKey(companyId, other.id))?.ratePercentTimes100 ?? null;
+      return theirs === rate ? [] : [`${other.name}, with the same code, is charged ${percentOf(theirs)}. This item will be charged ${percentOf(rate)}. Both stay as they are.`];
+    });
+
 /**
  * Adds an item, with the rate the business says it charges.
  *
@@ -724,6 +749,8 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   }
 
   const basis = str(input.basis) || 'The rate this business charges on this item';
+  // Issue #281 — a rate starts on the day it is declared, or the day the person picks; never in 2017.
+  const effectiveFrom = isoDate(str(input.effectiveFrom) || appToday());
   // Issue #308 — a barcode, a selling price and another name (in Hindi, say), all optional.
   const barcode = barcodeOf(companyId, input.barcode);
   const price = pricePaise(input.price);
@@ -744,15 +771,20 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
     },
   );
 
-  itemTaxes.set(taxKey(companyId, created.record.id), { kind: kindOfTax, ratePercentTimes100 });
+  // A retry of the same item returns the record already made, and declares nothing a second time.
+  const retried = itemTaxes.has(taxKey(companyId, created.record.id));
+  const alongside = retried ? [] : sameCodeRates(companyId, created.record.id, hsnSac, ratePercentTimes100);
+  if (!retried) itemTaxes.set(taxKey(companyId, created.record.id), { kind: kindOfTax, ratePercentTimes100 });
   if (price !== null) itemPrices.set(taxKey(companyId, created.record.id), price);
-  if (ratePercentTimes100 !== null) {
+  if (retried) ratePercentTimes100 = itemTaxes.get(taxKey(companyId, created.record.id))?.ratePercentTimes100 ?? null;
+  else if (ratePercentTimes100 !== null) {
     declaredRatesOf(companyId).declare({
       companyId: String(companyId),
+      itemId: created.record.id,
       code: hsnSac,
       kind: kind === 'service' ? 'SERVICES' : 'GOODS',
       ratePercentTimes100,
-      effectiveFrom: isoDate(str(input.effectiveFrom) || '2017-07-01'),
+      effectiveFrom,
       effectiveTo: null,
       declaredBy: str(input.declaredBy) || declaredBy,
       declaredOn: isoDate(str(input.declaredOn) || appToday()),
@@ -763,16 +795,17 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   return {
     state: 'recorded' as const,
     title: 'Item added',
-    message: `${created.record.name} is in your item list, counted in ${unit}${ratePercentTimes100 === null ? ', with no GST on it' : ` and charged at ${Number(ratePercentTimes100) / 100}%`}.${created.warnings.map((warning) => ` ${warning.message}`).join('')}`,
-    warnings: created.warnings.map((warning) => warning.message),
+    message: `${created.record.name} is in your item list, counted in ${unit}${ratePercentTimes100 === null ? ', with no GST on it' : ` and charged at ${Number(ratePercentTimes100) / 100}%`}.${[...created.warnings.map((warning) => warning.message), ...alongside].map((warning) => ` ${warning}`).join('')}`,
+    warnings: [...created.warnings.map((warning) => warning.message), ...alongside],
     item: itemViewOf(companyId, created.record),
   };
 };
 
 /**
  * Issue #187 — corrects an item's HSN or SAC code, which is what a bill held up for a code that is
- * too short asks the person to do. The GST rate the business declared is kept: it is stored against
- * the code, so it is declared again under the new one, with the same figure and the same basis.
+ * too short asks the person to do. The GST rate the business declared is kept. Since #281 it
+ * belongs to the item, so it simply goes on applying; an item whose rate was kept before that,
+ * against its code alone, has it declared for the item itself, with the same figure and basis.
  */
 export const changeItemCode = (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
   const input = (body ?? {}) as Record<string, unknown>;
@@ -791,15 +824,15 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
 
   const tax = itemTaxes.get(taxKey(companyId, current.id));
   const taxKind = current.kind === 'service' ? 'SERVICES' : 'GOODS';
-  // A declaration for "39" already covers "3901"; one is only added when the new code is not covered.
-  if (tax?.ratePercentTimes100 != null && declaredRatesOf(companyId).find(String(companyId), hsnSac, taxKind, today) === undefined) {
-    const earlier = declaredRatesOf(companyId).find(String(companyId), current.hsnSac, taxKind, today);
+  const earlier = declaredRatesOf(companyId).find(String(companyId), current.hsnSac, taxKind, today, current.id);
+  if (tax?.ratePercentTimes100 != null && earlier?.itemId !== current.id) {
     declaredRatesOf(companyId).declare({
       companyId: String(companyId),
+      itemId: current.id,
       code: hsnSac,
       kind: taxKind,
       ratePercentTimes100: tax.ratePercentTimes100,
-      effectiveFrom: earlier?.effectiveFrom ?? isoDate('2017-07-01'),
+      effectiveFrom: earlier?.effectiveFrom ?? today,
       effectiveTo: null,
       declaredBy: earlier?.declaredBy ?? declaredBy,
       declaredOn: today,
@@ -807,11 +840,12 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
     });
   }
 
+  const warnings = [...updated.warnings.map((warning) => warning.message), ...sameCodeRates(companyId, current.id, hsnSac, tax?.ratePercentTimes100 ?? null)];
   return {
     state: 'recorded' as const,
     title: 'Item code changed',
-    message: `${updated.record.name} now carries the code ${hsnSac}.${updated.warnings.map((warning) => ` ${warning.message}`).join('')}`,
-    warnings: updated.warnings.map((warning) => warning.message),
+    message: `${updated.record.name} now carries the code ${hsnSac}.${warnings.map((warning) => ` ${warning}`).join('')}`,
+    warnings,
     item: itemViewOf(companyId, updated.record),
   };
 };
@@ -1020,6 +1054,7 @@ export const seedCatalogue = (companyId: CompanyId | string, seed: CatalogueSeed
     itemTaxes.set(taxKey(companyId, item.id), { kind: 'taxable', ratePercentTimes100: item.ratePercentTimes100 });
     declaredRatesOf(companyId).declare({
       companyId: String(companyId),
+      itemId: item.id,
       code: item.hsnSac,
       kind: item.kind === 'service' ? 'SERVICES' : 'GOODS',
       ratePercentTimes100: item.ratePercentTimes100,

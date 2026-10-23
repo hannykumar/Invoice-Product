@@ -656,7 +656,7 @@ export class GstCalculator {
       return { entry: fromRegister.entry, basis: 'REGISTER', declaredBy: null, declaredBasis: null };
     }
     if (this.#declaredRates === undefined || item.hsnOrSac === null) return null;
-    const declared = this.#declaredRates.find(input.companyId, item.hsnOrSac, item.kind, input.documentDate);
+    const declared = this.#declaredRates.find(input.companyId, item.hsnOrSac, item.kind, input.documentDate, item.itemId);
     if (declared === undefined) return null;
     return {
       entry: {
