@@ -72,8 +72,8 @@ export class PostgresOperationsStore implements OperationsStore {
     return this.#read(companyId, async (sql) => (await sql.query(
       `SELECT ${FAILURE} FROM operational_failures f
         WHERE f.company_id = $1
-          AND ($2::uuid IS NULL OR (f.occurred_at, f.id) > (SELECT a.occurred_at, a.id FROM operational_failures a WHERE a.company_id = $1 AND a.id = $2))
-        ORDER BY f.occurred_at, f.id LIMIT $3`,
+          AND ($2::uuid IS NULL OR (f.occurred_at, f.id) < (SELECT a.occurred_at, a.id FROM operational_failures a WHERE a.company_id = $1 AND a.id = $2))
+        ORDER BY f.occurred_at DESC, f.id DESC LIMIT $3`,
       [companyId, page?.after ?? null, pageLimit(page)])).rows.map(failure));
   }
 
@@ -116,7 +116,12 @@ export class PostgresOperationsStore implements OperationsStore {
       `INSERT INTO status_incident_updates (id, incident_id, position, state, message, occurred_at)
        SELECT gen_random_uuid(), $1, $2 + r.ordinality - 1, r.state, r.message, r.at
          FROM ROWS FROM (jsonb_to_recordset($3::jsonb) AS (state text, message text, at timestamptz)) WITH ORDINALITY AS r(state, message, at, ordinality)`,
-      [i.id, stored, JSON.stringify(fresh)]);
+      [i.id, stored, JSON.stringify(fresh)]).catch((error: unknown) => {
+      if ((error as { code?: string; constraint?: string }).code === "23505" && (error as { constraint?: string }).constraint === "status_incident_updates_place") {
+        throw new PlatformError("TRY_AGAIN", "Someone else updated this incident at the same moment. Please try again.");
+      }
+      throw error;
+    });
   }
 
   async incident(id: Id): Promise<Incident | null> {

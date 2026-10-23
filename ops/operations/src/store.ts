@@ -22,6 +22,7 @@ export interface OperationsStore {
   action<T>(companyId: Id, work: () => Promise<T>): Promise<T>;
   addFailure(failure: ExternalFailure): Promise<void>;
   /** Oldest first; `after` is the id of the last failure already shown. */
+  /** Newest first, so an operations screen's first page shows the latest failures. */
   failures(companyId: Id, page?: Page): Promise<readonly ExternalFailure[]>;
   addGrant(grant: SupportGrant): Promise<void>;
   /** Records the revocation once: a grant already revoked keeps its first time, and `changed` is false. */
@@ -47,7 +48,7 @@ export class InMemoryOperationsStore implements OperationsStore {
 
   action<T>(_companyId: Id, work: () => Promise<T>): Promise<T> { return work(); }
   async addFailure(failure: ExternalFailure): Promise<void> { this.#failures.push(Object.freeze({ ...failure })); }
-  async failures(companyId: Id, page?: Page): Promise<readonly ExternalFailure[]> { return after(this.#failures.filter((f) => f.companyId === companyId), page); }
+  async failures(companyId: Id, page?: Page): Promise<readonly ExternalFailure[]> { return after(this.#failures.filter((f) => f.companyId === companyId).reverse(), page); }
   async addGrant(grant: SupportGrant): Promise<void> {
     if (this.#grants.has(grant.id)) throw new Error(`Support grant ${grant.id} is already saved.`);
     this.#grants.set(grant.id, Object.freeze({ ...grant, scopes: new Set(grant.scopes) }));

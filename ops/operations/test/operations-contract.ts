@@ -40,9 +40,9 @@ export function operationsContract(name: string, make: () => OperationsHarness, 
     const first = await telemetry.failures(ctx(a.companyId, a.userId), { limit: 2 });
     const second = await telemetry.failures(ctx(a.companyId, a.userId), { limit: 2, after: first.at(-1)!.id });
     const rest = await telemetry.failures(ctx(a.companyId, a.userId), { after: second.at(-1)!.id });
-    assert.deepEqual([...first, ...second, ...rest].map((f) => f.errorCode), ["IRP_0", "IRP_1", "IRP_2", "IRP_3", "IRP_4"]);
+    assert.deepEqual([...first, ...second, ...rest].map((f) => f.errorCode), ["IRP_4", "IRP_3", "IRP_2", "IRP_1", "IRP_0"]);
     assert.deepEqual((await telemetry.failures(ctx(b.companyId, b.userId))).map((f) => f.errorCode), ["BANK_DOWN"]);
-    assert.equal(first[0]!.occurredAt, "2026-10-01T10:00:00.000Z");
+    assert.equal(rest.at(-1)!.occurredAt, "2026-10-01T10:00:00.000Z");
     await assert.rejects(telemetry.failures(ctx(a.companyId, a.userId, new Set())), code("FORBIDDEN"));
   });
 
