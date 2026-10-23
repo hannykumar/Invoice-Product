@@ -115,7 +115,7 @@ const setup = async (): Promise<Fixture> => {
 
 const correction = (overrides: Partial<SalesPriceCorrectionCommand> = {}): SalesPriceCorrectionCommand => ({
   idempotencyKey: 'price-apples-95', originalInvoiceId: 'invoice-70', originalLineId: 'line-apples',
-  documentDate: isoDate('2026-08-30'), reason: 'Rate agreed was ₹95 a box, not ₹100.', newUnitPrice: rupees(95),
+  documentDate: isoDate('2026-08-30'), reason: 'Rate agreed was ₹95 a box, not ₹100.', cause: 'INVOICE_ERROR', newUnitPrice: rupees(95),
   ...overrides,
 });
 /** The same correction typed as an amount off rather than a new rate. */
@@ -176,6 +176,8 @@ test('#293: a retry is the same note; wrong input is refused and nothing is post
   await assert.rejects(f.service.previewPriceCorrection(actor, (() => { const { newUnitPrice: _price, ...rest } = correction({ idempotencyKey: 'neither' }); return rest; })()), code('PRICE_CORRECTION_ONE_FIGURE'));
   await assert.rejects(f.service.previewPriceCorrection(actor, amountOff(rupees(6651), { idempotencyKey: 'huge' })), code('PRICE_CORRECTION_MORE_THAN_CHARGED'));
   await assert.rejects(f.service.previewPriceCorrection(actor, correction({ idempotencyKey: 'no-reason', reason: ' ' })), code('PRICE_CORRECTION_REASON_REQUIRED'));
+  // A discount agreed after the sale needs s.15(3)(b)'s conditions, which are not recorded: refused, not posted.
+  await assert.rejects(f.service.postPriceCorrection(actor, correction({ idempotencyKey: 'after-sale', cause: 'DISCOUNT_AFTER_SALE', newUnitPrice: rupees(90) })), code('PRICE_CORRECTION_DISCOUNT_AFTER_SALE'));
   await assert.rejects(f.service.previewPriceCorrection(actor, correction({ idempotencyKey: 'no-line', originalLineId: 'nope' })), code('RETURN_LINE_NOT_FOUND'));
   await assert.rejects(f.service.previewPriceCorrection(actor, correction({ idempotencyKey: 'late', documentDate: isoDate('2027-12-01'), newUnitPrice: rupees(90) })), code('RETURN_CREDIT_NOTE_TOO_LATE'));
   await assert.rejects(f.service.previewPriceCorrection({ ...actor, companyId: OTHER }, correction({ idempotencyKey: 'other' })), code('RETURN_ORIGINAL_NOT_FOUND'));

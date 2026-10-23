@@ -68,6 +68,12 @@ export interface SalesPriceCorrectionCommand {
   readonly originalLineId: string;
   readonly documentDate: IsoDate;
   readonly reason: string;
+  /**
+   * Why the price changes. `INVOICE_ERROR`: the bill carried the wrong price, so its taxable value or
+   * tax was wrong (s.34(1)/(3)). `DISCOUNT_AFTER_SALE`: a discount agreed after the sale, which only
+   * comes off the value under s.15(3)(b) and is refused here (see `previewPriceCorrection`).
+   */
+  readonly cause: 'INVOICE_ERROR' | 'DISCOUNT_AFTER_SALE';
   readonly newUnitPrice?: Money;
   readonly amountOff?: Money;
   readonly periodOverrideReason?: string;
@@ -307,6 +313,18 @@ export class ReturnService {
     this.#permissions.require(actor, RETURN_PERMISSIONS.create, 'correct the price on a bill');
     if (command.idempotencyKey.trim() === '') throw invalid('RETURN_IDEMPOTENCY_KEY_REQUIRED', 'Every price correction needs a key so a retry cannot record it twice.');
     if (command.reason.trim() === '') throw invalid('PRICE_CORRECTION_REASON_REQUIRED', 'Please say why the price is being changed, for example "rate agreed was ₹95, not ₹100".');
+    // A discount given after the sale is not a wrong invoice. CGST Act s.15(3)(b) (in force 1 July
+    // 2017) keeps it out of the value only if it was agreed at or before the supply, is linked to
+    // the invoices, and the buyer has reversed the credit; s.34(2)'s proviso refuses the cut where
+    // the tax was passed on; Circular 92/11/2019-GST (7 Mar 2019) allows a commercial credit note
+    // that leaves GST alone; Circular 212/6/2024-GST (26 Jun 2024) wants evidence that the buyer
+    // reversed its credit. None of that is recorded here yet, so such a note is refused rather
+    // than cutting GST without the conditions. (Any Finance Act 2025 change to s.15(3)(b) is not
+    // verified.)
+    if (command.cause === 'DISCOUNT_AFTER_SALE') {
+      throw invalid('PRICE_CORRECTION_DISCOUNT_AFTER_SALE', 'A discount agreed after the sale cannot reduce GST here yet: the law asks for the agreement made before the sale and proof that the buyer gave back their GST credit. Nothing was recorded. If the bill simply had the wrong price, choose "The bill had the wrong price".');
+    }
+    if (command.cause !== 'INVOICE_ERROR') throw invalid('PRICE_CORRECTION_CAUSE_REQUIRED', 'Say why the price changes: the bill had the wrong price, or a discount was given after the sale.');
     const byPrice = command.newUnitPrice !== undefined, byAmount = command.amountOff !== undefined;
     if (byPrice === byAmount) throw invalid('PRICE_CORRECTION_ONE_FIGURE', 'Type either the new rate per unit or the amount off, not both.');
     if (byPrice && command.newUnitPrice!.minor < 0n) throw invalid('PRICE_CORRECTION_NEGATIVE_PRICE', 'The new rate cannot be below zero.');
@@ -317,6 +335,8 @@ export class ReturnService {
     const source = original.lines.find((line) => line.lineId === command.originalLineId);
     if (source === undefined) throw invalid('RETURN_LINE_NOT_FOUND', 'The selected item is not on the original bill.');
     if (isChargeLine(source)) throw invalid('PRICE_CORRECTION_CHARGE_LINE', 'Freight and other charges cannot be re-priced here. Choose an item on the bill.');
+    // A cess charged per unit does not change with the price, and this line cannot say which kind it carries.
+    if (source.cess.minor !== 0n) throw invalid('PRICE_CORRECTION_CESS_LINE', 'This item carries compensation cess, which may not change with the price. Ask your accountant to make this note.');
     if (source.taxableValue.minor <= 0n) throw invalid('PRICE_CORRECTION_FREE_LINE', 'This item was billed at nothing, so there is no tax to work a new price from. Make a new bill for it instead.');
     const previous = await this.#repo.listForOriginal(actor.companyId, original.id);
     const returned = previous.filter((note) => isGoodsReturn(note, 'SALES_RETURN')).flatMap((note) => note.lines)

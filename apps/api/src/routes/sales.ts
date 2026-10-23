@@ -49,7 +49,7 @@ const goodsReturn = fields({
   kind: text, documentId: text, lineId: text, reference: anything, date: text, reason: text, disposition: text,
   quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text,
   // Issue #293 — "Price correction": the new rate per unit or the amount off, before GST.
-  mode: text, newRate: anything, amountOff: anything,
+  mode: text, cause: text, newRate: anything, amountOff: anything,
 });
 
 export const SALES_ROUTES: readonly Route[] = [

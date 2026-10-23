@@ -110,7 +110,7 @@ test('#293: a lower price after the sale is a credit note, a higher one a debit 
   const line = await lineOf(owner, invoice.id);
   assert.equal(line.rate, 90);
   const correction = (reference: string, more: Record<string, unknown>) => ({
-    mode: 'PRICE', kind: 'SALES_RETURN', documentId: invoice.id, lineId: line.id, date: DATE, reference, reason: 'Rate agreed on the phone was different.', ...more,
+    mode: 'PRICE', cause: 'INVOICE_ERROR', kind: 'SALES_RETURN', documentId: invoice.id, lineId: line.id, date: DATE, reference, reason: 'Rate agreed on the phone was different.', ...more,
   });
 
   const looked = await request('POST', '/api/returns/preview', correction('mehta-293-cn', { newRate: '85' }), owner);
@@ -148,6 +148,10 @@ test('#293: a lower price after the sale is a credit note, a higher one a debit 
   assert.equal(wrong.body.code, 'PRICE_CORRECTION_ONE_FIGURE');
   const same = await request('POST', '/api/returns/preview', correction('mehta-293-same', { newRate: '95' }), owner);
   assert.equal(same.body.code, 'PRICE_CORRECTION_NO_CHANGE');
+  const afterSale = await request('POST', '/api/returns/record', correction('mehta-293-after', { cause: 'DISCOUNT_AFTER_SALE', newRate: '80' }), owner);
+  assert.equal(afterSale.body.code, 'PRICE_CORRECTION_DISCOUNT_AFTER_SALE');
+  const noCause = await request('POST', '/api/returns/preview', correction('mehta-293-nocause', { cause: '', newRate: '80' }), owner);
+  assert.equal(noCause.body.code, 'PRICE_CORRECTION_CAUSE_REQUIRED');
   const supplier = await request('POST', '/api/returns/preview', correction('mehta-293-supplier', { kind: 'PURCHASE_RETURN', newRate: '80' }), owner);
   assert.equal(supplier.body.code, 'PRICE_CORRECTION_SALES_ONLY');
 });

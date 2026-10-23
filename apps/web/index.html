@@ -154,6 +154,8 @@
                   <summary data-i18n="chargesSection"></summary>
                   <div class="field-grid sale-charges">
                     <label><span data-i18n="freight"></span><span class="input-with-prefix"><span>₹</span><input name="freight" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+                    <!-- Issue #293 — rupees off the whole bill, shared over its items before GST. -->
+                    <label><span data-i18n="billDiscount"></span><span class="input-with-prefix"><span>₹</span><input name="billDiscount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
                     <label><span data-i18n="otherCharges"></span><span class="input-with-prefix"><span>₹</span><input name="otherCharges" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
                   </div>
                 </details>
@@ -310,6 +312,7 @@
             <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" inputmode="decimal" required /></span><small data-line-price-note></small></label>
             <!-- Issue #293 — rupees off this line, before GST; printed in the bill's Discount column. -->
             <label><span data-i18n="lineDiscount"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="discount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+            <label><span data-i18n="lineDiscountPercent"></span><span class="input-with-suffix"><input data-line-field="discountPercent" type="number" min="0" max="100" step="0.01" inputmode="decimal" /><span>%</span></span></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -425,6 +428,7 @@
                 <!-- Issue #293 — a price corrected after the sale: a credit or debit note, nothing comes back. -->
                 <label class="full-field" id="return-mode-field"><span data-i18n="returnMode"></span><select name="mode" id="return-mode"><option value="" data-i18n="returnModeGoods"></option><option value="PRICE" data-i18n="returnModePrice"></option></select></label>
                 <fieldset class="full-field field-grid" id="return-price" hidden>
+                  <label class="full-field"><span data-i18n="returnCause"></span><select name="cause"><option value="INVOICE_ERROR" data-i18n="causeInvoiceError"></option><option value="DISCOUNT_AFTER_SALE" data-i18n="causeDiscountAfterSale"></option></select></label>
                   <label><span data-i18n="returnNewRate"></span><input name="newRate" type="number" min="0" step="0.01" inputmode="decimal" /></label>
                   <label><span data-i18n="returnAmountOff"></span><input name="amountOff" type="number" min="0.01" step="0.01" inputmode="decimal" /></label>
                   <small class="full-field" data-i18n="returnPriceHelp"></small>

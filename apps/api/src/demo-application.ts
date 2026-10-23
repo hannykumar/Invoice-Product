@@ -1757,7 +1757,9 @@ export class DemoApplication {
     const stockTile = stockItems[0] ?? { itemId: '', name: 'No goods yet', quantity: 0, unit: '', reorderLevel: null, needsAttention: false };
     const month = today.slice(0, 7);
     const salesTodayBilled = sales.filter((invoice) => invoice.documentDate === today).reduce((total, invoice) => total + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n);
-    const salesTodayReturned = returnNotes.filter((note) => note.kind === 'SALES_RETURN' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n);
+    const salesTodayReturned = returnNotes.filter((note) => note.kind === 'SALES_RETURN' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n)
+      // Issue #293 — a debit note for a higher price is more sales, so it counts back in.
+      - returnNotes.filter((note) => note.kind === 'SALES_DEBIT_NOTE' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n);
     const purchasesMonthBilled = purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === month).reduce((total, bill) => total + bill.totalPaise, 0n);
     const purchasesMonthReturned = returnNotes.filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) === month).reduce((total, note) => total + note.totals.total.minor, 0n);
     const home = await this.home(actor, companyId, today, { sales, payments, receivables, suppliersOwed: sum(supplierOpen.map((d) => d.outstanding)).minor, stockItems, salesToday: salesTodayBilled - salesTodayReturned });
@@ -4854,7 +4856,8 @@ export class DemoApplication {
     await this.freezeNotePrint(result.note);
     // Issue #284 — a credit note to a registered buyer is reported like a bill: sent by itself,
     // never awaited, and only when the rules say this note needs an e-invoice number. Issue #293 —
-    // so is a debit note to a customer (CGST Rule 48(4), Notification 13/2020-Central Tax).
+    // so is a debit note to a customer (CGST Rule 48(4), inserted by Notification 68/2019-Central Tax
+    // of 13 December 2019; the businesses it covers named by Notification 13/2020-Central Tax of 21 March 2020).
     const eInvoice = result.note.kind !== 'PURCHASE_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
     if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
     const noteWords = result.note.kind === 'SALES_DEBIT_NOTE' ? 'This debit note' : 'This credit note';
@@ -4902,7 +4905,9 @@ export class DemoApplication {
     if (documentId === '' || lineId === '' || lineId === WHOLE_BILL) throw invalid('RETURN_DOCUMENT_REQUIRED', 'Choose the bill and the item whose price changes.');
     const newUnitPrice = optionalMoney(input.newRate);
     const amountOff = optionalMoney(input.amountOff);
+    const cause = String(input.cause ?? '');
     return {
+      cause: cause === 'DISCOUNT_AFTER_SALE' ? 'DISCOUNT_AFTER_SALE' as const : cause === 'INVOICE_ERROR' ? 'INVOICE_ERROR' as const : '' as 'INVOICE_ERROR',
       idempotencyKey: `web-price:${String(input.reference || `${documentId}:${lineId}:${input.date}`)}`,
       originalInvoiceId: documentId, originalLineId: lineId,
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
