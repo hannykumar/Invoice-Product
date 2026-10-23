@@ -35,7 +35,7 @@ export class PostgresReconciliationStore implements ReconciliationStore {
 
   action<T>(companyId: string, work: () => Promise<T>): Promise<T> {
     return this.#db.unitOfWork(companyId, async ({ sql }) => {
-      await sql.query("SELECT pg_advisory_xact_lock(hashtextextended('bank-reconciliation:' || $1, 0))", [companyId]);
+      await sql.query("SELECT pg_advisory_xact_lock(hashtextextended('bank-reconciliation:' || $1::uuid::text, 0))", [companyId]);
       return work();
     });
   }

@@ -6,7 +6,10 @@
 import type { MatchCandidate, ReconciliationAuditEvent, ReconciliationMatch } from './model.ts';
 
 export interface Page { readonly limit?: number; readonly after?: string }
-export const pageLimit = (page?: Page): number => Math.min(Math.max(Math.trunc(page?.limit ?? 100), 1), 500);
+export const pageLimit = (page?: Page): number => {
+  const limit = Number(page?.limit ?? 100);
+  return Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 100;
+};
 export interface Unmatching { readonly at: string; readonly by: string; readonly reason: string }
 export interface MatchedLines { readonly bankTransactionIds: readonly string[]; readonly paymentIds: readonly string[] }
 

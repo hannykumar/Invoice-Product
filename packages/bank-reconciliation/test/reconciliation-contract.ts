@@ -77,6 +77,7 @@ export function reconciliationContract(name: string, make: () => ReconciliationH
     const undone = await Promise.all([service.unmatch(ctx(a), chosen.id, 'Wrong customer.'), service.unmatch(ctx(a), chosen.id, 'Wrong customer.')]);
     assert.deepEqual(undone.map((m) => m.status), ['UNMATCHED', 'UNMATCHED']);
     const events = await service.auditFor(ctx(a), chosen.id, { limit: 1 });
+    assert.equal((await service.auditFor(ctx(a), chosen.id, { limit: Number.NaN })).length, 2);
     const more = await service.auditFor(ctx(a), chosen.id, { after: events[0]!.id });
     assert.deepEqual([...events, ...more].map((e) => e.action), ['reconciliation.confirmed', 'reconciliation.unmatched']);
     const again = await service.confirm(ctx(a), run.candidates[1]!.id);
