@@ -34,7 +34,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
 | [`security-operations`](./security-operations-v1.md) | 1.1.0 | GPT 2 (#40) | Platform and operations | Published |
 | [`bank-import`](./bank-import-v1.md) | 1.0.0 | GPT 2 (#21) | GPT 2 (#22, #38) | Published |
-| [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.0.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
+| [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.1.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
 | [`bank-feeds`](./bank-feeds-v1.md) | 1.1.1 | GPT 2 (#24) | Bank reconciliation, API and web | Published |
 | [`collections`](./collections-v1.md) | 1.0.0 | GPT 2 (#23) | API, web, notifications | Published |
 | [`master-data`](./master-data-v1.md) | 1.0.0 | GPT 3 (#5) | GPT 1, GPT 2, GPT 3 | Published |

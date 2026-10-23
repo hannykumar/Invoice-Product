@@ -2,3 +2,4 @@
 export * from './model.ts';
 export * from './matcher.ts';
 export * from './service.ts';
+export * from './store.ts';
