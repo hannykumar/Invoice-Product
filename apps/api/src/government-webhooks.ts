@@ -14,9 +14,14 @@
  *      forged callback cannot name a company, which is a stronger property than checking whether the
  *      one it named was allowed.
  *
- * The verifier wired in below is `StaticWebhookVerifier`, GPT 2's development one. It is exactly as
- * strong as the provider contract behind it, which is to say not at all until #51 supplies a real
- * signing secret and a real verifier. That swap is one line here and nothing anywhere else.
+ * Issue #389 — the verifier wired in below is `HmacWebhookVerifier`: an HMAC-SHA256 over the raw
+ * bytes with that provider's own secret, compared in constant time, inside a five-minute window, on
+ * a body that must have the callback's shape. The secrets come from the environment
+ * (`GOVERNMENT_WEBHOOK_SECRET_IRP`, `…_EWAY_BILL`, `…_GST`; comma-separated while rotating). On a
+ * developer's machine or in a test a connector without one uses `DEVELOPMENT_WEBHOOK_SECRET`;
+ * anywhere else it has no secret, so every callback for it is refused. Seen events are kept in
+ * `government_webhook_events` whenever the app has a database, so a resend after a restart is still
+ * a duplicate.
  *
  * Until the government channel itself is wired into the running app (#51 again — it needs a
  * contracted provider and authorised GST numbers), this endpoint verifies, deduplicates and records
@@ -26,9 +31,12 @@
  */
 import { appClock } from './app-clock.ts';
 import { InMemoryAuditPort } from '@invoice/ledger';
-import { ConnectorGateway, MockConnector, StaticWebhookVerifier, type ConnectorKind } from '../../../packages/platform/src/connectors.ts';
+import { ConnectorGateway, HmacWebhookVerifier, isLocalEnvironment, MockConnector, type ConnectorKind, type WebhookSigningSecrets } from '../../../packages/platform/src/connectors.ts';
+import { registerSecretValues } from '../../../packages/platform/src/credentials.ts';
+import type { SqlExecutor } from '../../../packages/platform/src/database.ts';
 import {
   GovernmentWebhookReceiver,
+  PostgresWebhookEvents,
   InMemoryAuthorisations,
   InMemoryCallLog,
   InMemoryWebhookEvents,
@@ -42,25 +50,51 @@ const GOVERNMENT_CONNECTORS: readonly ConnectorKind[] = ['irp', 'eway_bill', 'gs
 export const isGovernmentConnector = (value: string): value is ConnectorKind =>
   (GOVERNMENT_CONNECTORS as readonly string[]).includes(value);
 
+/** Publicly known, so it is only ever used where nothing real can arrive: development and tests. */
+export const DEVELOPMENT_WEBHOOK_SECRET = 'karobar-development-webhook-secret';
+
+const secretVariable = (kind: ConnectorKind): string => `GOVERNMENT_WEBHOOK_SECRET_${kind.toUpperCase()}`;
+
+/** Each provider's signing secrets, read once. A connector with none refuses every callback. */
+export const governmentWebhookSecrets = (env: NodeJS.ProcessEnv = process.env): WebhookSigningSecrets & { readonly missing: readonly ConnectorKind[] } => {
+  const local = isLocalEnvironment(env.NODE_ENV);
+  const secrets = new Map<ConnectorKind, readonly string[]>();
+  for (const kind of GOVERNMENT_CONNECTORS) {
+    const configured = (env[secretVariable(kind)] ?? '').split(',').map((value) => value.trim()).filter((value) => value !== '');
+    registerSecretValues(configured);
+    secrets.set(kind, configured.length > 0 ? configured : local ? [DEVELOPMENT_WEBHOOK_SECRET] : []);
+  }
+  return {
+    missing: GOVERNMENT_CONNECTORS.filter((kind) => (secrets.get(kind) ?? []).length === 0),
+    async webhookSecrets(kind) { return secrets.get(kind) ?? []; },
+  };
+};
+
 let receiver: GovernmentWebhookReceiver | undefined;
 
-const governmentWebhookReceiver = (): GovernmentWebhookReceiver => {
-  if (receiver === undefined) {
-    const gateway = new ConnectorGateway(
-      GOVERNMENT_CONNECTORS.map((kind) => new MockConnector(kind)),
-      { async credentialReference(tenantId: string, connector: string) { return `vault://${connector}/${tenantId}`; } },
-      new StaticWebhookVerifier(),
-    );
-    receiver = new GovernmentWebhookReceiver({
-      gateway,
-      calls: new InMemoryCallLog(),
-      authorisations: new InMemoryAuthorisations(),
-      events: new InMemoryWebhookEvents(),
-      audit: new InMemoryAuditPort(),
-      clock: appClock,
-      exceptions: new RecordingExceptionSink(),
-    });
+/**
+ * Built once, at start-up when the server starts (`server.ts`), otherwise on the first callback.
+ * With a database the seen events are kept there; without one (development, tests) in memory.
+ */
+export const configureGovernmentWebhooks = (db: SqlExecutor | null, env: NodeJS.ProcessEnv = process.env, warn: (message: string) => void = console.warn): GovernmentWebhookReceiver => {
+  const secrets = governmentWebhookSecrets(env);
+  if (secrets.missing.length > 0) {
+    warn(`Government callbacks will be refused for ${secrets.missing.join(', ')}: no signing secret is set. Set ${secrets.missing.map(secretVariable).join(', ')}.`);
   }
+  const gateway = new ConnectorGateway(
+    GOVERNMENT_CONNECTORS.map((kind) => new MockConnector(kind)),
+    { async credentialReference(tenantId: string, connector: string) { return `vault://${connector}/${tenantId}`; } },
+    new HmacWebhookVerifier(secrets, () => appClock.now()),
+  );
+  receiver = new GovernmentWebhookReceiver({
+    gateway,
+    calls: new InMemoryCallLog(),
+    authorisations: new InMemoryAuthorisations(),
+    events: db === null ? new InMemoryWebhookEvents() : new PostgresWebhookEvents(db),
+    audit: new InMemoryAuditPort(),
+    clock: appClock,
+    exceptions: new RecordingExceptionSink(),
+  });
   return receiver;
 };
 
@@ -75,7 +109,8 @@ export const receiveGovernmentWebhook = async (
   kind: ConnectorKind,
   rawBody: string,
   signature: string,
+  db: SqlExecutor | null = null,
 ): Promise<{ readonly status: number; readonly outcome: WebhookOutcome }> => {
-  const outcome = await governmentWebhookReceiver().receive(kind, rawBody, signature);
+  const outcome = await (receiver ?? configureGovernmentWebhooks(db)).receive(kind, rawBody, signature);
   return { status: 202, outcome };
 };

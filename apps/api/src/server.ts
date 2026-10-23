@@ -16,6 +16,7 @@ import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
 import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
 import { openPersistence } from './persistence.ts';
+import { configureGovernmentWebhooks } from './government-webhooks.ts';
 import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
@@ -239,6 +240,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // Issue #340 — the database is chosen before the first request, and production without one stops here.
   const persistence = await openPersistence();
   startRuntime(persistence);
+  configureGovernmentWebhooks(persistence.kind === 'postgres' ? persistence.db : null, process.env, (message) => log.warn(message, {}));
   log.info('The API keeps its books', { in: persistence.kind });
   const port = Number(process.env.API_PORT ?? 4172);
   apiServer.listen(port, '127.0.0.1', () => log.info('The API is listening', { url: `http://127.0.0.1:${port}` }));
