@@ -24,14 +24,17 @@ export const bankReconciliationMigrations: readonly Migration[] = [{
       confirmed_by text, confirmed_at timestamptz, matched_at timestamptz NOT NULL DEFAULT now(),
       unmatched_at timestamptz, unmatched_by text, unmatch_reason text,
       CHECK ((status = 'UNMATCHED') = (unmatched_at IS NOT NULL AND unmatched_by IS NOT NULL AND btrim(coalesce(unmatch_reason, '')) <> '')),
+      UNIQUE (company_id, id),
       FOREIGN KEY (company_id, candidate_id) REFERENCES bank_reconciliation_candidates(company_id, id));
     CREATE INDEX bank_reconciliation_matches_active_banks ON bank_reconciliation_matches USING gin (bank_transaction_ids) WHERE status <> 'UNMATCHED';
     CREATE INDEX bank_reconciliation_matches_active_payments ON bank_reconciliation_matches USING gin (payment_ids) WHERE status <> 'UNMATCHED';
+    CREATE INDEX bank_reconciliation_matches_undone ON bank_reconciliation_matches(company_id, candidate_id) WHERE status = 'UNMATCHED';
     CREATE TABLE bank_reconciliation_events (
       id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES companies(id), actor_id text NOT NULL,
       action text NOT NULL CHECK (action IN ('reconciliation.auto_matched', 'reconciliation.confirmed', 'reconciliation.unmatched')),
-      match_id uuid NOT NULL REFERENCES bank_reconciliation_matches(id), occurred_at timestamptz NOT NULL, reason text,
-      seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE);
+      match_id uuid NOT NULL, occurred_at timestamptz NOT NULL, reason text,
+      seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE,
+      FOREIGN KEY (company_id, match_id) REFERENCES bank_reconciliation_matches(company_id, id));
     CREATE INDEX bank_reconciliation_events_match ON bank_reconciliation_events(company_id, match_id, seq);
     ALTER TABLE bank_reconciliation_candidates ENABLE ROW LEVEL SECURITY;
     ALTER TABLE bank_reconciliation_candidates FORCE ROW LEVEL SECURITY;
@@ -49,6 +52,17 @@ export const bankReconciliationMigrations: readonly Migration[] = [{
       END IF;
       RETURN NEW;
     END $$;
+    CREATE FUNCTION bank_reconciliation_line_matched_once() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtextextended('bank-reconciliation:' || NEW.company_id::text, 0));
+      IF EXISTS (SELECT 1 FROM bank_reconciliation_matches m
+                  WHERE m.company_id = NEW.company_id AND m.status <> 'UNMATCHED' AND m.id <> NEW.id
+                    AND (m.bank_transaction_ids && NEW.bank_transaction_ids OR m.payment_ids && NEW.payment_ids)) THEN
+        RAISE EXCEPTION 'This bank line or book entry is already matched; undo that match first.' USING ERRCODE = 'unique_violation', TABLE = TG_TABLE_NAME;
+      END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER bank_reconciliation_matches_line_once BEFORE INSERT ON bank_reconciliation_matches FOR EACH ROW EXECUTE FUNCTION bank_reconciliation_line_matched_once();
     CREATE TRIGGER bank_reconciliation_candidates_frozen BEFORE UPDATE OR DELETE ON bank_reconciliation_candidates FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
     CREATE TRIGGER bank_reconciliation_events_frozen BEFORE UPDATE OR DELETE ON bank_reconciliation_events FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
     CREATE TRIGGER bank_reconciliation_matches_frozen BEFORE UPDATE OR DELETE ON bank_reconciliation_matches FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('status', '*', 'unmatched_at,unmatched_by,unmatch_reason', 'AUTO_MATCHED>UNMATCHED,CONFIRMED>UNMATCHED');
@@ -64,5 +78,6 @@ export const bankReconciliationMigrations: readonly Migration[] = [{
     DROP TABLE IF EXISTS bank_reconciliation_matches;
     DROP TABLE IF EXISTS bank_reconciliation_candidates;
     DROP FUNCTION IF EXISTS bank_reconciliation_unmatched_once();
+    DROP FUNCTION IF EXISTS bank_reconciliation_line_matched_once();
   `,
 }];

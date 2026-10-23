@@ -28,6 +28,34 @@ export function reconciliationContract(name: string, make: () => ReconciliationH
     assert.deepEqual((await service.auditFor(ctx(a), first.matches[0]!.id)).map((e) => e.action), ['reconciliation.auto_matched']);
   });
 
+  test(`${name}: running reconcile again over more than 500 matched lines matches none of them twice`, { skip }, async () => {
+    const h = make();
+    const service = new BankReconciliationService(undefined, NOW, h.store);
+    const a = await h.company();
+    const day = (i: number) => new Date(Date.UTC(2025, 7, 1) + i * 86_400_000).toISOString().slice(0, 10);
+    const banks: BankLine[] = Array.from({ length: 520 }, (_, i) => ({ ...bank(a, `b${i}`, BigInt(i + 1) * 1_000n, `REF-${i}`), bookedOn: day(i) }));
+    const books: BookPayment[] = Array.from({ length: 520 }, (_, i) => ({ ...book(a, `p${i}`, BigInt(i + 1) * 1_000n, `REF-${i}`), date: day(i) }));
+    assert.equal((await service.reconcile(ctx(a), banks, books)).matches.length, 520);
+    const again = await service.reconcile(ctx(a), banks, books);
+    assert.deepEqual(again.matches, []);
+    assert.deepEqual(again.exceptions, []);
+  });
+
+  test(`${name}: a pair a person undid is not auto-matched again, only offered`, { skip }, async () => {
+    const h = make();
+    const service = new BankReconciliationService(undefined, NOW, h.store);
+    const a = await h.company();
+    const lines = [bank(a, 'one', 700n)];
+    const books = [book(a, 'one', 700n)];
+    const auto = (await service.reconcile(ctx(a), lines, books)).matches[0]!;
+    await service.unmatch(ctx(a), auto.id, 'Wrong customer.');
+    const again = await service.reconcile(ctx(a), lines, books);
+    assert.deepEqual(again.matches, []);
+    assert.deepEqual(again.candidates.map((c) => c.id), [auto.candidateId]);
+    assert.equal((await service.confirm(ctx(a), auto.candidateId)).status, 'CONFIRMED');
+    assert.deepEqual((await service.reconcile(ctx(a), lines, books)).matches, []);
+  });
+
   test(`${name}: two people confirming overlapping candidates at once: exactly one wins`, { skip }, async () => {
     const h = make();
     const service = new BankReconciliationService(undefined, NOW, h.store);

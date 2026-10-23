@@ -64,9 +64,12 @@ test("the database refuses another company's rows and any change to final or und
   const matchId = crypto.randomUUID();
   await store.action(a, async () => {
     await store.saveCandidates(a, [{ ...candidate, companyId: a }]);
-    await store.addMatch({ ...candidate, companyId: a, id: matchId, candidateId: 'cand-1', status: 'AUTO_MATCHED', remainingBankPaise: 0n, remainingBookPaise: 0n, confirmedBy: null, confirmedAt: null });
-    await store.appendAudit({ id: crypto.randomUUID(), companyId: a, actorId: 'owner', action: 'reconciliation.auto_matched', matchId, occurredAt: new Date().toISOString(), reason: null });
+    await store.addMatches(a, [{ ...candidate, companyId: a, id: matchId, candidateId: 'cand-1', status: 'AUTO_MATCHED', remainingBankPaise: 0n, remainingBookPaise: 0n, confirmedBy: null, confirmedAt: null }]);
+    await store.appendAudits(a, [{ id: crypto.randomUUID(), companyId: a, actorId: 'owner', action: 'reconciliation.auto_matched', matchId, occurredAt: new Date().toISOString(), reason: null }]);
   });
+  const second = { ...candidate, companyId: a, id: crypto.randomUUID(), candidateId: 'cand-1', paymentIds: ['p2'], status: 'CONFIRMED' as const, remainingBankPaise: 0n, remainingBookPaise: 0n, confirmedBy: 'owner', confirmedAt: new Date().toISOString() };
+  await assert.rejects(store.action(a, () => store.addMatches(a, [second])), code('23505'), 'a bank line already matched cannot be matched again');
+  await assert.rejects(app.unitOfWork(b, ({ sql }) => sql.query("INSERT INTO bank_reconciliation_events (id, company_id, actor_id, action, match_id, occurred_at) VALUES ($1, $2, 'owner', 'reconciliation.confirmed', $3, now())", [crypto.randomUUID(), b, matchId])), code('23503'), "an event cannot name another company's match");
   const inA = (sql: string) => app.unitOfWork(a, ({ sql: s }) => s.query(sql, [a]));
   const FROZEN = '23001';
   await assert.rejects(inA('UPDATE bank_reconciliation_candidates SET confidence = 10 WHERE company_id = $1'), code(FROZEN));

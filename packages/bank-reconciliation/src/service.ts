@@ -25,7 +25,9 @@ const overlaps = (left: MatchCandidate, right: MatchCandidate): boolean =>
  * Each command runs inside one `store.action(...)` (#366): on PostgreSQL one unit of work holding a
  * per-company lock, so two people confirming overlapping matches at once cannot both win, and a
  * match is never kept without its audit event. Running reconcile again over lines already matched
- * makes no second match and reports them as neither missing nor ambiguous.
+ * makes no second match and reports them as neither missing nor ambiguous, however many lines are
+ * already matched. A pair a person matched and then undid is offered again only as a suggestion: a
+ * run never auto-matches it over their undo.
  */
 export class BankReconciliationService {
   readonly #store: ReconciliationStore;
@@ -43,11 +45,12 @@ export class BankReconciliationService {
     if (bankLines.some((line) => line.companyId !== context.companyId) || bookPayments.some((payment) => payment.companyId !== context.companyId)) throw new Error('Reconciliation inputs belong to another company.');
     if ([...bankLines, ...bookPayments].some((item) => typeof item.amountPaise !== 'bigint' || item.amountPaise <= 0n)) throw new Error('Every bank line and book entry needs an amount above zero, in paise.');
     return this.#store.action(context.companyId, async () => {
-    const already = await this.#store.activeMatches(context.companyId, bankLines.map((line) => line.id), bookPayments.map((payment) => payment.id));
-    const settledBanks = new Set(already.flatMap((match) => match.bankTransactionIds));
-    const settledPayments = new Set(already.flatMap((match) => match.paymentIds));
+    const already = await this.#store.matchedLines(context.companyId, bankLines.map((line) => line.id), bookPayments.map((payment) => payment.id));
+    const settledBanks = new Set(already.bankTransactionIds);
+    const settledPayments = new Set(already.paymentIds);
     const candidates = buildCandidates(bankLines, bookPayments).filter((candidate) => !candidate.bankTransactionIds.some((id) => settledBanks.has(id)) && !candidate.paymentIds.some((id) => settledPayments.has(id)));
     await this.#store.saveCandidates(context.companyId, candidates);
+    const undone = new Set(await this.#store.undoneCandidates(context.companyId, candidates.map((candidate) => candidate.id)));
     const matches: ReconciliationMatch[] = [];
     const exceptions: ReconciliationException[] = [];
     const usedBanks = new Set<string>(settledBanks);
@@ -57,15 +60,15 @@ export class BankReconciliationService {
     for (const candidate of candidates) {
       if (candidate.bankTransactionIds.some((id) => usedBanks.has(id) || reversalBanks.has(id)) || candidate.paymentIds.some((id) => usedPayments.has(id))) continue;
       const competing = candidates.filter((other) => other.id !== candidate.id && overlaps(candidate, other) && other.confidence >= candidate.confidence - this.policy.ambiguityMargin);
-      if (candidate.confidence >= this.policy.automaticThreshold && competing.length === 0) {
+      if (candidate.confidence >= this.policy.automaticThreshold && competing.length === 0 && !undone.has(candidate.id)) {
         const match = this.toMatch(candidate, 'AUTO_MATCHED', null);
-        await this.#store.addMatch(match);
         matches.push(match);
         candidate.bankTransactionIds.forEach((id) => usedBanks.add(id));
         candidate.paymentIds.forEach((id) => usedPayments.add(id));
-        await this.record(context, match, 'reconciliation.auto_matched', null);
       }
     }
+    await this.#store.addMatches(context.companyId, matches);
+    await this.#store.appendAudits(context.companyId, matches.map((match) => this.event(context, match, 'reconciliation.auto_matched', null)));
     const activeCandidates = candidates.filter((candidate) => !candidate.bankTransactionIds.some((id) => usedBanks.has(id)) && !candidate.paymentIds.some((id) => usedPayments.has(id)));
     const ambiguousIds = new Set<string>();
     for (const candidate of activeCandidates) {
@@ -103,9 +106,10 @@ export class BankReconciliationService {
     return this.#store.action(context.companyId, async () => {
       const candidate = await this.#store.candidate(context.companyId, candidateId);
       if (!candidate) throw new Error('Reconciliation candidate was not found.');
-      if ((await this.#store.activeMatches(context.companyId, candidate.bankTransactionIds, candidate.paymentIds)).length > 0) throw new Error('One of these transactions is already matched.');
+      const taken = await this.#store.matchedLines(context.companyId, candidate.bankTransactionIds, candidate.paymentIds);
+      if (taken.bankTransactionIds.length + taken.paymentIds.length > 0) throw new Error('One of these transactions is already matched.');
       const match = this.toMatch(candidate, 'CONFIRMED', context.actorId);
-      await this.#store.addMatch(match);
+      await this.#store.addMatches(context.companyId, [match]);
       await this.record(context, match, 'reconciliation.confirmed', null);
       return match;
     });
@@ -138,6 +142,10 @@ export class BankReconciliationService {
   }
 
   private async record(context: ReconciliationContext, match: ReconciliationMatch, action: ReconciliationAuditEvent['action'], reason: string | null): Promise<void> {
-    await this.#store.appendAudit(Object.freeze({ id: randomUUID(), companyId: context.companyId, actorId: context.actorId, action, matchId: match.id, occurredAt: this.now().toISOString(), reason }));
+    await this.#store.appendAudits(context.companyId, [this.event(context, match, action, reason)]);
+  }
+
+  private event(context: ReconciliationContext, match: ReconciliationMatch, action: ReconciliationAuditEvent['action'], reason: string | null): ReconciliationAuditEvent {
+    return Object.freeze({ id: randomUUID(), companyId: context.companyId, actorId: context.actorId, action, matchId: match.id, occurredAt: this.now().toISOString(), reason });
   }
 }
