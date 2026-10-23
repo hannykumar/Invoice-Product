@@ -13,6 +13,7 @@
  */
 import { indiaDateOf } from '@invoice/kernel';
 import {
+  DomainError,
   invalid,
   isoDate,
   type Clock,
@@ -21,7 +22,7 @@ import {
 import type { ActorContext, AuditPort, PermissionPort } from '@invoice/ledger';
 import type { ComplianceRegister } from '@invoice/compliance-register';
 import { FactSet, type RulesEngine } from '@invoice/rules-engine';
-import type { Report, ReportFilter, ReportId, ReportService } from '@invoice/reports';
+import { REPORT_PERMISSIONS, type Report, type ReportFilter, type ReportId, type ReportService } from '@invoice/reports';
 import { citeFrom, plainSentence, safeSentence } from './citations.ts';
 import { citeCompliance, describeCitation, supportOf } from './compliance.ts';
 import { ASK_INSTEAD, looksLikeAnInstruction, understand, type Understanding } from './language.ts';
@@ -94,6 +95,12 @@ const emptyDraft = (): Draft => ({
   nextSteps: [],
   exceptionId: null,
 });
+
+/**
+ * Issue #397 — what "why is this bill blocked?" needs the asker to hold: the bill and its customer
+ * are sales data, the shortfall is stock data. The same permissions the sales and stock reports ask.
+ */
+const BLOCKED_BILL_PERMISSIONS = [REPORT_PERMISSIONS.sales, REPORT_PERMISSIONS.stock] as const;
 
 const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
@@ -551,6 +558,19 @@ export class AssistantService {
       );
       return;
     }
+    // Issue #397 — the answer names the bill, its customer and which items are short and by how
+    // much, so it is only given to someone who may see bills and stock. Checked before the lookup
+    // so a refusal reads the same whether or not the bill exists.
+    if (!BLOCKED_BILL_PERMISSIONS.every((permission) => this.#may(actor, permission))) {
+      draft.state = 'NEEDS_PERMISSION';
+      draft.sentences.push(
+        plainSentence(
+          'You do not have access to that bill. Ask the owner if you need to see bills and stock.',
+          'Aapko us bill ko dekhne ki ijazat nahin hai. Bill aur stock dekhna ho to malik se ijazat maangein.',
+        ),
+      );
+      return;
+    }
     if (reference === null) {
       draft.state = 'CANNOT_ANSWER';
       draft.sentences.push(
@@ -562,7 +582,7 @@ export class AssistantService {
       return;
     }
 
-    const document = await port.find(actor.companyId, reference);
+    const document = await port.find(actor, reference);
     if (document === null) {
       draft.state = 'CANNOT_ANSWER';
       draft.sentences.push(
@@ -661,6 +681,17 @@ export class AssistantService {
   }
 
   /** Puts one question to the rules engine. Returns null when there is no rule for the topic. */
+  /** Whether the asker holds a permission, asked of the platform rather than read off the actor. */
+  #may(actor: ActorContext, permission: string): boolean {
+    try {
+      this.#deps.permissions.require(actor, permission, 'see this');
+      return true;
+    } catch (error) {
+      if (error instanceof DomainError && error.kind === 'FORBIDDEN') return false;
+      throw error;
+    }
+  }
+
   #decide(topic: string, facts: Readonly<Record<string, string>>, on: IsoDate): ComplianceCitation | null {
     const engine = this.#deps.rules;
     const register = this.#deps.register;

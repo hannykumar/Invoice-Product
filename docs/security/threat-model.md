@@ -196,7 +196,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 
 | Path | Permission | Preview | Approval | Idempotency | Can it approve itself? |
 | --- | --- | --- | --- | --- | --- |
-| Assistant `POST /api/assistant/ask` | `assistant.ask` at the route; reads go through `ReportService` with the asker's permissions (exception: A2) | — | — | — | It writes nothing |
+| Assistant `POST /api/assistant/ask` | `assistant.ask` at the route; reads go through `ReportService` with the asker's permissions; "why is this bill blocked?" also needs `reports.view.sales` and `reports.view.stock` and reads as the asker (A2) | — | — | — | It writes nothing |
 | Agent `POST /api/agent/plan` → `approve` → `execute` | `agent.plan` / `agent.approve` / `agent.execute` at the route; each tool's own permission when steps are built, before execution and per step; `collections.send` checks again | The plan's fingerprint is shown and pinned | `approve` refuses an unseen or changed fingerprint; the platform command moves to `approved` only for an actor holding `approval.decide` | Company + plan + key; collections dedups by reminder key | **No.** There is no model, plans come from a fixed recipe list, and approval is a separate signed-in request by a person. The person who asked may approve their own plan (A1), exactly as they could send the same reminders by hand |
 | Agent tools | Two reads, `reminders.send`, `reminders.stop`, and `sales.cancel` (prepare-only). The registry refuses a high-risk tool unless it is prepare-only and refuses a write that skips approval | | | | Filing, IRN, e-way bill and moving money are refused intents |
 | Voice draft | Not routed. Produces a draft sale; tax comes from `SalesService` | Sale preview | Sale submit | Sale key | No approval path exists |
@@ -205,7 +205,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | A1 | One person plans, approves and executes in one click; a bare "remind" chases every overdue customer (A04) | Medium | Medium | Preview, fingerprint, permission per step | The count shown and a cap, or a second approver for bulk sends | Medium | accepted: designed flow (#348 review) |
-| A2 | "Why is this bill blocked?" reads any invoice, and stock as `setupActor`, past the asker's sales and stock permissions (`demo-application.ts:979-988`) (A01) | Medium | Medium | `assistant.ask`, tenant | Read as the asker | Medium | #397 |
+| A2 | "Why is this bill blocked?" read any invoice, and stock as `setupActor`, past the asker's sales and stock permissions (A01) | Medium | Medium | `assistant.ask`, tenant; `reports.view.sales` + `reports.view.stock` before the lookup, which runs as the asker | — | Low | fixed: #397 |
 | A3 | Instructions hidden in OCR text, a WhatsApp or email body, a voice transcript, or a supplier or item name steer an action (A03) | Low (no model) | High | Deterministic parsers, allow-listed intents, human approval | The rule above, enforced by a test when a model is wired | Medium | #316 must carry it |
 | A4 | A stored party or item name containing "guaranteed" or "you must" makes assistant answers fail (A04) | Low | Low | — | Check the sentence template, not the data | Low | #405 |
 | A5 | "Today" for the agent and for reminders comes from the client, so bills look overdue early and wording escalates (A04) | Medium | Low | — | Server clock | Low | #403 |

@@ -1016,9 +1016,13 @@ export class DemoApplication {
      * described by a fixture: the bill is looked up in the sales repository, its lines are checked
      * against what the stock ledger actually says, and the place-of-supply question is put to the
      * rules engine with this bill's own facts.
+     *
+     * Issue #397 — every read here runs as the person who asked, never `shop.setupActor`. The
+     * assistant has already checked they may see bills and stock before it asks.
      */
     const blocked: BlockedDocumentPort = {
-      async find(companyId: CompanyId, reference: string): Promise<BlockedDocument | null> {
+      async find(actor: ActorContext, reference: string): Promise<BlockedDocument | null> {
+        const companyId = actor.companyId;
         const invoices = await salesRepository.list(companyId);
         const invoice = invoices.find(
           (candidate) => (candidate.number ?? '').toUpperCase() === reference.toUpperCase() || candidate.id === reference,
@@ -1028,7 +1032,7 @@ export class DemoApplication {
         const reasons: BlockingReason[] = [];
         if (invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED') {
           for (const line of invoice.lines) {
-            const balance = await shop.inventoryService.balance(shop.setupActor, { itemId: line.itemId, warehouseId: shop.warehouseId });
+            const balance = await shop.inventoryService.balance(actor, { itemId: line.itemId, warehouseId: shop.warehouseId });
             if (balance.available.scaled >= line.quantity.scaled) continue;
             reasons.push({
               code: 'STOCK_SHORTFALL',

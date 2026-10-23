@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { isoDate, sum } from '@invoice/kernel';
 import { reconciles } from '@invoice/reports';
 import { makeBusiness, monthFilterFor, OTHER } from './fixture-helpers.ts';
+import type { BlockedDocument } from '../src/ports.ts';
 import { ASSISTANT_PERMISSIONS, RecordingExceptionQueue, ScriptedUnderstanding, StubBlockedDocuments, TODAY, buildAssistant } from './harness.ts';
 
 const ask = async (question: string, options: Parameters<typeof buildAssistant>[0] = {}) => {
@@ -220,23 +221,22 @@ describe('compliance answers name their source, date and certainty', () => {
 });
 
 describe('why a bill is blocked', () => {
-  const blocked = new StubBlockedDocuments([
-    {
-      documentId: 'inv-1042',
-      number: 'INV-1042',
-      kind: 'SALES_INVOICE',
-      date: isoDate('2026-04-20'),
-      partyName: 'Gurugram Fresh',
-      reasons: [
-        {
-          code: 'STOCK_SHORTFALL',
-          what: { 'en-IN': 'You are 6 boxes short: the bill needs 30 and 24 are free at the Karol Bagh shop.', 'hi-IN': 'Aapke paas 6 box kam hain: bill ko 30 chahiye aur Karol Bagh par 24 khaali hain.' },
-          nextStep: { 'en-IN': 'Bring 6 boxes from the Narela godown, or reduce the bill to 24.', 'hi-IN': 'Narela godown se 6 box laayein, ya bill 24 ka karein.' },
-          action: 'inventory:transfer',
-        },
-      ],
-    },
-  ]);
+  const blockedBill = {
+    documentId: 'inv-1042',
+    number: 'INV-1042',
+    kind: 'SALES_INVOICE',
+    date: isoDate('2026-04-20'),
+    partyName: 'Gurugram Fresh',
+    reasons: [
+      {
+        code: 'STOCK_SHORTFALL',
+        what: { 'en-IN': 'You are 6 boxes short: the bill needs 30 and 24 are free at the Karol Bagh shop.', 'hi-IN': 'Aapke paas 6 box kam hain: bill ko 30 chahiye aur Karol Bagh par 24 khaali hain.' },
+        nextStep: { 'en-IN': 'Bring 6 boxes from the Narela godown, or reduce the bill to 24.', 'hi-IN': 'Narela godown se 6 box laayein, ya bill 24 ka karein.' },
+        action: 'inventory:transfer',
+      },
+    ],
+  } satisfies BlockedDocument;
+  const blocked = new StubBlockedDocuments([blockedBill]);
 
   it('gives the shortage, the rule and the next safe action', async () => {
     const harness = await buildAssistant({ blocked });
@@ -261,6 +261,51 @@ describe('why a bill is blocked', () => {
     const answer = await harness.assistant.ask(harness.actor, { question: 'why is INV-9999 blocked?', today: TODAY });
     assert.equal(answer.state, 'CANNOT_ANSWER');
     assert.match(answer.sentences[0]?.['en-IN'] ?? '', /could not find INV-9999/);
+  });
+
+  // Issue #397 — the answer names the bill, its customer and which items are short and by how much.
+  // Someone who may ask questions but not see bills or stock is told so, and nothing is looked up.
+  const refusedFor = async (permissions: readonly string[], question: string) => {
+    const stub = new StubBlockedDocuments([blockedBill]);
+    const harness = await buildAssistant({ blocked: stub, permissions });
+    const answer = await harness.assistant.ask(harness.actor, { question, today: TODAY });
+    return { stub, answer };
+  };
+
+  it('refuses a person who holds only assistant.ask, without saying anything about the bill', async () => {
+    const { stub, answer } = await refusedFor(['assistant.ask'], 'why is INV-1042 blocked?');
+    assert.equal(answer.intent, 'WHY_BLOCKED');
+    assert.equal(answer.state, 'NEEDS_PERMISSION');
+    assert.deepEqual(answer.sentences.map((sentence) => sentence['en-IN']), [
+      'You do not have access to that bill. Ask the owner if you need to see bills and stock.',
+    ]);
+    const said = JSON.stringify(answer);
+    assert.doesNotMatch(said, /Gurugram Fresh|6 boxes short|Narela|held up by/);
+    assert.deepEqual(answer.nextSteps, []);
+    assert.equal(stub.askedBy.length, 0, 'the bill and its stock are not even read');
+  });
+
+  it('gives the same refusal for a bill that does not exist, so nobody can probe for numbers', async () => {
+    const real = await refusedFor(['assistant.ask'], 'why is INV-1042 blocked?');
+    const missing = await refusedFor(['assistant.ask'], 'why is INV-9999 blocked?');
+    assert.deepEqual(missing.answer.sentences, real.answer.sentences);
+    assert.equal(missing.answer.state, real.answer.state);
+  });
+
+  it('refuses someone who may see bills but not stock, and someone who may see stock but not bills', async () => {
+    for (const permissions of [['assistant.ask', 'reports.view.sales'], ['assistant.ask', 'reports.view.stock']]) {
+      const { stub, answer } = await refusedFor(permissions, 'why is INV-1042 blocked?');
+      assert.equal(answer.state, 'NEEDS_PERMISSION', permissions.join(', '));
+      assert.doesNotMatch(JSON.stringify(answer), /6 boxes short|Gurugram Fresh/);
+      assert.equal(stub.askedBy.length, 0);
+    }
+  });
+
+  it('looks the bill up as the person who asked', async () => {
+    const { stub, answer } = await refusedFor(['assistant.ask', 'reports.view.sales', 'reports.view.stock'], 'why is INV-1042 blocked?');
+    assert.equal(answer.state, 'NEEDS_A_PERSON');
+    assert.equal(stub.askedBy.length, 1);
+    assert.deepEqual(stub.askedBy[0]?.permissions, ['assistant.ask', 'reports.view.sales', 'reports.view.stock']);
   });
 });
 
