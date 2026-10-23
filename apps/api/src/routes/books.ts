@@ -12,7 +12,7 @@ const OWNER = needAny("record the owner's money in or out", 'ledger.post.receipt
 const UNDO = need('undo an entry', 'ledger.reverse');
 const BOOKS = need('see the cash and bank books', 'reports.view.financial');
 
-const expense = fields({ requestId: text, check: text, head: text, date: text, paidFrom: text, amount: text, gst: text, gstin: text, billNumber: text, credit: text, blockedReason: text, narration: text });
+const expense = fields({ requestId: text, check: text, head: text, date: text, paidFrom: text, amount: text, gst: text, billNumber: text, consignmentNote: text, narration: text });
 const journal = fields({ requestId: text, check: text, date: text, narration: text, lines: anything });
 const contra = fields({ requestId: text, check: text, date: text, direction: text, amount: text, narration: text });
 const owner = fields({ requestId: text, check: text, date: text, direction: text, paidFrom: text, amount: text, narration: text });

@@ -23,6 +23,31 @@ const CAPITAL = '3100';
 const DRAWINGS = '3150';
 const SOURCE_PREFIX = 'books.';
 
+/**
+ * Accounts a journal may not touch because a document backs every amount in them, and the screen
+ * that makes that document. GST credit needs the supplier's tax invoice and its place in GSTR-2B
+ * (CGST Act s.16(2)(a), (aa)); tax collected and sales need a tax invoice or a note (s.31, s.34)
+ * so they reach GSTR-1; reverse-charge tax comes with the self-invoice (s.9(3), s.31(3)(f)); TCS
+ * with its sale (s.52); advances are set off bill by bill (packages/receivables).
+ * A lawful GST adjustment journal (e.g. an ITC reversal under CGST Rules r.42/r.43) is not
+ * offered here: it would also have to reach GSTR-3B, which this screen does not do.
+ */
+const GST_CREDIT = 'comes only from a supplier\'s bill on Purchases, so it is checked against your GSTR-2B and reaches your GSTR-3B.';
+const GST_COLLECTED = 'comes only from a sale bill or a credit/debit note, so it reaches your GSTR-1 and GSTR-3B.';
+const PURCHASE_SIDE = 'comes only from a supplier\'s bill or a return to the supplier on Purchases.';
+const DOCUMENT_BACKED: Readonly<Partial<Record<NonNullable<Account['systemRole']>, string>>> = {
+  INPUT_CGST: GST_CREDIT, INPUT_SGST: GST_CREDIT, INPUT_IGST: GST_CREDIT, INPUT_CESS: GST_CREDIT,
+  GST_ON_ADVANCES: 'comes only from an advance receipt and is set off when its bill is made.',
+  ADVANCES_TO_SUPPLIERS: 'is set off bill by bill; pay an advance from Payments.',
+  OUTPUT_CGST: GST_COLLECTED, OUTPUT_SGST: GST_COLLECTED, OUTPUT_IGST: GST_COLLECTED, OUTPUT_CESS: GST_COLLECTED,
+  REVERSE_CHARGE_PAYABLE: 'comes only from a supplier\'s bill on Purchases, with its self-invoice.',
+  TCS_PAYABLE: 'comes only from the sale on which the tax was collected.',
+  SALES_GOODS: GST_COLLECTED, SALES_SERVICES: GST_COLLECTED,
+  SALES_RETURNS: 'comes only from a credit note against the sale bill.',
+  PURCHASES_GOODS: PURCHASE_SIDE, PURCHASES_SERVICES: PURCHASE_SIDE, PURCHASE_RETURNS: PURCHASE_SIDE,
+  STOCK_CHANGE: 'moves with the goods themselves, not by a journal.',
+};
+
 export interface ExpenseHead {
   readonly id: string;
   readonly code: string;
@@ -132,18 +157,18 @@ const reverseChargeCheck = (head: ExpenseHead, input: Input): string[] => {
     // Rent with no GST on the bill: a shop, godown or office let by an unregistered owner is S.No. 5AB
     // (inserted by 09/2024-CT(R), from 10.10.2024; amended by 07/2025-CT(R) so that a composition
     // recipient is outside it); a house let to a registered person is S.No. 5AA (05/2022-CT(R), from 18.07.2022).
-    throw invalid('BOOKS_EXPENSE_RENT_REVERSE_CHARGE', `Rent with no GST on the bill: you, the GST-registered tenant, usually pay that GST yourself under reverse charge (Notification 13/2017-CT(R), S.No. 5AB for a shop or godown from an unregistered owner; S.No. 5AA for a house). ${TO_PURCHASES} It works out whether that applies and makes the self-invoice.`);
+    throw invalid('BOOKS_EXPENSE_RENT_REVERSE_CHARGE', `Rent with no GST on the bill: as a GST-registered tenant you usually pay that GST yourself (reverse charge), for a shop, godown or office let by an owner with no GST number, and for a house. ${TO_PURCHASES} It works out whether that applies and makes the self-invoice.`);
   }
   if (head.id === 'transport') {
     // S.No. 1 and its Explanation: a transporter that issues a consignment note is a GTA, and its
     // freight is taxed on the registered recipient unless the GTA opted to pay it.
     const note = said(input.consignmentNote).toLowerCase();
-    if (note === 'yes') throw invalid('BOOKS_EXPENSE_GTA', `A transporter who gave a consignment note (bilty / LR) is a goods transport agency; GST on its freight is usually paid by you under reverse charge (Notification 13/2017-CT(R), S.No. 1). ${TO_PURCHASES}`);
+    if (note === 'yes') throw invalid('BOOKS_EXPENSE_GTA', `A transporter who gave a consignment note (bilty / LR) is a goods transport agency; GST on its freight is usually paid by you yourself (reverse charge). ${TO_PURCHASES}`);
     if (note !== 'no') throw invalid('BOOKS_EXPENSE_CONSIGNMENT_NOTE', 'Did the transporter give a consignment note (bilty / LR)? Please answer yes or no. A bus, train, taxi or auto fare is "no".');
     return [];
   }
   if (head.id === 'other') {
-    return ['If this was an advocate\'s fee, a security agency, a director\'s fee or another service the government lists for reverse charge (Notification 13/2017-CT(R)), undo it and enter it on Purchases instead, so the GST you owe on it is worked out.'];
+    return ['If this was an advocate\'s fee, a security agency, a director\'s fee or another service on which you pay the GST yourself (reverse charge), undo it and enter it on Purchases instead, so the GST you owe on it is worked out.'];
   }
   return [];
 };
@@ -283,7 +308,17 @@ export class BooksDesk {
     if (voucher === null || !voucher.source?.kind.startsWith(SOURCE_PREFIX)) {
       throw notFound('BOOKS_ENTRY_NOT_FOUND', 'There is no such expense, journal, contra or owner entry in this business.');
     }
-    const result = await this.#config.ledger.reverseVoucher(actor, { idempotencyKey: `${SOURCE_PREFIX}undo:${requestId}`, voucherId: voucher.id, date: appToday(), reason });
+    const today = appToday();
+    if (voucher.state === 'FINAL') {
+      // Undoing cash that came in takes it back out of the drawer, which cannot go below nothing.
+      const cash = (await this.#accounts()).find((a) => a.code === CASH);
+      const cashBack = voucher.lines.filter((l) => l.accountId === cash?.id).reduce((sum, l) => sum + l.debit.minor - l.credit.minor, 0n);
+      const inDrawer = cashBack > 0n ? await this.#cashOn(actor.companyId, today) : 0n;
+      if (cashBack > 0n && inDrawer < cashBack) {
+        throw invalid('BOOKS_CASH_SHORT', `Undoing this takes ${rupees(cashBack)} back out of the cash drawer, but the books show only ${rupees(inDrawer < 0n ? 0n : inDrawer)} in it today. Record the cash that went out first.`);
+      }
+    }
+    const result = await this.#config.ledger.reverseVoucher(actor, { idempotencyKey: `${SOURCE_PREFIX}undo:${requestId}`, voucherId: voucher.id, date: today, reason });
     return { undone: this.#entry(voucher, await this.#accounts()), reversal: { id: result.voucher.id, number: result.voucher.number, date: result.voucher.date }, duplicate: result.deduplicated };
   }
 
@@ -392,6 +427,8 @@ export class BooksDesk {
     const bankGroup = accounts.find((a) => a.code === BANK_GROUP);
     if (account.code === CASH || account.parentId === bankGroup?.id || account.systemRole === 'CHEQUES_IN_HAND') return 'cash and bank move through a contra, expense or owner\'s entry, so the cash book says why.';
     if (account.systemRole === 'STOCK_IN_HAND') return 'stock in hand moves with the goods themselves, not by a journal.';
+    const screen = account.systemRole === null ? undefined : DOCUMENT_BACKED[account.systemRole];
+    if (screen !== undefined) return `"${account.name}" ${screen}`;
     return null;
   }
 

@@ -108,7 +108,7 @@ test('#294: rent with no GST, and a GTA\'s freight, are reverse charge: sent to 
   const rent = await preview({ head: 'rent' });
   assert.equal(rent.status, 422);
   assert.equal(codeOf(rent), 'BOOKS_EXPENSE_RENT_REVERSE_CHARGE');
-  assert.match(String(rent.body.message ?? rent.body.error?.message), /5AB/);
+  assert.match(String(rent.body.message ?? rent.body.error?.message), /reverse charge/);
   assert.equal(codeOf(await preview({ head: 'transport' })), 'BOOKS_EXPENSE_CONSIGNMENT_NOTE');
   assert.equal(codeOf(await preview({ head: 'transport', consignmentNote: 'maybe' })), 'BOOKS_EXPENSE_CONSIGNMENT_NOTE');
   assert.equal(codeOf(await preview({ head: 'transport', consignmentNote: 'yes' })), 'BOOKS_EXPENSE_GTA');
@@ -222,11 +222,17 @@ test('#294: a journal must balance and must say why; cash, bank, stock and party
   assert.equal(codeOf(await journal([{ account: '5650', debit: '100' }])), 'BOOKS_JOURNAL_LINES');
   assert.equal(codeOf(await journal([{ account: '5650', debit: '100', credit: '100' }, { account: '5900', credit: '100' }])), 'BOOKS_JOURNAL_LINE_SIDE');
   assert.equal(codeOf(await journal([{ account: '9999', debit: '100' }, { account: '5900', credit: '100' }])), 'BOOKS_JOURNAL_ACCOUNT');
-  for (const code of ['1110', '1121', '1300', '5000']) {
+  // GST, sales, purchases, returns, advances and stock change are backed by documents the returns read.
+  const documentBacked = ['1410', '1420', '1430', '1440', '1450', '1460', '2210', '2220', '2230', '2240', '2300', '2400', '4100', '4200', '5100', '5110', '5120', '5150', '5200'];
+  for (const code of ['1110', '1121', '1300', '5000', ...documentBacked]) {
     assert.equal(codeOf(await journal([{ account: code, debit: '100' }, { account: '5900', credit: '100' }])), 'BOOKS_JOURNAL_ACCOUNT_NOT_ALLOWED', code);
+    assert.equal(codeOf(await journal([{ account: '5900', debit: '100' }, { account: code, credit: '100' }])), 'BOOKS_JOURNAL_ACCOUNT_NOT_ALLOWED', code);
   }
+  const credit = await journal([{ account: '1410', debit: '1000' }, { account: '5900', credit: '1000' }]);
+  assert.match(String(credit.body.message ?? credit.body.error?.message), /Purchases.*GSTR-2B/, JSON.stringify(credit.body));
   const allowed = (await request('GET', '/api/books/journal/accounts', {}, accountant)).body.accounts as { code: string }[];
   assert.ok(allowed.some((a) => a.code === '5650') && !allowed.some((a) => a.code === '1110'));
+  assert.deepEqual(allowed.filter((a) => documentBacked.includes(a.code)), [], 'none of them is offered');
 
   const saved = await save('journal', { date: DATE, narration: 'Repairs booked under other costs by mistake in September', lines: [{ account: '5650', debit: '100' }, { account: '5900', credit: '100' }] }, accountant);
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
@@ -271,6 +277,21 @@ test('#294: a saved entry is never edited; it is undone in full with a reason, o
 
   const sale = await request('POST', '/api/books/undo', { entryId: 'not-a-books-entry', reason: 'x', requestId: nextRequest() }, owner);
   assert.equal(sale.status, 404);
+});
+
+test('#294: undoing cash that came in cannot take the drawer below nothing', async () => {
+  const { owner } = await sessions();
+  const capital = await save('owner', { direction: 'capital', paidFrom: 'cash', amount: '4000', date: DATE }, owner);
+  assert.equal(capital.status, 200, JSON.stringify(capital.body));
+  const inDrawer = Number((await book('cash', owner)).closing);
+  const out = await save('owner', { direction: 'drawings', paidFrom: 'cash', amount: String(inDrawer - 1000), date: DATE }, owner);
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  const undo = (entryId: string) => request('POST', '/api/books/undo', { entryId, reason: 'Typed in twice', requestId: nextRequest() }, owner);
+  const short = await undo(capital.body.entry.id);
+  assert.equal(short.status, 422, JSON.stringify(short.body));
+  assert.equal(codeOf(short), 'BOOKS_CASH_SHORT');
+  assert.equal((await undo(out.body.entry.id)).status, 200, 'undoing the cash that went out is fine');
+  assert.equal((await undo(capital.body.entry.id)).status, 200, 'and then the capital can be undone');
 });
 
 test('#294: the heads list says which heads cannot carry GST', async () => {
