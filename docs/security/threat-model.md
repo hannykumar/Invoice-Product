@@ -168,14 +168,14 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 ### 4.6 PDF generation and printed bills
 
 Bills, notes, challans, quotations and e-way bills are rendered as HTML on the server, shown in the
-browser in `<iframe srcdoc>` frames, and turned into PDFs by launching headless Chromium
-(`packages/invoice-templates/src/pdf.ts`) with JavaScript enabled and every request but `data:`
-blocked.
+browser in `<iframe srcdoc>` frames, and turned into PDFs by one shared headless Chromium (`packages/invoice-templates/src/pdf.ts`, #398):
+at most two pages render together, sixteen more may wait, each render has a 20-second limit,
+JavaScript is off in the page and every request but `data:` is blocked.
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | P1 | An escaping miss in any template becomes same-origin XSS: the bill frames have no `sandbox` and share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked) | `sandbox` on every bill frame; the #349 CSP is inherited by `srcdoc` and blocks inline script | Medium | #349 (CSP) + #399 |
-| P2 | One Chromium per PDF request: repeated GETs exhaust the server; JavaScript is on in the renderer (A04) | Medium | Medium | Network blocked | A shared browser, JavaScript off, a rate limit | Medium | #350 + #398 |
+| P2 | Repeated PDF GETs exhaust the server (A04) | Medium | Medium | Network blocked; one shared browser, bounded pages and queue, a per-render time limit, JavaScript off (#398) | A per-user rate limit | Low | #350 |
 
 ### 4.7 Voice and text assistant, action agent — prompt injection
 
