@@ -41,7 +41,7 @@ const DUBAI = { legalName: 'Gulf Polymer Trading FZE', registration: 'overseas',
 const SEZ = { legalName: 'Sriperumbudur SEZ Moulders', registration: 'sez_without_payment', gstin: '33SSSSS1234S1ZA', line1: 'Plot 4, SEZ Phase II', city: 'Sriperumbudur', pincode: '602105' };
 const GRANULES = {
   name: 'LDPE Granules', kind: 'goods', hsnSac: '39011000', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for granules',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for granules',
 };
 const printOf = async (session: string, invoiceId: string): Promise<string> => {
   const printed = await request('POST', '/api/sales/print', { invoice: invoiceId }, session);

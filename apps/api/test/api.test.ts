@@ -1312,7 +1312,7 @@ test('#142 — a quotation becomes a sale without retyping, and a proforma is li
 
 test('#165 — money against a proforma gets a receipt voucher, GST on a services advance, set-off on the bill, and a refund voucher', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  const item = await request('POST', '/api/items', { name: 'Soap-press servicing', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', reference: 'api-165-item', requestId: 'api-165-item' }, owner);
+  const item = await request('POST', '/api/items', { name: 'Soap-press servicing', kind: 'service', hsnSac: '998719', unit: 'NOS', ratePercent: '18', effectiveFrom: '2026-04-01', reference: 'api-165-item', requestId: 'api-165-item' }, owner);
   assert.equal(item.status, 200, JSON.stringify(item.body));
 
   // A service: ₹10,000 + 18% GST asked for up front.

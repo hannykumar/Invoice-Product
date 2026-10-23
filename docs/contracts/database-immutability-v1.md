@@ -71,12 +71,16 @@ does.
 | `stock_reservations` | `CONSUMED`, `RELEASED`, `EXPIRED` | nothing | — |
 | `payments` | always | `allocated_paise` (the database's own figure), `cheque_state`, the reversal fields, `updated_at`, `version` | `RECORDED>REVERSED` |
 | `payment_allocations` | always | `released_at` (once), `updated_at` | — |
-| `document_settlements` | always | `allocated_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
+| `document_settlements` | always | `allocated_paise`, `credited_paise`, `debited_paise` and `status` (the database's own figures), `cancelled`, `updated_at` | — |
 | `advance_receipts` | always | `updated_at`, `version` | — |
 | `agent_plans` (#47, #366) | `EXECUTED` | `updated_at` | none: an executed plan is only ever saved again unchanged |
 | `agent_reports` | always | nothing | — |
 | `bank_reconciliation_candidates`, `bank_reconciliation_events` (#366) | always | nothing | — |
 | `bank_reconciliation_matches` (#366) | always | `unmatched_at`, `unmatched_by`, `unmatch_reason`, once (`bank_reconciliation_unmatched_once`); a line is in one match not undone at a time (`bank_reconciliation_line_matched_once`) | `AUTO_MATCHED`/`CONFIRMED` → `UNMATCHED` |
+| `privacy_notices`, `privacy_consents`, `privacy_retention_rules`, `restore_drills` (#366) | always | nothing | — |
+| `privacy_requests` (#366) | always | `blockers`, `completed_at`, only while `requested` (`security_settled_stays_settled`) | `requested` → `blocked`, `completed` |
+| `privacy_legal_holds` (#366) | always | `active`, `released_at`, once | — |
+| `backup_records` (#366) | always | `pruned_at`, once | — |
 | `operational_failures`, `status_incident_updates` (#366) | always | nothing | — |
 | `support_access_grants` (#366) | always | `revoked_at`, once (`operations_grant_revoked_once`) | — |
 
@@ -107,7 +111,7 @@ Append-only by their schema comments but not verified against a repository, so l
 lanes: `master_versions`, `master_snapshots`, `master_merges`, `bank_statement_transactions`,
 `subscription_payment_events`, `subscription_usage_events`,
 `notification_delivery_events`, `collection_communications`, `compliance_alerts`,
-`privacy_consents`, `restore_drills`, `government_calls` (freezable
+`government_calls` (freezable
 once its outcome is settled). `stock_balances` is not frozen because it is not a record: it is the
 sum of `stock_movements`, written only by the database (see [`sales-schema-v1`](./sales-schema-v1.md)).
 

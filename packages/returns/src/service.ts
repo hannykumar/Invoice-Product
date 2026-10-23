@@ -3,7 +3,7 @@ import {
   type Clock, type IsoDate, type Money, type Quantity,
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort } from '@invoice/ledger';
-import { buildPurchaseReturnPosting, buildSalesReturnPosting } from './posting.ts';
+import { buildPurchaseReturnPosting, buildSalesPriceCorrectionPosting, buildSalesReturnPosting } from './posting.ts';
 import { checkCreditNoteDeadline } from './credit-note-deadline.ts';
 import { formatDocumentNumber, documentSeriesScope } from '@invoice/sales';
 import {
@@ -14,7 +14,7 @@ import {
   validateNoteSeries,
   type NoteSeries,
 } from './note-series.ts';
-import { RETURN_PERMISSIONS, isChargeLine, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts, type SupplierCreditNoteRef } from './model.ts';
+import { RETURN_PERMISSIONS, isChargeLine, isGoodsReturn, isPriceCorrection, type ReturnDisposition, type ReturnNote, type ReturnNoteLine, type ReturnTaxAmounts, type SupplierCreditNoteRef } from './model.ts';
 import type { OriginalReturnLine, PurchaseReturnSourcePort, ReturnInventoryPort, ReturnNoteRepository, SalesReturnSourcePort } from './ports.ts';
 
 export interface SalesReturnLineInput {
@@ -73,6 +73,34 @@ export interface SalesReturnPreview {
   readonly summary: string;
   /** Issue #186 — e.g. the credit-note deadline is less than 30 days away. Empty when nothing to say. */
   readonly warnings: readonly string[];
+}
+
+/**
+ * Issue #293 — a change of price on one line of an issued bill, with nothing coming back.
+ *
+ * Give the new rate per unit (`newUnitPrice`, before GST) or the amount off the line's value
+ * (`amountOff`, before GST). A lower price makes a credit note (CGST Act s.34(1)), a higher one a
+ * debit note (s.34(3)). The new price applies to the quantity the customer still keeps.
+ */
+export interface SalesPriceCorrectionCommand {
+  readonly idempotencyKey: string;
+  readonly originalInvoiceId: string;
+  readonly originalLineId: string;
+  readonly documentDate: IsoDate;
+  readonly reason: string;
+  /**
+   * Why the price changes. `INVOICE_ERROR`: the bill carried the wrong price, so its taxable value or
+   * tax was wrong (s.34(1)/(3)). `DISCOUNT_AFTER_SALE`: a discount agreed after the sale, which only
+   * comes off the value under s.15(3)(b) and is refused here (see `previewPriceCorrection`).
+   */
+  readonly cause: 'INVOICE_ERROR' | 'DISCOUNT_AFTER_SALE';
+  readonly newUnitPrice?: Money;
+  readonly amountOff?: Money;
+  readonly periodOverrideReason?: string;
+}
+
+export interface SalesPriceCorrectionPreview extends SalesReturnPreview {
+  readonly kind: 'SALES_RETURN' | 'SALES_DEBIT_NOTE';
 }
 
 export type PurchaseReturnLineInput = SalesReturnLineInput;
@@ -170,7 +198,8 @@ export class ReturnService {
 
     const previous = await this.#repo.listForOriginal(actor.companyId, original.id);
     const already = new Map<string, bigint>();
-    for (const note of previous.filter((candidate) => candidate.kind === 'SALES_RETURN')) for (const line of note.lines) already.set(line.originalLineId, (already.get(line.originalLineId) ?? 0n) + line.quantity.scaled);
+    // Issue #293 — a price correction changes what was charged, not how much was sold.
+    for (const note of previous.filter((candidate) => isGoodsReturn(candidate, 'SALES_RETURN'))) for (const line of note.lines) already.set(line.originalLineId, (already.get(line.originalLineId) ?? 0n) + line.quantity.scaled);
     // Issue #233 — the whole bill: what is left of every line, charges included.
     const inputs: readonly SalesReturnLineInput[] = command.wholeBill === true
       ? original.lines
@@ -216,7 +245,7 @@ export class ReturnService {
           (input.replacementSerialNumbers?.length ?? 0) !== (input.serialNumbers?.length ?? 0)) {
         throw invalid('RETURN_REPLACEMENT_SERIALS_MISMATCH', 'The returned and replacement serial-number counts must match.');
       }
-      const amounts = this.#amounts(source, input.quantity.scaled);
+      const amounts = this.#amountsAtCurrentPrice(source, input.quantity.scaled, previous);
       lines.push({
         originalLineId: source.lineId, itemId: source.itemId, description: source.description,
         supplyKind: source.supplyKind, quantity: input.quantity, disposition: input.disposition,
@@ -284,6 +313,140 @@ export class ReturnService {
       companyId: actor.companyId, actorId: actor.userId, at, action: 'return.sales_posted',
       subjectType: 'credit_note', subjectId: outcome.note.id, summary: outcome.note.summary,
       details: { number: outcome.note.number, originalNumber: original.number, reason: command.reason, lines: String(outcome.note.lines.length), complianceStatus: outcome.note.complianceStatus },
+      ...(command.periodOverrideReason === undefined ? {} : { overrideReason: command.periodOverrideReason }),
+    });
+    return { note: outcome.note, deduplicated: false };
+  }
+
+  /**
+   * Issue #293 — what a price correction will credit or charge, checked and worked out, saving nothing.
+   *
+   * CGST Act 2017 s.34(1) (as substituted by the CGST (Amendment) Act 2018, in force 1 February
+   * 2019): a credit note where the taxable value or tax charged on an invoice exceeds what is
+   * payable; s.34(3): a debit note where it is less. Either names the invoice it corrects (CGST
+   * Rule 53(1A), inserted by Notification 3/2018-Central Tax of 23 January 2018). s.34(2) (as
+   * amended by Finance Act 2022, in force 1 October 2022): a credit note reduces tax only if issued
+   * by 30 November after the end of the bill's financial year; a debit note has no such limit.
+   * The tax on the difference is the original line's own, in the same proportion as on the bill.
+   */
+  async previewPriceCorrection(actor: ActorContext, command: SalesPriceCorrectionCommand): Promise<SalesPriceCorrectionPreview> {
+    this.#permissions.require(actor, RETURN_PERMISSIONS.create, 'correct the price on a bill');
+    if (command.idempotencyKey.trim() === '') throw invalid('RETURN_IDEMPOTENCY_KEY_REQUIRED', 'Every price correction needs a key so a retry cannot record it twice.');
+    if (command.reason.trim() === '') throw invalid('PRICE_CORRECTION_REASON_REQUIRED', 'Please say why the price is being changed, for example "rate agreed was ₹95, not ₹100".');
+    // A discount given after the sale is not a wrong invoice. CGST Act s.15(3)(b) (in force 1 July
+    // 2017) keeps it out of the value only if it was agreed at or before the supply, is linked to
+    // the invoices, and the buyer has reversed the credit; s.34(2)'s proviso refuses the cut where
+    // the tax was passed on; Circular 92/11/2019-GST (7 Mar 2019) allows a commercial credit note
+    // that leaves GST alone; Circular 212/6/2024-GST (26 Jun 2024) wants evidence that the buyer
+    // reversed its credit. None of that is recorded here yet, so such a note is refused rather
+    // than cutting GST without the conditions. (Any Finance Act 2025 change to s.15(3)(b) or to the
+    // s.34(2) proviso is not verified.)
+    if (command.cause === 'DISCOUNT_AFTER_SALE') {
+      throw invalid('PRICE_CORRECTION_DISCOUNT_AFTER_SALE', 'A discount agreed after the sale cannot reduce GST here yet: the law asks for the agreement made before the sale and proof that the buyer gave back their GST credit. Nothing was recorded. If the bill simply had the wrong price, choose "The bill had the wrong price".');
+    }
+    if (command.cause !== 'INVOICE_ERROR') throw invalid('PRICE_CORRECTION_CAUSE_REQUIRED', 'Say why the price changes: the bill had the wrong price, or a discount was given after the sale.');
+    const byPrice = command.newUnitPrice !== undefined, byAmount = command.amountOff !== undefined;
+    if (byPrice === byAmount) throw invalid('PRICE_CORRECTION_ONE_FIGURE', 'Type either the new rate per unit or the amount off, not both.');
+    if (byPrice && command.newUnitPrice!.minor < 0n) throw invalid('PRICE_CORRECTION_NEGATIVE_PRICE', 'The new rate cannot be below zero.');
+    if (byAmount && command.amountOff!.minor <= 0n) throw invalid('PRICE_CORRECTION_AMOUNT_NOT_POSITIVE', 'The amount off must be more than zero.');
+    const original = await this.#sales.findSalesDocument(actor.companyId, command.originalInvoiceId);
+    if (original === null) throw notFound('RETURN_ORIGINAL_NOT_FOUND', 'We could not find that issued bill in this business.');
+    if (original.state !== 'FINAL') throw conflict('RETURN_ORIGINAL_NOT_FINAL', 'A cancelled bill cannot have its price corrected.');
+    const source = original.lines.find((line) => line.lineId === command.originalLineId);
+    if (source === undefined) throw invalid('RETURN_LINE_NOT_FOUND', 'The selected item is not on the original bill.');
+    if (isChargeLine(source)) throw invalid('PRICE_CORRECTION_CHARGE_LINE', 'Freight and other charges cannot be re-priced here. Choose an item on the bill.');
+    // A cess charged per unit does not change with the price, and this line cannot say which kind it carries.
+    if (source.cess.minor !== 0n) throw invalid('PRICE_CORRECTION_CESS_LINE', 'This item carries compensation cess, which may not change with the price. Ask your accountant to make this note.');
+    if (source.taxableValue.minor <= 0n) throw invalid('PRICE_CORRECTION_FREE_LINE', 'This item was billed at nothing, so there is no tax to work a new price from. Make a new bill for it instead.');
+    const previous = await this.#repo.listForOriginal(actor.companyId, original.id);
+    const returned = previous.filter((note) => isGoodsReturn(note, 'SALES_RETURN')).flatMap((note) => note.lines)
+      .filter((line) => line.originalLineId === source.lineId).reduce((total, line) => total + line.quantity.scaled, 0n);
+    const kept = source.quantity.scaled - returned;
+    if (kept <= 0n) throw conflict('PRICE_CORRECTION_NOTHING_KEPT', `All of ${source.description} on ${original.number} has already come back, so there is no price left to change.`);
+    const current = this.#amountsAtCurrentPrice(source, kept, previous).taxableValue.minor;
+    const difference = byPrice ? divideHalfUp(command.newUnitPrice!.minor * kept, 1_000_000n) - current : -command.amountOff!.minor;
+    if (difference === 0n) throw invalid('PRICE_CORRECTION_NO_CHANGE', `That is the price already charged for ${source.description}, so there is nothing to correct.`);
+    if (-difference > current) {
+      throw invalid('PRICE_CORRECTION_MORE_THAN_CHARGED', `${source.description} is now billed at ${formatINR(money(current))} before GST, so no more than that can come off.`);
+    }
+    const kind = difference < 0n ? 'SALES_RETURN' as const : 'SALES_DEBIT_NOTE' as const;
+    const deadline = checkCreditNoteDeadline(original.date, command.documentDate);
+    if (kind === 'SALES_RETURN' && deadline.late) throw invalid('RETURN_CREDIT_NOTE_TOO_LATE', deadline.refusal as string);
+    if (command.documentDate < original.date) throw invalid('PRICE_CORRECTION_BEFORE_BILL', `The note cannot be dated before ${original.number} of ${original.date}.`);
+    const size = difference < 0n ? -difference : difference;
+    const share = (amount: Money): Money => money(divideHalfUp(amount.minor * size, source.taxableValue.minor));
+    const cgst = share(source.cgst), sgst = share(source.sgst), utgst = share(source.utgst), igst = share(source.igst), cess = share(source.cess);
+    const taxableValue = money(size);
+    const amounts: ReturnTaxAmounts = {
+      taxableValue, cgst, sgst, utgst, igst, cess, ineligibleTax: money(0n), reverseChargeTax: money(0n),
+      total: sum([taxableValue, cgst, sgst, utgst, igst, cess]),
+    };
+    const line: ReturnNoteLine = {
+      originalLineId: source.lineId, itemId: source.itemId, description: source.description, supplyKind: source.supplyKind,
+      quantity: { ...source.quantity, scaled: kept }, disposition: 'ACCEPTED', warehouseId: null, batchId: null,
+      serialNumbers: [], replacementSerialNumbers: [], amounts,
+      hsnOrSac: source.hsnOrSac ?? null, ratePercentTimes100: source.ratePercentTimes100 ?? null,
+      // The printed note's rate is the difference per unit: quantity × rate is the value it changes.
+      unitPrice: money(divideHalfUp(size * 1_000_000n, kept)),
+    };
+    const summary = kind === 'SALES_RETURN'
+      ? `The price of ${source.description} on ${original.number} comes down by ${formatINR(taxableValue)} before GST. A credit note for ${formatINR(amounts.total)} reduces what the customer owes. No goods come back.`
+      : `The price of ${source.description} on ${original.number} goes up by ${formatINR(taxableValue)} before GST. A debit note for ${formatINR(amounts.total)} adds to what the customer owes. No goods move.`;
+    return {
+      kind, originalNumber: original.number, lines: [line], totals: amounts,
+      complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary,
+      warnings: kind === 'SALES_RETURN' && deadline.warning !== null ? [deadline.warning] : [],
+    };
+  }
+
+  /** Issue #293 — records a price correction: a credit or debit note, its voucher, and no stock movement. */
+  async postPriceCorrection(actor: ActorContext, command: SalesPriceCorrectionCommand): Promise<{ note: ReturnNote; deduplicated: boolean }> {
+    const existing = await this.#repo.findByIdempotencyKey(actor.companyId, command.idempotencyKey);
+    if (existing !== null) return { note: existing, deduplicated: true };
+    await this.previewPriceCorrection(actor, command);
+    const original = await this.#sales.findSalesDocument(actor.companyId, command.originalInvoiceId);
+    if (original === null) throw notFound('RETURN_ORIGINAL_NOT_FOUND', 'We could not find that issued bill in this business.');
+    const id = this.#newId();
+    const at = this.#clock.now().toISOString();
+    const outcome = await this.#store.transaction(actor.companyId, async (uow) => {
+      // Worked out again under the company lock, so two corrections at once see each other.
+      const checked = await this.previewPriceCorrection(actor, command);
+      const credit = checked.kind === 'SALES_RETURN';
+      const seriesKind = credit ? CREDIT_NOTE_SERIES_KIND : DEBIT_NOTE_SERIES_KIND;
+      const series = credit ? this.#noteSeries.creditNote : this.#noteSeries.debitNote;
+      const sequence = await uow.sequences.next(actor.companyId, documentSeriesScope(seriesKind, series, command.documentDate));
+      const number = formatDocumentNumber(seriesKind, series, command.documentDate, sequence);
+      const posting = await buildSalesPriceCorrectionPosting(uow.accounts, actor.companyId, original.partyId, checked.totals, {
+        direction: credit ? 'DOWN' : 'UP', supplyKind: checked.lines[0]?.supplyKind ?? 'GOODS',
+      });
+      const posted = await this.#ledger.postVoucherIn(uow, actor, {
+        idempotencyKey: `sales-price-correction:ledger:${command.idempotencyKey}`,
+        type: credit ? 'CREDIT_NOTE' : 'DEBIT_NOTE', date: command.documentDate,
+        narration: `Price ${credit ? 'reduced' : 'raised'} on ${original.number}: ${command.reason}`,
+        source: { kind: credit ? 'credit_note' : 'debit_note', id, number }, lines: posting,
+        ...(command.periodOverrideReason === undefined ? {} : { periodOverride: { reason: command.periodOverrideReason } }),
+      });
+      const note: ReturnNote = {
+        id, companyId: actor.companyId, kind: checked.kind, number, documentDate: command.documentDate,
+        originalDocument: { id: original.id, number: original.number, date: original.date }, partyId: original.partyId,
+        reason: command.reason, lines: checked.lines, totals: checked.totals, voucherId: posted.voucher.id,
+        complianceStatus: checked.complianceStatus, createdBy: actor.userId, createdAt: at,
+        idempotencyKey: command.idempotencyKey, priceCorrection: true,
+        summary: credit
+          ? `${number} credits ${formatINR(checked.totals.total)} against ${original.number} for a lower price. No goods came back.`
+          : `${number} charges ${formatINR(checked.totals.total)} more against ${original.number} for a higher price.`,
+      };
+      await this.#repo.insert(note);
+      return { note, voucher: posted.voucher };
+    });
+    await this.#ledger.recordPosted(actor, outcome.voucher, command.periodOverrideReason);
+    await this.#audit.record({
+      companyId: actor.companyId, actorId: actor.userId, at, action: 'return.sales_price_corrected',
+      subjectType: outcome.note.kind === 'SALES_RETURN' ? 'credit_note' : 'debit_note', subjectId: outcome.note.id, summary: outcome.note.summary,
+      details: {
+        number: outcome.note.number, originalNumber: original.number, reason: command.reason, line: command.originalLineId,
+        difference: toTaxable(outcome.note), complianceStatus: outcome.note.complianceStatus,
+      },
       ...(command.periodOverrideReason === undefined ? {} : { overrideReason: command.periodOverrideReason }),
     });
     return { note: outcome.note, deduplicated: false };
@@ -477,6 +640,28 @@ export class ReturnService {
     }
   }
 
+  /**
+   * Issue #293 — what `returned` units are worth now: their share of the original line, less every
+   * price-reduction credit note and plus every debit note made on that line since, each spread over
+   * the units it was made for. Goods returned after a price cut are credited at the cut price.
+   */
+  #amountsAtCurrentPrice(source: OriginalReturnLine, returned: bigint, notes: readonly ReturnNote[]): ReturnTaxAmounts {
+    const base = this.#amounts(source, returned);
+    const changes = notes.filter(isPriceCorrection).flatMap((note) => note.lines
+      .filter((line) => line.originalLineId === source.lineId)
+      .map((line) => ({ sign: note.kind === 'SALES_DEBIT_NOTE' ? 1n : -1n, line })));
+    if (changes.length === 0) return base;
+    const keys = ['taxableValue', 'cgst', 'sgst', 'utgst', 'igst', 'cess', 'total'] as const;
+    const adjusted = { ...base };
+    for (const key of keys) {
+      adjusted[key] = money(base[key].minor + changes.reduce((total, change) =>
+        total + change.sign * divideHalfUp(change.line.amounts[key].minor * returned, change.line.quantity.scaled), 0n));
+    }
+    // Keep the note balanced: any one-paise remainder goes into the taxable value, as above.
+    const taxes = adjusted.cgst.minor + adjusted.sgst.minor + adjusted.utgst.minor + adjusted.igst.minor + adjusted.cess.minor;
+    return { ...adjusted, taxableValue: money(adjusted.total.minor - taxes) };
+  }
+
   #amounts(source: OriginalReturnLine, returned: bigint): ReturnTaxAmounts {
     const of = (amount: Money): Money => prorate(amount, returned, source.quantity.scaled);
     const taxableValue = of(source.taxableValue), cgst = of(source.cgst), sgst = of(source.sgst);
@@ -488,3 +673,5 @@ export class ReturnService {
     return { taxableValue: adjustedTaxable, cgst, sgst, utgst, igst, cess, ineligibleTax: money(0n), reverseChargeTax: money(0n), total: expected };
   }
 }
+
+const toTaxable = (note: ReturnNote): string => note.totals.taxableValue.minor.toString();

@@ -153,4 +153,127 @@ export const returnMigrations: readonly Migration[] = Object.freeze([{
     ALTER TABLE return_note_lines DROP CONSTRAINT IF EXISTS return_note_lines_item_or_charge_check;
     ALTER TABLE return_note_lines DROP COLUMN IF EXISTS charge_kind;
     ALTER TABLE return_note_lines ALTER COLUMN item_id SET NOT NULL;`,
+}, {
+  // Issue #293 — a price changed after the sale, with nothing coming back: a credit note for a lower
+  // price (CGST Act s.34(1)) or a debit note to the customer for a higher one (s.34(3)). Such a note
+  // is marked \`price_correction\`; its lines carry the quantity the new price applies to.
+  id: '20261023T011610860Z_returns_d50ad1d404d0_sales_debit_notes_and_price_corrections',
+  up: `
+    ALTER TABLE return_notes DROP CONSTRAINT return_notes_kind_check;
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_kind_check CHECK (kind IN ('SALES_RETURN','PURCHASE_RETURN','SALES_DEBIT_NOTE'));
+    ALTER TABLE return_notes ADD COLUMN price_correction boolean NOT NULL DEFAULT false;
+    -- A sales debit note only ever corrects a price; goods do not come back on one.
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_debit_note_is_price_check CHECK (kind <> 'SALES_DEBIT_NOTE' OR price_correction);
+    -- #365's quantity check, now counting only goods that came back: a price credit note's line
+    -- names the quantity still kept, so it must fit what is left but never uses any of it up.
+    CREATE OR REPLACE FUNCTION sales_return_within_original() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+    DECLARE
+      note_kind text;
+      original text;
+      sold bigint;
+      taken_back bigint;
+    BEGIN
+      SELECT kind, original_document_id INTO note_kind, original FROM return_notes WHERE id = NEW.return_note_id;
+      IF note_kind IS DISTINCT FROM 'SALES_RETURN' OR original !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
+        RETURN NEW;
+      END IF;
+      SELECT quantity_micro INTO sold FROM sales_invoice_lines
+        WHERE company_id = NEW.company_id AND invoice_id = original::uuid AND line_id = NEW.original_line_id FOR UPDATE;
+      IF sold IS NULL THEN
+        IF EXISTS (SELECT FROM sales_invoices WHERE company_id = NEW.company_id AND id = original::uuid) THEN
+          RAISE EXCEPTION 'This credit note names a line that is not on the bill.'
+            USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+        END IF;
+        RETURN NEW;
+      END IF;
+      SELECT COALESCE(sum(l.quantity_micro), 0) INTO taken_back FROM return_note_lines l JOIN return_notes n ON n.id = l.return_note_id
+        WHERE l.company_id = NEW.company_id AND n.kind = 'SALES_RETURN' AND NOT n.price_correction AND n.original_document_id = original AND l.original_line_id = NEW.original_line_id;
+      IF taken_back + NEW.quantity_micro > sold THEN
+        RAISE EXCEPTION 'This credit note takes back more than the bill sold on that line.'
+          USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    -- A sales debit note adds to what its bill is owed (#365's settlement row, kept by the database
+    -- as credit notes are), so the extra can be paid against the bill and the bill is not settled
+    -- until it is. A payment may go up to the bill plus its debit notes; credit notes are left out
+    -- of that cap, as before, so a credit note after the bill is paid still goes in.
+    ALTER TABLE document_settlements ADD COLUMN debited_paise bigint NOT NULL DEFAULT 0 CHECK (debited_paise >= 0);
+    ALTER TABLE document_settlements DROP CONSTRAINT document_settlements_allocated_within_value,
+      ADD CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise BETWEEN 0 AND value_paise + debited_paise);
+    -- PostgreSQL 16 cannot change a generated column's expression: the column (and the two indexes
+    -- on it) are made again.
+    ALTER TABLE document_settlements DROP COLUMN status;
+    ALTER TABLE document_settlements ADD COLUMN status text NOT NULL GENERATED ALWAYS AS (CASE
+        WHEN cancelled THEN 'CANCELLED'
+        WHEN allocated_paise >= value_paise - credited_paise + debited_paise THEN 'SETTLED'
+        WHEN allocated_paise > 0 THEN 'PARTLY_PAID'
+        ELSE 'OPEN' END) STORED;
+    CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    DROP TRIGGER document_settlements_frozen ON document_settlements;
+    CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,debited_paise,cancelled,status,updated_at', '');
+    CREATE FUNCTION debit_note_raises_bill() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+    BEGIN
+      UPDATE document_settlements SET debited_paise = debited_paise + NEW.total_paise, updated_at = now()
+        WHERE company_id = NEW.company_id AND document_kind = 'SALES_INVOICE' AND document_id = NEW.original_document_id;
+      RETURN NULL;
+    END;
+    $$;
+    CREATE TRIGGER return_notes_raise_bill AFTER INSERT ON return_notes
+      FOR EACH ROW WHEN (NEW.kind = 'SALES_DEBIT_NOTE') EXECUTE FUNCTION debit_note_raises_bill();
+  `,
+  // Fails while a sales debit note is stored, rather than losing it.
+  down: `
+    DROP TRIGGER IF EXISTS return_notes_raise_bill ON return_notes;
+    DROP FUNCTION IF EXISTS debit_note_raises_bill();
+    DROP TRIGGER document_settlements_frozen ON document_settlements;
+    CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,cancelled,status,updated_at', '');
+    ALTER TABLE document_settlements DROP COLUMN status;
+    ALTER TABLE document_settlements ADD COLUMN status text NOT NULL GENERATED ALWAYS AS (CASE
+        WHEN cancelled THEN 'CANCELLED'
+        WHEN allocated_paise >= value_paise - credited_paise THEN 'SETTLED'
+        WHEN allocated_paise > 0 THEN 'PARTLY_PAID'
+        ELSE 'OPEN' END) STORED;
+    CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    ALTER TABLE document_settlements DROP CONSTRAINT document_settlements_allocated_within_value,
+      ADD CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise BETWEEN 0 AND value_paise);
+    ALTER TABLE document_settlements DROP COLUMN debited_paise;
+    CREATE OR REPLACE FUNCTION sales_return_within_original() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+    DECLARE
+      note_kind text;
+      original text;
+      sold bigint;
+      taken_back bigint;
+    BEGIN
+      SELECT kind, original_document_id INTO note_kind, original FROM return_notes WHERE id = NEW.return_note_id;
+      IF note_kind IS DISTINCT FROM 'SALES_RETURN' OR original !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
+        RETURN NEW;
+      END IF;
+      SELECT quantity_micro INTO sold FROM sales_invoice_lines
+        WHERE company_id = NEW.company_id AND invoice_id = original::uuid AND line_id = NEW.original_line_id FOR UPDATE;
+      IF sold IS NULL THEN
+        IF EXISTS (SELECT FROM sales_invoices WHERE company_id = NEW.company_id AND id = original::uuid) THEN
+          RAISE EXCEPTION 'This credit note names a line that is not on the bill.'
+            USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+        END IF;
+        RETURN NEW;
+      END IF;
+      SELECT COALESCE(sum(l.quantity_micro), 0) INTO taken_back FROM return_note_lines l JOIN return_notes n ON n.id = l.return_note_id
+        WHERE l.company_id = NEW.company_id AND n.kind = 'SALES_RETURN' AND n.original_document_id = original AND l.original_line_id = NEW.original_line_id;
+      IF taken_back + NEW.quantity_micro > sold THEN
+        RAISE EXCEPTION 'This credit note takes back more than the bill sold on that line.'
+          USING ERRCODE = 'check_violation', TABLE = 'return_note_lines', CONSTRAINT = 'return_note_lines_within_original';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    ALTER TABLE return_notes DROP CONSTRAINT IF EXISTS return_notes_debit_note_is_price_check;
+    ALTER TABLE return_notes DROP COLUMN IF EXISTS price_correction;
+    ALTER TABLE return_notes DROP CONSTRAINT return_notes_kind_check;
+    ALTER TABLE return_notes ADD CONSTRAINT return_notes_kind_check CHECK (kind IN ('SALES_RETURN','PURCHASE_RETURN'));`,
 }]);

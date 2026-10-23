@@ -44,7 +44,7 @@ const CUSTOMER = {
 };
 const GOODS = {
   name: 'Brass Gate Valve 25mm', kind: 'goods', hsnSac: '84818030', unit: 'PCS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for valves',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for valves',
 };
 
 const text = (html: string): string => html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');

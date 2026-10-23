@@ -87,8 +87,8 @@ erDiagram
 | A stock balance is the sum of its movements and nobody edits it | Only the trigger on `stock_movements` writes `stock_balances`. The application role cannot insert, update or delete a balance |
 | A movement is final; it is undone once, by another movement, with a reason | freeze trigger, `UNIQUE (company_id, reverses_movement_id)`, `CHECK`s |
 | A movement's direction belongs to its kind; one stock is counted in one unit | `CHECK`, trigger |
-| A payment settles no more than itself, counting what was paid back out of it (`refunded_paise`, kept by a trigger on refund payments); a bill is paid no more than its value | `CHECK`s on `payments.allocated_paise` and `document_settlements.allocated_paise`. Only the trigger on `payment_allocations` writes those two figures |
-| A part payment never marks a bill paid. A credit note takes its value off what the bill is owed | `document_settlements.status` is computed by the database: settled when what is paid reaches the value less `credited_paise`. A trigger on `return_notes` keeps `credited_paise` |
+| A payment settles no more than itself, counting what was paid back out of it (`refunded_paise`, kept by a trigger on refund payments); a bill is paid no more than its value plus its sales debit notes (`debited_paise`, #293) | `CHECK`s on `payments.allocated_paise` and `document_settlements.allocated_paise`. Only the trigger on `payment_allocations` writes those two figures |
+| A part payment never marks a bill paid. A credit note takes its value off what the bill is owed; a sales debit note adds its value (#293) | `document_settlements.status` is computed by the database: settled when what is paid reaches the value less `credited_paise` plus `debited_paise`. Triggers on `return_notes` keep `credited_paise` and `debited_paise` |
 | A settlement row describes a real issued bill | a sales bill's row must match a FINAL bill of that company, customer and value |
 | A payment that was undone settles nothing new | the allocation trigger |
 | Money cannot be applied to a sales bill that was never issued | the allocation trigger |

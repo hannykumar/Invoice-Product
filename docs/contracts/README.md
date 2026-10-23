@@ -32,7 +32,7 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`sales-schema`](./sales-schema-v1.md) | 1.0.0 | GPT 1 (#365) | The repositories of sales, inventory and receivables (#366), #367, #340, and the lanes that later write `document_settlements` | Published |
 | [`connector`](./connector-v1.md) | 1.0.0 | GPT 2 (#8) | GPT 1, GPT 3 | Published |
 | [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
-| [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
+| [`security-operations`](./security-operations-v1.md) | 1.1.0 | GPT 2 (#40) | Platform and operations | Published |
 | [`bank-import`](./bank-import-v1.md) | 1.0.0 | GPT 2 (#21) | GPT 2 (#22, #38) | Published |
 | [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.1.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
 | [`bank-feeds`](./bank-feeds-v1.md) | 1.1.1 | GPT 2 (#24) | Bank reconciliation, API and web | Published |

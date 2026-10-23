@@ -20,6 +20,15 @@ import type { CessRule } from './rate-table.ts';
 
 export interface DeclaredRate {
   readonly companyId: string;
+  /**
+   * Issue #281 — the item this rate was declared for. A rate notification names goods by their
+   * description within a heading, not by the code alone (Notification 1/2017-Central Tax (Rate),
+   * 28 Jun 2017, in force 1 Jul 2017, explanation (iii)–(iv); as amended by 9/2025-Central Tax
+   * (Rate), 17 Sep 2025, in force 22 Sep 2025), so two items with one HSN code can lawfully carry
+   * two rates. A declaration with an item applies to that item only and never to another item that
+   * shares or extends its code. Without one, the declaration covers every item under the code.
+   */
+  readonly itemId?: string;
   /** HSN for goods, SAC for services. Matched by longest prefix, as with sourced rates. */
   readonly code: string;
   readonly kind: 'GOODS' | 'SERVICES';
@@ -35,7 +44,8 @@ export interface DeclaredRate {
 }
 
 export interface DeclaredRateReader {
-  find(companyId: string, code: string, kind: 'GOODS' | 'SERVICES', on: IsoDate): DeclaredRate | undefined;
+  /** With `itemId`, that item's own declaration comes first; the code is only the fallback. */
+  find(companyId: string, code: string, kind: 'GOODS' | 'SERVICES', on: IsoDate, itemId?: string): DeclaredRate | undefined;
   list(companyId: string): readonly DeclaredRate[];
 }
 
@@ -70,15 +80,28 @@ export class InMemoryDeclaredRates implements DeclaredRateReader {
     return this;
   }
 
-  find(companyId: string, code: string, kind: 'GOODS' | 'SERVICES', on: IsoDate): DeclaredRate | undefined {
-    const matches = this.#rates.filter(
-      (r) =>
-        r.companyId === companyId &&
-        r.kind === kind &&
-        code.startsWith(r.code) &&
-        compareDates(on, r.effectiveFrom) >= 0 &&
-        (r.effectiveTo === null || compareDates(on, r.effectiveTo) <= 0),
-    );
+  find(companyId: string, code: string, kind: 'GOODS' | 'SERVICES', on: IsoDate, itemId?: string): DeclaredRate | undefined {
+    const inForce = (r: DeclaredRate) =>
+      r.companyId === companyId &&
+      r.kind === kind &&
+      compareDates(on, r.effectiveFrom) >= 0 &&
+      (r.effectiveTo === null || compareDates(on, r.effectiveTo) <= 0);
+
+    // Issue #281 — the item's own rate first. Of the declarations in force on the day, the one that
+    // started latest is the business's current word; on a tie, the one made last.
+    if (itemId !== undefined) {
+      const own = this.#rates.filter((r) => r.itemId === itemId && inForce(r));
+      if (own.length > 0) {
+        return own.reduce((best, r) => {
+          const started = compareDates(r.effectiveFrom, best.effectiveFrom);
+          if (started !== 0) return started > 0 ? r : best;
+          return r.declaredOn.localeCompare(best.declaredOn) >= 0 ? r : best;
+        });
+      }
+    }
+
+    // A declaration made for one item is never one for another, however alike their codes.
+    const matches = this.#rates.filter((r) => r.itemId === undefined && inForce(r) && code.startsWith(r.code));
     if (matches.length === 0) return undefined;
     // Longest code wins, then the most recently declared, so the choice never depends on the
     // order the business happened to enter them in.

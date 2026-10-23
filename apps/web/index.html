@@ -154,6 +154,8 @@
                   <summary data-i18n="chargesSection"></summary>
                   <div class="field-grid sale-charges">
                     <label><span data-i18n="freight"></span><span class="input-with-prefix"><span>₹</span><input name="freight" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+                    <!-- Issue #293 — rupees off the whole bill, shared over its items before GST. -->
+                    <label><span data-i18n="billDiscount"></span><span class="input-with-prefix"><span>₹</span><input name="billDiscount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
                     <label><span data-i18n="otherCharges"></span><span class="input-with-prefix"><span>₹</span><input name="otherCharges" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
                   </div>
                 </details>
@@ -293,10 +295,10 @@
               </div>
             </div>
             <p id="sale-bill-eway-note" hidden></p>
-            <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
             <!-- Issue #183 — the whole marked set, fetched only when Print is pressed on A4, so the
                  screen keeps showing the Original the customer is given. -->
-            <iframe id="sale-bill-copies" title="Printed copies" aria-hidden="true" hidden></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="sale-bill-copies" title="Printed copies" aria-hidden="true" hidden></iframe>
           </article>
         </section>
 
@@ -308,6 +310,9 @@
             <small class="line-facts" data-line-facts></small>
             <div class="line-stepper"><button type="button" class="secondary-button" data-step="-1" aria-label="One less" data-i18n-aria="oneLess">−</button><label><span class="sr-only" data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" inputmode="decimal" required /><span data-line-unit>—</span></span></label><button type="button" class="secondary-button" data-step="1" aria-label="One more" data-i18n-aria="oneMore">＋</button></div>
             <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" inputmode="decimal" required /></span><small data-line-price-note></small></label>
+            <!-- Issue #293 — rupees off this line, before GST; printed in the bill's Discount column. -->
+            <label><span data-i18n="lineDiscount"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="discount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+            <label><span data-i18n="lineDiscountPercent"></span><span class="input-with-suffix"><input data-line-field="discountPercent" type="number" min="0" max="100" step="0.01" inputmode="decimal" /><span>%</span></span></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -360,7 +365,7 @@
             <ul class="self-invoice-list" data-self-invoices></ul>
             <div data-self-invoice-view hidden>
               <div class="panel-heading"><div><h2 data-self-invoice-title>—</h2></div><button type="button" class="primary-button" data-self-invoice-print data-i18n="printVoucher"></button></div>
-              <iframe data-self-invoice-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Self-invoice"></iframe>
+              <iframe sandbox="allow-same-origin allow-modals" data-self-invoice-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Self-invoice"></iframe>
             </div>
           </article>
         </section>
@@ -375,7 +380,7 @@
           </form>
           <article class="panel" data-voucher-panel hidden>
             <div class="panel-heading"><div><h2 data-voucher-title>—</h2></div><button type="button" class="primary-button" data-voucher-print data-i18n="printVoucher"></button></div>
-            <iframe data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Receipt"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Receipt"></iframe>
           </article>
         </section>
 
@@ -389,7 +394,7 @@
           </form>
           <article class="panel" data-voucher-panel hidden>
             <div class="panel-heading"><div><h2 data-voucher-title>—</h2></div><button type="button" class="primary-button" data-voucher-print data-i18n="printVoucher"></button></div>
-            <iframe data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Payment voucher"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Payment voucher"></iframe>
           </article>
         </section>
 
@@ -467,6 +472,14 @@
                 <label class="full-field"><span data-i18n="returnItem"></span><select name="lineId" id="return-line" required></select><small id="return-remaining" data-i18n="returnRemaining"></small></label>
                 <input name="kind" id="return-kind" type="hidden" />
                 <input name="unit" id="return-unit" type="hidden" />
+                <!-- Issue #293 — a price corrected after the sale: a credit or debit note, nothing comes back. -->
+                <label class="full-field" id="return-mode-field"><span data-i18n="returnMode"></span><select name="mode" id="return-mode"><option value="" data-i18n="returnModeGoods"></option><option value="PRICE" data-i18n="returnModePrice"></option></select></label>
+                <fieldset class="full-field field-grid" id="return-price" hidden disabled>
+                  <label class="full-field"><span data-i18n="returnCause"></span><select name="cause" required><option value="" data-i18n="causeChoose"></option><option value="INVOICE_ERROR" data-i18n="causeInvoiceError"></option><option value="DISCOUNT_AFTER_SALE" data-i18n="causeDiscountAfterSale"></option></select></label>
+                  <label><span data-i18n="returnNewRate"></span><input name="newRate" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+                  <label><span data-i18n="returnAmountOff"></span><input name="amountOff" type="number" min="0.01" step="0.01" inputmode="decimal" /></label>
+                  <small class="full-field" data-i18n="returnPriceHelp"></small>
+                </fieldset>
                 <label><span data-i18n="returnQuantity"></span><input name="quantity" type="number" min="0.000001" step="0.000001" required /></label>
                 <label><span data-i18n="disposition"></span><select name="disposition"><option value="ACCEPTED" data-i18n="dispAccepted"></option><option value="DAMAGED" data-i18n="dispDamaged"></option><option value="SCRAPPED" data-i18n="dispScrapped"></option><option value="REPLACEMENT" data-i18n="dispReplacement"></option></select></label>
                 <label><span data-i18n="returnDate"></span><input name="date" type="date" required /></label>
@@ -497,7 +510,7 @@
                 <button type="button" class="secondary-button" id="note-download" data-i18n="downloadPdf"></button>
               </div>
             </div>
-            <iframe id="note-frame" title="Printed note" data-i18n-aria="noteFrame"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="note-frame" title="Printed note" data-i18n-aria="noteFrame"></iframe>
           </article>
           <article class="panel" id="note-list-panel" hidden>
             <h2 data-i18n="notesTitle"></h2>
@@ -637,7 +650,7 @@
               <div class="field-grid"><label class="full-field"><span data-i18n="presaleCancelReason"></span><input name="reason" placeholder="The customer bought elsewhere" required /></label></div>
               <button type="submit" class="secondary-button wide" data-i18n="presaleCancel"></button>
             </form>
-            <iframe id="presale-frame" title="Printed quotation or proforma invoice" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="presale-frame" title="Printed quotation or proforma invoice" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
           </article>
         </section>
 
@@ -714,7 +727,7 @@
               </div>
               <button type="submit" class="secondary-button wide" data-i18n="cancelChallan"></button>
             </form>
-            <iframe id="challan-frame" title="Printed delivery challan" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="challan-frame" title="Printed delivery challan" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
           </article>
         </section>
 
@@ -763,7 +776,7 @@
             </div>
             <section id="eway-print-panel" hidden>
               <p id="eway-print-note"></p>
-              <iframe id="eway-print-frame" title="e-Way bill" class="bill-frame"></iframe>
+              <iframe sandbox="allow-same-origin allow-modals" id="eway-print-frame" title="e-Way bill" class="bill-frame"></iframe>
               <div class="dialog-actions">
                 <button type="button" class="primary-button" id="eway-print-send" data-i18n="printEwaySend"></button>
                 <a class="secondary-button" id="eway-print-pdf" download data-i18n="printEwayPdf"></a>
@@ -1444,7 +1457,7 @@
             <article class="panel branding-preview-panel">
               <h2 data-i18n="brandingPreviewTitle"></h2>
               <p class="setup-hint" data-i18n="brandingPreviewHelp"></p>
-              <iframe id="branding-preview" title="Sample bill" data-i18n-aria="brandingPreviewFrame"></iframe>
+              <iframe sandbox="allow-same-origin allow-modals" id="branding-preview" title="Sample bill" data-i18n-aria="brandingPreviewFrame"></iframe>
               <p class="branding-status" id="branding-status" role="status"></p>
             </article>
           </div>
@@ -1690,6 +1703,7 @@
         <label><span data-i18n="itemTax"></span><select name="taxChoice" id="item-tax"></select><small data-i18n="itemTaxHelp"></small></label>
         <label id="item-other-rate" hidden><span data-i18n="itemOtherRate"></span><input name="otherRate" type="number" min="0" max="100" step="0.01" /></label>
         <label><span data-i18n="itemBasis"></span><input name="basis" /><small data-i18n="itemBasisHelp"></small></label>
+        <label><span data-i18n="itemRateFrom"></span><input name="effectiveFrom" type="date" /><small data-i18n="itemRateFromHelp"></small></label>
         <label><span data-i18n="itemBarcode"></span><input name="barcode" autocomplete="off" /><small data-i18n="itemBarcodeHelp"></small></label>
         <label><span data-i18n="itemPrice"></span><span class="input-with-prefix"><span>₹</span><input name="price" type="number" min="0" step="0.01" inputmode="decimal" /></span><small data-i18n="itemPriceHelp"></small></label>
         <label><span data-i18n="itemOtherName"></span><input name="otherName" /><small data-i18n="itemOtherNameHelp"></small></label>

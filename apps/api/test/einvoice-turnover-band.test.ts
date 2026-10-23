@@ -49,13 +49,13 @@ const registeredBuyer = (session: string) => ensure(session, 'customers', {
 /** Eight digits: fine for every band. */
 const fullCodeItem = (session: string) => ensure(session, 'items', {
   name: 'GI Wire 8 gauge', kind: 'goods', hsnSac: '72172000', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for wire',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for wire',
 }, 'GI Wire 8 gauge');
 
 /** Four digits: enough up to ₹5 crore, too short above it. */
 const fourDigitItem = (session: string) => ensure(session, 'items', {
   name: 'Binding wire bundle', kind: 'goods', hsnSac: '7217', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for wire',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for wire',
 }, 'Binding wire bundle');
 
 const settle = async () => { await new Promise((resolve) => setImmediate(resolve)); await new Promise((resolve) => setTimeout(resolve, 50)); };

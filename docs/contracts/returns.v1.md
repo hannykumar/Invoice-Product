@@ -1,5 +1,7 @@
 # Returns and transaction adjustments v1.1
 
+Version 1.1.0 (issue #293: price corrections and sales debit notes).
+
 Issue #45 owns linked sales credit notes and purchase debit notes. A return never edits, cancels,
 or hides its original invoice. The note stores the original document and line identifiers, the
 reason, actor, date, quantities, disposition, exact proportional tax snapshot, voucher, and
@@ -20,6 +22,29 @@ compliance state.
 - A return dated in an open period may reference an invoice in a filed, hard-locked period. The
   original period is never reopened. A note dated inside a hard-locked period is refused; the
   ledger's reasoned override rules apply only to soft locks.
+
+## Price corrections and sales debit notes (v1.1.0, issue #293)
+
+`ReturnService.previewPriceCorrection` / `postPriceCorrection` change the price of one line of an
+issued sales bill with nothing coming back. The command names the bill and line and gives either
+`newUnitPrice` or `amountOff` (both before GST). The difference is worked on the quantity the
+customer still keeps, from the line's current value (original, less earlier price credits, plus
+earlier debits); tax on it is the original line's, in the same proportion.
+
+- Lower price: kind `SALES_RETURN` with `priceCorrection: true`, a `CN/…` number, the 30 November
+  limit of s.34(2), voucher Dr Discount given + output GST, Cr customer.
+- Higher price: kind `SALES_DEBIT_NOTE` (always `priceCorrection: true`), a `DN/…` number from the
+  debit-note series, no time limit (s.34(3)), voucher Dr customer, Cr sales + output GST.
+- No stock moves. Price notes never count against the quantity sold; goods returned later are
+  credited at the price the customer finally paid. Both notes go to GSTR-1 CDNR/CDNUR against the
+  original invoice (`ntty` `C` / `D`), with no quantity in the HSN summary, and to the e-invoice
+  rules as `CREDIT_NOTE` / `DEBIT_NOTE`.
+- Refusals: `PRICE_CORRECTION_ONE_FIGURE`, `PRICE_CORRECTION_NO_CHANGE`,
+  `PRICE_CORRECTION_MORE_THAN_CHARGED`, `PRICE_CORRECTION_CHARGE_LINE`, `PRICE_CORRECTION_FREE_LINE`,
+  `PRICE_CORRECTION_NOTHING_KEPT`, `PRICE_CORRECTION_REASON_REQUIRED`, `PRICE_CORRECTION_BEFORE_BILL`,
+  and `RETURN_CREDIT_NOTE_TOO_LATE` for a late credit. Over HTTP: `POST /api/returns/preview|record`
+  with `mode: "PRICE"`, `newRate` or `amountOff`. Migration
+  `…_returns_d50ad1d404d0_sales_debit_notes_and_price_corrections` adds the kind and `price_correction`.
 
 ## Damaged goods never re-enter sellable stock (issue #292)
 
