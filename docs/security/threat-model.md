@@ -174,7 +174,7 @@ JavaScript is off in the page and every request but `data:` is blocked.
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | An escaping miss in any template becomes same-origin XSS: the bill frames have no `sandbox` and share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked) | `sandbox` on every bill frame; the #349 CSP is inherited by `srcdoc` and blocks inline script | Medium | #349 (CSP) + #399 |
+| P1 | An escaping miss in any template becomes same-origin XSS: the bill frames share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked); the #349 CSP is inherited by `srcdoc` and blocks inline script; every bill frame has `sandbox="allow-same-origin allow-modals"` (no `allow-scripts`), so nothing in a bill can run even without the CSP (#399) | — | Low | #349 (CSP) + #399 |
 | P2 | Repeated PDF GETs exhaust the server (A04) | Medium | Medium | Network blocked; one shared browser, bounded pages and queue, a per-render time limit, JavaScript off (#398) | A per-user rate limit | Low | #350 |
 
 ### 4.7 Voice and text assistant, action agent — prompt injection
