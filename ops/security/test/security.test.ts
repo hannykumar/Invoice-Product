@@ -64,19 +64,19 @@ test("privacy exports are tenant isolated and deletion respects retention and le
   const a = context("company-a");
   const b = context("company-b");
 
-  privacy.publishNotice(a, { version: "2026-08", effectiveAt: "2026-08-01", purposes: ["invoice delivery", "payment reminders"] });
-  assert.throws(() => privacy.publishNotice(a, { version: "2026-08", effectiveAt: "2026-08-01", purposes: ["unrelated purpose"] }), /VERSION_CONFLICT/);
-  privacy.recordConsent(a, "customer-1", "2026-08", "granted", ["invoice delivery"]);
-  const exportRequest = privacy.request(a, "customer-1", "export", "export-customer-1");
-  assert.equal(privacy.request(a, "customer-1", "export", "export-customer-1").id, exportRequest.id);
-  assert.throws(() => privacy.request(a, "customer-2", "export", "export-customer-1"), /another person/);
-  assert.throws(() => privacy.get(b, exportRequest.id), (error: unknown) => error instanceof PlatformError && error.code === "TENANT_ISOLATION");
+  await privacy.publishNotice(a, { version: "2026-08", effectiveAt: "2026-08-01", purposes: ["invoice delivery", "payment reminders"] });
+  await assert.rejects(privacy.publishNotice(a, { version: "2026-08", effectiveAt: "2026-08-01", purposes: ["unrelated purpose"] }), /VERSION_CONFLICT/);
+  await privacy.recordConsent(a, "customer-1", "2026-08", "granted", ["invoice delivery"]);
+  const exportRequest = await privacy.request(a, "customer-1", "export", "export-customer-1");
+  assert.equal((await privacy.request(a, "customer-1", "export", "export-customer-1")).id, exportRequest.id);
+  await assert.rejects(privacy.request(a, "customer-2", "export", "export-customer-1"), /another person/);
+  await assert.rejects(privacy.get(b, exportRequest.id), (error: unknown) => error instanceof PlatformError && error.code === "NOT_FOUND");
   const exported = await privacy.executeExport(a, exportRequest.id);
   assert.deepEqual(exported.data, { invoices: ["INV-1"], phone: "synthetic" });
 
-  privacy.placeLegalHold(a, "customer-1", "Active GST assessment");
-  privacy.setRetention(a, "customer-1", "2027-04-01T00:00:00.000Z");
-  const deletion = privacy.request(a, "customer-1", "deletion", "delete-customer-1");
+  await privacy.placeLegalHold(a, "customer-1", "Active GST assessment");
+  await privacy.setRetention(a, "customer-1", "2027-04-01T00:00:00.000Z");
+  const deletion = await privacy.request(a, "customer-1", "deletion", "delete-customer-1");
   const blocked = await privacy.executeDeletion(a, deletion.id);
   assert.equal(blocked.request.status, "blocked");
   assert.deepEqual(blocked.request.blockers, ["Legal hold: Active GST assessment", "Records must be retained until 2027-04-01T00:00:00.000Z"]);
@@ -90,20 +90,20 @@ test("privacy deletion completes after approved retention and holds no longer ap
   store.records.set("company-a:customer-2", { contact: "synthetic" });
   const privacy = new PrivacyService(audit, store, () => new Date("2026-08-29T10:00:00.000Z"));
   const actor = context("company-a");
-  const hold = privacy.placeLegalHold(actor, "customer-2", "Reconciliation review");
-  privacy.releaseLegalHold(actor, hold.id, "Review completed");
-  privacy.setRetention(actor, "customer-2", "2026-08-01T00:00:00.000Z");
-  const request = privacy.request(actor, "customer-2", "deletion", "delete-customer-2");
+  const hold = await privacy.placeLegalHold(actor, "customer-2", "Reconciliation review");
+  await privacy.releaseLegalHold(actor, hold.id, "Review completed");
+  await privacy.setRetention(actor, "customer-2", "2026-08-01T00:00:00.000Z");
+  const request = await privacy.request(actor, "customer-2", "deletion", "delete-customer-2");
   const completed = await privacy.executeDeletion(actor, request.id);
   assert.equal(completed.request.status, "completed");
   assert.deepEqual(completed.result, { deletedRecords: 1, retainedRecords: 0 });
   assert.equal(store.records.has("company-a:customer-2"), false);
 });
 
-test("privacy operations require explicit server-side permissions", () => {
+test("privacy operations require explicit server-side permissions", async () => {
   const privacy = new PrivacyService(new AuditLog(), new SubjectStore());
   const unprivileged = context("company-a", "cashier", new Set());
-  assert.throws(() => privacy.request(unprivileged, "customer-1", "export", "export-1"), (error: unknown) => error instanceof PlatformError && error.code === "FORBIDDEN");
+  await assert.rejects(privacy.request(unprivileged, "customer-1", "export", "export-1"), (error: unknown) => error instanceof PlatformError && error.code === "FORBIDDEN");
 });
 
 test("encrypted backup restore validates integrity and schema before replacing data", async () => {
@@ -127,16 +127,16 @@ test("encrypted backup restore validates integrity and schema before replacing d
   const drill = await recovery.restore(actor, manifest.id, target);
   assert.equal(drill.status, "passed");
   assert.equal(JSON.parse(restored!).invoices, 4);
-  assert.equal(recovery.drills(actor).length, 1);
+  assert.equal((await recovery.drills(actor)).length, 1);
 
-  const stored = await repository.get(manifest.id);
+  const stored = await repository.get("company-a", manifest.id);
   assert.ok(stored);
-  await repository.save({ ...stored, payload: { ...stored.payload, ciphertext: `${stored.payload.ciphertext.slice(0, -2)}AA` } });
+  await repository.putPayload(stored.manifest, { ...stored.payload, ciphertext: `${stored.payload.ciphertext.slice(0, -2)}AA` });
   restored = undefined;
   await assert.rejects(recovery.restore(actor, manifest.id, target));
   assert.equal(restored, undefined);
-  assert.equal(recovery.drills(actor).at(-1)?.status, "failed");
-  assert.equal(recovery.drills(actor).at(-1)?.details, "RESTORE_VALIDATION_FAILED");
+  assert.equal((await recovery.drills(actor)).at(-1)?.status, "failed");
+  assert.equal((await recovery.drills(actor)).at(-1)?.details, "RESTORE_VALIDATION_FAILED");
 });
 
 test("backup listing, restore and pruning cannot cross company boundaries", async () => {
@@ -146,7 +146,7 @@ test("backup listing, restore and pruning cannot cross company boundaries", asyn
   let now = new Date("2026-08-01T00:00:00.000Z");
   const recovery = new BackupRecoveryService(audit, repository, encryption, "backup-v1", () => now);
   const backup = await recovery.create(context("company-a"), { snapshot: async () => Buffer.from("a") }, "schema-8", 1, "daily-1");
-  await assert.rejects(recovery.restore(context("company-b"), backup.id, { validate: async () => {}, replace: async () => {} }), (error: unknown) => error instanceof PlatformError && error.code === "TENANT_ISOLATION");
+  await assert.rejects(recovery.restore(context("company-b"), backup.id, { validate: async () => {}, replace: async () => {} }), (error: unknown) => error instanceof PlatformError && error.code === "NOT_FOUND");
   now = new Date("2026-08-03T00:00:00.000Z");
   assert.equal(await recovery.pruneExpired(context("company-b")), 0);
   assert.equal(await recovery.pruneExpired(context("company-a")), 1);

@@ -20,8 +20,11 @@ const safeFileName = (number: string): string => `${number.replace(/[^a-zA-Z0-9.
 const sale = fields({
   customerId: text, customer: text, party: text, date: text, terms: text, notes: anything,
   lines: anything, itemId: anything, item: anything, quantity: anything, unit: anything, rate: anything,
+  // Issue #293 — a one-line sale's discount (rupees or percent), and a discount on the whole bill.
+  discount: anything, discountPercent: anything, billDiscount: anything,
   freight: anything, otherCharges: anything, paidBy: text, paidAmount: anything, distanceKm: text,
-  underLut: anything, exportCurrency: text, shippingBillNumber: text, shippingBillDate: text, portCode: text, exportCountry: text, exchangeRate: text,
+  requestId: text, replaces: text,
+  underLut: anything, approvalReason: text, exportCurrency: text, shippingBillNumber: text, shippingBillDate: text, portCode: text, exportCountry: text, exchangeRate: text,
 });
 const cancel = fields({ invoice: text, reason: text, cancelGovernmentDocuments: anything });
 /** Money in or out. `bills` arrives both as a list and as its JSON text: the payment service reads both. */
@@ -35,17 +38,19 @@ const challan = fields({
   challan: text, customerId: text, customer: text, party: text, reason: text, reasonNote: text, deliveryState: text, deliveryPlace: text,
   itemId: text, item: text, date: text, quantity: text, unit: text, rate: anything, reference: anything,
   invoice: text, ewayBillNumber: text, vehicle: text, transporter: text, locale: anything, format: anything, copy: text,
-  terms: text, ewayBillCancelledOnPortal: anything,
+  terms: text, ewayBillCancelledOnPortal: anything, approvalReason: text, requestId: text,
 });
 const presale = fields({
   kind: text, document: text, customerId: text, customer: text, party: text, itemId: text, item: text, date: text, validUntil: anything,
   quantity: text, unit: text, rate: anything, terms: anything, purpose: anything, buyerOrderNumber: anything, paymentTerms: anything,
-  reference: anything, bankDetails: anything, invoice: text, reason: text, locale: anything, format: anything, token: text,
+  reference: anything, bankDetails: anything, invoice: text, reason: text, locale: anything, format: anything, token: text, approvalReason: text,
 });
 const advance = fields({ document: text, advance: text, amount: anything, date: text, mode: text, utr: anything, reason: text, reference: anything, which: anything });
 const goodsReturn = fields({
   kind: text, documentId: text, lineId: text, reference: anything, date: text, reason: text, disposition: text,
-  quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text,
+  quantity: text, unit: text, supplierNoteNumber: text, supplierNoteDate: text, noteId: text, requestId: text,
+  // Issue #293 — "Price correction": the new rate per unit or the amount off, before GST.
+  mode: text, cause: text, newRate: anything, amountOff: anything,
 });
 
 export const SALES_ROUTES: readonly Route[] = [
@@ -53,6 +58,9 @@ export const SALES_ROUTES: readonly Route[] = [
   post('/api/sales/estimate', { access: DRAFT, input: sale }, ({ app, actor, input }) => app.estimateSale(actor, input)),
   post('/api/sales/preview', { access: DRAFT, input: sale }, ({ app, actor, input }) => app.previewSale(actor, input)),
   post('/api/sales/record', { access: need('issue a bill', 'sales.draft.write', 'sales.finalise'), input: sale }, ({ app, actor, input }) => app.recordSale(actor, input)),
+  // Issue #301 — sales held because their review needed approval, and approving one with a reason.
+  list('/api/sales/waiting', { access: READ, key: 'bills' }, ({ app, actor }) => app.salesWaitingForApproval(actor)),
+  post('/api/sales/approve', { access: need('approve a bill', 'sales.approve', 'sales.finalise'), input: fields({ token: text, reason: text }) }, ({ app, actor, input }) => app.approveSale(actor, input)),
   // Issue #233 — cancelling a wrong bill: what it will do, then doing it. Refused with the credit-note
   // route once the bill's month is approved or filed.
   post('/api/sales/cancel/preview', { access: need('cancel a bill', 'sales.cancel'), input: cancel }, ({ app, actor, input }) => app.previewCancelSale(actor, input)),

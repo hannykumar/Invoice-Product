@@ -62,7 +62,7 @@ test('#231 a goods bill with freight gets an e-way bill and an e-invoice, and GS
   const recorded = await request('POST', '/api/sales/record', {
     customerId: await customer(session),
     lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '450', rate: '90' }],
-    freight: '2000', date: '2026-09-17', terms: '30', reference: 'freight-231',
+    freight: '2000', date: '2026-09-17', terms: '30', reference: 'freight-231', requestId: 'freight-231',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const invoice = recorded.body.invoice.id as string;

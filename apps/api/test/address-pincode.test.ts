@@ -30,7 +30,7 @@ const signIn = async (): Promise<string> => {
 
 const GRANULES = {
   name: 'LDPE Granules', kind: 'goods', hsnSac: '39011000', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for granules',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for granules',
 };
 
 test('a new customer whose PIN code is in another state is refused', async () => {
@@ -89,7 +89,7 @@ test('a customer’s address is corrected from the Sale screen, and the next bil
   assert.match(String(corrected.body.message), /Plot 19, IDA Kukatpally, Hyderabad 500037/);
 
   const sale = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '10', rate: '100' }], date: '2026-09-17', terms: '30', reference: 'pin-224-corrected',
+    customerId, lines: [{ itemId, quantity: '10', rate: '100' }], date: '2026-09-17', terms: '30', reference: 'pin-224-corrected', requestId: 'pin-224-corrected',
   }, session);
   assert.equal(sale.status, 200, sale.body.message);
   const printed = await request('POST', '/api/sales/print', { invoice: sale.body.invoice.id }, session);

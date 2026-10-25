@@ -12,6 +12,7 @@ import {
   everyVoucherBalances,
   finalRecordsAreImmutable,
   goldenDatasetStillMatches,
+  noTrackedCopyFiles,
   retriesAreIdempotent,
   stockNeverNegative,
   taxPartsSumToTotal,
@@ -72,6 +73,8 @@ export const runGates = (observations: Observations): GateReport => {
       goldenDatasetStillMatches(observations.golden)),
     evaluate('UNCERTAIN_MODEL_OUTPUT_IS_ASKED_ABOUT', 'Anything the app was unsure it heard is asked about', () =>
       uncertainModelOutputIsAskedAbout(observations.modelFields, observations.materialConfidence)),
+    evaluate('NO_TRACKED_COPY_FILES', 'No accidental copy files are tracked in the repository', () =>
+      noTrackedCopyFiles(observations.trackedPaths)),
   ];
 
   const failures = results.filter((result) => !result.passed);

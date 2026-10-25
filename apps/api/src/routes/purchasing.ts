@@ -3,7 +3,7 @@
  * comparison with the bill (#18), and recording the supplier's bill (#17).
  */
 import { DemoApplication } from '../demo-application.ts';
-import { anything, fields, get, need, nothing, post, text, READ, type Route } from './route.ts';
+import { anything, fields, get, list, need, nothing, post, text, READ, type Route } from './route.ts';
 
 const RECORD_BILL = need('record a supplier bill', 'ledger.post.purchase');
 
@@ -18,7 +18,11 @@ const matching = fields({
 const purchase = fields({
   supplierId: text, supplier: text, party: text, reference: text, date: text,
   lines: anything, itemId: anything, item: anything, quantity: anything, unit: anything, rate: anything, gst: anything, amount: anything, useAdvance: anything,
+  // Issue #289, part 2b — the day the goods or service reached the business (reverse-charge time of supply).
+  receivedOn: text,
 });
+/** Issue #289, part 2b — a self-invoice for a purchase from an unregistered supplier. */
+const selfInvoice = fields({ billId: text, date: text, idempotencyKey: text });
 
 export const PURCHASING_ROUTES: readonly Route[] = [
   // Issue #19 — what we know about a supplier, and the evidence behind each warning.
@@ -34,5 +38,9 @@ export const PURCHASING_ROUTES: readonly Route[] = [
     ({ app, actor, input }) => app.approvePurchaseMatch(actor, input)),
   post('/api/purchases/preview', { access: RECORD_BILL, input: purchase }, ({ app, actor, input }) => app.previewPurchase(actor, input)),
   post('/api/purchases/record', { access: RECORD_BILL, input: purchase }, ({ app, actor, input }) => app.recordPurchase(actor, input)),
+  // Issue #289, part 2b — the self-invoice (CGST s.31(3)(f), Rule 47A): issue it, print it, and the list of those due.
+  post('/api/purchases/self-invoice', { access: RECORD_BILL, input: selfInvoice }, ({ app, actor, input }) => app.issueSelfInvoice(actor, input)),
+  post('/api/purchases/self-invoice/print', { access: RECORD_BILL, input: selfInvoice }, ({ app, actor, input }) => app.selfInvoicePrint(actor, input)),
+  list('/api/purchases/self-invoices', { access: READ, key: 'items' }, ({ app, actor }) => app.selfInvoiceList(actor)),
   get('/api/purchases/:id', { access: READ, input: nothing }, ({ app, actor, params }) => app.purchase(actor, params.id!)),
 ];

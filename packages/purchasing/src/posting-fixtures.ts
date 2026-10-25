@@ -44,7 +44,7 @@ const WAREHOUSES: Warehouse[] = [
   { warehouseId: "wh-main", name: "Peenya godown" },
   // Where returned goods that cannot be sold again are put. A separate place rather than a flag,
   // because the whole point is that the saleable balance must not include them (#44).
-  { warehouseId: "wh-quarantine", name: "Quarantine shelf" },
+  { warehouseId: "wh-quarantine", name: "Quarantine shelf", sellable: false },
 ];
 
 export class Masters implements StockMasterData {

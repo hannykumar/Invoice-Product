@@ -21,8 +21,8 @@ import {
 } from '@invoice/collections';
 import { AssistantService } from '../../assistant/src/service.ts';
 import {
-  AuditLog,
   ChannelNotificationTransport,
+  CompanyTrailAuditLog,
   InAppNotificationAdapter,
   NotificationService,
   NotificationTemplateRegistry,
@@ -150,8 +150,10 @@ export const makeAgentDesk = async (
     },
   };
 
-  const audit = new AuditLog();
-  const commands = new PlatformCommandService(audit, [
+  // Issue #404 — one trail for the company: the agent's lines and its commands' lifecycle go where
+  // the reminders it sends are recorded.
+  const audit = business.audit;
+  const commands = new PlatformCommandService(new CompanyTrailAuditLog(audit), [
     // Anything the agent does that changes something needs a person who may approve it.
     { action: 'agent.run', minimumRisk: 'medium', requiredPermission: 'approval.decide' },
   ]);
@@ -159,6 +161,7 @@ export const makeAgentDesk = async (
   const agent = new ActionAgentService({
     registry,
     commands,
+    audit,
     contextFor,
     parties,
     store: options.store ?? new InMemoryAgentPlanStore(),

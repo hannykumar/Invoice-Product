@@ -118,7 +118,7 @@ test('#279: a credit note to a walk-in customer comes off B2CS, never CDNR', asy
   const original = (await ok('GET', '/api/returns/documents')).documents.find((document: any) => document.id === recorded.invoice.id);
   const back = {
     kind: original.kind, documentId: original.id, lineId: original.lines[0].id, unit: original.lines[0].unit,
-    quantity: '1', disposition: 'ACCEPTED', date: '2026-08-21', reference: 'e2e-279-return', reason: 'Wrong fragrance',
+    quantity: '1', disposition: 'ACCEPTED', date: '2026-08-21', reference: 'e2e-279-return', requestId: 'e2e-279-return', reason: 'Wrong fragrance',
   };
   const note = await ok('POST', '/api/returns/record', back);
   const august = await ok('POST', '/api/gst-returns', { period: '2026-08' });

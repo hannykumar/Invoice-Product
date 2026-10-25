@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  asId, fixedClock, isoDate, money, quantityFromString, rupees, toDecimalString,
+  DomainError, asId, fixedClock, isoDate, money, quantityFromString, rupees, toDecimalString,
   type AccountId, type CompanyId, type PartyId,
 } from '@invoice/kernel';
 import {
@@ -29,7 +29,7 @@ const actor: ActorContext = {
 class Masters implements StockMasterData {
   readonly #units = createDefaultUnitRegistry();
   readonly #items: StockItem[] = [{ itemId: 'APPLE', name: 'Apple box', baseUnit: 'BOX', tracksBatches: false, tracksSerials: false }];
-  readonly #warehouses: Warehouse[] = [{ warehouseId: 'shop', name: 'Main shop' }, { warehouseId: 'damaged', name: 'Damaged stock' }];
+  readonly #warehouses: Warehouse[] = [{ warehouseId: 'shop', name: 'Main shop' }, { warehouseId: 'damaged', name: 'Damaged stock', sellable: false }];
   item(_companyId: CompanyId, itemId: string) { return this.#items.find((item) => item.itemId === itemId); }
   warehouse(_companyId: CompanyId, warehouseId: string) { return this.#warehouses.find((warehouse) => warehouse.warehouseId === warehouseId); }
   units() { return this.#units; }
@@ -143,6 +143,19 @@ test('a retry returns the same note and never doubles stock or credit', async ()
   assert.equal((await f.notes.listForOriginal(COMPANY, 'invoice-70')).length, 1);
 });
 
+test('#392: the same key with a different return is refused, never answered with the earlier note', async () => {
+  const f = await setup();
+  await f.service.postSales(actor, command());
+  for (const changed of [
+    command({ lines: [{ originalLineId: 'line-apples', quantity: quantityFromString('11', 'BOX'), disposition: 'ACCEPTED' }] }),
+    command({ documentDate: isoDate('2026-08-31') }),
+    command({ reason: 'A different reason' }),
+  ]) {
+    await assert.rejects(f.service.postSales(actor, changed), (error: unknown) => error instanceof DomainError && error.code === 'RETURN_KEY_REUSED' && error.kind === 'CONFLICT');
+  }
+  assert.equal((await f.notes.listForOriginal(COMPANY, 'invoice-70')).length, 1);
+});
+
 test('partial returns share one eligibility ceiling, including concurrent attempts', async () => {
   const f = await setup();
   await f.service.postSales(actor, command());
@@ -186,6 +199,42 @@ test('a full damaged return clears the customer balance and goes only to damaged
   assert.ok(voucher);
   const accountRoles = await Promise.all(voucher.lines.map(async (line) => (await f.store.read().accounts.findById(COMPANY, line.accountId))?.systemRole));
   assert.ok(!accountRoles.includes('CASH_IN_HAND'), 'a return note must not silently move money; an approved refund is a separate payment');
+});
+
+test('issue #292: damaged goods are refused back into a godown they could be sold from', async () => {
+  const f = await setup();
+  const before = await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'shop' });
+  for (const warehouseId of ['shop', 'nowhere']) {
+    await assert.rejects(
+      f.service.postSales(actor, command({
+        idempotencyKey: `damaged-into-${warehouseId}`,
+        lines: [{ originalLineId: 'line-apples', quantity: quantityFromString('1', 'BOX'), disposition: 'DAMAGED', warehouseId }],
+      })),
+      (error: any) => error.code === 'RETURN_DAMAGED_INTO_SELLABLE_STOCK',
+    );
+  }
+  await assert.rejects(
+    f.service.postSales(actor, command({ idempotencyKey: 'damaged-whole-bill-shop', lines: [], wholeBill: true, wholeBillDisposition: 'DAMAGED', wholeBillWarehouseId: 'shop' })),
+    (error: any) => error.code === 'RETURN_DAMAGED_INTO_SELLABLE_STOCK',
+  );
+  assert.equal((await f.notes.listForOriginal(COMPANY, 'invoice-70')).length, 0, 'nothing was posted');
+  assert.deepEqual(await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'shop' }), before);
+});
+
+test('issue #292: a whole bill sent back damaged goes to the not-for-sale location, and none of it can be sold', async () => {
+  const f = await setup();
+  await f.service.postSales(actor, command({ idempotencyKey: 'damaged-whole-bill', lines: [], wholeBill: true, wholeBillDisposition: 'DAMAGED', wholeBillWarehouseId: 'damaged' }));
+  assert.equal((await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'shop' })).physical.scaled, 0n);
+  const damaged = await f.inventory.balance(actor, { itemId: 'APPLE', warehouseId: 'damaged' });
+  assert.equal(damaged.physical.scaled, quantityFromString('70', 'BOX').scaled);
+  assert.equal(f.inventory.sellable(actor, 'damaged'), false);
+  await assert.rejects(
+    f.inventory.recordMovement(actor, {
+      idempotencyKey: 'sell-damaged', itemId: 'APPLE', warehouseId: 'damaged', kind: 'SALE_OUT', quantity: quantityFromString('1', 'BOX'),
+      documentDate: isoDate('2026-08-20'), source: { kind: 'sales_invoice', id: 'x', number: 'X' }, reason: 'try to sell a damaged box',
+    }),
+    (error: any) => error.code === 'STOCK_WAREHOUSE_NOT_FOR_SALE',
+  );
 });
 
 test('a return against a hard-locked original month posts as a later adjustment, never back into the filed month', async () => {

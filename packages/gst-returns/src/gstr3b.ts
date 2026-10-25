@@ -141,7 +141,8 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
     line('4A(3)', 'GST you already paid on purchases where you owe the tax yourself', 'Aisi kharid par diya GST jis ka tax aapko bharna tha', input.inward.reverseChargeItc, input.inward.contributions),
     line('4A(4)', 'GST you already paid on goods brought in from outside India', 'Bahar se mangaye saaman par diya GST', input.inward.importItc, input.inward.contributions),
     line('4A(5)', 'GST you already paid on all other purchases', 'Baaki sab kharid par diya GST', input.inward.allOtherItc, input.inward.contributions),
-    line('4B', 'Credit you have to give back', 'Credit jo wapas karna hai', input.inward.reversedItc, input.inward.contributions),
+    // Issue #289, part 3 — Table 4(B)(1): credit the law does not allow (CGST s.17(5)), taken back out of 4(A).
+    line('4B', 'Credit the law does not allow (CGST s.17(5)), taken back out — Table 4(B)(1)', 'Jo credit kanoon nahin deta (CGST s.17(5)), wapas nikala — Table 4(B)(1)', input.inward.reversedItc, input.inward.contributions),
     line('4C', 'Credit left with you after that', 'Uske baad bacha hua credit', netItc, input.inward.contributions),
   ];
 

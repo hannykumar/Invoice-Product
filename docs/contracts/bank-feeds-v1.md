@@ -26,6 +26,12 @@ Tenant identity always comes from the authenticated context. The database tables
 
 `BankFeedProviderAdapter` exposes `startConsent`, `completeConsent`, `sync` and `revoke`. `ConnectorBankFeedAdapter` maps these operations to E08's `banking` connector. OAuth authorization codes pass through once; they are not returned, audited or persisted. The included synthetic provider uses invented Indian-business data for deterministic sandbox, outage, cursor-replay, expiry and revocation tests.
 
+## Consent return address and `state` (#402, v1.1.0; return page `/` since v1.1.1)
+
+The bank sends the customer back only to this app: `BankFeedService` takes a `ConsentReturnPolicy` of allowed origins (`https://…`, or `http://localhost` / `http://127.0.0.1` in development) and one fixed path, `BANK_RETURN_PATH` = `/` — the app's start page, which the web server always serves (#393); the app finishes the request there from the bank's `code` and `state`. The API builds the origins from `KAROBAR_PUBLIC_ORIGINS`, or this machine in development, and with none no consent starts. `startConsent` may name one of those addresses in `redirectUri` or leave it out; any other address is refused and the bank is not asked.
+
+`startConsent` returns `{ connection, state }`. `state` is 32 random bytes, passed to the adapter's `startConsent` to send with the bank request, and returned once to the person who started it (the API's `consentState`). Only its SHA-256 is stored, in `bank_feed_consent_states`, with the company, the person who started it and a 30-minute expiry. `completeConsent(context, connectionId, authorizationCode, state)` exchanges the code only when that hash, company and person match and the state is unused and in time; it is spent before the bank is asked, so a reply is used once. A wrong guess spends nothing. If the bank then refuses the code, the connection ends in `ERROR` and consent starts again.
+
 ## Known limitations
 
 The first version supports INR current, savings, cash-credit and other deposit accounts. It neither becomes an RBI Account Aggregator nor initiates payments. Production providers and legal/commercial access remain separately approved business work.

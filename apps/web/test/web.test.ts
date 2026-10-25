@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import vm from "node:vm";
-import { loadWebAsset } from "../server.ts";
+import type { AddressInfo } from "node:net";
+import { loadWebAsset, webServer } from "../server.ts";
+import { BANK_RETURN_PATH } from "../../../packages/bank-feeds/src/index.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (name: string) => readFile(resolve(root, name), "utf8");
@@ -201,8 +203,9 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // One focusable heading per screen. Bank feeds, reminders, operations, vehicle, migration, plans,
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
   // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six;
-  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 29);
+  // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine;
+  // #294's expenses screen makes thirty.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 30);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -225,7 +228,44 @@ test("the local web preview serves the application shell", async () => {
   assert.equal(asset.status, 200);
   assert.match(asset.contentType, /text\/html/);
   assert.match(asset.body.toString("utf8"), /id="view-dashboard"/);
-  assert.equal((await loadWebAsset("/../../private-file")).status, 403);
+  assert.equal((await loadWebAsset("/../../private-file")).status, 404);
+});
+
+test("#360: scripts and styles are named by their content and cached for a year; the shell and the API are not", async () => {
+  const shell = await loadWebAsset("/");
+  assert.equal(shell.cacheControl, "no-cache");
+  const html = shell.body.toString("utf8");
+  const names = [...html.matchAll(/(?:src|href)="(\/[\w-]+\.[0-9a-f]{12}\.(?:js|css))"/g)].map((match) => match[1]!);
+  assert.deepEqual(names.map((name) => name.replace(/\.[0-9a-f]{12}/, "")).sort(), ["/app.js", "/item-picker.js", "/sale-slides.js", "/styles.css"]);
+  for (const name of names) {
+    const asset = await loadWebAsset(name);
+    assert.equal(asset.cacheControl, "public, max-age=31536000, immutable", name);
+    assert.deepEqual(asset.body, await readFile(resolve(root, name.replace(/^\/(.+)\.[0-9a-f]{12}/, "$1"))));
+    assert.match(asset.contentType, /javascript|css/);
+  }
+  // A page from the previous deploy asks for a hash that no longer exists: today's file, revalidated.
+  const stale = await loadWebAsset("/app.000000000000.js");
+  assert.equal(stale.cacheControl, "no-cache");
+  assert.deepEqual(stale.body, await readFile(resolve(root, "app.js")));
+  assert.equal((await loadWebAsset("/done-screen.js")).cacheControl, "no-cache");
+  assert.equal((await loadWebAsset("/../../private-file")).cacheControl, "no-store");
+
+  await new Promise<void>((done) => webServer.listen(0, "127.0.0.1", done));
+  try {
+    const base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
+    const first = await fetch(`${base}/styles.css`);
+    const etag = first.headers.get("etag")!;
+    assert.equal(first.headers.get("cache-control"), "no-cache");
+    const again = await fetch(`${base}/styles.css`, { headers: { "if-none-match": etag } });
+    assert.equal(again.status, 304);
+    assert.equal(await again.text(), "");
+    assert.equal((await fetch(`${base}/styles.css`, { headers: { "if-none-match": `"x", W/${etag}` } })).status, 304);
+    // Anything behind sign-in is never kept by a browser, proxy or CDN.
+    const api = await fetch(`${base}/api/session`);
+    assert.equal(api.headers.get("cache-control"), "no-store");
+  } finally {
+    await new Promise<void>((done) => webServer.close(() => done()));
+  }
 });
 
 test("#230: money received picks a customer and money paid picks a supplier, never a typed name", async () => {
@@ -347,10 +387,11 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
     { main: false, view: "paid", disabled: false, label: "Money paid" },
     { main: false, view: "presale", disabled: false, label: "Quotation" },
     { main: false, view: "returns", disabled: false, label: "Return" },
-    { main: false, view: null, disabled: true, label: "Expense" },
+    { main: false, view: "books", disabled: false, label: "Expense" },
   ]);
   assert.match(sheet, /data-view="sale" autofocus/);
-  assert.match(sheet, /aria-describedby="expense-soon"[\s\S]*id="expense-soon" data-i18n="expenseSoon"/);
+  // Issue #294 — the expense button opens the expenses screen; it is no longer "coming soon".
+  assert.doesNotMatch(sheet, /expense-soon/);
   // Any screen reaches a new sale in one tap: the tab, F2 and Alt+N all open the sale itself.
   assert.match(script, /querySelector\("#bill-button"\)\.addEventListener\("click", openNewSale\)/);
   assert.match(script, /event\.key === "F2" \|\| \(event\.altKey && [^)]*event\.code === "KeyN"\)\) \{\s*event\.preventDefault\(\);\s*openNewSale\(\);/);
@@ -857,4 +898,42 @@ test("#288/#307: the sale form offers the walk-in customer and paid now by cash,
   assert.match(script, /\["WALK_IN_NAME_REQUIRED", "WALK_IN_DELIVERY"\]\.includes\(error\?\.code\)/);
   // The state is filled in from the PIN code.
   assert.match(script, /"\/api\/pincode\/state"/);
+});
+
+test("#402: the page the bank sends the customer back to is the app, and the app finishes the request there", async () => {
+  const page = await loadWebAsset(BANK_RETURN_PATH);
+  assert.equal(page.status, 200);
+  assert.match(page.contentType, /^text\/html/);
+  assert.match(page.body.toString("utf8"), /id="view-bank-feeds"/);
+  await new Promise<void>((done) => webServer.listen(0, "127.0.0.1", done));
+  try {
+    const base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
+    const returned = await fetch(`${base}${BANK_RETURN_PATH}?code=bank-code&state=bank-state`);
+    assert.equal(returned.status, 200);
+    assert.match(returned.headers.get("content-type") ?? "", /^text\/html/);
+  } finally {
+    await new Promise<void>((done) => webServer.close(() => done()));
+  }
+  const script = await read("app.js");
+  const finish = script.slice(script.indexOf("async function finishBankReturn"), script.indexOf("document.querySelector(\"#bank-feed-connect\")"));
+  assert.match(finish, /new URLSearchParams\(location\.search\)/);
+  assert.match(finish, /returned !== pending\.consentState/, "a reply whose state this tab did not hand out is not sent");
+  assert.ok(finish.indexOf("history.replaceState") < finish.indexOf("completeBankConsent(code)"), "the code leaves the address bar before it is used");
+  assert.match(script, /sessionStorage/);
+  assert.match(script, /finishBankReturn\(\);/);
+});
+
+test("#293: the Sale screen reaches every discount, and a price correction asks why before it can lower GST", async () => {
+  const [html, script, copy] = await Promise.all([read("index.html"), read("app.js"), localeCopy()]);
+  // A line discount in rupees or per cent, and one on the whole bill, all sent with the sale.
+  assert.match(html, /id="sale-line-template"[\s\S]*?data-line-field="discount" type="number" min="0"/);
+  assert.match(html, /id="sale-line-template"[\s\S]*?data-line-field="discountPercent" type="number" min="0" max="100"/);
+  assert.match(html, /name="billDiscount" type="number" min="0" step="0\.01"/);
+  assert.match(script, /\.\.\.draftData\(form\), lines: JSON\.stringify\(lines\)/, "the estimate and the sale send every named field and every line field");
+  // Nothing is chosen for the shopkeeper: a wrong bill and a discount after the sale are told apart
+  // (CGST Act s.34(1) against s.15(3)(b)), and the choice is off when nothing is being re-priced.
+  assert.match(html, /<fieldset class="full-field field-grid" id="return-price" hidden disabled>/);
+  assert.match(html, /<select name="cause" required><option value="" data-i18n="causeChoose"><\/option><option value="INVOICE_ERROR"/);
+  assert.match(script, /if \(fields\) fields\.disabled = !price;/);
+  for (const locale of ["en-IN", "hi-IN"]) assert.ok(copy[locale]?.causeChoose, `${locale} names the blank choice`);
 });

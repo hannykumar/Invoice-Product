@@ -180,6 +180,6 @@ test('one business cannot restore another business’s books', async () => {
       async validate() { throw new Error('validation must never be reached'); },
       async replace() { throw new Error('replacement must never be reached'); },
     }),
-    /another company/,
+    /not found for this company/,
   );
 });

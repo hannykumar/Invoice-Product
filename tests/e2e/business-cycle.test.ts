@@ -122,11 +122,11 @@ test('purchase → stock → sale → receipt stays balanced through refusals an
     permissions: new Set(['bank.reconcile', 'bank.reconcile.confirm']),
   };
   const reconciliation = new BankReconciliationService(undefined, () => new Date('2026-09-01T12:00:00.000Z'));
-  const matched = reconciliation.reconcile(reconciliationContext, [fromBankTransaction(bankTransaction)], [bookPayment]);
+  const matched = await reconciliation.reconcile(reconciliationContext, [fromBankTransaction(bankTransaction)], [bookPayment]);
   assert.equal(matched.matches.length, 1);
   assert.equal(matched.matches[0]?.status, 'AUTO_MATCHED');
   assert.equal(matched.exceptions.length, 0);
-  assert.deepEqual(reconciliation.auditFor(reconciliationContext, matched.matches[0]!.id).map((event) => event.action), ['reconciliation.auto_matched']);
+  assert.deepEqual((await reconciliation.auditFor(reconciliationContext, matched.matches[0]!.id)).map((event) => event.action), ['reconciliation.auto_matched']);
 
   // Money visible only at the bank becomes review work. Importing and reconciling it never invents
   // a receipt or changes the ledger behind the user's back.
@@ -138,7 +138,7 @@ test('purchase → stock → sale → receipt stays balanced through refusals an
     content: 'Date,Description,Debit,Credit,Reference\n02/09/2026,Unknown incoming transfer,,250.00,UTR-UNKNOWN-250',
   });
   const unexplainedLines = imports.transactionsFor(importContext, unexplained.id).map(fromBankTransaction);
-  const needsReview = reconciliation.reconcile(reconciliationContext, unexplainedLines, []);
+  const needsReview = await reconciliation.reconcile(reconciliationContext, unexplainedLines, []);
   assert.ok(needsReview.exceptions.some((item) => item.kind === 'MISSING_BOOK'));
   assert.equal(needsReview.suggestedPayments.length, 1, 'the product suggests work; it does not post it');
   assert.equal((await shop.store.read().vouchers.list(COMPANY, {})).length, vouchersBeforeUnmatchedBankLine);

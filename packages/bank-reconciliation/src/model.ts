@@ -52,6 +52,8 @@ export interface MatchCandidate {
 }
 
 export interface ReconciliationMatch extends MatchCandidate {
+  /** The candidate this match was made from (#366); `id` is the match's own, so undoing and re-confirming keeps both. */
+  readonly candidateId: string;
   readonly status: ReconciliationStatus;
   readonly remainingBankPaise: bigint;
   readonly remainingBookPaise: bigint;

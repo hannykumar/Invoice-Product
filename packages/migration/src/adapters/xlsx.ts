@@ -80,6 +80,6 @@ export const xlsxReader = (options: XlsxReaderOptions = {}): SpreadsheetReader =
  */
 export const workbookToCsv = async (bytes: Uint8Array, options: XlsxReaderOptions = {}): Promise<string> => {
   const sheet = await xlsxReader(options).read(bytes);
-  const { toCsv } = await import('../csv.ts');
-  return toCsv(sheet.headers, sheet.rows);
+  const { toRawCsv } = await import('../csv.ts');
+  return toRawCsv(sheet.headers, sheet.rows);
 };

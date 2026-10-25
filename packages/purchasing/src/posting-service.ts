@@ -170,6 +170,7 @@ export class PurchasePostingService {
         cgstPaise: eligible ? split.cgst : 0n, sgstPaise: eligible ? split.sgst : 0n,
         igstPaise: eligible ? split.igst : 0n, cessPaise: eligible ? split.cess : 0n,
         ineligibleItcPaise: ineligible,
+        ...(ineligible > 0n && line.blockedCreditClause !== undefined ? { blockedCreditClause: line.blockedCreditClause } : {}),
         // Allocate the bill-level rounding to the last line. That makes a full set of line
         // returns recover the exact printed supplier total while every partial line remains
         // traceable to its original value.

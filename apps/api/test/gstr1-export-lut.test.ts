@@ -36,7 +36,7 @@ const create = async (session: string, kind: 'customers' | 'items', body: Record
 const GULF = { legalName: 'Gulf Steel LLC', registration: 'overseas', line1: 'Plot 9, Industrial Area 4', city: 'Sharjah, United Arab Emirates' };
 const STEEL = {
   name: 'Export TMT Bar 16mm', kind: 'goods', hsnSac: '72142090', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for steel bar',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for steel bar',
 };
 
 test('a month with an export under LUT approves, and the export is reported as zero-rated', async () => {
@@ -46,7 +46,7 @@ test('a month with an export under LUT approves, and the export is reported as z
   const sold = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '100', rate: '100' }], date: '2026-07-10', terms: '30',
     underLut: 'yes', exportCountry: 'AE', exportCurrency: 'USD', exchangeRate: '84',
-    shippingBillNumber: '1234567', shippingBillDate: '2026-07-11', portCode: 'INMAA1', reference: 'lut-285',
+    shippingBillNumber: '1234567', shippingBillDate: '2026-07-11', portCode: 'INMAA1', reference: 'lut-285', requestId: 'lut-285',
   }, session);
   assert.equal(sold.status, 200, sold.body.message);
   const number = String(sold.body.invoice.number);

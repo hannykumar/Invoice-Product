@@ -17,6 +17,12 @@ export interface StockItem {
 export interface Warehouse {
   readonly warehouseId: string;
   readonly name: string;
+  /**
+   * Issue #292 — `false` for a place that holds goods which must not be sold, such as damaged
+   * goods a customer sent back. Its stock is counted and valued, but none of it is free to sell.
+   * Left out, the place is an ordinary godown.
+   */
+  readonly sellable?: boolean;
 }
 
 export interface StockMasterData {

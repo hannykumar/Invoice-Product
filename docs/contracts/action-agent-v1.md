@@ -1,5 +1,7 @@
 # Safe AI action agent contract v1
 
+Version 1.1.0 (#404: the agent writes to the company's own audit trail).
+
 Owner: GPT 1, built for GPT 2's issue #47. Consumers: the web app, and any surface that wants to
 let a person ask the product to *do* something rather than only answer.
 
@@ -91,3 +93,18 @@ does not have. A missing party, amount or date is a refusal with a question, nev
 - `putReport` refuses a key it already holds (`AGENT_REPORT_EXISTS`); `reportFor` is the latest.
 - On PostgreSQL an `EXECUTED` plan and every report are frozen by the database (#368), and both
   tables force row-level security. Writes need the action's unit of work.
+
+## Audit (#404)
+
+There is no audit log of the agent's own. `ActionAgentDeps.audit` is the company's audit port, the
+one sales, collections and returns write to, and `commands` is built over the same trail: in memory
+`PlatformCommandService` over `CompanyTrailAuditLog(shop.audit)`, on PostgreSQL
+`PostgresCommandService` over the company's `PostgresAuditLog`, so the `agent.run` command is a row
+in `command_records`.
+
+- `agent.requested`, `agent.previewed`, `agent.approved`, `agent.rejected`, `agent.refused_changed`,
+  `agent.step_done`, `agent.step_failed` and `agent.reported` are written with the plan id as the
+  subject and, once there is one, the command id in `details.commandId`. The command's own lifecycle
+  (`agent.run.created` … `agent.run.finalised`) is written under the command id.
+- The actor is always the person who asked, approved or ran it; the agent is never an actor.
+- Every write is awaited: a trail that cannot be saved fails the call rather than dropping a line.

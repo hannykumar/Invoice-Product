@@ -44,7 +44,7 @@ const CUSTOMER = {
 };
 const GOODS = {
   name: 'Brass Gate Valve 25mm', kind: 'goods', hsnSac: '84818030', unit: 'PCS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for valves',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for valves',
 };
 
 const text = (html: string): string => html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
@@ -57,7 +57,7 @@ const saleAndReturn = async (session: string, key: string, returnDate = '2026-09
   const itemId = catalogue.items.find((i: { name: string }) => i.name === GOODS.name)?.id
     ?? (await request('POST', '/api/items', GOODS, session)).body.item.id;
   const sold = await request('POST', '/api/sales/record', {
-    customerId, lines: [{ itemId, quantity: '40', rate: '2100' }], date: '2026-09-15', terms: '30', reference: `cn-186-${key}`,
+    customerId, lines: [{ itemId, quantity: '40', rate: '2100' }], date: '2026-09-15', terms: '30', reference: `cn-186-${key}`, requestId: `cn-186-${key}`,
   }, session);
   assert.equal(sold.status, 200, sold.body.message);
   const invoice = sold.body.invoice as { id: string; number: string };
@@ -65,7 +65,7 @@ const saleAndReturn = async (session: string, key: string, returnDate = '2026-09
   const line = documents.find((d: { id: string }) => d.id === invoice.id).lines[0];
   const recorded = await request('POST', '/api/returns/record', {
     kind: 'SALES_RETURN', documentId: invoice.id, lineId: line.id, quantity: '5', unit: 'PCS',
-    disposition: 'ACCEPTED', date: returnDate, reference: `cn-186-${key}-return`, reason: 'Five valves leaked on testing.',
+    disposition: 'ACCEPTED', date: returnDate, reference: `cn-186-${key}-return`, requestId: `cn-186-${key}-return`, reason: 'Five valves leaked on testing.',
   }, session);
   return { invoice, customerId, recorded };
 };
@@ -162,7 +162,7 @@ test('a credit note dated after 30 November of the next year is refused, and one
   const line = documents.find((d: { id: string }) => d.id === late.invoice.id).lines[0];
   const soon = await request('POST', '/api/returns/preview', {
     kind: 'SALES_RETURN', documentId: late.invoice.id, lineId: line.id, quantity: '1', unit: 'PCS',
-    disposition: 'ACCEPTED', date: '2027-11-05', reference: 'cn-186-soon', reason: 'One more came back.',
+    disposition: 'ACCEPTED', date: '2027-11-05', reference: 'cn-186-soon', requestId: 'cn-186-soon', reason: 'One more came back.',
   }, session);
   assert.equal(soon.status, 200, soon.body.message);
   assert.deepEqual(soon.body.warnings, ['The last day to issue a credit note that reduces GST for bills of 2026-27 is 30 November 2027.']);
@@ -208,7 +208,7 @@ const returnFifty = async (session: string, invoiceId: string, key: string) => {
     .find((l: { name?: string; description?: string; id: string }) => /TMT/.test(l.name ?? l.description ?? '')) ?? documents.find((d: { id: string }) => d.id === invoiceId).lines[0];
   const recorded = await request('POST', '/api/returns/record', {
     kind: 'SALES_RETURN', documentId: invoiceId, lineId: line.id, quantity: '50', unit: 'KGS',
-    disposition: 'ACCEPTED', date: '2026-09-20', reference: key, reason: 'Bent bars',
+    disposition: 'ACCEPTED', date: '2026-09-20', reference: key, requestId: key, reason: 'Bent bars',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   return recorded.body.note as { id: string; number: string };
@@ -231,7 +231,7 @@ test('#232 a credit note against a Karnataka → Maharashtra bill is reported un
   const session = await signIn();
   const sold = await request('POST', '/api/sales/record', {
     customerId: await customerIdOf(session, MEHTA), lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '450', rate: '90' }],
-    freight: '2000', date: '2026-09-17', terms: '30', reference: 'cn-232-mehta',
+    freight: '2000', date: '2026-09-17', terms: '30', reference: 'cn-232-mehta', requestId: 'cn-232-mehta',
   }, session);
   assert.equal(sold.status, 200, sold.body.message);
   const note = await returnFifty(session, sold.body.invoice.id, 'cn-232-mehta-return');
@@ -272,7 +272,7 @@ test('#232 a note follows the bill\'s delivery state, not the buyer\'s GST numbe
   assert.equal(address.status, 200, address.body.message);
   const sold = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId: 'sampoorna:item:TMT12', quantity: '450', rate: '90' }],
-    date: '2026-09-17', terms: '30', reference: 'cn-232-surat', shipTo: 'address', shipToAddressId: address.body.address.id,
+    date: '2026-09-17', terms: '30', reference: 'cn-232-surat', requestId: 'cn-232-surat', shipTo: 'address', shipToAddressId: address.body.address.id,
   }, session);
   assert.equal(sold.status, 200, sold.body.message);
   const note = await returnFifty(session, sold.body.invoice.id, 'cn-232-surat-return');

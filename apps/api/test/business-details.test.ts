@@ -47,17 +47,17 @@ test('a business with no address cannot issue a bill, and no invoice number is s
   assert.equal((await request('GET', '/api/business-details', {}, session)).status, 200);
   forgetBusinessDetails(COMPANY_A);
 
-  const refused = await request('POST', '/api/sales/record', { ...sale, reference: 'no-address-1' }, session);
+  const refused = await request('POST', '/api/sales/record', { ...sale, reference: 'no-address-1', requestId: 'no-address-1' }, session);
   assert.equal(refused.status, 422);
   assert.equal(refused.body.code, 'BUSINESS_ADDRESS_MISSING');
   assert.equal(refused.body.message, 'Add your business address in Business details before issuing — the law requires it on every bill.');
 
   // A draft still works: only issuing is held back.
-  assert.equal((await request('POST', '/api/sales/preview', { ...sale, reference: 'no-address-preview' }, session)).status, 200);
+  assert.equal((await request('POST', '/api/sales/preview', { ...sale, reference: 'no-address-preview', requestId: 'no-address-preview' }, session)).status, 200);
 
   const saved = await request('POST', '/api/business-details', ADDRESS, session);
   assert.equal(saved.status, 200);
-  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'no-address-2' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'no-address-2', requestId: 'no-address-2' }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   // The refused attempt consumed nothing: the first bill this company issues is still its first.
   assert.match(String(recorded.body.invoice.number), /^INV\/26-27\/0000\d\d$/);
@@ -76,7 +76,7 @@ test('the saved address, phone, PAN and bank details reach the printed bill, and
   assert.equal(saved.status, 200, saved.body.message);
   assert.equal(saved.body.bank.bankName, 'HDFC Bank');
 
-  const recorded = await request('POST', '/api/sales/record', { ...ADDRESS, ...sale, reference: 'printed-address' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...ADDRESS, ...sale, reference: 'printed-address', requestId: 'printed-address' }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const printed = await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, session);
   assert.equal(printed.status, 200);
@@ -117,7 +117,7 @@ test('a PAN or a state that disagrees with the GST number is refused', async () 
 test('changing the address later never changes a bill already issued', async () => {
   const session = await signIn();
   assert.equal((await request('POST', '/api/business-details', ADDRESS, session)).status, 200);
-  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'frozen-address' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'frozen-address', requestId: 'frozen-address' }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
 
   const moved = await request('POST', '/api/business-details', {
@@ -144,7 +144,7 @@ test('a delivery challan carries the same address as the consigner', async () =>
     item: 'Herbal Bath Soap 100g',
     quantity: '4',
     rate: '250',
-    reference: 'challan-address',
+    reference: 'challan-address', requestId: 'challan-address',
   }, session);
   assert.equal(issued.status, 200, issued.body.message);
   const printed = await request('POST', '/api/challans/print', { challan: issued.body.challan.id }, session);

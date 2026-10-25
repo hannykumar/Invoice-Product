@@ -1,4 +1,6 @@
-# Returns and transaction adjustments v1
+# Returns and transaction adjustments v1.1
+
+Version 1.1.0 (issue #293: price corrections and sales debit notes).
 
 Issue #45 owns linked sales credit notes and purchase debit notes. A return never edits, cancels,
 or hides its original invoice. The note stores the original document and line identifiers, the
@@ -20,6 +22,39 @@ compliance state.
 - A return dated in an open period may reference an invoice in a filed, hard-locked period. The
   original period is never reopened. A note dated inside a hard-locked period is refused; the
   ledger's reasoned override rules apply only to soft locks.
+
+## Price corrections and sales debit notes (v1.1.0, issue #293)
+
+`ReturnService.previewPriceCorrection` / `postPriceCorrection` change the price of one line of an
+issued sales bill with nothing coming back. The command names the bill and line and gives either
+`newUnitPrice` or `amountOff` (both before GST). The difference is worked on the quantity the
+customer still keeps, from the line's current value (original, less earlier price credits, plus
+earlier debits); tax on it is the original line's, in the same proportion.
+
+- Lower price: kind `SALES_RETURN` with `priceCorrection: true`, a `CN/…` number, the 30 November
+  limit of s.34(2), voucher Dr Discount given + output GST, Cr customer.
+- Higher price: kind `SALES_DEBIT_NOTE` (always `priceCorrection: true`), a `DN/…` number from the
+  debit-note series, no time limit (s.34(3)), voucher Dr customer, Cr sales + output GST.
+- No stock moves. Price notes never count against the quantity sold; goods returned later are
+  credited at the price the customer finally paid. Both notes go to GSTR-1 CDNR/CDNUR against the
+  original invoice (`ntty` `C` / `D`), with no quantity in the HSN summary, and to the e-invoice
+  rules as `CREDIT_NOTE` / `DEBIT_NOTE`.
+- Refusals: `PRICE_CORRECTION_ONE_FIGURE`, `PRICE_CORRECTION_NO_CHANGE`,
+  `PRICE_CORRECTION_MORE_THAN_CHARGED`, `PRICE_CORRECTION_CHARGE_LINE`, `PRICE_CORRECTION_FREE_LINE`,
+  `PRICE_CORRECTION_NOTHING_KEPT`, `PRICE_CORRECTION_REASON_REQUIRED`, `PRICE_CORRECTION_BEFORE_BILL`,
+  and `RETURN_CREDIT_NOTE_TOO_LATE` for a late credit. Over HTTP: `POST /api/returns/preview|record`
+  with `mode: "PRICE"`, `newRate` or `amountOff`. Migration
+  `…_returns_d50ad1d404d0_sales_debit_notes_and_price_corrections` adds the kind and `price_correction`.
+
+## Damaged goods never re-enter sellable stock (issue #292)
+
+A `DAMAGED` sales-return line must name a location the inventory port reports as not for sale
+(`ReturnInventoryPort.sellableLocation` returns `false`). An ordinary godown, or a place the
+company does not have, is refused with `RETURN_DAMAGED_INTO_SELLABLE_STOCK` and nothing is posted.
+A whole-bill return names its location in `wholeBillWarehouseId`. `ACCEPTED` goods go back to the
+godown they can be sold from; `SCRAPPED` goods are received and written off in linked movements.
+Every company in the app has a "Damaged / not for sale" location, and the web return form sends
+damaged goods there. Goods sent back to a supplier leave the godown as before.
 
 ## Note numbers (issue #185)
 
@@ -82,3 +117,9 @@ row-level security. `GET /api/returns/documents` lists eligible originals. The p
 commands are `POST /api/returns/preview` and `POST /api/returns/record`; both derive company and
 permissions from the authenticated session. Preview is read-only and record is atomic and
 idempotent.
+
+**A key is one return (v1.1, issue #392).** Both routes need the screen's own `requestId`; without
+one they answer `RETURN_REQUEST_ID_REQUIRED` (422). The typed note `reference` is never the key. A
+key seen before returns its note (`deduplicated: true`) only for the same kind, original document,
+date, reason and lines; anything else is `RETURN_KEY_REUSED` (`CONFLICT`, HTTP 409) and nothing is
+recorded.
