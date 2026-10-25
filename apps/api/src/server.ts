@@ -80,7 +80,7 @@ const statusOf = (error: unknown): number | undefined => {
 };
 
 /** "lines.0.rate" → "lines → 1 → rate", so the message names the field the way a person counts. */
-const fieldName = (path: readonly (string | number)[]): string => path.length === 0 ? 'the request' : path.map((part) => typeof part === 'number' ? String(part + 1) : part).join(' → ');
+const fieldName = (path: readonly PropertyKey[]): string => path.length === 0 ? 'the request' : path.map((part) => typeof part === 'number' ? String(part + 1) : String(part)).join(' → ');
 const invalidInputMessage = (error: ZodError): string => {
   const problems = error.issues.slice(0, 5).map((issue) => {
     if (issue.path.length === 0 && issue.code === 'invalid_type') return 'the request should be a set of named fields';
