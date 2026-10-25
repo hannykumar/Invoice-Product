@@ -163,7 +163,7 @@ test('#293: a return on a service line never talks about stock', async () => {
   const line = await lineOf(owner, sold.body.invoice.id);
   const preview = await request('POST', '/api/returns/preview', {
     kind: 'SALES_RETURN', documentId: sold.body.invoice.id, lineId: line.id, quantity: '1', unit: 'NOS', disposition: 'ACCEPTED',
-    date: DATE, reference: 'mehta-293-service-back', reason: 'One cut was not done.',
+    date: DATE, reference: 'mehta-293-service-back', requestId: 'mehta-293-service-back', reason: 'One cut was not done.',
   }, owner);
   assert.equal(preview.status, 200, JSON.stringify(preview.body));
   assert.equal(preview.body.stockMoves, false);
