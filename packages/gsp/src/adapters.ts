@@ -32,6 +32,7 @@ import type {
   CreateApiUserOutcome,
   GovernmentExceptionSink,
   GspProviderPort,
+  Page,
   ProviderStatusOutcome,
   RateLimiterPort,
   RequestOtpOutcome,
@@ -89,16 +90,25 @@ export class InMemoryCallLog implements CallLogRepository {
     return [...this.#rows.values()].find((row) => row.correlationId === correlationId) ?? null;
   }
 
-  async listUnsettled(companyId: CompanyId, before: string): Promise<readonly ProviderCall[]> {
-    return [...this.#rows.values()].filter(
+  async listUnsettled(companyId: CompanyId, before: string, page?: Page): Promise<readonly ProviderCall[]> {
+    return this.#page(
       (row) => row.companyId === companyId && row.outcome === 'UNKNOWN' && row.reconciledAt === null && row.startedAt <= before,
+      page,
     );
   }
 
-  async list(companyId: CompanyId, gstin?: string): Promise<readonly ProviderCall[]> {
-    return [...this.#rows.values()]
-      .filter((row) => row.companyId === companyId && (gstin === undefined || row.gstin === gstin))
-      .sort((left, right) => (left.startedAt < right.startedAt ? -1 : 1));
+  async list(companyId: CompanyId, gstin?: string, page?: Page): Promise<readonly ProviderCall[]> {
+    return this.#page((row) => row.companyId === companyId && (gstin === undefined || row.gstin === gstin), page);
+  }
+
+  /** By start time, ties in the order written (a stable sort), then the rows after `page.after`. */
+  #page(keep: (row: ProviderCall) => boolean, page?: Page): ProviderCall[] {
+    const rows = [...this.#rows.values()].filter(keep)
+      .sort((left, right) => (left.startedAt < right.startedAt ? -1 : left.startedAt > right.startedAt ? 1 : 0));
+    const at = page?.after === undefined ? -1 : rows.findIndex((row) => row.id === page.after);
+    // An `after` that is not in the list ends it, as it does in PostgreSQL.
+    const from = page?.after !== undefined && at === -1 ? rows.length : at + 1;
+    return rows.slice(from, page?.limit === undefined ? undefined : from + page.limit);
   }
 }
 

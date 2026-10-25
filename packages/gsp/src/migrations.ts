@@ -21,6 +21,17 @@
 //      a business ends up with two IRNs for one invoice.
 
 import type { Migration } from "../../platform/src/migration-definitions.ts";
+import { tenantPolicy } from "../../platform/src/immutability-migrations.ts";
+
+/**
+ * Issue #366 — the tables of this module that hold one company's rows and are read through
+ * `tenantTransaction`. `government_webhook_events` is not here on purpose: a callback arrives with
+ * no company, so it is matched and deduplicated across companies (government-access-v1,
+ * "Storage"). It waits for #345.
+ */
+const TENANT_TABLES = ["gstin_authorisations", "gstin_consents", "gsp_credentials", "gsp_otp_challenges", "government_calls"] as const;
+/** Tables the application may add to but never empty. */
+const NO_TRUNCATE = ["government_calls", "gstin_consents", "gsp_credentials"] as const;
 
 export const gspMigrations: readonly Migration[] = Object.freeze([{
   id: "20260901T080422517Z_gsp_f0f2809c30ed_government_access",
@@ -202,5 +213,117 @@ export const gspMigrations: readonly Migration[] = Object.freeze([{
     DROP INDEX IF EXISTS government_calls_provider_request_idx;
     DROP TABLE IF EXISTS government_webhook_rejections;
     DROP TABLE IF EXISTS government_webhook_events;
+  `,
+}, {
+  // Issue #366 — what the PostgreSQL repositories need: row-level security, an order key, foreign
+  // keys that carry the company, and the freeze rules of database-immutability-v1.
+  id: "20261022T170838526Z_gsp_59f4d0dcbdf0_postgres_repositories",
+  up: `
+    -- A consent, a credential or a one-time-password challenge can only belong to an authorisation
+    -- of its own company.
+    ALTER TABLE gstin_authorisations ADD CONSTRAINT gstin_authorisations_company_id_key UNIQUE (company_id, id);
+    ALTER TABLE gstin_consents ADD CONSTRAINT gstin_consents_same_company
+      FOREIGN KEY (company_id, authorisation_id) REFERENCES gstin_authorisations(company_id, id);
+    ALTER TABLE gsp_credentials ADD CONSTRAINT gsp_credentials_same_company
+      FOREIGN KEY (company_id, authorisation_id) REFERENCES gstin_authorisations(company_id, id);
+    ALTER TABLE gsp_otp_challenges ADD CONSTRAINT gsp_otp_challenges_same_company
+      FOREIGN KEY (company_id, authorisation_id) REFERENCES gstin_authorisations(company_id, id);
+
+    -- The order rows were written in. A revocation and a fresh authorisation can carry the same
+    -- instant, and "the newest consent" must not be a coin toss.
+    ALTER TABLE gstin_consents ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE gsp_credentials ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    ALTER TABLE government_calls ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    DROP INDEX gstin_consents_authorisation_idx;
+    CREATE INDEX gstin_consents_authorisation_idx ON gstin_consents(company_id, authorisation_id, seq DESC);
+    DROP INDEX gsp_credentials_authorisation_idx;
+    CREATE INDEX gsp_credentials_authorisation_idx ON gsp_credentials(company_id, authorisation_id, seq);
+
+    -- The provider's request id is the provider's, not ours: two businesses can be handed the same
+    -- one. It is unique within a company. At most one challenge is open per GST number.
+    ALTER TABLE gsp_otp_challenges DROP CONSTRAINT gsp_otp_challenges_pkey;
+    ALTER TABLE gsp_otp_challenges ADD PRIMARY KEY (company_id, request_id);
+    CREATE UNIQUE INDEX gsp_otp_challenges_open_idx ON gsp_otp_challenges(company_id, authorisation_id) WHERE settled_at IS NULL;
+
+    -- The channel writes a new row for every attempt, including a retry with the same reference
+    -- after a refusal or a timeout (channel.ts), and findByIdempotencyKey answers with the first.
+    -- A unique key refused that retry. It stays an index.
+    ALTER TABLE government_calls DROP CONSTRAINT government_calls_company_id_idempotency_key_key;
+    CREATE INDEX government_calls_idempotency_idx ON government_calls(company_id, idempotency_key, seq);
+    -- For list() and its pages: one company's calls, or one GST number's, in the order they started.
+    DROP INDEX government_calls_company_gstin_idx;
+    CREATE INDEX government_calls_company_gstin_idx ON government_calls(company_id, gstin, started_at, seq);
+    CREATE INDEX government_calls_company_started_idx ON government_calls(company_id, started_at, seq);
+    DROP INDEX government_calls_unsettled_idx;
+    CREATE INDEX government_calls_unsettled_idx
+      ON government_calls(company_id, started_at, seq) WHERE outcome = 'UNKNOWN' AND reconciled_at IS NULL;
+
+    -- A settled call is the record of what was done in a business's name. Once it is ACCEPTED,
+    -- REJECTED or REFUSED nothing changes but the time it was last looked at (reconcile.ts and
+    -- webhooks.ts mark a conflict that way), and the government's reference, filled in once by a
+    -- late callback on an accepted call that carried none (webhooks.ts). An UNKNOWN call is still
+    -- being settled, by the channel, reconciliation or a callback. No status moves once settled.
+    CREATE TRIGGER government_calls_frozen BEFORE UPDATE OR DELETE ON government_calls
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('outcome', 'ACCEPTED,REJECTED,REFUSED', 'reconciled_at,government_reference', '');
+    -- The government's reference is never written over, on any call: a disagreement goes to a
+    -- person with both (reconcile.ts, webhooks.ts).
+    CREATE FUNCTION gsp_government_reference_once() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+    BEGIN
+      IF OLD.government_reference IS NOT NULL AND NEW.government_reference IS DISTINCT FROM OLD.government_reference THEN
+        RAISE EXCEPTION 'The government''s reference for a call is never written over. A disagreement goes to a person with both.'
+          USING ERRCODE = 'restrict_violation', TABLE = TG_TABLE_NAME, COLUMN = 'government_reference';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER government_calls_reference_once BEFORE UPDATE ON government_calls
+      FOR EACH ROW EXECUTE FUNCTION gsp_government_reference_once();
+    -- A consent is kept as given; only its withdrawal is written later.
+    CREATE TRIGGER gstin_consents_frozen BEFORE UPDATE OR DELETE ON gstin_consents
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'withdrawn_at,withdrawn_by,withdrawal_reason', '');
+    -- A credential reference is kept as issued; only the moment it was replaced is written later.
+    CREATE TRIGGER gsp_credentials_frozen BEFORE UPDATE OR DELETE ON gsp_credentials
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'superseded_at', '');
+${NO_TRUNCATE.map((table) => `
+    CREATE TRIGGER ${table}_no_truncate BEFORE TRUNCATE ON ${table}
+      FOR EACH STATEMENT EXECUTE FUNCTION platform_no_truncate();`).join("")}
+${TENANT_TABLES.map(tenantPolicy).join("")}
+  `,
+  down: `
+${TENANT_TABLES.map((table) => `
+    DROP POLICY IF EXISTS ${table}_tenant ON ${table};
+    ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE ${table} DISABLE ROW LEVEL SECURITY;`).join("")}
+${NO_TRUNCATE.map((table) => `
+    DROP TRIGGER IF EXISTS ${table}_no_truncate ON ${table};`).join("")}
+    DROP TRIGGER IF EXISTS gsp_credentials_frozen ON gsp_credentials;
+    DROP TRIGGER IF EXISTS gstin_consents_frozen ON gstin_consents;
+    DROP TRIGGER IF EXISTS government_calls_reference_once ON government_calls;
+    DROP FUNCTION IF EXISTS gsp_government_reference_once();
+    DROP TRIGGER IF EXISTS government_calls_frozen ON government_calls;
+    DROP INDEX IF EXISTS government_calls_unsettled_idx;
+    CREATE INDEX government_calls_unsettled_idx
+      ON government_calls(company_id, started_at) WHERE outcome = 'UNKNOWN' AND reconciled_at IS NULL;
+    DROP INDEX IF EXISTS government_calls_company_started_idx;
+    DROP INDEX IF EXISTS government_calls_company_gstin_idx;
+    CREATE INDEX government_calls_company_gstin_idx ON government_calls(company_id, gstin, started_at DESC);
+    DROP INDEX IF EXISTS government_calls_idempotency_idx;
+    -- Fails, rightly, if a reference was used twice while the rule was away.
+    ALTER TABLE government_calls ADD CONSTRAINT government_calls_company_id_idempotency_key_key UNIQUE (company_id, idempotency_key);
+    DROP INDEX IF EXISTS gsp_otp_challenges_open_idx;
+    -- Fails, rightly, if two companies were handed the same request id while the rule was away.
+    ALTER TABLE gsp_otp_challenges DROP CONSTRAINT gsp_otp_challenges_pkey;
+    ALTER TABLE gsp_otp_challenges ADD PRIMARY KEY (request_id);
+    DROP INDEX IF EXISTS gsp_credentials_authorisation_idx;
+    CREATE INDEX gsp_credentials_authorisation_idx ON gsp_credentials(authorisation_id, issued_at DESC);
+    DROP INDEX IF EXISTS gstin_consents_authorisation_idx;
+    CREATE INDEX gstin_consents_authorisation_idx ON gstin_consents(authorisation_id, granted_at DESC);
+    ALTER TABLE government_calls DROP COLUMN IF EXISTS seq;
+    ALTER TABLE gsp_credentials DROP COLUMN IF EXISTS seq;
+    ALTER TABLE gstin_consents DROP COLUMN IF EXISTS seq;
+    ALTER TABLE gsp_otp_challenges DROP CONSTRAINT IF EXISTS gsp_otp_challenges_same_company;
+    ALTER TABLE gsp_credentials DROP CONSTRAINT IF EXISTS gsp_credentials_same_company;
+    ALTER TABLE gstin_consents DROP CONSTRAINT IF EXISTS gstin_consents_same_company;
+    ALTER TABLE gstin_authorisations DROP CONSTRAINT IF EXISTS gstin_authorisations_company_id_key;
   `,
 }]);
