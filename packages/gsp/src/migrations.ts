@@ -326,4 +326,39 @@ ${NO_TRUNCATE.map((table) => `
     ALTER TABLE gstin_consents DROP CONSTRAINT IF EXISTS gstin_consents_same_company;
     ALTER TABLE gstin_authorisations DROP CONSTRAINT IF EXISTS gstin_authorisations_company_id_key;
   `,
+}, {
+  // Issue #477 — a provider callback names no company, so the call it answers is found by a
+  // lookup that returns only the company id. `invoice_work_finder` (#345's no-login role for
+  // cross-company discovery) sees nothing but the columns the lookup reads, and the function is
+  // the only thing `invoice_app` may call. There is no bypass of row-level security: the role's
+  // own permissive policy is what shows it the rows, narrowed to these columns by the grant.
+  id: "20261025T233400696Z_gsp_52b70f5f3410_callback_company_lookup",
+  up: `
+    GRANT SELECT (company_id, provider_request_id, correlation_id, scope) ON government_calls TO invoice_work_finder;
+    CREATE POLICY government_calls_work_finder ON government_calls FOR SELECT TO invoice_work_finder USING (true);
+    -- The provider's request id is matched before our own correlation id, exactly as the
+    -- receiver does it, because the two namespaces could hold the same text on different calls.
+    -- The scopes argument is the caller's connector's scopes, so a callback cannot settle a call that
+    -- belongs to another provider. A reference naming calls in two companies answers null
+    -- rather than guessing: an ambiguous match must never settle anybody's call.
+    CREATE FUNCTION government_call_company(reference text, scopes text[]) RETURNS uuid
+      LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $fn$
+        SELECT COALESCE(
+          (SELECT CASE WHEN count(*) = 1 THEN min(d.company_id::text)::uuid END
+            FROM (SELECT DISTINCT c.company_id FROM government_calls c
+                  WHERE c.provider_request_id = reference AND c.scope = ANY (scopes)) d),
+          (SELECT CASE WHEN count(*) = 1 THEN min(d.company_id::text)::uuid END
+            FROM (SELECT DISTINCT c.company_id FROM government_calls c
+                  WHERE c.correlation_id = reference) d))
+    $fn$;
+    GRANT invoice_work_finder TO CURRENT_USER;
+    ALTER FUNCTION government_call_company(text, text[]) OWNER TO invoice_work_finder;
+    REVOKE ALL ON FUNCTION government_call_company(text, text[]) FROM PUBLIC;
+    GRANT EXECUTE ON FUNCTION government_call_company(text, text[]) TO invoice_app;
+  `,
+  down: `
+    DROP FUNCTION IF EXISTS government_call_company(text, text[]);
+    DROP POLICY IF EXISTS government_calls_work_finder ON government_calls;
+    REVOKE SELECT ON government_calls FROM invoice_work_finder;
+  `,
 }]);

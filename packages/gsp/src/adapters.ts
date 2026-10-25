@@ -24,7 +24,8 @@ import type { ActorContext } from '@invoice/ledger';
 import type { GovernmentReturnPort, GovernmentSubmitOutcome, GovernmentSubmitRequest } from '../../gst-returns/src/ports.ts';
 import type { PortalFetchOutcome, PortalRecordSource } from '../../itc/src/ports.ts';
 import type { TaxPeriod } from '../../gst-returns/src/types.ts';
-import type { GovernmentChannel } from './channel.ts';
+import type { ConnectorKind } from '../../platform/src/connectors.ts';
+import { scopesForConnector, type GovernmentChannel } from './channel.ts';
 import type {
   AuthorisationRepository,
   CallLogRepository,
@@ -82,12 +83,25 @@ export class InMemoryCallLog implements CallLogRepository {
     return [...this.#rows.values()].find((row) => row.companyId === companyId && row.idempotencyKey === key) ?? null;
   }
 
-  async findByProviderRequestId(providerRequestId: string): Promise<ProviderCall | null> {
-    return [...this.#rows.values()].find((row) => row.providerRequestId === providerRequestId) ?? null;
+  async companyForRequest(kind: ConnectorKind, reference: string): Promise<CompanyId | null> {
+    const rows = [...this.#rows.values()];
+    const scoped = scopesForConnector(kind);
+    const byRequest = new Set(
+      rows.filter((row) => row.providerRequestId === reference && row.scope !== null && scoped.includes(row.scope)).map((row) => row.companyId),
+    );
+    const byCorrelation = new Set(rows.filter((row) => row.correlationId === reference).map((row) => row.companyId));
+    return byRequest.size === 1 ? [...byRequest][0]! : byCorrelation.size === 1 ? [...byCorrelation][0]! : null;
   }
 
-  async findByCorrelationId(correlationId: string): Promise<ProviderCall | null> {
-    return [...this.#rows.values()].find((row) => row.correlationId === correlationId) ?? null;
+  async findByProviderRequestId(kind: ConnectorKind, companyId: CompanyId, providerRequestId: string): Promise<ProviderCall | null> {
+    const scoped = scopesForConnector(kind);
+    return [...this.#rows.values()].find(
+      (row) => row.companyId === companyId && row.providerRequestId === providerRequestId && row.scope !== null && scoped.includes(row.scope),
+    ) ?? null;
+  }
+
+  async findByCorrelationId(companyId: CompanyId, correlationId: string): Promise<ProviderCall | null> {
+    return [...this.#rows.values()].find((row) => row.companyId === companyId && row.correlationId === correlationId) ?? null;
   }
 
   async listUnsettled(companyId: CompanyId, before: string, page?: Page): Promise<readonly ProviderCall[]> {
@@ -161,6 +175,12 @@ export class InMemoryWebhookEvents implements WebhookEventRepository {
 
   async insert(record: WebhookEventRecord): Promise<void> {
     this.#rows.set(`${record.kind}:${record.eventId}`, record);
+  }
+
+  async update(record: WebhookEventRecord): Promise<void> {
+    const key = `${record.kind}:${record.eventId}`;
+    const stored = this.#rows.get(key);
+    if (stored !== undefined && stored.outcome === 'UNMATCHED') this.#rows.set(key, record);
   }
 
   async recordRejected(input: { readonly kind: string; readonly digest: string; readonly at: string; readonly reason: string }): Promise<void> {

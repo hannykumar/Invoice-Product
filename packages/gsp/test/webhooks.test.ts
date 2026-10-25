@@ -258,6 +258,32 @@ test('a callback saying it arrived, when we recorded that it never did, is not a
   assert.equal(desk.exceptions.raised.length, 1);
 });
 
+test('a callback that arrived before the call it answers is matched when the provider sends it again (#477)', async () => {
+  const desk = makeDesk();
+  const body = callback({ providerRequestId: 'corr-early-1', irn: 'irn-early-1' });
+  assert.equal((await desk.receiver.receive('irp', body, 'test-signature')).kind, 'UNMATCHED');
+
+  // The call it was about lands a moment later, timed out, named by our own correlation id.
+  await connect(desk);
+  desk.irp.setMode('timeout');
+  const outcome = await desk.channel.call(ownerOf(), {
+    operation: 'einvoice.generate', payload: invoicePayload(KARNATAKA_GSTIN, 'SI-1044'),
+    idempotencyKey: 'key-SI-1044', documentRef: 'SI-1044', correlationId: 'corr-early-1',
+  });
+  assert.equal(outcome.kind, 'UNKNOWN');
+  desk.irp.setMode('healthy');
+
+  // Delivered again, the early callback is upgraded — never lost as a "duplicate".
+  assert.equal((await desk.receiver.receive('irp', body, 'test-signature')).kind, 'SETTLED');
+  const call = await desk.calls.find(SUNRISE_COMPANY, outcome.callId);
+  assert.equal(call?.governmentReference, 'irn-early-1');
+  assert.equal(desk.events.all().length, 1, 'the early delivery is rewritten, not duplicated');
+  assert.equal(desk.events.all()[0]?.outcome, 'SETTLED');
+  assert.equal(desk.events.all()[0]?.companyId, SUNRISE_COMPANY);
+  // And it is a duplicate only now that it has settled.
+  assert.equal((await desk.receiver.receive('irp', body, 'test-signature')).kind, 'DUPLICATE');
+});
+
 test('a callback about a call this product never made is recorded and not acted on', async () => {
   const desk = makeDesk();
   await connect(desk);

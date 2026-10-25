@@ -123,15 +123,67 @@ test('a settled call, a consent and a credential cannot be rewritten or removed'
   assert.equal((await h.calls.find(d.companyId, answered.callId))?.reconciledAt, '2026-08-17T05:00:00.000Z');
 });
 
-test('a callback finds no call across companies on the database: nothing gets round row-level security', { skip }, async () => {
+test('a callback finds its company, and only its company, through the narrow lookup (#477)', { skip }, async () => {
   const h = harness();
   const d = await desk(h);
   await d.connect(KARNATAKA_GSTIN);
   const answered = await d.act(() => d.channel.call(d.owner, { operation: 'einvoice.generate', payload: invoicePayload(KARNATAKA_GSTIN, 'SI-5'), idempotencyKey: 'SI-5', documentRef: 'SI-5' }));
   const made = await h.calls.find(d.companyId, answered.callId);
   assert.ok(made?.providerRequestId);
-  assert.equal(await h.calls.findByProviderRequestId(made.providerRequestId), null);
-  assert.equal(await h.calls.findByCorrelationId(made.correlationId), null);
+  // The lookup answers one uuid — the company that made the call — by our own correlation id,
+  // and nothing at all for an id nobody made.
+  assert.equal(await h.calls.companyForRequest('irp', made.correlationId), d.companyId);
+  assert.equal(await h.calls.companyForRequest('irp', 'a-request-id-nobody-made'), null);
+  // A provider request id that names exactly one company's call resolves on that connector; on
+  // another connector's namespace the same text is nothing.
+  const solo = `req-${randomBytes(6).toString('hex')}`;
+  const soloCall = { ...made, id: crypto.randomUUID(), providerRequestId: solo, correlationId: `gsp-${solo}`, idempotencyKey: `key-${solo}` };
+  await h.write(d.companyId, async () => h.calls.insert(soloCall));
+  assert.equal(await h.calls.companyForRequest('irp', solo), d.companyId);
+  assert.equal(await h.calls.companyForRequest('gst', solo), null);
+  const other = await company();
+  // Inside its own company the call is found; inside another's it is not.
+  assert.equal((await h.calls.findByProviderRequestId('irp', d.companyId, solo))?.id, soloCall.id);
+  assert.equal(await h.calls.findByProviderRequestId('irp', other.companyId, solo), null);
+  assert.equal((await h.calls.findByCorrelationId(d.companyId, made.correlationId))?.id, made.id);
+  assert.equal(await h.calls.findByCorrelationId(other.companyId, made.correlationId), null);
+  // A request id that could name two companies' calls is ambiguous, so the lookup says nothing
+  // rather than guess — a forged or colliding reference settles nobody's call.
+  const clash = { ...made, id: crypto.randomUUID(), companyId: other.companyId, providerRequestId: solo, correlationId: `gsp-cl-${solo}`, idempotencyKey: `key-cl-${solo}` };
+  await h.write(other.companyId, async () => h.calls.insert(clash));
+  assert.equal(await h.calls.companyForRequest('irp', solo), null);
+  // The correlation ids stay unique: each company's own call is still found by its own.
+  assert.equal(await h.calls.companyForRequest('irp', `gsp-cl-${solo}`), other.companyId);
+});
+
+test('the company lookup can read a company id and nothing else (#477)', { skip }, async () => {
+  const h = harness();
+  const d = await desk(h);
+  await d.connect(KARNATAKA_GSTIN);
+  const answered = await d.act(() => d.channel.call(d.owner, { operation: 'einvoice.generate', payload: invoicePayload(KARNATAKA_GSTIN, 'SI-6'), idempotencyKey: 'SI-6', documentRef: 'SI-6' }));
+  const made = await h.calls.find(d.companyId, answered.callId);
+  assert.ok(made?.providerRequestId);
+  // The function hands the application role a uuid, never the row: with no tenant set on the
+  // connection, row-level security still shows invoice_app no calls, even for the company the
+  // lookup just named.
+  const { rows } = await app.query(`SELECT government_call_company($1, $2::text[]) AS company`, [made.correlationId, '{EINVOICE_GENERATE}']);
+  assert.equal(rows[0]?.company, d.companyId);
+  const direct = await app.query(`SELECT count(*)::int AS n FROM government_calls WHERE company_id = government_call_company($1, $2::text[])`, [made.correlationId, '{EINVOICE_GENERATE}']);
+  assert.equal(direct.rows[0]?.n, 0);
+  // And the role the function runs as is granted only the four columns it matches on: it could
+  // not be rewritten to leak a GST number, a payload or a credential.
+  const privilege = async (column: string) =>
+    (await owner.query(`SELECT has_column_privilege('invoice_work_finder', 'government_calls', $1, 'SELECT') AS yes`, [column])).rows[0]?.yes === true;
+  for (const column of ['company_id', 'provider_request_id', 'correlation_id', 'scope']) assert.equal(await privilege(column), true, column);
+  for (const column of ['id', 'seq', 'gstin', 'operation', 'document_ref', 'government_reference', 'error_message', 'credential_reference']) assert.equal(await privilege(column), false, column);
+  // invoice_app may run it; PUBLIC may not. A null proacl would be the default — executable by
+  // everyone — so the acl must exist and name only the granted roles.
+  assert.equal((await owner.query(`SELECT has_function_privilege('invoice_app', 'government_call_company(text,text[])', 'EXECUTE') AS yes`)).rows[0]?.yes, true);
+  const { rows: aclRows } = await owner.query(`SELECT proacl::text AS acl FROM pg_proc WHERE proname = 'government_call_company'`);
+  const acl = String(aclRows[0]?.acl);
+  assert.notEqual(acl, 'null');
+  assert.equal(acl.includes('invoice_app=X'), true);
+  assert.equal(acl.includes('PUBLIC'), false);
 });
 
 test('the migration runs down and up again', { skip }, async () => {

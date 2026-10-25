@@ -81,6 +81,17 @@ const CONNECTOR_FOR: Readonly<Record<GovernmentScope, ConnectorKind>> = Object.f
   GSTR2B_FETCH: 'gst',
 });
 
+const SCOPES_FOR: ReadonlyMap<ConnectorKind, readonly GovernmentScope[]> = (() => {
+  const grouped = new Map<ConnectorKind, GovernmentScope[]>();
+  for (const [scope, kind] of Object.entries(CONNECTOR_FOR) as [GovernmentScope, ConnectorKind][]) {
+    grouped.set(kind, [...(grouped.get(kind) ?? []), scope]);
+  }
+  return grouped;
+})();
+
+/** The scopes a callback on this connector may answer — what the company lookup matches on (#477). */
+export const scopesForConnector = (kind: ConnectorKind): readonly GovernmentScope[] => SCOPES_FOR.get(kind) ?? [];
+
 export class GovernmentChannel {
   readonly #deps: GovernmentChannelDeps;
 
