@@ -32,6 +32,9 @@ import type { EInvoiceReadResult } from "./einvoice.ts";
 import { crossCheck, readInvoiceFromOcr } from "./extraction.ts";
 import type { OcrReadResult } from "./extraction.ts";
 import type { OcrAdapter } from "./ocr.ts";
+import { InMemoryInboxStore } from "./inbox-store.ts";
+import type { InboxStore } from "./inbox-store.ts";
+import type { Page } from "./paging.ts";
 import type { Attachment, ExtractedField, ExtractionDraft, InboundDocument, InboundSender, InboundStatus, IntakeChannel, LogicalInvoiceKey, QuarantineReason } from "./inbox-types.ts";
 
 export class InboxError extends Error {
@@ -78,6 +81,18 @@ export interface PurchaseInboxOptions {
    * file is ever treated as signed (packages/gst/src/irp-signature.ts).
    */
   readonly irpSignatures?: IrpSignatureVerifier;
+  /**
+   * Where a document is kept once it belongs to a company (#366). In memory unless given; the app
+   * passes `PostgresInboxStore` when it runs on PostgreSQL.
+   */
+  readonly store?: InboxStore;
+  /**
+   * Runs one step's writes for a company in one transaction: on PostgreSQL,
+   * `(companyId, work) => db.unitOfWork(companyId, () => work())`. The inbox calls it itself, one
+   * short step at a time, because the company is only known after routing and the OCR read must
+   * never run inside a transaction. Without it the steps simply run.
+   */
+  readonly unitOfWork?: <T>(companyId: Id, work: () => Promise<T>) => Promise<T>;
 }
 
 /** Below this confidence a field must be looked at before the draft moves on. */
@@ -123,15 +138,20 @@ export class PurchaseInboxService {
   readonly #ocr: OcrAdapter;
   readonly #companies: readonly CompanyRoutingProfile[];
   readonly #signatures: IrpSignatureVerifier;
-  readonly #documents = new Map<Id, InboundDocument>();
-  readonly #drafts = new Map<Id, ExtractionDraft>();
-  /** company + sha256 to document id, the attachment-level duplicate index. */
-  readonly #byContent = new Map<string, Id>();
-  /** Scoped provider message id to document id, so a channel redelivery is not a new document (#406). */
-  readonly #byProviderMessage = new Map<string, Id>();
+  /** Routed documents, their drafts, and the company-scoped duplicate keys (#366). */
+  readonly #store: InboxStore;
+  readonly #unitOfWork: <T>(companyId: Id, work: () => Promise<T>) => Promise<T>;
+  /**
+   * The unrouted holding: documents whose company is not known yet (still screening, waiting for
+   * the virus scanner, or on an address no single company owns). They have no company to be
+   * stored under, so they stay in this process until routed or claimed (#366).
+   */
+  readonly #held = new Map<Id, InboundDocument>();
+  /** Scoped provider message id to a held document's id, so a channel redelivery is not a new document (#406). */
+  readonly #heldByMessage = new Map<string, Id>();
   /** For an unrouted document, the companies whose channel it arrived on: the only ones who may claim it. */
   readonly #channelOwners = new Map<Id, readonly Id[]>();
-  /** The intake idempotency key, so a retry records its draft under the same command. */
+  /** A held document's intake idempotency key; stored with the document once it is routed. */
   readonly #intakeKeys = new Map<Id, string>();
   /** Files held until the virus scanner answers (#401), keyed by document id. */
   readonly #awaitingScan = new Map<Id, ReceiveInput>();
@@ -145,25 +165,28 @@ export class PurchaseInboxService {
     assertDistinctChannels(companies);
     this.#companies = companies;
     this.#signatures = options.irpSignatures ?? NO_IRP_SIGNING_KEY;
+    this.#store = options.store ?? new InMemoryInboxStore();
+    this.#unitOfWork = options.unitOfWork ?? ((_companyId, work) => work());
   }
 
   // ------------------------------------------------------------------ reading
 
-  document(context: RequestContext, id: Id): InboundDocument {
-    const found = this.#documents.get(id);
-    if (!found || found.companyId !== context.companyId) throw notFound();
+  async document(context: RequestContext, id: Id): Promise<InboundDocument> {
+    const found = await this.#store.document(context.companyId, id);
+    if (!found) throw notFound();
     return found;
   }
 
-  draft(context: RequestContext, documentId: Id): ExtractionDraft {
-    const document = this.document(context, documentId);
-    const draft = this.#draftFor(document.id);
+  async draft(context: RequestContext, documentId: Id): Promise<ExtractionDraft> {
+    const document = await this.document(context, documentId);
+    const draft = await this.#store.draftFor(document.companyId, document.id);
     if (!draft) throw new InboxError("NOT_FOUND", "This document has no draft yet.");
     return draft;
   }
 
-  inbox(context: RequestContext, status?: InboundStatus): readonly InboundDocument[] {
-    return [...this.#documents.values()].filter((document) => document.companyId === context.companyId && (status === undefined || document.status === status));
+  /** Oldest first. Leave `page` out for the whole inbox, as before (#366). */
+  inbox(context: RequestContext, status?: InboundStatus, page?: Page): Promise<readonly InboundDocument[]> {
+    return this.#store.documents(context.companyId, status, page);
   }
 
   /**
@@ -172,7 +195,7 @@ export class PurchaseInboxService {
    * and time are shown: nothing has been read from them, and no storage key or hash leaves.
    */
   awaitingAssignment(context: RequestContext): readonly { readonly id: Id; readonly channel: IntakeChannel; readonly receivedAt: string; readonly fileName: string; readonly sizeBytes: number }[] {
-    return [...this.#documents.values()]
+    return [...this.#held.values()]
       .filter((document) => document.companyId === UNROUTED && document.status === "quarantined" && (this.#channelOwners.get(document.id) ?? []).includes(context.companyId))
       .map((document) => ({ id: document.id, channel: document.channel, receivedAt: document.receivedAt, fileName: document.attachment.fileName, sizeBytes: document.attachment.sizeBytes }));
   }
@@ -202,12 +225,15 @@ export class PurchaseInboxService {
     const checked: ReceiveInput = { ...input, attachment: measured };
 
     const messageKey = providerMessageKey(checked);
-    const existingByMessage = messageKey ? this.#byProviderMessage.get(messageKey) : undefined;
-    if (existingByMessage) {
+    if (messageKey) {
       // The key is scoped to this delivery's destination and file, so the document found is
       // always one that arrived on this same binding — never another company's document (#406).
-      const document = this.#documents.get(existingByMessage) as InboundDocument;
-      return { document, duplicate: true, ...(this.#draftFor(document.id) ? { draft: this.#draftFor(document.id) as ExtractionDraft } : {}) };
+      const stored = await this.#storedByMessage(checked, messageKey);
+      if (stored) return stored;
+      // Looked up after the await and set below with nothing awaited in between, so two copies
+      // arriving at once in this process still make one document.
+      const held = this.#heldByMessage.get(messageKey);
+      if (held) return { document: this.#held.get(held) as InboundDocument, duplicate: true };
     }
 
     const id = randomUUID();
@@ -221,9 +247,9 @@ export class PurchaseInboxService {
       status: "received",
       attempts: 1,
     };
-    this.#documents.set(id, document);
+    this.#held.set(id, document);
     this.#intakeKeys.set(id, input.idempotencyKey);
-    if (messageKey) this.#byProviderMessage.set(messageKey, id);
+    if (messageKey) this.#heldByMessage.set(messageKey, id);
 
     // 1. Screening, before anything reads the file.
     document = this.#set(document, { status: "screening" });
@@ -249,7 +275,7 @@ export class PurchaseInboxService {
    */
   async scanAnswered(documentId: Id, verdict: ScanVerdict): Promise<ReceiveResult> {
     const input = this.#awaitingScan.get(documentId);
-    const document = this.#documents.get(documentId);
+    const document = this.#held.get(documentId);
     if (!input || !document || document.status !== "quarantined" || document.quarantineReason !== "AWAITING_SCAN") {
       throw new InboxError("INVALID_STATE", "This document is not waiting for a virus check.");
     }
@@ -277,38 +303,41 @@ export class PurchaseInboxService {
   async #routeAndDraft(document: InboundDocument, input: ReceiveInput, detectedType: SupportedType): Promise<ReceiveResult> {
     // 2. Routing, from the uploader's session or the delivery address only. Nothing inside
     //    the file is consulted (#400).
-    const routing = routeDocument({
-      companies: this.#companies,
-      channel: input.channel,
-      sender: input.sender,
-      ...(input.deliveredTo === undefined ? {} : { deliveredTo: input.deliveredTo }),
-      ...(input.uploader === undefined ? {} : { uploader: input.uploader }),
-    });
+    const routing = this.#route(input);
     if (!routing.ok) {
       this.#channelOwners.set(document.id, routing.channelOwners);
       return { document: this.#quarantine(document, routing.reason, routing.message), duplicate: false };
     }
-    document = this.#set(document, { companyId: routing.companyId, routing: routing.decision });
+    const companyId = routing.companyId;
+    const routed = Object.freeze({ ...document, companyId, routing: routing.decision }) as InboundDocument;
+    const messageKey = providerMessageKey(input);
+    const intakeKey = this.#intakeKeys.get(document.id) ?? document.id;
 
+    // From here the document belongs to a company and is stored in that company's books (#366).
     // 3. Attachment-level duplicate check, scoped to the company that owns the file.
     //    The hash was measured from the bytes at intake (#401), not taken from the sender.
-    const contentKey = `${routing.companyId}:${document.attachment.sha256}`;
-    const earlier = this.#byContent.get(contentKey);
-    if (earlier && earlier !== document.id) {
-      const original = this.#documents.get(earlier) as InboundDocument;
-      const marked = this.#set(document, {
+    const outcome = await this.#unitOfWork(companyId, async (): Promise<ReceiveResult | null> => {
+      // The same delivery, stored by another server while this one was screening it (#406).
+      const redelivered = messageKey ? await this.#store.documentByMessageKey(companyId, messageKey) : null;
+      if (redelivered) return this.#withDraft(redelivered);
+      await this.#store.insertDocument(routed, { messageKey, intakeKey });
+      const earlier = await this.#store.claimContent(companyId, routed.attachment.sha256, routed.id);
+      if (earlier === routed.id) return null;
+      const original = await this.#store.document(companyId, earlier) as InboundDocument;
+      const marked = await this.#update(routed, {
         status: "discarded",
         duplicateOfId: earlier,
         statusMessage: `This is the same file you already received on ${new Date(original.receivedAt).toDateString()} through ${original.channel.replace("_", " ")}, so it has not been added twice.`,
       });
       this.#record(marked, "purchase.inbox.duplicate_discarded", { duplicateOfId: earlier });
       return { document: marked, duplicate: true };
-    }
-    this.#byContent.set(contentKey, document.id);
+    });
+    this.#release(document.id);
+    if (outcome) return outcome;
 
     // 4-6. Reading, cross-checking and drafting.
-    const company = this.#companies.find((candidate) => candidate.companyId === routing.companyId) as CompanyRoutingProfile;
-    return this.#readAndDraft(document, company, {
+    const company = this.#companies.find((candidate) => candidate.companyId === companyId) as CompanyRoutingProfile;
+    return this.#readAndDraft(routed, company, {
       // An e-invoice JSON file is its own body; the text comes from the received bytes.
       json: detectedType === "json" ? { body: new TextDecoder("utf-8").decode(input.bytes) } : null,
       ...(input.uploader === undefined ? {} : { actor: input.uploader }),
@@ -323,12 +352,12 @@ export class PurchaseInboxService {
    * round the company check or the review list.
    */
   async retry(context: RequestContext, documentId: Id): Promise<ReceiveResult> {
-    const document = this.document(context, documentId);
+    const document = await this.document(context, documentId);
     this.#require(context);
     if (document.status !== "failed") throw new InboxError("INVALID_STATE", "Only a document that failed can be tried again.");
     const company = this.#companies.find((candidate) => candidate.companyId === document.companyId);
     if (!company) throw new InboxError("INVALID_STATE", "This document has not been routed to a company yet.");
-    const attempted = this.#set(document, { attempts: document.attempts + 1 });
+    const attempted = await this.#update(document, { attempts: document.attempts + 1 });
     return this.#readAndDraft(attempted, company, { json: null, actor: context });
   }
 
@@ -338,8 +367,9 @@ export class PurchaseInboxService {
    * that arrived on an address this company owns (#400). A document that arrived on nobody's
    * address cannot be claimed by anybody, however its id was learned.
    */
-  assignCompany(context: RequestContext, documentId: Id, reason: string): InboundDocument {
-    const document = this.#documents.get(documentId);
+  async assignCompany(context: RequestContext, documentId: Id, reason: string): Promise<InboundDocument> {
+    const held = this.#held.get(documentId);
+    const document = held ?? await this.#store.document(context.companyId, documentId);
     if (!document) throw notFound();
     const mayClaim = document.companyId === UNROUTED
       ? (this.#channelOwners.get(document.id) ?? []).includes(context.companyId)
@@ -359,12 +389,19 @@ export class PurchaseInboxService {
       statusMessage: "Assigned to this business by hand. Nothing has been read or posted yet.",
       routing: { basis: "explicit_company", evidence: `Assigned by ${context.actorId}: ${reason.trim()}`, confidence: 1 },
     }) as InboundDocument;
-    this.#documents.set(document.id, assigned);
-    this.#channelOwners.delete(document.id);
-    // The file now belongs to this company, so the same file arriving again is a duplicate here.
-    const contentKey = `${context.companyId}:${document.attachment.sha256}`;
-    if (!this.#byContent.has(contentKey)) this.#byContent.set(contentKey, document.id);
-    this.#record(assigned, "purchase.inbox.company_assigned", { reason: reason.trim(), quarantineReason }, context.actorId);
+    await this.#unitOfWork(context.companyId, async () => {
+      if (held) {
+        // Out of the unrouted holding and into this company's books, with the keys it arrived with.
+        const messageKey = [...this.#heldByMessage].find(([, id]) => id === document.id)?.[0] ?? null;
+        await this.#store.insertDocument(assigned, { messageKey, intakeKey: this.#intakeKeys.get(document.id) ?? document.id });
+      } else {
+        await this.#store.updateDocument(assigned);
+      }
+      // The file now belongs to this company, so the same file arriving again is a duplicate here.
+      await this.#store.claimContent(context.companyId, document.attachment.sha256, document.id);
+      this.#record(assigned, "purchase.inbox.company_assigned", { reason: reason.trim(), quarantineReason }, context.actorId);
+    });
+    if (held) this.#release(document.id);
     return assigned;
   }
 
@@ -375,7 +412,7 @@ export class PurchaseInboxService {
     company: CompanyRoutingProfile,
     options: { readonly json: { readonly body: string } | null; readonly actor?: RequestContext },
   ): Promise<ReceiveResult> {
-    let document = this.#set(routed, { status: "extracting" });
+    let document = await this.#update(routed, { status: "extracting" });
 
     // Reading. e-invoice JSON is parsed locally, its IRP signature checked first.
     let eInvoice: EInvoiceReadResult | null = null;
@@ -383,10 +420,10 @@ export class PurchaseInboxService {
     if (options.json) {
       eInvoice = options.json.body ? readEInvoiceJson(options.json.body, { signatures: this.#signatures }) : null;
       if (eInvoice?.signature === "invalid") {
-        return { document: this.#quarantine(document, "SIGNATURE_INVALID", `This e-invoice file carries a government signature that does not match what is written in it, so it may have been altered. It has been held. Ask the supplier for the original. (${eInvoice.signatureMessage ?? ""})`.replace(" ()", "")), duplicate: false };
+        return { document: await this.#hold(document, "SIGNATURE_INVALID", `This e-invoice file carries a government signature that does not match what is written in it, so it may have been altered. It has been held. Ask the supplier for the original. (${eInvoice.signatureMessage ?? ""})`.replace(" ()", "")), duplicate: false };
       }
       if (!eInvoice?.invoiceNumber) {
-        return { document: this.#quarantine(document, "NOT_AN_INVOICE", eInvoice?.problems[0] ?? "This JSON file is not a GST e-invoice."), duplicate: false };
+        return { document: await this.#hold(document, "NOT_AN_INVOICE", eInvoice?.problems[0] ?? "This JSON file is not a GST e-invoice."), duplicate: false };
       }
     } else {
       try {
@@ -395,7 +432,7 @@ export class PurchaseInboxService {
       } catch (error) {
         const connectorError = error instanceof ConnectorError ? error : null;
         const firstAttempt = document.attempts <= 1;
-        const failed = this.#set(document, {
+        const failed = await this.#update(document, {
           status: "failed",
           statusMessage: connectorError?.retryable
             ? (firstAttempt ? "The document reader is temporarily unavailable. This will be tried again automatically." : "Still unavailable. This will be tried again.")
@@ -404,26 +441,26 @@ export class PurchaseInboxService {
         this.#record(failed, "purchase.inbox.extraction_failed", { code: connectorError?.code ?? "UNKNOWN", retryable: connectorError?.retryable ?? false, attempt: failed.attempts });
         return { document: failed, duplicate: false };
       }
-      if (read.unreadable) return { document: this.#quarantine(document, "UNREADABLE", read.problems[0] ?? "This document could not be read."), duplicate: false };
+      if (read.unreadable) return { document: await this.#hold(document, "UNREADABLE", read.problems[0] ?? "This document could not be read."), duplicate: false };
     }
 
     // Cross-check against what is printed. It can hold the document here; it never moves it.
     // The other business is never named: the list of companies is every tenant, and naming
     // one would tell this company who else uses the product (#400).
     const readFields = eInvoice ?? read;
-    if (!readFields) return { document: this.#quarantine(document, "UNREADABLE", "This document could not be read."), duplicate: false };
+    if (!readFields) return { document: await this.#hold(document, "UNREADABLE", "This document could not be read."), duplicate: false };
     const buyer = readFields.buyerGstin?.value;
     const printed = readFields.allGstins;
     const namesThisCompany = company.gstins.some((gstin) => printed.some((seen) => same(seen, gstin)));
     if (buyer && !company.gstins.some((gstin) => same(gstin, buyer))) {
       return {
-        document: this.#quarantine(document, "COMPANY_MISMATCH", `This invoice is addressed to GST number ${buyer.trim().toUpperCase()}, which is not one of ${company.legalName}'s GST numbers. It has been held rather than filed in the wrong books.`),
+        document: await this.#hold(document, "COMPANY_MISMATCH", `This invoice is addressed to GST number ${buyer.trim().toUpperCase()}, which is not one of ${company.legalName}'s GST numbers. It has been held rather than filed in the wrong books.`),
         duplicate: false,
       };
     }
     if (routed.routing?.basis === "channel_binding" && printed.length > 0 && !namesThisCompany) {
       return {
-        document: this.#quarantine(document, "COMPANY_MISMATCH", `This invoice does not name ${company.legalName}'s GST number, so it has been held for you to confirm which business it belongs to.`),
+        document: await this.#hold(document, "COMPANY_MISMATCH", `This invoice does not name ${company.legalName}'s GST number, so it has been held for you to confirm which business it belongs to.`),
         duplicate: false,
       };
     }
@@ -449,7 +486,7 @@ export class PurchaseInboxService {
 
     if (source === "ocr" && (missing.length >= 3 || worst < QUARANTINE_CONFIDENCE)) {
       return {
-        document: this.#quarantine(document, "EXTRACTION_TOO_UNCERTAIN", `Too little could be read from this document to prepare a draft${missing.length ? ` (missing: ${missing.join(", ")})` : ""}. Please send a clearer copy or enter it by hand.`),
+        document: await this.#hold(document, "EXTRACTION_TOO_UNCERTAIN", `Too little could be read from this document to prepare a draft${missing.length ? ` (missing: ${missing.join(", ")})` : ""}. Please send a clearer copy or enter it by hand.`),
         duplicate: false,
       };
     }
@@ -469,28 +506,31 @@ export class PurchaseInboxService {
       arithmeticProblems: [...crossCheck({ ...fields, lines: readFields.lines }), ...readFields.problems, ...signatureNote],
       createdAt: new Date().toISOString(),
     };
-    this.#drafts.set(draft.id, Object.freeze(draft));
-
-    const retried = document.attempts > 1;
-    document = this.#set(document, {
-      status: "draft_ready",
-      statusMessage: draft.fieldsNeedingReview.length === 0 && draft.arithmeticProblems.length === 0
-        ? `Read successfully${retried ? " on retry" : ""}. Nothing has been posted yet — please review and approve.`
-        : `Read${retried ? " on retry" : ""}, but ${draft.fieldsNeedingReview.length + draft.arithmeticProblems.length} thing(s) need your eye. Nothing has been posted yet.`,
+    const extracted = document;
+    // The draft, the document's move to "draft ready" and the command are saved together (#366).
+    return this.#unitOfWork(company.companyId, async () => {
+      await this.#store.insertDraft(Object.freeze(draft));
+      const retried = extracted.attempts > 1;
+      const ready = await this.#update(extracted, {
+        status: "draft_ready",
+        statusMessage: draft.fieldsNeedingReview.length === 0 && draft.arithmeticProblems.length === 0
+          ? `Read successfully${retried ? " on retry" : ""}. Nothing has been posted yet — please review and approve.`
+          : `Read${retried ? " on retry" : ""}, but ${draft.fieldsNeedingReview.length + draft.arithmeticProblems.length} thing(s) need your eye. Nothing has been posted yet.`,
+      });
+      // A command records the intake for audit and idempotency. It finalises at "draft
+      // prepared"; approving and posting the purchase are separate commands in #16/#17.
+      const context: RequestContext = options.actor && options.actor.companyId === company.companyId
+        ? options.actor
+        : { companyId: company.companyId, branchId: company.companyId, actorId: ready.sender.address, permissions: new Set(), sessionId: ready.id };
+      const command = this.#commands.create(context, {
+        action: "purchase.inbox.draft_prepared",
+        risk: "low",
+        idempotencyKey: (await this.#store.intakeKey(ready.companyId, ready.id)) ?? ready.id,
+        payload: { documentId: ready.id, sha256: ready.attachment.sha256, supplierGstin: readFields.supplierGstin?.value ?? null },
+      });
+      this.#record(ready, "purchase.inbox.draft_ready", { draftId: draft.id, command: command.id, needsReview: draft.fieldsNeedingReview, attempt: ready.attempts }, options.actor?.actorId);
+      return { document: ready, draft, duplicate: false };
     });
-    // A command records the intake for audit and idempotency. It finalises at "draft
-    // prepared"; approving and posting the purchase are separate commands in #16/#17.
-    const context: RequestContext = options.actor && options.actor.companyId === company.companyId
-      ? options.actor
-      : { companyId: company.companyId, branchId: company.companyId, actorId: document.sender.address, permissions: new Set(), sessionId: document.id };
-    const command = this.#commands.create(context, {
-      action: "purchase.inbox.draft_prepared",
-      risk: "low",
-      idempotencyKey: this.#intakeKeys.get(document.id) ?? document.id,
-      payload: { documentId: document.id, sha256: document.attachment.sha256, supplierGstin: readFields.supplierGstin?.value ?? null },
-    });
-    this.#record(document, "purchase.inbox.draft_ready", { draftId: draft.id, command: command.id, needsReview: draft.fieldsNeedingReview, attempt: document.attempts }, options.actor?.actorId);
-    return { document, draft, duplicate: false };
   }
 
   #require(context: RequestContext): void {
@@ -499,14 +539,67 @@ export class PurchaseInboxService {
     }
   }
 
-  #draftFor(documentId: Id): ExtractionDraft | undefined {
-    return [...this.#drafts.values()].find((draft) => draft.documentId === documentId);
+  #route(input: ReceiveInput) {
+    return routeDocument({
+      companies: this.#companies,
+      channel: input.channel,
+      sender: input.sender,
+      ...(input.deliveredTo === undefined ? {} : { deliveredTo: input.deliveredTo }),
+      ...(input.uploader === undefined ? {} : { uploader: input.uploader }),
+    });
   }
 
+  /**
+   * A redelivery already filed in a company (#406). Only the companies it could have reached are
+   * asked: the one its delivery routes to, or — when the address is shared — the ones that own the
+   * address and so may have claimed it. Routing is a pure function of the delivery, so this is the
+   * same answer the in-memory index gave.
+   */
+  async #storedByMessage(input: ReceiveInput, messageKey: string): Promise<ReceiveResult | null> {
+    const routing = this.#route(input);
+    for (const companyId of routing.ok ? [routing.companyId] : routing.channelOwners) {
+      const found = await this.#store.documentByMessageKey(companyId, messageKey);
+      if (found) return this.#withDraft(found);
+    }
+    return null;
+  }
+
+  async #withDraft(document: InboundDocument): Promise<ReceiveResult> {
+    const draft = await this.#store.draftFor(document.companyId, document.id);
+    return { document, duplicate: true, ...(draft ? { draft } : {}) };
+  }
+
+  /** A held document has been stored in its company: it leaves the unrouted holding. */
+  #release(id: Id): void {
+    this.#held.delete(id);
+    this.#intakeKeys.delete(id);
+    this.#channelOwners.delete(id);
+    for (const [key, heldId] of this.#heldByMessage) if (heldId === id) this.#heldByMessage.delete(key);
+  }
+
+  /** A document in the unrouted holding. Once routed, `#update` saves it instead. */
   #set(document: InboundDocument, changes: Partial<InboundDocument>): InboundDocument {
     const updated = Object.freeze({ ...document, ...changes }) as InboundDocument;
-    this.#documents.set(document.id, updated);
+    this.#held.set(document.id, updated);
     return updated;
+  }
+
+  /** A routed document's next step, saved in its company's unit of work. */
+  #update(document: InboundDocument, changes: Partial<InboundDocument>): Promise<InboundDocument> {
+    const updated = Object.freeze({ ...document, ...changes }) as InboundDocument;
+    return this.#unitOfWork(updated.companyId, async () => {
+      await this.#store.updateDocument(updated);
+      return updated;
+    });
+  }
+
+  /** `#quarantine` for a routed document. */
+  #hold(document: InboundDocument, reason: QuarantineReason, message: string): Promise<InboundDocument> {
+    return this.#unitOfWork(document.companyId, async () => {
+      const held = await this.#update(document, { status: "quarantined", quarantineReason: reason, statusMessage: message });
+      this.#record(held, "purchase.inbox.quarantined", { reason, message });
+      return held;
+    });
   }
 
   #quarantine(document: InboundDocument, reason: QuarantineReason, message: string): InboundDocument {
