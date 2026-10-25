@@ -140,6 +140,12 @@ export interface BookPurchaseDocument {
    */
   readonly outsideGstr2b?: true;
   /**
+   * Issue #289, part 2b — on a reverse-charge bill, the month of its time of supply (CGST s.12(3)
+   * goods, s.13(3) services): the month whose GSTR-3B carries its tax in 3.1(d), and before which its
+   * credit cannot be taken, because that credit comes from paying the tax. Absent: the bill's month.
+   */
+  readonly taxPointPeriod?: TaxPeriod;
+  /**
    * Issue #249 — goods we sent back to the supplier, handed over as a `CREDIT_NOTE`: the bill the
    * return corrects. The credit on that bill comes down by this document's tax from the month of the
    * return, whether or not the supplier's own note has reached the government's record yet.

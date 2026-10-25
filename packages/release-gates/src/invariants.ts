@@ -248,3 +248,20 @@ export const goldenDatasetStillMatches = (results: readonly GoldenObservation[])
   }
   return pass(id, title, 'CRITICAL', results.length, `${results.length} example businesses replay exactly.`);
 };
+
+/**
+ * Issue #299 — a file accidentally saved as "name 2.ts" was once committed and built a whole
+ * second copy of a module. Any tracked path shaped like an editor or operating-system duplicate
+ * fails the release, so the mistake can never come back.
+ */
+const COPY_NAME = / \d+\.(ts|md|json)$/;
+export const noTrackedCopyFiles = (paths: readonly string[]): GateResult => {
+  const id = 'NO_TRACKED_COPY_FILES';
+  const title = 'No accidental copy files are tracked in the repository';
+  const copies = paths.filter((path) => COPY_NAME.test(path));
+  if (copies.length > 0) {
+    return fail(id, title, 'CRITICAL', paths.length,
+      `${copies.length} tracked path(s) look like accidental copies, starting with ${copies[0]}.`);
+  }
+  return pass(id, title, 'CRITICAL', paths.length, `${paths.length} tracked paths checked, none shaped like a copy.`);
+};

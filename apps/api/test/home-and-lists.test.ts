@@ -53,7 +53,7 @@ const trade = (() => {
     assert.equal(customer.status, 200, JSON.stringify(customer.body));
     const sale = {
       customerId: customer.body.customer.id, item: 'TMT Steel Bar 12mm', quantity: '450', rate: '90',
-      freight: '2000', vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'home-237-sale',
+      freight: '2000', vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'home-237-sale', requestId: 'home-237-sale',
     };
     const reviewed = await request('POST', '/api/sales/preview', sale, owner);
     assert.equal(reviewed.status, 200, JSON.stringify(reviewed.body));
@@ -141,9 +141,11 @@ test('a promise and a dispute about Mehta\'s bill are recorded against Mehta, an
   const unknown = await request('POST', '/api/reminders/promise', { documentId: 'no-such-bill', amount: '1', promisedOn: '2026-10-15' }, owner);
   assert.equal(unknown.status, 404);
 
-  // Forty days on, Mehta's bill is late; the reminder is Mehta's and goes to Mehta's phone.
-  const later = '2026-11-20';
-  const sent = await request('POST', '/api/reminders/send', { documentId: bill.id, today: later }, owner);
+  // Fifty-three days on by the server's clock (#403), Mehta's bill is late; the reminder is Mehta's
+  // and goes to Mehta's phone.
+  useFixedAppClock('2026-11-20T10:00:00.000Z');
+  const sent = await request('POST', '/api/reminders/send', { documentId: bill.id }, owner)
+    .finally(() => useFixedAppClock('2026-09-28T10:00:00.000Z'));
   assert.equal(sent.status, 200, JSON.stringify(sent.body));
   assert.equal(sent.body.reminder.partyId, mehta);
   const outbox = (await request('GET', '/api/reminders', {}, owner)).body.outbox;
@@ -165,7 +167,7 @@ test('a promise and a dispute about Mehta\'s bill are recorded against Mehta, an
 test('a cancelled bill is not owed and does not appear as a sale on Home', async () => {
   const { owner, mehta } = await trade();
   const extra = await request('POST', '/api/sales/record', {
-    customerId: mehta, item: 'TMT Steel Bar 12mm', quantity: '10', rate: '90', date: DATE, terms: '30', reference: 'home-237-cancel',
+    customerId: mehta, item: 'TMT Steel Bar 12mm', quantity: '10', rate: '90', date: DATE, terms: '30', reference: 'home-237-cancel', requestId: 'home-237-cancel',
   }, owner);
   assert.equal(extra.status, 200, JSON.stringify(extra.body));
   const before = (await request('GET', '/api/dashboard', {}, owner)).body;
@@ -188,7 +190,7 @@ test('money received, a return and the government papers are built the same way'
   assert.equal((await request('POST', '/api/payments/record', payment, owner)).status, 200);
   const documents = (await request('GET', '/api/returns/documents', {}, owner)).body.documents;
   const original = documents.find((document: any) => document.id === bill.id);
-  const back = { kind: 'SALES_RETURN', documentId: bill.id, lineId: original.lines[0].id, quantity: '50', unit: 'KGS', date: DATE, reason: 'Bent bars', disposition: 'ACCEPTED', reference: 'home-237-return' };
+  const back = { kind: 'SALES_RETURN', documentId: bill.id, lineId: original.lines[0].id, quantity: '50', unit: 'KGS', date: DATE, reason: 'Bent bars', disposition: 'ACCEPTED', reference: 'home-237-return', requestId: 'home-237-return' };
   const previewed = await request('POST', '/api/returns/preview', back, owner);
   assert.equal(previewed.status, 200, JSON.stringify(previewed.body));
   assert.equal((await request('POST', '/api/returns/record', back, owner)).status, 200);

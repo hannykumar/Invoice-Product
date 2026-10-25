@@ -96,6 +96,12 @@ export interface ReturnInventoryLine {
 export interface ReturnInventoryPort {
   applySalesReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]>;
   applyPurchaseReturnIn(actor: ActorContext, line: ReturnInventoryLine): Promise<readonly string[]>;
+  /**
+   * Issue #292 — whether goods put in this place can be sold: `false` for the damaged / not-for-sale
+   * location, `true` for an ordinary godown, `null` for a place this business does not have. A port
+   * that moves no stock may leave it out.
+   */
+  sellableLocation?(actor: ActorContext, warehouseId: string): Promise<boolean | null>;
 }
 
 export const noReturnInventory: ReturnInventoryPort = {

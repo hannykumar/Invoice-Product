@@ -68,8 +68,8 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
 | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
 | `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
-| `ledger.post.receipt` | ✓ | ✓ | ✓ | ✓ |  |
-| `ledger.post.sale` | ✓ | ✓ | ✓ | ✓ |  |
+| `ledger.post.receipt` | ✓ | ✓ | ✓ |  |  |
+| `ledger.post.sale` | ✓ | ✓ | ✓ |  |  |
 | `ledger.reverse` | ✓ | ✓ | ✓ |  |  |
 | `ledger.setup` | ✓ | ✓ | ✓ |  |  |
 | `masters.item.rate.declare` | ✓ | ✓ | ✓ |  |  |
@@ -114,6 +114,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `sales.cancel` | ✓ | ✓ | ✓ |  |  |
 | `sales.draft.write` | ✓ | ✓ | ✓ | ✓ |  |
 | `sales.finalise` | ✓ | ✓ | ✓ | ✓ |  |
+| `sales.override_credit_limit` | ✓ | ✓ | ✓ |  |  |
 | `sales.view` | ✓ | ✓ | ✓ | ✓ |  |
 | `subscription.manage` | ✓ |  |  |  |  |
 | `subscription.view` | ✓ | ✓ | ✓ |  |  |
@@ -124,7 +125,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (160)
+## Routes (178)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
@@ -183,6 +184,8 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/sales/estimate` | `sales.draft.write` | ✓ | ✓ | ✓ | ✓ |  |
 | `POST /api/sales/preview` | `sales.draft.write` | ✓ | ✓ | ✓ | ✓ |  |
 | `POST /api/sales/record` | `sales.draft.write` + `sales.finalise` | ✓ | ✓ | ✓ | ✓ |  |
+| `GET /api/sales/waiting` | `sales.view` | ✓ | ✓ | ✓ | ✓ |  |
+| `POST /api/sales/approve` | `sales.approve` + `sales.finalise` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/sales/cancel/preview` | `sales.cancel` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/sales/cancel` | `sales.cancel` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/sales/print` | `sales.draft.write` | ✓ | ✓ | ✓ | ✓ |  |
@@ -264,6 +267,9 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/purchases/match/approve` | `purchase.match.approve` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/purchases/preview` | `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/purchases/record` | `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchases/self-invoice` | `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchases/self-invoice/print` | `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/purchases/self-invoices` | `purchases.view` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/purchases/:id` | `purchases.view` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/subscription` | `subscription.view` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/subscription/plan` | `subscription.manage` | ✓ |  |  |  |  |
@@ -288,3 +294,16 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/bank-feeds/consent/complete` | `bank.feed.manage` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/bank-feeds/sync` | `bank.feed.sync` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/bank-feeds/disconnect` | `bank.feed.manage` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/books/heads` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/books/journal/accounts` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/expense/preview` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/expense/record` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/journal/preview` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/journal/record` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/contra/preview` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/contra/record` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/owner/preview` | `ledger.post.receipt` or `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/owner/record` | `ledger.post.receipt` or `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/books/undo` | `ledger.reverse` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/books/entries` | `reports.view.financial` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/books/book` | `reports.view.financial` | ✓ | ✓ | ✓ |  |  |

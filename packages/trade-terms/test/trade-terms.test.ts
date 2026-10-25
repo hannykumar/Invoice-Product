@@ -270,7 +270,26 @@ test('a discount inside the business threshold is allowed, and beyond it needs a
   });
   assert.equal(large.lines[0]?.discount?.outcome, 'NEEDS_APPROVAL');
   assert.equal(large.outcome, 'NEEDS_APPROVAL');
-  assert.match(large.lines[0]?.discount?.sentence['en-IN'] ?? '', /more than the 10%/);
+  assert.match(large.lines[0]?.discount?.sentence['en-IN'] ?? '', /25% off the price list rate \(₹200\.00\)/);
+  // Issue #301 — says who may approve it.
+  assert.match(large.lines[0]?.discount?.sentence['en-IN'] ?? '', /more than 10% lower needs approval: the owner, or someone allowed to approve discounts/);
+});
+
+test('#301: a price below what this customer was last charged is said as that, not as a discount', async () => {
+  const desk = makeDesk({ discountWithoutApprovalBasisPoints: 1000 });
+  desk.parties.setLimit(inr(1000000));
+  desk.history.setAgreed([
+    { partyId: ABC, itemId: 'CRATE', amount: inr(250), documentNumber: 'INV/2026-27/00007', on: on('2026-07-01') },
+  ]);
+
+  const quote = await desk.service.quote(desk.actor, {
+    partyId: ABC, documentDate: on('2026-08-29'), lines: [line({ quantity: '10', unitPrice: inr(40) })],
+  });
+  const sentence = quote.lines[0]?.discount?.sentence['en-IN'] ?? '';
+  assert.equal(quote.outcome, 'NEEDS_APPROVAL');
+  assert.match(sentence, /₹40\.00 is 84% lower than the last price you charged them \(₹250\.00\)/);
+  assert.doesNotMatch(sentence, /% off/);
+  assert.match(sentence, /the owner, or someone allowed to approve discounts, has to approve it before the bill is issued/);
 });
 
 test('selling below cost is said out loud in money, and never blocks the bill', async () => {

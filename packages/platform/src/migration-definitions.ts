@@ -6,6 +6,7 @@ import { masterDataMigrations } from "../../masters/src/migrations.ts";
 import { purchasePostingMigrations } from "../../purchasing/src/posting-migrations.ts";
 import { purchaseMatchingMigrations } from "../../purchasing/src/matching-migrations.ts";
 import { supplierRiskMigrations } from "../../purchasing/src/supplier-risk-migrations.ts";
+import { reverseChargeMigrations } from "../../purchasing/src/reverse-charge-migrations.ts";
 import { eInvoiceMigrations } from "../../gst/src/einvoice-migrations.ts";
 import { gstReturnMigrations } from "../../gst-returns/src/migrations.ts";
 import { itcMigrations } from "../../itc/src/migrations.ts";
@@ -16,6 +17,7 @@ import { ledgerMigrations } from "../../ledger/src/migrations.ts";
 import { ewayBillMigrations } from "../../transport/src/migrations.ts";
 import { collectionMigrations } from "../../collections/src/migrations.ts";
 import { bankFeedMigrations } from "../../bank-feeds/src/migrations.ts";
+import { bankReconciliationMigrations } from "../../bank-reconciliation/src/migrations.ts";
 import { subscriptionMigrations } from "../../subscriptions/src/migrations.ts";
 import { vehicleSuitabilityMigrations } from "../../transport/src/suitability-migrations.ts";
 import { vehicleRecordMigrations } from "../../transport/src/vehicle-record-migrations.ts";
@@ -230,5 +232,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...immutabilityMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...subscriptionMigrations, ...actionAgentMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...immutabilityMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );

@@ -20,6 +20,8 @@ export const SYNTHETIC_PLATFORM_COMPANIES = [
 
 /** Read-only: the dashboard and nothing that changes anything. */
 export const VIEWER_PERMISSIONS: readonly Permission[] = ROLES.viewer.permissions;
+/** Issue #301 — someone at the counter: makes and issues bills, takes money, but approves nothing. */
+export const COUNTER_PERMISSIONS: readonly Permission[] = ROLES.staff.permissions;
 /** The books, bills and returns, but not who may sign in, the plan, or the shop's own particulars. */
 export const ACCOUNTANT_PERMISSIONS: readonly Permission[] = ROLES.accountant.permissions;
 
@@ -31,11 +33,11 @@ export const SYNTHETIC_PLATFORM_USERS = [
   ...SYNTHETIC_PLATFORM_COMPANIES.map((company) => ({ companyId: company.companyId, branchId: company.branchId, userId: company.userId, email: company.email, displayName: company.displayName, role: "owner" as const, permissions: PRODUCT_OWNER_PERMISSIONS })),
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000005", email: "accounts@sampoorna.example.invalid", displayName: "Sampoorna Accountant", role: "accountant" as const, permissions: ACCOUNTANT_PERMISSIONS },
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000004", email: "viewer@sampoorna.example.invalid", displayName: "Sampoorna Viewer", role: "viewer" as const, permissions: VIEWER_PERMISSIONS },
+  { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000007", email: "counter@sampoorna.example.invalid", displayName: "Sampoorna Counter", role: "staff" as const, permissions: COUNTER_PERMISSIONS },
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[1].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[1].branchId, userId: "00000000-0000-4000-8000-000000000015", email: "accounts@konkan.example.invalid", displayName: "Konkan Accountant", role: "accountant" as const, permissions: ACCOUNTANT_PERMISSIONS },
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[1].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[1].branchId, userId: "00000000-0000-4000-8000-000000000014", email: "viewer@konkan.example.invalid", displayName: "Konkan Viewer", role: "viewer" as const, permissions: VIEWER_PERMISSIONS },
-  // Issue #343 — an admin and a member of staff, so every role is somebody in the demo.
-  { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000007", email: "admin@sampoorna.example.invalid", displayName: "Sampoorna Admin", role: "admin" as const, permissions: ROLES.admin.permissions },
-  { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000008", email: "staff@sampoorna.example.invalid", displayName: "Sampoorna Counter Staff", role: "staff" as const, permissions: ROLES.staff.permissions },
+  // Issue #343 — an admin, so every role is somebody in the demo (the counter person above is staff).
+  { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000009", email: "admin@sampoorna.example.invalid", displayName: "Sampoorna Admin", role: "admin" as const, permissions: ROLES.admin.permissions },
   // Issue #342 — a chartered accountant who looks after both businesses: one person, two memberships,
   // switching between them without signing in again.
   ...SYNTHETIC_PLATFORM_COMPANIES.map((company) => ({ companyId: company.companyId, branchId: company.branchId, userId: "00000000-0000-4000-8000-000000000006", email: "ca@example.invalid", displayName: "Synthetic Chartered Accountant", role: "accountant" as const, permissions: ACCOUNTANT_PERMISSIONS })),

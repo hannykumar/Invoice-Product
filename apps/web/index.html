@@ -130,6 +130,8 @@
 
         <section class="view" id="view-sale" aria-labelledby="sale-title">
           <div class="page-heading compact"><div><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span><button type="button" class="secondary-button" id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"></button></div>
+          <!-- Issue #301 — sales held because their review needed approval, approved here by someone who may. -->
+          <section class="panel" id="sale-waiting" aria-labelledby="sale-waiting-title" hidden><h2 id="sale-waiting-title" data-i18n="saleWaitingTitle"></h2><ul id="sale-waiting-list"></ul></section>
           <!-- Issue #266 — said when a draft from an earlier day comes back. -->
           <p class="safety-note draft-date-note" id="sale-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
           <form class="draft-form sale-slides" data-draft="sale" novalidate>
@@ -153,6 +155,8 @@
                   <summary data-i18n="chargesSection"></summary>
                   <div class="field-grid sale-charges">
                     <label><span data-i18n="freight"></span><span class="input-with-prefix"><span>₹</span><input name="freight" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+                    <!-- Issue #293 — rupees off the whole bill, shared over its items before GST. -->
+                    <label><span data-i18n="billDiscount"></span><span class="input-with-prefix"><span>₹</span><input name="billDiscount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
                     <label><span data-i18n="otherCharges"></span><span class="input-with-prefix"><span>₹</span><input name="otherCharges" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
                   </div>
                 </details>
@@ -292,10 +296,10 @@
               </div>
             </div>
             <p id="sale-bill-eway-note" hidden></p>
-            <iframe id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="sale-bill-frame" title="Printed bill" data-i18n-aria="billFrame"></iframe>
             <!-- Issue #183 — the whole marked set, fetched only when Print is pressed on A4, so the
                  screen keeps showing the Original the customer is given. -->
-            <iframe id="sale-bill-copies" title="Printed copies" aria-hidden="true" hidden></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="sale-bill-copies" title="Printed copies" aria-hidden="true" hidden></iframe>
           </article>
         </section>
 
@@ -307,6 +311,9 @@
             <small class="line-facts" data-line-facts></small>
             <div class="line-stepper"><button type="button" class="secondary-button" data-step="-1" aria-label="One less" data-i18n-aria="oneLess">−</button><label><span class="sr-only" data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" inputmode="decimal" required /><span data-line-unit>—</span></span></label><button type="button" class="secondary-button" data-step="1" aria-label="One more" data-i18n-aria="oneMore">＋</button></div>
             <label><span data-i18n="rate"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" value="0" inputmode="decimal" required /></span><small data-line-price-note></small></label>
+            <!-- Issue #293 — rupees off this line, before GST; printed in the bill's Discount column. -->
+            <label><span data-i18n="lineDiscount"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="discount" type="number" min="0" step="0.01" inputmode="decimal" /></span></label>
+            <label><span data-i18n="lineDiscountPercent"></span><span class="input-with-suffix"><input data-line-field="discountPercent" type="number" min="0" max="100" step="0.01" inputmode="decimal" /><span>%</span></span></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -318,6 +325,8 @@
             <label><span data-i18n="quantity"></span><span class="input-with-suffix"><input data-line-field="quantity" type="number" min="0.001" step="0.001" value="1" required /><span data-line-unit>—</span></span></label>
             <label><span data-i18n="ratePerUnit"></span><span class="input-with-prefix"><span>₹</span><input data-line-field="rate" type="number" min="0" step="0.01" required /></span></label>
             <label><span data-i18n="gstRate"></span><select data-line-field="gst" data-gst-picker required></select></label>
+            <!-- Issue #289, part 3 — credit blocked by CGST s.17(5): the person says which clause; the app never guesses it. -->
+            <label><span data-i18n="creditAllowed"></span><select data-line-field="blocked"><option value="" data-i18n="creditAllowedYes"></option><option value="motor_vehicle" data-i18n="blocked_motor_vehicle"></option><option value="vessel_aircraft" data-i18n="blocked_vessel_aircraft"></option><option value="vehicle_insurance_repair" data-i18n="blocked_vehicle_insurance_repair"></option><option value="food_health_etc" data-i18n="blocked_food_health_etc"></option><option value="club_fitness" data-i18n="blocked_club_fitness"></option><option value="employee_travel" data-i18n="blocked_employee_travel"></option><option value="works_contract_building" data-i18n="blocked_works_contract_building"></option><option value="own_building" data-i18n="blocked_own_building"></option><option value="csr" data-i18n="blocked_csr"></option><option value="personal_use" data-i18n="blocked_personal_use"></option><option value="gift_sample" data-i18n="blocked_gift_sample"></option></select><small data-i18n="creditAllowedHelp"></small></label>
             <button type="button" class="text-button" data-remove-line data-i18n="removeLine"></button>
           </div>
         </template>
@@ -337,6 +346,8 @@
                 <label><span data-i18n="supplierBill"></span><input name="reference" data-i18n-placeholder="supplierBillPlaceholder" required /></label>
                 <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="billAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" type="number" min="0" step="0.01" /></span><small data-i18n="billAmountHelp"></small></label>
+                <!-- Issue #289, part 2b — on a reverse-charge bill the GST falls due from the day the goods arrived (CGST s.12(3)), and a self-invoice is due within 30 days of it (Rule 47A). -->
+                <label><span data-i18n="receivedOn"></span><input name="receivedOn" type="date" data-no-default /><small data-i18n="receivedOnHelp"></small></label>
               </div>
               <!-- Issue #311 — the supplier check (#19) runs when the supplier is chosen: one line. -->
               <p class="line-ok" id="purchase-supplier-check" aria-live="polite" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p>
@@ -349,6 +360,15 @@
             </article>
             <aside class="panel summary-card"><h2 data-i18n="beforeSaving"></h2><ol class="check-list"><li data-i18n="checkSupplier"></li><li data-i18n="checkDuplicate"></li><li data-i18n="checkTax"></li></ol><p class="safety-note"><span aria-hidden="true">i</span><span data-i18n="purchaseSafety"></span></p><h2 data-i18n="postingTitle"></h2><ol class="check-list"><li data-i18n="postingStock"></li><li data-i18n="postingBooks"></li><li data-i18n="postingOwed"></li></ol><p class="safety-note"><span aria-hidden="true">◎</span><span data-i18n="postingTogether"></span></p><p class="safety-note"><span aria-hidden="true">↻</span><span data-i18n="postingRetrySafe"></span></p><button type="submit" class="primary-button wide" data-i18n="reviewPurchase"></button><button type="button" class="secondary-button wide clear-draft" data-i18n="discardDraft"></button></aside>
           </form>
+          <!-- Issue #289, part 2b — self-invoices for purchases from sellers with no GST number (CGST s.31(3)(f), Rule 47A). -->
+          <article class="panel" id="self-invoice-panel" hidden>
+            <div class="panel-heading"><div><h2 data-i18n="selfInvoicesTitle"></h2><p data-i18n="selfInvoicesHelp"></p></div></div>
+            <ul class="self-invoice-list" data-self-invoices></ul>
+            <div data-self-invoice-view hidden>
+              <div class="panel-heading"><div><h2 data-self-invoice-title>—</h2></div><button type="button" class="primary-button" data-self-invoice-print data-i18n="printVoucher"></button></div>
+              <iframe sandbox="allow-same-origin allow-modals" data-self-invoice-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Self-invoice"></iframe>
+            </div>
+          </article>
         </section>
 
         <section class="view" id="view-payment" aria-labelledby="payment-title">
@@ -361,7 +381,7 @@
           </form>
           <article class="panel" data-voucher-panel hidden>
             <div class="panel-heading"><div><h2 data-voucher-title>—</h2></div><button type="button" class="primary-button" data-voucher-print data-i18n="printVoucher"></button></div>
-            <iframe data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Receipt"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Receipt"></iframe>
           </article>
         </section>
 
@@ -375,8 +395,55 @@
           </form>
           <article class="panel" data-voucher-panel hidden>
             <div class="panel-heading"><div><h2 data-voucher-title>—</h2></div><button type="button" class="primary-button" data-voucher-print data-i18n="printVoucher"></button></div>
-            <iframe data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Payment voucher"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" data-voucher-frame style="width:100%;height:760px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem" title="Payment voucher"></iframe>
           </article>
+        </section>
+
+        <!-- Issue #294 — expenses, contra and journal entries, the owner's money, and the cash and bank books. Filled by books.js. -->
+        <section class="view" id="view-books" aria-labelledby="books-title">
+          <div class="page-heading compact"><div><h1 id="books-title" tabindex="-1" data-i18n="booksTitle"></h1><p data-i18n="booksHelp"></p></div></div>
+          <div class="dashboard-grid">
+            <article class="panel form-panel"><h2 data-i18n="booksExpense"></h2>
+              <form data-books-kind="expense"><div class="field-grid">
+                <label><span data-i18n="booksHead"></span><select name="head" data-books-heads required></select></label>
+                <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="booksPaidFrom"></span><select name="paidFrom"><option value="cash" data-i18n="booksCash"></option><option value="bank" data-i18n="booksBank"></option><option value="upi">UPI</option></select></label>
+                <label><span data-i18n="booksAmount"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
+                <label><span data-i18n="booksConsignment"></span><select name="consignmentNote"><option value=""></option><option value="no" data-i18n="booksConsignmentNo"></option><option value="yes" data-i18n="booksConsignmentYes"></option></select></label>
+                <label><span data-i18n="booksBill"></span><input name="billNumber" maxlength="40" /></label>
+                <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
+              </div><small data-i18n="booksGstNote"></small> <small data-i18n="booksOwedNote"></small></form>
+            </article>
+            <article class="panel form-panel"><h2 data-i18n="booksOwner"></h2>
+              <form data-books-kind="owner"><div class="field-grid">
+                <label><span data-i18n="booksWhat"></span><select name="direction"><option value="capital" data-i18n="booksOwnerIn"></option><option value="drawings" data-i18n="booksOwnerOut"></option></select></label>
+                <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="booksPaidFrom"></span><select name="paidFrom"><option value="cash" data-i18n="booksCash"></option><option value="bank" data-i18n="booksBank"></option><option value="upi">UPI</option></select></label>
+                <label><span data-i18n="booksAmountPlain"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
+                <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
+              </div></form>
+            </article>
+            <article class="panel form-panel"><h2 data-i18n="booksContra"></h2>
+              <form data-books-kind="contra"><div class="field-grid">
+                <label><span data-i18n="booksWhat"></span><select name="direction"><option value="deposit" data-i18n="booksDeposit"></option><option value="withdraw" data-i18n="booksWithdraw"></option></select></label>
+                <label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label>
+                <label><span data-i18n="booksAmountPlain"></span><span class="input-with-prefix"><span>₹</span><input name="amount" inputmode="decimal" required /></span></label>
+                <label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" /></label>
+              </div></form>
+            </article>
+            <article class="panel form-panel"><h2 data-i18n="booksJournal"></h2><p data-i18n="booksJournalHelp"></p>
+              <form data-books-kind="journal">
+                <div class="field-grid"><label><span data-i18n="booksDate"></span><input name="date" type="date" required /></label><label><span data-i18n="booksNote"></span><input name="narration" maxlength="200" required /></label></div>
+                <div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account1" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit1" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit1" inputmode="decimal" /></label></div><div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account2" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit2" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit2" inputmode="decimal" /></label></div><div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account3" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit3" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit3" inputmode="decimal" /></label></div><div class="field-grid" data-journal-line><label><span data-i18n="booksAccount"></span><select name="account4" data-journal-account></select></label><label><span data-i18n="booksDebit"></span><input name="debit4" inputmode="decimal" /></label><label><span data-i18n="booksCreditSide"></span><input name="credit4" inputmode="decimal" /></label></div>
+              </form>
+            </article>
+          </div>
+          <article class="panel"><h2 data-i18n="booksBookTitle"></h2>
+            <div class="sheet-choices"><button type="button" class="secondary-button" data-books-book="cash" data-i18n="booksShowCash"></button><button type="button" class="secondary-button" data-books-book="bank" data-i18n="booksShowBank"></button></div>
+            <p data-books-book-summary></p>
+            <table class="data-table"><thead><tr><th data-i18n="booksDate"></th><th>#</th><th data-i18n="booksAgainst"></th><th data-i18n="booksIn"></th><th data-i18n="booksOut"></th><th data-i18n="booksBalance"></th></tr></thead><tbody data-books-book-rows></tbody></table>
+          </article>
+          <article class="panel"><h2 data-i18n="booksEntries"></h2><ul data-books-entries></ul></article>
         </section>
 
         <section class="view" id="view-bank-feeds" aria-labelledby="bank-feeds-title">
@@ -406,6 +473,14 @@
                 <label class="full-field"><span data-i18n="returnItem"></span><select name="lineId" id="return-line" required></select><small id="return-remaining" data-i18n="returnRemaining"></small></label>
                 <input name="kind" id="return-kind" type="hidden" />
                 <input name="unit" id="return-unit" type="hidden" />
+                <!-- Issue #293 — a price corrected after the sale: a credit or debit note, nothing comes back. -->
+                <label class="full-field" id="return-mode-field"><span data-i18n="returnMode"></span><select name="mode" id="return-mode"><option value="" data-i18n="returnModeGoods"></option><option value="PRICE" data-i18n="returnModePrice"></option></select></label>
+                <fieldset class="full-field field-grid" id="return-price" hidden disabled>
+                  <label class="full-field"><span data-i18n="returnCause"></span><select name="cause" required><option value="" data-i18n="causeChoose"></option><option value="INVOICE_ERROR" data-i18n="causeInvoiceError"></option><option value="DISCOUNT_AFTER_SALE" data-i18n="causeDiscountAfterSale"></option></select></label>
+                  <label><span data-i18n="returnNewRate"></span><input name="newRate" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+                  <label><span data-i18n="returnAmountOff"></span><input name="amountOff" type="number" min="0.01" step="0.01" inputmode="decimal" /></label>
+                  <small class="full-field" data-i18n="returnPriceHelp"></small>
+                </fieldset>
                 <label><span data-i18n="returnQuantity"></span><input name="quantity" type="number" min="0.000001" step="0.000001" required /></label>
                 <label><span data-i18n="disposition"></span><select name="disposition"><option value="ACCEPTED" data-i18n="dispAccepted"></option><option value="DAMAGED" data-i18n="dispDamaged"></option><option value="SCRAPPED" data-i18n="dispScrapped"></option><option value="REPLACEMENT" data-i18n="dispReplacement"></option></select></label>
                 <label><span data-i18n="returnDate"></span><input name="date" type="date" required /></label>
@@ -436,7 +511,7 @@
                 <button type="button" class="secondary-button" id="note-download" data-i18n="downloadPdf"></button>
               </div>
             </div>
-            <iframe id="note-frame" title="Printed note" data-i18n-aria="noteFrame"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="note-frame" title="Printed note" data-i18n-aria="noteFrame"></iframe>
           </article>
           <article class="panel" id="note-list-panel" hidden>
             <h2 data-i18n="notesTitle"></h2>
@@ -576,7 +651,7 @@
               <div class="field-grid"><label class="full-field"><span data-i18n="presaleCancelReason"></span><input name="reason" placeholder="The customer bought elsewhere" required /></label></div>
               <button type="submit" class="secondary-button wide" data-i18n="presaleCancel"></button>
             </form>
-            <iframe id="presale-frame" title="Printed quotation or proforma invoice" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="presale-frame" title="Printed quotation or proforma invoice" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
           </article>
         </section>
 
@@ -653,7 +728,7 @@
               </div>
               <button type="submit" class="secondary-button wide" data-i18n="cancelChallan"></button>
             </form>
-            <iframe id="challan-frame" title="Printed delivery challan" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
+            <iframe sandbox="allow-same-origin allow-modals" id="challan-frame" title="Printed delivery challan" style="width:100%;height:1150px;border:1px solid #ced9d4;border-radius:8px;background:#fff;margin-top:1rem"></iframe>
           </article>
         </section>
 
@@ -702,7 +777,7 @@
             </div>
             <section id="eway-print-panel" hidden>
               <p id="eway-print-note"></p>
-              <iframe id="eway-print-frame" title="e-Way bill" class="bill-frame"></iframe>
+              <iframe sandbox="allow-same-origin allow-modals" id="eway-print-frame" title="e-Way bill" class="bill-frame"></iframe>
               <div class="dialog-actions">
                 <button type="button" class="primary-button" id="eway-print-send" data-i18n="printEwaySend"></button>
                 <a class="secondary-button" id="eway-print-pdf" download data-i18n="printEwayPdf"></a>
@@ -1402,7 +1477,7 @@
             <article class="panel branding-preview-panel">
               <h2 data-i18n="brandingPreviewTitle"></h2>
               <p class="setup-hint" data-i18n="brandingPreviewHelp"></p>
-              <iframe id="branding-preview" title="Sample bill" data-i18n-aria="brandingPreviewFrame"></iframe>
+              <iframe sandbox="allow-same-origin allow-modals" id="branding-preview" title="Sample bill" data-i18n-aria="brandingPreviewFrame"></iframe>
               <p class="branding-status" id="branding-status" role="status"></p>
             </article>
           </div>
@@ -1559,8 +1634,7 @@
         <button type="button" class="secondary-button" data-view="paid"><span aria-hidden="true">₹</span> <span data-i18n="navPaid"></span></button>
         <button type="button" class="secondary-button" data-view="presale"><span aria-hidden="true">✎</span> <span data-i18n="navQuotation"></span></button>
         <button type="button" class="secondary-button" data-view="returns"><span aria-hidden="true">↩</span> <span data-i18n="navReturn"></span></button>
-        <button type="button" class="secondary-button" disabled aria-describedby="expense-soon"><span aria-hidden="true">₹</span> <span data-i18n="navExpense"></span></button>
-        <small class="sheet-soon" id="expense-soon" data-i18n="expenseSoon"></small>
+        <button type="button" class="secondary-button" data-view="books"><span aria-hidden="true">₹</span> <span data-i18n="navExpense"></span></button>
       </div>
       <button type="button" class="text-button sheet-close" data-close-dialog data-i18n="close"></button>
     </dialog>
@@ -1577,7 +1651,7 @@
         <button class="text-button" id="login-change-address" type="button" data-i18n="changeAddress" hidden></button>
       </form>
     </dialog>
-    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><!-- Issue #312 — on a sale review: one green line for what the law needs (it happens by itself), and at most one warning, only when the owner must act. --><p class="line-ok" id="review-ok" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p><p class="line-warn" id="review-warning" hidden><span aria-hidden="true">!</span><span data-line-text></span></p><label class="bill-choice" id="review-advance" hidden><input type="checkbox" id="review-advance-use" /><strong id="review-advance-label"></strong></label><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill"></button><button class="primary-button" id="review-add-customer" type="button" hidden data-i18n="addNamedCustomer"></button><button class="primary-button" id="review-date-today" type="button" hidden data-i18n="dateItToday"></button><button class="secondary-button" id="review-advance-voucher" type="button" hidden data-i18n="printAdvanceVoucher"></button><button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
+    <dialog id="review-dialog" aria-labelledby="review-title" aria-describedby="review-body"><div class="dialog-icon" id="review-icon" aria-hidden="true">✓</div><h2 id="review-title" data-i18n="checking"></h2><p id="review-body" data-i18n="checkingBody"></p><ul class="dialog-effects" id="review-effects"></ul><!-- Issue #312 — on a sale review: one green line for what the law needs (it happens by itself), and at most one warning, only when the owner must act. --><p class="line-ok" id="review-ok" hidden><span aria-hidden="true">✓</span><span data-line-text></span></p><p class="line-warn" id="review-warning" hidden><span aria-hidden="true">!</span><span data-line-text></span></p><label class="bill-choice" id="review-advance" hidden><input type="checkbox" id="review-advance-use" /><strong id="review-advance-label"></strong></label><!-- Issue #301 — a sale that needs approval: approved here with a reason, or sent to someone who may. --><div class="bill-choice" id="review-approval" hidden><strong id="review-approval-text"></strong><label id="review-approval-field"><span data-i18n="approvalReasonLabel"></span> <input type="text" id="review-approval-reason" maxlength="300" autocomplete="off" /></label></div><div class="dialog-actions"><button class="secondary-button" id="review-cancel" value="cancel" data-i18n="keepEditing"></button><button class="secondary-button" id="review-download" type="button" hidden>Download PDF</button><button class="secondary-button" id="review-eway" type="button" hidden data-i18n="ewayFromBill"></button><button class="primary-button" id="review-purchase" type="button" hidden data-i18n="enterPurchaseBill"></button><button class="primary-button" id="review-add-customer" type="button" hidden data-i18n="addNamedCustomer"></button><button class="primary-button" id="review-date-today" type="button" hidden data-i18n="dateItToday"></button><button class="secondary-button" id="review-advance-voucher" type="button" hidden data-i18n="printAdvanceVoucher"></button><button class="primary-button" id="review-back-to-sale" type="button" hidden data-i18n="backToSale"></button><button class="secondary-button" id="review-turnover" type="button" hidden data-open-turnover data-i18n="answerInBusinessDetails"></button><button class="primary-button" id="review-confirm" value="confirm" data-i18n="recordOnce"></button></div></dialog>
     <!-- Issue #307 — the finish of every bill, filled by done-screen.js (the four-slide sale #305 reuses it). -->
     <dialog id="done-screen" class="done-screen" aria-labelledby="done-title"></dialog>
     <!-- Issue #233 — cancelling an issued bill: what it will do, why it cannot, and the reason kept with it. -->
@@ -1649,6 +1723,7 @@
         <label><span data-i18n="itemTax"></span><select name="taxChoice" id="item-tax"></select><small data-i18n="itemTaxHelp"></small></label>
         <label id="item-other-rate" hidden><span data-i18n="itemOtherRate"></span><input name="otherRate" type="number" min="0" max="100" step="0.01" /></label>
         <label><span data-i18n="itemBasis"></span><input name="basis" /><small data-i18n="itemBasisHelp"></small></label>
+        <label><span data-i18n="itemRateFrom"></span><input name="effectiveFrom" type="date" /><small data-i18n="itemRateFromHelp"></small></label>
         <label><span data-i18n="itemBarcode"></span><input name="barcode" autocomplete="off" /><small data-i18n="itemBarcodeHelp"></small></label>
         <label><span data-i18n="itemPrice"></span><span class="input-with-prefix"><span>₹</span><input name="price" type="number" min="0" step="0.01" inputmode="decimal" /></span><small data-i18n="itemPriceHelp"></small></label>
         <label><span data-i18n="itemOtherName"></span><input name="otherName" /><small data-i18n="itemOtherNameHelp"></small></label>

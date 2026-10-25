@@ -40,7 +40,10 @@ export interface StockRow {
   readonly closing: string;
   /** Held by unfinished bills, so the same goods cannot be promised twice. */
   readonly reserved: string;
+  /** What can be sold. Always zero in a damaged / not-for-sale location (issue #292). */
   readonly available: string;
+  /** Issue #292 — false for damaged or quarantined goods: counted and valued, never sold. */
+  readonly sellable: boolean;
   readonly value: Money;
   readonly averageUnitCost: Money | null;
   /** Every movement behind the closing figure, so a count can be argued with. */
@@ -114,13 +117,15 @@ export const stockReportBody = async (
     const closing = physicalQuantity(movements, unitCode, { on: filter.to });
     const reserved = reservedQuantity(held, unitCode);
     const valued = valueStock(movements, { on: filter.to });
+    const warehouse = masterData.warehouse(companyId, warehouseId);
+    const sellable = warehouse?.sellable !== false;
 
     rows.push({
       itemId,
       itemName,
       warehouseId,
       warehouseName: nameOr(
-        masterData.warehouse(companyId, warehouseId)?.name ?? names.warehouse(companyId, warehouseId),
+        warehouse?.name ?? names.warehouse(companyId, warehouseId),
         warehouseId,
       ),
       unitCode,
@@ -129,7 +134,8 @@ export const stockReportBody = async (
       issued: amountOf({ scaled: totalMicro(during.filter((m) => DIRECTION_OF[m.kind] === 'OUT')), unit: unitCode }),
       closing: amountOf(closing),
       reserved: amountOf(reserved),
-      available: amountOf({ scaled: closing.scaled - reserved.scaled, unit: unitCode }),
+      available: amountOf({ scaled: sellable ? closing.scaled - reserved.scaled : 0n, unit: unitCode }),
+      sellable,
       value: valued.value,
       averageUnitCost: valued.averageUnitCost,
       movements: movements.map((m) => movementContribution(m, itemName)),

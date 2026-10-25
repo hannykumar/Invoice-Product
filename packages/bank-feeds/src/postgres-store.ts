@@ -9,7 +9,7 @@
  */
 import type { SqlExecutor, TransactionalExecutor } from '../../platform/src/database.ts';
 import { PostgresAuditLog } from '../../platform/src/postgres-audit.ts';
-import type { BankFeedAccount, BankFeedAuditEvent, BankFeedConnection, BankFeedTransaction, SyncResult } from './model.ts';
+import type { BankFeedAccount, BankFeedAuditEvent, BankFeedConnection, BankFeedConsentState, BankFeedTransaction, SyncResult } from './model.ts';
 import { providerKey, type BankFeedStore, type Page } from './store.ts';
 
 type Row = Record<string, unknown>;
@@ -172,6 +172,24 @@ export class PostgresBankFeedStore implements BankFeedStore {
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::uuid[])`,
       [companyId, connectionId, idempotencyKey, JSON.stringify(result.connection), result.imported, result.duplicates, result.transactions.map((t) => t.id)],
     );
+  }
+
+  async saveConsentState(state: BankFeedConsentState): Promise<void> {
+    await this.#write(state.companyId).query(
+      `INSERT INTO bank_feed_consent_states (company_id, connection_id, state_hash, started_by, expires_at) VALUES ($1, $2::uuid, $3, $4, $5::timestamptz)`,
+      [state.companyId, state.connectionId, state.stateHash, state.startedBy, state.expiresAt],
+    );
+  }
+
+  /** One conditional UPDATE: two replies racing for the same request cannot both use it. */
+  async useConsentState(companyId: string, connectionId: string, stateHash: string, actorId: string, at: string): Promise<boolean> {
+    const used = await this.#write(companyId).query(
+      `UPDATE bank_feed_consent_states SET used_at = $5::timestamptz
+        WHERE company_id = $1 AND connection_id = $2::uuid AND state_hash = $3 AND started_by = $4 AND used_at IS NULL AND expires_at > $5::timestamptz
+        RETURNING connection_id`,
+      [companyId, connectionId, stateHash, actorId, at],
+    );
+    return used.rows.length === 1;
   }
 
   async record(event: BankFeedAuditEvent): Promise<void> {

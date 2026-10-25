@@ -123,7 +123,8 @@ test('Before the trade: Sampoorna Traders, three old bills to ABC Traders (₹1,
   // ₹1,050 + ₹525 + ₹263 = ₹1,838
   assertRupees(abc.outstanding, '₹1,838.00', 'ABC Traders owes');
   assertRupees(books.dues.receivables.total, '₹1,838.00', 'customers owe');
-  assert.deepEqual((await home()).customer.documents.map((bill: any) => paise(bill.outstanding)), [rs('₹1,050'), rs('₹525'), rs('₹263')]);
+  // The bills owed on Home are listed as they were made, oldest first — #299 seeds them that way.
+  assert.deepEqual((await home()).customer.documents.map((bill: any) => paise(bill.outstanding)), [rs('₹263'), rs('₹525'), rs('₹1,050')]);
   // No steel in the godown: Reports has no line for it yet, and Home shows 0.
   assert.deepEqual((books.stock.rows as any[]).filter((row) => row.item === STEEL && row.closing !== '0.000'), []);
   assert.equal((await home()).stockItems.find((item: any) => item.name === STEEL).quantity, 0);
@@ -395,7 +396,7 @@ test('Step 9. 50 KGS come back, usable: credit note ₹4,500 + IGST ₹810 = ₹
   assert.ok(original, 'the bill from step 3 can be returned against');
   const back = {
     kind: original.kind, documentId: original.id, lineId: original.lines[0].id, unit: original.lines[0].unit,
-    quantity: '50', disposition: 'ACCEPTED', date: TODAY, reference: 'full-trade-238-return', reason: 'Bent bars',
+    quantity: '50', disposition: 'ACCEPTED', date: TODAY, reference: 'full-trade-238-return', requestId: 'full-trade-238-return', reason: 'Bent bars',
   };
   assert.equal(back.kind, 'SALES_RETURN');
   const review = await ok('POST', '/api/returns/preview', back);

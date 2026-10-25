@@ -73,4 +73,23 @@ export const bankFeedMigrations: readonly Migration[] = [{
     ALTER TABLE bank_feed_accounts DROP COLUMN IF EXISTS seq;
     ALTER TABLE bank_feed_connections DROP COLUMN IF EXISTS seq, DROP COLUMN IF EXISTS consent_url;
   `,
+}, {
+  // Issue #402 — the bank's reply must carry the `state` handed out when the request started. Only
+  // its SHA-256 is kept, with the company, the person who started it and when it runs out. It is
+  // used once: `used_at` is set by a single conditional UPDATE and never cleared.
+  id: '20261023T001354361Z_bank-feeds_769fe6aa0c94_consent_state_binding',
+  up: `
+    CREATE TABLE bank_feed_consent_states (
+      connection_id uuid PRIMARY KEY REFERENCES bank_feed_connections(id),
+      company_id uuid NOT NULL REFERENCES companies(id),
+      state_hash text NOT NULL CHECK (state_hash ~ '^[0-9a-f]{64}$'),
+      started_by text NOT NULL CHECK (started_by <> ''),
+      expires_at timestamptz NOT NULL,
+      used_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    ALTER TABLE bank_feed_consent_states ENABLE ROW LEVEL SECURITY; ALTER TABLE bank_feed_consent_states FORCE ROW LEVEL SECURITY;
+    CREATE POLICY bank_feed_consent_states_tenant ON bank_feed_consent_states USING (company_id = nullif(current_setting('app.company_id', true), '')::uuid) WITH CHECK (company_id = nullif(current_setting('app.company_id', true), '')::uuid);
+  `,
+  down: `DROP TABLE IF EXISTS bank_feed_consent_states;`,
 }];

@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isoDate, rupees } from '@invoice/kernel';
 import type { ReportHeader } from '@invoice/reports';
-import { citeAmount, plainSentence, safeSentence, UncheckableFigureError, UnsupportedClaimError } from '../src/citations.ts';
+import { citeAmount, plainSentence, safeSentence, UncheckableFigureError, UnsupportedClaimError, wording } from '../src/citations.ts';
 import { understand, looksLikeAnInstruction } from '../src/language.ts';
 import { resolvePeriod } from '../src/periods.ts';
 
@@ -124,6 +124,38 @@ describe('no unsupported legal certainty', () => {
         }),
       UnsupportedClaimError,
     );
+  });
+});
+
+describe('names and figures are filled in after the check (#405)', () => {
+  it('lets a party called "Guaranteed Traders" through, exactly as it was typed', () => {
+    const party = 'Guaranteed Traders';
+    const sentence = plainSentence(wording`The one waiting longest is ${party}: ${12} days past due.`, wording`Sabse purana ${party} ka hai.`);
+    assert.equal(sentence['en-IN'], 'The one waiting longest is Guaranteed Traders: 12 days past due.');
+    assert.equal(sentence['hi-IN'], 'Sabse purana Guaranteed Traders ka hai.');
+  });
+
+  it('does not let a name speak for the department either', () => {
+    const party = 'The Department Will Supply Co.';
+    assert.equal(plainSentence(wording`Sold to ${party}.`, 'theek hai')['en-IN'], 'Sold to The Department Will Supply Co..');
+  });
+
+  it('still checks our own words around the names', () => {
+    const party = 'ABC Traders';
+    assert.throws(() => plainSentence(wording`You must collect from ${party}.`, 'theek hai'), UnsupportedClaimError);
+    assert.throws(() => plainSentence('theek hai', wording`${party} se koi penalty nahin.`), UnsupportedClaimError);
+  });
+
+  it('checks wording nested inside wording, and renders it', () => {
+    const party = 'Definitely Fresh';
+    const inner = wording` for ${party}`;
+    assert.equal(plainSentence(wording`INV-1${inner} is held up.`, 'theek hai')['en-IN'], 'INV-1 for Definitely Fresh is held up.');
+    assert.throws(() => plainSentence(wording`INV-1${wording` is guaranteed for ${party}`}.`, 'theek hai'), UnsupportedClaimError);
+  });
+
+  it('cannot join our words to a name to make a phrase', () => {
+    assert.doesNotThrow(() => plainSentence(wording`you ${'are'} must`, 'theek hai'));
+    assert.throws(() => plainSentence(wording`you must${''}`, 'theek hai'), UnsupportedClaimError);
   });
 });
 

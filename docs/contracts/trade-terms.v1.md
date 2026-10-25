@@ -1,4 +1,4 @@
-# Contract: `trade-terms` v1.0.0
+# Contract: `trade-terms` v1.1.0
 
 | | |
 | --- | --- |
@@ -46,6 +46,12 @@ A discount inside the business's own threshold is simply allowed. Beyond it, the
 approval — it is not blocked and the draft is not thrown away, because the person may well be
 right; someone with `sales.approve_discount` has to say so.
 
+**What the sentence says (v1.1.0, issue #301).** A price below what this customer was last charged
+is said as exactly that — *"₹40.00 is 84% lower than the last price you charged them (₹250.00)"* —
+and a price below the price list as *"off the price list rate (₹200.00)"*, never as a discount
+nobody gave. A sentence that asks for approval says who may give it: *"the owner, or someone allowed
+to approve discounts"*.
+
 **Margin** is a warning, never a block. If the item's average cost is known and the price after
 discount is below it, the page says so in money terms — *"you would be selling at ₹40 below what
 these cost you"* — because that is a decision for the owner, not for the software. When the cost
@@ -77,6 +83,12 @@ nobody entered.
 An override needs the permission (`sales.override_credit_limit`, or `sales.approve_discount` for a
 discount) **and** a written reason. Both travel to the audit record with the actor and the figures
 that were overridden. Refusing without the permission names the permission rather than saying no.
+Since v1.1.0 (issue #301) the audit record also names the bill (`documentId`) and the discounts
+allowed, and only a credit position that itself holds the bill (`creditToQuoteOutcome`) needs
+`sales.override_credit_limit`: a warning the business lets through is not overridden.
+
+This package still writes nothing to a bill. The application that issues the bill (the API's
+`recordSale`, issue #301) refuses to issue one whose quote is not `ALLOW` unless it was overridden.
 
 ## Shape
 

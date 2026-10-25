@@ -10,7 +10,7 @@
  * issue, and it is met by construction here rather than by remembering to display it.
  */
 import { formatDate, formatINR, invalid, money, mulDiv, subtract, type CompanyId, type IsoDate, type Money, type PartyId } from '@invoice/kernel';
-import type { Bilingual, DiscountDecision, MarginWarning, PriceSuggestion } from './model.ts';
+import type { Bilingual, DiscountDecision, MarginWarning, PriceSource, PriceSuggestion } from './model.ts';
 import type { PriceListPort, SalesHistoryPort, StockCostPort } from './ports.ts';
 import type { ActorContext } from '@invoice/ledger';
 
@@ -99,13 +99,21 @@ export const suggestPrice = async (
   };
 };
 
-/** Basis points off, so 1250 is 12.5%. Negative or absurd asks are refused rather than clamped. */
+/**
+ * Basis points off, so 1250 is 12.5%. Negative or absurd asks are refused rather than clamped.
+ *
+ * Issue #301 — a price below what this customer was last charged is said as exactly that, "lower
+ * than the last price you charged them (₹250.00)", not as a discount nobody gave; and a sentence
+ * that asks for approval says who may give it.
+ */
 export const discountDecision = (
   input: {
     readonly listPrice: Money;
     readonly chargedPrice: Money;
     readonly quantity: bigint;
     readonly allowedWithoutApprovalBasisPoints: number;
+    /** Where `listPrice` came from, so the sentence names it. A price list when omitted. */
+    readonly source?: PriceSource;
   },
 ): DiscountDecision | null => {
   if (input.listPrice.minor <= 0n) return null;
@@ -117,6 +125,12 @@ export const discountDecision = (
   const needsApproval = basisPoints > input.allowedWithoutApprovalBasisPoints;
   const percent = (basisPoints / 100).toFixed(basisPoints % 100 === 0 ? 0 : 1);
   const allowed = (input.allowedWithoutApprovalBasisPoints / 100).toFixed(0);
+  const was = formatINR(input.listPrice);
+  const charged = formatINR(input.chargedPrice);
+  const lastTime = input.source === 'LAST_AGREED';
+  const what = lastTime
+    ? bilingual(`${charged} is ${percent}% lower than the last price you charged them (${was})`, `${charged} unke pichhle rate (${was}) se ${percent}% kam hai`)
+    : bilingual(`${charged} is ${percent}% off the price list rate (${was})`, `${charged} price list rate (${was}) se ${percent}% kam hai`);
 
   return {
     requestedBasisPoints: basisPoints,
@@ -124,14 +138,14 @@ export const discountDecision = (
     outcome: needsApproval ? 'NEEDS_APPROVAL' : 'ALLOW',
     amountOff,
     sentence: needsApproval
-      ? {
-          'en-IN': `This is ${percent}% off, which is more than the ${allowed}% anyone may give. Someone has to approve it.`,
-          'hi-IN': `Yeh ${percent}% ki chhoot hai, jo ${allowed}% se zyada hai. Kisi ko manzoori deni hogi.`,
-        }
-      : {
-          'en-IN': `You are giving ${percent}% off, which comes to ${formatINR(amountOff)} on this line.`,
-          'hi-IN': `Aap ${percent}% chhoot de rahe hain, is line par ${formatINR(amountOff)}.`,
-        },
+      ? bilingual(
+          `${what['en-IN']}. A price more than ${allowed}% lower needs approval: the owner, or someone allowed to approve discounts, has to approve it before the bill is issued.`,
+          `${what['hi-IN']}. ${allowed}% se zyada kam rate ke liye manzoori chahiye: owner ya discount manzoor karne wala koi vyakti bill jaari hone se pehle manzoori de.`,
+        )
+      : bilingual(
+          `${what['en-IN']}: ${formatINR(amountOff)} less on this line.`,
+          `${what['hi-IN']}: is line par ${formatINR(amountOff)} kam.`,
+        ),
   };
 };
 

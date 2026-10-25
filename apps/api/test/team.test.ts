@@ -65,8 +65,8 @@ test('#343: nobody is made an owner by an invitation or a role change, and only 
 
 test('#343: a role change takes effect on the next request; a removed member is signed out at once', async () => {
   const owner = await signIn('owner@sampoorna.example.invalid', SAMPOORNA);
-  const staff = await signIn('staff@sampoorna.example.invalid', SAMPOORNA);
-  const staffId = (await team(owner)).find((member) => member.name === 'staff@sampoorna.example.invalid')!.userId;
+  const staff = await signIn('counter@sampoorna.example.invalid', SAMPOORNA);
+  const staffId = (await team(owner)).find((member) => member.name === 'counter@sampoorna.example.invalid')!.userId;
   assert.equal((await call('GET', '/api/catalogue', {}, staff)).status, 200);
   const changed = await call('POST', '/api/team/role', { userId: staffId, role: 'viewer' }, owner);
   assert.equal(changed.status, 200, changed.body.message);
@@ -77,7 +77,7 @@ test('#343: a role change takes effect on the next request; a removed member is 
   const removed = await call('POST', '/api/team/remove', { userId: staffId }, owner);
   assert.equal(removed.status, 200, removed.body.message);
   assert.equal((await call('GET', '/api/session', {}, staff)).status, 401, 'their session ended at once');
-  assert.equal((await call('POST', '/api/auth/sign-in', { address: 'staff@sampoorna.example.invalid', code: DEMO_SIGN_IN_CODE }, undefined)).status, 403, 'and they belong to no business now');
+  assert.equal((await call('POST', '/api/auth/sign-in', { address: 'counter@sampoorna.example.invalid', code: DEMO_SIGN_IN_CODE }, undefined)).status, 403, 'and they belong to no business now');
 });
 
 test('#343: the only owner cannot leave until they hand the business over; then they stay on as an admin', async () => {

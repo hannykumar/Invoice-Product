@@ -123,6 +123,10 @@ Each of the four repositories has an in-memory store (`adapters.ts`) and a Postg
   `ITC_DECISION_DUPLICATE` (both `CONFLICT`). The service looks first, so a person never sees either;
   they are what two simultaneous requests get. A second claim for the same bill is not an error: the
   first is returned with `inserted: false`.
+- **A key is one answer (issue #392).** A decision key seen before is a retry only for the same
+  month, line, decision and reason; anything else is `ITC_KEY_REUSED` (`CONFLICT`, HTTP 409).
+  `POST /api/itc/decide` needs the screen's own `requestId` (`ITC_REQUEST_ID_REQUIRED`, 422
+  without one); the server no longer makes one from the clock.
 - Nothing is deleted. Import batches, decisions and claims are only ever added to (#368); a portal
   row is replaced in place by a later reading of the same document.
 
@@ -164,6 +168,36 @@ our return.
   credit on this month's documents not taken, so the return can compare its credit with the
   ledger's input GST for the month. Reverse-charge liability and exempt inward value count only
   the month's own documents.
+
+## Reverse charge: the month of the time of supply (issue #289, part 2b)
+
+A reverse-charge bill may carry `taxPointPeriod`: the month of its time of supply under CGST
+s.12(3) (goods: earliest of receipt, payment, the day after 30 days from the supplier's document)
+or s.13(3) (services: earlier of payment and, from a registered supplier, the day after 60 days
+from their invoice, or, from an unregistered one, the date of our self-invoice). The purchase lane
+decides it (`packages/purchasing/src/reverse-charge-timing.ts`); this module only reads it.
+
+- `reverseChargeLiability` (GSTR-3B 3.1(d)) counts a reverse-charge invoice in `taxPointPeriod`,
+  not its own month (`liabilityPeriodOf`). Absent, the document's month, as before.
+- The purchase-books port hands a reverse-charge bill over from the earlier of its own month and
+  its tax-point month. It is compared with GSTR-2B only from its own month.
+- A self-assessed bill (seller with no GSTIN) is claimed in 4(A)(3) in its tax-point month.
+- A bill matched through GSTR-2B whose tax point is later than the period is `HELD_BACK`, saying
+  when it falls due: its credit comes from paying that tax, on the same return.
+
+## Credit the law blocks (issue #289, part 3)
+
+`BookPurchaseDocument.amounts` is the tax as charged — what GSTR-2B shows and what reverse charge
+owes — and `ineligibleItc` the part CGST s.17(5) blocks; `creditableFromBooks` takes one from the
+other. The purchase adapter builds `amounts` from the bill's claimable heads plus its
+`ineligibleHeads`.
+
+- Table 4(A) carries the whole credit, eligible and ineligible, and the s.17(5) part is taken out in
+  `reversedItc`, Table 4(B)(1) (Circular 170/02/2022-GST, 06.07.2022, para 4 A and B; Table 4 as
+  amended by Notification 14/2022-CT). It is counted in the month the bill's credit is claimed, or,
+  for a bill blocked in full (`BLOCKED_IN_BOOKS`), in the month its tax belongs to.
+- The GSTR-3B file writes 4(B) as `itc_rev` type `RUL` (4(B)(1)); `OTH` (4(B)(2)) stays zero.
+- 3.1(d) counts the whole reverse-charge tax, blocked or not: s.17(5) removes credit, not liability.
 
 ## Known limitations
 

@@ -59,7 +59,7 @@ const KARNATAKA = {
 };
 const GRANULES = {
   name: 'LDPE Granules', kind: 'goods', hsnSac: '39011000', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for granules',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for granules',
 };
 
 const printOf = async (session: string, invoiceId: string): Promise<string> => {
@@ -75,14 +75,14 @@ test('with no delivery address the sale counts in the customer’s own state, an
 
   const checked = await request('POST', '/api/sales/preview', {
     customerId, lines: [{ itemId, quantity: '10', rate: '1000' }],
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-same',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-same', requestId: 'delivery-182-same',
   }, session);
   assert.equal(checked.status, 200, checked.body.message);
   assert.match(String(checked.body.placeOfSupply), /Karnataka \(29\)/);
 
   const recorded = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '10', rate: '1000' }],
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-same-2',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-same-2', requestId: 'delivery-182-same-2',
   }, session);
   const html = await printOf(session, recorded.body.invoice.id);
   assert.ok(/\bCGST\b/.test(html) && /\bSGST\b/.test(html), 'one state, so CGST and SGST');
@@ -105,13 +105,13 @@ test('goods sent to the customer’s own godown in another state move the sale t
     customerId, lines: [{ itemId, quantity: '10', rate: '1000' }],
     shipTo: 'address', shipToAddressId, date: '2026-09-17', terms: '30',
   };
-  const checked = await request('POST', '/api/sales/preview', { ...sale, reference: 'delivery-182-godown' }, session);
+  const checked = await request('POST', '/api/sales/preview', { ...sale, reference: 'delivery-182-godown', requestId: 'delivery-182-godown' }, session);
   assert.equal(checked.status, 200, checked.body.message);
   // Section 10(1)(a) — the movement ends in Maharashtra, so the sale counts there.
   assert.match(String(checked.body.placeOfSupply), /Maharashtra \(27\)/);
   assert.match(String(checked.body.placeOfSupply), /finish their journey/);
 
-  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'delivery-182-godown-2' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'delivery-182-godown-2', requestId: 'delivery-182-godown-2' }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const html = await printOf(session, recorded.body.invoice.id);
   assert.ok(html.includes('Gat 220, Bhosari MIDC'), 'the consignee block shows the Pune address');
@@ -132,13 +132,13 @@ test('goods delivered to a third party count where the billed customer is, not w
     customerId: billedTo, lines: [{ itemId, quantity: '10', rate: '1000' }],
     shipTo: 'party', shipToPartyId: consignee, date: '2026-09-17', terms: '30',
   };
-  const checked = await request('POST', '/api/sales/preview', { ...sale, reference: 'delivery-182-third' }, session);
+  const checked = await request('POST', '/api/sales/preview', { ...sale, reference: 'delivery-182-third', requestId: 'delivery-182-third' }, session);
   assert.equal(checked.status, 200, checked.body.message);
   // Section 10(1)(b) — the buyer's own state, although the goods went to Maharashtra.
   assert.match(String(checked.body.placeOfSupply), /Karnataka \(29\)/);
   assert.match(String(checked.body.placeOfSupply), /Nashik Moulders/);
 
-  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'delivery-182-third-2' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...sale, reference: 'delivery-182-third-2', requestId: 'delivery-182-third-2' }, session);
   const html = await printOf(session, recorded.body.invoice.id);
   assert.ok(html.includes('Nashik Moulders'), 'the consignee block shows the third party');
   assert.ok(html.includes('27FFFFF5555F1ZZ'), 'with their own GST number');
@@ -162,7 +162,7 @@ test('the transporter, vehicle, LR number, destination and order number all prin
     vehicleNumber: 'ka 01 ab 1234',
     lrNumber: 'SRL/2026/44120', lrDate: '2026-09-20', destination: 'Pune',
     buyerOrderNumber: 'DP/PO/188', termsOfDelivery: 'Ex-godown', otherReferences: 'Trial lot',
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-transport',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-transport', requestId: 'delivery-182-transport', approvalReason: 'Agreed with the owner',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
 
@@ -179,12 +179,12 @@ test('an e-way bill number is twelve digits, and anything else is refused', asyn
   const itemId = await ensureItem(session, GRANULES);
   const sale = { customerId, lines: [{ itemId, quantity: '10', rate: '1000' }], date: '2026-09-17', terms: '30' };
 
-  const short = await request('POST', '/api/sales/preview', { ...sale, ewayBillNumber: '72161460552', reference: 'delivery-182-short' }, session);
+  const short = await request('POST', '/api/sales/preview', { ...sale, ewayBillNumber: '72161460552', reference: 'delivery-182-short', requestId: 'delivery-182-short' }, session);
   assert.equal(short.status, 422);
   assert.equal(short.body.code, 'EWAY_BILL_NUMBER');
   assert.match(String(short.body.message), /exactly 12 digits/);
 
-  const recorded = await request('POST', '/api/sales/record', { ...sale, ewayBillNumber: '721614605529', reference: 'delivery-182-eway' }, session);
+  const recorded = await request('POST', '/api/sales/record', { ...sale, ewayBillNumber: '721614605529', reference: 'delivery-182-eway', requestId: 'delivery-182-eway' }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   assert.ok((await printOf(session, recorded.body.invoice.id)).includes('721614605529'));
 });
@@ -196,7 +196,7 @@ test('an e-way bill raised after the bill was issued prints on every later copy,
 
   const recorded = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-late',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-late', requestId: 'delivery-182-late', approvalReason: 'Agreed with the owner',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const before = await printOf(session, recorded.body.invoice.id);
@@ -222,7 +222,7 @@ test('a load over the limit is reminded about an e-way bill, and one under it is
   // 1400 × ₹60 = ₹84,000 of goods; 18% is ₹15,120; the consignment is ₹99,120, over ₹50,000.
   const big = await request('POST', '/api/sales/preview', {
     customerId: delhi, lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-reminder-yes',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-reminder-yes', requestId: 'delivery-182-reminder-yes',
   }, session);
   assert.equal(big.status, 200, big.body.message);
   assert.equal(big.body.ewayBill?.outcome, 'REQUIRED');
@@ -231,7 +231,7 @@ test('a load over the limit is reminded about an e-way bill, and one under it is
   // 10 × ₹4,000 = ₹40,000 of goods; 9% + 9% is ₹7,200; the consignment is ₹47,200, under the limit.
   const small = await request('POST', '/api/sales/preview', {
     customerId: karnataka, lines: [{ itemId, quantity: '10', rate: '4000' }],
-    date: '2026-09-17', terms: '30', reference: 'delivery-182-reminder-no',
+    date: '2026-09-17', terms: '30', reference: 'delivery-182-reminder-no', requestId: 'delivery-182-reminder-no',
   }, session);
   assert.equal(small.status, 200, small.body.message);
   assert.equal(small.body.ewayBill, null);
@@ -243,11 +243,11 @@ test('a vehicle number that is not a vehicle number is refused, and so is an unk
   const itemId = await ensureItem(session, GRANULES);
   const sale = { customerId, lines: [{ itemId, quantity: '10', rate: '1000' }], date: '2026-09-17', terms: '30' };
 
-  const badVehicle = await request('POST', '/api/sales/preview', { ...sale, vehicleNumber: 'LORRY-1', reference: 'delivery-182-bad-vehicle' }, session);
+  const badVehicle = await request('POST', '/api/sales/preview', { ...sale, vehicleNumber: 'LORRY-1', reference: 'delivery-182-bad-vehicle', requestId: 'delivery-182-bad-vehicle' }, session);
   assert.equal(badVehicle.status, 422);
   assert.equal(badVehicle.body.code, 'VEHICLE_NUMBER');
 
-  const unknownCarrier = await request('POST', '/api/sales/preview', { ...sale, transporterId: 'nobody', reference: 'delivery-182-bad-carrier' }, session);
+  const unknownCarrier = await request('POST', '/api/sales/preview', { ...sale, transporterId: 'nobody', reference: 'delivery-182-bad-carrier', requestId: 'delivery-182-bad-carrier' }, session);
   assert.equal(unknownCarrier.status, 422);
   assert.equal(unknownCarrier.body.code, 'TRANSPORTER_NOT_FOUND');
 });

@@ -1,6 +1,11 @@
 import type { CompanyId, IsoDate, Money, PartyId, Quantity, UserId, VoucherId } from '@invoice/kernel';
 
-export type ReturnKind = 'SALES_RETURN' | 'PURCHASE_RETURN';
+/**
+ * Issue #293 — `SALES_DEBIT_NOTE` is a debit note we issue to a customer who was under-charged
+ * (CGST Act s.34(3)). A sales credit note for a price reduction keeps the kind `SALES_RETURN`, so it
+ * flows everywhere a credit note does, and is told apart by `priceCorrection`.
+ */
+export type ReturnKind = 'SALES_RETURN' | 'PURCHASE_RETURN' | 'SALES_DEBIT_NOTE';
 export type ReturnDisposition = 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT';
 export type ReturnComplianceStatus = 'NOT_APPLICABLE' | 'PENDING_ADJUSTMENT';
 
@@ -82,7 +87,19 @@ export interface ReturnNote {
   readonly summary: string;
   /** Issue #249 — purchase returns only. `null` (or absent) until the supplier's note is known. */
   readonly supplierCreditNote?: SupplierCreditNoteRef | null;
+  /**
+   * Issue #293 — the note changes the price of goods or services the customer keeps; nothing came
+   * back. Its lines carry the quantity the new price applies to, and move no stock.
+   */
+  readonly priceCorrection?: boolean;
 }
+
+/** Issue #293 — a note that only changes the price, never the quantity sold. */
+export const isPriceCorrection = (note: Pick<ReturnNote, 'priceCorrection'>): boolean => note.priceCorrection === true;
+
+/** Issue #293 — a note that takes goods or services back: these alone count against the quantity sold. */
+export const isGoodsReturn = (note: Pick<ReturnNote, 'kind' | 'priceCorrection'>, kind: 'SALES_RETURN' | 'PURCHASE_RETURN'): boolean =>
+  note.kind === kind && !isPriceCorrection(note);
 
 export const RETURN_PERMISSIONS = {
   create: 'returns.create',

@@ -24,7 +24,7 @@ const ADDRESS: Readonly<Record<RoleName, string>> = {
   owner: 'owner@sampoorna.example.invalid',
   admin: 'admin@sampoorna.example.invalid',
   accountant: 'accounts@sampoorna.example.invalid',
-  staff: 'staff@sampoorna.example.invalid',
+  staff: 'counter@sampoorna.example.invalid',
   viewer: 'viewer@sampoorna.example.invalid',
 };
 
@@ -101,7 +101,7 @@ before(async () => {
   const steel = catalogue.items.find((item: { name: string }) => item.name === 'TMT Steel Bar 12mm');
   const today = (await call({ method: 'GET', path: '/api/dashboard' }, owner)).body.today as string;
   const purchase = await call({ method: 'POST', path: '/api/purchases/record' }, owner, '/api/purchases/record', {
-    supplierId: 'sampoorna:party:supplier', reference: 'MATRIX-343', date: today,
+    supplierId: 'sampoorna:party:supplier', reference: 'MATRIX-343', requestId: 'matrix-343-purchase', date: today,
     lines: [{ itemId: steel.id, item: steel.name, quantity: '10', rate: '64', gst: '1800' }],
   });
   assert.equal(purchase.status, 200, purchase.text);
@@ -110,7 +110,7 @@ before(async () => {
   const sold = documents.find((document) => document.id === fixtures.invoice) ?? documents[0]!;
   const returned = await call({ method: 'POST', path: '/api/returns/record' }, owner, '/api/returns/record', {
     kind: 'SALES_RETURN', documentId: sold.id, lineId: sold.lines[0]!.id, quantity: '1', unit: sold.lines[0]!.unit ?? 'PCS',
-    disposition: 'ACCEPTED', date: today, reference: 'matrix-343-return', reason: 'Matrix test',
+    disposition: 'ACCEPTED', date: today, reference: 'matrix-343-return', requestId: 'matrix-343-return', reason: 'Matrix test',
   });
   assert.equal(returned.status, 200, returned.text);
   fixtures.note = String(returned.body.note.id);

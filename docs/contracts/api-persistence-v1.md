@@ -21,8 +21,26 @@ Owner: #340. Builds on [`unit-of-work-v1`](./unit-of-work-v1.md). Affects: #341,
   only after every write started from synchronous code (below) has landed.
 - A `GET` runs as `asOneRead(work)`: no transaction, but any write it starts (the walk-in customer,
   created the first time it is read) commits before the answer is sent.
-- Work that follows an action (the automatic e-invoice) runs in its own unit of work, which waits
-  for the action's lock. #345 moves it onto the outbox.
+- Work that follows an action (the automatic e-invoice) is an outbox message written in the
+  action's own transaction (`uow.enqueue`, topic `einvoice.generate`, dedupe key = the bill). The
+  worker sends it after commit (#345).
+
+## The worker (#345)
+
+`npm run worker` (`apps/api/src/worker.ts`), with the same `DATABASE_URL` as the API. **It must run
+beside the API whenever the app has a database**; without it e-invoices and recurring work wait.
+
+- Finds companies with due work through `companies_with_due_work(stale interval)`: company ids
+  only, from a `SECURITY DEFINER` function owned by the no-login role `invoice_work_finder`, which
+  can see only the due-work columns of `outbox_messages` and `recurring_work_status`.
+- For each: `OutboxRelay.drain` with the company's handlers (`DemoApplication.outboxHandlers()`),
+  then its recurring jobs from `recurring_work_status` (`ops/operations/src/recurring-postgres.ts`).
+- Every claim is `FOR UPDATE SKIP LOCKED` with a lease (outbox 60 s, recurring 5 min); results are
+  saved only while the claim holds. Delivery is at least once; handlers are idempotent.
+- The e-invoice handler calls `EInvoiceService.prepareRegistration` (unit of work), `callPortal`
+  (holding nothing) and `completeRegistration` (in the unit of work that marks the message sent).
+- The Operations screen lists outbox messages as jobs and `recurring_work_status` as recurring
+  work, and replays either (`recurring:<key>` for a recurring job). The API runs no tick.
 
 ## Demo data
 
@@ -66,5 +84,10 @@ directly remains the masters lane's (#366).
   location) in a table, which arrives with #342's sign-up.
 - A `GET` that writes through a module repository (`requireUnitOfWork`) is refused with
   `NO_UNIT_OF_WORK`. None is known; one found is moved to a `POST` or given its own unit of work.
-- Recurring jobs run as one action per company on the API's tick, holding the company lock while they
-  call a portal. #345 moves them to the worker.
+- A recurring job runs inside one action for its company, so a job that calls a portal holds the
+  company lock while it does. Splitting those jobs as the e-invoice was split is per module.
+- Calls a person waits for stay in the request: e-invoice and e-way bill raised from their screens,
+  GST return submission, the supplier and vehicle checks. They still hold the company lock during
+  the call.
+- External failures and incidents on the Operations screen are the API process's own; the worker's
+  are in its log and error tracker.

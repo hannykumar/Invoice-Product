@@ -54,7 +54,7 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
   assert.equal(customer.status, 200, JSON.stringify(customer.body));
   const sale = {
     customerId: customer.body.customer.id, item: 'TMT Steel Bar 12mm', quantity: '450', rate: '90',
-    freight: '2000', vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'stock-229-sale',
+    freight: '2000', vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'stock-229-sale', requestId: 'stock-229-sale',
   };
 
   // Review takes nothing out: the 500 kg are all still there after it.
@@ -79,7 +79,7 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
   assert.deepEqual((await steelRows(owner)).map((row: any) => row.closing), ['50.000']);
 
   // 600 kg against 50: refused at the review and at Record, in one plain sentence.
-  const tooMuch = { ...sale, quantity: '600', reference: 'stock-229-too-much' };
+  const tooMuch = { ...sale, quantity: '600', reference: 'stock-229-too-much', requestId: 'stock-229-too-much' };
   for (const path of ['/api/sales/preview', '/api/sales/record']) {
     const refused = await request('POST', path, tooMuch, owner);
     assert.equal(refused.status, 409, JSON.stringify(refused.body));
@@ -89,7 +89,7 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
   assert.deepEqual((await steelRows(owner)).map((row: any) => row.closing), ['50.000']);
 
   // No bill number went on the refusal: the next bill takes the very next number.
-  const next = await request('POST', '/api/sales/record', { ...sale, quantity: '10', freight: '', reference: 'stock-229-next' }, owner);
+  const next = await request('POST', '/api/sales/record', { ...sale, quantity: '10', freight: '', reference: 'stock-229-next', requestId: 'stock-229-next' }, owner);
   assert.equal(next.status, 200, JSON.stringify(next.body));
   const sequence = (value: string) => Number(value.split('/').at(-1));
   assert.equal(sequence(next.body.invoice.number), sequence(number) + 1);
@@ -100,7 +100,7 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
   const original = documents.body.documents.find((document: any) => document.number === number);
   const returned = await request('POST', '/api/returns/record', {
     kind: 'SALES_RETURN', documentId: original.id, lineId: original.lines[0].id, quantity: '50', unit: 'KGS',
-    date: DATE, reason: 'Bent bars', disposition: 'ACCEPTED', reference: 'stock-229-return',
+    date: DATE, reason: 'Bent bars', disposition: 'ACCEPTED', reference: 'stock-229-return', requestId: 'stock-229-return',
   }, owner);
   assert.equal(returned.status, 200, JSON.stringify(returned.body));
   rows = await steelRows(owner);
@@ -117,13 +117,13 @@ test('the full stock path: buy 500, sell 450, refuse 600, take 50 back', async (
 test('a service is sold without any stock, and never touches the godown', async () => {
   const owner = await signIn();
   const item = await request('POST', '/api/items', {
-    name: 'Site measurement visit', kind: 'service', hsnSac: '998346', unit: 'NOS', ratePercent: '18',
+    name: 'Site measurement visit', kind: 'service', hsnSac: '998346', unit: 'NOS', ratePercent: '18', effectiveFrom: '2026-04-01',
   }, owner);
   assert.equal(item.status, 200, JSON.stringify(item.body));
   const before = (await request('GET', '/api/reports', {}, owner)).body.stock.rows;
 
   const sold = await request('POST', '/api/sales/record', {
-    party: 'ABC Traders', item: 'Site measurement visit', quantity: '2', rate: '1500', date: DATE, terms: '0', reference: 'stock-229-service',
+    party: 'ABC Traders', item: 'Site measurement visit', quantity: '2', rate: '1500', date: DATE, terms: '0', reference: 'stock-229-service', requestId: 'stock-229-service',
   }, owner);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   const after = (await request('GET', '/api/reports', {}, owner)).body.stock.rows;
@@ -148,7 +148,7 @@ test('#262: a short sale is refused with the way through, and after the purchase
   const wanted = String(before + 550);
   const sale = {
     customerId: mehta.id, item: 'TMT Steel Bar 12mm', quantity: wanted, rate: '90',
-    vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'stock-262-sale',
+    vehicle: 'KA01AB1234', date: DATE, terms: '30', reference: 'stock-262-sale', requestId: 'stock-262-sale',
   };
 
   const refused = await request('POST', '/api/sales/preview', sale, owner);

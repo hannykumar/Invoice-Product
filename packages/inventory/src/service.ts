@@ -175,6 +175,15 @@ export class InventoryService {
     );
   }
 
+  /**
+   * Issue #292 — whether goods in this place may be sold: `false` for a damaged / not-for-sale
+   * location, `true` for an ordinary godown, `null` when the place is not one this business has.
+   */
+  sellable(actor: ActorContext, warehouseId: string): boolean | null {
+    const warehouse = this.#masterData.warehouse(actor.companyId, warehouseId);
+    return warehouse === undefined ? null : warehouse.sellable !== false;
+  }
+
   /** Every movement behind a figure, so a total can always be drilled into. */
   async movementsFor(
     actor: ActorContext,
@@ -218,8 +227,10 @@ export class InventoryService {
 
     const item = this.#masterData.item(actor.companyId, command.itemId);
     if (item === undefined) throw notFound('STOCK_ITEM_UNKNOWN', 'We do not have details for that item.');
-    if (this.#masterData.warehouse(actor.companyId, command.warehouseId) === undefined) {
-      throw notFound('STOCK_WAREHOUSE_UNKNOWN', 'We do not have that godown.');
+    const warehouse = this.#masterData.warehouse(actor.companyId, command.warehouseId);
+    if (warehouse === undefined) throw notFound('STOCK_WAREHOUSE_UNKNOWN', 'We do not have that godown.');
+    if (command.kind === 'SALE_OUT' && warehouse.sellable === false) {
+      throw invalid('STOCK_WAREHOUSE_NOT_FOR_SALE', `Goods in ${warehouse.name} are kept aside and are not for sale.`);
     }
     const batchId = command.batchId ?? null;
     if (item.tracksBatches && batchId === null) {
@@ -392,7 +403,8 @@ export class InventoryService {
         const key = `${line.itemId}|${line.warehouseId}|${batchId ?? ''}`;
         const balance = await this.#balanceIn(actor.companyId, line.itemId, line.warehouseId, batchId, item.baseUnit);
         const alreadyClaimed = claimed.get(key) ?? 0n;
-        const available = balance.available.scaled - alreadyClaimed;
+        // Issue #292 — damaged or quarantined goods are counted, but none of them is free to sell.
+        const available = warehouse.sellable === false ? 0n : balance.available.scaled - alreadyClaimed;
 
         if (available < base.scaled) {
           shortfalls.push({

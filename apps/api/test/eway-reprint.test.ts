@@ -52,7 +52,7 @@ const DELHI = {
 };
 const GRANULES = {
   name: 'LDPE Granules', kind: 'goods', hsnSac: '39011000', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for granules',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for granules',
 };
 
 /** Pulls one labelled fact out of the printed page. */
@@ -75,7 +75,7 @@ test('an e-way bill printed again says exactly what it said the first time', asy
 
   const recorded = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-09-17', terms: '30', reference: 'eway-191-reprint',
+    date: '2026-09-17', terms: '30', reference: 'eway-191-reprint', requestId: 'eway-191-reprint',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   const invoice = recorded.body.invoice.id as string;

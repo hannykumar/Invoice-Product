@@ -1,4 +1,4 @@
-# Contract: `assistant` v1.0.0
+# Contract: `assistant` v1.1.0
 
 | | |
 | --- | --- |
@@ -74,6 +74,14 @@ three levels:
 approved rule with a legal source is behind the sentence, and speaking for the department or a court
 throws at every level. Every rule answer carries `RULE_DISCLAIMER`.
 
+**Names and figures are not checked as our own words (v1.1, issue #405).** A party, item or
+godown name is typed in by whoever set it up, and an item named in a question comes from the
+asker. A name such as "Guaranteed Traders" or "Definitely Fresh Atta" is data, not the assistant
+making a claim. `plainSentence` therefore takes its text through the `wording` tag
+(`` wording`The one waiting longest is ${name}.` ``): only the literal parts are checked, and every
+filled-in value is shown exactly as stored. A plain string is still checked whole. `safeSentence` is
+unchanged. Additive; nothing existing changed meaning (threat model A4).
+
 ## Prompt injection
 
 The question is data. `looksLikeAnInstruction` flags text that tries to instruct the product; the
@@ -88,6 +96,12 @@ port is configured, it receives only the words the lexicon matched, never the ra
 | `ReportService` (#35) | GPT 1 | Required. |
 | `RulesEngine` (#7) + `ComplianceRegister` (#54) | GPT 1 | Rule questions are refused, not guessed. |
 | `BlockedDocumentPort` | #9 / #11 / #12 will implement | "Why is this blocked?" says it cannot see, and points at the bill. |
+
+**v1.1.0 (#397):** `BlockedDocumentPort.find(actor, reference)` takes the asking `ActorContext`,
+not a company id, and every read behind it (the bill, the stock) runs as that actor. Before the
+port is called the assistant requires `reports.view.sales` and `reports.view.stock`; without both
+the answer is `NEEDS_PERMISSION` with "You do not have access to that bill", the same whether or
+not the bill exists, and the port is never called.
 | `ComplianceCalendarPort` | **GPT 3, #32 — not built** | Every rule answer carries a note that due dates are not visible here. |
 | `ExceptionQueuePort` (#6) | GPT 2 | An unbalanced set of books is still flagged in words; no item is raised. |
 | `QuestionUnderstandingPort` | optional model | The lexicon alone decides. |

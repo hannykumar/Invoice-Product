@@ -32,7 +32,7 @@ const EVERYTHING: readonly Permission[] = [
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",
   "notification.send", "collections.manage", "collections.send",
   "bank.balance.read", "bank.feed.manage", "bank.feed.sync",
-  "sales.approve_discount",
+  "sales.approve_discount", "sales.override_credit_limit",
   "reports.view.financial", "reports.view.sales", "reports.view.purchase", "reports.view.stock",
   "reports.view.dues", "reports.view.gst", "reports.view.exceptions", "reports.export",
   "collections.reminders.view", "collections.reminders.send", "collections.promise.record", "collections.dispute.manage",
@@ -72,7 +72,7 @@ export const ROLES: Readonly<Record<RoleName, { readonly title: string; readonly
     sentence: "Makes bills, quotations and challans, takes payments and adds customers. Cannot see bank balances, file GST or override stock.",
     permissions: [
       "dashboard.read", "sales.view", "masters.read",
-      "sales.draft.write", "sales.finalise", "ledger.post.sale", "ledger.post.receipt", "inventory.move",
+      "sales.draft.write", "sales.finalise", "inventory.move",
       "payments.record", "quotation.issue", "proforma.issue", "challan.issue",
       "masters.party.write", "einvoice.view", "eway.view", "eway.generate", "transport.vehicle.view", "assistant.ask",
     ],

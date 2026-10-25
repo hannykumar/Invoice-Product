@@ -98,7 +98,7 @@ export const runConformance = async (
   await record('consent.start', 'Consent begins away from us',
     'The shopkeeper must grant permission at the provider, not by typing a bank password into our screen.',
     [], async () => {
-      const started = await adapter.startConsent({ companyId: options.companyId, connectionId: 'conformance-1', redirectUri: options.redirectUri });
+      const started = await adapter.startConsent({ companyId: options.companyId, connectionId: 'conformance-1', redirectUri: options.redirectUri, state: 'conformance-state' });
       if (!started.providerConsentId || !started.consentUrl) throw new Error('No consent id or consent URL was returned.');
       if (!/^https:\/\//.test(started.consentUrl)) throw new Error(`The consent URL is not https: ${started.consentUrl}`);
       providerConsentId = started.providerConsentId;

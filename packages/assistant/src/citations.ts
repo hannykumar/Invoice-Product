@@ -101,37 +101,88 @@ export interface ClaimSupport {
 }
 
 /**
+ * Wording the product wrote, with gaps for what came from the books.
+ *
+ * Issue #405 (threat model A4): a party, item or godown name is chosen by whoever typed it in, and
+ * so is an item named in a question. It is data, not the assistant speaking. Built with the
+ * `wording` tag, only the literal parts are checked for the language of obligation; the filled-in
+ * values (names, figures, counts, dates) are shown as they are and never steer the check.
+ */
+export interface Wording {
+  readonly parts: readonly string[];
+  readonly values: readonly (string | number | Wording)[];
+}
+
+export const wording = (parts: TemplateStringsArray, ...values: readonly (string | number | Wording)[]): Wording => ({
+  parts: [...parts],
+  values,
+});
+
+const isWording = (value: string | number | Wording): value is Wording => typeof value === 'object';
+
+/** The finished sentence, as the person reads it. */
+const render = (text: string | Wording): string => {
+  if (!isWording(text)) return text;
+  return text.parts.reduce((out, part, index) => {
+    const value = text.values[index - 1];
+    return out + (value === undefined ? '' : isWording(value) ? render(value) : String(value)) + part;
+  });
+};
+
+/** A gap where a value goes. Not a word, so no phrase can be made across it. */
+const GAP = '\u2026';
+
+/** Only the product's own words: nested wording is kept, every value becomes a gap. */
+const ownWords = (text: string | Wording): string => {
+  if (!isWording(text)) return text;
+  return text.parts.reduce((out, part, index) => {
+    const value = text.values[index - 1];
+    return out + (value === undefined ? '' : isWording(value) ? ownWords(value) : GAP) + part;
+  });
+};
+
+const check = (text: string, support: ClaimSupport): void => {
+  for (const phrase of IMPERSONATION_PHRASES) {
+    const found = phrase.exec(text);
+    if (found !== null) {
+      throw new UnsupportedClaimError(
+        `An answer may not speak for the tax authority or a court: "${found[0]}".`,
+        found[0],
+      );
+    }
+  }
+  if (support.backedByApprovedRule && support.certainty === 'THE_RULE_SAYS') return;
+  for (const phrase of CERTAINTY_PHRASES) {
+    const found = phrase.exec(text);
+    if (found !== null) {
+      throw new UnsupportedClaimError(
+        `"${found[0]}" states an obligation, and no approved rule with a legal source is behind this answer.`,
+        found[0],
+      );
+    }
+  }
+};
+
+/**
  * Checks one sentence before it goes into an answer.
  *
  * Returns the sentence so it reads as a wrapper at every call site — you cannot forget to use the
  * result, because the result is the sentence.
  */
 export const safeSentence = (sentence: Bilingual, support: ClaimSupport): Bilingual => {
-  for (const language of ['en-IN', 'hi-IN'] as const) {
-    const text = sentence[language];
-    for (const phrase of IMPERSONATION_PHRASES) {
-      const found = phrase.exec(text);
-      if (found !== null) {
-        throw new UnsupportedClaimError(
-          `An answer may not speak for the tax authority or a court: "${found[0]}".`,
-          found[0],
-        );
-      }
-    }
-    if (support.backedByApprovedRule && support.certainty === 'THE_RULE_SAYS') continue;
-    for (const phrase of CERTAINTY_PHRASES) {
-      const found = phrase.exec(text);
-      if (found !== null) {
-        throw new UnsupportedClaimError(
-          `"${found[0]}" states an obligation, and no approved rule with a legal source is behind this answer.`,
-          found[0],
-        );
-      }
-    }
-  }
+  for (const language of ['en-IN', 'hi-IN'] as const) check(sentence[language], support);
   return sentence;
 };
 
-/** A sentence about the business's own figures. Nothing legal is being claimed, so nothing is gated. */
-export const plainSentence = (en: string, hi: string): Bilingual =>
-  safeSentence({ 'en-IN': en, 'hi-IN': hi }, { backedByApprovedRule: false, certainty: 'WE_CANNOT_SAY' });
+/**
+ * A sentence about the business's own figures. Nothing legal is being claimed, so nothing is gated.
+ *
+ * Anything from the books or the question goes in through `wording`, so only our own words are
+ * checked (#405).
+ */
+export const plainSentence = (en: string | Wording, hi: string | Wording): Bilingual => {
+  const unbacked: ClaimSupport = { backedByApprovedRule: false, certainty: 'WE_CANNOT_SAY' };
+  check(ownWords(en), unbacked);
+  check(ownWords(hi), unbacked);
+  return { 'en-IN': render(en), 'hi-IN': render(hi) };
+};

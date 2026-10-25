@@ -71,7 +71,7 @@ test('the bill names the customer and the item that were chosen, and neither dem
   const recorded = await request('POST', '/api/sales/record', {
     customerId,
     lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-08-29', terms: '30', reference: 'catalogue-181-one',
+    date: '2026-08-29', terms: '30', reference: 'catalogue-181-one', requestId: 'catalogue-181-one',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
 
@@ -93,7 +93,7 @@ test('a Delhi customer of a Karnataka business is charged IGST, not CGST and SGS
   const checked = await request('POST', '/api/sales/preview', {
     customerId,
     lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-08-29', terms: '30', reference: 'catalogue-181-igst',
+    date: '2026-08-29', terms: '30', reference: 'catalogue-181-igst', requestId: 'catalogue-181-igst',
   }, session);
   assert.equal(checked.status, 200, checked.body.message);
   // 1400 KGS × ₹60 = ₹84,000.00 of goods; 18% of that is ₹15,120.00; the bill is ₹99,120.00.
@@ -102,7 +102,7 @@ test('a Delhi customer of a Karnataka business is charged IGST, not CGST and SGS
   const recorded = await request('POST', '/api/sales/record', {
     customerId,
     lines: [{ itemId, quantity: '1400', rate: '60' }],
-    date: '2026-08-29', terms: '30', reference: 'catalogue-181-igst-2',
+    date: '2026-08-29', terms: '30', reference: 'catalogue-181-igst-2', requestId: 'catalogue-181-igst-2',
   }, session);
   const html = String((await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, session)).body.html);
   assert.ok(html.includes('IGST'), 'an inter-state sale carries IGST');
@@ -122,7 +122,7 @@ test('a sale carries as many lines as it takes', async () => {
       { itemId: regrind, quantity: '1400', rate: '60' },
       { itemId: bags, quantity: '10', rate: '500' },
     ],
-    date: '2026-08-29', terms: '30', reference: 'catalogue-181-two-lines',
+    date: '2026-08-29', terms: '30', reference: 'catalogue-181-two-lines', requestId: 'catalogue-181-two-lines',
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   // 1400 × 60 = ₹84,000.00 and 10 × 500 = ₹5,000.00, so ₹89,000.00 of goods.
@@ -146,7 +146,7 @@ test('a customer in our own state is charged CGST and SGST', async () => {
   const checked = await request('POST', '/api/sales/preview', {
     customerId,
     lines: [{ itemId, quantity: '40', rate: '2100' }],
-    date: '2026-08-29', terms: '30', reference: 'catalogue-181-intra',
+    date: '2026-08-29', terms: '30', reference: 'catalogue-181-intra', requestId: 'catalogue-181-intra',
   }, session);
   assert.equal(checked.status, 200, checked.body.message);
   // 40 × ₹2,100 = ₹84,000.00 of goods; 9% CGST is ₹7,560.00 and 9% SGST is ₹7,560.00;
@@ -156,7 +156,7 @@ test('a customer in our own state is charged CGST and SGST', async () => {
   const recorded = await request('POST', '/api/sales/record', {
     customerId,
     lines: [{ itemId, quantity: '40', rate: '2100' }],
-    date: '2026-08-29', terms: '30', reference: 'catalogue-181-intra-2',
+    date: '2026-08-29', terms: '30', reference: 'catalogue-181-intra-2', requestId: 'catalogue-181-intra-2',
   }, session);
   const html = String((await request('POST', '/api/sales/print', { invoice: recorded.body.invoice.id }, session)).body.html);
   assert.ok(/\bCGST\b/.test(html) && /\bSGST\b/.test(html), 'a sale inside one state carries CGST and SGST');
@@ -179,7 +179,7 @@ test('a customer or an item that is not a record cannot be billed', async () => 
   const noCustomer = await request('POST', '/api/sales/preview', {
     customerId: 'Someone We Never Saved',
     lines: [{ itemId: 'Herbal Bath Soap 100g', quantity: '1', rate: '10' }],
-    date: '2026-08-29', terms: '0', reference: 'catalogue-181-unknown-party',
+    date: '2026-08-29', terms: '0', reference: 'catalogue-181-unknown-party', requestId: 'catalogue-181-unknown-party',
   }, session);
   assert.equal(noCustomer.status, 422);
   assert.equal(noCustomer.body.code, 'CUSTOMER_NOT_FOUND');
@@ -187,7 +187,7 @@ test('a customer or an item that is not a record cannot be billed', async () => 
   const noItem = await request('POST', '/api/sales/preview', {
     customerId: 'ABC Traders',
     lines: [{ itemId: 'Something We Never Stocked', quantity: '1', rate: '10' }],
-    date: '2026-08-29', terms: '0', reference: 'catalogue-181-unknown-item',
+    date: '2026-08-29', terms: '0', reference: 'catalogue-181-unknown-item', requestId: 'catalogue-181-unknown-item',
   }, session);
   assert.equal(noItem.status, 422);
   assert.equal(noItem.body.code, 'ITEM_NOT_FOUND');
@@ -206,7 +206,7 @@ test('an item with no rate behind it cannot be billed, and no table supplies one
   const refused = await request('POST', '/api/sales/preview', {
     customerId,
     lines: [{ itemId, quantity: '10', rate: '100' }],
-    date: '2026-08-29', terms: '0', reference: 'catalogue-181-no-rate',
+    date: '2026-08-29', terms: '0', reference: 'catalogue-181-no-rate', requestId: 'catalogue-181-no-rate',
   }, session);
   assert.equal(refused.status, 400, refused.body.message);
   assert.match(String(refused.body.message), /rate/i);
@@ -219,7 +219,7 @@ test('a challan prints the consignee that was chosen, and the goods that went', 
 
   const issued = await request('POST', '/api/challans/issue', {
     customerId, item: itemId, quantity: '200', rate: '60',
-    reason: 'JOB_WORK', date: '2026-08-29', reference: 'catalogue-181-challan',
+    reason: 'JOB_WORK', date: '2026-08-29', reference: 'catalogue-181-challan', requestId: 'catalogue-181-challan',
   }, session);
   assert.equal(issued.status, 200, issued.body.message);
 

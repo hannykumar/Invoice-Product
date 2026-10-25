@@ -169,24 +169,38 @@ test('#343: a database from before roles keeps every member\'s reads, and its ow
   const roles = migrations.find((migration) => migration.id.endsWith('_membership_roles'))!;
   const companyId = crypto.randomUUID(); const branchId = crypto.randomUUID();
   const people = { owner: crypto.randomUUID(), cashier: crypto.randomUUID(), viewer: crypto.randomUUID() };
-  await owner.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Old Traders')", [companyId]);
-  await owner.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, 'Main shop')", [branchId, companyId]);
   const NEW: readonly string[] = ['sales.view', 'purchases.view', 'masters.read', 'business.settings.read', 'business.transfer'];
   const before = {
     owner: ROLES.owner.permissions.filter((permission) => !NEW.includes(permission)),
     cashier: ['dashboard.read', 'sales.draft.write', 'sales.finalise', 'payments.record'],
     viewer: ['dashboard.read'],
   };
-  // Rolled back first, so the rows are written exactly as a database from before #343 holds them.
-  await owner.query(roles.down);
+  // On a database of its own: rolling the migration back on the shared one would pull the column
+  // out from under every other test file running at the same time.
+  const name = `roles_backfill_${randomBytes(6).toString('hex')}`;
+  await owner.query(`CREATE DATABASE ${name}`);
+  const scratchUrl = new URL(url as string);
+  scratchUrl.pathname = `/${name}`;
+  const scratch = createDb(scratchUrl.toString());
+  let rows: Record<string, { role: string; permissions: string[] }>;
   try {
-    for (const [name, id] of Object.entries(people)) {
-      await owner.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic old member')", [id, `old-${id}@example.invalid`]);
-      await owner.query('INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb)', [companyId, id, JSON.stringify(before[name as keyof typeof before])]);
+    const { migrate } = await import('../../../packages/platform/src/migrations.ts');
+    await migrate(scratch);
+    await scratch.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Old Traders')", [companyId]);
+    await scratch.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, 'Main shop')", [branchId, companyId]);
+    // Rolled back first, so the rows are written exactly as a database from before #343 holds them.
+    await scratch.query(roles.down);
+    for (const [who, id] of Object.entries(people)) {
+      await scratch.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic old member')", [id, `old-${id}@example.invalid`]);
+      await scratch.query('INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb)', [companyId, id, JSON.stringify(before[who as keyof typeof before])]);
     }
-  } finally { await owner.query(roles.up); }
-  const rows = Object.fromEntries((await owner.query('SELECT user_id, role, permissions FROM memberships WHERE company_id = $1', [companyId])).rows
-    .map((row) => [String(row.user_id), { role: String(row.role), permissions: row.permissions as string[] }]));
+    await scratch.query(roles.up);
+    rows = Object.fromEntries((await scratch.query('SELECT user_id, role, permissions FROM memberships WHERE company_id = $1', [companyId])).rows
+      .map((row) => [String(row.user_id), { role: String(row.role), permissions: row.permissions as string[] }]));
+  } finally {
+    await scratch.close();
+    await owner.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+  }
   assert.equal(rows[people.owner]!.role, 'owner');
   for (const permission of NEW) assert.ok(rows[people.owner]!.permissions.includes(permission), `the owner keeps ${permission}`);
   assert.equal(rows[people.cashier]!.role, 'custom');
