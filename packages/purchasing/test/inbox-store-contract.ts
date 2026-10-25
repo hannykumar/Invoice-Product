@@ -81,6 +81,13 @@ export function inboxStoreContract(name: string, harness: () => InboxHarness, sk
     await h.write(a, () => h.store.updateDocument(assigned));
     assert.deepEqual(await h.store.document(a, full.id), assigned);
     await assert.rejects(h.write(a, () => h.store.updateDocument({ ...bare, id: randomUUID() })), code("INBOX_DOCUMENT_UNKNOWN"));
+    // Draft-ready and discarded are where the service stops: neither store lets them change.
+    for (const status of ["draft_ready", "discarded"] as const) {
+      const final = { ...documentFor(a, 10), status, ...(status === "discarded" ? { duplicateOfId: full.id } : {}) };
+      await h.write(a, () => h.store.insertDocument(final, { messageKey: null, intakeKey: `final-${status}` }));
+      await assert.rejects(h.write(a, () => h.store.updateDocument({ ...final, status: "extracting" })), code("INBOX_DOCUMENT_FINAL"), status);
+      assert.deepEqual(await h.store.document(a, final.id), final);
+    }
     assert.equal(await h.store.document(a, randomUUID()), null);
     assert.equal(await h.store.document(a, "not-an-id"), null);
     assert.equal(await h.store.intakeKey(a, randomUUID()), null);
@@ -143,6 +150,7 @@ export function inboxStoreContract(name: string, harness: () => InboxHarness, sk
     });
     // A claim for a document this company does not have is refused, not recorded.
     await assert.rejects(h.write(b, () => h.store.claimContent(b, sha("x"), first.id)), code("INBOX_DOCUMENT_UNKNOWN"));
+    await assert.rejects(h.write(b, () => h.store.claimContent(b, file, first.id)), code("INBOX_DOCUMENT_UNKNOWN"));
   });
 
   test(`${name}: a draft keeps every figure exactly, and there is one per document`, { skip }, async () => {

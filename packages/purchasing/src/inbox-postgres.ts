@@ -10,7 +10,7 @@ import type { SqlExecutor, TransactionalExecutor } from "../../platform/src/data
 import type { Id } from "../../masters/src/types.ts";
 import { pageLimit, type Page } from "./paging.ts";
 import {
-  inboxDocumentAlreadyStored, inboxDocumentNotFound, inboxDraftAlreadyStored, type InboxDocumentKeys, type InboxStore,
+  inboxDocumentAlreadyStored, inboxDocumentFinal, inboxDocumentNotFound, inboxDraftAlreadyStored, type InboxDocumentKeys, type InboxStore,
 } from "./inbox-store.ts";
 import type { ExtractionDraft, InboundDocument, InboundSender, InboundStatus, QuarantineReason, RoutingDecision } from "./inbox-types.ts";
 
@@ -92,7 +92,10 @@ export class PostgresInboxStore implements InboxStore {
        WHERE company_id = $1 AND id = $2 RETURNING id`,
       [document.companyId, document.id, document.status, document.quarantineReason ?? null, document.statusMessage ?? null,
         document.duplicateOfId ?? null, document.attempts, document.routing === undefined ? null : toJson(document.routing)],
-    );
+    ).catch((error: unknown) => {
+      // platform_freeze_posted refuses a change to a draft-ready or discarded document.
+      throw (error as { code?: string }).code === "23001" ? inboxDocumentFinal() : error;
+    });
     if (rows.length === 0) throw inboxDocumentNotFound();
   }
 
@@ -145,7 +148,9 @@ export class PostgresInboxStore implements InboxStore {
          RETURNING document_id)
        SELECT document_id FROM taken
        UNION ALL
-       SELECT document_id FROM purchase_inbox_contents WHERE company_id = $1 AND sha256 = $2
+       SELECT c.document_id FROM purchase_inbox_contents c
+        WHERE c.company_id = $1 AND c.sha256 = $2
+          AND EXISTS (SELECT 1 FROM purchase_inbox_documents d WHERE d.company_id = $1 AND d.id = $3)
        LIMIT 1`,
       [companyId, sha256, isUuid(documentId) ? documentId : null],
     );

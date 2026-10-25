@@ -67,7 +67,7 @@ test("postgres: a document is frozen once it is draft-ready or discarded, and no
     await h.store.insertDocument(open, { messageKey: null, intakeKey: "k2" });
   });
   await h.write(a, () => h.store.updateDocument({ ...ready, status: "draft_ready", statusMessage: "Read." }));
-  await assert.rejects(h.write(a, () => h.store.updateDocument({ ...ready, status: "extracting" })), code("23001"));
+  await assert.rejects(h.write(a, () => h.store.updateDocument({ ...ready, status: "extracting" })), code("INBOX_DOCUMENT_FINAL"));
   await assert.rejects(inCompany(a, "UPDATE purchase_inbox_documents SET status_message = 'x' WHERE id = $1", [ready.id]), code("23001"));
   // What arrived is not the application's to change, even while the document is still moving.
   await assert.rejects(inCompany(a, "UPDATE purchase_inbox_documents SET storage_key = 'elsewhere' WHERE id = $1", [open.id]), code("42501"));

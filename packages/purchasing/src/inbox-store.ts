@@ -49,6 +49,10 @@ export const inboxDocumentAlreadyStored = () =>
   conflict("INBOX_DOCUMENT_DUPLICATE", "This document has already been received, so it has not been added twice.");
 export const inboxDraftAlreadyStored = () =>
   conflict("INBOX_DRAFT_DUPLICATE", "A draft has already been prepared for this document.");
+export const inboxDocumentFinal = () =>
+  conflict("INBOX_DOCUMENT_FINAL", "This document has already been dealt with, so it cannot be changed.");
+/** Where the service never moves a document again, so neither store lets it change. */
+const FINAL: ReadonlySet<InboundStatus> = new Set(["draft_ready", "discarded"]);
 export const inboxDocumentNotFound = () => notFound("INBOX_DOCUMENT_UNKNOWN", "That document was not found.");
 
 interface Stored { readonly document: InboundDocument; readonly keys: InboxDocumentKeys }
@@ -80,6 +84,7 @@ export class InMemoryInboxStore implements InboxStore {
   async updateDocument(document: InboundDocument): Promise<void> {
     const stored = this.#state.documents.get(document.id);
     if (!stored || stored.document.companyId !== document.companyId) throw inboxDocumentNotFound();
+    if (FINAL.has(stored.document.status)) throw inboxDocumentFinal();
     this.#state.documents.set(document.id, { document: Object.freeze(document), keys: stored.keys });
   }
 
