@@ -101,9 +101,9 @@ export const CORE_ROUTES: readonly Route[] = [
   // Setting up a business runs against its own fresh company, so it needs a signed-in session but
   // not the session's company.
   post('/api/onboarding/preview', { access: need('set up a business', 'onboarding.run'), input: onboarding },
-    ({ context, input }) => previewOnboarding(input, context.companyId)),
+    ({ context, input }) => previewOnboarding(input, context.companyId, context.actorId)),
   post('/api/onboarding/finish', { access: need('set up a business', 'onboarding.finish'), input: onboarding },
-    ({ context, input }) => finishOnboarding(input, context.companyId)),
+    ({ context, input }) => finishOnboarding(input, context.companyId, context.actorId)),
 
   // Issue #147 — the mark of a trade: search the picture library, then keep what was picked.
   post('/api/trade-marks/search', { access: BRANDING, input: fields({ query: text, limit: text }) }, ({ input }) => searchMarks(input)),
