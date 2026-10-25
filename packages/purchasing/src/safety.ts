@@ -49,7 +49,8 @@ const MAGIC: readonly { readonly type: SupportedType; readonly test: (bytes: Uin
   { type: "json", test: (_bytes, text) => /^\s*[[{]/.test(text) },
 ];
 
-const DECLARED_TO_TYPE: Readonly<Record<string, SupportedType>> = {
+/** The declared types a file may claim, and what each is. Exported for #341's checks before an upload. */
+export const DECLARED_TO_TYPE: Readonly<Record<string, SupportedType>> = {
   "application/pdf": "pdf",
   "image/jpeg": "jpeg",
   "image/jpg": "jpeg",
@@ -61,7 +62,7 @@ const DECLARED_TO_TYPE: Readonly<Record<string, SupportedType>> = {
 };
 
 /** Executable or script extensions hidden behind a document-looking name. */
-const DANGEROUS_EXTENSION = /\.(exe|bat|cmd|com|scr|js|jse|vbs|vbe|ps1|sh|jar|apk|msi|dll|lnk|html?|svg)$/i;
+export const DANGEROUS_EXTENSION = /\.(exe|bat|cmd|com|scr|js|jse|vbs|vbe|ps1|sh|jar|apk|msi|dll|lnk|html?|svg)$/i;
 
 /** PDF dictionary keys that mean encryption or self-running content, wherever they sit in the file. */
 const ENCRYPT_TOKEN = /\/Encrypt\b/;

@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 172 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 175 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -270,6 +270,9 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/trade-marks/search` | `branding.write` |
 | POST | `/api/trade-marks/choose` | `branding.write` |
 | GET | `/api/branding` | service |
+| POST | `/api/files/uploads` | `ledger.post.purchase` or `branding.write` |
+| POST | `/api/files/:param/complete` | `ledger.post.purchase` or `branding.write` |
+| GET | `/api/files/:param/link` | service |
 | POST | `/api/branding` | `branding.write` |
 | GET | `/api/business-details` | service |
 | POST | `/api/business-details` | `business.settings.write` |
