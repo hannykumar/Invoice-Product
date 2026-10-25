@@ -86,9 +86,20 @@ export class Team {
   }
 
   /** Only an owner may touch an owner or an admin, or make someone an admin. */
+  /**
+   * Only an owner may touch an owner, an admin, or a member whose permissions were tailored ("custom"),
+   * or make someone an admin. And nobody else may give a role holding more than they hold themselves.
+   */
   async #mayManage(context: RequestContext, ...roles: readonly (RoleName | "custom" | undefined)[]): Promise<void> {
-    if (!roles.some((role) => role === "owner" || role === "admin")) return;
-    if ((await this.#me(context)).role !== "owner") throw new PlatformError("FORBIDDEN", "Only an owner can add, change or remove an owner or an admin.");
+    if ((await this.#me(context)).role === "owner") return;
+    if (roles.some((role) => role === "owner" || role === "admin" || role === "custom" || role === undefined)) {
+      throw new PlatformError("FORBIDDEN", "Only an owner can add, change or remove an owner, an admin, or someone with their own set of permissions.");
+    }
+    for (const role of roles) {
+      if (ROLES[role as RoleName].permissions.some((permission) => !context.permissions.has(permission))) {
+        throw new PlatformError("FORBIDDEN", "You cannot give someone more than you can do yourself.");
+      }
+    }
   }
 
   async #active(context: RequestContext): Promise<readonly Member[]> { return (await this.#store.review(context.companyId)).filter((member) => member.active); }

@@ -79,7 +79,7 @@ export const ROLES: Readonly<Record<RoleName, { readonly title: string; readonly
   },
   viewer: {
     title: "Viewer",
-    sentence: "Sees the Home page. Changes nothing, and sees no bank, tax-number or customer details.",
+    sentence: "Sees the Home page: today's money, what is owed and the latest bills. Changes nothing; no customer list, bank account, tax numbers or bill PDFs.",
     permissions: ["dashboard.read"],
   },
 };

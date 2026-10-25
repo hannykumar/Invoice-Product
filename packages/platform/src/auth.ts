@@ -7,7 +7,7 @@ import type { RoleName } from "./roles.ts";
 
 export interface Session { id: Id; userId: Id; companyId: Id; branchId: Id; expiresAt: number; revokedAt?: number; lastSeenAt?: number; }
 /** `email` is the address the invitation was sent to: an email, or a phone number in +91 form (#343). */
-export interface Invitation { id: Id; companyId: Id; branchId: Id; email: string; permissions: ReadonlySet<Permission>; expiresAt: number; acceptedAt?: number; revokedAt?: number; role?: RoleName | "custom"; }
+export interface Invitation { id: Id; companyId: Id; branchId: Id; email: string; permissions: ReadonlySet<Permission>; expiresAt: number; acceptedAt?: number; revokedAt?: number; role?: RoleName | "custom"; invitedBy?: Id; }
 /** How a member is named on the team screen. */
 export interface Person { id: Id; label: string; }
 /** A company a person belongs to, and the branches of it they may work in. */
@@ -36,13 +36,15 @@ export class AuthenticationService {
   constructor(access: AccessControl, now: () => number = Date.now) { this.access = access; this.now = now; }
   invite(actor: RequestContext, email: string, permissions: ReadonlySet<Permission>, expiresInMs = 7 * 24 * 60 * 60 * 1000, role: RoleName | "custom" = "custom"): { invitation: Invitation; token: string } {
     if (!actor.permissions.has("access.review")) throw new PlatformError("FORBIDDEN", "You do not have permission to review access.");
-    const token = randomUUID(); const invitation: Invitation = { id: randomUUID(), companyId: actor.companyId, branchId: actor.branchId, email: email.toLowerCase(), permissions, expiresAt: this.now() + expiresInMs, role };
+    const token = randomUUID(); const invitation: Invitation = { id: randomUUID(), companyId: actor.companyId, branchId: actor.branchId, email: email.toLowerCase(), permissions, expiresAt: this.now() + expiresInMs, role, invitedBy: actor.actorId };
     this.#invitations.set(digest(token), invitation); return { invitation, token };
   }
   /** With `provedAddress` (#343), only the person the invitation was sent to may take it up. */
   acceptInvitation(token: string, userId: Id, provedAddress?: string): Invitation {
     const invitation = this.#invitations.get(digest(token)); if (!invitation || invitation.revokedAt || invitation.acceptedAt || invitation.expiresAt <= this.now()) throw new Error("INVALID_INVITATION");
     if (provedAddress !== undefined && invitation.email !== provedAddress) throw new Error("INVALID_INVITATION");
+    // Issue #343 review — an invitation never replaces the role of someone already in the business.
+    if (this.access.members(invitation.companyId).some((member) => member.userId === userId && member.active)) throw new Error("INVALID_INVITATION");
     const accepted = { ...invitation, acceptedAt: this.now() }; this.#invitations.set(digest(token), accepted);
     this.access.grant({ userId, companyId: accepted.companyId, branchIds: new Set([accepted.branchId]), active: true, permissions: accepted.permissions, role: accepted.role ?? "custom" }); return accepted;
   }
@@ -71,7 +73,10 @@ export class AuthenticationService {
     for (const [key, session] of this.#sessions) if (session.id === sessionId && session.revokedAt === undefined) { this.#sessions.set(key, { ...session, revokedAt: this.now() }); return session.expiresAt; }
     return undefined;
   }
-  revokeMember(companyId: Id, userId: Id): void { this.access.revoke(companyId, userId); for (const [key, session] of this.#sessions) if (session.companyId === companyId && session.userId === userId && session.revokedAt === undefined) this.#sessions.set(key, { ...session, revokedAt: this.now() }); }
+  revokeMember(companyId: Id, userId: Id): void {
+    // Issue #343 review — the invitations they sent and nobody took up go with them.
+    for (const [key, invitation] of this.#invitations) if (invitation.companyId === companyId && invitation.invitedBy === userId && invitation.acceptedAt === undefined && invitation.revokedAt === undefined) this.#invitations.set(key, { ...invitation, revokedAt: this.now() });
+    this.access.revoke(companyId, userId); for (const [key, session] of this.#sessions) if (session.companyId === companyId && session.userId === userId && session.revokedAt === undefined) this.#sessions.set(key, { ...session, revokedAt: this.now() }); }
   review(companyId: Id): readonly Member[] { return this.access.members(companyId); }
 
   /** A person known before the provider ever saw them (the seed, or an invitation): found later by the address they prove. */

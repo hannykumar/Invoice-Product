@@ -12,7 +12,7 @@ Issue #343. Every API route names the permission it needs, and the server checks
 | Admin | Runs the business day to day and manages the team, but cannot change the plan or hand the business over. |
 | Accountant (or CA) | The books, bills, GST returns and payments. Not who may sign in, the plan, or the business's own particulars. |
 | Staff | Makes bills, quotations and challans, takes payments and adds customers. Cannot see bank balances, file GST or override stock. |
-| Viewer | Sees the Home page. Changes nothing, and sees no bank, tax-number or customer details. |
+| Viewer | Sees the Home page: today's money, what is owed and the latest bills. Changes nothing; no customer list, bank account, tax numbers or bill PDFs. |
 
 A chartered accountant who looks after several businesses is an **Accountant** in each: one sign-in, one membership per business, switching between them without signing in again. Only an owner can make someone an admin, change or remove an owner or admin, or hand the business over; nobody is made an owner directly, and the last owner cannot leave. Invitations last 7 days and can be taken up only by the phone number or email they were sent to.
 

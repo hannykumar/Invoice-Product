@@ -414,20 +414,18 @@ test("a server outside development refuses to run as a database account that cou
 platformContract("postgres as the application role", () => appHarness, skip);
 
 test("every table that holds a company's rows enforces row-level security, except the ones still listed here", { skip }, async () => {
-  // Tables whose repositories do not read through tenantTransaction yet. Each lane removes its tables
-  // from this list in the change that moves its repository over (#366). Nothing may be added.
+  // Tenant tables without forced row-level security, each for a stated reason. #366 moved every
+  // other table's repository onto tenantTransaction and forced its policy. Nothing may be added.
   const PENDING = new Set([
-    "account", "voucher", "journal_line", "fiscal_period", "ledger_sequence", "ledger_settings", "idempotency_record",
-    "bank_statement_imports", "bank_statement_transactions", "branches", "invitations", "sessions",
-    "compliance_alerts", "compliance_calendar_exceptions", "compliance_completions", "compliance_deadline_revisions", "compliance_obligation_definitions", "compliance_occurrences",
-    "e_invoice_policies", "e_invoice_supplier_facts", "e_invoices", "eway_bill_policies", "eway_bills", "eway_consolidated_trips",
-    "goods_receipt_lines", "goods_receipt_movements", "goods_receipts", "government_calls", "government_webhook_events", "gsp_credentials", "gsp_otp_challenges",
-    "gst_return_declared_thresholds", "gst_return_preparations", "gstin_authorisations", "gstin_consents",
-    "itc_claims", "itc_decisions", "itc_import_batches", "itc_portal_documents",
-    "master_identity_keys", "master_merges", "master_name_index", "master_records", "master_snapshots", "master_versions",
-    "purchase_bill_lines", "purchase_bill_receipts", "purchase_bills", "purchase_match_approvals", "purchase_match_tolerances", "purchase_order_lines", "purchase_orders",
-    "supplier_gstin_readings", "supplier_risk_acknowledgements", "supplier_risk_assessments", "supplier_risk_policies",
-    "unit_conversions", "units_of_measure", "vehicle_record_consents", "vehicle_records", "vehicle_suitability_checks", "vehicle_suitability_overrides", "vehicle_suitability_policies",
+    // Looked up before the company is known (sign-in, accepting an invitation); see database-immutability-v1.
+    "branches", "invitations", "sessions",
+    // Reference data shared by every company; a business's own rows carry its company_id.
+    "compliance_obligation_definitions",
+    // No service reads or writes these yet (the bank-statement import of bank-import-v1).
+    "bank_statement_imports", "bank_statement_transactions",
+    // A government callback arrives before it is matched to a company (#389, #477).
+    "government_webhook_events",
+    // Test-only stand-ins of the #363 pilot, created by its tests, not by a migration.
     "uow_pilot_sales_invoices", "uow_pilot_stock_movements",
   ]);
   const { rows } = await owner.query(

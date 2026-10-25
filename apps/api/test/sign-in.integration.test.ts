@@ -152,11 +152,18 @@ test('#343: the team on PostgreSQL — invite by phone, join at sign-in, remove 
   assert.deepEqual((await team.list(ownerContext)).members.map((member) => member.role).sort(), ['admin', 'owner']);
 
   await assert.rejects(team.leave(ownerContext), /only owner/);
+  // An invitation never replaces an existing member's role: the admin cannot demote the owner this way.
+  const lure = await team.invite(adminContext, ownerEmail, 'viewer');
+  await assert.rejects(signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE, undefined, lure.token), /cannot be used/);
+  assert.equal((await team.list(ownerContext)).members.find((member) => member.userId === ownerId)!.role, 'owner');
+  // What the admin sent and nobody took up is withdrawn when they are removed.
+  const pending = await team.invite(adminContext, `+9197${String(randomBytes(4).readUInt32BE() % 100_000_000).padStart(8, '0')}`, 'staff');
   await team.transfer(ownerContext, adminContext.actorId);
   const roles = Object.fromEntries((await team.list(ownerContext)).members.map((member) => [member.userId, member.role]));
   assert.equal(roles[adminContext.actorId], 'owner');
   assert.equal(roles[ownerId], 'admin');
 
+  void pending;
   // The new owner removes the old one: every session the old owner had in this business ends at once.
   await team.remove(await signIn.authenticate(bearer(joined.token)), ownerId);
   await assert.rejects(signIn.authenticate(bearer(ownerToken)), /Sign in again/);

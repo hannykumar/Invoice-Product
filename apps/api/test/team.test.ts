@@ -110,3 +110,25 @@ test('#343: a viewer calling the team routes directly, not through the screen, i
   }
   assert.equal((await call('GET', '/api/team', {}, viewer)).status, 403);
 });
+
+test('#343 review: an invitation to someone already in the business never replaces their role', async () => {
+  const owner = await signIn('owner@sampoorna.example.invalid', SAMPOORNA);
+  const admin = await signIn('admin@sampoorna.example.invalid', SAMPOORNA);
+  const lure = await call('POST', '/api/team/invite', { address: 'owner@sampoorna.example.invalid', role: 'viewer' }, admin);
+  assert.equal(lure.status, 200);
+  const token = decodeURIComponent(lure.body.link.slice('/#join='.length));
+  const joined = await joinWith('owner@sampoorna.example.invalid', token);
+  assert.equal(joined.status, 400, 'refused: the owner is already in this business');
+  assert.equal((await team(owner)).find((member) => member.you)!.role, 'owner', 'and is still the owner');
+});
+
+test('#343 review: removing someone withdraws the invitations they sent; nobody gives more than they hold', async () => {
+  const owner = await signIn('owner@sampoorna.example.invalid', SAMPOORNA);
+  const admin = await signIn('admin@sampoorna.example.invalid', SAMPOORNA);
+  const sent = await call('POST', '/api/team/invite', { address: '+919812300077', role: 'staff' }, admin);
+  assert.equal(sent.status, 200, sent.body.message);
+  const adminId = (await team(owner)).find((member) => member.name === 'admin@sampoorna.example.invalid')!.userId;
+  assert.equal((await call('POST', '/api/team/remove', { userId: adminId }, owner)).status, 200);
+  const late = await joinWith('+919812300077', decodeURIComponent(sent.body.link.slice('/#join='.length)));
+  assert.equal(late.status, 400, 'the removed admin\'s invitation no longer works');
+});
