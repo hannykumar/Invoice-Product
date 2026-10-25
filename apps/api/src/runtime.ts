@@ -17,6 +17,7 @@ import type { TransactionalExecutor } from '../../../packages/platform/src/datab
 import { recordMasterDataAs } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
+import { log } from './log.ts';
 
 export { AuthenticationError };
 
@@ -142,6 +143,12 @@ export class ApiRuntime {
   constructor(persistence: Persistence = MEMORY, signIn: SignIn = createSignIn(persistence)) {
     this.#persistence = persistence;
     this.signIn = signIn;
+    // Issue #342 — the stand-in accepts one code for everybody. On a database it can only be there
+    // because NODE_ENV says development; say so loudly at every start, so a real server set up that
+    // way by mistake is noticed in its first log line rather than by the first stranger who signs in.
+    if (signIn.provider === 'mock' && persistence.kind === 'postgres') {
+      log.warn('The demo sign-in is on, with a database: anyone can sign in with the demo code. This must only ever be a developer\'s machine. A real server needs NODE_ENV=production, SUPABASE_URL and SUPABASE_ANON_KEY.');
+    }
     this.#operations = persistence.kind === 'postgres'
       ? createOperations(undefined, undefined, { store: new PostgresOperationsStore(persistence.db), audit: new PostgresAuditLog(persistence.db) })
       : createOperations();
