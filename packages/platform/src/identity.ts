@@ -48,8 +48,8 @@ export const readSignInAddress = (typed: string): SignInAddress => {
 const addressOf = (identity: VerifiedIdentity): string | undefined => identity.email ?? identity.phone;
 
 /**
- * Development and tests only: every address gets the same code, from the seed. `runtime.ts` refuses
- * to start with it outside development (`identityProviderFor`), so no shop can ever sign in with it.
+ * Development and tests only: every address gets the same code, from the seed. `identityProviderFor`
+ * refuses to start with it unless NODE_ENV says development or test, so no shop can ever sign in with it.
  */
 export class MockIdentityProvider implements IdentityProvider {
   readonly kind = "mock" as const;

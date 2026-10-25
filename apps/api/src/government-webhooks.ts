@@ -33,9 +33,11 @@ import { appClock } from './app-clock.ts';
 import { InMemoryAuditPort } from '@invoice/ledger';
 import { ConnectorGateway, HmacWebhookVerifier, isLocalEnvironment, MockConnector, type ConnectorKind, type WebhookSigningSecrets } from '../../../packages/platform/src/connectors.ts';
 import { registerSecretValues } from '../../../packages/platform/src/credentials.ts';
-import type { SqlExecutor } from '../../../packages/platform/src/database.ts';
+import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import {
   GovernmentWebhookReceiver,
+  PostgresAuthorisations,
+  PostgresCallLog,
   PostgresWebhookEvents,
   InMemoryAuthorisations,
   InMemoryCallLog,
@@ -76,7 +78,7 @@ let receiver: GovernmentWebhookReceiver | undefined;
  * Built once, at start-up when the server starts (`server.ts`), otherwise on the first callback.
  * With a database the seen events are kept there; without one (development, tests) in memory.
  */
-export const configureGovernmentWebhooks = (db: SqlExecutor | null, env: NodeJS.ProcessEnv = process.env, warn: (message: string) => void = console.warn): GovernmentWebhookReceiver => {
+export const configureGovernmentWebhooks = (db: TransactionalExecutor | null, env: NodeJS.ProcessEnv = process.env, warn: (message: string) => void = console.warn): GovernmentWebhookReceiver => {
   const secrets = governmentWebhookSecrets(env);
   if (secrets.missing.length > 0) {
     warn(`Government callbacks will be refused for ${secrets.missing.join(', ')}: no signing secret is set. Set ${secrets.missing.map(secretVariable).join(', ')}.`);
@@ -88,8 +90,10 @@ export const configureGovernmentWebhooks = (db: SqlExecutor | null, env: NodeJS.
   );
   receiver = new GovernmentWebhookReceiver({
     gateway,
-    calls: new InMemoryCallLog(),
-    authorisations: new InMemoryAuthorisations(),
+    // On the database a callback finds no call yet: it names no company, and the calls are closed
+    // to a connection without one (#366, government-access-v1 "Storage"; the lookup waits for #345).
+    calls: db === null ? new InMemoryCallLog() : new PostgresCallLog(db),
+    authorisations: db === null ? new InMemoryAuthorisations() : new PostgresAuthorisations(db),
     events: db === null ? new InMemoryWebhookEvents() : new PostgresWebhookEvents(db),
     audit: new InMemoryAuditPort(),
     clock: appClock,
@@ -109,7 +113,7 @@ export const receiveGovernmentWebhook = async (
   kind: ConnectorKind,
   rawBody: string,
   signature: string,
-  db: SqlExecutor | null = null,
+  db: TransactionalExecutor | null = null,
 ): Promise<{ readonly status: number; readonly outcome: WebhookOutcome }> => {
   const outcome = await (receiver ?? configureGovernmentWebhooks(db)).receive(kind, rawBody, signature);
   return { status: 202, outcome };

@@ -125,6 +125,39 @@ that did not authenticate, `404` for a connector that takes no government callba
 (`GovernmentCallReconciler`) remains the fallback when no callback ever arrives; the two agree by
 construction because both read the acknowledgement with the same function.
 
+## Storage (issue #366)
+
+`PostgresAuthorisations` and `PostgresCallLog` (`src/postgres-repositories.ts`) implement the same
+ports as the in-memory stores, and one contract suite (`test/gsp-store-contract.ts`) runs on both.
+Writes join the action's unit of work (`requireUnitOfWork`); reads run in `tenantTransaction`.
+Migration `…gsp_59f4d0dcbdf0_postgres_repositories`:
+
+- **Row-level security** on `gstin_authorisations`, `gstin_consents`, `gsp_credentials`,
+  `gsp_otp_challenges`, `government_calls`. A consent, credential or challenge can only point at an
+  authorisation of its own company.
+- **Nothing secret is stored.** A credential is a vault reference; a one-time password never
+  reaches the database, only the challenge's id, expiry, tries left and phone hint.
+- **Frozen.** A call is fixed once `ACCEPTED`, `REJECTED` or `REFUSED`: only `reconciled_at` may
+  change, and `government_reference` may be filled in once. No call's government reference is ever
+  written over. A consent may only gain its withdrawal; a credential only `superseded_at`. None of
+  the three can be deleted or truncated.
+- **Paging.** `CallLogRepository.list` and `listUnsettled` take an optional `Page` (keyset by start
+  time, ties in the order written). `AuthorisationRepository.list` is not paged: one row per
+  registration.
+- **A retry under the same idempotency key is a row of its own** (as the channel always did);
+  `findByIdempotencyKey` answers with the first. The unique key on `(company_id, idempotency_key)`
+  became an index.
+- **The OTP request id is unique per company**, not globally: it is the provider's id, not ours.
+- **The callback receiver runs on these stores** when the app has a database
+  (`apps/api/src/government-webhooks.ts`), beside #389's `PostgresWebhookEvents`.
+- **A callback cannot find its call on PostgreSQL yet.** It names no company, and
+  `government_calls` is closed to a connection without one, so `findByProviderRequestId` and
+  `findByCorrelationId` answer null: the callback is recorded `UNMATCHED` and reconciliation settles
+  the call by polling. That is exact today, because the running app makes no government calls yet
+  (#51). Before the channel is wired on PostgreSQL, #345 must resolve the company from the provider
+  request id before the tenant transaction opens. Nothing here bypasses row-level security.
+  `government_webhook_events` (#389, rows with no company) stays on the pending list.
+
 ## Assumptions recorded against unfinished dependencies
 
 - **#50 (provider comparison) and #51 (production contracting) are open.** No provider has been

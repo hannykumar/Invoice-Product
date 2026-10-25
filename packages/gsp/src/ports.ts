@@ -19,8 +19,16 @@ import type {
   ProviderProfile,
 } from './types.ts';
 
+/** Issue #366 — keyset paging: up to `limit` rows after the row with id `after`. Without one, every row. */
+export interface Page {
+  readonly after?: string;
+  readonly limit?: number;
+}
+
 export interface AuthorisationRepository {
   find(companyId: CompanyId, gstin: string): Promise<GstinAuthorisation | null>;
+  // ponytail: not paged — one row per GST registration of one business, a handful. Page it if a
+  // business ever holds hundreds.
   list(companyId: CompanyId): Promise<readonly GstinAuthorisation[]>;
   put(authorisation: GstinAuthorisation): Promise<void>;
 }
@@ -37,8 +45,8 @@ export interface CallLogRepository {
   settle(call: ProviderCall): Promise<void>;
   find(companyId: CompanyId, id: string): Promise<ProviderCall | null>;
   findByIdempotencyKey(companyId: CompanyId, key: string): Promise<ProviderCall | null>;
-  /** The calls whose fate we never learned. What reconciliation reads. */
-  listUnsettled(companyId: CompanyId, before: string): Promise<readonly ProviderCall[]>;
+  /** The calls whose fate we never learned, oldest first. What reconciliation reads. */
+  listUnsettled(companyId: CompanyId, before: string, page?: Page): Promise<readonly ProviderCall[]>;
   /**
    * The call a provider's callback is about.
    *
@@ -49,7 +57,8 @@ export interface CallLogRepository {
    */
   findByProviderRequestId(providerRequestId: string): Promise<ProviderCall | null>;
   findByCorrelationId(correlationId: string): Promise<ProviderCall | null>;
-  list(companyId: CompanyId, gstin?: string): Promise<readonly ProviderCall[]>;
+  /** In the order they started; calls that started at the same instant, in the order they were written. */
+  list(companyId: CompanyId, gstin?: string, page?: Page): Promise<readonly ProviderCall[]>;
 }
 
 /**
