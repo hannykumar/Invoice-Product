@@ -278,6 +278,11 @@ export class SubscriptionService {
     }));
   }
 
+  /** Issue #350 — the plan a company is on, for its limits. Read-only; the company is the caller's own. */
+  async planOf(companyId: string): Promise<string> {
+    return (await this.#subscriptions.find(companyId as ActorContext['companyId']))?.planId ?? 'free';
+  }
+
   async account(actor: ActorContext, today: IsoDate): Promise<AccountView> {
     this.#permissions.require(actor, SUBSCRIPTION_PERMISSIONS.view, 'see your plan');
     const subscription = (await this.#subscriptions.find(actor.companyId)) ?? this.#impliedFree(actor.companyId, today);

@@ -15,6 +15,9 @@ import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
 import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
+import { expensiveLimit, LIMITS, RateLimited } from '../../../packages/platform/src/rate-limits.ts';
+import { costOf } from './routes/costs.ts';
+import { spend } from './spending.ts';
 import { openPersistence } from './persistence.ts';
 import { configureGovernmentWebhooks } from './government-webhooks.ts';
 import { asOneAction, asOneRead } from './durable.ts';
@@ -56,6 +59,7 @@ const isMeantForTheScreen = (error: unknown): error is Error =>
 const statusOf = (error: unknown): number | undefined => {
   if (error instanceof AuthenticationError) return 401;
   if (error instanceof SignInUnavailable) return 503;
+  if (error instanceof RateLimited) return 429;
   // A provider that signed its callback wrongly is told so, and told nothing else.
   if (error instanceof WebhookNotAuthenticated) return 401;
   if (error instanceof ZodError) return 400;
@@ -106,6 +110,10 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
       message: `Something went wrong on our side. Nothing was saved. Quote ${requestId} if you contact us.`,
     });
   }
+  if (error instanceof RateLimited) {
+    const refused = failure(429, requestId, { title: 'Please wait a little', code: 'TOO_MANY_REQUESTS', message: error.message });
+    return { ...refused, headers: { ...refused.headers, 'retry-after': String(error.retryAfterSeconds) } };
+  }
   if (error instanceof ZodError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: invalidInputMessage(error) });
   if (error instanceof SyntaxError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because a number or a list that was sent could not be read. Check what was typed and try again.' });
   const known = error as Error;
@@ -125,11 +133,28 @@ const isPublic = (route: Route): route is PublicRoute => route.access.kind === '
  * the permission (before reading the input, #280), validate the input, run the handler.
  * `pathname` may carry a `?query`; a GET's input is its query, merged over `body` for in-process callers.
  */
-export function handleApi(method: string, pathname: string, body: unknown = {}, authorization?: string, delivery?: WebhookDelivery, requestId: string = randomUUID()): Promise<ApiResult> {
-  return inRequest(requestId, () => dispatch(method, pathname, body, authorization, delivery, requestId));
+export function handleApi(method: string, pathname: string, body: unknown = {}, authorization?: string, delivery?: WebhookDelivery, requestId: string = randomUUID(), clientIp?: string): Promise<ApiResult> {
+  return inRequest(requestId, () => dispatch(method, pathname, body, authorization, delivery, requestId, clientIp));
 }
 
-async function dispatch(method: string, pathname: string, body: unknown, authorization: string | undefined, delivery: WebhookDelivery | undefined, requestId: string): Promise<ApiResult> {
+/**
+ * Issue #350 — the limits every signed-in request counts against, after its permission (a refusal
+ * is always 403, never 429): the person's own pace, then heavy work per company by plan, then a
+ * paid service's daily allowance per company and Karobar's daily spending cap for it.
+ */
+const countRequest = async (runtime: ReturnType<typeof apiRuntime>, route: Route, context: { companyId: string; actorId: string }, app: { planId(actor: ActorContext): Promise<string> }, actor: ActorContext): Promise<void> => {
+  await runtime.limits.take(LIMITS.perUser, context.actorId);
+  const cost = costOf(route.method, route.path);
+  if (cost === undefined) return;
+  await runtime.limits.take(expensiveLimit(await app.planId(actor)), context.companyId);
+  if (cost.paid === undefined) return;
+  await spend(runtime.limits, cost.paid, context.companyId);
+};
+
+/** Public routes never limited per address: the health check, and the provider callback that proves itself by its signature. */
+const UNLIMITED_PUBLIC: ReadonlySet<string> = new Set(['/api/status', '/api/webhooks/government/:kind']);
+
+async function dispatch(method: string, pathname: string, body: unknown, authorization: string | undefined, delivery: WebhookDelivery | undefined, requestId: string, clientIp?: string): Promise<ApiResult> {
   // A path the URL parser rejects (`//`, a stray space) names nothing that could exist.
   const url = URL.parse(pathname, 'http://localhost');
   const found = url === null ? undefined : matchRoute(method, url.pathname);
@@ -141,14 +166,24 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
     const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
     let reply: unknown;
     if (isPublic(route)) {
-      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery, authorization });
+      // Signed-out callers are limited per address — but never the health check a load balancer polls
+      // from one address, nor a provider's signed callback; sign-in's own limits are in its route (core.ts).
+      if (clientIp !== undefined && !UNLIMITED_PUBLIC.has(route.path) && !route.path.startsWith('/api/auth/')) await runtime.limits.take(LIMITS.signedOutPerIp, clientIp);
+      reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery, authorization, clientIp });
     } else {
-      const context = await runtime.authenticate(authorization);
+      let context;
+      try { context = await runtime.authenticate(authorization); }
+      catch (error) {
+        // Issue #350 — guessing at sessions: requests with no valid session count per address.
+        if (error instanceof AuthenticationError && clientIp !== undefined) await runtime.limits.take(LIMITS.signedOutPerIp, clientIp);
+        throw error;
+      }
       annotate({ company_id: context.companyId, user_id: context.actorId });
       const actor = runtime.actor(context);
       if (route.access.kind === 'gate') requirePermission(actor, route.access);
       const input = await route.input.parseAsync(raw);
       const app = await runtime.application(context);
+      await countRequest(runtime, route, context, app, actor);
       const handle = async (): Promise<unknown> => asMasterDataCaller(context, () => route.handle({ input, params, runtime, requestId, delivery, context, actor, app }));
       // Issue #340 — one request that changes something is one business action, and so one
       // transaction (#363): the bill, its entry in the books, its stock movement and its audit record
@@ -206,6 +241,18 @@ export async function serveApi(request: IncomingMessage, response: ServerRespons
   });
 }
 
+/**
+ * Issue #350 — who is asking, for the limits per IP. Behind a proxy (#356) every request arrives
+ * from the proxy, so with KAROBAR_TRUSTED_PROXY=1 the address the proxy saw is used instead: the
+ * last hop it added to X-Forwarded-For, which a client cannot forge past it.
+ */
+const TRUST_PROXY = process.env.KAROBAR_TRUSTED_PROXY === '1';
+export const clientAddress = (request: Pick<IncomingMessage, 'headers' | 'socket'>, trustProxy = TRUST_PROXY): string => {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (trustProxy && typeof forwarded === 'string' && forwarded.trim() !== '') return forwarded.split(',').at(-1)!.trim();
+  return request.socket.remoteAddress ?? 'unknown';
+};
+
 const answer = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {
   const { pathname } = url;
   // Issue #349 — refused before the body is read, so a hostile page cannot even make us read it.
@@ -231,7 +278,7 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
   return handleApi(method, `${pathname}${url.search}`, read.parsed, session === undefined ? undefined : `Bearer ${session}`, {
     rawBody: read.raw,
     signature: typeof signature === 'string' ? signature : '',
-  }, requestId);
+  }, requestId, clientAddress(request));
 }
 
 export const apiServer = applyTimeouts(createServer(serveApi));

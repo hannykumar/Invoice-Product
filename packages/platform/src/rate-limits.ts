@@ -7,7 +7,8 @@
  * Buckets are hashed: the table never holds a phone number, an email or an IP address.
  *
  * ponytail: fixed windows let up to twice a limit through across a window's edge; switch to a sliding
- * window only if that is ever seen being used.
+ * window only if that is ever seen being used. Buckets are never deleted (the application may not
+ * delete, #368); prune long-idle ones from an owner's maintenance job if the table ever matters.
  */
 import { createHash } from "node:crypto";
 import type { SqlExecutor } from "./database.ts";
@@ -21,8 +22,11 @@ export interface CounterStore {
   peek(bucket: string, windowSeconds: number, now: number): Promise<Counted>;
 }
 
+/** A day's window is an Indian day: it starts at midnight IST (UTC+5:30), when "tomorrow" begins for the shop. */
+const IST_OFFSET_SECONDS = 5.5 * 60 * 60;
 const windowOf = (windowSeconds: number, now: number) => {
-  const start = Math.floor(now / 1000 / windowSeconds) * windowSeconds * 1000;
+  const offset = windowSeconds >= 24 * 60 * 60 ? IST_OFFSET_SECONDS : 0;
+  const start = (Math.floor((now / 1000 + offset) / windowSeconds) * windowSeconds - offset) * 1000;
   return { start, end: start + windowSeconds * 1000 };
 };
 
@@ -48,13 +52,15 @@ export class PostgresCounterStore implements CounterStore {
   constructor(db: SqlExecutor) { this.#db = db; }
   async hit(bucket: string, windowSeconds: number, now: number): Promise<Counted> {
     const { start, end } = windowOf(windowSeconds, now);
+    // One row per bucket: the same window counts on, a new window starts again at one.
     const { rows } = await this.#db.query(
       `INSERT INTO rate_limit_counters (bucket, window_start, window_end, count) VALUES ($1, $2, $3, 1)
-       ON CONFLICT (bucket, window_start) DO UPDATE SET count = rate_limit_counters.count + 1 RETURNING count`,
+       ON CONFLICT (bucket) DO UPDATE SET
+         count = CASE WHEN rate_limit_counters.window_start = EXCLUDED.window_start THEN rate_limit_counters.count + 1 ELSE 1 END,
+         window_start = EXCLUDED.window_start, window_end = EXCLUDED.window_end
+       RETURNING count`,
       [bucket, new Date(start).toISOString(), new Date(end).toISOString()],
     );
-    // Old windows are cleared now and then by whoever is counting; nothing else needs them.
-    if (Math.random() < 0.005) await this.#db.query("DELETE FROM rate_limit_counters WHERE window_end < now() - interval '2 days'");
     return { count: Number(rows[0]!.count), resetsAt: end };
   }
   async peek(bucket: string, windowSeconds: number, now: number): Promise<Counted> {
@@ -79,7 +85,7 @@ export class RateLimited extends Error {
   readonly limit: string;
   constructor(limit: Limit, retryAfterSeconds: number) {
     const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-    const wait = retryAfterSeconds >= 3600 * 2 ? "Please try again tomorrow." : `Please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`;
+    const wait = limit.windowSeconds >= 24 * 60 * 60 ? "Please try again tomorrow." : `Please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`;
     super(`${limit.words} ${wait}`);
     this.retryAfterSeconds = retryAfterSeconds;
     this.limit = limit.name;
@@ -99,6 +105,13 @@ export class RateLimiter {
     const { count, resetsAt } = await this.#store.hit(hashed(limit.name, key), limit.windowSeconds, now);
     if (count > limit.max) throw new RateLimited(limit, Math.max(1, Math.ceil((resetsAt - now) / 1000)));
     return count;
+  }
+
+  /** Refuses without counting when the limit is already spent: for counters only failures add to (wrong codes). */
+  async refuseIfSpent(limit: Limit, key: string): Promise<void> {
+    const now = this.#now();
+    const { count, resetsAt } = await this.#store.peek(hashed(limit.name, key), limit.windowSeconds, now);
+    if (count >= limit.max) throw new RateLimited(limit, Math.max(1, Math.ceil((resetsAt - now) / 1000)));
   }
 
   async used(limit: Limit, key: string): Promise<number> {
@@ -122,7 +135,7 @@ export const LIMITS = {
   wrongCodesPerAddress: { name: "wrong-code-address", max: 5, windowSeconds: 15 * MINUTE, words: "Too many wrong codes for this number or email." },
   wrongCodesPerIp: { name: "wrong-code-ip", max: 5, windowSeconds: 15 * MINUTE, words: "Too many wrong codes from here." },
   signedOutPerIp: { name: "public-ip", max: 60, windowSeconds: MINUTE, words: "Too many requests from here." },
-  perUser: { name: "user", max: 300, windowSeconds: MINUTE, words: "That was a lot of requests in a short time." },
+  perUser: { name: "user", max: 600, windowSeconds: MINUTE, words: "That was a lot of requests in a short time." },
 } as const satisfies Record<string, Limit>;
 
 /** Expensive work (PDFs, GST returns, e-invoice and e-way calls, reading bills, the assistant), per company per minute, by plan. */
