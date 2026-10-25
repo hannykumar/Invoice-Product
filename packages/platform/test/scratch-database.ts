@@ -23,6 +23,9 @@ export const withScratchDatabase = async <T>(
   // Held for the whole test on one connection of the owner's pool; CREATE and DROP DATABASE run on
   // another, because they cannot run inside a transaction.
   return owner.transaction(async (lock) => {
+    // Waiting for another up/down test to finish is waiting our turn, not a stuck lock: the pool's
+    // 15-second lock_timeout would otherwise fail this test whenever the other one runs long.
+    await lock.query("SET LOCAL lock_timeout = '10min'");
     await lock.query('SELECT pg_advisory_xact_lock(363, $1)', [SCRATCH_DATABASES]);
     const name = `${prefix}_${randomBytes(6).toString('hex')}`;
     await owner.query(`CREATE DATABASE ${name}`);
