@@ -78,6 +78,8 @@ does.
 | `bank_reconciliation_candidates`, `bank_reconciliation_events` (#366) | always | nothing | — |
 | `bank_reconciliation_matches` (#366) | always | `unmatched_at`, `unmatched_by`, `unmatch_reason`, once (`bank_reconciliation_unmatched_once`); a line is in one match not undone at a time (`bank_reconciliation_line_matched_once`) | `AUTO_MATCHED`/`CONFIRMED` → `UNMATCHED` |
 | `privacy_notices`, `privacy_consents`, `privacy_retention_rules`, `restore_drills` (#366) | always | nothing | — |
+| `notifications` (#39, #366) | `delivered`, `suppressed` | nothing | none |
+| `notification_delivery_events`, `bank_feed_transactions`, `bank_feed_syncs`, `eway_bill_acknowledgements` (#366) | always | nothing | — |
 | `privacy_requests` (#366) | always | `blockers`, `completed_at`, only while `requested` (`security_settled_stays_settled`) | `requested` → `blocked`, `completed` |
 | `privacy_legal_holds` (#366) | always | `active`, `released_at`, once | — |
 | `backup_records` (#366) | always | `pruned_at`, once | — |
@@ -107,10 +109,14 @@ re-creates its trigger, and name the reason in the PR.
 
 ### Not frozen yet, and why
 
+The `FROZEN` list in `immutability-migrations.ts` is the input of a migration that has already been
+applied, so it is not edited. Tables frozen later carry their trigger in their own migration and
+are listed in the table above.
+
 Append-only by their schema comments but not verified against a repository, so left to their own
 lanes: `master_versions`, `master_snapshots`, `master_merges`, `bank_statement_transactions`,
 `subscription_payment_events`, `subscription_usage_events`,
-`notification_delivery_events`, `collection_communications`, `compliance_alerts`,
+`collection_communications`, `compliance_alerts`,
 `government_calls` (freezable
 once its outcome is settled). `stock_balances` is not frozen because it is not a record: it is the
 sum of `stock_movements`, written only by the database (see [`sales-schema-v1`](./sales-schema-v1.md)).
@@ -192,6 +198,10 @@ The platform's own tenant tables now force row-level security on `app.company_id
   (#366), adding the policy `return_notes` uses. The ledger's seven tables have it since
   `…_ledger_…_row_level_security` (#366): `read()` runs each read in `tenantTransaction` and refuses
   a write with `NO_UNIT_OF_WORK` outside the action's unit of work.
+  After #366 the list holds only tables with a stated reason, each written beside it in the test:
+  sign-in tables read before the company is known, shared reference data, the unused bank-statement
+  import tables, government callbacks before they are matched to a company (#477), and the #363 pilot's
+  test-only stand-ins.
 - A seed or a script that writes tenant rows must run inside `tenantTransaction`/`unitOfWork`,
   or the policy refuses the write.
 
