@@ -21,7 +21,8 @@ import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
-import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, readLimitedBody } from './http-hardening.ts';
+import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, MAX_STORED_FILE_BODY_BYTES, readLimitedBody, STORED_FILE_ROUTE } from './http-hardening.ts';
+import { localObjectStore, MAX_STORED_FILE_BYTES } from './files-application.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
 import { asMasterDataCaller } from './master-data.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
@@ -216,6 +217,9 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
   if (!isSignedCallback(pathname) && (isCrossSiteWrite(method, request.headers) || (session !== undefined && isUnnamedWrite(method, request.headers)))) {
     return failure(403, requestId, { title: 'Nothing was saved', code: 'CROSS_SITE_REQUEST', message: 'This came from another website, so it was refused. Open Karobar itself and try again.' });
   }
+  // Issue #341 — the local file store's signed address (development and tests). The token is the
+  // whole of its authority: it names one file, one method, one content type and an expiry.
+  if (pathname === STORED_FILE_ROUTE) return storedFile(request, response, method, url, requestId);
   let read: { parsed: unknown; raw: string };
   try { read = await readBody(request, bodyLimitFor(pathname)); }
   catch (error) {
@@ -233,6 +237,22 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
     signature: typeof signature === 'string' ? signature : '',
   }, requestId);
 }
+
+const storedFile = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {
+  const local = localObjectStore();
+  if (local === null || (method !== 'PUT' && method !== 'GET')) return failure(404, requestId, { title: 'Not found', message: 'That API route does not exist. Nothing was saved.' });
+  let body: Buffer = Buffer.alloc(0);
+  if (method === 'PUT') {
+    try { body = await readLimitedBody(request, MAX_STORED_FILE_BODY_BYTES); } catch (error) {
+      if (!(error instanceof BodyTooLarge)) throw error;
+      response.setHeader('connection', 'close');
+      return failure(413, requestId, { title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: 'This file is too large to keep.' });
+    }
+  }
+  const done = await local.accept(url.searchParams.get('token') ?? '', { method, contentType: String(request.headers['content-type'] ?? ''), body, maxBytes: MAX_STORED_FILE_BYTES });
+  if (done.status !== 200) return failure(done.status, requestId, { title: 'Not allowed', message: done.status === 413 ? 'This file is too large to keep.' : 'This address has expired or does not allow this. Ask for a new one.' });
+  return withRequestId({ status: 200, headers: { 'cache-control': 'no-store', ...done.headers }, body: done.body ?? '' }, requestId);
+};
 
 export const apiServer = applyTimeouts(createServer(serveApi));
 
