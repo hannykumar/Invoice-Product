@@ -207,6 +207,8 @@ const platformMigrations: readonly Migration[] = [{
       CHECK (role IN ('owner', 'admin', 'accountant', 'staff', 'viewer', 'custom'));
     ALTER TABLE invitations ADD COLUMN role text NOT NULL DEFAULT 'custom'
       CHECK (role IN ('owner', 'admin', 'accountant', 'staff', 'viewer', 'custom'));
+    -- Who sent it: removing that person withdraws the invitations nobody has taken up yet.
+    ALTER TABLE invitations ADD COLUMN invited_by uuid;
     -- Members from before #343 keep what they could read: each gets the new read permission that
     -- goes with what they could already do, and whoever held the owner's powers is the owner. Done
     -- across every company at once, so the tenant policy is lifted for these statements only.
@@ -226,6 +228,7 @@ const platformMigrations: readonly Migration[] = [{
     ALTER TABLE memberships FORCE ROW LEVEL SECURITY;
   `,
   down: `
+    ALTER TABLE invitations DROP COLUMN IF EXISTS invited_by;
     ALTER TABLE invitations DROP COLUMN IF EXISTS role;
     ALTER TABLE memberships DROP COLUMN IF EXISTS role;
   `,

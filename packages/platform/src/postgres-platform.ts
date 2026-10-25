@@ -200,8 +200,8 @@ export class PostgresAuthenticationService {
     const token = randomUUID();
     // Only the token's hash is stored; the token itself exists once, in the reply to the person who invited.
     const { rows } = await this.#db.unitOfWork(actor.companyId, ({ sql }) => sql.query(
-      "INSERT INTO invitations (id, token_hash, company_id, branch_id, email, permissions, expires_at, role) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8) RETURNING *",
-      [randomUUID(), digest(token), actor.companyId, actor.branchId, email.toLowerCase(), JSON.stringify([...permissions]), at(this.#now() + expiresInMs), role],
+      "INSERT INTO invitations (id, token_hash, company_id, branch_id, email, permissions, expires_at, role, invited_by) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9) RETURNING *",
+      [randomUUID(), digest(token), actor.companyId, actor.branchId, email.toLowerCase(), JSON.stringify([...permissions]), at(this.#now() + expiresInMs), role, actor.actorId],
     ));
     return { invitation: toInvitation(rows[0] as Row), token };
   }
@@ -219,6 +219,11 @@ export class PostgresAuthenticationService {
       );
       if (rows[0] === undefined) throw new Error("INVALID_INVITATION");
       const accepted = toInvitation(rows[0]);
+      // Issue #343 review — an invitation never replaces the role of someone already in the business
+      // (an admin could otherwise demote the owner by inviting the owner's own address). Thrown inside
+      // the unit of work, so the invitation is not marked used either.
+      const member = await sql.query("SELECT 1 FROM memberships WHERE company_id = $1 AND user_id = $2 AND active", [accepted.companyId, userId]);
+      if (member.rows.length > 0) throw new Error("INVALID_INVITATION");
       await this.#access.grant({ userId, companyId: accepted.companyId, branchIds: new Set([accepted.branchId]), active: true, permissions: accepted.permissions, role: accepted.role ?? "custom" });
       return accepted;
     });
@@ -272,6 +277,8 @@ export class PostgresAuthenticationService {
     return this.#db.unitOfWork(companyId, async ({ sql }) => {
       await this.#access.revoke(companyId, userId);
       await sql.query("UPDATE sessions SET revoked_at = $3 WHERE company_id = $1 AND user_id = $2 AND revoked_at IS NULL", [companyId, userId, at(this.#now())]);
+      // Issue #343 review — the invitations they sent and nobody took up go with them.
+      await sql.query("UPDATE invitations SET revoked_at = $3 WHERE company_id = $1 AND invited_by = $2 AND accepted_at IS NULL AND revoked_at IS NULL", [companyId, userId, at(this.#now())]);
     });
   }
 
