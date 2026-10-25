@@ -101,7 +101,7 @@ export class PostgresInboxStore implements InboxStore {
     return (await this.#documents(companyId, "AND id = $2", [id]))[0] ?? null;
   }
 
-  documents(companyId: Id, status?: InboundStatus, page?: Page): Promise<readonly InboundDocument[]> {
+  async documents(companyId: Id, status?: InboundStatus, page?: Page): Promise<readonly InboundDocument[]> {
     const values: unknown[] = [];
     let where = "";
     if (status !== undefined) { values.push(status); where += ` AND status = $${values.length + 1}`; }
@@ -109,7 +109,7 @@ export class PostgresInboxStore implements InboxStore {
     let tail = "ORDER BY purchase_inbox_documents.received_at, id";
     if (page !== undefined) {
       if (page.after !== undefined) {
-        if (!isUuid(page.after)) return Promise.resolve([]);
+        if (!isUuid(page.after)) return [];
         values.push(page.after);
         // A cursor that names no row of this list gives nothing, as in memory.
         where += ` AND (purchase_inbox_documents.received_at, id) > (SELECT c.received_at, c.id FROM purchase_inbox_documents c WHERE c.company_id = $1 AND c.id = $${values.length + 1}::uuid)`;

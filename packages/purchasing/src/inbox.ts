@@ -331,6 +331,13 @@ export class PurchaseInboxService {
       });
       this.#record(marked, "purchase.inbox.duplicate_discarded", { duplicateOfId: earlier });
       return { document: marked, duplicate: true };
+    }).catch(async (error: unknown) => {
+      // The store's unique key refused a second copy written at the same moment (#406): the
+      // first one is the document, so answer with it.
+      const redelivered = messageKey && (error as { code?: string }).code === "INBOX_DOCUMENT_DUPLICATE"
+        ? await this.#store.documentByMessageKey(companyId, messageKey) : null;
+      if (!redelivered) throw error;
+      return this.#withDraft(redelivered);
     });
     this.#release(document.id);
     if (outcome) return outcome;
