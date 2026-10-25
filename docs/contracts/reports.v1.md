@@ -1,4 +1,4 @@
-# Contract: `reports` v1.0.0
+# Contract: `reports` v1.1.0
 
 | | |
 | --- | --- |
@@ -63,6 +63,12 @@ may have none. Asking for "the Karol Bagh shop" must not silently include the se
 Each returns a `Report<T>` — a header (company, filter, when it was built, the snapshot id) and a
 body. The header is what an export carries, so a printed page always says what it was filtered to.
 
+## Damaged stock is shown on its own line (1.1.0, #292)
+
+Each `StockRow` carries `sellable`. A row for a damaged / not-for-sale location has
+`sellable: false` and `available` of zero: it is still counted in `closing` and valued in
+`value`, but nothing in it can be sold.
+
 ## Drill-down
 
 ```ts
@@ -117,6 +123,11 @@ was produced, the snapshot id — then the rows. A snapshot id is
 deterministic — the report id, the filter and the as-at instant, folded together — so asking twice
 for the same period as at the same instant produces the same id and the same bytes. Retrying an export
 therefore cannot produce a second, subtly different document.
+
+**No cell runs as a formula (v1.1.0, issue #394).** In a CSV, any cell — heading, header line or
+row — that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written with a leading `'`,
+so a spreadsheet shows it as text. A plain number such as `-1250.00` is left as it is.
+`neutraliseSpreadsheetCell` in `@invoice/kernel` is the one rule; JSON is unchanged.
 
 ## Permissions
 

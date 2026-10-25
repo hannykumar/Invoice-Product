@@ -19,7 +19,7 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",
   "notification.send", "collections.manage", "collections.send",
   "bank.balance.read", "bank.feed.manage", "bank.feed.sync",
-  "sales.approve_discount",
+  "sales.approve_discount", "sales.override_credit_limit",
   "reports.view.financial", "reports.view.sales", "reports.view.purchase", "reports.view.stock",
   "reports.view.dues", "reports.view.gst", "reports.view.exceptions", "reports.export",
   "collections.reminders.view", "collections.reminders.send", "collections.promise.record", "collections.dispute.manage",
@@ -48,6 +48,8 @@ export const SYNTHETIC_PLATFORM_COMPANIES = [
 
 /** Read-only: the dashboard and nothing that changes anything. */
 export const VIEWER_PERMISSIONS: readonly Permission[] = ["dashboard.read"];
+/** Issue #301 — someone at the counter: makes and issues bills, takes money, but approves nothing. */
+export const COUNTER_PERMISSIONS: readonly Permission[] = ["dashboard.read", "sales.draft.write", "sales.finalise", "inventory.move", "payments.record"];
 /** The books, bills and returns, but not who may sign in, the plan, or the shop's own particulars. */
 export const ACCOUNTANT_PERMISSIONS: readonly Permission[] = PRODUCT_OWNER_PERMISSIONS.filter((permission) => ![
   "access.review", "subscription.manage", "business.settings.write", "branding.write", "payments.upi.write",
@@ -62,6 +64,7 @@ export const SYNTHETIC_PLATFORM_USERS = [
   ...SYNTHETIC_PLATFORM_COMPANIES.map((company) => ({ companyId: company.companyId, branchId: company.branchId, userId: company.userId, email: company.email, displayName: company.displayName, role: "owner" as const, permissions: PRODUCT_OWNER_PERMISSIONS })),
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000005", email: "accounts@sampoorna.example.invalid", displayName: "Sampoorna Accountant", role: "accountant" as const, permissions: ACCOUNTANT_PERMISSIONS },
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000004", email: "viewer@sampoorna.example.invalid", displayName: "Sampoorna Viewer", role: "viewer" as const, permissions: VIEWER_PERMISSIONS },
+  { companyId: SYNTHETIC_PLATFORM_COMPANIES[0].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[0].branchId, userId: "00000000-0000-4000-8000-000000000007", email: "counter@sampoorna.example.invalid", displayName: "Sampoorna Counter", role: "counter" as const, permissions: COUNTER_PERMISSIONS },
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[1].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[1].branchId, userId: "00000000-0000-4000-8000-000000000015", email: "accounts@konkan.example.invalid", displayName: "Konkan Accountant", role: "accountant" as const, permissions: ACCOUNTANT_PERMISSIONS },
   { companyId: SYNTHETIC_PLATFORM_COMPANIES[1].companyId, branchId: SYNTHETIC_PLATFORM_COMPANIES[1].branchId, userId: "00000000-0000-4000-8000-000000000014", email: "viewer@konkan.example.invalid", displayName: "Konkan Viewer", role: "viewer" as const, permissions: VIEWER_PERMISSIONS },
   // Issue #342 — a chartered accountant who looks after both businesses: one person, two memberships,

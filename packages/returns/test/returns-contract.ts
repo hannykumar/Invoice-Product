@@ -67,6 +67,19 @@ export function returnsContract(label: string, harness: () => ReturnsHarness, sk
     assert.equal((await repo.findById(scene.companyId, saved.id))?.lines[1]?.itemId, 'charge:freight');
   });
 
+  test(`${label}: #293 — a price-correction credit note and a sales debit note round-trip with their mark`, { skip }, async () => {
+    const { scene, insert, repo } = await setup();
+    const priced = (line: ReturnNoteLine): ReturnNoteLine => ({ ...line, disposition: 'ACCEPTED', warehouseId: null, serialNumbers: [] });
+    const base = note(scene);
+    const credit = note(scene, { priceCorrection: true, lines: [priced(base.lines[0]!)] });
+    const debit = note(scene, { kind: 'SALES_DEBIT_NOTE', number: 'DN/26-27/0000009', priceCorrection: true, lines: [priced(base.lines[0]!)] });
+    await insert(credit);
+    await insert(debit);
+    assert.deepEqual(await repo.findById(scene.companyId, credit.id), credit);
+    assert.deepEqual(await repo.findById(scene.companyId, debit.id), debit);
+    assert.equal((await repo.findById(scene.companyId, debit.id))?.kind, 'SALES_DEBIT_NOTE');
+  });
+
   test(`${label}: "not found" is null for a read and RETURN_NOTE_NOT_FOUND for a change`, { skip }, async () => {
     const { h, scene, repo } = await setup();
     const missing = crypto.randomUUID();

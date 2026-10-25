@@ -37,6 +37,11 @@ export interface ApprovedPurchaseLine {
   readonly gstRateBasisPoints: number;
   readonly cessRateBasisPoints?: number;
   readonly itcEligibility: ItcEligibility;
+  /**
+   * Issue #289, part 3 — when `itcEligibility` is `INELIGIBLE` because CGST s.17(5) blocks the
+   * credit, the clause that does ("17(5)(b)"). See `blocked-credit.ts`.
+   */
+  readonly blockedCreditClause?: string;
   /** `GOODS` lines receive stock; `SERVICES` lines are an expense and receive none. */
   readonly supplyKind: "GOODS" | "SERVICES";
   /** Where the goods landed. Required for a goods line; never set on a service line. */
@@ -90,6 +95,11 @@ export interface PurchaseTaxSummary {
   readonly cessPaise: Paise;
   /** Tax charged that cannot be claimed, and so was added to the cost of the goods. */
   readonly ineligibleItcPaise: Paise;
+  /**
+   * Issue #289, part 3 — the same blocked tax by head, for GSTR-3B Table 4(B)(1). Absent on bills
+   * posted before it was kept; they had none.
+   */
+  readonly ineligibleHeads?: { readonly cgstPaise: Paise; readonly sgstPaise: Paise; readonly igstPaise: Paise; readonly cessPaise: Paise };
   readonly intraState: boolean;
   readonly reverseCharge: boolean;
   /** Which rule decided the split, copied from the verdict so the decision stays explainable. */
@@ -125,6 +135,8 @@ export interface PurchaseBillLineSnapshot {
   readonly igstPaise: Paise;
   readonly cessPaise: Paise;
   readonly ineligibleItcPaise: Paise;
+  /** Issue #289, part 3 — the s.17(5) clause that blocked this line's credit, if any. */
+  readonly blockedCreditClause?: string;
   /** The share of the supplier's printed total, including allocated bill rounding. */
   readonly supplierValuePaise: Paise;
 }

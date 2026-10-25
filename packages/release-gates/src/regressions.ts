@@ -68,4 +68,13 @@ export const REGRESSION_REGISTER: readonly RegressionEntry[] = [
     guardedBy: 'packages/reports/test/reports.test.ts',
     fixedOn: '2026-08-29',
   },
+  {
+    foundIn: '#299',
+    defect:
+      'The demo seed parked the owner\'s opening stock cost in the opening-balance-difference account and left it there, so the trial balance showed a ₹1,400 suspense balance nobody had decided.',
+    consequence:
+      'A suspense balance is a figure that owes an explanation; a demo books that carries one teaches owners to accept unexplained differences, and understates the capital the owner actually put in.',
+    guardedBy: 'apps/api/test/seed-books.test.ts',
+    fixedOn: '2026-10-23',
+  },
 ];

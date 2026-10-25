@@ -12,8 +12,8 @@
  *  - refusing to finish the four dangerous classes at all.
  */
 import { conflict, forbidden, invalid, notAllowed, notFound, type Clock, type IsoDate } from '@invoice/kernel';
-import type { ActorContext, PermissionPort } from '@invoice/ledger';
-import type { PlatformCommandService, RequestContext } from '../../platform/src/index.ts';
+import type { ActorContext, AuditPort, PermissionPort } from '@invoice/ledger';
+import type { CommandRecord, CommandStatus, RequestContext } from '../../platform/src/index.ts';
 import { fingerprintOf } from './fingerprint.ts';
 import {
   AGENT_PERMISSIONS,
@@ -36,9 +36,26 @@ import { looksLikeAnInstruction } from '../../assistant/src/language.ts';
 
 export const AGENT_ACTION = 'agent.run';
 
+/**
+ * Issue #404 — GPT 2's command lifecycle as the agent uses it: the in-memory
+ * `PlatformCommandService` or, on PostgreSQL, `PostgresCommandService` (#364), which returns
+ * promises and keeps the command records with every other command of the company.
+ */
+export interface AgentCommandPort {
+  create(context: RequestContext, input: Omit<CommandRecord, 'id' | 'companyId' | 'branchId' | 'actorId' | 'status' | 'createdAt'>): CommandRecord | Promise<CommandRecord>;
+  get(context: RequestContext, id: string): CommandRecord | Promise<CommandRecord>;
+  transition(context: RequestContext, id: string, next: CommandStatus, reason?: string): CommandRecord | Promise<CommandRecord>;
+}
+
 export interface ActionAgentDeps {
   readonly registry: ToolRegistry;
-  readonly commands: PlatformCommandService;
+  readonly commands: AgentCommandPort;
+  /**
+   * Issue #404 — the company's own audit trail, the one the owner and their CA read. What the
+   * assistant was asked, what it showed, who approved which fingerprint and what each step did sit
+   * there beside the reminders and bills those steps caused, never in a log of the agent's own.
+   */
+  readonly audit: AuditPort;
   readonly contextFor: (actor: ActorContext) => RequestContext;
   readonly parties: PartyDirectoryPort;
   readonly store: AgentPlanStore;
@@ -48,6 +65,18 @@ export interface ActionAgentDeps {
   /** How long any one tool may take before the step is failed and the rest carries on. */
   readonly toolDeadlineMs?: number;
 }
+
+/** What each line on the company's trail says, in words the owner and their CA can read. */
+const TRAIL_SUMMARY = {
+  'agent.requested': 'Asked the assistant to do something. Nothing was changed.',
+  'agent.previewed': 'The assistant showed exactly what it would do. Nothing was changed.',
+  'agent.approved': 'Approved the list the assistant showed.',
+  'agent.rejected': 'Refused the list the assistant showed.',
+  'agent.refused_changed': 'The assistant stopped: the books changed after the list was approved.',
+  'agent.step_done': 'The assistant did one approved step.',
+  'agent.step_failed': 'One approved step could not be done.',
+  'agent.reported': 'The assistant finished and reported what it did.',
+} as const;
 
 const bilingual = (en: string, hi: string): Bilingual => ({ 'en-IN': en, 'hi-IN': hi });
 
@@ -63,7 +92,8 @@ const dedupe = (refusals: readonly Refusal[]): readonly Refusal[] => {
 
 export class ActionAgentService {
   readonly #registry: ToolRegistry;
-  readonly #commands: PlatformCommandService;
+  readonly #commands: AgentCommandPort;
+  readonly #audit: AuditPort;
   readonly #contextFor: (actor: ActorContext) => RequestContext;
   readonly #parties: PartyDirectoryPort;
   readonly #store: AgentPlanStore;
@@ -75,6 +105,7 @@ export class ActionAgentService {
   constructor(deps: ActionAgentDeps) {
     this.#registry = deps.registry;
     this.#commands = deps.commands;
+    this.#audit = deps.audit;
     this.#contextFor = deps.contextFor;
     this.#parties = deps.parties;
     this.#store = deps.store;
@@ -134,7 +165,7 @@ export class ActionAgentService {
       requestedAt: at,
     };
     await this.#store.put(plan);
-    this.#record(actor, plan.id, 'agent.requested', {
+    await this.#record(actor, plan, 'agent.requested', {
       intent: plan.intent,
       confidence: String(understood.confidence),
       // The words that matched, not the request: an audit trail records what was asked of the
@@ -165,7 +196,7 @@ export class ActionAgentService {
     // the action, the risk and the amount — and none of those are known until the request has been
     // expanded against the books. A plan that only reads is genuinely low risk, and saying so is
     // what lets it run without troubling anybody for an approval.
-    const command = this.#commands.create(this.#contextFor(actor), {
+    const command = await this.#commands.create(this.#contextFor(actor), {
       action: AGENT_ACTION,
       risk: this.#riskOf(steps),
       idempotencyKey: `agent:${plan.id}`,
@@ -187,9 +218,9 @@ export class ActionAgentService {
     };
     await this.#store.put(next);
     if (needsApproval && command.status === 'draft') {
-      this.#commands.transition(this.#contextFor(actor), command.id, 'submitted', 'The assistant showed the person what it would do.');
+      await this.#commands.transition(this.#contextFor(actor), command.id, 'submitted', 'The assistant showed the person what it would do.');
     }
-    this.#record(actor, plan.id, 'agent.previewed', {
+    await this.#record(actor, next, 'agent.previewed', {
       steps: String(steps.length),
       writes: String(steps.filter((step) => step.kind === 'WRITE').length),
       fingerprint: next.fingerprint ?? '',
@@ -210,10 +241,10 @@ export class ActionAgentService {
     if (!plan.needsApproval) {
       throw notAllowed('AGENT_NOTHING_TO_APPROVE', 'Nothing here changes anything, so there is nothing to approve.');
     }
-    this.#commands.transition(this.#contextFor(actor), plan.commandId as string, 'approved', 'Approved by the person who asked.');
+    await this.#commands.transition(this.#contextFor(actor), plan.commandId as string, 'approved', 'Approved by the person who asked.');
     const next: AgentPlan = { ...plan, state: 'APPROVED' };
     await this.#store.put(next);
-    this.#record(actor, plan.id, 'agent.approved', { fingerprint });
+    await this.#record(actor, plan, 'agent.approved', { fingerprint });
     return next;
   }
 
@@ -221,10 +252,10 @@ export class ActionAgentService {
     this.#permissions.require(actor, AGENT_PERMISSIONS.approve, 'refuse what the assistant would do');
     const plan = await this.#require(actor, planId);
     if (plan.commandId === null) throw notAllowed('AGENT_NOT_PREVIEWED', 'There is nothing here to refuse yet.');
-    this.#commands.transition(this.#contextFor(actor), plan.commandId, 'rejected', reason);
+    await this.#commands.transition(this.#contextFor(actor), plan.commandId, 'rejected', reason);
     const next: AgentPlan = { ...plan, state: 'REJECTED' };
     await this.#store.put(next);
-    this.#record(actor, plan.id, 'agent.rejected', { reason });
+    await this.#record(actor, plan, 'agent.rejected', { reason });
     return next;
   }
 
@@ -265,7 +296,7 @@ export class ActionAgentService {
     if (current !== plan.fingerprint) {
       // Something moved between the approval and now — a bill paid, a dispute raised, a customer
       // who asked to be left alone. Nobody agreed to the new list, so nobody gets it.
-      this.#record(actor, plan.id, 'agent.refused_changed', { approved: plan.fingerprint ?? '', now: current });
+      await this.#record(actor, plan, 'agent.refused_changed', { approved: plan.fingerprint ?? '', now: current });
       throw conflict(
         'AGENT_PLAN_CHANGED',
         'Your books changed since you approved this, so what you agreed to is no longer what would happen. Have another look and I will do the new version.',
@@ -284,6 +315,7 @@ export class ActionAgentService {
         ), false));
         continue;
       }
+      let wrote = false;
       try {
         const tool = this.#registry.requirePermitted(actor, step.tool);
         if (tool.kind === 'READ') {
@@ -296,14 +328,14 @@ export class ActionAgentService {
         }
         if (tool.executability === 'PREPARE_ONLY') {
           // Prepared, and left where a person must finish it. The agent never moves it further.
-          const prepared = this.#commands.create(this.#contextFor(actor), {
+          const prepared = await this.#commands.create(this.#contextFor(actor), {
             action: step.tool,
             risk: 'high',
             idempotencyKey: `agent-prepared:${plan.id}:${step.stepId}`,
             payload: { ...step.input, preparedByAgent: true, planId: plan.id },
             ...(step.amount === null ? {} : { amountPaise: step.amount.minor }),
           });
-          this.#commands.transition(this.#contextFor(actor), prepared.id, 'submitted', 'Prepared by the assistant; a person must finish it.');
+          await this.#commands.transition(this.#contextFor(actor), prepared.id, 'submitted', 'Prepared by the assistant; a person must finish it.');
           outcomes.push(this.#outcome(step, 'PREPARED', {
             statement: bilingual(
               `Prepared and waiting for you: ${step.describe['en-IN']}`,
@@ -316,13 +348,16 @@ export class ActionAgentService {
         const parsed = tool.parse(step.input as never);
         const output = await this.#withDeadline(tool.run(actor, parsed, this.#deadlineMs), step.tool);
         outcomes.push(this.#outcome(step, 'DONE', tool.evidence(parsed, output as never), null, false));
-        this.#record(actor, plan.id, 'agent.step_done', { tool: step.tool, step: step.stepId, party: step.party ?? '' });
+        wrote = true;
       } catch (error) {
         stopped.add(step.stepId);
         const message = error instanceof Error ? error.message : 'This could not be completed.';
         outcomes.push(this.#outcome(step, 'FAILED', null, bilingual(message, message), true));
-        this.#record(actor, plan.id, 'agent.step_failed', { tool: step.tool, step: step.stepId, why: message });
+        await this.#record(actor, plan, 'agent.step_failed', { tool: step.tool, step: step.stepId, why: message });
       }
+      // Outside the try: a trail that fails to save must not turn a step that happened into one that
+      // looks retryable, or a reminder could go twice.
+      if (wrote) await this.#record(actor, plan, 'agent.step_done', { tool: step.tool, step: step.stepId, party: step.party ?? '' });
     }
 
     const failed = outcomes.filter((outcome) => outcome.state === 'FAILED');
@@ -358,8 +393,8 @@ export class ActionAgentService {
 
     await this.#store.putReport(actor.companyId, `${planId}:${input.idempotencyKey}`, report);
     await this.#store.put({ ...plan, state: 'EXECUTED' });
-    this.#finish(actor, plan.commandId, state === 'NOTHING_DONE' && failed.length > 0 ? 'failed' : 'finalised', report.summary['en-IN']);
-    this.#record(actor, plan.id, 'agent.reported', { state, done: String(did.length), failed: String(failed.length) });
+    await this.#finish(actor, plan.commandId, state === 'NOTHING_DONE' && failed.length > 0 ? 'failed' : 'finalised', report.summary['en-IN']);
+    await this.#record(actor, plan, 'agent.reported', { state, done: String(did.length), failed: String(failed.length) });
     return report;
   }
 
@@ -432,17 +467,17 @@ export class ActionAgentService {
    * rather than being allowed to skip them: the record of what happened should look the same
    * whether or not a person had to be asked.
    */
-  #finish(actor: ActorContext, commandId: string, ending: 'finalised' | 'failed', reason: string): void {
+  async #finish(actor: ActorContext, commandId: string, ending: 'finalised' | 'failed', reason: string): Promise<void> {
     const context = this.#contextFor(actor);
-    let status = this.#commands.get(context, commandId).status;
+    let status = (await this.#commands.get(context, commandId)).status;
     if (status === 'draft') {
-      this.#commands.transition(context, commandId, 'submitted', 'Nothing here changes anything.');
+      await this.#commands.transition(context, commandId, 'submitted', 'Nothing here changes anything.');
       status = 'submitted';
     }
     if (status === 'submitted') {
-      this.#commands.transition(context, commandId, 'approved', 'Nothing here changes anything, so no approval was needed.');
+      await this.#commands.transition(context, commandId, 'approved', 'Nothing here changes anything, so no approval was needed.');
     }
-    this.#commands.transition(context, commandId, ending, reason);
+    await this.#commands.transition(context, commandId, ending, reason);
   }
 
   #outcome(step: PlannedStep, state: StepOutcome['state'], evidence: ToolEvidence | null, failure: Bilingual | null, retryable: boolean): StepOutcome {
@@ -467,14 +502,21 @@ export class ActionAgentService {
     }
   }
 
-  #record(actor: ActorContext, correlationId: string, action: string, details: Readonly<Record<string, string>>): void {
-    this.#commands.audit.append({
+  /**
+   * Issue #404 — one line on the company's own trail. The actor is the person who asked, approved
+   * or ran it, never the assistant, and the plan id is the subject, so the line sits under the same
+   * id as the plan; once the plan has its platform command, that command's id travels with it.
+   */
+  async #record(actor: ActorContext, plan: Pick<AgentPlan, 'id' | 'commandId'>, action: keyof typeof TRAIL_SUMMARY, details: Readonly<Record<string, string>>): Promise<void> {
+    await this.#audit.record({
       companyId: actor.companyId,
       actorId: actor.userId,
+      at: this.#clock.now().toISOString(),
       action,
-      correlationId,
-      before: null,
-      after: { ...details },
+      subjectType: 'agent_plan',
+      subjectId: plan.id,
+      summary: TRAIL_SUMMARY[action],
+      details: { ...details, ...(plan.commandId === null ? {} : { commandId: plan.commandId }) },
     });
   }
 

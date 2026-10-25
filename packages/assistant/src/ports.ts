@@ -14,6 +14,7 @@
  *    name an intent this package already has; it can never supply a figure, a period or a company.
  */
 import type { CompanyId, IsoDate } from '@invoice/kernel';
+import type { ActorContext } from '@invoice/ledger';
 import type { Intent } from './model.ts';
 
 export interface UnderstandingSuggestion {
@@ -61,9 +62,14 @@ export interface BlockedDocument {
   readonly reasons: readonly BlockingReason[];
 }
 
-/** Whoever knows why a document is stuck. Sales (#9), inventory (#12) and credit control (#11). */
+/**
+ * Whoever knows why a document is stuck. Sales (#9), inventory (#12) and credit control (#11).
+ *
+ * Issue #397 — given the person who asked, never a company id alone: every read behind the answer
+ * (the bill, the stock) runs as them, not as a setup or service identity.
+ */
 export interface BlockedDocumentPort {
-  find(companyId: CompanyId, reference: string): Promise<BlockedDocument | null>;
+  find(actor: ActorContext, reference: string): Promise<BlockedDocument | null>;
 }
 
 /** GPT 3's issue #32. Absent until it lands, and the answer says so. */

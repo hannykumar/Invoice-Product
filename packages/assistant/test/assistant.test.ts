@@ -14,7 +14,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isoDate, sum } from '@invoice/kernel';
 import { reconciles } from '@invoice/reports';
-import { makeBusiness, monthFilterFor, OTHER } from './fixture-helpers.ts';
+import { aBusyMonth, makeBusiness, monthFilterFor, OTHER } from './fixture-helpers.ts';
+import type { BlockedDocument } from '../src/ports.ts';
 import { ASSISTANT_PERMISSIONS, RecordingExceptionQueue, ScriptedUnderstanding, StubBlockedDocuments, TODAY, buildAssistant } from './harness.ts';
 
 const ask = async (question: string, options: Parameters<typeof buildAssistant>[0] = {}) => {
@@ -220,23 +221,22 @@ describe('compliance answers name their source, date and certainty', () => {
 });
 
 describe('why a bill is blocked', () => {
-  const blocked = new StubBlockedDocuments([
-    {
-      documentId: 'inv-1042',
-      number: 'INV-1042',
-      kind: 'SALES_INVOICE',
-      date: isoDate('2026-04-20'),
-      partyName: 'Gurugram Fresh',
-      reasons: [
-        {
-          code: 'STOCK_SHORTFALL',
-          what: { 'en-IN': 'You are 6 boxes short: the bill needs 30 and 24 are free at the Karol Bagh shop.', 'hi-IN': 'Aapke paas 6 box kam hain: bill ko 30 chahiye aur Karol Bagh par 24 khaali hain.' },
-          nextStep: { 'en-IN': 'Bring 6 boxes from the Narela godown, or reduce the bill to 24.', 'hi-IN': 'Narela godown se 6 box laayein, ya bill 24 ka karein.' },
-          action: 'inventory:transfer',
-        },
-      ],
-    },
-  ]);
+  const blockedBill = {
+    documentId: 'inv-1042',
+    number: 'INV-1042',
+    kind: 'SALES_INVOICE',
+    date: isoDate('2026-04-20'),
+    partyName: 'Gurugram Fresh',
+    reasons: [
+      {
+        code: 'STOCK_SHORTFALL',
+        what: { 'en-IN': 'You are 6 boxes short: the bill needs 30 and 24 are free at the Karol Bagh shop.', 'hi-IN': 'Aapke paas 6 box kam hain: bill ko 30 chahiye aur Karol Bagh par 24 khaali hain.' },
+        nextStep: { 'en-IN': 'Bring 6 boxes from the Narela godown, or reduce the bill to 24.', 'hi-IN': 'Narela godown se 6 box laayein, ya bill 24 ka karein.' },
+        action: 'inventory:transfer',
+      },
+    ],
+  } satisfies BlockedDocument;
+  const blocked = new StubBlockedDocuments([blockedBill]);
 
   it('gives the shortage, the rule and the next safe action', async () => {
     const harness = await buildAssistant({ blocked });
@@ -261,6 +261,122 @@ describe('why a bill is blocked', () => {
     const answer = await harness.assistant.ask(harness.actor, { question: 'why is INV-9999 blocked?', today: TODAY });
     assert.equal(answer.state, 'CANNOT_ANSWER');
     assert.match(answer.sentences[0]?.['en-IN'] ?? '', /could not find INV-9999/);
+  });
+
+  // Issue #397 — the answer names the bill, its customer and which items are short and by how much.
+  // Someone who may ask questions but not see bills or stock is told so, and nothing is looked up.
+  const refusedFor = async (permissions: readonly string[], question: string) => {
+    const stub = new StubBlockedDocuments([blockedBill]);
+    const harness = await buildAssistant({ blocked: stub, permissions });
+    const answer = await harness.assistant.ask(harness.actor, { question, today: TODAY });
+    return { stub, answer };
+  };
+
+  it('refuses a person who holds only assistant.ask, without saying anything about the bill', async () => {
+    const { stub, answer } = await refusedFor(['assistant.ask'], 'why is INV-1042 blocked?');
+    assert.equal(answer.intent, 'WHY_BLOCKED');
+    assert.equal(answer.state, 'NEEDS_PERMISSION');
+    assert.deepEqual(answer.sentences.map((sentence) => sentence['en-IN']), [
+      'You do not have access to that bill. Ask the owner if you need to see bills and stock.',
+    ]);
+    const said = JSON.stringify(answer);
+    assert.doesNotMatch(said, /Gurugram Fresh|6 boxes short|Narela|held up by/);
+    assert.deepEqual(answer.nextSteps, []);
+    assert.equal(stub.askedBy.length, 0, 'the bill and its stock are not even read');
+  });
+
+  it('gives the same refusal for a bill that does not exist, so nobody can probe for numbers', async () => {
+    const real = await refusedFor(['assistant.ask'], 'why is INV-1042 blocked?');
+    const missing = await refusedFor(['assistant.ask'], 'why is INV-9999 blocked?');
+    assert.deepEqual(missing.answer.sentences, real.answer.sentences);
+    assert.equal(missing.answer.state, real.answer.state);
+  });
+
+  it('refuses someone who may see bills but not stock, and someone who may see stock but not bills', async () => {
+    for (const permissions of [['assistant.ask', 'reports.view.sales'], ['assistant.ask', 'reports.view.stock']]) {
+      const { stub, answer } = await refusedFor(permissions, 'why is INV-1042 blocked?');
+      assert.equal(answer.state, 'NEEDS_PERMISSION', permissions.join(', '));
+      assert.doesNotMatch(JSON.stringify(answer), /6 boxes short|Gurugram Fresh/);
+      assert.equal(stub.askedBy.length, 0);
+    }
+  });
+
+  it('looks the bill up as the person who asked', async () => {
+    const { stub, answer } = await refusedFor(['assistant.ask', 'reports.view.sales', 'reports.view.stock'], 'why is INV-1042 blocked?');
+    assert.equal(answer.state, 'NEEDS_A_PERSON');
+    assert.equal(stub.askedBy.length, 1);
+    assert.deepEqual(stub.askedBy[0]?.permissions, ['assistant.ask', 'reports.view.sales', 'reports.view.stock']);
+  });
+});
+
+describe('names in the books are data, not the assistant\'s own wording', () => {
+  // Issue #405 (threat model A4): anyone who can add a party or an item chooses its name. A name
+  // that happens to contain "guaranteed" or "you must" must never stop an answer that quotes it.
+  const renamed = <T>(reports: T, method: string, rename: (row: Record<string, unknown>) => Record<string, unknown>): T =>
+    new Proxy(reports as object, {
+      get(target, property) {
+        const value: unknown = Reflect.get(target, property, target);
+        if (typeof value !== 'function') return value;
+        if (property !== method) return value.bind(target);
+        return async (...args: unknown[]) => {
+          const report = (await value.apply(target, args)) as { body: { rows: Record<string, unknown>[] } };
+          return { ...report, body: { ...report.body, rows: report.body.rows.map(rename) } };
+        };
+      },
+    }) as T;
+
+  it('names a customer called "Guaranteed Traders" as the one waiting longest', async () => {
+    const business = await aBusyMonth();
+    const reports = renamed(business.reports, 'receivablesAgeing', (row) => ({ ...row, partyName: 'Guaranteed Traders', oldestDaysOverdue: 12 }));
+    const harness = await buildAssistant({ business: { ...business, reports } });
+    const answer = await harness.assistant.ask(harness.actor, { question: 'who owes me money?', today: TODAY });
+
+    assert.equal(answer.state, 'ANSWERED');
+    assert.ok(answer.sentences.some((sentence) => /waiting longest is Guaranteed Traders/.test(sentence['en-IN'])));
+    assert.ok(answer.sentences.some((sentence) => /Guaranteed Traders ka hai/.test(sentence['hi-IN'])));
+  });
+
+  it('names an item called "Definitely Fresh Atta" kept at a godown called "You Must Visit"', async () => {
+    const business = await aBusyMonth();
+    const reports = renamed(business.reports, 'stock', (row) =>
+      row['itemName'] === 'Apple box, 10 kg' ? { ...row, itemName: 'Definitely Fresh Atta', warehouseName: 'You Must Visit' } : row,
+    );
+    const harness = await buildAssistant({ business: { ...business, reports } });
+    const answer = await harness.assistant.ask(harness.actor, { question: 'how much stock of Definitely Fresh Atta?', today: TODAY });
+
+    assert.equal(answer.state, 'ANSWERED');
+    assert.ok(answer.sentences.some((sentence) => /^Definitely Fresh Atta at You Must Visit:/.test(sentence['en-IN'])));
+  });
+
+  it('repeats an item name from the question when it is not in the godown', async () => {
+    const { answer } = await ask('how much stock of Guaranteed Pure Ghee?');
+    assert.equal(answer.state, 'CANNOT_ANSWER');
+    assert.match(answer.sentences[0]?.['en-IN'] ?? '', /could not find an item called "Guaranteed Pure Ghee"/);
+  });
+
+  it('names a blocked bill\'s customer called "Guaranteed Traders"', async () => {
+    const blocked = new StubBlockedDocuments([
+      {
+        documentId: 'inv-2001',
+        number: 'INV-2001',
+        kind: 'SALES_INVOICE',
+        date: isoDate('2026-04-20'),
+        partyName: 'Guaranteed Traders',
+        reasons: [
+          {
+            code: 'CREDIT_LIMIT',
+            what: { 'en-IN': 'This customer is over their credit limit.', 'hi-IN': 'Yeh customer apni udhaar seema se upar hai.' },
+            nextStep: { 'en-IN': 'Take a payment first.', 'hi-IN': 'Pehle payment lein.' },
+            action: null,
+          },
+        ],
+      },
+    ]);
+    const harness = await buildAssistant({ blocked });
+    const answer = await harness.assistant.ask(harness.actor, { question: 'why is INV-2001 blocked?', today: TODAY });
+
+    assert.equal(answer.state, 'NEEDS_A_PERSON');
+    assert.match(answer.sentences[0]?.['en-IN'] ?? '', /INV-2001 for Guaranteed Traders is held up by 1 thing/);
   });
 });
 

@@ -316,3 +316,18 @@ test('#342: the demo sign-in on a database is announced loudly at every start', 
   } finally { stop(); }
   assert.ok(lines.some((line) => /"level":"warn"/.test(line) && /anyone can sign in with the demo code/.test(line)), lines.join('\n'));
 });
+
+test('#342: every process that starts the runtime (API, web server, worker) refuses a database with no NODE_ENV', async () => {
+  const { ApiRuntime } = await import('../src/runtime.ts');
+  const saved = { env: process.env.NODE_ENV, url: process.env.DATABASE_URL };
+  delete process.env.NODE_ENV;
+  process.env.DATABASE_URL = 'postgresql://invoice:invoice@localhost:5432/invoice';
+  try {
+    const db = { query: async () => ({ rows: [] }) } as unknown as import('../../../packages/platform/src/database.ts').TransactionalExecutor;
+    // apps/api/src/server.ts, apps/web/server.ts and apps/api/src/worker.ts all start through startRuntime → new ApiRuntime(persistence).
+    assert.throws(() => new ApiRuntime({ kind: 'postgres', db }), /NODE_ENV is not set, but a database is/);
+  } finally {
+    if (saved.env === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved.env;
+    if (saved.url === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = saved.url;
+  }
+});

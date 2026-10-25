@@ -25,12 +25,15 @@ export const TODAY = isoDate('2026-04-30');
 /** A blocked bill, described by whoever blocked it. Sales (#9) will implement this port for real. */
 export class StubBlockedDocuments implements BlockedDocumentPort {
   readonly #documents: BlockedDocument[];
+  /** Who each lookup ran as, so a test can prove it was the asker (issue #397). */
+  readonly askedBy: ActorContext[] = [];
 
   constructor(documents: readonly BlockedDocument[]) {
     this.#documents = [...documents];
   }
 
-  async find(_companyId: CompanyId, reference: string): Promise<BlockedDocument | null> {
+  async find(actor: ActorContext, reference: string): Promise<BlockedDocument | null> {
+    this.askedBy.push(actor);
     return (
       this.#documents.find(
         (document) => document.number?.toUpperCase() === reference.toUpperCase() || document.documentId === reference,

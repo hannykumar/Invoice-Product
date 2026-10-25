@@ -97,7 +97,7 @@ for (const request of ['Stop reminding Bombay Traders', 'Stop sending reminders'
 }
 
 heading('7. The trail it left');
-for (const event of desk.audit.forCompany(desk.contextFor(desk.actor))) {
-  console.log(`  ${event.action.padEnd(24)} ${JSON.stringify(event.after ?? {}).slice(0, 96)}`);
+for (const event of desk.audit.events.filter((line) => line.companyId === desk.actor.companyId)) {
+  console.log(`  ${event.action.padEnd(24)} ${JSON.stringify(event.details).slice(0, 96)}`);
 }
 console.log('');

@@ -102,7 +102,7 @@ test('#288: part paid by UPI into the bank — the rest is owed, and the UPI lin
   assert.equal((await request('POST', '/api/branding/upi', { upiId: 'sampoorna@okicici' }, session)).status, 200);
   const before = await books(session);
   const sold = await request('POST', '/api/sales/record', {
-    party: 'ABC Traders', item: SOAP, quantity: '3', rate: '40', date: DATE, terms: '7', paidBy: 'UPI', paidAmount: '100', requestId: 'counter-288-upi-part',
+    party: 'ABC Traders', item: SOAP, quantity: '3', rate: '40', date: DATE, terms: '7', paidBy: 'UPI', paidAmount: '100', requestId: 'counter-288-upi-part', approvalReason: 'Agreed with the owner',
   }, session);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   assert.equal(sold.body.due, 26);
@@ -117,7 +117,7 @@ test('#288: part paid by UPI into the bank — the rest is owed, and the UPI lin
 test('#288: "within 7 days" keeps today\'s behaviour — nothing received, the whole bill owed and asked for', async () => {
   const session = await ownerSession();
   const before = await books(session);
-  const sold = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: SOAP, quantity: '3', rate: '40', date: DATE, terms: '7', requestId: 'counter-288-credit' }, session);
+  const sold = await request('POST', '/api/sales/record', { party: 'ABC Traders', item: SOAP, quantity: '3', rate: '40', date: DATE, terms: '7', requestId: 'counter-288-credit', approvalReason: 'Agreed with the owner' }, session);
   assert.equal(sold.status, 200, JSON.stringify(sold.body));
   assert.equal(sold.body.paid, null);
   assert.equal(sold.body.due, 126);

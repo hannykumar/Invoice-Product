@@ -55,7 +55,7 @@ const CUSTOMER = {
 };
 const GOODS = {
   name: 'PVC Sheets', kind: 'goods', hsnSac: '39204900', unit: 'KGS',
-  taxKind: 'taxable', ratePercentTimes100: '1800', basis: 'The rate our accountant uses for PVC',
+  taxKind: 'taxable', ratePercentTimes100: '1800', effectiveFrom: '2026-04-01', basis: 'The rate our accountant uses for PVC',
 };
 
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
@@ -65,7 +65,7 @@ const issueGoodsBill = async (session: string, reference: string): Promise<strin
   const itemId = await ensureItem(session, GOODS);
   const recorded = await request('POST', '/api/sales/record', {
     customerId, lines: [{ itemId, quantity: '100', rate: '250' }],
-    date: '2026-09-17', terms: '30', reference,
+    date: '2026-09-17', terms: '30', reference, requestId: reference,
   }, session);
   assert.equal(recorded.status, 200, recorded.body.message);
   return recorded.body.invoice.id as string;

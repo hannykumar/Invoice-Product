@@ -99,6 +99,7 @@ export class TradeTermsService {
               chargedPrice: charged,
               quantity,
               allowedWithoutApprovalBasisPoints: this.#policy.discountWithoutApprovalBasisPoints,
+              source: price.source,
             });
 
       const margin =
@@ -142,7 +143,7 @@ export class TradeTermsService {
 
     let applied: TradeTermsQuote['override'] = null;
     if (request.override !== undefined && outcome !== 'ALLOW') {
-      applied = await this.#applyOverride(actor, request.override, outcome, credit, lines);
+      applied = await this.#applyOverride(actor, request.override, outcome, credit, lines, request.documentId ?? null);
       outcome = 'ALLOW';
       reasons.push({
         'en-IN': `Allowed anyway, because: ${request.override.reason}`,
@@ -163,6 +164,7 @@ export class TradeTermsService {
     outcome: QuoteOutcome,
     credit: TradeTermsQuote['credit'],
     lines: readonly LineTerms[],
+    documentId: string | null,
   ): Promise<{ reason: string; by: string }> {
     const reason = override.reason.trim();
     if (reason === '') {
@@ -172,7 +174,9 @@ export class TradeTermsService {
       );
     }
 
-    const needsCredit = credit.outcome !== 'ALLOW';
+    // Issue #301 — only a credit position that itself holds the bill needs the credit permission; a
+    // warning the business lets through is not something to override.
+    const needsCredit = creditToQuoteOutcome(credit.outcome, this.#policy.warnNeedsApproval) !== 'ALLOW';
     const needsDiscount = lines.some((line) => line.discount?.outcome === 'NEEDS_APPROVAL');
     const required = needsCredit ? TRADE_TERMS_PERMISSIONS.overrideCreditLimit : TRADE_TERMS_PERMISSIONS.approveDiscount;
     if (!actor.permissions.includes(required)) {
@@ -209,6 +213,9 @@ export class TradeTermsService {
         exposure: String(credit.exposure.minor),
         excess: String(credit.excess.minor),
         oldestDaysOverdue: String(credit.oldestDaysOverdue),
+        // Issue #301 — which bill was allowed, so the approval can be found from the bill.
+        documentId: documentId ?? '',
+        discounts: lines.filter((line) => line.discount?.outcome === 'NEEDS_APPROVAL').map((line) => `${line.itemId}:${line.discount?.requestedBasisPoints}`).join(','),
       },
       overrideReason: reason,
     });

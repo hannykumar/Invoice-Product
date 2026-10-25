@@ -3,10 +3,11 @@
  *
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
-import { conflict, DomainError, financialYearOf as financialYearName, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { BooksDesk } from './books-entry-application.ts';
+import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
-import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
-import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine } from '@invoice/gst-calc';
+import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
+import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine, type Discount } from '@invoice/gst-calc';
 import { RulesEngine, shippedRegistry } from '@invoice/rules-engine';
 import { reportError, reportUnexpected } from '../../../packages/platform/src/error-reporting.ts';
 import { ChallanService, InMemoryChallanRepository, InMemoryPreSaleRepository, InMemorySalesRepository, noComplianceHooks, PreSaleService, SALES_PERMISSIONS, SalesService, type CancelBlocker, type CancellationGuardPort, type InventoryPort, type ReservationRequest, type SalesInvoice } from '@invoice/sales';
@@ -90,8 +91,10 @@ import { ChallanDesk, type ChallanFacts, type ChallanHooks } from './challan-app
 import { PreSaleDesk } from './presale-application.ts';
 import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode, type AdvanceParticulars, type DocumentReference } from '@invoice/receivables';
 import {
+  TRADE_TERMS_PERMISSIONS,
   TradeTermsService,
   noPriceList,
+  type TradeTermsQuote,
   type CreditPositionPort,
   type PartyTermsPort,
   type SalesHistoryPort,
@@ -120,6 +123,9 @@ import type { ApprovedPurchase, ApprovedPurchaseLine, PurchaseBill, PurchasePost
 import { validatePurchase } from '../../../packages/purchasing/src/validate.ts';
 import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adapter.ts';
 import { citeReverseChargeEntry, reverseChargeDecisionFor, type ReverseChargeDecision } from '../../../packages/purchasing/src/reverse-charge-notified.ts';
+import { checkReverseChargeEntry, type RegisterParty, type ReverseChargeLine, type SelfInvoice } from '../../../packages/purchasing/src/reverse-charge-register.ts';
+import { rcmTimeOfSupply, selfInvoiceDue, type RcmSupplyKind } from '../../../packages/purchasing/src/reverse-charge-timing.ts';
+import { BLOCKED_CREDIT_REASONS, blockedCreditReasonFor } from '../../../packages/purchasing/src/blocked-credit.ts';
 import type { Party } from '../../../packages/masters/src/types.ts';
 import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
@@ -127,7 +133,8 @@ import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/s
 import { purchaseDocumentLedger } from '../../../packages/purchasing/src/posting-adapters.ts';
 import { quantity } from '../../../packages/masters/src/units.ts';
 import { createCompanyShop, type CompanySeed } from './company-shop.ts';
-import { MEMORY, type Persistence } from './persistence.ts';
+import { PUBLIC_ORIGINS } from './http-hardening.ts';
+import { isLocal, MEMORY, type Persistence } from './persistence.ts';
 import { PostgresSalesRepository, PostgresChallanRepository, PostgresPreSaleRepository } from '../../../packages/sales/src/postgres-repository.ts';
 import { PostgresAdvanceRepository, PostgresPaymentRepository } from '../../../packages/receivables/src/postgres-repository.ts';
 import { PostgresReturnPreparations } from '../../../packages/gst-returns/src/postgres-repository.ts';
@@ -138,7 +145,11 @@ import type { SalesRepository } from '../../../packages/sales/src/ports.ts';
 import type { PaymentRepository } from '../../../packages/receivables/src/ports.ts';
 import type { ReturnNoteRepository } from '../../../packages/returns/src/ports.ts';
 import type { ReturnPreparationRepository } from '../../../packages/gst-returns/src/ports.ts';
-import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import type { OutboxHandler } from '../../../packages/platform/src/outbox.ts';
+
+/** Issue #345 — the outbox topic of the automatic e-invoice that follows a bill. */
+export const EINVOICE_TOPIC = 'einvoice.generate';
 import {
   ActionAgentService,
   InMemoryAgentPlanStore,
@@ -154,7 +165,9 @@ import {
   type AgentReport,
   type PartyDirectoryPort,
 } from '@invoice/action-agent';
-import { AuditLog, PlatformCommandService } from '../../../packages/platform/src/index.ts';
+import { CompanyTrailAuditLog, PlatformCommandService } from '../../../packages/platform/src/index.ts';
+import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
+import { PostgresCommandService } from '../../../packages/platform/src/postgres-platform.ts';
 import {
   InMemoryServiceInvoiceRepository,
   InMemorySubscriptionRepository,
@@ -211,9 +224,9 @@ import type {
 import { CURRENT_STATE_RULES, jurisdictionCounts } from '../../../packages/transport/src/rules.ts';
 import type { GoodsReceipt, MatchResult, PurchaseOrder } from '../../../packages/purchasing/src/matching-types.ts';
 import {
-  InMemoryReturnNoteRepository, ReturnService, isChargeLine, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote,
+  InMemoryReturnNoteRepository, ReturnService, isChargeLine, isGoodsReturn, purchaseReturnSource, returnInventoryAdapter, salesReturnSource, type ReturnNote, type SalesReturnSourcePort,
 } from '../../../packages/returns/src/index.ts';
-import { BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
+import { BANK_RETURN_PATH, BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
 import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
 import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
@@ -224,11 +237,26 @@ import {
   type OutwardDocument, type OutwardLine, type OutwardSupplyPort, type ReturnWorkspace, type TaxPeriod,
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
-import { DurableMap } from './durable.ts';
+import { DurableMap, persist } from './durable.ts';
 
 /** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
 const WHOLE_BILL = '__whole__';
+/**
+ * Issue #293 — a bill's service lines are services on a credit note too: never put back in a godown,
+ * never told "goods will go back into stock". A bill is made as goods; the item list says which of
+ * its lines are services.
+ */
+const servicesKeptOutOfStock = (source: SalesReturnSourcePort): SalesReturnSourcePort => ({
+  async findSalesDocument(companyId, id) {
+    const found = await source.findSalesDocument(companyId, id);
+    if (found === null) return null;
+    const services = new Set(catalogueItems(companyId).filter((item) => item.kind === 'service').map((item) => item.id));
+    return { ...found, lines: found.lines.map((line) => (services.has(line.itemId) ? { ...line, supplyKind: 'SERVICES' as const, warehouseId: null } : line)) };
+  },
+});
+/** Issue #293 — the Returns screen's "Price correction": a new price on a line, nothing coming back. */
+const PRICE_CORRECTION = 'PRICE';
 const LOCKED_RETURN_STATES: ReadonlySet<string> = new Set(['APPROVED', 'EXPORTED', 'SUBMITTING', 'FILED', 'SUBMISSION_FAILED']);
 /** Issue #266 — a return in one of these states has left for the government; the words say how far. */
 const SENT_RETURN_STATES: Readonly<Record<string, string>> = { EXPORTED: 'downloaded for filing', SUBMITTING: 'sent for filing', FILED: 'filed' };
@@ -343,6 +371,17 @@ const paymentKeyOf = (input: Record<string, unknown>): string => {
   return `web-payment:${direction}:${request}`;
 };
 
+/**
+ * Issue #392 — the key a screen sends for one bill, return or answer, so a retry is recognised. It is
+ * never invented here and never taken from what the shopkeeper typed: an invented key turns a retry
+ * into a second document, and a typed reference can belong to two real sales.
+ */
+const requestKeyOf = (input: Record<string, unknown>, code: string, what: string): string => {
+  const request = String(input.requestId ?? '').trim();
+  if (request === '') throw invalid(code, `This ${what} has no entry number, so a second press could record it twice. Reload the page and enter it again.`);
+  return request;
+};
+
 // Money by UPI or bank transfer goes into, or comes out of, the business's current account.
 const CURRENT_ACCOUNT = '1121';
 
@@ -413,8 +452,9 @@ const modeWords = (payment: Payment): string => {
  * an advance payment and nothing invented: what it is against (the purchase order, or goods to be
  * supplied), the supplier's receipt voucher when entered, the narration "Being advance paid to …
  * against …", and, once the advance has been adjusted against their bill, the bill it was adjusted
- * against. It is our own accounts voucher; it is not the reverse-charge payment voucher of CGST
- * Rule 52, and the heading does not say it is.
+ * against. It is our own accounts voucher. Issue #289, part 2b — when the payment pays a
+ * reverse-charge bill, the voucher also carries CGST Rule 52's particulars for it, so it is the
+ * payment voucher s.31(3)(g) requires at the time of payment.
  */
 const paymentVoucherHtml = (input: {
   readonly payment: Payment;
@@ -422,8 +462,21 @@ const paymentVoucherHtml = (input: {
   readonly seller: RenderableParty;
   readonly party: RenderableParty;
   readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint; adjusted: boolean }[];
+  /**
+   * Issue #289, part 2b — the reverse-charge bills this payment pays. When there are any, this is
+   * also the payment voucher of CGST s.31(3)(g), and carries Rule 52's particulars for them:
+   * (e) description, (g) rate, (h) tax payable, (i) place of supply for an inter-State supply, and
+   * (j) the supplier's signature. (a)-(d) and (f) are the voucher's own fields above.
+   */
+  readonly reverseCharge?: readonly { readonly bill: string; readonly interState: boolean; readonly placeOfSupply: string; readonly lines: readonly ReverseChargeLine[] }[];
 }): string => {
-  const { payment, number, seller, party } = input;
+  const { payment, seller, party } = input;
+  const rcm = input.reverseCharge ?? [];
+  // Rule 52(b): at most sixteen characters, unique for the financial year. The books' own number
+  // ("PAYMENT/2026-27/000001", 22 characters) is too long, so a reverse-charge voucher shows the same
+  // sequence in a short form ("PV/2627/000001") and names the books' number beside it.
+  const short = rcm.length === 0 ? null : rule52VoucherNumber(input.number);
+  const number = short ?? input.number;
   const receipt = payment.direction === 'RECEIPT';
   const advance = payment.advanceToSupplier === true;
   // Bills paid by this payment when it was made, and bills a later bill's entry adjusted the advance against.
@@ -438,6 +491,7 @@ const paymentVoucherHtml = (input: {
   const particulars = payment.advanceParticulars;
   const facts: [string, string][] = [
     [receipt ? 'Receipt number' : 'Voucher number', number],
+    ...(short !== null && short !== input.number ? [['Books voucher', input.number] as [string, string]] : []),
     ['Date', printDate(payment.date)],
     [receipt ? 'Received from' : 'Paid to', party.name],
     ['Amount', formatPaise(payment.amount.minor)],
@@ -471,7 +525,72 @@ ${billTable}
 ${adjustedTable}
 ${!advance && onAccount > 0n ? `<p>On account, not yet put against a bill: ${formatPaise(onAccount)}</p>` : ''}
 ${narration}
+${rcm.length === 0 ? '' : `<h2 style="font-size:16px">Supplies on which tax is payable on reverse charge</h2>
+<p><small>Payment voucher under CGST section 31(3)(g) and Rule 52: the tax below is paid by ${escapeHtml(seller.name)}, the recipient, not by ${escapeHtml(party.name)}.</small></p>
+<table><tr><th>Bill</th><th>Description</th><th>HSN/SAC</th><th>Taxable value</th><th>Rate</th><th>Tax payable</th>${rcm.some((bill) => bill.interState) ? '<th>Place of supply</th>' : ''}</tr>
+${rcm.flatMap((bill) => bill.lines.map((line) => {
+    const heads = bill.interState
+      ? `IGST ${line.gstRateBasisPoints / 100}%`
+      : `CGST ${line.gstRateBasisPoints / 200}% + SGST ${line.gstRateBasisPoints / 200}%`;
+    const tax = bill.interState ? formatPaise(line.igstPaise) : `${formatPaise(line.cgstPaise)} + ${formatPaise(line.sgstPaise)}`;
+    return `<tr><td>${escapeHtml(bill.bill)}</td><td>${escapeHtml(line.description)}</td><td>${escapeHtml(line.hsnSac)}</td><td>${formatPaise(line.taxableValuePaise)}</td><td>${heads}</td><td>${tax}</td>${rcm.some((other) => other.interState) ? `<td>${bill.interState ? escapeHtml(bill.placeOfSupply) : ''}</td>` : ''}</tr>`;
+  })).join('')}</table>
+<p style="margin-top:36px">Signature of the supplier or authorised representative: ____________________</p>`}
 <p style="margin-top:48px;text-align:right">For ${escapeHtml(seller.name)}<br><br>Authorised signatory</p></body></html>`;
+};
+
+/**
+ * Issue #289, part 2b — a books voucher number ("PAYMENT/2026-27/000001") in the short form CGST
+ * Rule 52(b) allows: at most sixteen characters of letters, digits, hyphen and slash, unique for the
+ * financial year. The sequence is the books' own, which is unique for the year, so the short form is
+ * too. `null` when the number is not in the books' form, so nothing is invented for it.
+ */
+export const rule52VoucherNumber = (number: string): string | null => {
+  const parts = /^[A-Z_]+\/(\d{2})(\d{2})-(\d{2})\/(\d+)$/.exec(number);
+  if (parts === null) return /^[A-Za-z0-9/-]{1,16}$/.test(number) ? number : null;
+  const short = `PV/${parts[2]}${parts[3]}/${parts[4]}`;
+  return short.length <= 16 ? short : null;
+};
+
+/**
+ * Issue #289, part 2b — the self-invoice: the tax invoice a registered buyer issues for a purchase
+ * from a supplier who is not registered, on which the buyer pays the GST (CGST s.31(3)(f), within
+ * 30 days — Rule 47A). It carries the particulars of CGST Rule 46 that apply to it, each from the
+ * register, nothing invented: (a) the supplier's name and address (and GSTIN only if it has one),
+ * (b) the number, (c) the date, (d) our name, address and GSTIN, (g) HSN/SAC, (h) description,
+ * (i) quantity and unit, (j)/(k) value and taxable value, (l) rate, (m) tax by head, (n) place of
+ * supply with the State, (p) that the tax is payable on reverse charge, and (q) a signature line.
+ */
+const selfInvoiceHtml = (invoice: SelfInvoice, bill: { number: string; date: string }): string => {
+  const party = (title: string, who: RegisterParty) =>
+    `<td><strong>${escapeHtml(title)}</strong><br>${escapeHtml(who.name)}${who.addressLines.map((line) => `<br>${escapeHtml(line)}`).join('')}<br>GSTIN: ${who.gstin === null ? 'Not registered' : escapeHtml(who.gstin)}${who.stateCode === '' ? '' : `<br>State: ${escapeHtml(who.stateName)} (${escapeHtml(who.stateCode)})`}</td>`;
+  const heads = invoice.interState ? ['IGST'] : ['CGST', 'SGST'];
+  const row = (line: SelfInvoice['lines'][number]) => {
+    const rate = line.gstRateBasisPoints / 100;
+    const taxCells = invoice.interState
+      ? `<td>${rate}%</td><td>${formatPaise(line.igstPaise)}</td>`
+      : `<td>${rate / 2}%</td><td>${formatPaise(line.cgstPaise)}</td><td>${rate / 2}%</td><td>${formatPaise(line.sgstPaise)}</td>`;
+    return `<tr><td>${line.lineNumber}</td><td>${escapeHtml(line.description)}</td><td>${escapeHtml(line.hsnSac)}</td><td>${escapeHtml(line.quantity)}</td><td>${formatPaise(line.taxableValuePaise)}</td>${taxCells}</tr>`;
+  };
+  const tax = invoice.cgstPaise + invoice.sgstPaise + invoice.igstPaise + invoice.cessPaise;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(invoice.number)}</title>
+<style>body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{width:100%;border-collapse:collapse;margin:12px 0}td,th{border:1px solid #999;padding:6px;text-align:left;vertical-align:top}h1{font-size:20px;margin:0}small{color:#444}</style></head><body>
+<h1>TAX INVOICE</h1>
+<p><small>Issued by the recipient for a supply received from a supplier who is not registered (CGST section 31(3)(f), Rule 47A).</small></p>
+<table><tr>${party('Supplier', invoice.supplier)}${party('Recipient (issuer of this invoice)', invoice.recipient)}</tr></table>
+<table>
+<tr><th>Invoice number</th><td>${escapeHtml(invoice.number)}</td></tr>
+<tr><th>Invoice date</th><td>${escapeHtml(formatDate(invoice.issuedOn))}</td></tr>
+<tr><th>Date of receipt of the supply</th><td>${escapeHtml(formatDate(invoice.receivedOn))}</td></tr>
+<tr><th>Supplier's document</th><td>${escapeHtml(bill.number)} dated ${escapeHtml(formatDate(isoDate(bill.date)))}</td></tr>
+<tr><th>Place of supply</th><td>${escapeHtml(invoice.placeOfSupply.stateName)} (${escapeHtml(invoice.placeOfSupply.stateCode)})</td></tr>
+<tr><th>Whether tax is payable on reverse charge</th><td>Yes</td></tr>
+</table>
+<table><tr><th>#</th><th>Description</th><th>HSN/SAC</th><th>Quantity</th><th>Taxable value</th>${heads.map((head) => `<th>${head} rate</th><th>${head}</th>`).join('')}</tr>
+${invoice.lines.map(row).join('')}
+<tr><th colspan="4">Total</th><th>${formatPaise(invoice.taxableValuePaise)}</th>${invoice.interState ? `<th></th><th>${formatPaise(invoice.igstPaise)}</th>` : `<th></th><th>${formatPaise(invoice.cgstPaise)}</th><th></th><th>${formatPaise(invoice.sgstPaise)}</th>`}</tr></table>
+<p>Total value of supply: ${formatPaise(invoice.taxableValuePaise)}. Tax payable by the recipient on reverse charge: ${formatPaise(tax)} (${amountInWords(money(tax))}).</p>
+<p style="margin-top:48px;text-align:right">For ${escapeHtml(invoice.recipient.name)}<br><br>Authorised signatory</p></body></html>`;
 };
 
 /** An optional amount on a sale: blank and zero both mean no charge. */
@@ -490,6 +609,63 @@ const daysAfter = (date: string, days: number): string => {
 };
 
 const jsonAmount = (minor: bigint): number => Number(minor) / 100;
+
+/**
+ * Issue #293 — a sale line's discount, typed as rupees off the line (`discount`) or as a percentage
+ * (`discountPercent`). CGST Act 2017 s.15(3)(a) (in force 1 July 2017): a discount given before or
+ * at the time of supply and recorded on the invoice is not part of the value GST is charged on, so
+ * the calculator takes it off before tax and the bill prints it in its Discount column.
+ */
+const lineDiscountOf = (row: Record<string, unknown>, gross: bigint): Discount | undefined => {
+  const amountText = String(row.discount ?? '').replace(/,/g, '').trim();
+  const percentText = String(row.discountPercent ?? '').trim();
+  const amount = optionalMoney(amountText);
+  if (percentText !== '' && !/^\d+(?:\.\d{1,2})?$/.test(percentText)) {
+    throw invalid('SALE_DISCOUNT_PERCENT_INVALID', 'Type the discount as a percentage, like 5 or 7.5.');
+  }
+  const [whole = '0', fraction = ''] = percentText.split('.');
+  const percent = percentText === '' ? 0n : BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+  if (amount !== undefined && amount.minor > 0n && percent > 0n) {
+    throw invalid('SALE_DISCOUNT_TWICE', 'Give the discount either in rupees or as a percentage, not both.');
+  }
+  if (percent > 10000n) throw invalid('SALE_DISCOUNT_TOO_LARGE', 'A discount cannot be more than 100%.');
+  if (percent > 0n) return { kind: 'PERCENT', percentTimes100: percent };
+  if (amount === undefined || amount.minor === 0n) return undefined;
+  if (amount.minor > gross) {
+    throw invalid('SALE_DISCOUNT_TOO_LARGE', `The discount (${formatPaise(amount.minor)}) is more than the line is worth (${formatPaise(gross)}).`);
+  }
+  return { kind: 'AMOUNT', amount };
+};
+
+/**
+ * Issue #293 — a discount on the whole bill (`billDiscount`, in rupees), shared over the item lines
+ * in proportion to what each is worth after its own discount, so each line's GST is worked on its
+ * own reduced value (s.15(3)(a)). The last line takes the paise left over, so the shares add up.
+ */
+const withBillDiscount = <L extends { readonly quantity: { readonly scaled: bigint }; readonly unitPrice: { readonly minor: bigint }; readonly discount?: Discount }>(
+  lines: readonly L[], billDiscount: unknown,
+): L[] => {
+  const off = optionalMoney(billDiscount);
+  if (off === undefined || off.minor === 0n) return [...lines];
+  const worth = lines.map((line) => {
+    const gross = mulDiv(money(line.unitPrice.minor), line.quantity.scaled, 1_000_000n).minor;
+    const own = line.discount === undefined ? 0n
+      : line.discount.kind === 'AMOUNT' ? line.discount.amount.minor : mulDiv(money(gross), line.discount.percentTimes100, 10000n).minor;
+    return { gross, own, net: gross - own };
+  });
+  const total = worth.reduce((sum, line) => sum + line.net, 0n);
+  if (off.minor > total) {
+    throw invalid('SALE_BILL_DISCOUNT_TOO_LARGE', `The items come to ${formatPaise(total)} before GST, so the discount on the bill cannot be more than that.`);
+  }
+  let left = off.minor;
+  return lines.map((line, index) => {
+    const facts = worth[index]!;
+    const share = index === lines.length - 1 ? left : (off.minor * facts.net) / total;
+    left -= share;
+    const amount = facts.own + share;
+    return amount === 0n ? line : { ...line, discount: { kind: 'AMOUNT' as const, amount: money(amount) } };
+  });
+};
 
 /** Issue #306 — something that would stop a bill, said in both languages, as the live total carries it. */
 interface Refusal {
@@ -546,11 +722,12 @@ const party = (stateCode: string, name: string, gstin: string, addressLines_: re
  * from `namesFrom` in the report service; this only has to satisfy the interface and supply a unit
  * registry, so it returns the ids and lets the names layer do the naming.
  */
-const demoStockMasterData = (): StockMasterData => {
+const demoStockMasterData = (godowns: Pick<StockMasterData, 'warehouse'>): StockMasterData => {
   const registry = createDefaultUnitRegistry();
   return {
     item(_companyId, _itemId): StockItem | undefined { return undefined; },
-    warehouse(_companyId, _warehouseId): Warehouse | undefined { return undefined; },
+    // Issue #292 — the company's own godowns, so the report knows which one is not for sale.
+    warehouse(companyId, warehouseId): Warehouse | undefined { return godowns.warehouse(companyId, warehouseId); },
     units() { return registry; },
   };
 };
@@ -587,6 +764,16 @@ const livePurchaseReadPort = (shop: Awaited<ReturnType<typeof createCompanyShop>
   },
 });
 
+/** Issue #289, part 2b — what a reverse-charge bill adds to the register once it is posted. */
+interface ReverseChargeEntryDraft {
+  readonly receivedOn: IsoDate;
+  readonly supplyKind: RcmSupplyKind;
+  /** The lines on which we pay the GST: what the self-invoice covers. */
+  readonly lineNumbers: readonly number[];
+  readonly supplierRegistered: boolean;
+  readonly notes: readonly string[];
+}
+
 /** The three things a purchase will do, taken from the preview rather than written by hand. */
 const previewEffects = (preview: PurchasePostingPreview, location: string): string[] => {
   const tax = preview.tax;
@@ -595,9 +782,11 @@ const previewEffects = (preview: PurchasePostingPreview, location: string): stri
   if (effects.length === 0) effects.push('Stock: nothing, this is a service');
   effects.push(
     tax.reverseCharge
-      ? `GST: ${formatPaise(claimable)} payable by you under reverse charge`
+      ? `GST: ${formatPaise(claimable + tax.ineligibleItcPaise)} payable by you under reverse charge`
       : `GST you can claim back: ${formatPaise(claimable)} (${tax.intraState ? 'CGST + SGST' : 'IGST'})`,
   );
+  // Issue #289, part 3 — tax CGST s.17(5) blocks: in the cost, not claimed.
+  if (tax.ineligibleItcPaise > 0n) effects.push(`GST that cannot be claimed (CGST s.17(5)), added to cost: ${formatPaise(tax.ineligibleItcPaise)}`);
   effects.push(`Supplier due: ${formatPaise(preview.totalPaise)}`);
   effects.push(`Due date: ${preview.dueDate}`);
   if (preview.roundOffPaise !== 0n) effects.push(`Rounding recorded separately: ${formatPaise(preview.roundOffPaise < 0n ? -preview.roundOffPaise : preview.roundOffPaise)}`);
@@ -668,8 +857,8 @@ export class DemoApplication {
   private readonly notifications: NotificationService;
   private readonly outbox: DemoReminderOutbox;
   private readonly bankFeeds: BankFeedService;
+  private readonly booksDesk: BooksDesk;
   private readonly agent: ActionAgentService;
-  private readonly agentAudit: AuditLog;
   private readonly gstReturns: GstReturnService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
   readonly challans: ChallanDesk;
@@ -695,7 +884,6 @@ export class DemoApplication {
     bankFeeds: BankFeedService,
     subscriptions: SubscriptionService,
     agent: ActionAgentService,
-    agentAudit: AuditLog,
     gstReturns: GstReturnService,
     challans: ChallanDesk,
     presale: PreSaleDesk,
@@ -726,11 +914,11 @@ export class DemoApplication {
     this.returnNotes = returnNotes;
     this.subscriptions = subscriptions;
     this.agent = agent;
-    this.agentAudit = agentAudit;
     this.collections = collections;
     this.notifications = notifications;
     this.outbox = outbox;
     this.bankFeeds = bankFeeds;
+    this.booksDesk = new BooksDesk({ ledger: shop.ledger, store: shop.store, companyId: config.companyId, gstin: config.gstin });
     this.gstReturns = gstReturns;
   }
 
@@ -752,6 +940,16 @@ export class DemoApplication {
     // Issue #249 — the shop holds the notes, so the purchase comparison reads the same ones.
     const returnNotes = shop.returnNotes;
     participate(salesRepository, paymentRepository);
+    // Issue #289, part 2b — the first payment against a reverse-charge bill can bring its GST forward
+    // (CGST s.12(3)(b), s.13(3)(a): the date the payment is entered in the books). An advance taken
+    // off the bill counts from the day the advance was paid. A reversed payment counts for nothing.
+    shop.setPaidOn(async (companyId, billId) => {
+      const dates = (await paymentRepository.list(companyId))
+        .filter((payment) => payment.direction === 'PAYMENT' && payment.state === 'RECORDED' && payment.allocations.some((allocation) => allocation.documentId === billId))
+        .map((payment) => payment.date)
+        .sort();
+      return dates[0] ?? null;
+    });
     // Issue #181 — the customers and items this company actually keeps, in `packages/masters`.
     // The screens add to the same records, so a customer added at the counter is a customer the
     // bill can be made out to a moment later. Only the demo company is given any to start with.
@@ -812,11 +1010,12 @@ export class DemoApplication {
         }
         // A credit note already points at this bill. Cancelling the bill would leave that note
         // reducing tax on a sale that was never reported.
-        const notes = (await returnNotes.listForOriginal(invoice.companyId, invoice.id)).filter((note) => note.kind === 'SALES_RETURN');
+        // Issue #293 — a debit note for a higher price points at the bill just the same.
+        const notes = (await returnNotes.listForOriginal(invoice.companyId, invoice.id)).filter((note) => note.kind !== 'PURCHASE_RETURN');
         if (notes.length > 0) {
           found.push({
             code: 'SALES_CANCEL_HAS_CREDIT_NOTE',
-            message: `${number} cannot be cancelled: credit note ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`,
+            message: `${number} cannot be cancelled: ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`,
             clearable: null,
           });
         }
@@ -881,7 +1080,10 @@ export class DemoApplication {
           ...document, value: money(document.value.minor - returnedValue(document.documentId, 'PURCHASE_RETURN')),
         }));
         const invoices = await salesRepository.list(companyId, { partyId, state: 'FINAL' });
-        const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: money((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - returnedValue(invoice.id, 'SALES_RETURN')), side: 'RECEIVABLE' }));
+        // Issue #293 — a debit note for a higher price adds to what is due on its bill.
+        const debitedValue = (documentId: string) => notes.filter((note) => note.kind === 'SALES_DEBIT_NOTE' && note.originalDocument.id === documentId)
+          .reduce((total, note) => total + note.totals.total.minor, 0n);
+        const saleDocuments: OpenDocument[] = invoices.map((invoice) => ({ documentId: invoice.id, kind: 'SALES_INVOICE', number: invoice.number ?? invoice.id, partyId, date: invoice.documentDate, dueDate: invoice.dueDate, value: money((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - returnedValue(invoice.id, 'SALES_RETURN') + debitedValue(invoice.id)), side: 'RECEIVABLE' }));
         return [...purchaseDocuments, ...saleDocuments];
       },
       async parties(companyId) {
@@ -903,7 +1105,7 @@ export class DemoApplication {
       store: shop.store,
       sales: salesRepository,
       inventory: shop.inventory,
-      stockMasterData: demoStockMasterData(),
+      stockMasterData: demoStockMasterData(shop.masters),
       dues: duesFrom(documents, payments),
       purchases: livePurchaseReadPort(shop),
       // Names are read from master data as they stand, so a customer or an item added today is
@@ -915,7 +1117,7 @@ export class DemoApplication {
         // Purchases keep their own short item ids, so those fall back to the purchase catalogue.
         item: (companyId, itemId) => catalogueItems(companyId).find((item) => item.id === itemId)?.name
           ?? DemoApplication.CATALOGUE[itemId]?.description,
-        warehouse: (_companyId, warehouseId) => warehouseId === shop.warehouseId ? config.location : undefined,
+        warehouse: (companyId, warehouseId) => shop.masters.warehouse(companyId, warehouseId)?.name,
         branch: () => undefined,
       },
       permissions: permissionPortFromActor,
@@ -996,8 +1198,8 @@ export class DemoApplication {
 
     const returns = new ReturnService({
       store: shop.store, ledger: shop.ledger, repository: returnNotes,
-      sales: salesReturnSource(salesRepository, async (companyId, documentId) =>
-        (await shop.eInvoices.findByDocumentId(companyId, documentId))?.status === 'REGISTERED'),
+      sales: servicesKeptOutOfStock(salesReturnSource(salesRepository, async (companyId, documentId) =>
+        (await shop.eInvoices.findByDocumentId(companyId, documentId))?.status === 'REGISTERED')),
       // Issue #186 — a supplier's bill line has no HSN of its own; the item list supplies it.
       purchases: purchaseReturnSource(shop.bills, (companyId, itemId) =>
         catalogueItems(companyId).find((item) => item.id === itemId)?.hsnSac ?? DemoApplication.CATALOGUE[itemId]?.hsnSac ?? null),
@@ -1011,9 +1213,13 @@ export class DemoApplication {
      * described by a fixture: the bill is looked up in the sales repository, its lines are checked
      * against what the stock ledger actually says, and the place-of-supply question is put to the
      * rules engine with this bill's own facts.
+     *
+     * Issue #397 — every read here runs as the person who asked, never `shop.setupActor`. The
+     * assistant has already checked they may see bills and stock before it asks.
      */
     const blocked: BlockedDocumentPort = {
-      async find(companyId: CompanyId, reference: string): Promise<BlockedDocument | null> {
+      async find(actor: ActorContext, reference: string): Promise<BlockedDocument | null> {
+        const companyId = actor.companyId;
         const invoices = await salesRepository.list(companyId);
         const invoice = invoices.find(
           (candidate) => (candidate.number ?? '').toUpperCase() === reference.toUpperCase() || candidate.id === reference,
@@ -1023,7 +1229,7 @@ export class DemoApplication {
         const reasons: BlockingReason[] = [];
         if (invoice.state !== 'FINAL' && invoice.state !== 'CANCELLED') {
           for (const line of invoice.lines) {
-            const balance = await shop.inventoryService.balance(shop.setupActor, { itemId: line.itemId, warehouseId: shop.warehouseId });
+            const balance = await shop.inventoryService.balance(actor, { itemId: line.itemId, warehouseId: shop.warehouseId });
             if (balance.available.scaled >= line.quantity.scaled) continue;
             reasons.push({
               code: 'STOCK_SHORTFALL',
@@ -1140,7 +1346,12 @@ export class DemoApplication {
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `upi-settlement-${config.companyId}`, bookedOn: '2026-08-29', description: 'UPI settlement from yesterday', amountMinor: 48_750_00n, direction: 'CREDIT', reference: 'SYNTHETIC-UTR-240829' });
       bankProvider.addTransaction(`current-${config.companyId}`, { providerTransactionId: `shop-rent-${config.companyId}`, bookedOn: '2026-08-29', description: 'Shop rent NEFT', amountMinor: 25_000_00n, direction: 'DEBIT', reference: 'SYNTHETIC-NEFT-240829' });
     }
-    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)));
+    // Issue #402: the bank sends the customer back only to this app's start page — on the
+    // public origins in KAROBAR_PUBLIC_ORIGINS, or on this machine in development. Never to an
+    // address the browser names.
+    const webPort = process.env.WEB_PORT ?? process.env.PORT ?? '4173';
+    const bankReturnOrigins = PUBLIC_ORIGINS.size > 0 ? [...PUBLIC_ORIGINS] : isLocal(process.env.NODE_ENV) ? [`http://localhost:${webPort}`, `http://127.0.0.1:${webPort}`] : [];
+    const bankFeeds = new BankFeedService([bankProvider], undefined, pick(() => new InMemoryBankFeedStore(), (db) => new PostgresBankFeedStore(db)), { origins: bankReturnOrigins, path: BANK_RETURN_PATH });
 
     // Issue #42 [E42]: what this company's plan covers, and what it has used. The payment provider
     // is the mock one — no production credential is needed to run any of this — and the limits it
@@ -1158,10 +1369,14 @@ export class DemoApplication {
     // already composed above — #23 decides what a reminder should be and re-checks the bill at the
     // moment of sending, #34 grounds the total in one of #35's reports and carries its snapshot id,
     // and cancelling a bill is registered as prepare-only, so the assistant can never finish it.
-    const agentAudit = new AuditLog();
-    const agentCommands = new PlatformCommandService(agentAudit, [
-      { action: 'agent.run', minimumRisk: 'medium', requiredPermission: 'approval.decide' },
-    ]);
+    // Issue #404 — over the company's own audit trail, so what the assistant was asked, who approved
+    // which list and its command's lifecycle sit beside the reminders it sent. On PostgreSQL the
+    // command records are kept with every other command of the company.
+    const agentPolicies = [{ action: 'agent.run', minimumRisk: 'medium', requiredPermission: 'approval.decide' }] as const;
+    const companyAudit = shop.audit;
+    const agentCommands = companyAudit instanceof PostgresAuditLog
+      ? new PostgresCommandService((persistence as Extract<Persistence, { kind: 'postgres' }>).db, companyAudit, agentPolicies)
+      : new PlatformCommandService(new CompanyTrailAuditLog(companyAudit), agentPolicies);
     const agentRegistry = new ToolRegistry()
       .register(findUnpaidTool(collections))
       .register(totalOwedTool(assistant))
@@ -1182,6 +1397,7 @@ export class DemoApplication {
     const agent = new ActionAgentService({
       registry: agentRegistry,
       commands: agentCommands,
+      audit: shop.audit,
       contextFor: (from: ActorContext) => ({
         companyId: from.companyId,
         branchId: from.branchId ?? config.branchId,
@@ -1315,7 +1531,8 @@ export class DemoApplication {
         // inter-state note carrying IGST was flagged as a local sale and filed under Karnataka.
         const hsnByItem = Object.fromEntries(catalogueItems(companyId).map((item) => [item.id, item.hsnSac]));
         const notes = await Promise.all((await returnNotes.list(companyId))
-          .filter((note) => note.kind === 'SALES_RETURN' && taxPeriodOf(note.documentDate) === period)
+          // Issue #293 — a sales debit note goes to GSTR-1 beside the credit notes (Table 9B, type "D").
+          .filter((note) => (note.kind === 'SALES_RETURN' || note.kind === 'SALES_DEBIT_NOTE') && taxPeriodOf(note.documentDate) === period)
           .map(async (note) => {
             const original = await salesRepository.findById(companyId, note.originalDocument.id);
             return returnNoteToDocument(note, customerOn(String(note.partyId)), supplier, {
@@ -1407,7 +1624,7 @@ export class DemoApplication {
       advances,
     }), advances);
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, agentAudit, gstReturns, challans, presale, exportSales);
+    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, gstReturns, challans, presale, exportSales);
     app.cancelGuard = cancellationGuard;
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
@@ -1456,6 +1673,8 @@ export class DemoApplication {
   }
 
   private async seed(): Promise<void> {
+    // Issue #395 — the demo company's address is seeded before it opens, so its walk-in customer is too.
+    if (businessDetailsOf(this.config.companyId) !== null) await this.walkIn(this.shop.setupActor);
     // Issue #229 — a sale takes its goods out of stock, so the three old soap bills below need the
     // soap they sold. It is entered as the count on the day the books begin: 4 + 2 + 1 = 7 pieces,
     // at a made-up cost of ₹200 each, and all of it is sold by those bills, so no soap is left.
@@ -1465,10 +1684,46 @@ export class DemoApplication {
       quantity: quantityFromString('7', 'PCS'),
       unitCost: money(200_00n),
     });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', notes: 'Synthetic opening demo sale' });
-    // Two older bills, so the Reminders screen has something to decide about on the demo's date.
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
-    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
+    await this.clearOpeningStockSuspense();
+    // Issue #299 — the bills are recorded oldest first so bill numbers climb with the dates:
+    // 000001 is two months past its due date, 000002 is ten days past, 000003 is the newest.
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '1', rate: '250', date: '2026-06-15', terms: '15', reference: 'seed-overdue-2', requestId: 'seed-overdue-2', notes: 'Synthetic bill, two months past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '2', rate: '250', date: '2026-07-20', terms: '30', reference: 'seed-overdue-1', requestId: 'seed-overdue-1', notes: 'Synthetic bill, ten days past its due date' });
+    await this.recordSale(this.shop.setupActor, { party: this.config.customerName, item: 'Herbal Bath Soap 100g', quantity: '4', rate: '250', date: '2026-08-29', terms: '30', reference: 'seed-sale', requestId: 'seed-sale', notes: 'Synthetic opening demo sale' });
+  }
+
+  /**
+   * Issue #299 — the opening stock entry parks its cost in the opening-balance-difference account,
+   * which is where an unexplained difference is meant to sit until the owner decides. The demo
+   * knows where it came from — the owner put in the soap the business began with — so the balance
+   * is moved to Capital the way an accountant clears a suspense balance, and the demo books carry
+   * no unexplained difference. Whatever happens to sit in the account is cleared, not a fixed
+   * figure, so the journal stays right if the seeded count or cost changes.
+   */
+  private async clearOpeningStockSuspense(): Promise<void> {
+    const actor = this.shop.setupActor;
+    const accounts = this.shop.store.read().accounts;
+    const [difference, capital] = await Promise.all([
+      accounts.findByCode(actor.companyId, '3900'),
+      accounts.findByCode(actor.companyId, '3100'),
+    ]);
+    if (!difference || !capital) return;
+    const row = (await trialBalance(this.shop.store.read(), actor.companyId)).rows
+      .find((entry) => entry.account.id === difference.id);
+    if (!row || row.balance.minor === 0n) return;
+    // Clear to the opposite side: a credit balance is debited away, a debit balance credited.
+    const { balance: amount, side } = row;
+    await this.shop.ledger.postVoucher(actor, {
+      idempotencyKey: 'seed-opening-stock-clearance',
+      type: 'JOURNAL',
+      date: isoDate('2026-04-01'),
+      narration: 'The opening stock was the owner\u2019s own goods, so its cost is moved from the opening difference to capital',
+      source: { kind: 'opening_stock', id: 'seed-opening-soap', number: null },
+      lines: [
+        { accountId: difference.id, debit: side === 'CREDIT' ? amount : money(0n), credit: side === 'DEBIT' ? amount : money(0n) },
+        { accountId: capital.id, debit: side === 'DEBIT' ? amount : money(0n), credit: side === 'CREDIT' ? amount : money(0n) },
+      ],
+    });
   }
 
   /** Issue #280 — every change to where customers pay, oldest first, from the audit trail. */
@@ -1516,7 +1771,9 @@ export class DemoApplication {
     const stockTile = stockItems[0] ?? { itemId: '', name: 'No goods yet', quantity: 0, unit: '', reorderLevel: null, needsAttention: false };
     const month = today.slice(0, 7);
     const salesTodayBilled = sales.filter((invoice) => invoice.documentDate === today).reduce((total, invoice) => total + (invoice.pricing?.totals.invoiceValue.minor ?? 0n), 0n);
-    const salesTodayReturned = returnNotes.filter((note) => note.kind === 'SALES_RETURN' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n);
+    const salesTodayReturned = returnNotes.filter((note) => note.kind === 'SALES_RETURN' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n)
+      // Issue #293 — a debit note for a higher price is more sales, so it counts back in.
+      - returnNotes.filter((note) => note.kind === 'SALES_DEBIT_NOTE' && note.documentDate === today).reduce((total, note) => total + note.totals.total.minor, 0n);
     const purchasesMonthBilled = purchases.filter((bill) => bill.state === 'POSTED' && bill.invoiceDate.slice(0, 7) === month).reduce((total, bill) => total + bill.totalPaise, 0n);
     const purchasesMonthReturned = returnNotes.filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) === month).reduce((total, note) => total + note.totals.total.minor, 0n);
     const home = await this.home(actor, companyId, today, { sales, payments, receivables, suppliersOwed: sum(supplierOpen.map((d) => d.outstanding)).minor, stockItems, salesToday: salesTodayBilled - salesTodayReturned });
@@ -1725,6 +1982,21 @@ export class DemoApplication {
     return AssistantService.supportedIntents().map((intent) => ({ intent, label: describeIntent(intent) }));
   }
 
+  // Issue #294 — expenses, journal and contra entries, the owner's money, and the cash and bank books.
+  booksHeads(actor: ActorContext) { this.companyOf(actor); return this.booksDesk.heads(); }
+  async booksJournalAccounts(actor: ActorContext) { this.companyOf(actor); return this.booksDesk.journalAccounts(); }
+  async booksPreview(actor: ActorContext, kind: 'expense' | 'journal' | 'contra' | 'owner', input: Record<string, unknown>) {
+    this.companyOf(actor);
+    return this.booksDesk.preview(actor, kind, input);
+  }
+  async booksRecord(actor: ActorContext, kind: 'expense' | 'journal' | 'contra' | 'owner', input: Record<string, unknown>) {
+    this.companyOf(actor);
+    return this.booksDesk.record(actor, kind, input);
+  }
+  async booksUndo(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.undo(actor, input); }
+  async booksEntries(actor: ActorContext) { this.companyOf(actor); return { entries: await this.booksDesk.entries(actor) }; }
+  async booksBook(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.book(actor, input); }
+
   async reports(actor: ActorContext) {
     this.companyOf(actor);
     // Issue #234 — the financial year today falls in (1 April to 31 March), worked out from today in
@@ -1794,7 +2066,7 @@ export class DemoApplication {
         title: pack.stock.header.title,
         sentence: pack.stock.body.sentence,
         value: jsonAmount(pack.stock.body.value.amount.minor),
-        rows: pack.stock.body.rows.map((r) => ({ item: r.itemName, warehouse: r.warehouseName, unit: r.unitCode, closing: r.closing, available: r.available, value: jsonAmount(r.value.minor) })),
+        rows: pack.stock.body.rows.map((r) => ({ item: r.itemName, warehouse: r.warehouseName, unit: r.unitCode, closing: r.closing, available: r.available, sellable: r.sellable, value: jsonAmount(r.value.minor) })),
       },
       dues: {
         receivables: { title: pack.receivables.header.title, sentence: pack.receivables.body.sentence, total: jsonAmount(pack.receivables.body.total.amount.minor), rows: pack.receivables.body.rows.map((r) => ({ party: r.partyName, outstanding: jsonAmount(r.outstanding.minor), onAccount: jsonAmount(r.onAccount.minor), oldestDaysOverdue: r.oldestDaysOverdue })) },
@@ -1842,8 +2114,11 @@ export class DemoApplication {
     // Issue #289 — a supplier who may not charge GST: the bill carries none, whatever the states.
     const registration = resolveSupplier(this.companyOf(actor), approved.supplierPartyId).gstRegistrationType;
     const reverseCharge = approved.taxLiability === 'REVERSE_CHARGE';
+    // Issue #289, part 3 — under reverse charge the blocked tax is still owed (s.9(3)); only its credit goes.
+    const rcmPayable = claimable + (reverseCharge ? preview.tax.ineligibleItcPaise : 0n);
+    const blockedNotes = DemoApplication.blockedCreditNotes(approved, preview.tax.intraState);
     const why = reverseCharge
-      ? `This bill is under reverse charge: ${approved.supplierName} charges no GST on it, and you pay ${formatPaise(claimable)} of GST to the government yourself (CGST s.9(3)).`
+      ? `This bill is under reverse charge: ${approved.supplierName} charges no GST on it, and you pay ${formatPaise(rcmPayable)} of GST to the government yourself (CGST s.9(3)).`
       : registration === 'unregistered'
       ? `The supplier is not registered for GST, so their bill carries no GST (CGST s.32(1)) and none can be claimed back (s.16(2)(a)).`
       : registration === 'composition'
@@ -1863,14 +2138,14 @@ export class DemoApplication {
       message: advance !== null && advance.used > 0n
         ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} for ${formatPaise(preview.totalPaise)} will take the ${formatPaise(advance.used)} advance already paid off it, so you will owe them ${formatPaise(preview.totalPaise - advance.used)}, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`
         : reverseCharge
-          ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST under reverse charge that you pay the government in cash and then claim back as credit.`
+          ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(rcmPayable)} of GST under reverse charge that you pay the government in cash${claimable === rcmPayable ? ' and then claim back as credit' : `, of which ${formatPaise(claimable)} comes back as credit`}.`
           : `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} will add ${formatPaise(preview.totalPaise)} to what you owe them, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`,
       amount: jsonAmount(preview.totalPaise),
       supplier: approved.supplierName,
       taxType: intra ? 'CGST_SGST' : 'IGST',
       tax: { cgst: jsonAmount(preview.tax.cgstPaise), sgst: jsonAmount(preview.tax.sgstPaise), igst: jsonAmount(preview.tax.igstPaise), total: jsonAmount(claimable) },
       // Issue #261 — with an advance taken off, the bill's total is not what is due; the sum below says what is.
-      effects: [why, ...reverseChargeNotes, ...lines, ...sumLine,
+      effects: [why, ...reverseChargeNotes, ...blockedNotes, ...lines, ...sumLine,
         ...previewEffects(preview, this.config.location).map((line) => advance !== null && advance.used > 0n && line.startsWith('Supplier due: ') ? `Bill total: ${formatPaise(preview.totalPaise)}` : line),
         ...preview.warnings, ...(advance === null ? [] : advance.effects)],
       token: approved.id,
@@ -1912,19 +2187,17 @@ export class DemoApplication {
     if ('alreadyRecorded' in draft) {
       // Pressing Record twice, or typing the same bill in again, records it once.
       const dashboard = await state();
-      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded) };
+      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded), reverseCharge: await this.reverseChargeJson(actor, draft.alreadyRecorded) };
     }
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: approved.supplierPartyId, name: approved.supplierName, kind: 'SUPPLIER' });
     // Issue #261 — worked out before the bill is posted, so it is the advance the review showed.
     const advance = await this.supplierAdvanceFor(actor, approved, input);
-    if (advance !== null && advance.used > 0n && approved.taxLiability === 'REVERSE_CHARGE') {
-      // Tax on a reverse-charge service falls due when it is paid, so an advance would have moved
-      // that date. This screen does not handle reverse charge, so it says so rather than mis-tax it.
-      throw notAllowed('PURCHASE_ADVANCE_REVERSE_CHARGE', 'This bill is under reverse charge, and an advance paid on it changes when its GST was due. That is not handled here yet, so nothing was recorded.');
-    }
+    // Issue #289, part 2b — an advance on a reverse-charge bill is allowed now: the day it was paid is
+    // a payment date under CGST s.12(3)(b) / s.13(3)(a), so the bill's GST falls due from then.
     const result = await this.shop.posting.post(actor, approved, `web:${approved.id}`);
+    if (draft.reverseChargeEntry !== null) await this.recordReverseCharge(actor, approved, result.bill, draft.reverseChargeEntry);
     const used = advance !== null && advance.used > 0n
       ? await this.payments.useSupplierAdvance(actor, {
         partyId: approved.supplierPartyId as PartyId, documentId: result.bill.id, documentNumber: result.bill.invoiceNumber,
@@ -1955,6 +2228,127 @@ export class DemoApplication {
       advanceAdjustments: adjustments.map((a) => ({ paymentId: a.paymentId, voucherNumber: a.voucherNumber, paidOn: a.paidOn, amount: jsonAmount(a.amount) })),
       bill: DemoApplication.purchaseBillJson(result.bill), stock: DemoApplication.stockOf(dashboard, approved.lines[0]?.itemId), supplier: dashboard.supplier,
       purchaseCheck: await this.purchaseCheckFor(actor, result.bill),
+      reverseCharge: await this.reverseChargeJson(actor, result.bill),
+    };
+  }
+
+  /**
+   * Issue #289, part 2b — puts a posted reverse-charge bill in the register: the date it reached the
+   * business, its reverse-charge lines as a self-invoice must print them (Rule 46), and the supplier.
+   */
+  private async recordReverseCharge(actor: ActorContext, approved: ApprovedPurchase, bill: PurchaseBill, entry: ReverseChargeEntryDraft) {
+    const companyId = this.companyOf(actor);
+    const lines = bill.lines.filter((line) => entry.lineNumbers.includes(line.lineNumber)).map((line) => {
+      const typed = approved.lines.find((candidate) => candidate.lineNumber === line.lineNumber);
+      return {
+        lineNumber: line.lineNumber, description: line.description, hsnSac: typed?.hsnSac ?? '',
+        quantity: formatQuantity(line.quantity), unit: line.quantity.unit,
+        taxableValuePaise: line.taxableValuePaise, gstRateBasisPoints: typed?.gstRateBasisPoints ?? 0,
+        cgstPaise: line.cgstPaise, sgstPaise: line.sgstPaise, igstPaise: line.igstPaise, cessPaise: line.cessPaise,
+      };
+    });
+    await this.shop.reverseCharge.recordPurchase(actor, {
+      billId: bill.id, supplierPartyId: bill.supplierPartyId, supplier: this.registerParty(companyId, bill.supplierPartyId),
+      supplierRegistered: entry.supplierRegistered, supplyKind: entry.supplyKind,
+      invoiceNumber: bill.invoiceNumber, invoiceDate: isoDate(bill.invoiceDate), receivedOn: entry.receivedOn,
+      enteredOn: indiaDateOf(bill.postedAt), interState: !bill.tax.intraState, lines,
+    });
+  }
+
+  /**
+   * Issue #289, part 2b — issue the self-invoice for one purchase from an unregistered supplier
+   * (CGST s.31(3)(f), Rule 47A). Once per purchase: pressing again returns the one issued.
+   */
+  async issueSelfInvoice(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const billId = String(input.billId ?? '').trim();
+    if (billId === '') throw invalid('SELF_INVOICE_BILL_REQUIRED', 'Choose the purchase to issue the self-invoice for.');
+    const bill = await this.shop.bills.findById(companyId, billId);
+    if (bill === null) throw notFound('PURCHASE_BILL_UNKNOWN', 'That supplier bill was not found.');
+    const typed = String(input.date ?? '').trim();
+    let issuedOn: IsoDate;
+    try {
+      issuedOn = typed === '' ? appToday() : isoDate(typed);
+    } catch {
+      throw invalid('SELF_INVOICE_DATE', 'Enter the self-invoice date as a date.');
+    }
+    const key = String(input.idempotencyKey ?? '').trim() || `self-invoice:${bill.id}`;
+    const { invoice, deduplicated } = await this.shop.reverseCharge.issueSelfInvoice(actor, {
+      billId: bill.id, issuedOn, idempotencyKey: key, billReversed: bill.state === 'REVERSED',
+      recipient: (() => {
+        const seller = sellerPrint(companyId, { name: this.config.name, gstin: this.config.gstin }).seller;
+        return { name: seller.name, addressLines: seller.addressLines, gstin: seller.gstin ?? this.config.gstin, stateCode: seller.stateCode, stateName: seller.stateName };
+      })(),
+    });
+    const point = await this.shop.taxPointOf(companyId, bill.id);
+    const due = selfInvoiceDue(invoice.receivedOn, appToday(), invoice.issuedOn);
+    return {
+      state: 'recorded', deduplicated,
+      title: deduplicated ? 'Self-invoice already issued' : 'Self-invoice issued',
+      message: deduplicated
+        ? `Self-invoice ${invoice.number} was already issued for bill ${bill.invoiceNumber} from ${bill.supplierName}. A second one was not made.`
+        : `Self-invoice ${invoice.number} dated ${formatDate(invoice.issuedOn)} is issued for bill ${bill.invoiceNumber} from ${bill.supplierName}.`,
+      effects: [due.words, ...(point === null ? [] : [point.words])],
+      number: invoice.number, issuedOn: invoice.issuedOn, billId: bill.id,
+      html: selfInvoiceHtml(invoice, { number: bill.invoiceNumber, date: bill.invoiceDate }),
+    };
+  }
+
+  /** Issue #289, part 2b — the self-invoice of one purchase, as a printable page. */
+  async selfInvoicePrint(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const billId = String(input.billId ?? '').trim();
+    const invoice = await this.shop.reverseCharge.selfInvoiceFor(companyId, billId);
+    if (invoice === null) throw notFound('SELF_INVOICE_UNKNOWN', 'No self-invoice has been issued for that purchase yet.');
+    const bill = await this.shop.bills.findById(companyId, billId);
+    return { state: 'print' as const, number: invoice.number, html: selfInvoiceHtml(invoice, { number: bill?.invoiceNumber ?? '', date: bill?.invoiceDate ?? invoice.receivedOn }) };
+  }
+
+  /**
+   * Issue #289, part 2b — every purchase from an unregistered supplier on reverse charge, with its
+   * self-invoice: issued, or how many of the 30 days are left. The ones needing action come first.
+   */
+  async selfInvoiceList(actor: ActorContext) {
+    const companyId = this.companyOf(actor);
+    const live = new Set((await this.shop.bills.list(companyId)).filter((bill) => bill.state === 'POSTED').map((bill) => bill.id));
+    const rows = await this.shop.reverseCharge.reminders(companyId, appToday(), (billId) => live.has(billId));
+    const order: Record<string, number> = { OVERDUE: 0, LAST_DAY: 1, DUE_SOON: 2, NOT_YET_DUE: 3, ISSUED: 4 };
+    const sorted = [...rows].sort((a, b) => (order[a.due.state] ?? 9) - (order[b.due.state] ?? 9));
+    return {
+      toIssue: sorted.filter((row) => row.due.state !== 'ISSUED').length,
+      items: sorted.map((row) => ({
+        billId: row.billId, supplier: row.supplierName, bill: row.invoiceNumber, receivedOn: row.receivedOn,
+        tax: jsonAmount(row.taxPaise), state: row.due.state, lastDay: row.due.lastDay, daysLeft: row.due.daysLeft,
+        words: row.due.words, number: row.selfInvoiceNumber,
+      })),
+    };
+  }
+
+  /** A party as a self-invoice or payment voucher prints it: name, address, GSTIN if any, State. */
+  private registerParty(companyId: CompanyId, partyId: string): RegisterParty {
+    const printed = this.paymentPartyPrint(companyId, partyId);
+    return { name: printed.name, addressLines: printed.addressLines, gstin: printed.gstin ?? null, stateCode: printed.stateCode, stateName: printed.stateName };
+  }
+
+  /**
+   * Issue #289, part 2b — where a reverse-charge bill stands: when its GST falls due and in which
+   * return, and (for an unregistered supplier) its self-invoice. `null` for any other bill.
+   */
+  private async reverseChargeJson(actor: ActorContext, bill: PurchaseBill) {
+    const companyId = this.companyOf(actor);
+    const purchase = await this.shop.reverseCharge.purchaseFor(companyId, bill.id);
+    if (purchase === null) return null;
+    const point = await this.shop.taxPointOf(companyId, bill.id);
+    const invoice = await this.shop.reverseCharge.selfInvoiceFor(companyId, bill.id);
+    const due = purchase.supplierRegistered ? null : selfInvoiceDue(purchase.receivedOn, appToday(), invoice?.issuedOn ?? null);
+    return {
+      billId: bill.id,
+      receivedOn: purchase.receivedOn,
+      timeOfSupply: point === null ? null : { date: point.date, clause: point.clause, settled: point.settled, period: taxPeriodOf(point.date), words: point.words },
+      selfInvoice: purchase.supplierRegistered ? null : {
+        state: due?.state ?? 'NOT_YET_DUE', lastDay: due?.lastDay ?? null, daysLeft: due?.daysLeft ?? null, words: due?.words ?? '',
+        number: invoice?.number ?? null, issuedOn: invoice?.issuedOn ?? null,
+      },
     };
   }
 
@@ -2013,8 +2407,13 @@ export class DemoApplication {
 
   // ------------------------------------------------------- issue #23: chasing what is still owed
 
-  private reminderDate(input: Record<string, unknown>): IsoDate {
-    return input.today === undefined || input.today === '' ? appToday() : isoDate(String(input.today));
+  /**
+   * Issue #403 — the day a reminder is worked out for is the server's today, never a date the request
+   * names: a future "today" would chase bills that are not yet due, in stronger words, and log a day
+   * that never happened. Tests move the day with `useFixedAppClock(...)`.
+   */
+  private static reminderDate(): IsoDate {
+    return appToday();
   }
 
   private candidateJson(candidate: ReminderCandidate) {
@@ -2057,7 +2456,7 @@ export class DemoApplication {
   /** Everything the Reminders screen shows: the plan, what was sent, promises and disputes. */
   async reminders(actor: ActorContext, input: Record<string, unknown> = {}) {
     const companyId = this.companyOf(actor);
-    const today = this.reminderDate(input);
+    const today = DemoApplication.reminderDate();
     const plan = await this.collections.plan(actor, today);
     return {
       asOf: today,
@@ -2087,7 +2486,7 @@ export class DemoApplication {
     this.companyOf(actor);
     const reminder = await this.collections.send(actor, {
       documentId: String(input.documentId ?? ''),
-      today: this.reminderDate(input),
+      today: DemoApplication.reminderDate(),
     });
     return {
       state: reminder.state === 'SENT' ? 'recorded' : 'recorded',
@@ -2101,7 +2500,7 @@ export class DemoApplication {
 
   async sendAllReminders(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const sent = await this.collections.sendPlanned(actor, this.reminderDate(input));
+    const sent = await this.collections.sendPlanned(actor, DemoApplication.reminderDate());
     return {
       state: 'recorded',
       title: sent.length === 0 ? 'Nothing needed sending' : `${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`,
@@ -2114,7 +2513,7 @@ export class DemoApplication {
 
   async retryReminder(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
-    const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), this.reminderDate(input));
+    const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), DemoApplication.reminderDate());
     return { state: 'recorded', title: `Reminder ${reminder.state.toLowerCase()}`, message: reminder.failureReason ?? reminder.message['en-IN'], reminder: this.reminderJson(reminder) };
   }
 
@@ -2189,18 +2588,19 @@ export class DemoApplication {
    * be billed: the master record is written, and the customer's own account is opened in the
    * ledger. Both or neither.
    */
-  async catalogue(actor: ActorContext) {
-    const companyId = this.companyOf(actor);
-    // Issue #288 — the walk-in customer is on the list from the start, once there is a shop address
-    // to bill a counter sale at. Without one, no bill can be issued at all, and the list says nothing.
-    if (businessDetailsOf(companyId) !== null) await this.walkIn(actor);
-    return readCatalogue(companyId);
+  catalogue(actor: ActorContext) {
+    // Issue #395 — a read only reads. The walk-in customer (#288) is made when the shop's address
+    // is saved (`saveBusinessDetails`), so it is on the list from then on.
+    return readCatalogue(this.companyOf(actor));
   }
 
-  /** Issue #288 — the company's walk-in customer, with its account in the books. */
-  private async walkIn(actor: ActorContext) {
+  /**
+   * Issue #288 — the company's walk-in customer, with its account in the books, opened by `openedBy`.
+   * Issue #395: never from a read.
+   */
+  private async walkIn(actor: ActorContext, openedBy: ActorContext = this.shop.setupActor) {
     const party = walkInCustomer(this.companyOf(actor));
-    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id, name: party.legalName, kind: 'CUSTOMER' });
+    await this.shop.ledger.openPartyAccount(openedBy, { partyId: party.id, name: party.legalName, kind: 'CUSTOMER' });
     return party;
   }
 
@@ -2304,6 +2704,11 @@ export class DemoApplication {
     const before = describe(readBusinessDetails(companyId, company).bank);
     const saved = saveBusinessDetails(companyId, company, input);
     await this.recordPayeeChange(actor, 'bank account', before, describe(saved.bank));
+    // Issue #395 — the walk-in customer (#288) needs the shop's address, so it is made, or moved to
+    // the new town and PIN code, here, and its account opened as the person saving. Without
+    // `ledger.setup` the account waits for the first counter sale.
+    if (actor.permissions.includes('ledger.setup')) await this.walkIn(actor, actor);
+    else walkInCustomer(companyId);
     return saved;
   }
 
@@ -2377,14 +2782,16 @@ export class DemoApplication {
     // Issue #233 — one key per review, sent by the screen with the review and again with Record, so
     // pressing Record twice issues one bill. The screen never uses the customer's own reference as
     // the key: two real sales can carry the same order number, and the second must not come back as
-    // the first. (Callers without a review key still fall back to it, as before.)
+    // the first. Issue #392 — a review without a key is refused rather than given an invented one.
     // Issue #256 — this review replaces the one the same sale form showed before it. That earlier
     // review was never issued, so it is forgotten rather than left behind as "a bill waiting".
     const replaced = String(input.replaces ?? '').trim();
     if (replaced !== '' && replaced !== String(input.requestId ?? '')) {
       await this.discardReview(actor, `web-sale:${replaced}`, 'a later review of the same sale replaced it');
     }
-    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${String(input.requestId || input.reference || crypto.randomUUID())}`, input: { ...this.saleInput(input), ...zeroRated } });
+    // The bill is read before its key, so a form that cannot be read is answered as that.
+    const saleInput = { ...this.saleInput(input), ...zeroRated };
+    const draft = await this.sales.createDraft(actor, { idempotencyKey: `web-sale:${requestKeyOf(input, 'SALE_REQUEST_ID_REQUIRED', 'bill')}`, input: saleInput });
     try {
       if (exportSale !== null) this.exportSales.set(draft.id, exportSale);
       // Issue #266 — the date the bill will carry, said plainly when it is not today.
@@ -2407,9 +2814,11 @@ export class DemoApplication {
         effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === BALANCE_WILL_INCREASE ? paidNow.sentence : effect)),
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
-        placeOfSupply: walkIn === null
-          ? delivery.placeOfSupplyReason
-          : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
+        placeOfSupply: draft.supplyKind === 'SERVICES'
+          ? DemoApplication.servicePlaceOfSupplyReason(draft.pricing?.placeOfSupplyStateCode ?? null, customer, walkIn !== null)
+          : walkIn === null
+            ? delivery.placeOfSupplyReason
+            : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
           kind: exportSale.kind,
@@ -2491,7 +2900,9 @@ export class DemoApplication {
           stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
           'en-IN': `${state} sale · ${taxes}`,
           'hi-IN': `${state} ki bikri · ${taxes}`,
-          reason: walkIn === null
+          reason: bill.supplyKind === 'SERVICES'
+            ? DemoApplication.servicePlaceOfSupplyReason(pricing.placeOfSupplyStateCode, customer, walkIn !== null)
+            : walkIn === null
             ? delivery.placeOfSupplyReason
             : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
         },
@@ -2662,7 +3073,12 @@ export class DemoApplication {
         date: String(input.date ?? '') || appToday(),
         terms: String(input.terms ?? '30'),
         reference: String(input.reference ?? '') || `challan-bill:${challan.id}`,
-      });
+        approvalReason: String(input.approvalReason ?? ''),
+        // One bill per challan: the challan itself is what a retry repeats.
+        requestId: String(input.requestId ?? '') || `challan-bill:${challan.id}`,
+      }, false);
+      // Issue #301 — a challan is billed or refused, never held: the goods are already with them.
+      if (!('invoice' in recorded)) throw new Error('A challan bill was held for approval.');
     } catch (error) {
       await this.challans.hooks.hold(actor, challan);
       throw error;
@@ -2675,6 +3091,9 @@ export class DemoApplication {
   private ewayDecisionOf(draft: SalesInvoice, delivery: DeliveryDetails | null) {
     const pricing = draft.pricing;
     if (pricing === null) return null;
+    // Issue #287 — CGST Rule 138(1): an e-way bill is for the movement of goods. A service moves
+    // none, so its bill is never checked or reminded for one.
+    if (draft.supplyKind === 'SERVICES') return null;
     try {
       const consignor = dispatchFrom(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
       const billTo = this.movementParty(draft.partyId);
@@ -2710,6 +3129,139 @@ export class DemoApplication {
    * their credit. Issue #142 — a draft made from a quotation is checked here too, so a converted
    * quotation meets exactly the checks a typed sale does.
    */
+  /** Issue #293 — a line's rate per unit after its discount, rounded to the paisa. */
+  private static priceAfterDiscount(line: SalesInvoice['lines'][number], priced: { readonly grossAmount: { readonly minor: bigint }; readonly discountAmount: { readonly minor: bigint } } | undefined) {
+    if (line.discount === undefined || priced === undefined || line.quantity.scaled <= 0n) return line.unitPrice;
+    const net = priced.grossAmount.minor - priced.discountAmount.minor;
+    return money((net * 1_000_000n + line.quantity.scaled / 2n) / line.quantity.scaled);
+  }
+
+  /** Issue #11 / #301 — the trade-terms verdict on a draft, with an approval's reason when one is given. */
+  private termsQuote(actor: ActorContext, draft: SalesInvoice, override?: { readonly reason: string }): Promise<TradeTermsQuote> {
+    const pricing = draft.pricing;
+    if (pricing === null) throw invalid('SALES_NOT_PRICED', 'This bill has not been worked out yet.');
+    return this.terms.quote(actor, {
+      // The customer and the goods this bill is actually for, so "last time you charged them" is
+      // about them and about these goods, not about a demo party's soap.
+      partyId: draft.partyId,
+      documentDate: draft.documentDate,
+      documentId: draft.id,
+      // Issue #235 — the whole bill, GST, freight and other charges included: what they will owe.
+      billValue: pricing.totals.invoiceValue,
+      lines: draft.lines.map((line) => ({
+        lineId: line.lineId,
+        itemId: line.itemId,
+        itemName: pricing.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? itemView(this.config.companyId, line.itemId).name,
+        unit: line.quantity.unit,
+        quantity: String(Number(line.quantity.scaled) / 1_000_000),
+        // Issue #293 — what each unit is really sold for after its discount, so #11's discount limit
+        // and approval apply to a typed discount exactly as to a lowered rate.
+        unitPrice: DemoApplication.priceAfterDiscount(line, pricing.lines.find((priced) => priced.lineId === line.lineId)),
+      })),
+      ...(override === undefined ? {} : { override }),
+    });
+  }
+
+  /**
+   * Issue #301 — whether this person may approve what the sale review asked approval for: approving a
+   * bill (`sales.approve`), plus the credit or discount permission for what is being allowed.
+   */
+  private static approvalFor(actor: ActorContext, quote: TradeTermsQuote) {
+    if (quote.outcome === 'ALLOW') return { required: false, canApprove: true, who: '' };
+    const credit = quote.credit.outcome !== 'ALLOW' && quote.reasons.includes(quote.credit.sentence);
+    const discount = quote.lines.some((line) => line.discount?.outcome === 'NEEDS_APPROVAL');
+    const needed: string[] = [SALES_PERMISSIONS.approve];
+    if (credit) needed.push(TRADE_TERMS_PERMISSIONS.overrideCreditLimit);
+    if (discount) needed.push(TRADE_TERMS_PERMISSIONS.approveDiscount);
+    const who = credit
+      ? 'someone allowed to approve bills past a customer’s credit limit'
+      : 'the owner, or someone allowed to approve discounts';
+    return { required: true, canApprove: needed.every((permission) => actor.permissions.includes(permission)), who };
+  }
+
+  /**
+   * Issue #301 — a sale whose review needs approval is never issued without one. The person issuing it
+   * either approves it, giving a reason that is kept with their name in the audit trail, or, when they
+   * cannot, the bill is held as waiting for approval (`hold`), or refused when there is nowhere to hold it.
+   * Returns the held result, or `null` when the bill may be issued.
+   *
+   * A held bill is not a tax invoice: CGST Act 2017 s.31(1) (in force 1 July 2017) wants the invoice
+   * issued before or at the removal of the goods, so they should not leave until it is approved.
+   */
+  private async approvalGate(actor: ActorContext, token: string, approval: { readonly reason: string; readonly hold: boolean }) {
+    const draft = await this.salesRepository.findById(this.companyOf(actor), token);
+    // A bill already issued or cancelled is for `finalise` to answer, as a repeat or a refusal.
+    if (draft === null || draft.pricing === null || draft.state === 'FINAL' || draft.state === 'CANCELLED') return null;
+    const quote = await this.termsQuote(actor, draft);
+    const gate = DemoApplication.approvalFor(actor, quote);
+    if (!gate.required) return null;
+    const why = quote.reasons.map((reason) => reason['en-IN']).join(' ');
+    const reason = approval.reason.trim();
+    if (reason !== '' && gate.canApprove) {
+      // Writes the approval, who gave it and why, to the audit trail; refuses an empty reason.
+      await this.termsQuote(actor, draft, { reason });
+      return null;
+    }
+    if (reason !== '') {
+      throw forbidden('SALE_APPROVAL_NOT_ALLOWED', `You cannot approve this bill. It needs ${gate.who}. Nothing was issued.`, { details: { approver: gate.who } });
+    }
+    if (gate.canApprove) {
+      throw notAllowed('SALE_APPROVAL_REQUIRED', `${why} Nothing was issued. Say why you are allowing it, and it is issued with your name on the approval.`, { details: { approver: gate.who, canApprove: 'true' } });
+    }
+    if (!approval.hold) {
+      throw notAllowed('SALE_APPROVAL_REQUIRED', `${why} Nothing was issued. Ask ${gate.who} to make this bill.`, { details: { approver: gate.who, canApprove: 'false' } });
+    }
+    const held = draft.state === 'PENDING_APPROVAL' ? draft : await this.sales.submitForApproval(actor, token);
+    if (held.state === 'NEEDS_INFO') {
+      throw notAllowed('SALES_NEEDS_INFO', 'This bill needs more information before it can be sent for approval.');
+    }
+    return {
+      state: 'waiting',
+      title: 'Waiting for approval',
+      message: `${why} The bill was not issued. It is waiting for approval from ${gate.who}.`,
+      amount: jsonAmount(held.pricing?.totals.invoiceValue.minor ?? 0n),
+      token: held.id,
+      approver: gate.who,
+    };
+  }
+
+  /** Issue #301 — bills held for approval, with why, for someone who may approve them. */
+  async salesWaitingForApproval(actor: ActorContext) {
+    const held = await this.salesRepository.list(this.companyOf(actor), { state: 'PENDING_APPROVAL' });
+    const bills = await Promise.all(held.map(async (bill) => {
+      const quote = bill.pricing === null ? null : await this.termsQuote(actor, bill);
+      return {
+        token: bill.id,
+        date: bill.documentDate,
+        customer: this.partyName(this.companyOf(actor), String(bill.partyId)),
+        amount: jsonAmount(bill.pricing?.totals.invoiceValue.minor ?? 0n),
+        why: quote === null ? [] : quote.reasons,
+        madeByYou: bill.createdBy === actor.userId,
+        canApprove: quote !== null && DemoApplication.approvalFor(actor, quote).canApprove && bill.createdBy !== actor.userId,
+      };
+    }));
+    return { bills };
+  }
+
+  /** Issue #301 — someone allowed to approves a held bill, with their reason, and it is issued. */
+  async approveSale(actor: ActorContext, input: Record<string, unknown>) {
+    const usageDate = appToday();
+    requireIssuable(this.config.companyId);
+    await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
+    const token = String(input.token ?? '');
+    const bill = await this.salesRepository.findById(this.companyOf(actor), token);
+    if (bill === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
+    if (bill.state !== 'PENDING_APPROVAL') throw notAllowed('SALE_NOT_WAITING', 'This bill is not waiting for approval.');
+    if (String(input.reason ?? '').trim() === '') {
+      throw invalid('SALE_APPROVAL_REASON_REQUIRED', 'Please say why this is being allowed, so anyone looking at the bill later understands.');
+    }
+    // Checked before the approval is written down, so a refused approval leaves no trace of one.
+    if (bill.createdBy === actor.userId) {
+      throw forbidden('SALES_SELF_APPROVAL', 'The person who made a bill cannot approve it. Ask someone else to look at it.');
+    }
+    return this.issueCheckedSale(actor, token, usageDate, null, '', { reason: String(input.reason), hold: false });
+  }
+
   private async checkSale(actor: ActorContext, draft: SalesInvoice) {
     if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
     // Issue #229 — no selling more than is in the godown. Checked here, at the review, for every
@@ -2734,23 +3286,7 @@ export class DemoApplication {
 
     // Issue #11: what was last agreed, what the discount is, and whether this customer should be
     // given more credit. The draft is excluded from its own pending value.
-    const quote = await this.terms.quote(actor, {
-      // The customer and the goods this bill is actually for, so "last time you charged them" is
-      // about them and about these goods, not about a demo party's soap.
-      partyId: draft.partyId,
-      documentDate: draft.documentDate,
-      documentId: draft.id,
-      // Issue #235 — the whole bill, GST, freight and other charges included: what they will owe.
-      billValue: draft.pricing.totals.invoiceValue,
-      lines: draft.lines.map((line) => ({
-        lineId: line.lineId,
-        itemId: line.itemId,
-        itemName: draft.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? itemView(this.config.companyId, line.itemId).name,
-        unit: line.quantity.unit,
-        quantity: String(Number(line.quantity.scaled) / 1_000_000),
-        unitPrice: line.unitPrice,
-      })),
-    });
+    const quote = await this.termsQuote(actor, draft);
 
     const effects = ['A numbered invoice will be issued.', BALANCE_WILL_INCREASE];
     for (const reason of quote.reasons) effects.push(reason['en-IN']);
@@ -2792,6 +3328,8 @@ export class DemoApplication {
           margin: line.margin === null ? null : { sentence: line.margin.sentence },
         })),
       },
+      // Issue #301 — what Record will do: issue it, ask this person to approve it, or hold it.
+      approval: DemoApplication.approvalFor(actor, quote),
     };
   }
 
@@ -2816,7 +3354,7 @@ export class DemoApplication {
     };
   }
 
-  async recordSale(actor: ActorContext, input: Record<string, unknown>) {
+  async recordSale(actor: ActorContext, input: Record<string, unknown>, hold = true) {
     // Issue #42: the plan is checked before the bill is issued, and counted only after it was.
     // In that order, because a bill that failed to post is not a bill, and charging somebody's
     // allowance for the product's own failure would be the wrong way round.
@@ -2832,7 +3370,7 @@ export class DemoApplication {
     const preview = await this.previewSale(actor, input);
     // Issue #284 — refused here first, so the review this request made is not left behind as a draft.
     await this.refuseIfTooLateForPortal(actor, preview.token, true);
-    return this.issueCheckedSale(actor, preview.token, usageDate, paid, String(input.distanceKm ?? '').trim());
+    return this.issueCheckedSale(actor, preview.token, usageDate, paid, String(input.distanceKm ?? '').trim(), { reason: String(input.approvalReason ?? ''), hold });
   }
 
   /** Issues a bill that has been checked, and counts it against the plan once it exists. */
@@ -2850,7 +3388,19 @@ export class DemoApplication {
    *     portal's own duplicate answer is treated as success.
    */
   private startAutomaticEInvoice(actor: ActorContext, invoiceId: string): void {
-    void this.afterThisAction(actor.companyId, async () => {
+    const persistence = this.shop.persistence;
+    if (persistence.kind === 'postgres') {
+      // Issue #345 — written in the bill's own transaction: if the bill rolls back, so does this,
+      // and nothing is ever sent for a bill that does not exist. The worker sends it after commit.
+      // The action waits for this write before it commits (`durable.ts`).
+      persist(actor.companyId, () => persistence.db.requireUnitOfWork(actor.companyId).enqueue({
+        topic: EINVOICE_TOPIC,
+        dedupeKey: invoiceId,
+        payload: { documentId: invoiceId, actorId: String(actor.userId), branchId: actor.branchId === null ? null : String(actor.branchId) },
+      }));
+      return;
+    }
+    void (async () => {
       const document = await this.eInvoiceDocumentFor(actor, invoiceId);
       const applicability = this.applicabilityFor(document);
       // Decided here rather than inside the service, because the service refuses a bill that does
@@ -2858,7 +3408,7 @@ export class DemoApplication {
       // right answer, not an error worth showing them.
       if (decideApplicability(applicability).outcome !== 'APPLICABLE') return;
       await this.shop.eInvoice.register(actor, { document, applicability });
-    }).catch((error: unknown) => {
+    })().catch((error: unknown) => {
       // Nothing here may reach the bill. The record itself carries the failure and the retry; a
       // fault of our own (not the portal being down) is reported as well.
       reportUnexpected('api.einvoiceAutoSend', error);
@@ -2866,15 +3416,41 @@ export class DemoApplication {
   }
 
   /**
-   * Issue #340 — work that follows an action without being part of it. On PostgreSQL it is its own
-   * unit of work, which waits for the company's lock and so starts only after the action has
-   * committed; it reads the bill afresh, so a bill that rolled back is never sent anywhere.
-   * #345 moves this onto the transactional outbox and a separate worker.
+   * Issue #345 — the worker's side of the automatic e-invoice. The record is marked PENDING in one
+   * unit of work, the portal is called holding nothing, and the answer is saved in the unit of work
+   * that marks the outbox message sent. A crash anywhere repeats the same question with the same
+   * idempotency key, and the portal answers a repeat with the IRN it already gave.
    */
-  private afterThisAction(companyId: CompanyId, work: () => Promise<void>): Promise<void> {
+  outboxHandlers(): Readonly<Record<string, OutboxHandler>> {
     const persistence = this.shop.persistence;
-    if (persistence.kind === 'memory') return work();
-    return outsideUnitOfWork(() => persistence.db.unitOfWork(companyId, work));
+    if (persistence.kind === 'memory') return {};
+    return {
+      [EINVOICE_TOPIC]: async (message) => {
+        const payload = message.payload as { documentId: string; actorId: string; branchId: string | null };
+        const actor: ActorContext = {
+          companyId: this.config.companyId,
+          branchId: payload.branchId === null ? null : asId<'Branch'>(payload.branchId),
+          userId: asId<'User'>(payload.actorId),
+          permissions: ['einvoice.generate', 'einvoice.view'],
+        };
+        const prepared = await persistence.db.unitOfWork(this.config.companyId, async () => {
+          const document = await this.eInvoiceDocumentFor(actor, payload.documentId);
+          const applicability = this.applicabilityFor(document);
+          if (decideApplicability(applicability).outcome !== 'APPLICABLE') return null;
+          try {
+            return await this.shop.eInvoice.prepareRegistration(actor, { document, applicability });
+          } catch (error) {
+            // A bill the rules say not to send (or cannot yet decide) is an answer, not a failure to
+            // retry: it waits on the E-invoice screen, exactly as before.
+            if (error instanceof DomainError) return null;
+            throw error;
+          }
+        });
+        if (prepared === null || prepared.kind === 'DONE') return;
+        const outcome = await this.shop.eInvoice.callPortal(prepared);
+        return async () => { await this.shop.eInvoice.completeRegistration(actor, prepared, outcome); };
+      },
+    };
   }
 
   /**
@@ -2921,9 +3497,11 @@ export class DemoApplication {
     );
   }
 
-  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null, ewayDistanceKm = '') {
+  private async issueCheckedSale(actor: ActorContext, token: string, usageDate: IsoDate, paidNow: PaidNow | null = null, ewayDistanceKm = '', approval = { reason: '', hold: true }) {
     requireIssuable(this.config.companyId);
     await this.refuseIfTooLateForPortal(actor, token, false);
+    const held = await this.approvalGate(actor, token, approval);
+    if (held !== null) return held;
     const finalise = () => this.sales.finalise(actor, { idempotencyKey: `web-sale-final:${token}`, invoiceId: token });
     // Issue #288 — "Paid now": the bill and its receipt in one unit of work. Both vouchers post, or
     // neither does and no bill number is used. Keyed on the bill, so a second press records neither again.
@@ -3028,7 +3606,8 @@ export class DemoApplication {
     const position = await this.payments.position(actor, invoice.partyId as PartyId, invoice.documentDate);
     const due = position.documents.find((d) => d.document.documentId === invoice.id)?.outstanding.minor
       ?? invoice.pricing?.totals.invoiceValue.minor ?? 0n;
-    const upiId = upiIdOf(companyId);
+    // Issue #390 — the payee frozen on this bill when it was issued, never the id saved since.
+    const upiId = this.invoicePrints.get(invoice.id)?.document.upiId ?? null;
     const payee = sellerPrint(companyId, { name: this.config.name, gstin: this.config.gstin }).seller.name;
     const voucher = receipt?.voucherId == null ? null : await this.shop.ledger.getVoucher(actor, receipt.voucherId);
     return {
@@ -3185,7 +3764,7 @@ export class DemoApplication {
     await this.subscriptions.require(actor, 'sales.issue_invoice', usageDate);
     const token = String(input.token ?? '');
     if ((await this.salesRepository.findById(companyId, token)) === null) throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
-    return this.issueCheckedSale(actor, token, usageDate);
+    return this.issueCheckedSale(actor, token, usageDate, null, '', { reason: String(input.approvalReason ?? ''), hold: true });
   }
 
   /**
@@ -3207,8 +3786,14 @@ export class DemoApplication {
     // from the business's own saved particulars. Frozen here with everything else, so changing the
     // address tomorrow never alters a bill issued today.
     const us = sellerPrint(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
+    // Issue #390 — the UPI id customers pay into is frozen with the bill, like the bank details.
+    // A reprint must never re-point an issued bill's pay-by-scan square at a different payee:
+    // CGST Rule 56(8) (in force since 1 July 2017) forbids overwriting an entry in a document once
+    // made, and the invoice issued under Section 31 / Rule 46 is the document the customer holds.
+    // A new payee reaches a customer only on a new bill or payment request.
+    const upiId = upiIdOf(invoice.companyId);
     this.invoicePrints.set(invoice.id, {
-      document: toInvoiceDocument(invoice, {
+      document: { ...toInvoiceDocument(invoice, {
         title: 'TAX_INVOICE',
         seller: us.seller,
         bank: us.bank,
@@ -3232,7 +3817,7 @@ export class DemoApplication {
         ...(delivery?.poReference == null ? {} : { poReference: delivery.poReference }),
         logoDataUri: branding.logoDataUri,
         tradeMark: branding.tradeMark,
-      }),
+      }), upiId },
       snapshot: brandedSnapshot(template, 'en-IN', String(invoice.documentDate), branding),
     });
   }
@@ -3280,7 +3865,9 @@ export class DemoApplication {
     // business or an export is judged here exactly as there.
     const eInvoiceExpected =
       eInvoiceRecords.length > 0 || this.eInvoiceDecisionFor(invoice).needed === 'YES';
-    const upiId = upiIdOf(companyId);
+    // Issue #390 — the UPI square pays the id frozen on the bill at issue (it rides in on
+    // `facts.document`). A bill frozen before #390 carries none and prints no square, rather than
+    // the id saved today: its original payee is not known, and guessing could send money elsewhere.
     // Issue #182 — the e-way bill number is raised against the issued invoice, so it only exists
     // after the bill is frozen. It is layered on here exactly as the government's IRN is: the
     // stored document is untouched, and every later reprint carries the number.
@@ -3295,7 +3882,7 @@ export class DemoApplication {
       cancelled: invoice.state === 'CANCELLED'
         ? { on: invoice.cancelledAt === null ? invoice.documentDate : DemoApplication.indiaDate(invoice.cancelledAt), reason: invoice.cancelReason ?? '' }
         : null,
-      ...(upiId === null ? {} : { upiId }),
+      upiId: facts.document.upiId ?? null,
       ...(ewayBillNumber === null || transport?.eWayBillNumber != null
         ? {}
         : { transport: { ...(transport ?? {}), eWayBillNumber: ewayBillNumber } }),
@@ -3394,7 +3981,8 @@ export class DemoApplication {
     this.companyOf(actor);
     const plan = await this.agent.plan(actor, {
       text: String(input.request ?? ''),
-      today: input.today === undefined || input.today === '' ? appToday() : isoDate(String(input.today)),
+      // Issue #403 — the server's today, never one the request names.
+      today: appToday(),
     });
     // Planning looks at nothing; the preview is where the request meets the books, so both run
     // together for the screen. Neither of them writes anything.
@@ -3429,12 +4017,22 @@ export class DemoApplication {
         ...this.agentPlanJson(plan),
         report: await this.agent.report(actor, plan.id).then((report) => (report === null ? null : this.agentReportJson(report))),
       }))),
-      // The trail is GPT 2's audit log, not a second copy kept for the screen.
-      audit: this.agentAudit
-        .forCompany({ companyId: actor.companyId, branchId: String(actor.branchId ?? ''), actorId: actor.userId, permissions: new Set(), sessionId: 'read' })
-        .slice(-20)
-        .map((event) => ({ action: event.action, at: event.occurredAt, detail: event.after ?? {} })),
+      audit: await this.agentTrail(actor.companyId),
     };
+  }
+
+  /** Issue #404 — the assistant's last twenty lines, read from the company's own audit trail. */
+  private async agentTrail(companyId: CompanyId): Promise<readonly { readonly action: string; readonly at: string; readonly detail: unknown }[]> {
+    const audit = this.shop.audit;
+    if (audit instanceof InMemoryAuditPort) {
+      return audit.events.filter((event) => event.companyId === companyId && event.action.startsWith('agent.'))
+        .slice(-20).map((event) => ({ action: event.action, at: event.at, detail: event.details }));
+    }
+    const db = (this.shop.persistence as Extract<Persistence, { kind: 'postgres' }>).db;
+    const { rows } = await db.tenantTransaction(companyId, (sql) => sql.query(
+      `SELECT action, occurred_at, COALESCE(after_json -> 'details', after_json, '{}'::jsonb) AS detail FROM audit_events
+        WHERE company_id = $1 AND action LIKE 'agent.%' ORDER BY seq DESC LIMIT 20`, [companyId]));
+    return rows.reverse().map((row) => ({ action: String(row.action), at: (row.occurred_at as Date).toISOString(), detail: row.detail }));
   }
 
   // ------------------------------------------------------------ issue #42: the plan and its use
@@ -3713,6 +4311,14 @@ export class DemoApplication {
         const bill = documents.find((d) => d.documentId === allocation.documentId);
         return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor, adjusted: allocation.adjustedFromAdvance === true };
       }),
+      // Issue #289, part 2b — s.31(3)(g): paying a reverse-charge bill, this voucher is the payment voucher.
+      reverseCharge: payment.direction !== 'PAYMENT' ? [] : (await Promise.all(payment.allocations.map(async (allocation) => {
+        const purchase = await this.shop.reverseCharge.purchaseFor(companyId, allocation.documentId);
+        return purchase === null ? null : {
+          bill: purchase.invoiceNumber, interState: purchase.interState, lines: purchase.lines,
+          placeOfSupply: `${seller.stateName} (${seller.stateCode})`,
+        };
+      }))).filter((entry) => entry !== null),
     });
     return { state: 'print' as const, number: voucher?.number ?? payment.id, html };
   }
@@ -3825,12 +4431,13 @@ export class DemoApplication {
   }
 
   async startBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
-    const connection = await this.bankFeeds.startConsent(this.bankContext(actor), { provider: String(input.provider ?? ''), redirectUri: String(input.redirectUri ?? '') });
-    return { state: 'draft', connection: this.bankConnectionJson(connection) };
+    const { connection, state } = await this.bankFeeds.startConsent(this.bankContext(actor), { provider: String(input.provider ?? ''), ...(input.redirectUri ? { redirectUri: String(input.redirectUri) } : {}) });
+    // Issue #402: `consentState` comes back once, to the person who started the request; the bank returns it.
+    return { state: 'draft', connection: this.bankConnectionJson(connection), consentState: state };
   }
 
   async completeBankFeedConsent(actor: ActorContext, input: Record<string, unknown>) {
-    const connection = await this.bankFeeds.completeConsent(this.bankContext(actor), String(input.connectionId ?? ''), String(input.authorizationCode ?? ''));
+    const connection = await this.bankFeeds.completeConsent(this.bankContext(actor), String(input.connectionId ?? ''), String(input.authorizationCode ?? ''), String(input.consentState ?? ''));
     return { state: 'success', connection: this.bankConnectionJson(connection) };
   }
 
@@ -3944,6 +4551,13 @@ export class DemoApplication {
         outward: workspace.gstr3b.outward.map((box) => ({
           boxId: box.boxId, label: box.label['en-IN'],
           taxableValue: jsonAmount(box.amounts.taxableValue.minor),
+          tax: jsonAmount(totalTaxOf(box.amounts).minor),
+        })),
+        // Issue #289, part 3 — Table 4 box by box, so 4(A) and the s.17(5) credit taken out in 4(B)(1) can be seen.
+        credit: workspace.gstr3b.credit.map((box) => ({
+          boxId: box.boxId, label: box.label['en-IN'],
+          cgst: jsonAmount(box.amounts.cgst.minor), sgst: jsonAmount(box.amounts.sgst.minor),
+          igst: jsonAmount(box.amounts.igst.minor), cess: jsonAmount(box.amounts.cess.minor),
           tax: jsonAmount(totalTaxOf(box.amounts).minor),
         })),
         heads: workspace.gstr3b.heads.map((head) => ({
@@ -4155,7 +4769,7 @@ export class DemoApplication {
       lineKey: String(input.lineKey ?? ''),
       kind: kind === 'ACCEPT' ? 'ACCEPT' : kind === 'REJECT' ? 'REJECT' : 'PENDING',
       reason: String(input.reason ?? ''),
-      idempotencyKey: `web-itc:${period}:${String(input.lineKey ?? '')}:${kind}:${String(input.reference ?? Date.now())}`,
+      idempotencyKey: `web-itc:${period}:${requestKeyOf(input, 'ITC_REQUEST_ID_REQUIRED', 'answer')}`,
     });
     return this.itcWorkspaceJson(workspace);
   }
@@ -4210,7 +4824,7 @@ export class DemoApplication {
     const companyId = this.companyOf(actor);
     permissionPortFromActor.require(actor, 'returns.create', 'view bills eligible for return');
     const returned = async (id: string, kind: 'SALES_RETURN' | 'PURCHASE_RETURN', lineId: string) =>
-      (await this.returnNotes.listForOriginal(companyId, id)).filter((note) => note.kind === kind)
+      (await this.returnNotes.listForOriginal(companyId, id)).filter((note) => isGoodsReturn(note, kind))
         .flatMap((note) => note.lines).filter((line) => line.originalLineId === lineId)
         .reduce((total, line) => total + line.quantity.scaled, 0n);
     const sales = await this.salesRepository.list(companyId, { state: 'FINAL' });
@@ -4221,10 +4835,14 @@ export class DemoApplication {
           kind: 'SALES_RETURN', id: invoice.id, number: invoice.number, party: this.invoicePrints.get(invoice.id)?.document.buyer.name ?? this.config.customerName,
           date: invoice.documentDate,
           // Issue #233 — what a credit note for the whole bill would still credit, charges included.
-          leftToCredit: jsonAmount((invoice.pricing?.totals.invoiceValue.minor ?? 0n) - (await this.returnNotes.listForOriginal(companyId, invoice.id))
-            .filter((note) => note.kind === 'SALES_RETURN').reduce((total, note) => total + note.totals.total.minor, 0n)),
+          // Issue #293 — a debit note for a higher price adds to it.
+          leftToCredit: jsonAmount((invoice.pricing?.totals.invoiceValue.minor ?? 0n) + (await this.returnNotes.listForOriginal(companyId, invoice.id))
+            .filter((note) => note.kind !== 'PURCHASE_RETURN')
+            .reduce((total, note) => total + (note.kind === 'SALES_DEBIT_NOTE' ? 1n : -1n) * note.totals.total.minor, 0n)),
           lines: await Promise.all(invoice.lines.map(async (line) => ({
             id: line.lineId, item: invoice.pricing?.lines.find((priced) => priced.lineId === line.lineId)?.itemName ?? line.note ?? line.itemId,
+            // Issue #293 — the rate the bill charged, so a price correction can start from it.
+            rate: jsonAmount(line.unitPrice.minor),
             quantity: Number(line.quantity.scaled) / 1_000_000, unit: line.quantity.unit,
             returned: Number(await returned(invoice.id, 'SALES_RETURN', line.lineId)) / 1_000_000,
           }))),
@@ -4243,16 +4861,21 @@ export class DemoApplication {
   }
 
   async previewReturn(actor: ActorContext, input: Record<string, unknown>) {
+    if (String(input.mode ?? '') === PRICE_CORRECTION) return this.previewPriceCorrection(actor, input);
     const command = this.returnInput(input);
     const preview = command.kind === 'SALES_RETURN'
       ? await this.returns.previewSales(actor, command.command)
       : await this.returns.previewPurchase(actor, command.command);
+    // Issue #293 — services and charges never go into or out of a godown, so the sentence says so.
+    const stockMoves = preview.lines.some((line) => line.supplyKind === 'GOODS' && !isChargeLine(line));
     return {
       state: 'preview', title: command.kind === 'SALES_RETURN' ? 'Customer return checked' : 'Supplier return checked',
       message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.command.idempotencyKey,
+      stockMoves,
       effects: [
         command.kind === 'SALES_RETURN' ? 'A credit note will reduce what the customer owes.' : 'A debit note will reduce what you owe the supplier.',
-        command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
+        !stockMoves ? 'Nothing goes into or out of stock: this is for services, not goods.'
+          : command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
         preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
         ...preview.warnings,
       ],
@@ -4262,22 +4885,74 @@ export class DemoApplication {
   }
 
   async recordReturn(actor: ActorContext, input: Record<string, unknown>) {
-    const command = this.returnInput(input);
-    const result = command.kind === 'SALES_RETURN'
-      ? await this.returns.postSales(actor, command.command)
-      : await this.returns.postPurchase(actor, command.command);
+    // Issue #293 — a price correction is recorded through the same door, with nothing coming back.
+    const price = String(input.mode ?? '') === PRICE_CORRECTION;
+    const command = price ? null : this.returnInput(input);
+    const result = command === null
+      ? await this.returns.postPriceCorrection(actor, this.priceCorrectionInput(input))
+      : command.kind === 'SALES_RETURN'
+        ? await this.returns.postSales(actor, command.command)
+        : await this.returns.postPurchase(actor, command.command);
     await this.freezeNotePrint(result.note);
     // Issue #284 — a credit note to a registered buyer is reported like a bill: sent by itself,
-    // never awaited, and only when the rules say this note needs an e-invoice number.
-    const eInvoice = result.note.kind === 'SALES_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
+    // never awaited, and only when the rules say this note needs an e-invoice number. Issue #293 —
+    // so is a debit note to a customer (CGST Rule 48(4), inserted by Notification 68/2019-Central Tax
+    // of 13 December 2019; the businesses it covers named by Notification 13/2020-Central Tax of 21 March 2020).
+    const eInvoice = result.note.kind !== 'PURCHASE_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
     if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
+    const noteWords = result.note.kind === 'SALES_DEBIT_NOTE' ? 'This debit note' : 'This credit note';
     return {
       state: 'recorded', deduplicated: result.deduplicated,
-      title: result.deduplicated ? 'Return already recorded once' : 'Return recorded',
+      title: price
+        ? (result.deduplicated ? 'Price correction already recorded once' : 'Price correction recorded')
+        : (result.deduplicated ? 'Return already recorded once' : 'Return recorded'),
       message: eInvoice?.needed === 'YES'
-        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? eInvoice.message.replace('This bill', 'This credit note') : 'This credit note has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.'}`
+        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? eInvoice.message.replace('This bill', noteWords) : `${noteWords} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`}`
         : result.note.summary,
-      note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor) },
+      note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor), priceCorrection: result.note.priceCorrection === true },
+    };
+  }
+
+  /** Issue #293 — the check before a price correction: what note it makes, for how much, saving nothing. */
+  private async previewPriceCorrection(actor: ActorContext, input: Record<string, unknown>) {
+    const command = this.priceCorrectionInput(input);
+    const preview = await this.returns.previewPriceCorrection(actor, command);
+    const credit = preview.kind === 'SALES_RETURN';
+    return {
+      state: 'preview', title: credit ? 'Lower price checked' : 'Higher price checked',
+      message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.idempotencyKey,
+      noteKind: preview.kind, stockMoves: false,
+      effects: [
+        credit ? 'A credit note will reduce what the customer owes.' : 'A debit note will add to what the customer owes.',
+        'Nothing goes into or out of stock: only the price changes.',
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
+        ...preview.warnings,
+      ],
+      warnings: preview.warnings,
+    };
+  }
+
+  /**
+   * Issue #293 — a price correction as typed on the Returns screen: the bill, the line, and either the
+   * new rate per unit (`newRate`) or the amount off (`amountOff`), both before GST.
+   */
+  private priceCorrectionInput(input: Record<string, unknown>) {
+    if (String(input.kind ?? 'SALES_RETURN') === 'PURCHASE_RETURN') {
+      throw invalid('PRICE_CORRECTION_SALES_ONLY', "A supplier's change of price comes on the supplier's own credit or debit note. Enter it from their paper.");
+    }
+    const documentId = String(input.documentId ?? '').trim();
+    const lineId = String(input.lineId ?? '').trim();
+    if (documentId === '' || lineId === '' || lineId === WHOLE_BILL) throw invalid('RETURN_DOCUMENT_REQUIRED', 'Choose the bill and the item whose price changes.');
+    const newUnitPrice = optionalMoney(input.newRate);
+    const amountOff = optionalMoney(input.amountOff);
+    const cause = String(input.cause ?? '');
+    return {
+      cause: cause === 'DISCOUNT_AFTER_SALE' ? 'DISCOUNT_AFTER_SALE' as const : cause === 'INVOICE_ERROR' ? 'INVOICE_ERROR' as const : '' as 'INVOICE_ERROR',
+      idempotencyKey: `web-price:${String(input.reference || `${documentId}:${lineId}:${input.date}`)}`,
+      originalInvoiceId: documentId, originalLineId: lineId,
+      documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
+      ...(newUnitPrice === undefined ? {} : { newUnitPrice }),
+      ...(amountOff === undefined ? {} : { amountOff }),
     };
   }
 
@@ -4287,7 +4962,7 @@ export class DemoApplication {
     if (bill === null) return null;
     return this.eInvoiceDecisionFor({
       id: bill.id, partyId: bill.partyId, customerType: bill.customerType,
-      documentDate: note.documentDate, documentType: 'CREDIT_NOTE',
+      documentDate: note.documentDate, documentType: note.kind === 'SALES_DEBIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE',
     });
   }
 
@@ -4304,7 +4979,7 @@ export class DemoApplication {
     if (template === undefined) throw notFound('API_TEMPLATE', 'The India-standard design is missing.');
     const branding = brandingOf(note.companyId);
     const us = sellerPrint(this.config.companyId, { name: this.config.name, gstin: this.config.gstin });
-    const bill = note.kind === 'SALES_RETURN' ? this.invoicePrints.get(note.originalDocument.id) : undefined;
+    const bill = note.kind !== 'PURCHASE_RETURN' ? this.invoicePrints.get(note.originalDocument.id) : undefined;
     const original = bill !== undefined
       ? noteOriginalFromInvoice(bill.document)
       : await this.noteOriginalFromPurchase(note);
@@ -4358,6 +5033,8 @@ export class DemoApplication {
           printable: this.notePrints.has(note.id),
           // Issue #249 — the supplier's own credit note, once known, for goods sent back to them.
           supplierCreditNote: note.supplierCreditNote ?? null,
+          // Issue #293 — a note that changed only the price.
+          priceCorrection: note.priceCorrection === true,
         })),
     };
   }
@@ -4677,7 +5354,7 @@ export class DemoApplication {
     if (invoice === null) {
       // Issue #284 — a credit note is reported to the government exactly as a bill is.
       const note = await this.returnNotes.findById(companyId, invoiceId);
-      if (note !== null && note.kind === 'SALES_RETURN') return this.noteEInvoiceDocument(actor, note);
+      if (note !== null && note.kind !== 'PURCHASE_RETURN') return this.noteEInvoiceDocument(actor, note);
       throw notFound('API_INVOICE_NOT_FOUND', 'We could not find that bill.');
     }
     if (invoice.state !== 'FINAL' || invoice.number === null) {
@@ -4801,7 +5478,7 @@ export class DemoApplication {
     return {
       ...bill,
       documentId: note.id,
-      documentType: 'CREDIT_NOTE',
+      documentType: note.kind === 'SALES_DEBIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE',
       documentNumber: note.number,
       documentDate: note.documentDate,
       lines,
@@ -4988,11 +5665,12 @@ export class DemoApplication {
     records: readonly EInvoiceRecord[],
     now: string,
   ) {
-    const notes = (await this.returnNotes.list(this.companyOf(actor))).filter((note) => note.kind === 'SALES_RETURN');
+    const notes = (await this.returnNotes.list(this.companyOf(actor))).filter((note) => note.kind !== 'PURCHASE_RETURN');
     return notes.flatMap((note) => {
       const bill = invoices.find((invoice) => invoice.id === note.originalDocument.id);
       if (bill === undefined) return [];
-      const decision = this.eInvoiceDecisionFor({ id: bill.id, partyId: bill.partyId, customerType: bill.customerType, documentDate: note.documentDate, documentType: 'CREDIT_NOTE' });
+      const debit = note.kind === 'SALES_DEBIT_NOTE';
+      const decision = this.eInvoiceDecisionFor({ id: bill.id, partyId: bill.partyId, customerType: bill.customerType, documentDate: note.documentDate, documentType: debit ? 'DEBIT_NOTE' : 'CREDIT_NOTE' });
       if (decision.needed !== 'YES') return [];
       const record = records.find((candidate) => candidate.documentId === note.id);
       let customer: string | null = null;
@@ -5004,13 +5682,13 @@ export class DemoApplication {
         date: note.documentDate,
         customer,
         amount: jsonAmount(note.totals.total.minor),
-        kind: 'CREDIT_NOTE' as const,
+        kind: debit ? 'DEBIT_NOTE' as const : 'CREDIT_NOTE' as const,
         against: note.originalDocument.number,
         eInvoiceStatus: status,
         needed: decision.needed,
         decision: decision.lateForPortal === true
-          ? decision.message.replace('This bill', 'This credit note')
-          : `This credit note against ${note.originalDocument.number} needs a government e-invoice number.`,
+          ? decision.message.replace('This bill', debit ? 'This debit note' : 'This credit note')
+          : `This ${debit ? 'debit' : 'credit'} note against ${note.originalDocument.number} needs a government e-invoice number.`,
         askTurnover: false,
         statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
         canRetry: status === 'FAILED' && record?.failure?.retryable === true,
@@ -5152,6 +5830,10 @@ export class DemoApplication {
     }
     const pricing = invoice.pricing;
     if (pricing === null) throw invalid('API_INVOICE_NOT_PRICED', 'This bill has no tax worked out on it yet.');
+    // Issue #287 — CGST Rule 138(1): e-way bills are for goods that move.
+    if (invoice.supplyKind === 'SERVICES') {
+      throw invalid('EWAY_NOT_FOR_SERVICES', 'This bill is for a service. An e-way bill is only for goods that move (CGST Rule 138), so this bill never needs one.');
+    }
 
     const lines = consignmentLinesOf(pricing.lines);
     const document: ConsignmentDocument = {
@@ -5464,7 +6146,8 @@ export class DemoApplication {
     const records = await this.shop.ewayBill.list(actor);
     const rows = [];
     for (const invoice of invoices) {
-      if (invoice.number === null) continue;
+      // Issue #287 — a service bill moves no goods, so it is not one to choose an e-way bill for.
+      if (invoice.number === null || invoice.supplyKind === 'SERVICES') continue;
       let customer: string | null = null;
       try { customer = customerView(this.config.companyId, invoice.partyId).name; } catch (error) { reportUnexpected('api.listCustomerName', error); customer = null; }
       let outcome: string = 'CANNOT_DECIDE';
@@ -6009,7 +6692,7 @@ export class DemoApplication {
    * Anything it does not clear is refused with its own words; nothing is marked "checked" here.
    */
   private async purchaseInput(actor: ActorContext, input: Record<string, unknown>): Promise<
-    | { readonly approved: ApprovedPurchase; readonly supplierState: string; readonly godownState: string; readonly reverseChargeNotes: readonly string[] }
+    | { readonly approved: ApprovedPurchase; readonly supplierState: string; readonly godownState: string; readonly reverseChargeNotes: readonly string[]; readonly reverseChargeEntry: ReverseChargeEntryDraft | null }
     | { readonly alreadyRecorded: PurchaseBill; readonly message: string }
   > {
     const companyId = this.companyOf(actor);
@@ -6029,6 +6712,11 @@ export class DemoApplication {
     const reverseCharge = this.reverseChargeOf(companyId, supplier, supplierGstin !== undefined, typedLines, input, date);
     // What the supplier's bill shows: a reverse-charge or exempt line carries no GST from them.
     const lines = typedLines.map((line, index) => reverseCharge.lines[index]?.kind === 'NONE' ? line : { ...line, gstRateBasisPoints: 0 });
+    // Issue #289, part 2b — the facts a reverse-charge bill's time of supply turns on (CGST s.12(3),
+    // s.13(3)), checked before anything is posted so the register never refuses a posted bill.
+    const reverseChargeEntry = reverseCharge.any
+      ? this.reverseChargeEntryOf(supplier, supplierGstin !== undefined, typedLines, reverseCharge.lines, input, date)
+      : null;
     const typedTotal = String(input.amount ?? '').trim() === '' ? null : paise(input.amount);
     const linesTotal = lines.reduce((total, line) => total + line.taxableValuePaise + taxOn(line.taxableValuePaise, line.gstRateBasisPoints), 0n);
     const total = typedTotal ?? linesTotal;
@@ -6104,6 +6792,16 @@ export class DemoApplication {
       const shown = verdict.findings.filter((finding) => finding.severity !== 'MINOR');
       throw invalid('PURCHASE_NEEDS_CHECKING', shown.length === 0 ? verdict.summary : shown.map((finding) => finding.message).join(' '), { details: { status: verdict.status } });
     }
+    // Issue #289, part 3 — a line with no GST at all (unregistered seller, exempt freight) has no
+    // credit to block. Checked on the final rates, after reverse charge has set the law's rate.
+    const finalLines = lines.map((line, index) => {
+      const decided = reverseCharge.lines[index];
+      return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+    });
+    const untaxedBlocked = finalLines.find((line) => line.itcEligibility === 'INELIGIBLE' && line.gstRateBasisPoints === 0);
+    if (untaxedBlocked !== undefined) {
+      throw invalid('PURCHASE_BLOCKED_NO_GST', `Line ${untaxedBlocked.lineNumber} (${untaxedBlocked.description}) carries no GST, so there is no credit to mark as not available. Leave it as "GST can be claimed".`);
+    }
     return {
       approved: {
         id: `web-purchase:${draftId}`,
@@ -6115,10 +6813,7 @@ export class DemoApplication {
         invoiceNumber: reference,
         invoiceDate: date,
         // Issue #289 — on a reverse-charge line the GST is the law's rate for the supply, owed by us.
-        lines: lines.map((line, index) => {
-          const decided = reverseCharge.lines[index];
-          return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
-        }),
+        lines: finalLines,
         invoiceTotalPaise: total,
         taxLiability: reverseCharge.any ? 'REVERSE_CHARGE' : 'SUPPLIER',
         creditDays: 30,
@@ -6127,8 +6822,43 @@ export class DemoApplication {
       },
       supplierState,
       godownState,
-      reverseChargeNotes: reverseCharge.notes,
+      reverseChargeNotes: reverseChargeEntry === null ? reverseCharge.notes : [...reverseCharge.notes, ...reverseChargeEntry.notes],
+      reverseChargeEntry,
     };
+  }
+
+  /**
+   * Issue #289, part 2b — when the goods or service reached the business (typed as `receivedOn`,
+   * else the bill's date), which reverse-charge lines the self-invoice covers, and what the review
+   * says about the date the tax falls due and the self-invoice's 30 days.
+   */
+  private reverseChargeEntryOf(
+    supplier: Party, registered: boolean, lines: readonly ApprovedPurchaseLine[],
+    decided: readonly { readonly kind: string }[], input: Record<string, unknown>, date: IsoDate,
+  ): ReverseChargeEntryDraft {
+    const typed = String(input.receivedOn ?? '').trim();
+    let receivedOn: IsoDate;
+    try {
+      receivedOn = typed === '' ? date : isoDate(typed);
+    } catch {
+      throw invalid('PURCHASE_RECEIVED_ON', 'Enter the date the goods or the service reached you, as a date.');
+    }
+    const lineNumbers = lines.filter((_, index) => decided[index]?.kind === 'REVERSE_CHARGE').map((line) => line.lineNumber);
+    const supplyKind = checkReverseChargeEntry({
+      receivedOn, today: appToday(),
+      supplyKinds: lines.filter((line) => lineNumbers.includes(line.lineNumber)).map((line) => line.supplyKind),
+    });
+    // The time of supply as it stands on the day of recording: nothing has been paid yet.
+    const point = rcmTimeOfSupply({
+      supplyKind, supplierDocumentDate: date, supplierIssuesInvoice: registered, receivedOn, paidOn: null, selfInvoiceOn: null, enteredInBooksOn: appToday(),
+    });
+    const notes = [
+      supplyKind === 'SERVICES' && !registered
+        ? `The GST on this falls due on the date of your self-invoice, or the day you pay ${supplier.legalName} if that is earlier (CGST s.13(3)(a) and (c)). It goes on the GST return for that month.`
+        : `${point.words} It goes on the GST return for ${formatTaxPeriod(taxPeriodOf(point.date))}, and moves earlier if you pay ${supplier.legalName} before then.`,
+      ...(registered ? [] : [`${supplier.legalName} has no GST number, so you issue the invoice for this purchase yourself — a self-invoice (CGST s.31(3)(f)). ${selfInvoiceDue(receivedOn, appToday(), null).words} The app makes it for you once the bill is recorded.`]),
+    ];
+    return { receivedOn, supplyKind, lineNumbers, supplierRegistered: registered, notes };
   }
 
   /** The reviewed GST rules, which answer IGST against CGST and SGST from the two states (#228). */
@@ -6205,9 +6935,21 @@ export class DemoApplication {
     });
     if (any) {
       notes.push('You pay this GST to the government in cash with your GSTR-3B (Table 3.1(d)); credit cannot be used to pay it (CGST s.49(4), Circular 172/04/2022-GST). The same amount comes back as credit in that return (Table 4(A)(3)).');
-      if (!registered) notes.push(`${supplier.legalName} has no GST number, so you must issue a self-invoice for this purchase within 30 days of receiving it (CGST s.31(3)(f), Rule 47A). The app does not make the self-invoice yet: make it on paper for now.`);
     }
     return { lines: result, any, notes };
+  }
+
+  /**
+   * Issue #289, part 3 — one sentence per line whose credit CGST s.17(5) blocks: the clause, the
+   * tax, and where it went instead.
+   */
+  private static blockedCreditNotes(approved: ApprovedPurchase, intraState: boolean): string[] {
+    return approved.lines.filter((line) => line.itcEligibility === 'INELIGIBLE').map((line) => {
+      const tax = taxOn(line.taxableValuePaise, line.gstRateBasisPoints);
+      const reason = BLOCKED_CREDIT_REASONS.find((candidate) => candidate.clause === line.blockedCreditClause);
+      const owed = approved.taxLiability === 'REVERSE_CHARGE' ? ' You still pay this GST to the government under reverse charge; only the credit is lost.' : '';
+      return `${line.description}: credit not available — ${reason?.label.toLowerCase() ?? 'blocked'} (CGST s.${line.blockedCreditClause ?? '17(5)'}). Its ${formatPaise(tax)} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you, not to the GST you claim back.${owed}`;
+    });
   }
 
   /** Issue #289 — answers to the reverse-charge questions, from `rcm_<id>` form fields or an object. */
@@ -6274,7 +7016,14 @@ export class DemoApplication {
         throw invalid('PURCHASE_GST_RATE', `${label}: choose the GST rate printed on the supplier's bill.`);
       }
       const goods = item.kind === 'goods';
+      // Issue #289, part 3 — credit blocked by CGST s.17(5): the person names the clause; the app
+      // never decides it. A bill with no GST has nothing to block.
+      const blocked = blockedCreditReasonFor(row.blocked ?? row.creditBlocked);
+      if (blocked === undefined) {
+        throw invalid('PURCHASE_BLOCKED_REASON', `${label}: choose why the GST on it cannot be claimed from the list, or leave it as "GST can be claimed".`);
+      }
       return {
+        ...(blocked === null ? {} : { blockedCreditClause: blocked.clause }),
         lineNumber: index + 1,
         itemId: item.id,
         description: item.name,
@@ -6285,7 +7034,7 @@ export class DemoApplication {
         ratePaise: rate,
         taxableValuePaise: lineTaxableValue(qty.scaled, rate),
         gstRateBasisPoints: gstBasisPoints,
-        itcEligibility: 'ELIGIBLE' as const,
+        itcEligibility: blocked === null ? 'ELIGIBLE' as const : 'INELIGIBLE' as const,
       };
     });
   }
@@ -6303,19 +7052,24 @@ export class DemoApplication {
     const parsed: unknown = typeof raw === 'string' && raw.trim() !== '' ? JSON.parse(raw) : raw;
     const rows: Record<string, unknown>[] = Array.isArray(parsed) && parsed.length > 0
       ? parsed as Record<string, unknown>[]
-      : [{ item: input.itemId ?? input.item, quantity: input.quantity, unit: input.unit, rate: input.rate }];
-    return rows.map((row, index) => {
+      : [{ item: input.itemId ?? input.item, quantity: input.quantity, unit: input.unit, rate: input.rate, discount: input.discount, discountPercent: input.discountPercent }];
+    return withBillDiscount(rows.map((row, index) => {
       const item = resolveItem(this.config.companyId, String(row.itemId ?? row.item ?? ''));
       const unit = String(row.unit ?? '').trim().toUpperCase() || item.baseUnit;
+      const quantity = quantityFromString(String(row.quantity ?? ''), unit);
+      const unitPrice = money(paise(row.rate));
+      // Issue #293 — the line's own discount, taken off before GST.
+      const discount = lineDiscountOf(row, mulDiv(unitPrice, quantity.scaled, 1_000_000n).minor);
       return {
         lineId: `line-${index + 1}`,
         itemId: item.id,
         warehouseId: this.shop.warehouseId,
-        quantity: quantityFromString(String(row.quantity ?? ''), unit),
-        unitPrice: money(paise(row.rate)),
+        quantity,
+        unitPrice,
         priceBasis: 'EXCLUSIVE' as const,
+        ...(discount === undefined ? {} : { discount }),
       };
-    });
+    }), input.billDiscount);
   }
 
   /**
@@ -6344,6 +7098,34 @@ export class DemoApplication {
     return particulars;
   }
 
+  /**
+   * Issue #287 — goods or services, from the items on the bill. A bill carries one kind (its
+   * copies, e-way bill, income account and GSTR-1 rows all follow it), and goods and services count
+   * in a state by different rules (IGST Act s. 10 against s. 12), so a bill mixing the two is
+   * refused until each line can carry its own.
+   */
+  private saleSupplyKind(lines: readonly { readonly itemId: string }[], input: Record<string, unknown>): 'GOODS' | 'SERVICES' {
+    const kinds = new Set(lines.map((line) => itemView(this.config.companyId, line.itemId).kind));
+    if (kinds.size > 1) {
+      throw invalid('SALE_MIXES_GOODS_AND_SERVICES', 'This bill has goods and a service on it. Make one bill for the goods and another for the service: GST decides where goods and services count by different rules, and one bill cannot carry both yet.');
+    }
+    if (!kinds.has('service')) return 'GOODS';
+    if (!['', 'same'].includes(String(input.shipTo ?? '').trim().toLowerCase())) {
+      throw invalid('SERVICE_NO_SHIP_TO', 'A service is not sent anywhere, so a service bill has no delivery address. Choose "Same as billing address".');
+    }
+    return 'SERVICES';
+  }
+
+  /** Issue #287 — IGST Act s. 12(2): why a service counts in this state, said as plainly as goods are. */
+  private static servicePlaceOfSupplyReason(stateCode: string | null, customer: { readonly legalName: string; readonly gstRegistrationType: string }, walkIn: boolean): string {
+    const code = stateCode ?? '';
+    const where = `Place of supply: ${STATE_NAMES[code] ?? code} (${code})`;
+    if (walkIn) return `${where} — the service is supplied at your counter, so it counts in your own state.`;
+    return customer.gstRegistrationType === 'unregistered'
+      ? `${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`
+      : `${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`;
+  }
+
   private saleInput(input: Record<string, unknown>) {
     const date = isoDate(String(input.date));
     const terms = Number(input.terms ?? 0);
@@ -6360,16 +7142,23 @@ export class DemoApplication {
     // Issue #182 — where the goods go decides which state this sale counts in, and the two cases
     // differ in law: a customer's own godown moves the supply to that state, while goods handed to
     // a third party on the customer's instructions stay where the customer is.
+    const lines = this.saleLines(input);
+    const supplyKind = this.saleSupplyKind(lines, input);
     const delivery = deliveryDetails(this.config.companyId, customer, input);
     return {
       partyId: customer.id as PartyId,
       customerType: customer.gstRegistrationType === 'unregistered' ? 'B2C' as const : 'B2B' as const,
-      supplyKind: 'GOODS' as const,
+      supplyKind,
       documentDate: date,
       dueDate: isoDate(daysAfter(date, Number.isFinite(terms) ? terms : 0)),
-      deliveryStateCode: delivery.placeOfSupplyStateCode,
-      placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
-      lines: this.saleLines(input),
+      // Issue #287 — where goods are delivered is IGST Act s. 10. A service is not delivered
+      // anywhere: s. 12(2) decides it in the calculator, from the customer (or from us, when an
+      // unregistered customer has no address on record).
+      ...(supplyKind === 'SERVICES' ? {} : {
+        deliveryStateCode: delivery.placeOfSupplyStateCode,
+        placeOfSupplyStateCode: delivery.placeOfSupplyStateCode,
+      }),
+      lines,
       ...(freight === undefined ? {} : { freight }),
       ...(otherCharges === undefined ? {} : { otherCharges }),
       narration: String(input.notes || '') || null,
@@ -6386,18 +7175,25 @@ export class DemoApplication {
       return {
         kind,
         command: {
-          idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:whole:${input.date}`)}`,
+          idempotencyKey: `web-return:${kind}:${requestKeyOf(input, 'RETURN_REQUEST_ID_REQUIRED', 'return')}`,
           documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
           originalInvoiceId: documentId, lines: [], wholeBill: true,
           wholeBillDisposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT',
+          ...(String(input.disposition) === 'DAMAGED' ? { wholeBillWarehouseId: this.shop.damagedWarehouseId } : {}),
         },
       };
     }
     const quantity = quantityFromString(String(input.quantity ?? ''), String(input.unit ?? 'PCS'));
+    const disposition = String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT';
     const shared = {
-      idempotencyKey: `web-return:${String(input.reference || `${kind}:${documentId}:${lineId}:${input.date}`)}`,
+      idempotencyKey: `web-return:${kind}:${requestKeyOf(input, 'RETURN_REQUEST_ID_REQUIRED', 'return')}`,
       documentDate: isoDate(String(input.date)), reason: String(input.reason ?? ''),
-      lines: [{ originalLineId: lineId, quantity, disposition: String(input.disposition ?? 'ACCEPTED') as 'ACCEPTED' | 'DAMAGED' | 'SCRAPPED' | 'REPLACEMENT', warehouseId: this.shop.warehouseId }],
+      // Issue #292 — goods a customer sends back damaged go to the damaged / not-for-sale location,
+      // never into the godown they can be sold from. Goods sent back to a supplier leave the main godown.
+      lines: [{
+        originalLineId: lineId, quantity, disposition,
+        warehouseId: kind === 'SALES_RETURN' && disposition === 'DAMAGED' ? this.shop.damagedWarehouseId : this.shop.warehouseId,
+      }],
     };
     // Issue #249 — the supplier's credit note, when it is already in hand. Both or neither.
     const supplierNoteNumber = String(input.supplierNoteNumber ?? '').trim();

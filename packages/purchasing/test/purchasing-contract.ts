@@ -124,6 +124,19 @@ export function purchasingContract(label: string, harness: () => PurchasingHarne
     assert.deepEqual(await h.bills.listForParty(s.companyId, crypto.randomUUID()), []);
   });
 
+  // Issue #289, part 3 — credit blocked by s.17(5): the clause on the line, the tax by head on the bill.
+  t("a bill with blocked credit keeps the s.17(5) clause and the blocked tax by head", async () => {
+    const { h, s } = await setUp();
+    const full = billFor(s, 3);
+    const blocked: PurchaseBill = {
+      ...full,
+      tax: { ...full.tax, cgstPaise: 8_100n, sgstPaise: 8_100n, ineligibleItcPaise: 1_800n, ineligibleHeads: { cgstPaise: 900n, sgstPaise: 900n, igstPaise: 0n, cessPaise: 0n } },
+      lines: [full.lines[0]!, { ...full.lines[1]!, cgstPaise: 0n, sgstPaise: 0n, ineligibleItcPaise: 1_800n, blockedCreditClause: "17(5)(g)" }],
+    };
+    await h.write(s.companyId, () => h.bills.insert(blocked));
+    assert.deepEqual(await h.bills.findById(s.companyId, blocked.id), blocked);
+  });
+
   t("a bill without the optional parts keeps them absent, not empty", async () => {
     const { h, s } = await setUp();
     const full = billFor(s, 2);

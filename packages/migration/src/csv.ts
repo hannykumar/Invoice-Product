@@ -7,8 +7,11 @@
  * All of that is a reading problem, and it is solved here so that nothing downstream ever has to
  * think about it.
  *
- * Nothing in this file interprets a value. A cell arrives as the text it was, spaces and all.
+ * Nothing in this file interprets a value. A cell arrives as the text it was, spaces and all — the
+ * one exception is the `'` our own error file puts in front of a would-be formula (#394), which is
+ * taken off again so a corrected row reads exactly as the person typed it.
  */
+import { neutraliseSpreadsheetCell, restoreSpreadsheetCell } from '@invoice/kernel';
 
 export interface Sheet {
   /** The header row, in file order. */
@@ -88,6 +91,15 @@ const splitRecords = (text: string, delimiter: string): string[][] => {
   return records;
 };
 
+const SNIFF_CHARACTERS = 64 * 1024;
+
+/** The start of the file, ending at a line break, which holds the twenty lines the sniff compares. */
+const sniffHead = (text: string): string => {
+  if (text.length <= SNIFF_CHARACTERS) return text;
+  const end = text.lastIndexOf('\n', SNIFF_CHARACTERS);
+  return end <= 0 ? text.slice(0, SNIFF_CHARACTERS) : text.slice(0, end);
+};
+
 /**
  * Works out which character separates the columns.
  *
@@ -96,10 +108,13 @@ const splitRecords = (text: string, delimiter: string): string[][] => {
  * count, but it does not beat consistency.
  */
 export const sniffDelimiter = (text: string): string => {
+  // Issue #396 — only the first lines are compared, so only the start of the file is split; each
+  // candidate used to split the whole file, four full reads before the real one.
+  const head = sniffHead(text);
   let best = ',';
   let bestScore = -1;
   for (const delimiter of CANDIDATE_DELIMITERS) {
-    const sample = splitRecords(text, delimiter).slice(0, 20).filter((record) => record.some((c) => c.trim() !== ''));
+    const sample = splitRecords(head, delimiter).slice(0, 20).filter((record) => record.some((c) => c.trim() !== ''));
     if (sample.length === 0) continue;
     const widths = sample.map((record) => record.length);
     const widest = Math.max(...widths);
@@ -152,7 +167,7 @@ export const readDelimited = (raw: string, options: ReadOptions = {}): Sheet => 
   for (let index = headerIndex + 1; index < records.length; index += 1) {
     const record = records[index] as string[];
     if (record.every((cell) => cell.trim() === '')) continue;
-    const padded = Array.from({ length: width }, (_unused, column) => record[column] ?? '');
+    const padded = Array.from({ length: width }, (_unused, column) => restoreSpreadsheetCell(record[column] ?? ''));
     rows.push(padded);
     rowNumbers.push(index + 1);
   }
@@ -179,8 +194,17 @@ export const asRecords = (sheet: Sheet): Readonly<Record<string, string>>[] =>
 const quoteIfNeeded = (value: string): string =>
   /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
-/** Writes a CSV, used for the error file the person hands back to whoever made the export. */
+/**
+ * Writes a CSV for a person to open in a spreadsheet: the error file they hand back to whoever made
+ * the export. A cell that would run as a formula is marked as text first (#394).
+ */
 export const toCsv = (headers: readonly string[], rows: readonly (readonly string[])[]): string =>
+  [headers, ...rows]
+    .map((row) => row.map((cell) => quoteIfNeeded(neutraliseSpreadsheetCell(cell ?? ''))).join(','))
+    .join('\r\n');
+
+/** Writes cells exactly as they are, for text that only this module reads back in. */
+export const toRawCsv = (headers: readonly string[], rows: readonly (readonly string[])[]): string =>
   [headers, ...rows].map((row) => row.map((cell) => quoteIfNeeded(cell ?? '')).join(',')).join('\r\n');
 
 /**

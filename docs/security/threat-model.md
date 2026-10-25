@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 154 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 172 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -87,9 +87,9 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | Sales and returns | `/api/sales/*`, `/api/returns/*`, PDFs and previews | §4.6 |
 | Government | `/api/einvoices/*`, `/api/eway/*`, `/api/challans/*`, `/api/gst-returns/*`, `/api/itc/*`, `/api/vehicles/*` | Adapters mocked; WhiteBooks sandbox |
 | Purchasing | `/api/purchase-orders`, `/api/goods-receipts`, `/api/purchases/*`, `/api/suppliers/check*` | |
-| Money | `/api/payments/*`, `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
+| Money | `/api/payments/*`, `/api/books/*` (expenses, journal, contra, owner's money, cash and bank books), `/api/presale/*`, `/api/bank-feeds/*`, `/api/subscription*` | We record money; we never move it |
 | Agent and reminders | `/api/agent/*`, `/api/reminders/*` | §4.7 |
-| Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves files under `apps/web` |
+| Static web server | `apps/web/server.ts`: any path not under `/api/` | Serves only the page's own files (`index.html`, its `*.js`, `*.css`, `*.svg`); everything else is 404 (#393) |
 
 | # | Threat (OWASP) | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -103,7 +103,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | H8 | Session token in `localStorage` is stolen by any XSS; no sign-out route (A07) | Low | High | No `innerHTML` from data | HttpOnly cookie, sign-out | Medium | #342 (+ #349 CSP) |
 | H9 | CSRF once the session is a cookie (A01) | Low today, High after #342 | High | Bearer header | `SameSite` cookie + Origin/Host check on every non-GET | **High** | #349 (Origin check), #342 (cookie) |
 | H10 | A retry creates a second document when the client sends no idempotency key: the server invents one (`randomUUID()`, `Date.now()`, or an empty key) (A04/A08) | Medium | High | Idempotency on every command | Refuse a write that has no client key | **High** | #392 |
-| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked | Allow-list of served files | Medium | #393 |
+| H11 | The static web server serves its own source and tests (`/server.ts`, `/test/*.ts`, `/README.md`) (A05) | High | Low | Path traversal is blocked; allow-list of served files, 404 for the rest (#393) | — | Low | #393 |
 | H12 | Cross-company access on any route (A01) | Low | High | Session tenancy, `companyOf` | Generated 401 / 403 / 404 tests for every route; RLS in use | Medium | #343, #340 |
 
 ### 4.2 File uploads — logos, signatures, migration files, ITC files
@@ -123,16 +123,18 @@ run script.
 ### 4.3 Government and payment webhooks
 
 One inbound webhook exists: `POST /api/webhooks/government/:kind` (`irp`, `eway_bill`, `gst`). It
-is matched before authentication and verified by `StaticWebhookVerifier`
-(`packages/platform/src/connectors.ts:48`), which accepts any body whose `x-provider-signature`
-header is the literal string `test-signature`. There is no HMAC, secret, timestamp or replay
-window, the payload is not schema-checked, and redelivery protection is an in-memory set. No
+is matched before authentication and verified by `HmacWebhookVerifier`
+(`packages/platform/src/connectors.ts`, #389): an HMAC-SHA256 over the raw bytes with the
+provider's own secret, compared in constant time, inside a five-minute timestamp window, on a body
+that must pass a schema. Outside development a connector with no secret refuses every callback,
+and the `test-signature` verifier cannot be constructed. Seen events are kept in
+`government_webhook_events` (unique `(connector, event_id)`) when the app has a database. No
 payment webhook is routed yet (#346).
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; the call log is empty until #51 | HMAC over the raw bytes with a per-provider secret from the vault, constant-time compare, timestamp window, schema check, and a refusal to start with the test verifier outside development | **High** | #389 |
-| W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | In-memory dedup | Durable unique `(kind, eventId)` — the SQL index exists but the app does not use it | Medium | same issue as W1 |
+| W1 | Anyone forges a government callback: settles an unknown IRP call with an IRN of their choosing, raises false conflicts, reads our stored reference back in the 202 (A07/A08) | High | High | Company comes from our call log, not the payload; HMAC over the raw bytes with a per-provider secret, constant-time compare, 5-minute timestamp window, schema check; the test verifier cannot be built outside development (#389) | Secrets in a managed vault rather than environment variables (#51) | Low | #389 |
+| W2 | Replay of a genuine callback after a restart; unbounded growth of the seen-events set (A08/A04) | Medium | Medium | Durable unique `(kind, eventId)` in `government_webhook_events`; replay outside the 5-minute window refused; in-memory set capped (#389) | — | Low | same issue as W1 |
 | W3 | Forged subscription "paid" event (A08) | — | High | Not routed | Signed webhook as the only source of truth | **High** | #346 |
 
 ### 4.4 WhatsApp, email, camera and upload purchase intake
@@ -156,9 +158,9 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF` | Neutralise such cells | Medium | #394 |
-| M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | — | Body limit, row limit | Medium | #349 + #396 |
-| M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session | Per-company slots | Low | #396 |
+| M1 | Spreadsheet formula injection: the "rows to fix" CSV echoes original cells that start with `= + - @` (`packages/migration/src/csv.ts:178`) (A03) | Medium | Medium | Quoting of `" , CR LF`; such cells are prefixed with `'` in the error file and report CSVs | — | Low | #394 |
+| M2 | No row or size limit; the file is parsed four or five times per analyse and preview (A04) | Medium | Medium | 5 MB body limit (#349); `MAX_ROWS_PER_FILE` (5,000 data rows) refused at analyse with `MIGRATION_TOO_MANY_ROWS`; the file is split once at analyse and that reading is reused by preview and commit; the separator is sniffed from the first 64 KB only | — | Low | #349 + #396 |
+| M3 | One global 8-slot store of migrations: anyone with `migration.run` evicts other companies' in-progress migrations (A04) | Medium | Low | A workspace is owned by company + actor + session; a session's extra workspaces close only its own oldest (3 per session); each business has its own cap of 8 and is refused (`MIGRATION_TOO_MANY_OPEN`) rather than evicting; a workspace closes after 2 hours unused | — | Low | #396 |
 | M4 | XLSX zip bomb, or a bank-statement PDF bomb, once those parsers are routed (A04/A06) | Low | Medium | Not routed | Size, sheet, page and row limits before parsing | Low | — |
 | E1 | GST return and offline JSON exports leak another company's data (A01) | Low | High | Permission and `actor.companyId` in the service | — | Low | — |
 | E2 | Header injection through a PDF filename (A03) | Low | Low | Filenames sanitised | — | Low | — |
@@ -166,14 +168,14 @@ and its fingerprint is unchanged. XLSX and bank-statement PDF/XLSX parsers exist
 ### 4.6 PDF generation and printed bills
 
 Bills, notes, challans, quotations and e-way bills are rendered as HTML on the server, shown in the
-browser in `<iframe srcdoc>` frames, and turned into PDFs by launching headless Chromium
-(`packages/invoice-templates/src/pdf.ts`) with JavaScript enabled and every request but `data:`
-blocked.
+browser in `<iframe srcdoc>` frames, and turned into PDFs by one shared headless Chromium (`packages/invoice-templates/src/pdf.ts`, #398):
+at most two pages render together, sixteen more may wait, each render has a 20-second limit,
+JavaScript is off in the page and every request but `data:` is blocked.
 
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | An escaping miss in any template becomes same-origin XSS: the bill frames have no `sandbox` and share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked) | `sandbox` on every bill frame; the #349 CSP is inherited by `srcdoc` and blocks inline script | Medium | #349 (CSP) + #399 |
-| P2 | One Chromium per PDF request: repeated GETs exhaust the server; JavaScript is on in the renderer (A04) | Medium | Medium | Network blocked | A shared browser, JavaScript off, a rate limit | Medium | #350 + #398 |
+| P1 | An escaping miss in any template becomes same-origin XSS: the bill frames share the app's origin and its token (A03) | Low | High | `escapeHtml` everywhere (checked); the #349 CSP is inherited by `srcdoc` and blocks inline script; every bill frame has `sandbox="allow-same-origin allow-modals"` (no `allow-scripts`), so nothing in a bill can run even without the CSP (#399) | — | Low | #349 (CSP) + #399 |
+| P2 | Repeated PDF GETs exhaust the server (A04) | Medium | Medium | Network blocked; one shared browser, bounded pages and queue, a per-render time limit, JavaScript off (#398) | A per-user rate limit | Low | #350 |
 
 ### 4.7 Voice and text assistant, action agent — prompt injection
 
@@ -196,7 +198,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 
 | Path | Permission | Preview | Approval | Idempotency | Can it approve itself? |
 | --- | --- | --- | --- | --- | --- |
-| Assistant `POST /api/assistant/ask` | `assistant.ask` at the route; reads go through `ReportService` with the asker's permissions (exception: A2) | — | — | — | It writes nothing |
+| Assistant `POST /api/assistant/ask` | `assistant.ask` at the route; reads go through `ReportService` with the asker's permissions; "why is this bill blocked?" also needs `reports.view.sales` and `reports.view.stock` and reads as the asker (A2) | — | — | — | It writes nothing |
 | Agent `POST /api/agent/plan` → `approve` → `execute` | `agent.plan` / `agent.approve` / `agent.execute` at the route; each tool's own permission when steps are built, before execution and per step; `collections.send` checks again | The plan's fingerprint is shown and pinned | `approve` refuses an unseen or changed fingerprint; the platform command moves to `approved` only for an actor holding `approval.decide` | Company + plan + key; collections dedups by reminder key | **No.** There is no model, plans come from a fixed recipe list, and approval is a separate signed-in request by a person. The person who asked may approve their own plan (A1), exactly as they could send the same reminders by hand |
 | Agent tools | Two reads, `reminders.send`, `reminders.stop`, and `sales.cancel` (prepare-only). The registry refuses a high-risk tool unless it is prepare-only and refuses a write that skips approval | | | | Filing, IRN, e-way bill and moving money are refused intents |
 | Voice draft | Not routed. Produces a draft sale; tax comes from `SalesService` | Sale preview | Sale submit | Sale key | No approval path exists |
@@ -205,7 +207,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | A1 | One person plans, approves and executes in one click; a bare "remind" chases every overdue customer (A04) | Medium | Medium | Preview, fingerprint, permission per step | The count shown and a cap, or a second approver for bulk sends | Medium | accepted: designed flow (#348 review) |
-| A2 | "Why is this bill blocked?" reads any invoice, and stock as `setupActor`, past the asker's sales and stock permissions (`demo-application.ts:979-988`) (A01) | Medium | Medium | `assistant.ask`, tenant | Read as the asker | Medium | #397 |
+| A2 | "Why is this bill blocked?" read any invoice, and stock as `setupActor`, past the asker's sales and stock permissions (A01) | Medium | Medium | `assistant.ask`, tenant; `reports.view.sales` + `reports.view.stock` before the lookup, which runs as the asker | — | Low | fixed: #397 |
 | A3 | Instructions hidden in OCR text, a WhatsApp or email body, a voice transcript, or a supplier or item name steer an action (A03) | Low (no model) | High | Deterministic parsers, allow-listed intents, human approval | The rule above, enforced by a test when a model is wired | Medium | #316 must carry it |
 | A4 | A stored party or item name containing "guaranteed" or "you must" makes assistant answers fail (A04) | Low | Low | — | Check the sentence template, not the data | Low | #405 |
 | A5 | "Today" for the agent and for reminders comes from the client, so bills look overdue early and wording escalates (A04) | Medium | Low | — | Server clock | Low | #403 |
@@ -216,7 +218,7 @@ or a recipient. The deterministic layer validates the draft and a person approve
 | # | Threat | Likelihood | Impact | Have | Missing | Rating | Issue |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | O1 | SSRF through a user-supplied URL (A10) | Low | High | No user-controlled outbound URL; government hosts allow-listed | The #348 review checks every new `fetch` | Low | — |
-| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Synthetic provider | Allow-listed redirect; `state` bound to the session | Medium | #402 |
+| O2 | Bank-feed `redirectUri` accepts any https host; consent completion has no `state` (A01/A07) | Medium once a real bank is wired | Medium | Return address only this app's origins and its start page `/`; random `state` stored hashed, bound to company and person, single-use, 30 minutes | — | Low | #402 |
 | O3 | One WhiteBooks credential and GSTIN shared by every company (A01/A02) | High at launch | High | Sandbox only; production hard-off | A per-company credential in a vault | **High** | #210 |
 | O4 | Secrets committed, or leaked through a dependency (A06) | Medium | High | `.env` gitignored, mode 0600 | gitleaks, Dependabot | **High** | #351 |
 | O5 | Personal data in logs (A09) | Medium | Medium | Recursive redaction | Structured logs with a request id | Medium | #357, #352 |
@@ -349,12 +351,17 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/purchases/:param` | service |
 | POST | `/api/purchases/preview` | `ledger.post.purchase` |
 | POST | `/api/purchases/record` | `ledger.post.purchase` |
+| POST | `/api/purchases/self-invoice` | `ledger.post.purchase` |
+| POST | `/api/purchases/self-invoice/print` | `ledger.post.purchase` |
+| GET | `/api/purchases/self-invoices` | service |
 | GET | `/api/subscription` | service |
 | POST | `/api/subscription/plan` | `subscription.manage` |
 | POST | `/api/subscription/pay` | `subscription.manage` |
 | POST | `/api/sales/estimate` | `sales.draft.write` |
 | POST | `/api/sales/preview` | `sales.draft.write` |
 | POST | `/api/sales/record` | `sales.draft.write` + `sales.finalise` |
+| GET | `/api/sales/waiting` | service |
+| POST | `/api/sales/approve` | `sales.approve` + `sales.finalise` |
 | POST | `/api/sales/cancel/preview` | `sales.cancel` |
 | POST | `/api/sales/cancel` | `sales.cancel` |
 | POST | `/api/sales/print` | `sales.draft.write` |
@@ -400,3 +407,16 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/returns/notes` | service |
 | POST | `/api/returns/supplier-note` | `returns.create` |
 | POST | `/api/returns/print` | `returns.create` |
+| GET | `/api/books/heads` | service |
+| GET | `/api/books/journal/accounts` | service |
+| POST | `/api/books/expense/preview` | `ledger.post.payment` |
+| POST | `/api/books/expense/record` | `ledger.post.payment` |
+| POST | `/api/books/journal/preview` | `ledger.post.journal` |
+| POST | `/api/books/journal/record` | `ledger.post.journal` |
+| POST | `/api/books/contra/preview` | `ledger.post.journal` |
+| POST | `/api/books/contra/record` | `ledger.post.journal` |
+| POST | `/api/books/owner/preview` | `ledger.post.receipt` or `ledger.post.payment` |
+| POST | `/api/books/owner/record` | `ledger.post.receipt` or `ledger.post.payment` |
+| POST | `/api/books/undo` | `ledger.reverse` |
+| GET | `/api/books/entries` | service |
+| GET | `/api/books/book` | service |

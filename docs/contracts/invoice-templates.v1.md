@@ -1,4 +1,4 @@
-# Contract: `invoice-templates` v1.0.0
+# Contract: `invoice-templates` v1.0.1
 
 | | |
 | --- | --- |
@@ -74,6 +74,11 @@ engine would mean the PDF could differ from the preview the user approved.
 - `InvoiceDocument.upiId` is frozen onto the bill like the bank details. Every shipped design
   (version 1.1.0) carries the optional field `qr.upi`; snapshots taken before it do not, so old bills
   reprint unchanged.
+- Since v1.0.1 (#390) the app freezes the UPI id saved at the moment of issue into the bill's stored
+  print copy, and every reprint, preview, PDF and the sale's done-screen UPI link use only that
+  frozen id. Changing or removing the saved id later affects only bills issued after the change. A
+  bill frozen before v1.0.1 carries no id and prints no square, because its original payee is not
+  known (CGST Rule 56(8): an entry in an issued document is never overwritten).
 - The square carries `upi://pay?pa=<upi id>&pn=<seller name>&am=<amount still due>&cu=INR&tn=<bill
   number>`. The amount is `totals.outstanding`, else the total less `totals.amountPaid`, else the
   total.

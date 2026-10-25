@@ -1,5 +1,6 @@
 import { AccessControl, AuditLog, ExceptionQueue, PlatformCommandService } from "./platform.ts";
 export { AccessControl, AuditLog, ExceptionQueue, PlatformCommandService } from "./platform.ts";
+export { CompanyTrailAuditLog, type ModuleAuditTrail } from "./company-trail.ts";
 export * from "./types.ts";
 export * from "./connectors.ts";
 export * from "./credentials.ts";

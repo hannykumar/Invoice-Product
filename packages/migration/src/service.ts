@@ -135,6 +135,16 @@ const bilingual = (en: string, hi: string): Bilingual => ({ 'en-IN': en, 'hi-IN'
 
 const digestOf = (content: string): string => createHash('sha256').update(content, 'utf8').digest('hex');
 
+/**
+ * Issue #396 — the most data rows one file may carry. Duplicate control compares rows with each
+ * other and with what the business already has, so a file far past this holds the server's single
+ * thread; a business with more splits the export (by group, or A–M and N–Z).
+ */
+export const MAX_ROWS_PER_FILE = 5_000;
+
+/** Issue #396 — how many read files one service keeps, so preview and commit do not read it again. */
+const SHEETS_KEPT = 8;
+
 export class MigrationService {
   readonly #store: LedgerStore;
   readonly #ledger: LedgerService;
@@ -146,6 +156,8 @@ export class MigrationService {
   readonly #audit: AuditPort;
   readonly #clock: Clock;
   readonly #newId: () => string;
+  /** Issue #396 — each file read once, at analyse; keyed by company, batch and the file's digest. */
+  readonly #sheets = new Map<string, Sheet>();
 
   constructor(deps: MigrationServiceDeps) {
     this.#store = deps.store;
@@ -181,6 +193,19 @@ export class MigrationService {
       throw invalid(
         'MIGRATION_NO_HEADINGS',
         'We could not find the heading row in this file. Open it, make sure the first row names the columns, and save it again.',
+      );
+    }
+    if (sheet.rows.length > MAX_ROWS_PER_FILE) {
+      throw invalid(
+        'MIGRATION_TOO_MANY_ROWS',
+        `This file has ${sheet.rows.length.toLocaleString('en-IN')} rows, and one file can bring in at most ${MAX_ROWS_PER_FILE.toLocaleString('en-IN')}. Nothing was read in. Split it into smaller files (for example A to M and N to Z) and bring each one in.`,
+        {
+          details: {
+            rows: String(sheet.rows.length),
+            limit: String(MAX_ROWS_PER_FILE),
+            'hi-IN': `Is file mein ${sheet.rows.length.toLocaleString('en-IN')} line hain, aur ek file mein zyada se zyada ${MAX_ROWS_PER_FILE.toLocaleString('en-IN')} laayi ja sakti hain. Kuch nahin padha gaya. File ko chhoti files mein baantein (jaise A se M aur N se Z) aur har ek ko alag laayein.`,
+          },
+        },
       );
     }
     if (command.entity === undefined && looksLikeTransactions(sheet.headers)) {
@@ -231,6 +256,7 @@ export class MigrationService {
 
     await this.#batches.insert(batch);
     await this.#batches.putSource(actor.companyId, batch.id, command.content);
+    this.#keepSheet(actor.companyId, batch.id, digest, sheet);
     await this.#audit.record({
       companyId: actor.companyId,
       actorId: actor.userId,
@@ -564,11 +590,25 @@ export class MigrationService {
     return this.#stock;
   }
 
-  /** Reads the file through the approved mapping — or the proposal, when previewing before approval. */
-  async #read(
-    actor: ActorContext,
-    batch: ImportBatch,
-  ): Promise<{ sheet: Sheet; outcomes: readonly RowOutcome[]; duplicates: DuplicateSummary }> {
+  #keepSheet(companyId: CompanyId, batchId: string, digest: string, sheet: Sheet): void {
+    const key = `${companyId}:${batchId}:${digest}`;
+    this.#sheets.delete(key);
+    this.#sheets.set(key, sheet);
+    while (this.#sheets.size > SHEETS_KEPT) {
+      const oldest = this.#sheets.keys().next().value;
+      if (oldest === undefined) break;
+      this.#sheets.delete(oldest);
+    }
+  }
+
+  /**
+   * Issue #396 — the file as analyse read it. Only a service that never saw the analyse (a restart,
+   * or one batch among many) reads the stored text again, and keeps that for next time.
+   */
+  async #sheetOf(actor: ActorContext, batch: ImportBatch): Promise<Sheet> {
+    const key = `${actor.companyId}:${batch.id}:${batch.digest}`;
+    const kept = this.#sheets.get(key);
+    if (kept !== undefined) return kept;
     const content = await this.#batches.source(actor.companyId, batch.id);
     if (content === null) {
       throw notFound('MIGRATION_FILE_GONE', 'The file for this import is no longer here. Upload it again.');
@@ -577,6 +617,16 @@ export class MigrationService {
       ...(batch.readOptions.delimiter === null ? {} : { delimiter: batch.readOptions.delimiter }),
       ...(batch.readOptions.headerRow === null ? {} : { headerRow: batch.readOptions.headerRow }),
     });
+    this.#keepSheet(actor.companyId, batch.id, batch.digest, sheet);
+    return sheet;
+  }
+
+  /** Reads the file through the approved mapping — or the proposal, when previewing before approval. */
+  async #read(
+    actor: ActorContext,
+    batch: ImportBatch,
+  ): Promise<{ sheet: Sheet; outcomes: readonly RowOutcome[]; duplicates: DuplicateSummary }> {
+    const sheet = await this.#sheetOf(actor, batch);
     const mapping = batch.approvedMapping ?? batch.proposal.columns;
     const parsed = readRows(batch.entity, sheet, mapping, {
       asOn: batch.readOptions.asOn,

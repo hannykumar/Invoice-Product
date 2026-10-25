@@ -1,4 +1,4 @@
-# Contract: `inventory` v1.0.0
+# Contract: `inventory` v1.1.0
 
 | | |
 | --- | --- |
@@ -75,6 +75,15 @@ alone.
 - **Transfers** are two linked movements, so both ends are traceable and the business-wide total
   does not change.
 - **Adjustments** always require a reason, because the difference is unexplained by itself.
+
+## Damaged / not-for-sale locations (1.1.0, #292)
+
+`Warehouse.sellable` is optional; `false` marks a place for goods that must not be sold, such as
+damaged goods a customer sent back. Its stock is counted and valued like any other, but
+`reserve` treats nothing in it as available and `recordMovement` refuses a `SALE_OUT` from it
+(`STOCK_WAREHOUSE_NOT_FOR_SALE`). `InventoryService.sellable(actor, warehouseId)` answers
+`true`, `false`, or `null` for a place the company does not have. A warehouse without the field
+is an ordinary godown, so existing callers are unchanged.
 
 ## Valuation
 

@@ -66,9 +66,9 @@ export const CORE_ROUTES: readonly Route[] = [
   // Issue #123 — a provider's callback about a government call. No session: it authenticates by
   // signing the bytes it sent, so it reads the raw body rather than the parsed one.
   post('/api/webhooks/government/:kind', { access: publicRoute('the government provider proves itself by signing the bytes it sent'), input: anything },
-    async ({ params, delivery }) => {
+    async ({ params, delivery, runtime }) => {
       if (!isGovernmentConnector(params.kind!)) return replyJson(404, { state: 'failed', title: 'Not found', message: 'That is not a government callback address.' });
-      const received = await receiveGovernmentWebhook(params.kind!, delivery?.rawBody ?? '', delivery?.signature ?? '');
+      const received = await receiveGovernmentWebhook(params.kind!, delivery?.rawBody ?? '', delivery?.signature ?? '', runtime.database);
       return replyJson(received.status, { state: 'received', outcome: received.outcome });
     }),
 
