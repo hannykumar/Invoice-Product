@@ -185,11 +185,18 @@ test('#342: the demo sign-in and the in-memory store never run outside developme
   assert.throws(() => identityProviderFor({ NODE_ENV: 'production', SUPABASE_URL: 'http://x.supabase.co', SUPABASE_ANON_KEY: 'k' }, DEMO_SIGN_IN_CODE), /https/);
   assert.equal(identityProviderFor({ NODE_ENV: 'production', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k' }, DEMO_SIGN_IN_CODE).kind, 'supabase');
   assert.equal(identityProviderFor({ NODE_ENV: 'test' }, DEMO_SIGN_IN_CODE).kind, 'mock');
-  // A deployment that forgot NODE_ENV still has its database: it is not mistaken for a developer's machine.
-  assert.throws(() => identityProviderFor({ DATABASE_URL: 'postgresql://db.example.invalid/books' }, DEMO_SIGN_IN_CODE), /demo sign-in only runs/);
-  // The owner's own Mac: the database on this machine, no NODE_ENV, no Supabase — the stand-in signs in.
-  assert.equal(identityProviderFor({ DATABASE_URL: 'postgresql://invoice:invoice@localhost:55460/invoice' }, DEMO_SIGN_IN_CODE).kind, 'mock');
-  assert.equal(identityProviderFor({ DATABASE_URL: 'postgresql://invoice:invoice@127.0.0.1:5432/invoice' }, DEMO_SIGN_IN_CODE).kind, 'mock');
+  // Where the database lives decides nothing: a real server may keep PostgreSQL on the same host.
+  // With a database and no NODE_ENV the server refuses to start rather than run the demo sign-in.
+  for (const url of ['postgresql://db.example.invalid/books', 'postgresql://invoice:invoice@localhost:55460/invoice', 'postgresql://invoice:invoice@127.0.0.1:5432/invoice', 'postgresql://invoice:invoice@[::1]:5432/invoice', 'postgresql:///invoice?host=/var/run/postgresql']) {
+    assert.throws(() => identityProviderFor({ DATABASE_URL: url }, DEMO_SIGN_IN_CODE), /NODE_ENV is not set, but a database is/, url);
+  }
+  assert.throws(() => identityProviderFor({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://invoice:invoice@localhost:5432/invoice' }, DEMO_SIGN_IN_CODE), /SUPABASE_URL is not set/);
+  for (const environment of ['Production ', 'PROD', 'dev', 'staging']) assert.throws(() => identityProviderFor({ NODE_ENV: environment }, DEMO_SIGN_IN_CODE), /SUPABASE_URL is not set/, environment);
+  assert.throws(() => identityProviderFor({ NODE_ENV: '  ', DATABASE_URL: 'postgresql://invoice:invoice@localhost/invoice' }, DEMO_SIGN_IN_CODE), /NODE_ENV is not set/, 'a blank NODE_ENV is no NODE_ENV');
+  // Told it is a developer's machine, the owner's local app signs in with the stand-in.
+  assert.equal(identityProviderFor({ NODE_ENV: 'development', DATABASE_URL: 'postgresql://invoice:invoice@localhost:55460/invoice' }, DEMO_SIGN_IN_CODE).kind, 'mock');
+  // No NODE_ENV but Supabase configured: the real provider, never the stand-in.
+  assert.equal(identityProviderFor({ DATABASE_URL: 'postgresql://invoice:invoice@localhost:5432/invoice', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_ANON_KEY: 'k' }, DEMO_SIGN_IN_CODE).kind, 'supabase');
   assert.equal(identityProviderFor({}, DEMO_SIGN_IN_CODE).kind, 'mock', 'no NODE_ENV and no database: a developer running it bare');
 });
 
@@ -295,4 +302,32 @@ test('#342: Supabase saying the code is wrong is the person\'s to fix; Supabase 
   await assert.rejects(new SignIn(store, wrong.provider).checkCode('9876543210', '000000'), { message: CODE_NOT_ACCEPTED });
   const down = standIn(() => new Response('upstream', { status: 502 }));
   await assert.rejects(new SignIn(store, down.provider).checkCode('9876543210', '000000'), /Sign-in is not working just now/);
+});
+
+test('#342: the demo sign-in on a database is announced loudly at every start', async () => {
+  const { ApiRuntime } = await import('../src/runtime.ts');
+  const { captureLog } = await import('../src/log.ts');
+  const lines: string[] = [];
+  const stop = captureLog((_level, line) => { lines.push(line); });
+  try {
+    const db = { query: async () => ({ rows: [] }) } as unknown as import('../../../packages/platform/src/database.ts').TransactionalExecutor;
+    const runtime = new ApiRuntime({ kind: 'postgres', db });
+    assert.equal(runtime.signIn.provider, 'mock', 'this test runs with NODE_ENV=test');
+  } finally { stop(); }
+  assert.ok(lines.some((line) => /"level":"warn"/.test(line) && /anyone can sign in with the demo code/.test(line)), lines.join('\n'));
+});
+
+test('#342: every process that starts the runtime (API, web server, worker) refuses a database with no NODE_ENV', async () => {
+  const { ApiRuntime } = await import('../src/runtime.ts');
+  const saved = { env: process.env.NODE_ENV, url: process.env.DATABASE_URL };
+  delete process.env.NODE_ENV;
+  process.env.DATABASE_URL = 'postgresql://invoice:invoice@localhost:5432/invoice';
+  try {
+    const db = { query: async () => ({ rows: [] }) } as unknown as import('../../../packages/platform/src/database.ts').TransactionalExecutor;
+    // apps/api/src/server.ts, apps/web/server.ts and apps/api/src/worker.ts all start through startRuntime → new ApiRuntime(persistence).
+    assert.throws(() => new ApiRuntime({ kind: 'postgres', db }), /NODE_ENV is not set, but a database is/);
+  } finally {
+    if (saved.env === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved.env;
+    if (saved.url === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = saved.url;
+  }
 });

@@ -48,8 +48,8 @@ export const readSignInAddress = (typed: string): SignInAddress => {
 const addressOf = (identity: VerifiedIdentity): string | undefined => identity.email ?? identity.phone;
 
 /**
- * Development and tests only: every address gets the same code, from the seed. `runtime.ts` refuses
- * to start with it outside development (`identityProviderFor`), so no shop can ever sign in with it.
+ * Development and tests only: every address gets the same code, from the seed. `identityProviderFor`
+ * refuses to start with it unless NODE_ENV says development or test, so no shop can ever sign in with it.
  */
 export class MockIdentityProvider implements IdentityProvider {
   readonly kind = "mock" as const;
@@ -164,18 +164,14 @@ export class SupabaseIdentityProvider implements IdentityProvider {
 }
 
 /**
- * Issue #342 — a developer's machine or a test run: `NODE_ENV` says so, or is unset and the database
- * (if any) is on this machine. A deployment that forgot `NODE_ENV` points at a database somewhere
- * else, so it is never mistaken for one and never gets the demo sign-in.
+ * Issue #342 — a developer's machine or a test run, which the process is only ever told, never left
+ * to infer: `NODE_ENV=development` or `test`. Where the database lives says nothing about it — a real
+ * server can keep PostgreSQL on the same host. The one other case is no `NODE_ENV` and no database at
+ * all: the app then runs in memory (#340, `openPersistence`) and its sessions can reach no PostgreSQL.
  */
 export const isDeveloperMachine = (env: Readonly<Record<string, string | undefined>>): boolean => {
   const environment = (env.NODE_ENV ?? "").trim().toLowerCase();
-  if (environment === "development" || environment === "test") return true;
-  if (environment !== "") return false;
-  const url = env.DATABASE_URL?.trim();
-  if (!url) return true;
-  const host = URL.parse(url)?.hostname ?? "";
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  return environment === "development" || environment === "test" || (environment === "" && !env.DATABASE_URL?.trim());
 };
 
 /** The provider for this process. With `SUPABASE_URL` set, Supabase; without it, the mock — and only on a developer's machine. */
@@ -188,6 +184,8 @@ export const identityProviderFor = (env: Readonly<Record<string, string | undefi
     return new SupabaseIdentityProvider(url, key);
   }
   if (!isDeveloperMachine(env)) {
+    // Fails closed: with a database and no NODE_ENV the server does not guess which one it is.
+    if ((env.NODE_ENV ?? "").trim() === "") throw new Error("NODE_ENV is not set, but a database is. Set NODE_ENV=development on a developer's machine, or NODE_ENV=production with SUPABASE_URL and SUPABASE_ANON_KEY on a real server. The server will not start until it is told which.");
     throw new Error("SUPABASE_URL is not set. The demo sign-in only runs on a developer's machine (NODE_ENV=development or test), so the server will not start.");
   }
   return new MockIdentityProvider(demoCode);
