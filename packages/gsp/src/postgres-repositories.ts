@@ -12,9 +12,9 @@
  * resolves it); a one-time password is never on the record, only the challenge's id, expiry, tries
  * left and the last digits of the phone.
  *
- * There is no PostgreSQL store for provider callbacks (`WebhookEventRepository`), and the two
- * cross-company lookups of the call log refuse: a callback names no company, and these tables are
- * closed to a connection that has none. That waits for #345 (see government-access-v1, "Storage").
+ * Provider callbacks are kept by `PostgresWebhookEvents` (#389). The two cross-company lookups of
+ * the call log find nothing here: a callback names no company, and these tables are closed to a
+ * connection that has none. That waits for #345 (see government-access-v1, "Storage").
  */
 import { notAllowed, type CompanyId, type UserId } from '@invoice/kernel';
 import type { SqlExecutor, TransactionalExecutor } from '../../platform/src/database.ts';
@@ -295,13 +295,20 @@ export class PostgresCallLog implements CallLogRepository {
     return this.#select(companyId, '($2::text IS NULL OR c.gstin = $2)', [gstin ?? null, ...pageValues(page)], callPage(3));
   }
 
-  /** Refused: a callback names no company, and this table is closed to a connection without one (#345). */
+  /**
+   * Always null on the database, for now. A callback names no company, and `government_calls` is
+   * closed to a connection without one, so the honest answer is what row-level security shows:
+   * nothing. The callback is recorded as UNMATCHED and reconciliation settles the call by polling.
+   * Today that is also the exact answer, because the running app makes no government calls yet
+   * (#51). Before the channel is wired on PostgreSQL, #345 must resolve the company from the
+   * provider request id first; no bypass of row-level security is built here.
+   */
   async findByProviderRequestId(): Promise<ProviderCall | null> {
-    throw callbackNeedsCompany();
+    return null;
   }
 
   async findByCorrelationId(): Promise<ProviderCall | null> {
-    throw callbackNeedsCompany();
+    return null;
   }
 
   #select(companyId: CompanyId, where: string, values: unknown[], tail: string): Promise<ProviderCall[]> {
@@ -310,8 +317,3 @@ export class PostgresCallLog implements CallLogRepository {
     )).rows.map(toCall));
   }
 }
-
-const callbackNeedsCompany = () => notAllowed(
-  'GSP_CALLBACK_NEEDS_COMPANY',
-  'A provider callback cannot be matched to its call on the database yet: it names no business, and each business\'s calls are closed to everyone else. Until then such calls are settled by reconciliation.',
-);

@@ -148,12 +148,15 @@ Migration `…gsp_59f4d0dcbdf0_postgres_repositories`:
   `findByIdempotencyKey` answers with the first. The unique key on `(company_id, idempotency_key)`
   became an index.
 - **The OTP request id is unique per company**, not globally: it is the provider's id, not ours.
-- **Not on PostgreSQL yet: provider callbacks.** A callback names no company, so
-  `findByProviderRequestId`, `findByCorrelationId` and `WebhookEventRepository` (deduplication
-  across companies, rows with no company) cannot run under row-level security. `PostgresCallLog`
-  refuses the two lookups with `GSP_CALLBACK_NEEDS_COMPANY`; there is no PostgreSQL webhook store,
-  and `government_webhook_events` stays on the pending list. Waiting on #345/#340 for a lookup that
-  resolves the company from a provider request id before the tenant transaction opens.
+- **The callback receiver runs on these stores** when the app has a database
+  (`apps/api/src/government-webhooks.ts`), beside #389's `PostgresWebhookEvents`.
+- **A callback cannot find its call on PostgreSQL yet.** It names no company, and
+  `government_calls` is closed to a connection without one, so `findByProviderRequestId` and
+  `findByCorrelationId` answer null: the callback is recorded `UNMATCHED` and reconciliation settles
+  the call by polling. That is exact today, because the running app makes no government calls yet
+  (#51). Before the channel is wired on PostgreSQL, #345 must resolve the company from the provider
+  request id before the tenant transaction opens. Nothing here bypasses row-level security.
+  `government_webhook_events` (#389, rows with no company) stays on the pending list.
 
 ## Assumptions recorded against unfinished dependencies
 

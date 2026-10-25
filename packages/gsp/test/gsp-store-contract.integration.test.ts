@@ -123,10 +123,15 @@ test('a settled call, a consent and a credential cannot be rewritten or removed'
   assert.equal((await h.calls.find(d.companyId, answered.callId))?.reconciledAt, '2026-08-17T05:00:00.000Z');
 });
 
-test('a callback cannot be matched across companies on the database yet, and says so', { skip }, async () => {
-  const calls = harness().calls;
-  await assert.rejects(calls.findByProviderRequestId('provider-1'), code('GSP_CALLBACK_NEEDS_COMPANY'));
-  await assert.rejects(calls.findByCorrelationId('gsp-1'), code('GSP_CALLBACK_NEEDS_COMPANY'));
+test('a callback finds no call across companies on the database: nothing gets round row-level security', { skip }, async () => {
+  const h = harness();
+  const d = await desk(h);
+  await d.connect(KARNATAKA_GSTIN);
+  const answered = await d.act(() => d.channel.call(d.owner, { operation: 'einvoice.generate', payload: invoicePayload(KARNATAKA_GSTIN, 'SI-5'), idempotencyKey: 'SI-5', documentRef: 'SI-5' }));
+  const made = await h.calls.find(d.companyId, answered.callId);
+  assert.ok(made?.providerRequestId);
+  assert.equal(await h.calls.findByProviderRequestId(made.providerRequestId), null);
+  assert.equal(await h.calls.findByCorrelationId(made.correlationId), null);
 });
 
 test('the migration runs down and up again', { skip }, async () => {
