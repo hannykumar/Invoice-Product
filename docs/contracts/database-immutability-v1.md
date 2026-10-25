@@ -200,8 +200,8 @@ The platform's own tenant tables now force row-level security on `app.company_id
   a write with `NO_UNIT_OF_WORK` outside the action's unit of work.
   After #366 the list holds only tables with a stated reason, each written beside it in the test:
   sign-in tables read before the company is known, shared reference data, the unused bank-statement
-  import tables, government callbacks before they are matched to a company, the gsp tables still in
-  progress, and the #363 pilot's test-only stand-ins.
+  import tables, government callbacks before they are matched to a company (#477), and the #363 pilot's
+  test-only stand-ins.
 - A seed or a script that writes tenant rows must run inside `tenantTransaction`/`unitOfWork`,
   or the policy refuses the write.
 

@@ -27,8 +27,11 @@ test('#398: ten bill PDFs asked for at once start one browser, not ten', async (
   const realLaunch = puppeteer.launch.bind(puppeteer);
   const launch = context.mock.method(puppeteer, 'launch', realLaunch);
   const owner = await signIn('owner@sampoorna.example.invalid', COMPANY_A);
-  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '100', date: '2026-08-29', terms: '7', reference: 'PDF-POOL-398', approvalReason: 'Agreed with the owner' };
-  const recorded = JSON.parse(String((await call('POST', '/api/sales/record', sale, owner)).body)) as { invoice: { id: string } };
+  const sale = { party: 'ABC Traders', item: 'Herbal Bath Soap 100g', quantity: '1', rate: '100', date: '2026-08-29', terms: '7', reference: 'PDF-POOL-398', requestId: 'pdf-pool-398', approvalReason: 'Agreed with the owner' };
+  // Every bill carries the caller's entry number (#392); without it the sale is refused and there is nothing to print.
+  const made = await call('POST', '/api/sales/record', sale, owner);
+  assert.equal(made.status, 200, String(made.body));
+  const recorded = JSON.parse(String(made.body)) as { invoice: { id: string } };
   const files = await Promise.all(Array.from({ length: 10 }, () => call('GET', `/api/sales/${recorded.invoice.id}/pdf`, {}, owner)));
   for (const file of files) {
     assert.equal(file.status, 200, String(file.body));

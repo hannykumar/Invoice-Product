@@ -171,7 +171,11 @@ export class GovernmentAccessService {
       scopes: [...input.scopes],
       consent: existing?.consent ?? null,
       credential: null,
-      credentialHistory: existing?.credentialHistory ?? [],
+      // A paused connection still holds its credential. Starting again moves it into the history
+      // rather than dropping it: "which credential made this call" must stay answerable (#366).
+      credentialHistory: existing === null
+        ? []
+        : existing.credential === null ? existing.credentialHistory : [...existing.credentialHistory, existing.credential],
       otp: null,
       apiUserId: outcome.apiUserId,
       validUntil: null,

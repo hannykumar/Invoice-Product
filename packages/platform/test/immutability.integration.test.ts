@@ -423,10 +423,8 @@ test("every table that holds a company's rows enforces row-level security, excep
     "compliance_obligation_definitions",
     // No service reads or writes these yet (the bank-statement import of bank-import-v1).
     "bank_statement_imports", "bank_statement_transactions",
-    // A government callback arrives before it is matched to a company (#389).
+    // A government callback arrives before it is matched to a company (#389, #477).
     "government_webhook_events",
-    // gsp: authorisations, consents, OTP challenges, credentials and the call log, in progress in #366.
-    "government_calls", "gsp_credentials", "gsp_otp_challenges", "gstin_authorisations", "gstin_consents",
     // Test-only stand-ins of the #363 pilot, created by its tests, not by a migration.
     "uow_pilot_sales_invoices", "uow_pilot_stock_movements",
   ]);
