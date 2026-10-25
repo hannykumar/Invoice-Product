@@ -74,7 +74,7 @@ type AnyInput = any;
 interface RouteBase {
   readonly method: Method;
   readonly path: string;
-  readonly input: z.ZodType<unknown, z.ZodTypeDef, unknown>;
+  readonly input: z.ZodType<unknown, unknown>;
   /** On a list route, the key of the array the dispatcher pages with `cursor` and `limit`. */
   readonly list?: string;
   /**
@@ -117,9 +117,9 @@ export const postCallingOut: typeof post = (path, declared, handle) => ({ ...pos
 /** One value the service turns into text or a number itself: `'10.5'` and `10.5` are both fine. */
 export const text = z.union([z.string(), z.number(), z.bigint(), z.boolean(), z.null()]).optional();
 /** A yes/no the service reads as `=== true` (or a value it ignores otherwise). */
-export const flag = z.unknown();
+export const flag = z.unknown().optional();
 /** A field whose shape the service decides (lines, column maps, a list or its JSON text). */
-export const anything = z.unknown();
+export const anything = z.unknown().optional();
 
 /** The body of a POST, or the query of a GET: an object carrying at least these fields. Extra fields pass. */
 export const fields = <T extends z.ZodRawShape>(shape: T) => z.object(shape).passthrough();
