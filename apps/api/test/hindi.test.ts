@@ -14,6 +14,8 @@ import { handleApi } from '../src/server.ts';
 import { sells, stockEverything } from './stock-helper.ts';
 import { useFixedAppClock } from '../src/app-clock.ts';
 import { signIn as signInAs } from './sign-in-helper.ts';
+import { saveTurnoverBand } from './turnover-helper.ts';
+import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
 
 useFixedAppClock('2026-08-29T10:00:00.000Z');
 
@@ -106,6 +108,64 @@ test('#298: payment review and record answer a Hindi session in Hindi', async ()
   assert.deepEqual(englishSentences(recorded.body, 'payment.record'), []);
 });
 
+test('#298: a Hindi purchase check still keeps English under en-IN (Devin Review #493-1)', async () => {
+  const session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
+  const input = { supplierId: 'sampoorna:party:supplier', reference: 'SRS-298-1', date: '2026-08-27', lines: [{ item: 'TMT Steel Bar 12mm', quantity: '10', rate: '64', gst: '1800' }] };
+
+  const recorded = await request('POST', '/api/purchases/record', { ...input, locale: 'hi-IN' }, session);
+  assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
+  const check = recorded.body.purchaseCheck as Record<string, unknown>;
+  assert.ok(check);
+  assert.ok(englishProse(check['en-IN'] as string), `the English side is English: ${check['en-IN']}`);
+  assert.ok(!englishProse(check['hi-IN'] as string), `the Hindi side is Hindi: ${check['hi-IN']}`);
+});
+
+test('#298: a Hindi estimate refusal keeps English under en-IN (Devin Review #493-2)', async () => {
+  const session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
+
+  const estimate = await request('POST', '/api/sales/estimate', {
+    party: 'ABC Traders', item: SOAP, quantity: '999999999', rate: '180', date: DATE, locale: 'hi-IN',
+  }, session);
+  assert.equal(estimate.status, 200, JSON.stringify(estimate.body));
+  const refusal = (estimate.body.refusals as Record<string, unknown>[])[0];
+  assert.ok(refusal, JSON.stringify(estimate.body));
+  assert.ok(englishProse(refusal['en-IN'] as string), `the English side is English: ${refusal['en-IN']}`);
+  assert.ok(!englishProse(refusal['hi-IN'] as string), `the Hindi side is Hindi: ${refusal['hi-IN']}`);
+});
+
+test('#298: a Hindi return confirmation is Hindi and calls the note a note (Devin Review #493-3)', async () => {
+  const session = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
+  await saveTurnoverBand(session, '5_TO_10_CRORE');
+  const buyer = await request('POST', '/api/customers', {
+    legalName: 'Review Registered Buyer', registration: 'regular', gstin: syntheticGstin('29', 'RRSTP1234F'),
+    line1: '9, Market Road', city: 'Bengaluru', pincode: '560001',
+  }, session);
+  assert.equal(buyer.status, 200, JSON.stringify(buyer.body));
+
+  const sale = await request('POST', '/api/sales/record', {
+    party: 'Review Registered Buyer', item: SOAP, quantity: '3', rate: '200', date: DATE,
+    requestId: 'SALE-298-1', locale: 'hi-IN',
+  }, session);
+  assert.equal(sale.status, 200, JSON.stringify(sale.body));
+  assert.equal(sale.body.eInvoice?.needed, 'YES', 'the bill is one the portal wants, so the suffix is exercised');
+
+  const choices = await request('GET', '/api/returns/documents', {}, session);
+  const bill = (choices.body.documents as Record<string, any>[]).find((document) => document.party === 'Review Registered Buyer');
+  assert.ok(bill, JSON.stringify(choices.body));
+
+  const recorded = await request('POST', '/api/returns/record', {
+    kind: 'SALES_RETURN', documentId: bill.id, lineId: 'line-1', quantity: '1',
+    disposition: 'ACCEPTED', reason: 'Customer brought the soap back.', date: DATE,
+    reference: 'CN-298-1', requestId: 'CN-298-1', locale: 'hi-IN',
+  }, session);
+  assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
+  const message = recorded.body.message as string;
+  assert.ok(message.length > 0);
+  assert.ok(!englishProse(message), `the confirmation is Hindi, not English: ${message}`);
+  assert.ok(!/This (bill|credit note|debit note)/.test(message), `no English left in: ${message}`);
+  assert.match(message, /credit note/i, `the note is named a credit note, not a bill: ${message}`);
+});
+
 test('#298: the GST return workspace and export answer a Hindi session in Hindi', async () => {
   const owner = await signInAs('owner@sampoorna.example.invalid', SAMPOORNA);
   const workspace = await request('POST', '/api/gst-returns', hindi({ period: '2026-08' }), owner);
@@ -138,3 +198,4 @@ test('#298: a refusal told in Hindi when the server has a Hindi form for it', as
   assert.equal(refused.body.code, 'PAYMENT_MORE_THAN_BILLS');
   assert.deepEqual(englishSentences({ message: refused.body.message }, 'refusal'), []);
 });
+

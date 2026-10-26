@@ -119,7 +119,7 @@ import { salesInventoryAdapter, type InventoryStore, type StockItem, type StockM
 import { DEFAULT_SALES_POLICY } from '../../../packages/sales/src/policy.ts';
 import { lineTaxableValue, taxOn } from '../../../packages/purchasing/src/recompute.ts';
 import { formatQuantity } from '../../../packages/masters/src/units.ts';
-import { both, say } from './language.ts';
+import { both, say, type Bilingual } from './language.ts';
 import type { ApprovedPurchase, ApprovedPurchaseLine, PurchaseBill, PurchasePostingPreview } from '../../../packages/purchasing/src/posting-types.ts';
 import { validatePurchase } from '../../../packages/purchasing/src/validate.ts';
 import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adapter.ts';
@@ -2369,7 +2369,7 @@ export class DemoApplication {
       if (line === undefined) return null;
       return {
         status: line.status, outcome: line.outcome, portalDataPresent: workspace.portalDataPresent,
-        'en-IN': `${say(line.statusLabel)} — ${say(line.outcomeLabel)}`,
+        'en-IN': `${line.statusLabel['en-IN']} — ${line.outcomeLabel['en-IN']}`,
         'hi-IN': `${line.statusLabel['hi-IN']} — ${line.outcomeLabel['hi-IN']}`,
         sentence: say(line.sentence),
       };
@@ -2873,7 +2873,7 @@ export class DemoApplication {
       const refusals: Refusal[] = bill.problems.map((problem) => ({
         code: problem.code,
         ...(problem.lineId === undefined ? {} : { lineId: problem.lineId, itemId: bill.lines.find((line) => line.lineId === problem.lineId)?.itemId }),
-        'en-IN': say(problem.message),
+        'en-IN': problem.message['en-IN'],
         'hi-IN': problem.message['hi-IN'],
       }));
       const pricing = bill.pricing;
@@ -4908,6 +4908,25 @@ export class DemoApplication {
     };
   }
 
+  /**
+   * Issue #298 — what the recorded note did, said in the session's language. `note.summary` is the
+   * frozen English record kept for the printed note; this pair is only the screen's sentence, and
+   * its en-IN side is the stored sentence verbatim so the two can never disagree.
+   */
+  private noteSummaryWords(note: ReturnNote): Bilingual {
+    const total = formatINR(note.totals.total);
+    const against = note.originalDocument.number;
+    if (note.priceCorrection === true && note.kind === 'SALES_DEBIT_NOTE')
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne zyada daam ke liye ${against} par ${total} aur maanga.` };
+    if (note.priceCorrection === true)
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne kam daam ke liye ${against} par ${total} ka credit diya. Maal waapas nahi aaya.` };
+    if (note.kind === 'PURCHASE_RETURN') {
+      const party = supplierParties(this.config.companyId).find((candidate) => candidate.id === note.partyId)?.legalName ?? note.partyId;
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne ${against} ke liye ${party} ka ${total} baaki kam kiya.` };
+    }
+    return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne ${against} ke liye ${total} ka credit diya.` };
+  }
+
   async recordReturn(actor: ActorContext, input: Record<string, unknown>) {
     // Issue #293 — a price correction is recorded through the same door, with nothing coming back.
     const price = String(input.mode ?? '') === PRICE_CORRECTION;
@@ -4924,15 +4943,18 @@ export class DemoApplication {
     // of 13 December 2019; the businesses it covers named by Notification 13/2020-Central Tax of 21 March 2020).
     const eInvoice = result.note.kind !== 'PURCHASE_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
     if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
-    const noteWords = result.note.kind === 'SALES_DEBIT_NOTE' ? 'This debit note' : 'This credit note';
+    const noteWords = result.note.kind === 'SALES_DEBIT_NOTE'
+      ? { 'en-IN': 'This debit note', 'hi-IN': 'Is debit note' }
+      : { 'en-IN': 'This credit note', 'hi-IN': 'Is credit note' };
+    const noteSummary = this.noteSummaryWords(result.note);
     return {
       state: 'recorded', deduplicated: result.deduplicated,
       title: price
         ? (result.deduplicated ? both('Price correction already recorded once', 'Daam sudhaar pehle se ek baar darj hai') : both('Price correction recorded', 'Daam sudhaar darj hua'))
         : (result.deduplicated ? both('Return already recorded once', 'Wapsi pehle se ek baar darj hai') : both('Return recorded', 'Wapsi darj hui')),
       message: eInvoice?.needed === 'YES'
-        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? say(eInvoice.message).replace('This bill', noteWords) : both(`${noteWords} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`, `${noteWords} par sarkari e-invoice number hona zaroori hai. Use ab bheja ja raha hai, aur number E-invoice screen par aane par dikhega.`)}`
-        : result.note.summary,
+        ? `${say(noteSummary)} ${eInvoice.lateForPortal === true ? say({ 'en-IN': eInvoice.message['en-IN'].replace('This bill', noteWords['en-IN']), 'hi-IN': eInvoice.message['hi-IN'].replace('Is bill', noteWords['hi-IN']) }) : both(`${noteWords['en-IN']} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`, `${noteWords['hi-IN']} par sarkari e-invoice number hona zaroori hai. Use ab bheja ja raha hai, aur number E-invoice screen par aane par dikhega.`)}`
+        : say(noteSummary),
       note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor), priceCorrection: result.note.priceCorrection === true },
     };
   }
