@@ -1,4 +1,4 @@
-# Contract: `onboarding` v1.0.0
+# Contract: `onboarding` v1.1.0
 
 | | |
 | --- | --- |
@@ -6,6 +6,7 @@
 | **Consumed by** | GPT 2 (#38 web, #3 company creation), GPT 1 (#37 migration, #13 branding) |
 | **Package** | `@invoice/onboarding` |
 | **Status** | Published |
+| **Storage** | 1.1.0 — PostgreSQL, issue #366 (lane: GPT 2, #49) |
 
 ## Purpose
 
@@ -87,6 +88,27 @@ where "continue" should go. `renderChecklist()` produces a standalone screen so 
 ordering can be reviewed by a person now — **issue #38 owns the real interface**; this exists to be
 ported, not to compete with it.
 
+## Storage (v1.1.0, issue #366)
+
+`OnboardingRepository` has two implementations that pass one contract suite
+(`packages/onboarding/test/onboarding-repository-contract.ts`): `InMemoryOnboardingRepository`
+and `PostgresOnboardingRepository` (`src/postgres-repository.ts`, table `onboarding_sessions`).
+
+- Writes need the action's unit of work (`NO_UNIT_OF_WORK` otherwise); reads use
+  `tenantTransaction`. Answers and step states are stored whole as jsonb, bigints included.
+- Forced row-level security on `company_id`. The database also holds: one setup per idempotency
+  key and **one setup in progress per business** (a second is `ONBOARDING_ALREADY_STARTED`), a
+  known state for every one of the seven steps, and a finished (`COMPLETED`) setup is frozen
+  (`platform_freeze_posted`, #368). The opening voucher id must be one of the company's own entries.
+- A setup started before a restart is finished after it, on a new connection pool (tested).
+
+**The running app on PostgreSQL** (`apps/api/src/onboarding-application.ts`): a finish creates the
+new company's `companies` row, its chart of accounts, its setup, its opening entry and its audit
+trail in **one unit of work opened for the new company's id**, outside the request's own unit of
+work for the session's company. `app.company_id` is the new id, so every row-level policy is
+satisfied as written; nothing bypasses it. A setup with a problem rolls back and saves nothing. A
+preview never touches the database.
+
 ## Known limitations
 
 - Opening **stock** is handed to an `OpeningStockPort`, which is a no-op until #12 lands. Quantities
@@ -95,3 +117,6 @@ ported, not to compete with it.
   of accounts has been seeded.
 - Logos are accepted as data URIs with no resizing or format validation.
 - There is no "invite your staff" step; users and roles are #3's.
+- On PostgreSQL the finished company gets **no membership**, so nobody can switch to it yet
+  (memberships are #3's). The same was true in memory, where the company vanished on restart.
+- Declared rates stay in `InMemoryDeclaredRates`: `@invoice/gst-calc` (GPT 1) has no table yet.

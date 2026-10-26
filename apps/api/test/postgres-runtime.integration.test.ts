@@ -162,3 +162,35 @@ test('#294: on PostgreSQL an expense and the owner\'s money are in the books aft
     'SELECT sum(debit_minor) - sum(credit_minor) AS imbalance FROM journal_line WHERE voucher_id = $1', [rent.entry.id])).rows[0]!;
   assert.equal(String(imbalance.imbalance), '0');
 });
+
+test('#366: on PostgreSQL a finished business setup is kept in its own company, and a setup with a mistake saves nothing', { skip }, async () => {
+  const run = randomBytes(3).toString('hex');
+  if (server === undefined) await start();
+  const token = await signInHere('owner@sampoorna.example.invalid', COMPANY);
+  const good = {
+    legalName: `Meera Bakers ${run}`, businessType: 'BAKERY', stateCode: '08',
+    registration: 'REGULAR', gstin: '08AAAAA0000A1Z2', filingFrequency: 'QUARTERLY',
+    booksStartDate: '2026-04-01', itemName: 'Chocolate cake 500g', itemKind: 'GOODS', itemUnit: 'PCS', itemHsn: '1905',
+    openingCash: '8000',
+  };
+  const mistyped = await call('POST', '/api/onboarding/finish', { ...good, legalName: `Mistyped Bakers ${run}`, gstin: '08AAAAA0000A1Z9' }, token);
+  assert.equal(mistyped.ok, false, JSON.stringify(mistyped));
+  const finished = await call('POST', '/api/onboarding/finish', good, token);
+  assert.equal(finished.status, 200, JSON.stringify(finished));
+  assert.equal(finished.result.trialBalance.balanced, true);
+  assert.equal(finished.result.trialBalance.totalDebits, 8000);
+
+  await stop();
+  await start();
+
+  // Straight from the database: the new company, its finished setup, its opening entry and its trail.
+  const made = (await owner.query(
+    `SELECT c.id, (SELECT state FROM onboarding_sessions s WHERE s.company_id = c.id) AS setup,
+            (SELECT count(*) FROM voucher v WHERE v.company_id = c.id AND v.id::text = $2) AS opening,
+            (SELECT count(*) FROM audit_events a WHERE a.company_id = c.id AND a.action LIKE 'onboarding.%') AS audits
+       FROM companies c WHERE c.legal_name = $1`, [good.legalName, finished.result.openingVoucherId])).rows;
+  assert.equal(made.length, 1);
+  assert.deepEqual({ setup: made[0]!.setup, opening: String(made[0]!.opening), audits: String(made[0]!.audits) }, { setup: 'COMPLETED', opening: '1', audits: '2' });
+  assert.notEqual(made[0]!.id, COMPANY, 'the setup is not written into the session\'s own company');
+  assert.equal((await owner.query('SELECT count(*)::int AS n FROM companies WHERE legal_name = $1', [`Mistyped Bakers ${run}`])).rows[0]!.n, 0);
+});
