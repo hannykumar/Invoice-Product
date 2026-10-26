@@ -82,7 +82,13 @@ export type SystemAccountRole =
    */
   | 'STOCK_CHANGE'
   | 'FREIGHT_OUTWARD'
-  | 'DISCOUNT_ALLOWED';
+  | 'DISCOUNT_ALLOWED'
+  /**
+   * Issue #295 — tax a customer deducted from their payment (TDS). It is a receivable from the
+   * government, not money the customer still owes: the customer settles the bill in full by paying
+   * less, and the deducted part comes back through the income-tax return (matched with Form 26AS).
+   */
+  | 'TDS_RECEIVABLE';
 
 export interface Account {
   readonly id: AccountId;
