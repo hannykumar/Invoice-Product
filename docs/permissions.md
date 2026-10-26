@@ -313,7 +313,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/bank-feeds/reconcile` | `bank.reconcile` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/bank-feeds/reconcile/confirm` | `bank.reconcile.confirm` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/bank-feeds/reconcile/unmatch` | `bank.reconcile.confirm` | ✓ | ✓ | ✓ |  |  |
-| `POST /api/bank-feeds/reconcile/record` | `bank.reconcile.confirm` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/bank-feeds/reconcile/record` | `bank.reconcile.confirm` + `payments.record` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/books/heads` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/books/journal/accounts` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/books/expense/preview` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
