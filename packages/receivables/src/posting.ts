@@ -125,11 +125,8 @@ export const buildPaymentPosting = (
  * expense, and a small balance written off is a bad debt. The customer is credited for the money
  * plus every adjustment, so what they owe falls by all of it.
  */
-export interface SettlementAccounts {
-  readonly tdsReceivable: AccountId;
-  readonly discountAllowed: AccountId;
-  readonly badDebts: AccountId;
-}
+/** The account each settlement kind posts to, resolved only for the kinds actually settled. */
+export type SettlementAccounts = Partial<Record<BillSettlement['kind'], AccountId>>;
 
 export const buildSettlementPostings = (
   partyAccount: AccountId,
@@ -137,10 +134,13 @@ export const buildSettlementPostings = (
   settlements: readonly BillSettlement[],
   accounts: SettlementAccounts,
 ): PostingLineOut[] => {
-  const accountFor = (settlement: BillSettlement): AccountId =>
-    settlement.kind === 'TDS_DEDUCTED' ? accounts.tdsReceivable
-      : settlement.kind === 'DISCOUNT_ALLOWED' ? accounts.discountAllowed
-        : accounts.badDebts;
+  const accountFor = (settlement: BillSettlement): AccountId => {
+    const account = accounts[settlement.kind];
+    if (account === undefined) {
+      throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books do not have somewhere to record this settlement yet.', { details: { kind: settlement.kind } });
+    }
+    return account;
+  };
   const words = (settlement: BillSettlement): string =>
     settlement.kind === 'TDS_DEDUCTED'
       ? `TDS deducted by the customer on ${settlement.documentNumber}, s.${settlement.tdsSection ?? ''}`

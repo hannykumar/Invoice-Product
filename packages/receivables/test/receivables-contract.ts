@@ -515,6 +515,12 @@ export function receivablesContract(label: string, makeWorld: () => World, skip:
       idempotencyKey: 'bad-paid', direction: 'PAYMENT', partyId: s.ids.supplier as PartyId, mode: 'CASH', amount: paise(100n), date: on('2026-04-11'),
       settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'BALANCE_WRITTEN_OFF', amount: paise(50n) }],
     }), refusedWith('SETTLEMENT_ON_MONEY_PAID'));
+    // A write-off needs the write-off permission even when it arrives on a receipt.
+    const clerk: ActorContext = { ...s.actor, permissions: s.actor.permissions.filter((p) => p !== 'payments.write_off') };
+    await assert.rejects(() => s.receivables.recordPayment(clerk, {
+      ...base, idempotencyKey: 'clerk-write-off', writeOffLimit: paise(BILL),
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'BALANCE_WRITTEN_OFF', amount: paise(50n) }],
+    }), refusedWith('PERMISSION_DENIED'));
     // Nothing was kept.
     assert.equal((await s.receivables.paymentsFor(s.actor, s.ids.customer as PartyId)).filter((p) => p.idempotencyKey.startsWith('bad-')).length, 0);
   });

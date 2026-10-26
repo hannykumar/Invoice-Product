@@ -37,6 +37,7 @@ import {
   buildPaymentPosting,
   buildWriteOffPosting,
   resolveAccounts,
+  type SettlementAccounts,
 } from './posting.ts';
 import {
   RECEIVABLES_PERMISSIONS,
@@ -221,6 +222,11 @@ export class ReceivablesService {
       validateAllocation(command.amount, allocations, theirs);
     }
     if (settlements.length > 0) {
+      // Issue #295 — a write-off stays a write-off whoever submits it: the same permission the
+      // Write-off action demands, even when it comes in on a receipt.
+      if (settlements.some((settlement) => settlement.kind === 'BALANCE_WRITTEN_OFF')) {
+        this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.writeOff, 'write off a small balance');
+      }
       validateSettlements(allocations, settlements, theirs, command.writeOffLimit ?? zero('INR'));
     }
     // Issue #261 — money paid to a supplier that no bill takes is an advance, and only when a person
@@ -254,21 +260,17 @@ export class ReceivablesService {
       if (advance && advances === null) {
         throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books have nowhere to keep an advance paid to a supplier yet.', { details: { role: 'ADVANCES_TO_SUPPLIERS' } });
       }
-      // Issue #295 — where each kind of non-cash settlement is posted, resolved like the rest.
-      const settlementAccounts = settlements.length === 0 ? null : {
-        tdsReceivable: await uow.accounts.findBySystemRole(actor.companyId, 'TDS_RECEIVABLE'),
-        discountAllowed: await uow.accounts.findBySystemRole(actor.companyId, 'DISCOUNT_ALLOWED'),
-        badDebts: await uow.accounts.findBySystemRole(actor.companyId, 'BAD_DEBTS'),
-      };
-      if (settlementAccounts !== null) {
-        const missing = (role: 'TDS_RECEIVABLE' | 'DISCOUNT_ALLOWED' | 'BAD_DEBTS', account: { id: string } | null): void => {
-          if (settlements.some((s) => (s.kind === 'TDS_DEDUCTED' ? 'TDS_RECEIVABLE' : s.kind === 'DISCOUNT_ALLOWED' ? 'DISCOUNT_ALLOWED' : 'BAD_DEBTS') === role) && account === null) {
-            throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books do not have somewhere to record this settlement yet.', { details: { role } });
-          }
-        };
-        missing('TDS_RECEIVABLE', settlementAccounts.tdsReceivable);
-        missing('DISCOUNT_ALLOWED', settlementAccounts.discountAllowed);
-        missing('BAD_DEBTS', settlementAccounts.badDebts);
+      // Issue #295 — where each kind of non-cash settlement is posted. Only the accounts the
+      // settlements actually use are looked up: a chart without an unused role still records the rest.
+      const settlementRole = { TDS_DEDUCTED: 'TDS_RECEIVABLE', DISCOUNT_ALLOWED: 'DISCOUNT_ALLOWED', BALANCE_WRITTEN_OFF: 'BAD_DEBTS' } as const;
+      const settlementAccounts: SettlementAccounts = {};
+      for (const kind of new Set(settlements.map((settlement) => settlement.kind))) {
+        const role = settlementRole[kind];
+        const found = await uow.accounts.findBySystemRole(actor.companyId, role);
+        if (found === null) {
+          throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books do not have somewhere to record this settlement yet.', { details: { role } });
+        }
+        settlementAccounts[kind] = found.id;
       }
       const lines = advance && advances !== null
         ? buildSupplierAdvancePosting(accounts.settlement, accounts.party, advances.id, command.partyId, againstBills, leftOver, narration)
@@ -281,12 +283,7 @@ export class ReceivablesService {
             command.amount,
             narration,
           ),
-          ...(settlementAccounts === null ? [] : buildSettlementPostings(accounts.party, command.partyId, settlements, {
-            // `missing()` above has already refused when a needed account is absent.
-            tdsReceivable: settlementAccounts.tdsReceivable!.id,
-            discountAllowed: settlementAccounts.discountAllowed!.id,
-            badDebts: settlementAccounts.badDebts!.id,
-          })),
+          ...(settlements.length === 0 ? [] : buildSettlementPostings(accounts.party, command.partyId, settlements, settlementAccounts)),
         ];
       const posted = await this.#ledger.postVoucherIn(uow, actor, {
         idempotencyKey: `payment:${command.idempotencyKey}`,

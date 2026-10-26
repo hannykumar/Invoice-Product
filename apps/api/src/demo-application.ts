@@ -4315,7 +4315,11 @@ export class DemoApplication {
   async previewPayment(actor: ActorContext, input: Record<string, unknown>) {
     const plan = await this.paymentPlan(actor, input);
     const { direction, party, amount, how, applied, leftOver, owedBefore } = plan;
-    const owedAfter = owedBefore - (amount - leftOver);
+    // Issue #295 — TDS, discount, write-off and credit notes close a bill without money: the
+    // review counts them too, or it would promise a debt that is not really left.
+    const adjustments = plan.settlements.reduce((total, settlement) => total + settlement.amount.minor, 0n)
+      + plan.creditNotes.reduce((total, note) => total + note.noteTotal, 0n);
+    const owedAfter = owedBefore - (amount - leftOver) - adjustments;
     if (plan.advance > 0n) return this.previewSupplierAdvance(actor, plan, owedAfter);
     const whose = direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`;
     return {
@@ -4400,25 +4404,6 @@ export class DemoApplication {
     const { direction, party, amount, date, how, applied } = plan;
     // A party added a moment ago gets their own account in the books before money is posted to it.
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id as PartyId, name: party.name, kind: direction === 'RECEIPT' ? 'CUSTOMER' : 'SUPPLIER' });
-    // Issue #295 — a discount chosen as a GST credit note is a real note (CGST Act s.34 with
-    // s.15(3)(b)), issued per line before the payment so the bill's outstanding already counts it.
-    // Each note's own idempotency key makes a retried record find the note rather than make it twice.
-    const issuedNotes: { bill: string; number: string; total: bigint }[] = [];
-    for (const request of plan.creditNotes) {
-      for (const line of request.lines) {
-        const { note } = await this.returns.postPriceCorrection(actor, {
-          idempotencyKey: `${plan.key}:credit-note:${line.lineId}`,
-          originalInvoiceId: request.position.document.documentId,
-          originalLineId: line.lineId,
-          documentDate: plan.date,
-          reason: `Discount allowed while receiving payment${plan.reference === null ? '' : ` ${plan.reference}`} on ${request.position.document.number}`,
-          cause: 'DISCOUNT_AFTER_SALE',
-          amountOff: money(line.amountOff),
-          discountEvidence: request.evidence,
-        });
-        issuedNotes.push({ bill: request.position.document.number, number: note.number, total: note.totals.total.minor });
-      }
-    }
     const payment = await this.payments.recordPayment(actor, {
       idempotencyKey: plan.key,
       direction,
@@ -4436,9 +4421,29 @@ export class DemoApplication {
       ...(plan.particulars === undefined ? {} : { advanceParticulars: plan.particulars }),
       ...(plan.narration === undefined ? {} : { narration: plan.narration }),
     });
-    // The same request twice is one payment. The same key for a different payment is a mistake, not a retry.
+    // The same request twice is one payment. The same key for a different payment is a mistake,
+    // not a retry — checked before any credit note is issued, so a refused retry leaves nothing behind.
     if (payment.partyId !== party.id || payment.amount.minor !== amount || payment.direction !== direction) {
       throw conflict('PAYMENT_KEY_REUSED', 'This entry was already used for a different payment. Nothing new was recorded; start a fresh entry.');
+    }
+    // Issue #295 — a discount chosen as a GST credit note is a real note (CGST Act s.34 with
+    // s.15(3)(b)), issued per line. Each note's own idempotency key makes a retried record find
+    // the note rather than make it twice, and lets the receipt show only this payment's notes.
+    const issuedNotes: { bill: string; number: string; total: bigint }[] = [];
+    for (const request of plan.creditNotes) {
+      for (const line of request.lines) {
+        const { note } = await this.returns.postPriceCorrection(actor, {
+          idempotencyKey: `${plan.key}:credit-note:${line.lineId}`,
+          originalInvoiceId: request.position.document.documentId,
+          originalLineId: line.lineId,
+          documentDate: plan.date,
+          reason: `Discount allowed while receiving payment${plan.reference === null ? '' : ` ${plan.reference}`} on ${request.position.document.number}`,
+          cause: 'DISCOUNT_AFTER_SALE',
+          amountOff: money(line.amountOff),
+          discountEvidence: request.evidence,
+        });
+        issuedNotes.push({ bill: request.position.document.number, number: note.number, total: note.totals.total.minor });
+      }
     }
     return this.paymentRecordedJson(actor, payment, party, false, issuedNotes);
   }
@@ -4511,14 +4516,15 @@ export class DemoApplication {
         quarter: settlement.tdsQuarter ?? null,
         certificate: settlement.tdsCertificate ?? null,
       })),
-      // …and the s.34 credit notes a discount issued on any bill this receipt touched.
+      // …and the s.34 credit notes THIS receipt's discount issued — matched by the key they were
+      // posted under, so a note from another receipt or an earlier correction is never claimed here.
       creditNotes: (await Promise.all(
         [...new Set([...payment.allocations.map((a) => a.documentId), ...(payment.settlements ?? []).map((s) => s.documentId)])]
           .map(async (documentId) => {
             const bill = payment.allocations.find((a) => a.documentId === documentId)?.documentNumber
               ?? (payment.settlements ?? []).find((s) => s.documentId === documentId)?.documentNumber ?? documentId;
             return (await this.returnNotes.listForOriginal(companyId, documentId))
-              .filter((note) => note.priceCorrection)
+              .filter((note) => note.priceCorrection === true && note.idempotencyKey.startsWith(`${payment.idempotencyKey}:credit-note:`))
               .map((note) => ({ bill, number: note.number }));
           }),
       )).flat(),
@@ -4572,6 +4578,11 @@ export class DemoApplication {
       ...request,
       ...(await this.creditNoteLinesOf(companyId, request)),
     })));
+    // Issue #295 — a GST credit note needs the returns permission. The review refuses here, not
+    // after the clerk pressed Record.
+    if (creditNotes.length > 0) {
+      permissionPortFromActor.require(actor, 'returns.create', 'issue a GST credit note for the discount');
+    }
     const adjustmentOn = (documentId: string): bigint =>
       settlementPlan.settlements.filter((s) => s.documentId === documentId).reduce((total, s) => total + s.amount.minor, 0n)
         + creditNotes.filter((note) => note.position.document.documentId === documentId).reduce((total, note) => total + note.noteTotal, 0n);

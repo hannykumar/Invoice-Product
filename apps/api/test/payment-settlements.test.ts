@@ -54,6 +54,8 @@ test('₹1,180 with ₹180 deducted as TDS: ₹1,000 received settles the bill, 
   const preview = await request('POST', '/api/payments/preview', input, owner);
   assert.equal(preview.status, 200, JSON.stringify(preview.body));
   assert.ok(preview.body.effects.some((line: string) => line.includes('₹180.00 of tax deducted under s.194C (Q2-2026-27)')), preview.body.effects.join('\n'));
+  // The review counts the deduction too: cash plus TDS closes the bill, so nothing is left due.
+  assert.ok(preview.body.effects.some((line: string) => line.includes('₹0.00 after this')), preview.body.effects.join('\n'));
 
   const recorded = await request('POST', '/api/payments/record', input, owner);
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
@@ -138,4 +140,27 @@ test('a discount chosen as a GST credit note issues a real s.34 note, and needs 
   assert.equal(recorded.body.creditNotes.length >= 1, true);
   const voucher = await request('POST', '/api/payments/voucher', { paymentId: recorded.body.paymentId }, owner);
   assert.match(voucher.body.html, /Credit note issued for the discount/);
+});
+
+test('a later receipt on the same bill does not claim an earlier receipt\'s credit note', async () => {
+  const { owner, customerId, bill } = await billed();
+  // First receipt: ₹1,000 cash and an ₹80 GST credit note, leaving ₹100 owed.
+  const first = await request('POST', '/api/payments/record', {
+    partyId: customerId, amount: '1000', date: DATE, method: 'UPI', requestId: 'settle-cn-first',
+    settlements: JSON.stringify([{ bill: bill.id, discount: { amount: '80', creditNote: true, agreedBeforeSupply: true, buyerReversedItc: true } }]),
+  }, owner);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.outstanding, 100);
+
+  // Second receipt: the last ₹100 in cash against the same bill, no adjustment of its own.
+  const second = await request('POST', '/api/payments/record', {
+    partyId: customerId, amount: '100', date: DATE, method: 'Cash', requestId: 'settle-cn-second', bills: [bill.id],
+  }, owner);
+  assert.equal(second.status, 200, JSON.stringify(second.body));
+  assert.equal(second.body.outstanding, 0);
+
+  const firstVoucher = await request('POST', '/api/payments/voucher', { paymentId: first.body.paymentId }, owner);
+  assert.match(firstVoucher.body.html, /Credit note issued for the discount/);
+  const secondVoucher = await request('POST', '/api/payments/voucher', { paymentId: second.body.paymentId }, owner);
+  assert.doesNotMatch(secondVoucher.body.html, /Credit note issued for the discount/);
 });
