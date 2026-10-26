@@ -9,7 +9,7 @@
  *  2. **Nothing is over-applied.** ₹30,000 cannot settle ₹30,000 of one bill and ₹10,000 of
  *     another, and a bill already settled cannot absorb more.
  */
-import { compareDates, invalid, isZero, subtract, sum, formatINR, toDecimalString, zero, type IsoDate, type Money } from '@invoice/kernel';
+import { compareDates, invalid, isZero, money, subtract, sum, formatINR, toDecimalString, zero, type IsoDate, type Money } from '@invoice/kernel';
 import type { Allocation, BillSettlement, DocumentPosition, OpenDocument, Payment } from './model.ts';
 
 const nil = (): Money => zero('INR');
