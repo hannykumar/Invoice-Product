@@ -249,10 +249,27 @@ export async function serveApi(request: IncomingMessage, response: ServerRespons
  * last hop it added to X-Forwarded-For, which a client cannot forge past it.
  */
 const TRUST_PROXY = process.env.KAROBAR_TRUSTED_PROXY === '1';
+if (!TRUST_PROXY && process.env.NODE_ENV?.trim().toLowerCase() === 'production') {
+  log.warn('KAROBAR_TRUSTED_PROXY is not set: if this server is behind a load balancer, every customer looks like the load balancer and shares one set of sign-in limits.');
+}
+/**
+ * One address per caller: `::ffff:1.2.3.4` is `1.2.3.4`, and an IPv6 address counts by its /64 — a
+ * home or phone connection is given a whole /64, so counting single addresses would let one caller
+ * pick a new one for every request.
+ */
+export const normaliseAddress = (address: string): string => {
+  const plain = address.trim().replace(/^::ffff:/i, '');
+  if (!plain.includes(':')) return plain;
+  const [head = '', tail = ''] = plain.split('::');
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === '' ? [] : tail.split(':');
+  const groups = plain.includes('::') ? [...left, ...Array(8 - left.length - right.length).fill('0'), ...right] : left;
+  return `${groups.slice(0, 4).map((group) => group.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`;
+};
 export const clientAddress = (request: Pick<IncomingMessage, 'headers' | 'socket'>, trustProxy = TRUST_PROXY): string => {
   const forwarded = request.headers['x-forwarded-for'];
-  if (trustProxy && typeof forwarded === 'string' && forwarded.trim() !== '') return forwarded.split(',').at(-1)!.trim();
-  return request.socket.remoteAddress ?? 'unknown';
+  if (trustProxy && typeof forwarded === 'string' && forwarded.trim() !== '') return normaliseAddress(forwarded.split(',').at(-1)!);
+  return normaliseAddress(request.socket.remoteAddress ?? 'unknown');
 };
 
 const answer = async (request: IncomingMessage, response: ServerResponse, method: string, url: URL, requestId: string): Promise<ApiResult> => {

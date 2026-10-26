@@ -72,17 +72,21 @@ export const CORE_ROUTES: readonly Route[] = [
     }),
   post('/api/auth/sign-in', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ address: text, code: text, companyId: text, invitation: text }) },
     async ({ runtime, input, authorization, clientIp }) => {
-      // Issue #350 — only wrong codes count; once there are too many, even the right one waits.
+      // Issue #350 — every attempt is counted before the code is checked, so guesses sent all at once
+      // are counted too; a right code is given back, so only wrong ones add up. Once there are too
+      // many, even the right one waits.
       const address = canonicalAddress(String(input.address ?? '')).value;
       const counters: [Limit, string][] = [[LIMITS.wrongCodesPerAddress, address], ...(clientIp === undefined ? [] : [[LIMITS.wrongCodesPerIp, clientIp] as [Limit, string]])];
-      for (const [limit, key] of counters) await runtime.limits.refuseIfSpent(limit, key);
+      for (const [limit, key] of counters) await runtime.limits.take(limit, key);
       let opened;
       try {
         opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId), input.invitation === undefined ? undefined : String(input.invitation));
       } catch (error) {
-        if (error instanceof AuthenticationError) for (const [limit, key] of counters) await runtime.limits.take(limit, key);
+        // A wrong code stays counted; anything else (no business yet, an outage) was not a guess.
+        if (!(error instanceof AuthenticationError)) for (const [limit, key] of counters) await runtime.limits.giveBack(limit, key);
         throw error;
       }
+      for (const [limit, key] of counters) await runtime.limits.giveBack(limit, key);
       await runtime.signIn.replaceSession(/^Bearer\s+(\S+)$/i.exec(authorization ?? '')?.[1]);
       return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
     }),

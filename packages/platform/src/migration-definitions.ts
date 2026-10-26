@@ -244,7 +244,7 @@ const platformMigrations: readonly Migration[] = [{
       bucket text NOT NULL,
       window_start timestamptz NOT NULL,
       window_end timestamptz NOT NULL,
-      count integer NOT NULL CHECK (count > 0),
+      count integer NOT NULL CHECK (count >= 0),
       PRIMARY KEY (bucket)
     );
     DO $$ BEGIN

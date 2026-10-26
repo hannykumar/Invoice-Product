@@ -18,7 +18,8 @@ import { recordMasterDataAs } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 import { AuthenticationError, createSignIn, signInStore, type SignIn } from './sign-in.ts';
 import { Team } from '../../../packages/platform/src/team.ts';
-import { MemoryCounterStore, PostgresCounterStore, RateLimiter } from '../../../packages/platform/src/rate-limits.ts';
+import { MemoryCounterStore, PostgresCounterStore, RateLimiter, rateLimitSecret } from '../../../packages/platform/src/rate-limits.ts';
+import { isDeveloperMachine } from '../../../packages/platform/src/identity.ts';
 import { log } from './log.ts';
 import { AuditLog } from '../../../packages/platform/src/index.ts';
 import { PrivacyService } from '../../../ops/security/src/privacy.ts';
@@ -162,7 +163,11 @@ export class ApiRuntime {
     const people = signInStore(persistence);
     this.signIn = createSignIn(people);
     this.team = new Team(people);
-    this.limits = new RateLimiter(persistence.kind === 'postgres' ? new PostgresCounterStore(persistence.db) : new MemoryCounterStore());
+    this.limits = new RateLimiter(
+      persistence.kind === 'postgres' ? new PostgresCounterStore(persistence.db) : new MemoryCounterStore(),
+      Date.now,
+      rateLimitSecret(process.env, isDeveloperMachine(process.env)),
+    );
     // Issue #342 — the stand-in accepts one code for everybody. On a database it can only be there
     // because NODE_ENV says development; say so loudly at every start, so a real server set up that
     // way by mistake is noticed in its first log line rather than by the first stranger who signs in.

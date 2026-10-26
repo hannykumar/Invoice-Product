@@ -120,3 +120,46 @@ test('#350: over HTTP, signed-out callers are limited per address, and a proxy i
   assert.ok(statuses.slice(0, LIMITS.signedOutPerIp.max).every((status) => status === 401), statuses.join(','));
   assert.equal(statuses.at(-1), 429);
 });
+
+// ------------------------------------------------------------------ review findings (#350)
+
+test('#350 review: guesses sent all at once are all counted; a right code is given back', async () => {
+  const address = '+919812366601';
+  const burst = await Promise.all(Array.from({ length: 12 }, () => post('/api/auth/sign-in', { address, code: '000000' }, '198.51.100.60')));
+  const statuses = burst.map((reply) => reply.status).sort();
+  assert.equal(statuses.filter((status) => status === 401).length, 5, `only five guesses reach the code check: ${statuses.join(',')}`);
+  assert.equal(statuses.filter((status) => status === 429).length, 7);
+  // Right codes are given back, so a person signing in often is never locked out by it.
+  for (let i = 0; i < 8; i += 1) assert.notEqual((await post('/api/auth/sign-in', { address: 'owner@sampoorna.example.invalid', code: DEMO_SIGN_IN_CODE }, '198.51.100.61')).status, 429);
+});
+
+test('#350 review: a company over its allowance never uses up Karobar\'s cap for everybody else', async () => {
+  const limits = new RateLimiter(new MemoryCounterStore());
+  const quota = companyQuota('gsp');
+  for (let i = 0; i < quota.max; i += 1) await spend(limits, 'gsp', 'greedy');
+  for (let i = 0; i < 100; i += 1) await assert.rejects(spend(limits, 'gsp', 'greedy'), /today's allowance/);
+  assert.equal(await limits.used(globalCap('gsp'), 'all'), quota.max, 'its refused calls did not count towards the cap');
+});
+
+test('#350 review: buckets are keyed with a server secret, required outside development', async () => {
+  const { createHash } = await import('node:crypto');
+  const { rateLimitSecret, DEVELOPMENT_RATE_LIMIT_SECRET } = await import('../../../packages/platform/src/rate-limits.ts');
+  const buckets: string[] = [];
+  const store = { hit: async (bucket: string) => { buckets.push(bucket); return { count: 1, resetsAt: Date.now() + 1000 }; }, peek: async () => ({ count: 0, resetsAt: 0 }), unhit: async () => {} };
+  await new RateLimiter(store, Date.now, 'a'.repeat(32)).take(LIMITS.codeRequestsPerAddress, '+919812300001');
+  await new RateLimiter(store, Date.now, 'b'.repeat(32)).take(LIMITS.codeRequestsPerAddress, '+919812300001');
+  const plain = createHash('sha256').update('+919812300001').digest('hex').slice(0, 32);
+  assert.notEqual(buckets[0], buckets[1], 'a different secret gives a different bucket');
+  assert.ok(!buckets[0]!.includes(plain), 'not the plain hash anyone can recompute');
+  assert.throws(() => rateLimitSecret({}, false), /KAROBAR_RATE_LIMIT_SECRET is not set/);
+  assert.throws(() => rateLimitSecret({ KAROBAR_RATE_LIMIT_SECRET: 'short' }, false), /at least 32/);
+  assert.equal(rateLimitSecret({}, true), DEVELOPMENT_RATE_LIMIT_SECRET);
+});
+
+test('#350 review: one caller is one address — IPv4 in IPv6 form, and an IPv6 /64', async () => {
+  const { normaliseAddress } = await import('../src/server.ts');
+  assert.equal(normaliseAddress('::ffff:203.0.113.9'), '203.0.113.9');
+  assert.equal(normaliseAddress('2001:db8:0:1:aaaa::1'), normaliseAddress('2001:0db8:0000:0001:ffff:ffff:ffff:ffff'));
+  assert.notEqual(normaliseAddress('2001:db8:0:1::1'), normaliseAddress('2001:db8:0:2::1'));
+  assert.equal(normaliseAddress('::1'), '0:0:0:0::/64');
+});
