@@ -405,7 +405,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/bank-feeds/reconcile` | `bank.reconcile` |
 | POST | `/api/bank-feeds/reconcile/confirm` | `bank.reconcile.confirm` |
 | POST | `/api/bank-feeds/reconcile/unmatch` | `bank.reconcile.confirm` |
-| POST | `/api/bank-feeds/reconcile/record` | `bank.reconcile.confirm` |
+| POST | `/api/bank-feeds/reconcile/record` | `bank.reconcile.confirm` + `payments.record` |
 | GET | `/api/compliance/calendar` | service |
 | POST | `/api/compliance/calendar/complete` | `compliance.calendar.complete` |
 | POST | `/api/itc` | `itc.view` |

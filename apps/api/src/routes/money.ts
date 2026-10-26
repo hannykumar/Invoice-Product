@@ -16,7 +16,7 @@ const reminder = fields({
   disputeId: text, resolution: text,
 });
 const bankFeed = fields({ provider: text, redirectUri: text, connectionId: text, authorizationCode: text, consentState: text, idempotencyKey: text });
-const reconcile = fields({ candidateId: text, matchId: text, reason: text, transactionId: text, partyId: text });
+const reconcile = fields({ candidateId: text, matchId: text, reason: text, transactionId: text, partyId: text, bills: text });
 
 export const MONEY_ROUTES: readonly Route[] = [
   // Issue #42 — what this business's plan covers, what it has used, and paying for it.
@@ -55,5 +55,5 @@ export const MONEY_ROUTES: readonly Route[] = [
   post('/api/bank-feeds/reconcile', { access: need('check the bank against the books', 'bank.reconcile'), input: bankFeed }, ({ app, actor }) => app.runBankReconciliation(actor)),
   post('/api/bank-feeds/reconcile/confirm', { access: need('say two records are the same money', 'bank.reconcile.confirm'), input: reconcile }, ({ app, actor, input }) => app.confirmReconciliation(actor, input)),
   post('/api/bank-feeds/reconcile/unmatch', { access: need('say two records are the same money', 'bank.reconcile.confirm'), input: reconcile }, ({ app, actor, input }) => app.unmatchReconciliation(actor, input)),
-  post('/api/bank-feeds/reconcile/record', { access: need('say two records are the same money', 'bank.reconcile.confirm'), input: reconcile }, ({ app, actor, input }) => app.recordBankSuggestion(actor, input)),
+  post('/api/bank-feeds/reconcile/record', { access: need('post a bank line to the books', 'bank.reconcile.confirm', 'payments.record'), input: reconcile }, ({ app, actor, input }) => app.recordBankSuggestion(actor, input)),
 ];

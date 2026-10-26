@@ -60,6 +60,15 @@ test('marking a deadline done requires a key and records a typed confirmation', 
   assert.equal(done.body.state, 'success');
 });
 
+test('a business whose turnover is unanswered gets no e-invoice deadlines', async () => {
+  const session = await owner();
+  const cal = await request('GET', '/api/compliance/calendar', {}, session);
+  assert.equal(cal.status, 200, JSON.stringify(cal.body));
+  // The seeded shop has not answered the turnover question, so the calendar must not schedule
+  // e-invoice backlog deadlines (Rule 48(4)'s ₹5-crore floor) — it asks instead.
+  assert.equal(cal.body.entries.filter((entry: { occurrence: { key: string } }) => entry.occurrence.key.startsWith('EINVOICE_BACKLOG')).length, 0);
+});
+
 // ------------------------------------------------------------------ bank reconciliation
 
 test('the reconcile run returns its four lists — even with nothing to match', async () => {
@@ -99,7 +108,9 @@ test('the rate hint answers for a known code and refuses an empty ask', async ()
   assert.equal(hint.status, 200, JSON.stringify(hint.body));
   assert.ok(hint.body.kind === 'SUGGESTED' || hint.body.kind === 'ASK', 'advice is always one of the two shapes');
   if (hint.body.kind === 'SUGGESTED') {
-    assert.ok(typeof hint.body.ratePercentTimes100 === 'number', 'a suggestion carries the rate the form can apply');
+    // The register's units — basis points — travel unchanged so a 5% suggestion saves 5% (500),
+    // not the 5 basis points a percent figure would write.
+    assert.ok(hint.body.ratePercentTimes100 >= 100, 'a suggestion carries basis points, not percent');
     assert.ok(hint.body.reason?.['en-IN'], 'a suggestion carries its reason in words');
   }
 });

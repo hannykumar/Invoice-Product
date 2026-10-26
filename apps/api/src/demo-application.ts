@@ -1820,7 +1820,22 @@ export class DemoApplication {
           gstin: config.gstin,
           registrationType: { value: config.gstin === '' ? 'UNREGISTERED' : 'REGULAR', basis: 'DERIVED' },
           gstFilingFrequency: { value: 'MONTHLY', basis: 'DERIVED', basisNote: 'The GST returns screen prepares one return a month.' },
-          eInvoiceApplicable: { value: eInvoiceExemptionOf(companyId) === 'NONE', basis: 'DERIVED', basisNote: 'The business answered the e-invoice question.' },
+          // The same turnover facts `eInvoiceDecisionFor` reads: e-invoice obliges only a business
+          // that has crossed ₹5 crore in any year since 2017-18 (CGST Rule 48(4), applied by
+          // Notf. 78/2020-CT as amended by 10/2023-CT for the ₹5-crore floor, effective
+          // 2023-11-01). An exemption means it never applies. When the turnover answer is missing
+          // the fact itself stays null — the obligation waits for an answer instead of scheduling
+          // deadlines a small business does not have.
+          eInvoiceApplicable: eInvoiceExemptionOf(companyId) !== 'NONE'
+            ? { value: false, basis: 'DERIVED', basisNote: 'Business details says the business is exempt from e-invoice.' }
+            : (() => {
+              const answers = turnoverAnswersOf(companyId);
+              const band = turnoverBandOn(answers, isoDate(appToday()));
+              const legacy = band === null ? turnoverAnswerOn(answers, isoDate(appToday())) : null;
+              const above = band === '5_TO_10_CRORE' || band === '10_CRORE_AND_ABOVE' || band === 'UP_TO_5_CRORE_EARLIER_ABOVE' || legacy === 'YES'
+                ? true : band === 'UP_TO_5_CRORE' || legacy === 'NO' ? false : null;
+              return above === null ? null : { value: above, basis: 'DERIVED', basisNote: 'From the turnover answer in Business details.' };
+            })(),
           movesGoods: { value: catalogueItems(companyId).some((item) => item.kind === 'goods'), basis: 'DERIVED' },
           stateCode: { value: config.gstin.slice(0, 2), basis: 'DERIVED' },
           calendarFrom: booksStart,
@@ -4843,7 +4858,9 @@ export class DemoApplication {
         transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString(), matched: matchedBank.has(transaction.id) })),
       }))),
       // Issue #297 — which imported lines a match not undone already covers, for the Reconcile tab.
-      reconciliation: { matchedTransactionIds: matched.bankTransactionIds, matchedPaymentIds: matched.paymentIds },
+      // Payment ids are book data: a caller who may only read the bank balance gets the bank side,
+      // not the ids of the business's receipts and payments.
+      reconciliation: { matchedTransactionIds: matched.bankTransactionIds, matchedPaymentIds: actor.permissions.includes('bank.reconcile') ? matched.paymentIds : [] },
     };
   }
 
@@ -4952,6 +4969,9 @@ export class DemoApplication {
       reference: line.reference ?? null,
       bankAccountCode: CURRENT_ACCOUNT,
       narration: `Recorded from the bank feed: ${line.description}`,
+      // The supplier bill this debit settles, when the person named one; anything left over — or a
+      // payment they said is on account — stays an advance, the same as the money-paid form.
+      ...(billIdsOf(input).length > 0 ? { bills: billIdsOf(input) } : {}),
       ...(direction === 'PAYMENT' ? { advanceToSupplier: true } : {}),
     });
     return { state: 'success', paymentId: payment.id };
@@ -5053,7 +5073,9 @@ export class DemoApplication {
     return {
       kind: advice.kind,
       ...(rate === null ? {} : {
-        ratePercentTimes100: Number(rate.gstRateBasisPoints) / 100,
+        // The register and the item form both keep rates in basis points (5% = 500), so the
+        // suggestion travels in the same unit — the form only divides for its percent text field.
+        ratePercentTimes100: Number(rate.gstRateBasisPoints),
         basis: rate.basis,
         reverseCharge: rate.reverseCharge,
         citation: rate.citation,
