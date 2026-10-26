@@ -38,6 +38,8 @@ const EVERYTHING: readonly Permission[] = [
   "collections.reminders.view", "collections.reminders.send", "collections.promise.record", "collections.dispute.manage",
   "subscription.view", "subscription.manage",
   "operations.read", "operations.manage", "support.access.grant", "queue.replay", "incident.manage", "feature-flags.manage",
+  // #352 — the privacy register (export, deletion, holds, retention) and backups: the owner's and admin's.
+  "privacy.manage", "privacy.export", "privacy.delete", "backup.manage", "backup.restore",
   "assistant.ask",
   "agent.plan", "agent.approve", "agent.execute",
   "business.settings.write", "branding.write", "payments.upi.write",
@@ -64,7 +66,8 @@ export const ROLES: Readonly<Record<RoleName, { readonly title: string; readonly
     sentence: "The books, bills, GST returns and payments. Not who may sign in, the plan, or the business's own particulars.",
     permissions: without(EVERYTHING,
       "access.review", "subscription.manage", "business.settings.write", "branding.write", "payments.upi.write",
-      "support.access.grant", "feature-flags.manage", "incident.manage", "operations.manage", "migration.commit", "migration.rollback", "business.transfer"),
+      "support.access.grant", "feature-flags.manage", "incident.manage", "operations.manage", "migration.commit", "migration.rollback", "business.transfer",
+      "privacy.manage", "privacy.export", "privacy.delete", "backup.manage", "backup.restore"),
   },
   staff: {
     // The handbook's cashier (#3): may make a sale, but not see bank balances, file GST or override negative stock.

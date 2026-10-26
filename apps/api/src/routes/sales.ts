@@ -35,6 +35,8 @@ const payment = fields({
   chequeNumber: text, chequeDate: text, reference: text, requestId: text,
   bills: anything, invoices: anything, invoice: anything, advance: anything,
   purchaseOrderNumber: text, purchaseOrderDate: text, supplierReceiptNumber: text, supplierReceiptDate: text,
+  // Issue #295 — per-bill adjustments on money received: TDS deducted, discount allowed, write-off.
+  settlements: anything,
 });
 const challan = fields({
   challan: text, customerId: text, customer: text, party: text, reason: text, reasonNote: text, deliveryState: text, deliveryPlace: text,
