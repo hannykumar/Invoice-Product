@@ -74,6 +74,24 @@ store that also appends each version to `master_versions` through `PostgresVersi
 the action. Nothing else about the service changes. The async service that reads PostgreSQL
 directly remains the masters lane's (#366).
 
+## Files (#341)
+
+Private object storage behind `ObjectStore` (`packages/platform/src/storage.ts`); only the key and
+the facts are in PostgreSQL (`stored_files`, forced row-level security, screened once, no delete).
+
+| Route | Who | What |
+| --- | --- | --- |
+| `POST /api/files/uploads` `{ purpose, fileName, contentType, sizeBytes }` | `purchase_bill`: `ledger.post.purchase`; `branding_logo`: `branding.write` | Checks the name, claimed type and size first (`safety.ts`), then returns `{ file, upload: { url, method: 'PUT', headers, expiresAt } }`, valid 5 minutes. The key is `<company>/<purpose>/<uuid>`, chosen by the server. |
+| *the browser* `PUT upload.url` with `upload.headers` | the address itself | The file goes straight to storage, never through the API. |
+| `POST /api/files/:id/complete` | as for uploading | Reads the stored file, has it scanned, screens it with `screenAttachment` (#401): `available`, or `quarantined` with `reason` and a shopkeeper's `message`. |
+| `GET /api/files/:id/link` | `purchase_bill`: `ledger.post.purchase`; `branding_logo`: `dashboard.read` | An available file only: `{ download: { url } }`, valid 60 seconds, served as an attachment. Another company's id is 404. |
+
+- **Stores:**
+  - `SpacesObjectStore`: DigitalOcean Spaces BLR1 (decision 0003), S3 v4 pre-signed URLs, objects `x-amz-acl: private`. Configured by `SPACES_BUCKET`, `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` and optionally `SPACES_ENDPOINT` and `SPACES_REGION`.
+  - `LocalObjectStore`: a folder (`FILE_STORE_DIR`) and HMAC-signed `/api/files/blob?token=` addresses. Development and tests only. Production without Spaces refuses to issue an address.
+- **Virus scan:** a file no scanner has answered for is held (#401). No scanner is chosen for production yet, so there every file is `quarantined` with reason `AWAITING_SCAN`. In development a stand-in answers clean.
+- **Limits:** a supplier's bill is a PDF, JPEG, PNG or HEIC of up to 25 MB; a logo is a PNG or JPEG of up to 1 MB.
+
 ## Known limits
 
 - Memory is the read path for master data and `app_records`, so **one API process** only. Two would

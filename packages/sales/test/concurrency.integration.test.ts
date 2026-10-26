@@ -71,7 +71,7 @@ const codeOf = (outcome: PromiseSettledResult<unknown>): string => ((outcome as 
 
 test('50 sales of the last 5 crates at once, on two servers: exactly 5 are issued, stock ends at 0, the rest are told why', { skip }, async () => {
   const shop = await newShop('5');
-  const outcomes = await Promise.allSettled(Array.from({ length: 50 }, (_x, i) => (i % 2 === 0 ? shop.a : shop.b).recordSale(`last-${i}`, '1')));
+  const outcomes = await Promise.allSettled(Array.from({ length: 50 }, (_x, i) => pilot.likeATill(() => (i % 2 === 0 ? shop.a : shop.b).recordSale(`last-${i}`, '1'))));
   const issued = outcomes.filter((o) => o.status === 'fulfilled');
   assert.equal(issued.length, 5, `issued ${issued.length}; refusals: ${[...new Set(outcomes.filter((o) => o.status === 'rejected').map(codeOf))].join(', ')}`);
   assert.equal(await onHand(shop.ids.companyId), 0);
@@ -114,7 +114,7 @@ test('200 bills at once from two server processes: 200 numbers, every one used o
 
 test('the same request sent 20 times at once, to two servers: one bill, one entry, one stock movement', { skip }, async () => {
   const shop = await newShop('100');
-  const outcomes = await Promise.allSettled(Array.from({ length: 20 }, (_x, i) => (i % 2 === 0 ? shop.a : shop.b).recordSale('double-click')));
+  const outcomes = await Promise.allSettled(Array.from({ length: 20 }, (_x, i) => pilot.likeATill(() => (i % 2 === 0 ? shop.a : shop.b).recordSale('double-click'))));
   const answers = outcomes.filter((o) => o.status === 'fulfilled').map((o) => (o as PromiseFulfilledResult<{ invoice: { id: string; number: string | null } }>).value.invoice);
   assert.equal(answers.length, 20, `refused: ${outcomes.filter((o) => o.status === 'rejected').map(codeOf).join(', ')}`);
   assert.equal(new Set(answers.map((bill) => bill.id)).size, 1, 'every retry is answered with the same bill');
