@@ -336,20 +336,24 @@ ${NO_TRUNCATE.map((table) => `
   up: `
     GRANT SELECT (company_id, provider_request_id, correlation_id, scope) ON government_calls TO invoice_work_finder;
     CREATE POLICY government_calls_work_finder ON government_calls FOR SELECT TO invoice_work_finder USING (true);
-    -- The provider's request id is matched before our own correlation id, exactly as the
-    -- receiver does it, because the two namespaces could hold the same text on different calls.
-    -- The scopes argument is the caller's connector's scopes, so a callback cannot settle a call that
-    -- belongs to another provider. A reference naming calls in two companies answers null
-    -- rather than guessing: an ambiguous match must never settle anybody's call.
+    -- The scopes argument is the caller's connector's scopes, so a callback cannot settle a call
+    -- that belongs to another provider. The provider's request id answers first; our own
+    -- correlation id is consulted only when no call carries that request id. A request id that
+    -- names calls of two companies answers null outright — an ambiguous match must never settle
+    -- anybody's call, including through the correlation fallback.
     CREATE FUNCTION government_call_company(reference text, scopes text[]) RETURNS uuid
       LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $fn$
-        SELECT COALESCE(
-          (SELECT CASE WHEN count(*) = 1 THEN min(d.company_id::text)::uuid END
-            FROM (SELECT DISTINCT c.company_id FROM government_calls c
-                  WHERE c.provider_request_id = reference AND c.scope = ANY (scopes)) d),
-          (SELECT CASE WHEN count(*) = 1 THEN min(d.company_id::text)::uuid END
-            FROM (SELECT DISTINCT c.company_id FROM government_calls c
-                  WHERE c.correlation_id = reference) d))
+        SELECT CASE WHEN count(*) = 1 THEN min(d.company_id::text)::uuid END
+          FROM (
+            SELECT DISTINCT c.company_id FROM government_calls c
+              WHERE c.provider_request_id = reference AND c.scope = ANY (scopes)
+            UNION ALL
+            SELECT DISTINCT c.company_id FROM government_calls c
+              WHERE c.correlation_id = reference AND c.scope = ANY (scopes)
+                AND NOT EXISTS (
+                  SELECT 1 FROM government_calls x
+                    WHERE x.provider_request_id = reference AND x.scope = ANY (scopes))
+          ) d
     $fn$;
     GRANT invoice_work_finder TO CURRENT_USER;
     ALTER FUNCTION government_call_company(text, text[]) OWNER TO invoice_work_finder;

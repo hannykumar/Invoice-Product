@@ -160,9 +160,10 @@ Migration `…gsp_59f4d0dcbdf0_postgres_repositories`:
   `invoice_work_finder` (#345's no-login discovery role), with a pinned `search_path`, granted
   only to `invoice_app`, returning one uuid or none. The role may read only the four columns the
   lookup matches on, through its own permissive policy: nothing here bypasses row-level
-  security, and the function can never hand back a call. The reference is matched first on the
-  provider request id among calls of *this connector's* scopes, then on our own correlation id,
-  and a reference that names calls of two companies answers null rather than guessing. Once the
+  security, and the function can never hand back a call. The reference is matched on the
+  provider request id among calls of *this connector's* scopes — one company answers it, two or
+  more answer null outright — and our own correlation id is consulted only when no call carries
+  that request id, under the same one-company rule. Once the
   company is known the callback is handled inside that company's `unitOfWork`, where
   `findByProviderRequestId` (also connector-scoped) and `findByCorrelationId` read the call in
   its own tenant context like every other read. A request id that matches nothing stays

@@ -55,8 +55,9 @@ export interface CallLogRepository {
    * with no session and no company, and the company is then taken *from the row it matched*
    * rather than from anything the caller said. That is what stops a forged callback naming
    * somebody else's company — it never gets to name one. The reference is matched against this
-   * connector's calls only, and a reference that could name two companies' calls answers null
-   * rather than guessing. On PostgreSQL this goes through a SECURITY DEFINER function that
+   * connector's calls only: the provider's request id answers first, our own correlation id
+   * only when no call carries that request id, and a reference that could name two companies'
+   * calls answers null rather than guessing — through the fallback too. On PostgreSQL this goes through a SECURITY DEFINER function that
    * returns one uuid or none (#477); row-level security is never bypassed, the finder's own
    * policy is what shows it the match columns and nothing else.
    */

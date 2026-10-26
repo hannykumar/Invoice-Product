@@ -84,13 +84,16 @@ export class InMemoryCallLog implements CallLogRepository {
   }
 
   async companyForRequest(kind: ConnectorKind, reference: string): Promise<CompanyId | null> {
-    const rows = [...this.#rows.values()];
     const scoped = scopesForConnector(kind);
-    const byRequest = new Set(
-      rows.filter((row) => row.providerRequestId === reference && row.scope !== null && scoped.includes(row.scope)).map((row) => row.companyId),
-    );
-    const byCorrelation = new Set(rows.filter((row) => row.correlationId === reference).map((row) => row.companyId));
-    return byRequest.size === 1 ? [...byRequest][0]! : byCorrelation.size === 1 ? [...byCorrelation][0]! : null;
+    const rows = [...this.#rows.values()];
+    const inScope = (row: ProviderCall) => row.scope !== null && scoped.includes(row.scope);
+    // The provider's request id answers first; the correlation id is consulted only when no call
+    // carries that request id. An ambiguous answer is null, never a guess — including through
+    // the fallback (#477).
+    const byRequest = new Set(rows.filter((row) => inScope(row) && row.providerRequestId === reference).map((row) => row.companyId));
+    if (byRequest.size > 0) return byRequest.size === 1 ? [...byRequest][0]! : null;
+    const byCorrelation = new Set(rows.filter((row) => inScope(row) && row.correlationId === reference).map((row) => row.companyId));
+    return byCorrelation.size === 1 ? [...byCorrelation][0]! : null;
   }
 
   async findByProviderRequestId(kind: ConnectorKind, companyId: CompanyId, providerRequestId: string): Promise<ProviderCall | null> {

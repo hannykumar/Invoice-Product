@@ -154,6 +154,14 @@ test('a callback finds its company, and only its company, through the narrow loo
   assert.equal(await h.calls.companyForRequest('irp', solo), null);
   // The correlation ids stay unique: each company's own call is still found by its own.
   assert.equal(await h.calls.companyForRequest('irp', `gsp-cl-${solo}`), other.companyId);
+  // An ambiguous request id answers null outright: the same string being a correlation id
+  // somewhere must not let the fallback settle that company's call instead.
+  const boom = `boom-${randomBytes(6).toString('hex')}`;
+  const named = (as: CompanyId, over: object) => ({ ...made, ...over, id: crypto.randomUUID(), companyId: as });
+  await h.write(d.companyId, async () => h.calls.insert(named(d.companyId, { providerRequestId: boom, correlationId: `gsp-x1-${boom}`, idempotencyKey: `key-x1-${boom}` })));
+  await h.write(other.companyId, async () => h.calls.insert(named(other.companyId, { providerRequestId: boom, correlationId: `gsp-x2-${boom}`, idempotencyKey: `key-x2-${boom}` })));
+  await h.write(other.companyId, async () => h.calls.insert(named(other.companyId, { providerRequestId: `p-x3-${boom}`, correlationId: boom, idempotencyKey: `key-x3-${boom}` })));
+  assert.equal(await h.calls.companyForRequest('irp', boom), null);
 });
 
 test('the company lookup can read a company id and nothing else (#477)', { skip }, async () => {
