@@ -52,8 +52,22 @@ test("prepare this month's return and approve it (#355)", async ({ page, request
     await expect(page.locator("#gst-action-result")).toContainText("Approved", { timeout: 20_000 });
     await expect(page.locator("#gst-export")).toBeEnabled();
     await expect(approve).toBeDisabled();
+
+    // Approved figures are fixed against the owner's name: one more sale in the same month,
+    // then the month asked for again, must show exactly the figures that were approved.
+    const frozen = await page.locator("#gst-3b-panel").innerText();
+    await apiCall(request, cookie, "/api/sales/record", {
+      customerId, date, terms: "now", paidBy: "CASH",
+      requestId: `gstr-drift-${Date.now()}`,
+      lines: JSON.stringify([{ itemId, quantity: "1", unit: "PCS", rate: "30" }]),
+    });
+    await page.locator('#gst-return-form button[type="submit"]').click();
+    await expect(page.locator("#gst-3b-panel")).toHaveText(frozen, { useInnerText: true });
   } else {
-    // A rerun on a month already approved: the pill says so and the button stays disabled.
+    // A rerun on a month already approved: the pill says so and the button stays disabled,
+    // and the figures the month already carries are the frozen ones — no drift check is
+    // possible without a fresh approve, so the first-run branch above owns that check.
     await expect(page.locator("#gst-status")).toContainText(/approv/i);
+    await expect(page.locator("#gst-3b-panel")).not.toBeEmpty();
   }
 });
