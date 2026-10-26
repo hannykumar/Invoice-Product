@@ -9,7 +9,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import type { SqlExecutor, TransactionalExecutor } from "./database.ts";
-import { newSessionToken, sessionExpired, SESSION_ABSOLUTE_MS, SESSION_TOUCH_MS, type Invitation, type Membership, type Session } from "./auth.ts";
+import { newSessionToken, sessionExpired, SESSION_ABSOLUTE_MS, SESSION_TOUCH_MS, type Invitation, type Membership, type Person, type Session } from "./auth.ts";
 import type { VerifiedIdentity } from "./identity.ts";
 import { canonicalJson, riskRank, transitions, type Member } from "./platform.ts";
 import { reviveJson, type PostgresAuditLog } from "./postgres-audit.ts";
@@ -148,9 +148,9 @@ export class PostgresAccessControl {
   grant(member: Member): Promise<void> {
     return this.#db.unitOfWork(member.companyId, async ({ sql }) => {
       await sql.query(
-        `INSERT INTO memberships (company_id, user_id, permissions, active) VALUES ($1, $2, $3::jsonb, $4)
-         ON CONFLICT (company_id, user_id) DO UPDATE SET permissions = EXCLUDED.permissions, active = EXCLUDED.active`,
-        [member.companyId, member.userId, JSON.stringify([...member.permissions]), member.active],
+        `INSERT INTO memberships (company_id, user_id, permissions, active, role) VALUES ($1, $2, $3::jsonb, $4, $5)
+         ON CONFLICT (company_id, user_id) DO UPDATE SET permissions = EXCLUDED.permissions, active = EXCLUDED.active, role = EXCLUDED.role`,
+        [member.companyId, member.userId, JSON.stringify([...member.permissions]), member.active, member.role ?? "custom"],
       );
       await sql.query("DELETE FROM user_branch_access WHERE company_id = $1 AND user_id = $2", [member.companyId, member.userId]);
       for (const branchId of member.branchIds) await sql.query("INSERT INTO user_branch_access (company_id, user_id, branch_id) VALUES ($1, $2, $3)", [member.companyId, member.userId, branchId]);
@@ -163,12 +163,12 @@ export class PostgresAccessControl {
 
   async members(companyId: Id): Promise<readonly Member[]> {
     const { rows } = await this.#db.tenantTransaction(companyId, (sql) => sql.query(
-      `SELECT m.user_id, m.permissions, m.active,
+      `SELECT m.user_id, m.permissions, m.active, m.role,
               COALESCE((SELECT jsonb_agg(a.branch_id) FROM user_branch_access a WHERE a.company_id = m.company_id AND a.user_id = m.user_id), '[]') AS branch_ids
          FROM memberships m WHERE m.company_id = $1 ORDER BY m.user_id`,
       [companyId],
     ));
-    return rows.map((r) => ({ userId: String(r.user_id), companyId, branchIds: new Set(r.branch_ids as string[]), active: Boolean(r.active), permissions: new Set(r.permissions as Permission[]) }));
+    return rows.map((r) => ({ userId: String(r.user_id), companyId, branchIds: new Set(r.branch_ids as string[]), active: Boolean(r.active), permissions: new Set(r.permissions as Permission[]), role: r.role as NonNullable<Member["role"]> }));
   }
 
   async context(companyId: Id, branchId: Id, userId: Id, sessionId: Id): Promise<RequestContext> {
@@ -186,6 +186,7 @@ const toSession = (r: Row): Session => ({
 const toInvitation = (r: Row): Invitation => ({
   id: String(r.id), companyId: String(r.company_id), branchId: String(r.branch_id), email: String(r.email), permissions: new Set(r.permissions as Permission[]), expiresAt: ms(r.expires_at),
   ...(r.accepted_at === null ? {} : { acceptedAt: ms(r.accepted_at) }), ...(r.revoked_at === null ? {} : { revokedAt: ms(r.revoked_at) }),
+  ...(r.role === undefined ? {} : { role: r.role as NonNullable<Invitation["role"]> }),
 });
 
 export class PostgresAuthenticationService {
@@ -194,30 +195,36 @@ export class PostgresAuthenticationService {
   readonly #now: () => number;
   constructor(db: TransactionalExecutor, access: PostgresAccessControl, now: () => number = Date.now) { this.#db = db; this.#access = access; this.#now = now; }
 
-  async invite(actor: RequestContext, email: string, permissions: ReadonlySet<Permission>, expiresInMs = 7 * 24 * 60 * 60 * 1000): Promise<{ invitation: Invitation; token: string }> {
+  async invite(actor: RequestContext, email: string, permissions: ReadonlySet<Permission>, expiresInMs = 7 * 24 * 60 * 60 * 1000, role: NonNullable<Invitation["role"]> = "custom"): Promise<{ invitation: Invitation; token: string }> {
     if (!actor.permissions.has("access.review")) throw new PlatformError("FORBIDDEN", "You do not have permission to review access.");
     const token = randomUUID();
     // Only the token's hash is stored; the token itself exists once, in the reply to the person who invited.
     const { rows } = await this.#db.unitOfWork(actor.companyId, ({ sql }) => sql.query(
-      "INSERT INTO invitations (id, token_hash, company_id, branch_id, email, permissions, expires_at) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) RETURNING *",
-      [randomUUID(), digest(token), actor.companyId, actor.branchId, email.toLowerCase(), JSON.stringify([...permissions]), at(this.#now() + expiresInMs)],
+      "INSERT INTO invitations (id, token_hash, company_id, branch_id, email, permissions, expires_at, role, invited_by) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9) RETURNING *",
+      [randomUUID(), digest(token), actor.companyId, actor.branchId, email.toLowerCase(), JSON.stringify([...permissions]), at(this.#now() + expiresInMs), role, actor.actorId],
     ));
     return { invitation: toInvitation(rows[0] as Row), token };
   }
 
-  async acceptInvitation(token: string, userId: Id): Promise<Invitation> {
+  /** With `provedAddress` (#343), only the person the invitation was sent to may take it up. */
+  async acceptInvitation(token: string, userId: Id, provedAddress?: string): Promise<Invitation> {
     // Looked up before the company is known: the token is the only thing the invited person has.
     const found = (await this.#db.query("SELECT company_id FROM invitations WHERE token_hash = $1", [digest(token)])).rows[0];
     if (found === undefined) throw new Error("INVALID_INVITATION");
     return this.#db.unitOfWork(String(found.company_id), async ({ sql }) => {
       // One statement decides it, so an invitation pressed twice at once is accepted once.
       const { rows } = await sql.query(
-        "UPDATE invitations SET accepted_at = $2 WHERE token_hash = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > $2 RETURNING *",
-        [digest(token), at(this.#now())],
+        "UPDATE invitations SET accepted_at = $2 WHERE token_hash = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > $2 AND ($3::text IS NULL OR email = $3) RETURNING *",
+        [digest(token), at(this.#now()), provedAddress ?? null],
       );
       if (rows[0] === undefined) throw new Error("INVALID_INVITATION");
       const accepted = toInvitation(rows[0]);
-      await this.#access.grant({ userId, companyId: accepted.companyId, branchIds: new Set([accepted.branchId]), active: true, permissions: accepted.permissions });
+      // Issue #343 review — an invitation never replaces the role of someone already in the business
+      // (an admin could otherwise demote the owner by inviting the owner's own address). Thrown inside
+      // the unit of work, so the invitation is not marked used either.
+      const member = await sql.query("SELECT 1 FROM memberships WHERE company_id = $1 AND user_id = $2 AND active", [accepted.companyId, userId]);
+      if (member.rows.length > 0) throw new Error("INVALID_INVITATION");
+      await this.#access.grant({ userId, companyId: accepted.companyId, branchIds: new Set([accepted.branchId]), active: true, permissions: accepted.permissions, role: accepted.role ?? "custom" });
       return accepted;
     });
   }
@@ -270,10 +277,21 @@ export class PostgresAuthenticationService {
     return this.#db.unitOfWork(companyId, async ({ sql }) => {
       await this.#access.revoke(companyId, userId);
       await sql.query("UPDATE sessions SET revoked_at = $3 WHERE company_id = $1 AND user_id = $2 AND revoked_at IS NULL", [companyId, userId, at(this.#now())]);
+      // Issue #343 review — the invitations they sent and nobody took up go with them.
+      await sql.query("UPDATE invitations SET revoked_at = $3 WHERE company_id = $1 AND invited_by = $2 AND accepted_at IS NULL AND revoked_at IS NULL", [companyId, userId, at(this.#now())]);
     });
   }
 
   review(companyId: Id): Promise<readonly Member[]> { return this.#access.members(companyId); }
+
+  /** Issue #343 — sets a member's role, permissions and branches (changing a role, handing over ownership). */
+  grantMember(member: Member): Promise<void> { return this.#access.grant(member); }
+
+  async describeUsers(ids: readonly Id[]): Promise<readonly Person[]> {
+    const { rows } = await this.#db.query("SELECT id, display_name, email, phone FROM users WHERE id = ANY($1::uuid[])", [ids]);
+    const found = new Map(rows.map((r) => [String(r.id), String(r.display_name ?? r.email ?? r.phone)]));
+    return ids.map((id) => ({ id, label: found.get(id) ?? id }));
+  }
 
   /**
    * Issue #342 — the person a provider has just checked. Found by the provider's id for them; a person

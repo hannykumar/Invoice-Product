@@ -13,3 +13,5 @@ handoffs/
 tmp/
 # Finder/iCloud duplicates such as "branding-application 2.ts" (#337)
 * [0-9].*
+playwright-report/
+test-results/
