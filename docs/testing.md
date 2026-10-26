@@ -43,7 +43,7 @@ the real web server on PostgreSQL:
 | Record a purchase | `purchase.spec.ts` | A supplier bill is previewed and confirmed; the recorded box repeats the supplier, their bill number and what is owed. |
 | Prepare a GST return | `gst-returns.spec.ts` | A month with real purchases and sales is prepared and approved; the figures are then fixed. |
 | Upgrade plan | `plan.spec.ts` | Choosing a different plan changes the plan shown on the screen. |
-| Invite a teammate | `team.spec.ts` | The Team screen produces an invite link. **Skipped until PR #478 lands** — the screen is #343's; the skip itself checks whether `#view-team` exists and unskips automatically when it does. |
+| Invite a teammate | `team.spec.ts` | The Team screen produces an invite link. |
 
 Browser tests assert what the shopkeeper reads — the bill number, the rupee total, the badge the
 books earn — not implementation details.
