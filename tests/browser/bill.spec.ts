@@ -11,6 +11,7 @@ import {
 
 test.describe("make a bill (#355)", () => {
   let customerName: string;
+  let customerId: string;
   let itemName: string;
 
   test.beforeEach(async ({ request }) => {
@@ -24,7 +25,7 @@ test.describe("make a bill (#355)", () => {
     await recordPurchase(request, cookie, {
       supplierId, reference: unique("KSS"), itemId, quantity: "100", rate: "20", gst: "500",
     });
-    await addCustomer(request, cookie, customerName);
+    customerId = await addCustomer(request, cookie, customerName);
   });
 
   test("two soaps at the usual price: number and total on the done screen", async ({ page }) => {
@@ -41,10 +42,12 @@ test.describe("make a bill (#355)", () => {
     // The usual price is filled for the counter — ₹30 a piece, so ₹60 + ₹3 GST = ₹63.
     await expect(page.locator('#sale-lines [data-line-field="rate"]').last()).toHaveValue("30");
 
-    // Customer: the named buyer, from the taps the slide offers.
+    // Customer: the named buyer. The slide offers five chips; past that, the picker.
     await page.locator("#sale-next").click();
     await expect(page.locator("#sale-customer-choices")).toBeVisible();
-    await page.locator("#sale-customer-choices button", { hasText: customerName }).first().click();
+    const chip = page.locator("#sale-customer-choices button", { hasText: customerName }).first();
+    if ((await chip.count()) > 0) await chip.click();
+    else await page.locator('[data-draft="sale"] [data-customer-picker]').selectOption({ value: customerId });
 
     // Payment: cash is already chosen; "Make bill" once the review says so.
     await page.locator("#sale-next").click();
