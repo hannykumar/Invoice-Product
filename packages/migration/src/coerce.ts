@@ -55,13 +55,13 @@ export interface AmountRead {
 
 /** Reads an amount in rupees. Refuses anything with more than two decimal places. */
 export const readMoney = (cell: string): Read<AmountRead> => {
-  if (isBlank(cell)) return fail('AMOUNT_EMPTY', 'This amount is empty.', 'Yeh rakam khaali hai.');
+  if (isBlank(cell)) return fail('AMOUNT_EMPTY', 'This amount is empty.', 'यह रक़म ख़ाली है।');
   const { text, negative, side } = undecorate(cell);
   if (!/^\d+(\.\d+)?$/.test(text)) {
     return fail(
       'AMOUNT_NOT_A_NUMBER',
       `"${cell.trim()}" is not an amount we can read. Write it as a plain number, for example 4500 or 4500.50.`,
-      `"${cell.trim()}" ko rakam ke roop mein nahin padha ja sakta. Saadhaaran number likhein, jaise 4500 ya 4500.50.`,
+      `"${cell.trim()}" को रक़म के रूप में नहीं पढ़ा जा सका। साधारण नंबर लिखिए, जैसे 4500 या 4500.50।`,
     );
   }
   const [, fraction = ''] = text.split('.');
@@ -69,7 +69,7 @@ export const readMoney = (cell: string): Read<AmountRead> => {
     return fail(
       'AMOUNT_TOO_MANY_PAISE',
       `"${cell.trim()}" has more than two decimal places, so we cannot record it exactly. Round it yourself and put the correct figure in the file.`,
-      `"${cell.trim()}" mein do se zyada dashamlav hain, isliye ise theek se darj nahin kiya ja sakta. Sahi rakam file mein likhein.`,
+      `"${cell.trim()}" में दो से ज़्यादा दशमलव हैं, इसलिए इसे ठीक से दर्ज नहीं किया जा सकता। सही रक़म फ़ाइल में लिखिए।`,
     );
   }
   const amount = fromDecimalString(`${negative ? '-' : ''}${text}`);
@@ -78,14 +78,14 @@ export const readMoney = (cell: string): Read<AmountRead> => {
 
 /** Reads a quantity, with the unit that was written beside it when there was one. */
 export const readQuantity = (cell: string, fallbackUnit: string): Read<Quantity> => {
-  if (isBlank(cell)) return fail('QUANTITY_EMPTY', 'This quantity is empty.', 'Yeh maatra khaali hai.');
+  if (isBlank(cell)) return fail('QUANTITY_EMPTY', 'This quantity is empty.', 'यह मात्रा ख़ाली है।');
   const text = cell.trim().replace(/,/g, '');
   const match = /^(-?\d+(?:\.\d+)?)\s*([A-Za-z][A-Za-z.\s]*)?$/.exec(text);
   if (match === null) {
     return fail(
       'QUANTITY_NOT_A_NUMBER',
       `"${cell.trim()}" is not a quantity we can read. Write it as a number, for example 12 or 12.5.`,
-      `"${cell.trim()}" ko maatra ke roop mein nahin padha ja sakta. Number likhein, jaise 12 ya 12.5.`,
+      `"${cell.trim()}" को मात्रा के रूप में नहीं पढ़ा जा सका। नंबर लिखिए, जैसे 12 या 12.5।`,
     );
   }
   const digits = match[1] as string;
@@ -94,12 +94,12 @@ export const readQuantity = (cell: string, fallbackUnit: string): Read<Quantity>
     return fail(
       'QUANTITY_TOO_PRECISE',
       `"${cell.trim()}" has more than six decimal places. We never round a quantity quietly, so please shorten it in the file.`,
-      `"${cell.trim()}" mein chah se zyada dashamlav hain. Maatra kabhi chupchaap round nahin ki jaati; file mein ise chhota karein.`,
+      `"${cell.trim()}" में छह से ज़्यादा दशमलव हैं। मात्रा कभी चुपचाप राउंड नहीं की जाती; फ़ाइल में इसे छोटा कीजिए।`,
     );
   }
   const unit = (match[2] ?? fallbackUnit).trim().replace(/\.$/, '').toUpperCase();
   if (unit === '') {
-    return fail('QUANTITY_NO_UNIT', 'We do not know what unit this quantity is in.', 'Yeh maatra kis unit mein hai, pata nahin.');
+    return fail('QUANTITY_NO_UNIT', 'We do not know what unit this quantity is in.', 'यह मात्रा किस यूनिट में है, पता नहीं।');
   }
   return { ok: true, value: makeQuantity(digits, unit) };
 };
@@ -116,7 +116,7 @@ const build = (year: number, month: number, day: number): Read<IsoDate> => {
     return fail(
       'DATE_NOT_REAL',
       `"${text}" is not a real date.`,
-      `"${text}" asli taareekh nahin hai.`,
+      `"${text}" असली तारीख़ नहीं है।`,
     );
   }
 };
@@ -129,7 +129,7 @@ const build = (year: number, month: number, day: number): Read<IsoDate> => {
  * these products follows — but the person is shown what we read, never left to assume.
  */
 export const readDate = (cell: string): Read<IsoDate> => {
-  if (isBlank(cell)) return fail('DATE_EMPTY', 'This date is empty.', 'Yeh taareekh khaali hai.');
+  if (isBlank(cell)) return fail('DATE_EMPTY', 'This date is empty.', 'यह तारीख़ ख़ाली है।');
   const text = cell.trim();
 
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
@@ -139,7 +139,7 @@ export const readDate = (cell: string): Read<IsoDate> => {
   if (named !== null) {
     const month = MONTHS[(named[2] as string).slice(0, 4).toLowerCase()] ?? MONTHS[(named[2] as string).slice(0, 3).toLowerCase()];
     if (month === undefined) {
-      return fail('DATE_UNKNOWN_MONTH', `We do not recognise the month in "${text}".`, `"${text}" mein mahina samajh nahin aaya.`);
+      return fail('DATE_UNKNOWN_MONTH', `We do not recognise the month in "${text}".`, `"${text}" में महीना समझ नहीं आया।`);
     }
     const yearText = named[3] as string;
     const year = yearText.length === 2 ? 2000 + Number(yearText) : Number(yearText);
@@ -153,7 +153,7 @@ export const readDate = (cell: string): Read<IsoDate> => {
     const yearText = numeric[3] as string;
     const year = yearText.length === 2 ? 2000 + Number(yearText) : Number(yearText);
     if (first > 12 && second > 12) {
-      return fail('DATE_UNREADABLE', `"${text}" is not a date we can read.`, `"${text}" ko taareekh ke roop mein nahin padha ja sakta.`);
+      return fail('DATE_UNREADABLE', `"${text}" is not a date we can read.`, `"${text}" को तारीख़ के रूप में नहीं पढ़ा जा सकता।`);
     }
     // Day first, as every Indian export writes it.
     const [day, month] = first > 12 ? [first, second] : second > 12 ? [second, first] : [first, second];
@@ -163,7 +163,7 @@ export const readDate = (cell: string): Read<IsoDate> => {
         ...read,
         note: {
           'en-IN': `"${text}" was read as ${day} of month ${month}, ${year}, the way Indian software writes dates.`,
-          'hi-IN': `"${text}" ko ${day}/${month}/${year} padha gaya, jaise Bhaarat ke software taareekh likhte hain.`,
+          'hi-IN': `"${text}" को ${day}/${month}/${year} पढ़ा गया, जैसे भारत के सॉफ़्टवेयर तारीख़ लिखते हैं।`,
         },
       };
     }
@@ -181,19 +181,19 @@ export const readDate = (cell: string): Read<IsoDate> => {
   return fail(
     'DATE_UNREADABLE',
     `"${text}" is not a date we can read. Write it as 01-04-2026.`,
-    `"${text}" ko taareekh ke roop mein nahin padha ja sakta. Ise 01-04-2026 ki tarah likhein.`,
+    `"${text}" को तारीख़ के रूप में नहीं पढ़ा जा सकता। इसे 01-04-2026 की तरह लिखिए।`,
   );
 };
 
 /** Reads a percentage into basis points: "18%" and "18" both become 1800. */
 export const readPercent = (cell: string): Read<number> => {
-  if (isBlank(cell)) return fail('PERCENT_EMPTY', 'This rate is empty.', 'Yeh dar khaali hai.');
+  if (isBlank(cell)) return fail('PERCENT_EMPTY', 'This rate is empty.', 'यह दर ख़ाली है।');
   const text = cell.trim().replace(/%$/, '').replace(/,/g, '').trim();
   if (!/^\d+(\.\d{1,2})?$/.test(text)) {
     return fail(
       'PERCENT_NOT_A_NUMBER',
       `"${cell.trim()}" is not a rate we can read. Write it as 18 or 18%.`,
-      `"${cell.trim()}" ko dar ke roop mein nahin padha ja sakta. 18 ya 18% likhein.`,
+      `"${cell.trim()}" को दर के रूप में नहीं पढ़ा जा सका। 18 या 18% लिखिए।`,
     );
   }
   const [whole = '0', fraction = ''] = text.split('.');
@@ -202,20 +202,20 @@ export const readPercent = (cell: string): Read<number> => {
     return fail(
       'PERCENT_TOO_LARGE',
       `"${cell.trim()}" is more than 100%, which cannot be a GST rate.`,
-      `"${cell.trim()}" sau pratishat se zyada hai, jo GST dar nahin ho sakti.`,
+      `"${cell.trim()}" सौ प्रतिशत से ज़्यादा है, जो GST दर नहीं हो सकती।`,
     );
   }
   return { ok: true, value: basisPoints };
 };
 
 export const readInteger = (cell: string): Read<number> => {
-  if (isBlank(cell)) return fail('NUMBER_EMPTY', 'This number is empty.', 'Yeh number khaali hai.');
+  if (isBlank(cell)) return fail('NUMBER_EMPTY', 'This number is empty.', 'यह नंबर ख़ाली है।');
   const text = cell.trim().replace(/,/g, '');
   if (!/^\d+$/.test(text)) {
     return fail(
       'NUMBER_NOT_WHOLE',
       `"${cell.trim()}" is not a whole number.`,
-      `"${cell.trim()}" poora number nahin hai.`,
+      `"${cell.trim()}" पूरा नंबर नहीं है।`,
     );
   }
   return { ok: true, value: Number(text) };
@@ -229,6 +229,6 @@ export const readSide = (cell: string): Read<'DEBIT' | 'CREDIT'> => {
   return fail(
     'SIDE_UNREADABLE',
     `"${cell.trim()}" does not say whether the amount is owed to the business or by it. Write Dr or Cr.`,
-    `"${cell.trim()}" se pata nahin chalta ki rakam lena hai ya dena. Dr ya Cr likhein.`,
+    `"${cell.trim()}" से पता नहीं चलता कि रक़म लेना है या देना। Dr या Cr लिखिए।`,
   );
 };

@@ -118,7 +118,7 @@ export const ageingBody = async (
         documents: entry.documents.map((d) => documentContribution(d, entry.name)),
         sentence: summary?.sentence ?? {
           'en-IN': `${entry.name} has nothing outstanding.`,
-          'hi-IN': `${entry.name} ka kuch baaki nahin hai.`,
+          'hi-IN': `${entry.name} का कुछ बाक़ी नहीं है।`,
         },
       };
     })
@@ -145,11 +145,11 @@ export const ageingBody = async (
       side === 'RECEIVABLE'
         ? {
             'en-IN': `Customers still owe you ${formatINR(total.amount)}, and ${late} of them ${late === 1 ? 'is' : 'are'} late.`,
-            'hi-IN': `Customers se ${formatINR(total.amount)} lena baaki hai, aur unmein ${late} late hain.`,
+            'hi-IN': `ग्राहकों से ${formatINR(total.amount)} लेना बाक़ी है, और उनमें ${late} देर से हैं।`,
           }
         : {
             'en-IN': `You still owe suppliers ${formatINR(total.amount)}, and ${late} of them ${late === 1 ? 'is' : 'are'} already past the date.${advancesPaid.minor > 0n ? ` Separately, you have paid suppliers ${formatINR(advancesPaid)} in advance, to be taken off their next bills.` : ''}`,
-            'hi-IN': `Suppliers ko ${formatINR(total.amount)} dena baaki hai, aur unmein ${late} ki tareekh nikal chuki hai.${advancesPaid.minor > 0n ? ` Alag se, aapne suppliers ko ${formatINR(advancesPaid)} advance diya hai, jo unke agle bill se kata jayega.` : ''}`,
+            'hi-IN': `सप्लायरों को ${formatINR(total.amount)} देना बाक़ी है, और उनमें ${late} की तारीख़ निकल चुकी है।${advancesPaid.minor > 0n ? ` अलग से, आपने सप्लायरों को ${formatINR(advancesPaid)} एडवांस दिया है, जो उनके अगले बिल से कटा जाएगा।` : ''}`,
           },
   };
 };
