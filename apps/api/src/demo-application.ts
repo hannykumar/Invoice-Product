@@ -301,14 +301,14 @@ const chosenAsAdvance = (input: Record<string, unknown>): boolean =>
   input.advance === true || input.advance === 'yes' || input.advance === 'true';
 
 /** The words on the choice, the same on the screen and in any refusal that points to it. */
-const advanceChoiceLabel = (supplier: string) => ({ 'en-IN': `Record this as an advance to ${supplier}`, 'hi-IN': `Ise ${supplier} ka advance ke roop mein darj karein` });
+const advanceChoiceLabel = (supplier: string) => ({ 'en-IN': `Record this as an advance to ${supplier}`, 'hi-IN': `इसे ${supplier} को अडवांस के रूप में दर्ज कीजिए` });
 
 const advanceChoiceHelp = (supplier: string, openBills: number) => ({ 'en-IN': openBills === 0
   ? `You have no bill from ${supplier} yet. This money will be kept as an advance and taken off their next bill.`
   : `Whatever is not put against a bill ticked above will be kept as an advance and taken off ${supplier}'s next bill.`,
   'hi-IN': openBills === 0
-  ? `${supplier} ka abhi koi bill nahi hai. Ye paisa advance ke roop mein rakha jayega aur unke agle bill se ghata diya jayega.`
-  : `Jo paisa upar tick kiye bill par nahi lagega, wo advance ke roop mein rakha jayega aur ${supplier} ke agle bill se ghata diya jayega.` });
+  ? `${supplier} का अभी कोई बिल नहीं है। यह पैसा अडवांस के रूप में रखा जाएगा और उनके अगले बिल से घटा दिया जाएगा।`
+  : `जो पैसा ऊपर टिक किए बिल पर नहीं लगेगा, वह अडवांस के रूप में रखा जाएगा और ${supplier} के अगले बिल से घटा दिया जाएगा।` });
 
 /**
  * Issue #274 — a document number with its date, typed on Money paid: both or neither. `label` names
@@ -399,21 +399,21 @@ const paymentHow = (direction: 'RECEIPT' | 'PAYMENT', input: Record<string, unkn
 } => {
   const chosen = String(input.method ?? input.mode ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   if (chosen === '') throw invalid('PAYMENT_MODE_REQUIRED', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
-  if (chosen === 'CASH') return { mode: 'CASH', bankAccountCode: null, words: { 'en-IN': 'cash', 'hi-IN': 'naqd' } };
+  if (chosen === 'CASH') return { mode: 'CASH', bankAccountCode: null, words: { 'en-IN': 'cash', 'hi-IN': 'नक़द' } };
   if (chosen === 'UPI') return { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'UPI', 'hi-IN': 'UPI' } };
-  if (chosen === 'BANK_TRANSFER') return { mode: 'BANK_TRANSFER', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'bank transfer', 'hi-IN': 'bank transfer' } };
+  if (chosen === 'BANK_TRANSFER') return { mode: 'BANK_TRANSFER', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'bank transfer', 'hi-IN': 'बैंक' } };
   if (chosen === 'CHEQUE') {
     const number = String(input.chequeNumber ?? '').trim();
     const dated = String(input.chequeDate ?? '').trim();
     if (number === '' || dated === '') throw invalid('PAYMENT_CHEQUE_DETAILS_REQUIRED', 'Enter the cheque number and the date written on the cheque.');
     const chequeDate = isoDate(dated);
     // A cheque received waits in "cheques in hand" until it clears; a cheque given is drawn on our bank.
-    return { mode: 'CHEQUE', bankAccountCode: direction === 'PAYMENT' ? CURRENT_ACCOUNT : null, words: { 'en-IN': `cheque No. ${number} dated ${chequeDate}`, 'hi-IN': `cheque No. ${number} dinank ${chequeDate}` }, cheque: { number, chequeDate } };
+    return { mode: 'CHEQUE', bankAccountCode: direction === 'PAYMENT' ? CURRENT_ACCOUNT : null, words: { 'en-IN': `cheque No. ${number} dated ${chequeDate}`, 'hi-IN': `चेक नं. ${number} दिनांक ${chequeDate}` }, cheque: { number, chequeDate } };
   }
   throw invalid('PAYMENT_MODE_INVALID', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
 };
 
-const BALANCE_WILL_INCREASE = { 'en-IN': 'The customer balance will increase.', 'hi-IN': 'Graahak ka baaki badhega.' };
+const BALANCE_WILL_INCREASE = { 'en-IN': 'The customer balance will increase.', 'hi-IN': 'ग्राहक का बाक़ी बढ़ेगा।' };
 
 /** Issue #288 — CGST Rule 46(e): from this taxable value an unregistered buyer must be named on the bill. */
 const WALK_IN_LIMIT = 50_000_00n;
@@ -424,9 +424,9 @@ const WALK_IN_LIMIT = 50_000_00n;
  * Nothing defaults to cash; an amount left out is the whole bill.
  */
 const PAID_NOW: Readonly<Record<string, { mode: PaymentMode; bankAccountCode: string | null; words: { 'en-IN': string; 'hi-IN': string } }>> = {
-  CASH: { mode: 'CASH', bankAccountCode: null, words: { 'en-IN': 'cash', 'hi-IN': 'naqd' } },
+  CASH: { mode: 'CASH', bankAccountCode: null, words: { 'en-IN': 'cash', 'hi-IN': 'नक़द' } },
   UPI: { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'UPI', 'hi-IN': 'UPI' } },
-  CARD: { mode: 'CARD', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'card', 'hi-IN': 'card' } },
+  CARD: { mode: 'CARD', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'card', 'hi-IN': 'कार्ड' } },
 };
 type PaidNow = (typeof PAID_NOW)[string] & { readonly amount: bigint | null };
 const paidNowOf = (input: Record<string, unknown>): PaidNow | null => {
@@ -1149,7 +1149,7 @@ export class DemoApplication {
           if (prepared === null || !LOCKED_RETURN_STATES.has(prepared.state)) continue;
           found.push({
             code: 'SALES_CANCEL_MONTH_APPROVED',
-            message: both(`${number} cannot be cancelled: it is in the GST return for ${month}, which is ${prepared.state === 'FILED' ? 'filed' : 'approved'}. Make a credit note for the whole bill instead (Returns, choose "Whole bill"). The bill and the note both stay on record.`, `${number} ko radd nahi kiya ja sakta: ye ${month} ke GST return mein hai, jo ${prepared.state === 'FILED' ? 'filed' : 'approved'} hai. Uske badle poore bill ka credit note banayein (Returns mein "Whole bill" chunein). Bill aur note dono record mein rahenge.`),
+            message: both(`${number} cannot be cancelled: it is in the GST return for ${month}, which is ${prepared.state === 'FILED' ? 'filed' : 'approved'}. Make a credit note for the whole bill instead (Returns, choose "Whole bill"). The bill and the note both stay on record.`, `${number} को रद्द नहीं किया जा सकता: यह ${month} के GST रिटर्न में है, जो ${prepared.state === 'FILED' ? 'फ़ाइल हुआ' : 'मंज़ूर'} है। उसके बदले पूरे बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)। बिल और नोट दोनों रिकॉर्ड में रहेंगे।`),
             clearable: null,
           });
           break;
@@ -1161,7 +1161,7 @@ export class DemoApplication {
         if (notes.length > 0) {
           found.push({
             code: 'SALES_CANCEL_HAS_CREDIT_NOTE',
-            message: both(`${number} cannot be cancelled: ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`, `${number} ko radd nahi kiya ja sakta: uske liye ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} pehle se bana hai. Uske badle baaki bill ka credit note banayein (Returns mein "Whole bill" chunein).`),
+            message: both(`${number} cannot be cancelled: ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`, `${number} को रद्द नहीं किया जा सकता: उसके लिए ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'क्रेडिट नोट' : 'नोट'} ${notes.map((note) => note.number).join(', ')} पहले से बना है। उसके बदले बाक़ी बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)।`),
             clearable: null,
           });
         }
@@ -1174,7 +1174,7 @@ export class DemoApplication {
         if (eInvoice?.status === 'PENDING') {
           found.push({
             code: 'SALES_CANCEL_EINVOICE_WAITING',
-            message: both(`${number} has been sent for its e-invoice number and the government has not answered yet. Wait for the answer on the E-invoice screen, then cancel.`, `${number} ka e-invoice number mangne ke liye bheja gaya hai aur sarkar ka jawaab nahi aaya. E-invoice screen par jawaab ka intezaar karein, phir radd karein.`),
+            message: both(`${number} has been sent for its e-invoice number and the government has not answered yet. Wait for the answer on the E-invoice screen, then cancel.`, `${number} का ई-इनवॉइस नंबर मँगाने के लिए भेजा गया है और सरकार का जवाब नहीं आया। ई-इनवॉइस स्क्रीन पर जवाब का इंतज़ार कीजिए, फिर रद्द कीजिए।`),
             clearable: null,
           });
         } else if (eInvoice?.status === 'REGISTERED') {
@@ -1182,12 +1182,12 @@ export class DemoApplication {
           found.push(open
             ? {
               code: 'SALES_CANCEL_EINVOICE_ACTIVE',
-              message: both(`${number} has a government e-invoice number (IRN). The e-invoice has to be cancelled with the government first, and that is allowed only within 24 hours of registering it. Cancel the e-invoice, then this bill.`, `${number} ka sarkari e-invoice number (IRN) hai. Pehle sarkar ke saath e-invoice radd karna zaroori hai, jo sirf register hone ke 24 ghante ke andar ho sakta hai. E-invoice radd karein, phir ye bill.`),
+              message: both(`${number} has a government e-invoice number (IRN). The e-invoice has to be cancelled with the government first, and that is allowed only within 24 hours of registering it. Cancel the e-invoice, then this bill.`, `${number} का सरकारी ई-इनवॉइस नंबर (IRN) है। पहले सरकार के साथ ई-इनवॉइस रद्द करना ज़रूरी है, जो सिर्फ़ रजिस्टर होने के 24 घंटे के अंदर हो सकता है। ई-इनवॉइस रद्द कीजिए, फिर यह बिल।`),
               clearable: 'EINVOICE',
             }
             : {
               code: 'SALES_CANCEL_EINVOICE_WINDOW_CLOSED',
-              message: both(`${number} has a government e-invoice number, and the 24 hours in which the government allows it to be cancelled have passed. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`, `${number} ka sarkari e-invoice number hai, aur jis 24 ghante mein sarkar radd karne deti hai wo beet gaya hai. Uske badle poore bill ka credit note banayein (Returns mein "Whole bill" chunein).`),
+              message: both(`${number} has a government e-invoice number, and the 24 hours in which the government allows it to be cancelled have passed. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`, `${number} का सरकारी ई-इनवॉइस नंबर है, और जिस 24 घंटे में सरकार रद्द करने देती है वह बीत गया है। उसके बदले पूरे बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)।`),
               clearable: null,
             });
         }
@@ -1198,12 +1198,12 @@ export class DemoApplication {
           found.push(open
             ? {
               code: 'SALES_CANCEL_EWAY_ACTIVE',
-              message: both(`${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}. It has to be cancelled on the portal first, which is allowed only within 24 hours of raising it. Cancel the e-way bill, then this bill.`, `${number} ka e-way bill ${eway.acknowledgement.ewayBillNumber} hai. Use pehle portal par radd karna zaroori hai, jo sirf banaye jaane ke 24 ghante ke andar ho sakta hai. E-way bill radd karein, phir ye bill.`),
+              message: both(`${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}. It has to be cancelled on the portal first, which is allowed only within 24 hours of raising it. Cancel the e-way bill, then this bill.`, `${number} का ई-वे बिल ${eway.acknowledgement.ewayBillNumber} है। उसे पहले पोर्टल पर रद्द करना ज़रूरी है, जो सिर्फ़ बनाए जाने के 24 घंटे के अंदर हो सकता है। ई-वे बिल रद्द कीजिए, फिर यह बिल।`),
               clearable: 'EWAY_BILL',
             }
             : {
               code: 'SALES_CANCEL_EWAY_WINDOW_CLOSED',
-              message: both(`${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}, and it can no longer be cancelled on the portal, so the government holds these goods as moved. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`, `${number} ka e-way bill ${eway.acknowledgement.ewayBillNumber} hai, aur use ab portal par radd nahi kiya ja sakta, isliye sarkar ke nazdeek ye maal pahunch gaya. Uske badle poore bill ka credit note banayein (Returns mein "Whole bill" chunein).`),
+              message: both(`${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}, and it can no longer be cancelled on the portal, so the government holds these goods as moved. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`, `${number} का ई-वे बिल ${eway.acknowledgement.ewayBillNumber} है, और उसे अब पोर्टल पर रद्द नहीं किया जा सकता, इसलिए सरकार के नज़दीक यह माल पहुंच गया। उसके बदले पूरे बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)।`),
               clearable: null,
             });
         }
@@ -1381,11 +1381,11 @@ export class DemoApplication {
               code: 'STOCK_SHORTFALL',
               what: {
                 'en-IN': `There is not enough ${line.itemId} in ${config.location}: the bill needs ${formatQuantity(line.quantity)} and ${formatQuantity(balance.available)} is free to sell.`,
-                'hi-IN': `${config.location} mein ${line.itemId} kam hai: bill ko ${formatQuantity(line.quantity)} chahiye aur bechne ke liye ${formatQuantity(balance.available)} hai.`,
+                'hi-IN': `${config.location} में ${line.itemId} कम है: बिल को ${formatQuantity(line.quantity)} चाहिए और बेचने के लिए ${formatQuantity(balance.available)} है।`,
               },
               nextStep: {
                 'en-IN': 'Receive more stock, or reduce the quantity on the bill.',
-                'hi-IN': 'Aur maal mangwayein, ya bill ki maatra kam karein.',
+                'hi-IN': 'और माल मँगाइए, या बिल की मात्रा कम कीजिए।',
               },
               action: 'purchase',
             });
@@ -1394,11 +1394,11 @@ export class DemoApplication {
             code: 'RULE_CHECK',
             what: {
               'en-IN': 'Which state this sale counts in has to be settled before the bill goes out.',
-              'hi-IN': 'Bill jaane se pehle tay karna hoga ki yeh bikri kis rajya ki hai.',
+              'hi-IN': 'बिल जाने से पहले तय करना होगा कि यह बिक्री किस राज्य की है।',
             },
             nextStep: {
               'en-IN': 'Check the delivery address on the bill.',
-              'hi-IN': 'Bill par delivery ka pata dekh lein.',
+              'hi-IN': 'बिल पर डिलीवरी का पता देख लीजिए।',
             },
             action: 'sale',
             topic: 'gst.place_of_supply',
@@ -2287,7 +2287,7 @@ export class DemoApplication {
     const advance = await this.supplierAdvanceFor(actor, approved, input);
     return {
       state: 'preview',
-      title: both('Ready to record', 'Darj karne ke liye taiyaar'),
+      title: both('Ready to record', 'दर्ज करने के लिए तैयार'),
       // Nothing has happened yet, so the review says what recording will do, not what it did.
       message: advance !== null && advance.used > 0n
         ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} for ${formatPaise(preview.totalPaise)} will take the ${formatPaise(advance.used)} advance already paid off it, so you will owe them ${formatPaise(preview.totalPaise - advance.used)}, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`
@@ -2341,7 +2341,7 @@ export class DemoApplication {
     if ('alreadyRecorded' in draft) {
       // Pressing Record twice, or typing the same bill in again, records it once.
       const dashboard = await state();
-      return { state: 'recorded', deduplicated: true, title: both('Already recorded once', 'Pehle se ek baar darj hai'), message: both(`${draft.message} Stock and the supplier balance were not doubled.`, `${draft.message} Stock aur supplier ka baaki dobara nahi badha.`), bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded), reverseCharge: await this.reverseChargeJson(actor, draft.alreadyRecorded) };
+      return { state: 'recorded', deduplicated: true, title: both('Already recorded once', 'पहले से एक बार दर्ज है'), message: both(`${draft.message} Stock and the supplier balance were not doubled.`, `${draft.message} स्टॉक और सप्लायर का बाक़ी दोबारा नहीं बढ़ा।`), bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded), reverseCharge: await this.reverseChargeJson(actor, draft.alreadyRecorded) };
     }
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
@@ -2646,7 +2646,7 @@ export class DemoApplication {
       state: reminder.state === 'SENT' ? 'recorded' : 'recorded',
       title: reminder.state === 'SENT' ? 'Reminder sent' : `Reminder ${reminder.state.toLowerCase()}`,
       message: reminder.state === 'FAILED'
-        ? (reminder.failureReason ?? both('The message could not be delivered.', 'Sandesh nahi pahunch paya.'))
+        ? (reminder.failureReason ?? both('The message could not be delivered.', 'संदेश नहीं पहुंच पाया।'))
         : say(reminder.message),
       reminder: this.reminderJson(reminder),
     };
@@ -2657,10 +2657,10 @@ export class DemoApplication {
     const sent = await this.collections.sendPlanned(actor, DemoApplication.reminderDate());
     return {
       state: 'recorded',
-      title: sent.length === 0 ? both('Nothing needed sending', 'Kuch bhejna zaroori nahi tha') : both(`${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`, `${sent.length} reminder sambhale`),
+      title: sent.length === 0 ? both('Nothing needed sending', 'कुछ भेजना ज़रूरी नहीं था') : both(`${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`, `${sent.length} रिमाइंडर संभाले`),
       message: sent.length === 0
-        ? both('Every open bill was deliberately left alone today. The reasons are on this screen.', 'Har khula bill aaj jaan boojh kar chhoda gaya. Wajah is screen par hai.')
-        : both(`${sent.filter((r) => r.state === 'SENT').length} sent, ${sent.filter((r) => r.state !== 'SENT').length} not delivered.`, `${sent.filter((r) => r.state === 'SENT').length} bheje gaye, ${sent.filter((r) => r.state !== 'SENT').length} nahi pahunche.`),
+        ? both('Every open bill was deliberately left alone today. The reasons are on this screen.', 'हर खुला बिल आज जान-बूझकर छोड़ा गया। वजह इस स्क्रीन पर है।')
+        : both(`${sent.filter((r) => r.state === 'SENT').length} sent, ${sent.filter((r) => r.state !== 'SENT').length} not delivered.`, `${sent.filter((r) => r.state === 'SENT').length} भेजे गए, ${sent.filter((r) => r.state !== 'SENT').length} नहीं पहुंचे।`),
       reminders: sent.map((reminder) => this.reminderJson(reminder)),
     };
   }
@@ -2668,7 +2668,7 @@ export class DemoApplication {
   async retryReminder(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), DemoApplication.reminderDate());
-    return { state: 'recorded', title: both(`Reminder ${reminder.state.toLowerCase()}`, `Reminder ${reminder.state.toLowerCase()}`), message: reminder.failureReason ?? say(reminder.message), reminder: this.reminderJson(reminder) };
+    return { state: 'recorded', title: both(`Reminder ${reminder.state.toLowerCase()}`, `रिमाइंडर ${reminder.state.toLowerCase()}`), message: reminder.failureReason ?? say(reminder.message), reminder: this.reminderJson(reminder) };
   }
 
   /**
@@ -2702,7 +2702,7 @@ export class DemoApplication {
       promisedOn: isoDate(String(input.promisedOn ?? '')),
       note: input.note === undefined ? null : String(input.note),
     });
-    return { state: 'recorded', title: both('Promise recorded', 'Vaada darj hua'), message: both(`${bill.name} promised ${formatINR(promise.amount)} against ${bill.number} by ${promise.promisedOn}. Reminders for this bill are paused until then.`, `${bill.name} ne ${bill.number} ke liye ${promise.promisedOn} tak ${formatINR(promise.amount)} dene ka vaada kiya. Is bill ke reminders tab tak ruke hain.`), partyId: bill.partyId, party: bill.name };
+    return { state: 'recorded', title: both('Promise recorded', 'वादा दर्ज हुआ'), message: both(`${bill.name} promised ${formatINR(promise.amount)} against ${bill.number} by ${promise.promisedOn}. Reminders for this bill are paused until then.`, `${bill.name} ने ${bill.number} के लिए ${promise.promisedOn} तक ${formatINR(promise.amount)} देने का वादा किया। इस बिल के रिमाइंडर तब तक रुके हैं।`), partyId: bill.partyId, party: bill.name };
   }
 
   async raiseBillDispute(actor: ActorContext, input: Record<string, unknown>) {
@@ -2714,25 +2714,25 @@ export class DemoApplication {
       documentId,
       reason: String(input.reason ?? ''),
     });
-    return { state: 'recorded', title: both('Dispute recorded', 'Vivad darj hua'), message: documentId === null ? both(`${party.name}'s bills will not be chased until the dispute is closed.`, `${party.name} ke bills ke liye vivad band hone tak paisa nahi manga jayega.`) : both(`${'number' in party ? party.number : 'This bill'} for ${party.name} will not be chased until the dispute is closed.`, `${party.name} ka ${'number' in party ? party.number : 'ye bill'} vivad band hone tak nahi manga jayega.`), partyId: party.partyId, party: party.name };
+    return { state: 'recorded', title: both('Dispute recorded', 'विवाद दर्ज हुआ'), message: documentId === null ? both(`${party.name}'s bills will not be chased until the dispute is closed.`, `${party.name} के बिलों के लिए विवाद बंद होने तक पैसा नहीं माँगा जाएगा।`) : both(`${'number' in party ? party.number : 'This bill'} for ${party.name} will not be chased until the dispute is closed.`, `${party.name} का ${'number' in party ? party.number : 'यह बिल'} विवाद बंद होने तक नहीं माँगा जाएगा।`), partyId: party.partyId, party: party.name };
   }
 
   async resolveBillDispute(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     await this.collections.resolveDispute(actor, String(input.disputeId ?? ''), String(input.resolution ?? 'Settled with the customer.'));
-    return { state: 'recorded', title: both('Dispute closed', 'Vivad band hua'), message: both('The bill goes back into the reminder ladder at the rung its age has reached.', 'Bill reminder ki seedhi mein apni umr ke hisaab se waapas chala gaya.') };
+    return { state: 'recorded', title: both('Dispute closed', 'विवाद बंद हुआ'), message: both('The bill goes back into the reminder ladder at the rung its age has reached.', 'बिल रिमाइंडर की सीढ़ी में अपनी उम्र के हिसाब से वापस चला गया।') };
   }
 
   async stopReminders(actor: ActorContext, input: Record<string, unknown>) {
     const party = this.chosenCustomer(actor, input);
     await this.collections.optOut(actor, party.partyId, String(input.reason ?? ''));
-    return { state: 'recorded', title: both('Reminders stopped', 'Reminders band'), message: both(`${party.name} will not receive automatic reminders.`, `${party.name} ko automatic reminders nahi jayenge.`), partyId: party.partyId, party: party.name };
+    return { state: 'recorded', title: both('Reminders stopped', 'रिमाइंडर बंद'), message: both(`${party.name} will not receive automatic reminders.`, `${party.name} को अपने-आप रिमाइंडर नहीं जाएँगे।`), partyId: party.partyId, party: party.name };
   }
 
   async resumeReminders(actor: ActorContext, input: Record<string, unknown> = {}) {
     const party = this.chosenCustomer(actor, input);
     await this.collections.resumeReminders(actor, party.partyId);
-    return { state: 'recorded', title: both('Reminders started again', 'Reminders phir shuru'), message: both(`${party.name} will receive automatic reminders again.`, `${party.name} ko phir se automatic reminders jayenge.`), partyId: party.partyId, party: party.name };
+    return { state: 'recorded', title: both('Reminders started again', 'रिमाइंडर फिर शुरू'), message: both(`${party.name} will receive automatic reminders again.`, `${party.name} को फिर से अपने-आप रिमाइंडर जाएँगे।`), partyId: party.partyId, party: party.name };
   }
 
   /**
@@ -2898,13 +2898,13 @@ export class DemoApplication {
     const limit = customer.creditLimitPaise ?? null;
     return {
       ...corrected,
-      title: both('Customer corrected', 'Graahak theek kiya gaya'),
+      title: both('Customer corrected', 'ग्राहक ठीक किया गया'),
       message: say({ 'en-IN': `${corrected.message} ${limit === null
         ? `${customer.legalName} has no credit limit, so bills to them are not checked against one.`
         : `${customer.legalName}'s credit limit is ${formatPaise(limit)}. Every bill to them is checked against it.`}`,
         'hi-IN': `${corrected.message} ${limit === null
-        ? `${customer.legalName} ki koi udhaar seema nahi hai, isliye unke bills seema se jaanch nahi hote.`
-        : `${customer.legalName} ki udhaar seema ${formatPaise(limit)} hai. Har bill usi se jaancha jata hai.`}` }),
+        ? `${customer.legalName} की कोई उधार सीमा नहीं है, इसलिए उनके बिल सीमा से जाँचे नहीं जाते।`
+        : `${customer.legalName} की उधार सीमा ${formatPaise(limit)} है। हर बिल उसी से जाँचा जाता है।`}` }),
     };
   }
 
@@ -2975,7 +2975,7 @@ export class DemoApplication {
           ? DemoApplication.servicePlaceOfSupplyReason(draft.pricing?.placeOfSupplyStateCode ?? null, customer, walkIn !== null)
           : walkIn === null
             ? delivery.placeOfSupplyReason
-            : both(`Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`, `Supply ka sthan: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — maal aapke counter par diya jaata hai.`),
+            : both(`Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`, `सप्लाई का स्थान: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — माल आपके काउंटर पर दिया जाता है।`),
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
           kind: exportSale.kind,
@@ -3030,7 +3030,7 @@ export class DemoApplication {
       if (pricing === null) return { ...refused(refusals), dateNotice };
       if (walkIn !== null && pricing.totals.taxableValue.minor >= WALK_IN_LIMIT) {
         const error = DemoApplication.walkInTooLarge(pricing.totals.taxableValue.minor);
-        refusals.push({ code: error.code, 'en-IN': error.message, 'hi-IN': `Is bill ka taxable value ${formatPaise(pricing.totals.taxableValue.minor)} hai. ${formatPaise(WALK_IN_LIMIT)} se upar kanoon (CGST Rule 46(e)) bill par kharidaar ka naam, pata aur rajya maangta hai. Customer ko naam aur pate ke saath joden, aur Walk-in ki jagah unhe chunen.` });
+        refusals.push({ code: error.code, 'en-IN': error.message, 'hi-IN': `इस बिल का टैक्सेबल वैल्यू ${formatPaise(pricing.totals.taxableValue.minor)} है। ${formatPaise(WALK_IN_LIMIT)} से ऊपर क़ानून (CGST Rule 46(e)) बिल पर ख़रीदार का नाम, पता और राज्य माँगता है। ग्राहक को नाम और पते के साथ जोड़िए, और Walk-in की जगह उन्हें चुनिए।` });
       }
       const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
       const delivery = deliveryDetails(this.config.companyId, customer, input);
@@ -3056,23 +3056,23 @@ export class DemoApplication {
         placeOfSupply: {
           stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
           'en-IN': `${state} sale · ${taxes}`,
-          'hi-IN': `${state} ki bikri · ${taxes}`,
+          'hi-IN': `${state} की बिक्री · ${taxes}`,
           reason: bill.supplyKind === 'SERVICES'
             ? DemoApplication.servicePlaceOfSupplyReason(pricing.placeOfSupplyStateCode, customer, walkIn !== null)
             : walkIn === null
             ? delivery.placeOfSupplyReason
-            : both(`Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`, `Supply ka sthan: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — maal aapke counter par diya jaata hai.`),
+            : both(`Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`, `सप्लाई का स्थान: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — माल आपके काउंटर पर दिया जाता है।`),
         },
         ewayBill: eway === null ? null : eway.outcome === 'REQUIRED'
-          ? { needed: true, 'en-IN': 'Needs an e-way bill before the goods leave', 'hi-IN': 'Maal nikalne se pehle e-way bill chahiye', reason: eway.reason }
-          : { needed: false, 'en-IN': 'No e-way bill needed', 'hi-IN': 'E-way bill ki zaroorat nahin', reason: eway.reason },
+          ? { needed: true, 'en-IN': 'Needs an e-way bill before the goods leave', 'hi-IN': 'माल निकलने से पहले ई-वे बिल चाहिए', reason: eway.reason }
+          : { needed: false, 'en-IN': 'No e-way bill needed', 'hi-IN': 'ई-वे बिल की ज़रूरत नहीं', reason: eway.reason },
         eInvoice: {
           needed: eInvoice.needed, askTurnover: eInvoice.askTurnover, message: say(eInvoice.message),
           ...(eInvoice.needed === 'YES'
-            ? { 'en-IN': 'Needs a government e-invoice number, sent by itself when you issue the bill', 'hi-IN': 'Sarkari e-invoice number chahiye, bill jaari karte hi apne aap bheja jayega' }
+            ? { 'en-IN': 'Needs a government e-invoice number, sent by itself when you issue the bill', 'hi-IN': 'सरकारी ई-इनवॉइस नंबर चाहिए, बिल जारी करते ही अपने आप भेजा जाएगा' }
             : eInvoice.needed === 'NO'
-              ? { 'en-IN': 'No e-invoice needed', 'hi-IN': 'E-invoice ki zaroorat nahin' }
-              : { 'en-IN': 'E-invoice not decided yet: answer the turnover question in Business details', 'hi-IN': 'E-invoice abhi tay nahin: Business details mein turnover ka sawaal bharein' }),
+              ? { 'en-IN': 'No e-invoice needed', 'hi-IN': 'ई-इनवॉइस की ज़रूरत नहीं' }
+              : { 'en-IN': 'E-invoice not decided yet: answer the turnover question in Business details', 'hi-IN': 'ई-इनवॉइस अभी तय नहीं: बिज़नेस डिटेल्स में टर्नओवर का सवाल भरिए' }),
         },
         dateNotice,
         refusals,
@@ -3118,15 +3118,15 @@ export class DemoApplication {
       approvedMonth = true;
     }
     if (date === today) return null;
-    const lines = [both(`This bill will be dated ${formatClaimDate(date)}, which is before today, ${formatClaimDate(today)}.`, `Ye bill ${formatClaimDate(date)} ki tareekh ka banega, jo aaj ${formatClaimDate(today)} se pehle ki hai.`)];
+    const lines = [both(`This bill will be dated ${formatClaimDate(date)}, which is before today, ${formatClaimDate(today)}.`, `यह बिल ${formatClaimDate(date)} की तारीख़ का बनेगा, जो आज ${formatClaimDate(today)} से पहले की है।`)];
     if (approvedMonth) {
-      lines.push(both(`The GST return for ${month} is already approved without it, so that return will have to be reopened and approved again.`, `${month} ka GST return iske bina pehle se manzoor hai, isliye wo return phir se kholkar dobara manzoor karna hoga.`));
+      lines.push(both(`The GST return for ${month} is already approved without it, so that return will have to be reopened and approved again.`, `${month} का GST रिटर्न इसके बिना पहले से मंज़ूर है, इसलिए वह रिटर्न फिर से खोलकर दोबारा मंज़ूर करना होगा।`));
     }
     const later = (await this.salesRepository.list(companyId))
       .filter((bill) => bill.number !== null && financialYearOf(bill.documentDate) === financialYearOf(date) && bill.documentDate > date)
       .sort((a, b) => b.documentDate.localeCompare(a.documentDate))[0];
     if (later !== undefined) {
-      lines.push(both(`Bill ${later.number} is already issued with the date ${formatClaimDate(later.documentDate)}, so this bill will get a later number with an earlier date.`, `Bill ${later.number} ${formatClaimDate(later.documentDate)} ki tareekh se pehle se bana hai, isliye is bill ko pehli tareekh ke saath baad ka number milega.`));
+      lines.push(both(`Bill ${later.number} is already issued with the date ${formatClaimDate(later.documentDate)}, so this bill will get a later number with an earlier date.`, `बिल ${later.number} ${formatClaimDate(later.documentDate)} की तारीख़ से पहले से बना है, इसलिए इस बिल को पहली तारीख़ के साथ बाद का नंबर मिलेगा।`));
     }
     return lines.join(' ');
   }
@@ -3157,7 +3157,7 @@ export class DemoApplication {
     if (decision === null || decision.outcome !== 'REQUIRED') return null;
     return {
       outcome: decision.outcome,
-      message: both('This consignment needs an e-way bill before the vehicle leaves.', 'Gaadi chalne se pehle is consignment ka e-way bill zaroori hai.'),
+      message: both('This consignment needs an e-way bill before the vehicle leaves.', 'गाड़ी चलने से पहले इस कंसाइनमेंट का ई-वे बिल ज़रूरी है।'),
       reason: decision.reason,
       ruleId: decision.ruleId,
     };
@@ -3374,8 +3374,8 @@ export class DemoApplication {
     }
     return {
       state: 'waiting',
-      title: both('Waiting for approval', 'Manzoori ka intezaar'),
-      message: both(`${why} The bill was not issued. It is waiting for approval from ${gate.who}.`, `${why} Bill nahi bana. ${gate.who} ki manzoori ka intezaar hai.`),
+      title: both('Waiting for approval', 'मंज़ूरी का इंतज़ार'),
+      message: both(`${why} The bill was not issued. It is waiting for approval from ${gate.who}.`, `${why} बिल नहीं बना। ${gate.who} की मंज़ूरी का इंतज़ार है।`),
       amount: jsonAmount(held.pricing?.totals.invoiceValue.minor ?? 0n),
       token: held.id,
       approver: gate.who,
@@ -3445,7 +3445,7 @@ export class DemoApplication {
     // given more credit. The draft is excluded from its own pending value.
     const quote = await this.termsQuote(actor, draft);
 
-    const effects = [both('A numbered invoice will be issued.', 'Number wala bill banega.'), say(BALANCE_WILL_INCREASE)];
+    const effects = [both('A numbered invoice will be issued.', 'नंबर वाला बिल बनेगा।'), say(BALANCE_WILL_INCREASE)];
     for (const reason of quote.reasons) effects.push(say(reason));
     for (const line of quote.lines) {
       if (line.price.source !== 'NONE') effects.push(say(line.price.sentence));
@@ -3453,7 +3453,7 @@ export class DemoApplication {
 
     return {
       state: 'preview',
-      title: quote.outcome === 'BLOCK' ? both('This sale is on hold', 'Ye bikri roki hui hai') : both('Sale checked', 'Bikri jaanchi gayi'),
+      title: quote.outcome === 'BLOCK' ? both('This sale is on hold', 'यह बिक्री रोकी हुई है') : both('Sale checked', 'बिक्री जाँची गई'),
       message: say(draft.pricing.explanation),
       amount: jsonAmount(draft.pricing.totals.invoiceValue.minor),
       token: draft.id,
@@ -3507,9 +3507,9 @@ export class DemoApplication {
       ...paid, amount, due,
       sentence: due === 0n
         ? { 'en-IN': `Paid now by ${paid.words['en-IN']}: ${formatPaise(amount)}. Nothing is left to pay on this bill.`,
-            'hi-IN': `${paid.words['hi-IN']} se abhi diya: ${formatPaise(amount)}. Is bill par kuch baaki nahi raha.` }
+            'hi-IN': `${paid.words['hi-IN']} से अभी दिया: ${formatPaise(amount)}। इस बिल पर कुछ बाक़ी नहीं रहा।` }
         : { 'en-IN': `Paid now by ${paid.words['en-IN']}: ${formatPaise(amount)}. ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} is added to what ${customer} owes.`,
-            'hi-IN': `${paid.words['hi-IN']} se abhi diya: ${formatPaise(amount)}. ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} ${customer} ke baaki mein juda.` },
+            'hi-IN': `${paid.words['hi-IN']} से अभी दिया: ${formatPaise(amount)}। ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} ${customer} के बाक़ी में जुड़ेगा।` },
     };
   }
 
@@ -3688,10 +3688,10 @@ export class DemoApplication {
     const ewayRaised = ewayBill === null ? null : await this.raiseEwayByItself(actor, final.invoice.id, ewayDistanceKm);
     return {
       state: 'recorded', deduplicated: final.deduplicated,
-      title: final.deduplicated ? both('Sale already recorded once', 'Bikri pehle se ek baar darj hai') : both('Sale recorded', 'Bikri darj hui'),
+      title: final.deduplicated ? both('Sale already recorded once', 'बिक्री पहले से एक बार दर्ज है') : both('Sale recorded', 'बिक्री दर्ज हुई'),
       message: receipt === null
-        ? both(`${final.invoice.number} was issued.`, `${final.invoice.number} ban gaya.`)
-        : both(`${final.invoice.number} was issued. ${formatPaise(receipt.amount.minor)} received by ${paidNow?.words['en-IN'] ?? receipt.mode.toLowerCase()}.`, `${final.invoice.number} ban gaya. ${paidNow?.words['hi-IN'] ?? receipt.mode.toLowerCase()} se ${formatPaise(receipt.amount.minor)} mila.`),
+        ? both(`${final.invoice.number} was issued.`, `${final.invoice.number} बन गया।`)
+        : both(`${final.invoice.number} was issued. ${formatPaise(receipt.amount.minor)} received by ${paidNow?.words['en-IN'] ?? receipt.mode.toLowerCase()}.`, `${final.invoice.number} बन गया। ${paidNow?.words['hi-IN'] ?? receipt.mode.toLowerCase()} से ${formatPaise(receipt.amount.minor)} मिला।`),
       // Said on the screen the moment the bill is issued, so nobody has to go looking for it.
       eInvoice: decision.needed === 'NO'
         ? { expected: false, needed: 'NO' as const, message: null, askTurnover: false }
@@ -3699,7 +3699,7 @@ export class DemoApplication {
           ? { expected: false, needed: 'UNKNOWN' as const, message: say(decision.message), askTurnover: decision.askTurnover }
           : decision.lateForPortal === true
             ? { expected: true, needed: 'YES' as const, message: say(decision.message), askTurnover: false }
-            : { expected: true, needed: 'YES' as const, askTurnover: false, message: both('This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.', 'Is bill par sarkari e-invoice number hona zaroori hai. Use ab bheja ja raha hai — bill to ban chuka hai, aur number E-invoice screen par aane par dikhega.') },
+            : { expected: true, needed: 'YES' as const, askTurnover: false, message: both('This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.', 'इस बिल पर सरकारी ई-इनवॉइस नंबर होना ज़रूरी है। उसे अब भेजा जा रहा है — बिल तो बन चुका है, और नंबर ई-इनवॉइस स्क्रीन पर आने पर दिखेगा।') },
       invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
       // Issue #240 — whether these goods need an e-way bill, so the screen can offer it in one press.
       ewayBill,
@@ -3812,7 +3812,7 @@ export class DemoApplication {
       invoiceId, reason, today: DemoApplication.cancelToday(), ignoreClearable: ['EINVOICE', 'EWAY_BILL'],
     });
     if (invoice.state === 'CANCELLED') {
-      return { state: 'preview' as const, title: both(`${invoice.number} is already cancelled`, `${invoice.number} pehle se radd hai`), message: both('Nothing more will change.', 'Ab kuch aur nahi badlega.'), token: invoice.id, amount: 0, effects: [], clearFirst: [] };
+      return { state: 'preview' as const, title: both(`${invoice.number} is already cancelled`, `${invoice.number} पहले से रद्द है`), message: both('Nothing more will change.', 'अब कुछ और नहीं बदलेगा।'), token: invoice.id, amount: 0, effects: [], clearFirst: [] };
     }
     const clearFirst = (await this.cancelGuard.blockers(actor, invoice)).filter((blocker) => blocker.clearable !== null);
     const customer = customerView(companyId, String(invoice.partyId)).name;
@@ -3834,8 +3834,8 @@ export class DemoApplication {
     ];
     return {
       state: 'preview' as const,
-      title: both(`Cancel ${invoice.number}?`, `${invoice.number} radd karein?`),
-      message: both(`${invoice.number} for ${formatPaise(value)} will be cancelled.`, `${invoice.number} ${formatPaise(value)} ka radd ho jayega.`),
+      title: both(`Cancel ${invoice.number}?`, `${invoice.number} रद्द करें?`),
+      message: both(`${invoice.number} for ${formatPaise(value)} will be cancelled.`, `${invoice.number} ${formatPaise(value)} का रद्द हो जाएगा।`),
       token: invoice.id,
       amount: jsonAmount(value),
       effects,
@@ -3889,10 +3889,10 @@ export class DemoApplication {
       state: 'recorded' as const,
       deduplicated,
       title: deduplicated ? 'Bill already cancelled' : 'Bill cancelled',
-      message: both(`${invoice.number} is cancelled. The number stays used, the bill stays on record marked CANCELLED, ${customer}'s balance and the stock are back as they were, and the GST return counts it as cancelled.`, `${invoice.number} radd ho gaya. Number wahi ka wahi hai, bill record mein CANCELLED mark ke saath hai, ${customer} ka baaki aur stock jaise the waise ho gaye, aur GST return ise radd ginta hai.`),
+      message: both(`${invoice.number} is cancelled. The number stays used, the bill stays on record marked CANCELLED, ${customer}'s balance and the stock are back as they were, and the GST return counts it as cancelled.`, `${invoice.number} रद्द हो गया। नंबर वहीं का वहीं है, बिल रिकॉर्ड में CANCELLED मार्क के साथ है, ${customer} का बाक़ी और स्टॉक जैसे थे वैसे हो गए, और GST रिटर्न इसे रद्द गिनता है।`),
       onAccount: onAccount === 0n ? null : {
         amount: jsonAmount(onAccount),
-        message: both(`${formatPaise(onAccount)} received against ${invoice.number} is now held on account for ${customer}.`, `${invoice.number} ke liye mila ${formatPaise(onAccount)} ab ${customer} ke khaate mein rakha hai.`),
+        message: both(`${formatPaise(onAccount)} received against ${invoice.number} is now held on account for ${customer}.`, `${invoice.number} के लिए मिला ${formatPaise(onAccount)} अब ${customer} के ख़ाते में रखा है।`),
       },
       invoice: { id: invoice.id, number: invoice.number, state: invoice.state, reason: invoice.cancelReason },
     };
@@ -3910,7 +3910,7 @@ export class DemoApplication {
     const checked = await this.checkSale(actor, converted.invoice);
     return {
       ...checked,
-      title: both(`Bill ready from ${converted.quotation.number}`, `${converted.quotation.number} se bill taiyaar`),
+      title: both(`Bill ready from ${converted.quotation.number}`, `${converted.quotation.number} से बिल तैयार`),
       effects: [...converted.notes, ...checked.effects],
       quotation: this.presale.describe(converted.quotation),
     };
@@ -4151,7 +4151,7 @@ export class DemoApplication {
   async agentApprove(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const plan = await this.agent.approve(actor, String(input.planId ?? ''), String(input.fingerprint ?? ''));
-    return { state: 'recorded', title: both('Approved', 'Manzoor'), message: both('The assistant will do exactly what you saw.', 'Assistant waise hi karega jaise aapne dekha.'), plan: this.agentPlanJson(plan) };
+    return { state: 'recorded', title: both('Approved', 'मंज़ूर'), message: both('The assistant will do exactly what you saw.', 'असिस्टेंट वैसे ही करेगा जैसे आपने देखा।'), plan: this.agentPlanJson(plan) };
   }
 
   async agentExecute(actor: ActorContext, input: Record<string, unknown>) {
@@ -4261,8 +4261,8 @@ export class DemoApplication {
       : await this.subscriptions.changePlan(actor, { planId, on: today, reason: String(input.reason ?? 'Changed from the account screen') });
     return {
       state: 'recorded',
-      title: both('Plan changed', 'Plan badla'),
-      message: both(`This business is now on the ${subscription.planId} plan. Nothing that was already recorded has changed.`, `Ye business ab ${subscription.planId} plan par hai. Jo pehle darj hua wo waise ka waisa hai.`),
+      title: both('Plan changed', 'प्लान बदला'),
+      message: both(`This business is now on the ${subscription.planId} plan. Nothing that was already recorded has changed.`, `यह बिज़नेस अब ${subscription.planId} प्लान पर है। जो पहले दर्ज हुआ वह वैसे का वैसा है।`),
     };
   }
 
@@ -4330,21 +4330,21 @@ export class DemoApplication {
       + plan.creditNotes.reduce((total, note) => total + note.noteTotal, 0n);
     const owedAfter = owedBefore - (amount - leftOver) - adjustments;
     if (plan.advance > 0n) return this.previewSupplierAdvance(actor, plan, owedAfter);
-    const whose = direction === 'RECEIPT' ? `${party.name} ka baaki` : `${party.name} ka aapka baaki`;
+    const whose = direction === 'RECEIPT' ? `${party.name} का बाक़ी` : `${party.name} का आपका बाक़ी`;
     return {
       state: 'preview',
-      title: both(direction === 'RECEIPT' ? 'Money received — check it' : 'Money paid — check it', direction === 'RECEIPT' ? 'Paisa mila — jaanch lein' : 'Paisa diya — jaanch lein'),
-      message: both(`${formatPaise(amount)} will reduce ${direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`}.`, `${formatPaise(amount)} ${whose} ghatayega.`),
+      title: both(direction === 'RECEIPT' ? 'Money received — check it' : 'Money paid — check it', direction === 'RECEIPT' ? 'पैसा मिला — जाँच लीजिए' : 'पैसा दिया — जाँच लीजिए'),
+      message: both(`${formatPaise(amount)} will reduce ${direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`}.`, `${formatPaise(amount)} ${whose} घटाएगा।`),
       amount: jsonAmount(amount),
       party,
       direction,
       token: plan.key,
       effects: [
         both(`${direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${party.name} by ${how.words['en-IN']}.`,
-          `${party.name} ${direction === 'RECEIPT' ? 'se' : 'ko'} ${how.words['hi-IN']} se ${direction === 'RECEIPT' ? 'milaa' : 'diya'}.`),
+          `${party.name} ${direction === 'RECEIPT' ? 'से' : 'को'} ${how.words['hi-IN']} से ${direction === 'RECEIPT' ? 'मिला' : 'दिया'}।`),
         ...applied.map(({ position, amount: put }) =>
           both(`${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} still due on this bill`,
-            `${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} is bill par abhi baaki`)),
+            `${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} इस बिल पर अभी बाक़ी`)),
         // Issue #295 — what each adjustment does, in words a shopkeeper can check.
         ...plan.settlements.map((settlement) => settlement.kind === 'TDS_DEDUCTED'
           ? both(`${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} of tax deducted under s.${settlement.tdsSection} (${settlement.tdsQuarter}) — kept as TDS to come back from the government, not as money ${party.name} still owes.`,
@@ -4360,12 +4360,12 @@ export class DemoApplication {
         ...(leftOver > 0n
           ? [applied.length === 0
             ? both(`${formatPaise(leftOver)} is not put against any bill yet, so it stays on account for ${party.name}.`,
-                `${formatPaise(leftOver)} abhi kisi bill par nahi laga, isliye ${party.name} ke khaate mein rahega.`)
+                `${formatPaise(leftOver)} अभी किसी बिल पर नहीं लगा, इसलिए ${party.name} के ख़ाते में रहेगा।`)
             : both(`${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} is more than the bills chosen, so it stays on account for ${party.name}.`,
-                `${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} chune hue bills se zyada hai, isliye ${party.name} ke khaate mein rahega.`)]
+                `${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} चुने हुए बिल से ज़्यादा है, इसलिए ${party.name} के ख़ाते में रहेगा।`)]
           : []),
         both(`${direction === 'RECEIPT' ? `${party.name} owes` : `You owe ${party.name}`} ${formatPaise(owedBefore)} on open bills now, and ${formatPaise(owedAfter < 0n ? 0n : owedAfter)} after this.`,
-          `${direction === 'RECEIPT' ? `${party.name} ka` : `${party.name} ko aapka`} ${formatPaise(owedBefore)} khule bills par abhi hai, aur iske baad ${formatPaise(owedAfter < 0n ? 0n : owedAfter)}.`),
+          `${direction === 'RECEIPT' ? `${party.name} का` : `${party.name} को आपका`} ${formatPaise(owedBefore)} खुले बिल पर अभी है, और इसके बाद ${formatPaise(owedAfter < 0n ? 0n : owedAfter)}।`),
       ],
     };
   }
@@ -4381,30 +4381,30 @@ export class DemoApplication {
     const against = amount - advance;
     return {
       state: 'preview',
-      title: both('Advance to a supplier — check it', 'Supplier ko advance — jaanch lein'),
+      title: both('Advance to a supplier — check it', 'सप्लायर को अडवांस — जाँच लीजिए'),
       message: owedAfter <= 0n
         ? both(`Advance paid to ${party.name}: ${formatPaise(advance)}. You owe them nothing yet; when their bill is entered, ${formatPaise(advance)} will be taken off it.`,
-          `${party.name} ko advance diya: ${formatPaise(advance)}. Abhi aapka koi baaki nahi hai; jab unka bill aayega, usme se ${formatPaise(advance)} ghata diya jayega.`)
+          `${party.name} को अडवांस दिया: ${formatPaise(advance)}। अभी आपका कोई बाक़ी नहीं है; जब उनका बिल आएगा, उसमें से ${formatPaise(advance)} घटा दिया जाएगा।`)
         : both(`Advance paid to ${party.name}: ${formatPaise(advance)}. It is not taken off the ${formatPaise(owedAfter)} you already owe them on open bills; when their next bill is entered, ${formatPaise(advance)} will be taken off it.`,
-          `${party.name} ko advance diya: ${formatPaise(advance)}. Ye khule bills ke ${formatPaise(owedAfter)} baaki se nahi ghata; jab unka agla bill aayega, usme se ${formatPaise(advance)} ghata diya jayega.`),
+          `${party.name} को अडवांस दिया: ${formatPaise(advance)}। यह खुले बिलों के ${formatPaise(owedAfter)} बाक़ी से नहीं घटा; जब उनका अगला बिल आएगा, उसमें से ${formatPaise(advance)} घटा दिया जाएगा।`),
       amount: jsonAmount(amount),
       advance: jsonAmount(advance),
       party,
       direction: plan.direction,
       token: plan.key,
       effects: [
-        both(`Paid to ${party.name} by ${how.words['en-IN']}.`, `${party.name} ko ${how.words['hi-IN']} se diya.`),
+        both(`Paid to ${party.name} by ${how.words['en-IN']}.`, `${party.name} को ${how.words['hi-IN']} से दिया।`),
         ...applied.map(({ position: bill, amount: put }) =>
           both(`${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} still due on this bill`,
-            `${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} is bill par abhi baaki`)),
-        ...(applied.length > 0 ? [both(`${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} is kept as an advance.`, `${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} advance ke roop mein rakha gaya.`)] : []),
-        ...(heldBefore > 0n ? [both(`Advances already with ${party.name}: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`, `${party.name} ke paas pehle se advance: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`)] : []),
+            `${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} इस बिल पर अभी बाक़ी`)),
+        ...(applied.length > 0 ? [both(`${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} is kept as an advance.`, `${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} अडवांस के रूप में रखा गया।`)] : []),
+        ...(heldBefore > 0n ? [both(`Advances already with ${party.name}: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`, `${party.name} के पास पहले से अडवांस: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}।`)] : []),
         // Issue #274 — what the voucher will say it is against, before anything is saved.
-        both(`Against: ${advanceAgainstWords(plan.particulars)}.`, `Kinare: ${advanceAgainstWords(plan.particulars)}.`),
-        ...(plan.particulars?.supplierReceiptVoucher ? [both(`Supplier's receipt voucher: No. ${plan.particulars.supplierReceiptVoucher.number} dated ${formatDate(plan.particulars.supplierReceiptVoucher.date)}.`, `Supplier ka receipt voucher: No. ${plan.particulars.supplierReceiptVoucher.number} dinank ${formatDate(plan.particulars.supplierReceiptVoucher.date)}.`)] : []),
+        both(`Against: ${advanceAgainstWords(plan.particulars)}.`, `बदले में: ${advanceAgainstWords(plan.particulars)}।`),
+        ...(plan.particulars?.supplierReceiptVoucher ? [both(`Supplier's receipt voucher: No. ${plan.particulars.supplierReceiptVoucher.number} dated ${formatDate(plan.particulars.supplierReceiptVoucher.date)}.`, `सप्लायर की रसीद वाउचर: नं. ${plan.particulars.supplierReceiptVoucher.number} दिनांक ${formatDate(plan.particulars.supplierReceiptVoucher.date)}।`)] : []),
         `Narration: ${plan.narration ?? ''}`,
-        both(`In your books it is kept under "Advances paid to suppliers", not as money you owe.`, `Aapki bahi mein ye "Suppliers ko diya advance" mein rakha gaya hai, aapka baaki nahi.`),
-        both('No GST is entered for this advance, and no GST credit is claimed on it. The credit comes with their bill.', 'Is advance par koi GST darj nahi, aur na hi GST credit liya gaya. Credit unke bill ke saath aayega.'),
+        both(`In your books it is kept under "Advances paid to suppliers", not as money you owe.`, `आपकी बही में यह "Advances paid to suppliers" में रखा गया है, आपका बाक़ी नहीं।`),
+        both('No GST is entered for this advance, and no GST credit is claimed on it. The credit comes with their bill.', 'इस अडवांस पर कोई GST दर्ज नहीं, और न ही GST क्रेडिट लिया गया। क्रेडिट उनके बिल के साथ आएगा।'),
       ],
     };
   }
@@ -4480,16 +4480,16 @@ export class DemoApplication {
     return {
       state: 'recorded',
       deduplicated,
-      title: earlier !== null ? both('Already recorded once', 'Pehle se ek baar darj hai') : direction === 'RECEIPT' ? both('Money received recorded', 'Mila hua paisa darj hua') : payment.advanceToSupplier === true ? both('Advance paid recorded', 'Diya hua advance darj hua') : both('Money paid recorded', 'Diya hua paisa darj hua'),
+      title: earlier !== null ? both('Already recorded once', 'पहले से एक बार दर्ज है') : direction === 'RECEIPT' ? both('Money received recorded', 'मिला हुआ पैसा दर्ज हुआ') : payment.advanceToSupplier === true ? both('Advance paid recorded', 'दिया हुआ अडवांस दर्ज हुआ') : both('Money paid recorded', 'दिया हुआ पैसा दर्ज हुआ'),
       message: earlier !== null
         ? both(`${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'from' : 'to'} ${party.name} was already recorded. It was not recorded twice.`,
-          `${party.name} ${direction === 'RECEIPT' ? 'se' : 'ko'} ${formatPaise(payment.amount.minor)} pehle se darj hai. Do baar darj nahi hua.`)
+          `${party.name} ${direction === 'RECEIPT' ? 'से' : 'को'} ${formatPaise(payment.amount.minor)} पहले से दर्ज है। दो बार दर्ज नहीं हुआ।`)
         : both(`${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'received from' : 'paid to'} ${party.name} is in your books${voucher === null ? '' : ` as ${voucher.number}`}.`,
-          `${party.name} ${direction === 'RECEIPT' ? 'se mila' : 'ko diya'} ${formatPaise(payment.amount.minor)} aapki bahi mein darj hai${voucher === null ? '' : `, voucher ${voucher.number} ke roop mein`}.`),
+          `${party.name} ${direction === 'RECEIPT' ? 'से मिला' : 'को दिया'} ${formatPaise(payment.amount.minor)} आपकी बही में दर्ज है${voucher === null ? '' : `, वाउचर ${voucher.number} के रूप में`}।`),
       effects: [
-        direction === 'RECEIPT' ? both(`${party.name} now owes ${formatPaise(owed.minor)} on open bills.`, `${party.name} ka ${formatPaise(owed.minor)} khule bills par baaki hai.`) : both(`You now owe ${party.name} ${formatPaise(owed.minor)}.`, `Ab ${party.name} ko aapka ${formatPaise(owed.minor)} baaki hai.`),
+        direction === 'RECEIPT' ? both(`${party.name} now owes ${formatPaise(owed.minor)} on open bills.`, `${party.name} का ${formatPaise(owed.minor)} खुले बिल पर बाक़ी है।`) : both(`You now owe ${party.name} ${formatPaise(owed.minor)}.`, `अब ${party.name} को आपका ${formatPaise(owed.minor)} बाक़ी है।`),
         ...(direction === 'PAYMENT' && position.advancesPaid.minor > 0n
-          ? [both(`Advance with ${party.name}, to be taken off their next bill: ${formatPaise(position.advancesPaid.minor)}.`, `${party.name} ke paas advance, jo unke agle bill se ghatega: ${formatPaise(position.advancesPaid.minor)}.`)]
+          ? [both(`Advance with ${party.name}, to be taken off their next bill: ${formatPaise(position.advancesPaid.minor)}.`, `${party.name} के पास अडवांस, जो उनके अगले बिल से घटेगा: ${formatPaise(position.advancesPaid.minor)}।`)]
           : []),
       ],
       advance: jsonAmount(advance),
@@ -4642,7 +4642,7 @@ export class DemoApplication {
     // chose with its own click. Without that click, money no bill takes is refused, as before.
     const advanceChosen = direction === 'PAYMENT' && chosenAsAdvance(input);
     const tickEn = `tick “${advanceChoiceLabel(party.name)['en-IN']}”`;
-    const tickHi = `tick “${advanceChoiceLabel(party.name)['hi-IN']}”`;
+    const tickHi = `“${advanceChoiceLabel(party.name)['hi-IN']}” पर टिक कीजिए`;
     if (direction === 'PAYMENT' && remaining > 0n && !advanceChosen) {
       const covered = amount - remaining;
       throw invalid('PAYMENT_MORE_THAN_BILLS', chosen.length === 0
@@ -4651,9 +4651,9 @@ export class DemoApplication {
           : `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. To pay them before a bill instead, ${tickEn}.`
         : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills, pay ${formatPaise(covered)}, or ${tickEn} to keep ${formatPaise(remaining)} as an advance.`, { details: { 'hi-IN': chosen.length === 0
         ? open.length === 0
-          ? `${party.name} ka abhi koi bill nahi hai. Unka bill aane se pehle paisa dene ke liye, ${tickHi}. Kuch darj nahi hua.`
-          : `${party.name} ka woh bill chunein jiske liye ye paisa hai. Bill se pehle paisa dene ke liye, ${tickHi}.`
-        : `Chune hue bills ${formatPaise(covered)} ke hain, par ${formatPaise(amount)} diya ja raha hai. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} kisi bill par nahi lagega. Aur bills chunein, ${formatPaise(covered)} dein, ya ${tickHi} taaki ${formatPaise(remaining)} advance rahe.` } });
+          ? `${party.name} का अभी कोई बिल नहीं है। उनका बिल आने से पहले पैसा देने के लिए, ${tickHi}। कुछ दर्ज नहीं हुआ।`
+          : `${party.name} का वह बिल चुनिए जिसके लिए यह पैसा है। बिल से पहले पैसा देने के लिए, ${tickHi}।`
+        : `चुने हुए बिल ${formatPaise(covered)} के हैं, पर ${formatPaise(amount)} दिया जा रहा है। ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} किसी बिल पर नहीं लगेगा। और बिल चुनिए, ${formatPaise(covered)} दीजिए, या ${tickHi} ताकि ${formatPaise(remaining)} अडवांस रहे।` } });
     }
     // Issue #274 — what the advance is paid against, and its narration, only when there is an advance.
     const particulars = direction === 'PAYMENT' && remaining > 0n ? advanceParticularsOf(input, date) : undefined;
@@ -4760,7 +4760,7 @@ export class DemoApplication {
   async disconnectBankFeed(actor: ActorContext, input: Record<string, unknown>) {
     const connectionId = String(input.connectionId ?? '');
     const connection = await this.bankFeeds.disconnect(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-disconnect:${connectionId}`));
-    return { state: 'success', connection: this.bankConnectionJson(connection), message: both('Bank access was disconnected. Previously imported transactions remain available for your records.', 'Bank ka access band ho gaya. Pehle se laayi gayi transactions aapke record mein hain.') };
+    return { state: 'success', connection: this.bankConnectionJson(connection), message: both('Bank access was disconnected. Previously imported transactions remain available for your records.', 'बैंक का ऐक्सेस बंद हो गया। पहले से लाई गई ट्रांज़ेक्शन आपके रिकॉर्ड में हैं।') };
   }
 
   private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
@@ -5123,7 +5123,7 @@ export class DemoApplication {
     const file = await this.gstReturns.exportFile(actor, { ...this.gstInput(input), returnType });
     return {
       state: 'gst-export' as const,
-      title: both(`${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} file ready`, `${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} file taiyaar`),
+      title: both(`${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} file ready`, `${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} फ़ाइल तैयार`),
       message: say(file.sentence),
       fileName: file.fileName,
       payload: file.payload,
@@ -5179,14 +5179,14 @@ export class DemoApplication {
     // Issue #293 — services and charges never go into or out of a godown, so the sentence says so.
     const stockMoves = preview.lines.some((line) => line.supplyKind === 'GOODS' && !isChargeLine(line));
     return {
-      state: 'preview', title: command.kind === 'SALES_RETURN' ? both('Customer return checked', 'Graahak wapsi jaanchi gayi') : both('Supplier return checked', 'Supplier wapsi jaanchi gayi'),
+      state: 'preview', title: command.kind === 'SALES_RETURN' ? both('Customer return checked', 'ग्राहक वापसी जाँची गई') : both('Supplier return checked', 'सप्लायर वापसी जाँची गई'),
       message: say(preview.summary), amount: jsonAmount(preview.totals.total.minor), token: command.command.idempotencyKey,
       stockMoves,
       effects: [
-        command.kind === 'SALES_RETURN' ? both('A credit note will reduce what the customer owes.', 'Ek credit note graahak ka baaki ghata dega.') : both('A debit note will reduce what you owe the supplier.', 'Ek debit note supplier ka aapka baaki ghata dega.'),
-        !stockMoves ? both('Nothing goes into or out of stock: this is for services, not goods.', 'Stock mein kuch nahi aata-jata: ye services ke liye hai, maal ke liye nahi.')
-          : command.kind === 'SALES_RETURN' ? both('Accepted goods will go back into stock.', 'Maanyata maal stock mein waapas jayega.') : both('Returned goods will leave stock.', 'Wapsi ka maal stock se chala jayega.'),
-        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? both('This bill has a government e-invoice number, so this note must be reported to the government too.', 'Is bill ka sarkari e-invoice number hai, isliye ye note bhi sarkar ko report hona zaroori hai.') : both('Nothing about this note has to be reported to the government separately.', 'Is note ke baare mein sarkar ko alag se kuch report nahi karna.'),
+        command.kind === 'SALES_RETURN' ? both('A credit note will reduce what the customer owes.', 'एक क्रेडिट नोट ग्राहक का बाक़ी घटा देगा।') : both('A debit note will reduce what you owe the supplier.', 'एक डेबिट नोट सप्लायर का आपका बाक़ी घटा देगा।'),
+        !stockMoves ? both('Nothing goes into or out of stock: this is for services, not goods.', 'स्टॉक में कुछ नहीं आता-जाता: यह सेवाओं के लिए है, माल के लिए नहीं।')
+          : command.kind === 'SALES_RETURN' ? both('Accepted goods will go back into stock.', 'स्वीकृत माल स्टॉक में वापस जाएगा।') : both('Returned goods will leave stock.', 'वापसी का माल स्टॉक से चला जाएगा।'),
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? both('This bill has a government e-invoice number, so this note must be reported to the government too.', 'इस बिल का सरकारी ई-इनवॉइस नंबर है, इसलिए यह नोट भी सरकार को रिपोर्ट होना ज़रूरी है।') : both('Nothing about this note has to be reported to the government separately.', 'इस नोट के बारे में सरकार को अलग से कुछ रिपोर्ट नहीं करना।'),
         ...preview.warnings.map(say),
       ],
       // Issue #186 — e.g. the 30 November deadline is close. Kept apart so every language shows it.
@@ -5203,14 +5203,14 @@ export class DemoApplication {
     const total = formatINR(note.totals.total);
     const against = note.originalDocument.number;
     if (note.priceCorrection === true && note.kind === 'SALES_DEBIT_NOTE')
-      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne zyada daam ke liye ${against} par ${total} aur maanga.` };
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने ज़्यादा दाम के लिए ${against} पर ${total} और माँगा।` };
     if (note.priceCorrection === true)
-      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne kam daam ke liye ${against} par ${total} ka credit diya. Maal waapas nahi aaya.` };
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने कम दाम के लिए ${against} पर ${total} का क्रेडिट दिया। माल वापस नहीं आया।` };
     if (note.kind === 'PURCHASE_RETURN') {
       const party = supplierParties(this.config.companyId).find((candidate) => candidate.id === note.partyId)?.legalName ?? note.partyId;
-      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne ${against} ke liye ${party} ka ${total} baaki kam kiya.` };
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने ${against} के लिए ${party} का ${total} बाक़ी कम किया।` };
     }
-    return { 'en-IN': note.summary, 'hi-IN': `${note.number} ne ${against} ke liye ${total} ka credit diya.` };
+    return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने ${against} के लिए ${total} का क्रेडिट दिया।` };
   }
 
   async recordReturn(actor: ActorContext, input: Record<string, unknown>) {
@@ -5230,16 +5230,16 @@ export class DemoApplication {
     const eInvoice = result.note.kind !== 'PURCHASE_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
     if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
     const noteWords = result.note.kind === 'SALES_DEBIT_NOTE'
-      ? { 'en-IN': 'This debit note', 'hi-IN': 'Is debit note' }
-      : { 'en-IN': 'This credit note', 'hi-IN': 'Is credit note' };
+      ? { 'en-IN': 'This debit note', 'hi-IN': 'इस डेबिट नोट' }
+      : { 'en-IN': 'This credit note', 'hi-IN': 'इस क्रेडिट नोट' };
     const noteSummary = this.noteSummaryWords(result.note);
     return {
       state: 'recorded', deduplicated: result.deduplicated,
       title: price
-        ? (result.deduplicated ? both('Price correction already recorded once', 'Daam sudhaar pehle se ek baar darj hai') : both('Price correction recorded', 'Daam sudhaar darj hua'))
-        : (result.deduplicated ? both('Return already recorded once', 'Wapsi pehle se ek baar darj hai') : both('Return recorded', 'Wapsi darj hui')),
+        ? (result.deduplicated ? both('Price correction already recorded once', 'दाम सुधार पहले से एक बार दर्ज है') : both('Price correction recorded', 'दाम सुधार दर्ज हुआ'))
+        : (result.deduplicated ? both('Return already recorded once', 'वापसी पहले से एक बार दर्ज है') : both('Return recorded', 'वापसी दर्ज हुई')),
       message: eInvoice?.needed === 'YES'
-        ? `${say(noteSummary)} ${eInvoice.lateForPortal === true ? say({ 'en-IN': eInvoice.message['en-IN'].replace('This bill', noteWords['en-IN']), 'hi-IN': eInvoice.message['hi-IN'].replace('Is bill', noteWords['hi-IN']) }) : both(`${noteWords['en-IN']} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`, `${noteWords['hi-IN']} par sarkari e-invoice number hona zaroori hai. Use ab bheja ja raha hai, aur number E-invoice screen par aane par dikhega.`)}`
+        ? `${say(noteSummary)} ${eInvoice.lateForPortal === true ? say({ 'en-IN': eInvoice.message['en-IN'].replace('This bill', noteWords['en-IN']), 'hi-IN': eInvoice.message['hi-IN'].replace('इस बिल', noteWords['hi-IN']) }) : both(`${noteWords['en-IN']} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`, `${noteWords['hi-IN']} पर सरकारी ई-इनवॉइस नंबर होना ज़रूरी है। उसे अब भेजा जा रहा है, और नंबर ई-इनवॉइस स्क्रीन पर आने पर दिखेगा।`)}`
         : say(noteSummary),
       note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor), priceCorrection: result.note.priceCorrection === true },
     };
@@ -5251,13 +5251,13 @@ export class DemoApplication {
     const preview = await this.returns.previewPriceCorrection(actor, command);
     const credit = preview.kind === 'SALES_RETURN';
     return {
-      state: 'preview', title: credit ? both('Lower price checked', 'Kam daam jaancha gaya') : both('Higher price checked', 'Zyada daam jaancha gaya'),
+      state: 'preview', title: credit ? both('Lower price checked', 'कम दाम जाँचा गया') : both('Higher price checked', 'ज़्यादा दाम जाँचा गया'),
       message: say(preview.summary), amount: jsonAmount(preview.totals.total.minor), token: command.idempotencyKey,
       noteKind: preview.kind, stockMoves: false,
       effects: [
-        credit ? both('A credit note will reduce what the customer owes.', 'Ek credit note graahak ka baaki ghata dega.') : both('A debit note will add to what the customer owes.', 'Ek debit note graahak ke baaki mein judega.'),
-        both('Nothing goes into or out of stock: only the price changes.', 'Stock mein kuch nahi aata-jata: sirf daam badalta hai.'),
-        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? both('This bill has a government e-invoice number, so this note must be reported to the government too.', 'Is bill ka sarkari e-invoice number hai, isliye ye note bhi sarkar ko report hona zaroori hai.') : both('Nothing about this note has to be reported to the government separately.', 'Is note ke baare mein sarkar ko alag se kuch report nahi karna.'),
+        credit ? both('A credit note will reduce what the customer owes.', 'एक क्रेडिट नोट ग्राहक का बाक़ी घटा देगा।') : both('A debit note will add to what the customer owes.', 'एक डेबिट नोट ग्राहक के बाक़ी में जुड़ेगा।'),
+        both('Nothing goes into or out of stock: only the price changes.', 'स्टॉक में कुछ नहीं आता-जाता: सिर्फ़ दाम बदलता है।'),
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? both('This bill has a government e-invoice number, so this note must be reported to the government too.', 'इस बिल का सरकारी ई-इनवॉइस नंबर है, इसलिए यह नोट भी सरकार को रिपोर्ट होना ज़रूरी है।') : both('Nothing about this note has to be reported to the government separately.', 'इस नोट के बारे में सरकार को अलग से कुछ रिपोर्ट नहीं करना।'),
         ...preview.warnings.map(say),
       ],
       warnings: preview.warnings.map(say),
@@ -5384,8 +5384,8 @@ export class DemoApplication {
       date: isoDate(String(input.supplierNoteDate ?? '')),
     });
     return {
-      state: 'recorded', title: both("Supplier's credit note added", 'Supplier ka credit note joda'),
-      message: both(`${note.number} now carries ${note.supplierCreditNote?.number ?? ''} dated ${note.supplierCreditNote?.date ?? ''}. The purchase check will look for it in the government's record.`, `${note.number} par ab ${note.supplierCreditNote?.number ?? ''} dinank ${note.supplierCreditNote?.date ?? ''} hai. Purchase check ise sarkar ke record mein dhundhega.`),
+      state: 'recorded', title: both("Supplier's credit note added", 'सप्लायर का क्रेडिट नोट जोड़ा'),
+      message: both(`${note.number} now carries ${note.supplierCreditNote?.number ?? ''} dated ${note.supplierCreditNote?.date ?? ''}. The purchase check will look for it in the government's record.`, `${note.number} पर अब ${note.supplierCreditNote?.number ?? ''} दिनांक ${note.supplierCreditNote?.date ?? ''} है। पर्चेज़ चेक इसे सरकार के रिकॉर्ड में ढूँढेगा।`),
       note: { id: note.id, number: note.number, supplierCreditNote: note.supplierCreditNote ?? null },
     };
   }
@@ -5511,7 +5511,7 @@ export class DemoApplication {
     });
     const order = created.state === 'DRAFT' ? await this.shop.matching.placeOrder(actor, created.id) : created;
     return {
-      state: 'recorded', title: both('Order placed', 'Order diya gaya'), message: order.summary,
+      state: 'recorded', title: both('Order placed', 'ऑर्डर दिया गया'), message: order.summary,
       order: this.orderJson(order), stock: await this.stockOf(actor, item.id),
     };
   }
@@ -5613,14 +5613,14 @@ export class DemoApplication {
     const reason = String(input.reason ?? '').trim();
     const rebuilt = await this.matchPurchaseBill(actor, input);
     if (rebuilt.outcome !== 'HOLD_FOR_APPROVAL') {
-      return { ...rebuilt, title: both('Nothing to approve', 'Manzoor karne ko kuch nahi'), message: both('This bill is not on hold, so there is nothing to accept.', 'Ye bill hold par nahi hai, isliye manzoor karne ko kuch nahi.') };
+      return { ...rebuilt, title: both('Nothing to approve', 'मंज़ूर करने को कुछ नहीं'), message: both('This bill is not on hold, so there is nothing to accept.', 'यह बिल होल्ड पर नहीं है, इसलिए मंज़ूर करने को कुछ नहीं।') };
     }
     const match = rebuilt.raw;
     await this.shop.matching.approveMatch(actor, match, reason);
     const cleared = await this.shop.matching.isClearedToPost(actor, match);
     return {
       ...DemoApplication.matchJson(match, cleared),
-      title: both('Differences accepted', 'Farak manzoor kiya'),
+      title: both('Differences accepted', 'फ़र्क़ मंज़ूर किया'),
       message: cleared.reason,
       stock: rebuilt.stock,
     };
@@ -5916,29 +5916,29 @@ export class DemoApplication {
     const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
     const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
-    const NOT_NEEDED_HI = 'Is bill ko e-invoice number ki zaroorat nahin';
+    const NOT_NEEDED_HI = 'इस बिल को ई-इनवॉइस नंबर की ज़रूरत नहीं';
     if (decision.outcome === 'APPLICABLE') {
       const deadline = reportingDeadline(bill.documentDate, this.turnoverFactsOn(bill.documentDate).lastYearTurnover ?? {}, appToday());
       // Issue #236 — a bill dated too long ago for the portal is not described as being sent.
       const late = deadline.kind === 'LIMIT' && deadline.closed;
       const message = late
         ? { 'en-IN': `This bill needs a government e-invoice number, but it cannot be sent. ${deadline.message}`,
-            'hi-IN': `Is bill ko sarkari e-invoice number chahiye, par use bheja nahi ja sakta. ${deadline.message}` }
+            'hi-IN': `इस बिल को सरकारी ई-इनवॉइस नंबर चाहिए, पर उसे नहीं भेजा जा सकता। ${deadline.message}` }
         : { 'en-IN': 'This bill needs a government e-invoice number. It is sent by itself when you issue it.',
-            'hi-IN': 'Is bill ko sarkari e-invoice number chahiye. Bill jaari karte hi apne aap bheja jaata hai.' };
+            'hi-IN': 'इस बिल को सरकारी ई-इनवॉइस नंबर चाहिए। जारी करते ही अपने आप भेजा जाता है।' };
       return { needed: 'YES', message, askTurnover: false, ruleId: decision.ruleId, lateForPortal: late };
     }
     if (decision.outcome === 'NOT_APPLICABLE') {
       const exemption = eInvoiceExemptionOf(this.config.companyId);
       const message = decision.ruleId === 'EINV.RECIPIENT.B2C'
         ? { 'en-IN': `${NOT_NEEDED}: the customer has no GST number.`,
-            'hi-IN': `${NOT_NEEDED_HI}: customer ke paas GST number nahin hai.` }
+            'hi-IN': `${NOT_NEEDED_HI}: ग्राहक के पास GST नंबर नहीं है।` }
         : decision.ruleId.startsWith('EINV.EXEMPT.') && exemption !== 'NONE'
           ? { 'en-IN': `${NOT_NEEDED}: Business details says your business is ${EINVOICE_EXEMPTION_WORDS[exemption]}, and the e-invoice rules leave those out whatever the turnover.`,
-              'hi-IN': `${NOT_NEEDED_HI}: Business details kehta hai aapka karobar ${EINVOICE_EXEMPTION_WORDS[exemption]} hai, aur e-invoice ke niyam unhein har turnover par chhodte hain.` }
+              'hi-IN': `${NOT_NEEDED_HI}: बिज़नेस डिटेल्स कहता है आपका कारोबार ${EINVOICE_EXEMPTION_WORDS[exemption]} है, और ई-इनवॉइस के नियम उन्हें हर टर्नओवर पर छोड़ते हैं।` }
           : decision.ruleId.startsWith('EINV.THRESHOLD.')
             ? { 'en-IN': `${NOT_NEEDED}: Business details says your turnover has never been over ₹5 crore in any year since 2017-18.`,
-                'hi-IN': `${NOT_NEEDED_HI}: Business details kehta hai aapka turnover 2017-18 ke baad kabhi ₹5 crore se upar nahi gaya.` }
+                'hi-IN': `${NOT_NEEDED_HI}: बिज़नेस डिटेल्स कहता है आपका टर्नओवर 2017-18 के बाद कभी ₹5 करोड़ से ऊपर नहीं गया।` }
             : { 'en-IN': `${NOT_NEEDED}. ${decision.reason}`, 'hi-IN': `${NOT_NEEDED_HI}. ${decision.reason}` };
       return { needed: 'NO', message, askTurnover: false, ruleId: decision.ruleId };
     }
@@ -5946,7 +5946,7 @@ export class DemoApplication {
       return {
         needed: 'UNKNOWN', askTurnover: true, ruleId: decision.ruleId,
         message: { 'en-IN': "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.",
-                   'hi-IN': 'Abhi pata nahin ki aapko e-invoice chahiye ya nahin: Business details mein nahin likha ki turnover ₹5 crore se upar gaya hai ya nahin. Business details mein ek baar jawab dein. Yeh bill abhi bhi jaari ho sakta hai.' },
+                   'hi-IN': 'अभी पता नहीं कि आपको ई-इनवॉइस चाहिए या नहीं: बिज़नेस डिटेल्स में नहीं लिखा कि टर्नओवर ₹5 करोड़ से ऊपर गया है या नहीं। बिज़नेस डिटेल्स में एक बार जवाब दीजिए। यह बिल अभी भी जारी हो सकता है।' },
       };
     }
     return { needed: 'UNKNOWN', askTurnover: false, ruleId: decision.ruleId, message: { 'en-IN': decision.reason, 'hi-IN': decision.reason } };
@@ -5982,7 +5982,7 @@ export class DemoApplication {
           // The bill is already issued, so "sent by itself when you issue it" is not said here;
           // the status line says where it stands.
           decision: decision.needed === 'YES' && decision.lateForPortal !== true
-            ? both('This bill needs a government e-invoice number.', 'Is bill ko sarkari e-invoice number chahiye.')
+            ? both('This bill needs a government e-invoice number.', 'इस बिल को सरकारी ई-इनवॉइस नंबर चाहिए।')
             : say(decision.message),
           askTurnover: decision.askTurnover,
           statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
@@ -6028,7 +6028,7 @@ export class DemoApplication {
         decision: decision.lateForPortal === true
           ? say(decision.message).replace('This bill', debit ? 'This debit note' : 'This credit note')
           : both(`This ${debit ? 'debit' : 'credit'} note against ${note.originalDocument.number} needs a government e-invoice number.`,
-                 `${note.originalDocument.number} ke liye is ${debit ? 'debit' : 'credit'} note ko sarkari e-invoice number chahiye.`),
+                 `${note.originalDocument.number} के लिए इस ${debit ? 'डेबिट' : 'क्रेडिट'} नोट को सरकारी ई-इनवॉइस नंबर चाहिए।`),
         askTurnover: false,
         statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
         canRetry: status === 'FAILED' && record?.failure?.retryable === true,
@@ -6697,7 +6697,7 @@ export class DemoApplication {
     if (result.kind === 'FOUND') {
       return {
         ...base,
-        title: both(`${base.vehicle} is on the registering authority's record`, `${base.vehicle} registering authority ke record mein hai`),
+        title: both(`${base.vehicle} is on the registering authority's record`, `${base.vehicle} रजिस्टरिंग अथॉरिटी के रिकॉर्ड में है`),
         provider: result.provenance.provider,
         providerReference: result.provenance.providerReference,
         retrievedAt: result.provenance.retrievedAt,
@@ -6709,7 +6709,7 @@ export class DemoApplication {
     if (result.kind === 'NOT_FOUND') {
       return {
         ...base,
-        title: both(`The authority holds no vehicle with the number ${base.vehicle}`, `Authority ke paas ${base.vehicle} number ki koi gaadi nahi hai`),
+        title: both(`The authority holds no vehicle with the number ${base.vehicle}`, `अथॉरिटी के पास ${base.vehicle} नंबर की कोई गाड़ी नहीं है`),
         provider: result.provenance.provider,
         providerReference: result.provenance.providerReference,
         retrievedAt: result.provenance.retrievedAt,
@@ -6720,7 +6720,7 @@ export class DemoApplication {
     }
     return {
       ...base,
-      title: both('This vehicle has not been checked', 'Ye gaadi abhi jaanchi nahi gayi'),
+      title: both('This vehicle has not been checked', 'यह गाड़ी अभी जाँची नहीं गई'),
       code: result.code,
       retryable: result.retryable,
       provider: null,
@@ -6972,11 +6972,11 @@ export class DemoApplication {
     const reason = String(input.reason ?? '').trim();
     const rebuilt = await this.checkSupplier(actor, input);
     if (rebuilt.level === 'INFORMATION') {
-      return { ...rebuilt, title: both('Nothing to accept', 'Maanyata dene ko kuch nahi'), message: both('There is nothing on this supplier that needs accepting.', 'Is supplier ke baare mein kuch maanyata dene ki zaroorat nahi.') };
+      return { ...rebuilt, title: both('Nothing to accept', 'मान्यता देने को कुछ नहीं'), message: both('There is nothing on this supplier that needs accepting.', 'इस सप्लायर के बारे में कुछ मान्यता देने की ज़रूरत नहीं।') };
     }
     await this.shop.risk.acknowledge(actor, rebuilt.raw, reason);
     const cleared = await this.shop.risk.isClearedToProceed(actor, rebuilt.raw);
-    return { ...DemoApplication.riskJson(rebuilt.raw, cleared), title: both('Accepted', 'Maanyata di gayi'), message: cleared.reason };
+    return { ...DemoApplication.riskJson(rebuilt.raw, cleared), title: both('Accepted', 'मान्यता दी गई'), message: cleared.reason };
   }
 
   /** The assessment as a screen needs it: every warning with the evidence behind it. */
@@ -7467,11 +7467,11 @@ export class DemoApplication {
   private static servicePlaceOfSupplyReason(stateCode: string | null, customer: { readonly legalName: string; readonly gstRegistrationType: string }, walkIn: boolean): string {
     const code = stateCode ?? '';
     const where = `Place of supply: ${STATE_NAMES[code] ?? code} (${code})`;
-    const whereHi = `Supply ka sthan: ${STATE_NAMES[code] ?? code} (${code})`;
-    if (walkIn) return both(`${where} — the service is supplied at your counter, so it counts in your own state.`, `${whereHi} — seva aapke counter par di gayi, isliye yeh aapke apne rajya mein gini jaati hai.`);
+    const whereHi = `सप्लाई का स्थान: ${STATE_NAMES[code] ?? code} (${code})`;
+    if (walkIn) return both(`${where} — the service is supplied at your counter, so it counts in your own state.`, `${whereHi} — सेवा आपके काउंटर पर दी गई, इसलिए यह आपके अपने राज्य में गिनी जाती है।`);
     return customer.gstRegistrationType === 'unregistered'
-      ? both(`${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`, `${whereHi} — seva ${customer.legalName} ko di gayi, unka saved pata wahin hai.`)
-      : both(`${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`, `${whereHi} — seva ${customer.legalName} ko di gayi, jo wahan GST ke liye registered hain.`);
+      ? both(`${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`, `${whereHi} — सेवा ${customer.legalName} को दी गई, उनका सेव किया पता वहीं है।`)
+      : both(`${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`, `${whereHi} — सेवा ${customer.legalName} को दी गई, जो वहाँ GST के लिए रजिस्टर्ड हैं।`);
   }
 
   private saleInput(input: Record<string, unknown>) {
