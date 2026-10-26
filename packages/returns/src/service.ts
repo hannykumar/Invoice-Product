@@ -257,9 +257,9 @@ export class ReturnService {
     const totals = addAmounts(lines.map((line) => line.amounts));
     const summary = command.wholeBill === true
       ? { 'en-IN': `The whole of ${original.number} (${lines.length} line${lines.length === 1 ? '' : 's'}, charges included) will be credited for ${formatINR(totals.total)}.`,
-          'hi-IN': `${original.number} ka poora bill (${lines.length} line${lines.length === 1 ? '' : 's'}, charges samet) ${formatINR(totals.total)} ka credit hoga.` }
+          'hi-IN': `${original.number} का पूरा बिल (${lines.length} लाइन, चार्ज समेत) ${formatINR(totals.total)} का क्रेडिट होगा.` }
       : { 'en-IN': `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ${formatINR(totals.total)}.`,
-          'hi-IN': `${original.number} ke ${lines.length} item${lines.length === 1 ? '' : 's'} ka ${formatINR(totals.total)} credit hoga.` };
+          'hi-IN': `${original.number} के ${lines.length} सामान का ${formatINR(totals.total)} क्रेडिट होगा.` };
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: deadline.warning === null ? [] : [deadline.warning] };
   }
 
@@ -393,9 +393,9 @@ export class ReturnService {
     };
     const summary = kind === 'SALES_RETURN'
       ? { 'en-IN': `The price of ${source.description} on ${original.number} comes down by ${formatINR(taxableValue)} before GST. A credit note for ${formatINR(amounts.total)} reduces what the customer owes. No goods come back.`,
-          'hi-IN': `${original.number} par ${source.description} ka daam GST se pehle ${formatINR(taxableValue)} kam hoga. ${formatINR(amounts.total)} ka credit note graahak ka baaki ghata dega. Maal waapas nahi aata.` }
+          'hi-IN': `${original.number} पर ${source.description} का दाम GST से पहले ${formatINR(taxableValue)} कम होगा. ${formatINR(amounts.total)} का क्रेडिट नोट ग्राहक का बाक़ी घटा देगा. माल वापस नहीं आता.` }
       : { 'en-IN': `The price of ${source.description} on ${original.number} goes up by ${formatINR(taxableValue)} before GST. A debit note for ${formatINR(amounts.total)} adds to what the customer owes. No goods move.`,
-          'hi-IN': `${original.number} par ${source.description} ka daam GST se pehle ${formatINR(taxableValue)} badhega. ${formatINR(amounts.total)} ka debit note graahak ke baaki mein judega. Maal nahi chalta.` };
+          'hi-IN': `${original.number} पर ${source.description} का दाम GST से पहले ${formatINR(taxableValue)} बढ़ेगा. ${formatINR(amounts.total)} का डेबिट नोट ग्राहक के बाक़ी में जुड़ेगा. माल नहीं चलता.` };
     return {
       kind, originalNumber: original.number, lines: [line], totals: amounts,
       complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary,
@@ -507,7 +507,7 @@ export class ReturnService {
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
     const summary = { 'en-IN': `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will reduce the supplier balance by ${formatINR(totals.total)}.`,
-      'hi-IN': `${original.number} ke ${lines.length} item${lines.length === 1 ? '' : 's'} supplier ka baaki ${formatINR(totals.total)} se ghatayenge.` };
+      'hi-IN': `${original.number} के ${lines.length} सामान सप्लायर का बाक़ी ${formatINR(totals.total)} से घटाएँगे.` };
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: [] };
   }
 

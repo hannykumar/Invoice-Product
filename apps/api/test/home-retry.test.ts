@@ -69,12 +69,12 @@ const bill = { id: 'inv-1', number: 'INV/1', customer: 'Bhosari Fabricators' };
 
 test('e-way task: nothing tried yet opens the screen; the portal down offers Retry; a refusal opens it', () => {
   const untried = ewayTask({ ...bill, failure: null }, true);
-  assert.deepEqual(untried.action, { label: { 'en-IN': 'Raise', 'hi-IN': 'Banayen' }, open: { view: 'eway', bill: 'inv-1' } });
+  assert.deepEqual(untried.action, { label: { 'en-IN': 'Raise', 'hi-IN': 'बनाइए' }, open: { view: 'eway', bill: 'inv-1' } });
 
   const down = ewayTask({ ...bill, failure: { retryable: true, distanceKm: 0 } }, true);
   assert.equal(down.title['en-IN'], 'The e-way bill for INV/1 could not be made — the government site did not answer');
-  assert.equal(down.title['hi-IN'], 'INV/1 ka e-way bill nahi bana — sarkari site ne jawab nahi diya');
-  assert.deepEqual(down.action, { label: { 'en-IN': 'Retry', 'hi-IN': 'Phir bhejen' }, post: { path: '/api/eway/generate', body: { invoice: 'inv-1', reason: 'SUPPLY' } } });
+  assert.equal(down.title['hi-IN'], 'INV/1 का ई-वे बिल नहीं बना — सरकारी साइट ने जवाब नहीं दिया');
+  assert.deepEqual(down.action, { label: { 'en-IN': 'Retry', 'hi-IN': 'फिर भेजिए' }, post: { path: '/api/eway/generate', body: { invoice: 'inv-1', reason: 'SUPPLY' } } });
   // A typed distance is sent again, so a same-PIN delivery does not come back asking for it.
   assert.equal((ewayTask({ ...bill, failure: { retryable: true, distanceKm: 12 } }, true).action as any).post.body.distanceKm, '12');
 
@@ -89,7 +89,7 @@ test('e-way task: nothing tried yet opens the screen; the portal down offers Ret
 test('e-invoice task: the portal down says so and offers Retry; a refusal says refused and opens the bill', () => {
   const down = eInvoiceTask({ id: 'inv-1', number: 'INV/1', eInvoiceStatus: 'FAILED', needed: 'YES', canRetry: true }, true);
   assert.equal(down?.title['en-IN'], 'The e-invoice for INV/1 could not be sent — the government site did not answer');
-  assert.deepEqual(down?.action, { label: { 'en-IN': 'Retry', 'hi-IN': 'Phir bhejen' }, post: { path: '/api/einvoices/register', body: { invoice: 'inv-1' } } });
+  assert.deepEqual(down?.action, { label: { 'en-IN': 'Retry', 'hi-IN': 'फिर भेजिए' }, post: { path: '/api/einvoices/register', body: { invoice: 'inv-1' } } });
   const refused = eInvoiceTask({ id: 'inv-1', number: 'INV/1', eInvoiceStatus: 'FAILED', needed: 'YES', canRetry: false }, true);
   assert.equal(refused?.title['en-IN'], 'INV/1: the government refused the e-invoice');
   assert.deepEqual((refused?.action as any).open, { view: 'einvoice', bill: 'inv-1' });
@@ -115,7 +115,7 @@ test('#311: the e-way bill not raised by itself because the portal was down is a
 
   const task = await homeTask(session, `eway:${sold.invoice.id}`);
   assert.equal(task.title['en-IN'], `The e-way bill for ${sold.invoice.number} could not be made — the government site did not answer`);
-  assert.equal(task.action.label['hi-IN'], 'Phir bhejen');
+  assert.equal(task.action.label['hi-IN'], 'फिर भेजिए');
   assert.equal(task.action.post.path, '/api/eway/generate');
 
   const retried = await press(session, task);

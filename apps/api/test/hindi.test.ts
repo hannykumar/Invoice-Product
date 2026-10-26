@@ -1,12 +1,15 @@
 /**
  * Issue #298 — a session that asks in Hindi must never be answered in English. The screen sends
  * `locale: 'hi-IN'` on every call; every sentence the server sends back on the returns, sale and
- * payment screens must be Hindi (Roman script — the script this app chose, see
- * docs/ux/00-design-principles.md §6), not English and not Devanagari.
+ * payment screens must be Hindi in Devanagari — the owner's decision (26 Oct 2026, recorded in
+ * docs/ux/00-design-principles.md §6).
  *
- * The check is deliberately simple: a sentence is "English" when it carries at least two English
- * function words ("the … will", "was … saved"). Item and party names never do — "TMT Steel Bar
- * 12mm" and "ABC Traders" trip nothing — and a Roman Hindi sentence never does either.
+ * Two checks catch every wrong answer: a sentence is "English" when it carries at least two English
+ * function words ("the … will", "was … saved"), and any run of three or more lowercase Latin
+ * letters flags Latin script left behind — item and party names are Capitalized (so "ABC Traders"
+ * and "TMT Steel Bar 12mm" trip nothing), while any stray Roman-Hindi or English word ("bikri",
+ * "credit", "hai") does. Codes, amounts, GSTINs and bill numbers stay Latin by rule, and are all
+ * uppercase or digits.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -47,16 +50,23 @@ const SKIP = new Set([
 ]);
 
 const englishProse = (s: string): boolean => {
-  if (/[ऀ-ॿ]/.test(s)) return true; // Hindi is Roman in this app: Devanagari is as wrong as English.
   const words = s.match(/[a-zA-Z]+/g);
   if (words === null || words.length < 5) return false;
   const hits = words.filter((word) => ENGLISH.has(word.toLowerCase()));
   return hits.length >= 2;
 };
 
+// Lowercase Latin words allowed inside a hi-IN sentence because they are data, not prose: the
+// seeded warehouse 'Peenya godown' is a name. Everything else lowercase is a leftover to fail on.
+const LATIN_OK = new Set(['godown']);
+const latinLeft = (s: string): string[] =>
+  (s.match(/[a-zA-Z]+/g) ?? []).filter((word) => word.length >= 3 && word === word.toLowerCase() && !LATIN_OK.has(word));
+
 const englishSentences = (value: unknown, path: string, found: string[] = []): string[] => {
   if (typeof value === 'string') {
     if (englishProse(value)) found.push(`${path}: ${value}`);
+    const stray = latinLeft(value);
+    if (stray.length > 0) found.push(`${path}: Latin words in a Hindi sentence — ${stray.join(', ')}: ${value}`);
     return found;
   }
   if (Array.isArray(value)) value.forEach((item, i) => englishSentences(item, `${path}[${i}]`, found));
@@ -87,7 +97,7 @@ test('#298: the sale review answers a Hindi session in Hindi, never English', as
   const reviewed = await request('POST', '/api/sales/preview', sale, owner);
   assert.equal(reviewed.status, 200, JSON.stringify(reviewed.body));
   assert.deepEqual(englishSentences(reviewed.body, 'preview'), []);
-  assert.match(reviewed.body.title, /Bikri|bikri/);
+  assert.match(reviewed.body.title, /बिक्री/);
 
   const recorded = await request('POST', '/api/sales/record', hindi({ ...sale, requestId: 'hindi-298-record' }), owner);
   assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
@@ -163,7 +173,7 @@ test('#298: a Hindi return confirmation is Hindi and calls the note a note (Devi
   assert.ok(message.length > 0);
   assert.ok(!englishProse(message), `the confirmation is Hindi, not English: ${message}`);
   assert.ok(!/This (bill|credit note|debit note)/.test(message), `no English left in: ${message}`);
-  assert.match(message, /credit note/i, `the note is named a credit note, not a bill: ${message}`);
+  assert.match(message, /क्रेडिट नोट/, `the note is named a credit note, not a bill: ${message}`);
 });
 
 test('#298: the GST return workspace and export answer a Hindi session in Hindi', async () => {
