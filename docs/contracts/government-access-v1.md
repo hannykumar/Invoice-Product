@@ -107,11 +107,15 @@ the answer back. `GovernmentWebhookReceiver.receive(kind, rawBody, signature)` t
 - **The raw bytes must survive to the receiver.** A parsed and re-serialised body is a different
   string with the same meaning, and verifies against nothing. `handleApi` takes the raw body for
   this route alone.
-- **The company comes from the matched call.** A callback names a provider request id or the
-  correlation id we generated; we find our own row and take the company, GST number and document
-  from it. A forged callback cannot name a company at all.
+- **The company comes first, through a narrow lookup (#477).** A callback names a provider
+  request id or the correlation id we generated; `government_call_company`, a SECURITY DEFINER
+  function returning only a company id, says which company the call belongs to. The callback is
+  then handled inside that company's `unitOfWork`, and our own row gives the GST number and
+  document. A forged callback cannot name a company at all.
 - **Deduplication is durable.** `(connector, event_id)` is unique in the database, not a set in a
-  process that restarts. A resent acknowledgement answers `DUPLICATE` and changes nothing.
+  process that restarts. A resent acknowledgement answers `DUPLICATE` and changes nothing —
+  except a delivery recorded `UNMATCHED`, which is matched again every time it is redelivered:
+  a callback that arrived before the call it answers is not lost as a "duplicate" (#477).
 - **Outcomes**: `SETTLED` (an unknown call now has the government's answer), `CONFIRMED` (agrees
   with what we hold — the ordinary race with polling), `CONFLICT` (disagrees: both sides kept, an
   exception raised), `UNMATCHED`, `REFUSED` (the matched call's GST number is not connected here),
@@ -150,13 +154,23 @@ Migration `…gsp_59f4d0dcbdf0_postgres_repositories`:
 - **The OTP request id is unique per company**, not globally: it is the provider's id, not ours.
 - **The callback receiver runs on these stores** when the app has a database
   (`apps/api/src/government-webhooks.ts`), beside #389's `PostgresWebhookEvents`.
-- **A callback cannot find its call on PostgreSQL yet.** It names no company, and
-  `government_calls` is closed to a connection without one, so `findByProviderRequestId` and
-  `findByCorrelationId` answer null: the callback is recorded `UNMATCHED` and reconciliation settles
-  the call by polling. That is exact today, because the running app makes no government calls yet
-  (#51). Before the channel is wired on PostgreSQL, #345 must resolve the company from the provider
-  request id before the tenant transaction opens. Nothing here bypasses row-level security.
-  `government_webhook_events` (#389, rows with no company) stays on the pending list.
+- **A callback finds its company through a narrow audited lookup (#477).** It names no company,
+  so before the tenant transaction opens `companyForRequest` asks
+  `government_call_company(reference, scopes)` — a `SECURITY DEFINER` function owned by
+  `invoice_work_finder` (#345's no-login discovery role), with a pinned `search_path`, granted
+  only to `invoice_app`, returning one uuid or none. The role may read only the four columns the
+  lookup matches on, through its own permissive policy: nothing here bypasses row-level
+  security, and the function can never hand back a call. The reference is matched on the
+  provider request id among calls of *this connector's* scopes — one company answers it, two or
+  more answer null outright — and our own correlation id is consulted only when no call carries
+  that request id, under the same one-company rule. Once the
+  company is known the callback is handled inside that company's `unitOfWork`, where
+  `findByProviderRequestId` (also connector-scoped) and `findByCorrelationId` read the call in
+  its own tenant context like every other read. A request id that matches nothing stays
+  `UNMATCHED` and reconciliation still settles the call by polling; a redelivery of an
+  `UNMATCHED` event is matched again, so a callback that arrived before its call is not lost as
+  a "duplicate". `government_webhook_events` (#389, rows with no company) stays on the pending
+  list.
 
 ## Assumptions recorded against unfinished dependencies
 

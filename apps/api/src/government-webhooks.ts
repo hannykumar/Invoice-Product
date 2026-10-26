@@ -31,6 +31,7 @@
  */
 import { appClock } from './app-clock.ts';
 import { InMemoryAuditPort } from '@invoice/ledger';
+import type { CompanyId } from '@invoice/kernel';
 import { ConnectorGateway, HmacWebhookVerifier, isLocalEnvironment, MockConnector, type ConnectorKind, type WebhookSigningSecrets } from '../../../packages/platform/src/connectors.ts';
 import { registerSecretValues } from '../../../packages/platform/src/credentials.ts';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
@@ -90,14 +91,16 @@ export const configureGovernmentWebhooks = (db: TransactionalExecutor | null, en
   );
   receiver = new GovernmentWebhookReceiver({
     gateway,
-    // On the database a callback finds no call yet: it names no company, and the calls are closed
-    // to a connection without one (#366, government-access-v1 "Storage"; the lookup waits for #345).
+    // A callback names no company, so `companyForRequest` asks the narrow SECURITY DEFINER lookup
+    // for the company id alone (#477), and the callback is then handled inside that company's
+    // unit of work — dedup row, settle and audit line committing together.
     calls: db === null ? new InMemoryCallLog() : new PostgresCallLog(db),
     authorisations: db === null ? new InMemoryAuthorisations() : new PostgresAuthorisations(db),
     events: db === null ? new InMemoryWebhookEvents() : new PostgresWebhookEvents(db),
     audit: new InMemoryAuditPort(),
     clock: appClock,
     exceptions: new RecordingExceptionSink(),
+    ...(db === null ? {} : { unitOfWork: <T>(companyId: CompanyId, work: () => Promise<T>) => db.unitOfWork(companyId, () => work()) }),
   });
   return receiver;
 };
