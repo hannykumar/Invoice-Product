@@ -125,10 +125,13 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (178)
+## Routes (181)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
+| `POST /api/files/uploads` | `ledger.post.purchase` or `branding.write` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/files/:file/complete` | `ledger.post.purchase` or `branding.write` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/files/:file/link` | `purchases.view` or `business.settings.read` or `branding.write` or `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/auth/code` | nobody signed in: asking for a sign-in code: there is no session yet | — | — | — | — | — |
 | `POST /api/auth/sign-in` | nobody signed in: signing in: there is no session yet to hold a permission | — | — | — | — | — |
 | `POST /api/auth/sign-out` | any member: anyone signed in may end their own session | ✓ | ✓ | ✓ | ✓ | ✓ |

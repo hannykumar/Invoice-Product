@@ -89,7 +89,7 @@ for (const role of ROLE_NAMES) {
 
 // ------------------------------------------------------------------ another company's resources
 
-const fixtures = { invoice: '', note: '', id: '', invoiceNumber: '', customer: '' };
+const fixtures = { invoice: '', note: '', id: '', file: '', invoiceNumber: '', customer: '' };
 
 before(async () => {
   const owner = await signIn(ADDRESS.owner, SAMPOORNA);
@@ -114,10 +114,14 @@ before(async () => {
   });
   assert.equal(returned.status, 200, returned.text);
   fixtures.note = String(returned.body.note.id);
+  // #341's private files: a Sampoorna logo upload, still waiting for its bytes, is enough to ask after.
+  const upload = await call({ method: 'POST', path: '/api/files/uploads' }, owner, '/api/files/uploads', { purpose: 'branding_logo', fileName: 'logo.png', contentType: 'image/png', sizeBytes: 208 });
+  assert.equal(upload.status, 200, upload.text);
+  fixtures.file = String(upload.body.file.id);
 });
 
 /** What each `:param` in a path names. A new kind of param must be added here, with a real fixture. */
-const PARAM_FIXTURE: Readonly<Record<string, keyof typeof fixtures>> = { invoice: 'invoice', note: 'note', id: 'id' };
+const PARAM_FIXTURE: Readonly<Record<string, keyof typeof fixtures>> = { invoice: 'invoice', note: 'note', id: 'id', file: 'file' };
 
 test('#343: another company\'s id in the path is "not found" (404), never its data', async () => {
   assert.ok(fixtures.invoice && fixtures.id, `fixtures were made: ${JSON.stringify(fixtures)}`);

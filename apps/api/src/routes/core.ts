@@ -8,6 +8,7 @@ import { finishOnboarding, previewOnboarding } from '../onboarding-application.t
 import { chooseMark, searchMarks } from '../trade-mark-application.ts';
 import { previewBranding, readBranding, saveBranding } from '../branding-application.ts';
 import { currentStates, readBusinessDetails } from '../business-details-application.ts';
+import { completeUpload, downloadLink, requestUpload } from '../files-application.ts';
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from '../migration-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
 import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, REFERENCE, type Route } from './route.ts';
@@ -40,7 +41,21 @@ const sessionView = async (runtime: ApiRuntime, context: RequestContext) => ({
   companies: (await runtime.signIn.companies(context)).map((membership) => runtime.companySummary(membership.companyId)),
 });
 
+/**
+ * Issue #341 — adding a file needs one of the rights a kind of file asks for, checked before the body
+ * is read; the files service then checks the exact one for that kind (a bill needs purchase posting,
+ * a logo branding). Opening a file is checked by the service, by kind, like every GET.
+ */
+const ADD_FILE = needAny('add a file', 'ledger.post.purchase', 'branding.write');
+
 export const CORE_ROUTES: readonly Route[] = [
+  // Issue #341 — private file storage: an address to upload to, the screening when it has arrived, a short-lived address to open it.
+  post('/api/files/uploads', { access: ADD_FILE, input: fields({ purpose: text, fileName: text, contentType: text, sizeBytes: anything }) },
+    ({ runtime, actor, input }) => requestUpload(runtime.database, actor, input)),
+  post('/api/files/:file/complete', { access: ADD_FILE, input: nothing },
+    ({ runtime, actor, params }) => completeUpload(runtime.database, actor, { fileId: params.file })),
+  get('/api/files/:file/link', { access: needAny('open a file', 'purchases.view', 'business.settings.read', 'branding.write', 'ledger.post.purchase'), input: nothing },
+    ({ runtime, actor, params }) => downloadLink(runtime.database, actor, params.file!)),
   // Issue #342 — signing in with a one-time code to a phone number or email (ADR D1). The session
   // comes back only as an HttpOnly cookie (ADR D2): the reply body never carries it.
   post('/api/auth/code', { access: publicRoute('asking for a sign-in code: there is no session yet'), input: fields({ address: text }) },
