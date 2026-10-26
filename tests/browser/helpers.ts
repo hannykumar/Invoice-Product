@@ -13,8 +13,23 @@ export const baseURL = () => `http://127.0.0.1:${process.env.WEB_PORT ?? process
 /** Names that stay unique across runs, so records from an earlier run never collide. */
 export const unique = (word: string) => `${word} ${Date.now().toString(36)}`;
 
+/**
+ * Sessions already opened through the dialog in this run, by address. #350 limits how many codes one
+ * address may ask for (5 in 15 minutes), as it should for a real shop; so the dialog is walked in full
+ * once per address (auth.spec.ts walks it end to end), and later flows reuse that session.
+ */
+const sessions = new Map<string, Awaited<ReturnType<ReturnType<Page["context"]>["cookies"]>>>();
+
 /** Signs in through the login dialog exactly as the shopkeeper does: address, then the code. */
 export async function signIn(page: Page, address = OWNER) {
+  const opened = sessions.get(address);
+  if (opened !== undefined) {
+    await page.context().addCookies(opened);
+    await page.evaluate(() => localStorage.setItem("karobar.signedIn", "1"));
+    await page.reload();
+    await expect(page.locator("#login-dialog")).toBeHidden();
+    return;
+  }
   const form = page.locator("#login-form");
   await expect(page.locator("#login-dialog")).toBeVisible();
   await form.locator('[name="address"]').fill(address);
@@ -24,13 +39,14 @@ export async function signIn(page: Page, address = OWNER) {
   await form.locator('[name="code"]').fill(DEMO_CODE);
   await form.locator('button[type="submit"]').click();
   await expect(page.locator("#login-dialog")).toBeHidden();
+  sessions.set(address, (await page.context().cookies()).filter((cookie) => cookie.name === "__Host-karobar_session"));
 }
 
 /** A session cookie from the two sign-in routes — for arranging data a flow needs. */
 export async function apiSignIn(request: APIRequestContext, address = OWNER): Promise<string> {
   const base = baseURL();
-  const sent = await request.post(`${base}/api/auth/code`, { data: { address } });
-  if (!sent.ok()) throw new Error(`/api/auth/code -> ${sent.status()}`);
+  // The stand-in provider needs no code sent first, and asking for one would count against #350's
+  // code limits; the dialog flow (signIn) asks for one as a person does.
   const answer = await request.post(`${base}/api/auth/sign-in`, { data: { address, code: DEMO_CODE } });
   const cookie = (answer.headers()["set-cookie"] ?? "").match(/__Host-karobar_session=([^;]+)/)?.[1];
   if (!answer.ok() || !cookie) throw new Error(`/api/auth/sign-in -> ${answer.status()}: ${await answer.text()}`);
