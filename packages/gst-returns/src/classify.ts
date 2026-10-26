@@ -132,11 +132,11 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       'BLOCKING',
       {
         'en-IN': `Note ${document.number} corrects bill ${original.number} of ${original.date}, but that bill cannot be found in your sales, so the state the note counts in is not known.`,
-        'hi-IN': `Note ${document.number} bill ${original.number} (${original.date}) ko theek karta hai, par woh bill aapki bikri me nahi mil raha, isliye pata nahi ki note kis state ka mana jayega.`,
+        'hi-IN': `नोट ${document.number} बिल ${original.number} (${original.date}) को ठीक करता है, पर वह बिल आपकी बिक्री में नहीं मिल रहा, इसलिए पता नहीं कि नोट किस राज्य का माना जाएगा.`,
       },
       {
         'en-IN': `A note counts in the same state as the bill it corrects. Find bill ${original.number} and make sure it is in your sales; the note then takes its state from it.`,
-        'hi-IN': `Note usi state ka hota hai jis state ka bill tha. Bill ${original.number} dhoondhiye aur bikri me hai yeh pakka kijiye; phir note wahi state le lega.`,
+        'hi-IN': `नोट उसी राज्य का होता है जिस राज्य का बिल था. बिल ${original.number} ढूँढिए और बिक्री में है यह पक्का कीजिए; फिर नोट वही राज्य ले लेगा.`,
       },
       document,
     ));
@@ -146,11 +146,11 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       'BLOCKING',
       {
         'en-IN': `Bill ${document.number} does not say which state the sale counts as made in.`,
-        'hi-IN': `Bill ${document.number} par nahi likha ki bikri kis state ki mani jayegi.`,
+        'hi-IN': `बिल ${document.number} पर नहीं लिखा कि बिक्री किस राज्य की मानी जाएगी.`,
       },
       {
         'en-IN': 'Open the bill and set the place of supply. It decides whether the tax is IGST or CGST plus SGST, so the return cannot be prepared without it.',
-        'hi-IN': 'Bill kholkar place of supply bhariye. Isi se tay hota hai ki IGST lagega ya CGST aur SGST.',
+        'hi-IN': 'बिल खोलकर place of supply भरीए. इसी से तय होता है कि IGST लगेगा या CGST और SGST.',
       },
       document,
     ));
@@ -164,11 +164,11 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       'BLOCKING',
       {
         'en-IN': `Bill ${document.number} carries state code ${document.placeOfSupplyStateCode}, which is not a GST state code.`,
-        'hi-IN': `Bill ${document.number} par state code ${document.placeOfSupplyStateCode} hai, jo GST ka state code nahi hai.`,
+        'hi-IN': `बिल ${document.number} पर राज्य कोड ${document.placeOfSupplyStateCode} है, जो GST का राज्य कोड नहीं है.`,
       },
       {
         'en-IN': 'Correct the state on the bill. The government file will be rejected with an unknown code in it.',
-        'hi-IN': 'Bill par state theek kijiye. Galat code ke saath government file reject ho jayegi.',
+        'hi-IN': 'बिल पर राज्य ठीक कीजिए. ग़लत कोड के साथ सरकारी फ़ाइल रिजेक्ट हो जाएगी.',
       },
       document,
     ));
@@ -180,11 +180,11 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       'BLOCKING',
       {
         'en-IN': `${document.partyName} has no GST number on bill ${document.number}, and nobody has confirmed that they do not have one.`,
-        'hi-IN': `Bill ${document.number} par ${document.partyName} ka GST number nahi hai, aur kisi ne yeh confirm bhi nahi kiya ki unke paas hai hi nahi.`,
+        'hi-IN': `बिल ${document.number} पर ${document.partyName} का GST नंबर नहीं है, और किसी ने यह कन्फ़र्म भी नहीं किया कि उनके पास है ही नहीं.`,
       },
       {
         'en-IN': 'Either type the buyer\'s GST number, or tick that this customer is not registered. A sale to a business and a sale to a consumer go on different parts of the return, so the difference cannot be guessed.',
-        'hi-IN': 'Ya to buyer ka GST number likhiye, ya tick kijiye ki customer registered nahi hai. Dono return ke alag hisso me jaate hain.',
+        'hi-IN': 'या तो ख़रीदार का GST नंबर लिखिए, या टिक कीजिए कि ग्राहक रजिस्टर्ड नहीं है. दोनों रिटर्न के अलग हिस्सों में जाते हैं.',
       },
       document,
     ));
@@ -196,9 +196,9 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       'BLOCKING',
       {
         'en-IN': `Bill ${document.number} has no lines on it.`,
-        'hi-IN': `Bill ${document.number} par koi line nahi hai.`,
+        'hi-IN': `बिल ${document.number} पर कोई लाइन नहीं है.`,
       },
-      { 'en-IN': 'Check the bill. An empty bill cannot be reported.', 'hi-IN': 'Bill dekhiye. Khali bill report nahi ho sakta.' },
+      { 'en-IN': 'Check the bill. An empty bill cannot be reported.', 'hi-IN': 'बिल देखिए. ख़ाली बिल रिपोर्ट नहीं हो सकता.' },
       document,
     ));
   }
@@ -209,11 +209,11 @@ const missingFacts = (document: OutwardDocument): ReturnFinding[] => {
       'BLOCKING',
       {
         'en-IN': `Credit or debit note ${document.number} does not say which bill it adjusts.`,
-        'hi-IN': `Credit ya debit note ${document.number} par nahi likha ki kis bill ko theek kar raha hai.`,
+        'hi-IN': `क्रेडिट या डेबिट नोट ${document.number} पर नहीं लिखा कि किस बिल को ठीक कर रहा है.`,
       },
       {
         'en-IN': 'Link the note to the original bill. The return has to name the bill being adjusted.',
-        'hi-IN': 'Note ko asli bill se joriye. Return me us bill ka naam dena zaroori hai.',
+        'hi-IN': 'नोट को असली बिल से जोड़िए. रिटर्न में उस बिल का नाम देना ज़रूरी है.',
       },
       document,
     ));
@@ -240,7 +240,7 @@ const classified = (
       ? because
       : reason(
           `${because['en-IN']} It is a correction to ${document.amends?.number} from ${document.amends?.period}, so it goes in the corrections table.`,
-          `${because['hi-IN']} Yeh ${document.amends?.period} ke bill ${document.amends?.number} ka sudhaar hai, isliye corrections table me jayega.`,
+          `${because['hi-IN']} यह ${document.amends?.period} के बिल ${document.amends?.number} का सुधार है, इसलिए सुधारों वाली टेबल में जाएगा.`,
         ),
     ...(thresholdUsed === undefined ? {} : { thresholdUsed }),
     findings,
@@ -264,21 +264,21 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
   if (document.kind === 'ADVANCE_ADJUSTED') {
     return classified('TXPD', document, reason(
       'Tax paid on an advance in an earlier month, now set against the bill it paid for.',
-      'Pichhle mahine ke advance par diya tax, ab us bill ke against laga.',
+      'पिछले महीने के एडवांस पर दिया टैक्स, अब उस बिल में जुड़ा.',
     ), warnings);
   }
 
   if (document.kind === 'ADVANCE_RECEIPT' || document.kind === 'REFUND_VOUCHER') {
     return classified('AT', document, reason(
       'Money received before the goods went out, which the form counts on its own.',
-      'Saaman jaane se pehle mila paisa, jise form alag ginta hai.',
+      'सामान जाने से पहले मिला पैसा, जिसे फ़ॉर्म अलग गिनता है.',
     ), warnings);
   }
 
   if (NO_TAX.includes(document.treatment)) {
     return classified('NIL', document, reason(
       'This supply carried no GST, so the form only counts its value.',
-      'Is bikri par GST nahi laga, isliye form sirf uski value ginta hai.',
+      'इस बिक्री पर GST नहीं लगा, इसलिए फ़ॉर्म सिर्फ़ उसकी वैल्यू गिनता है.',
     ), warnings);
   }
 
@@ -286,12 +286,12 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
     if (NOTES.includes(document.kind)) {
       return classified('CDNUR', document, reason(
         'A note against an export, which the form keeps with the other notes to buyers without a GST number.',
-        'Export ke against note, jo form bina GST number wale buyers ke notes ke saath rakhta hai.',
+        'एक्सपोर्ट के अगेंस्ट नोट, जिसे फ़ॉर्म बिना GST नंबर वाले ख़रीदारों के नोटों के साथ रखता है.',
       ), warnings);
     }
     return classified('EXP', document, reason(
       'The goods or services left India, which the form reports on its own.',
-      'Saaman ya service India ke bahar gaya, jise form alag report karta hai.',
+      'सामान या सर्विस भारत के बाहर गया, जिसे फ़ॉर्म अलग रिपोर्ट करता है.',
     ), warnings);
   }
 
@@ -304,11 +304,11 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
           'BLOCKING',
           {
             'en-IN': `Bill ${document.number} is marked as a supply to a special economic zone or a deemed export, but the buyer has no GST number on it.`,
-            'hi-IN': `Bill ${document.number} special economic zone ya deemed export ke roop me hai, par buyer ka GST number nahi hai.`,
+            'hi-IN': `बिल ${document.number} स्पेशल इकोनॉमिक ज़ोन या डीम्ड एक्सपोर्ट के रूप में है, पर ख़रीदार का GST नंबर नहीं है.`,
           },
           {
             'en-IN': 'These buyers are always registered. Add the buyer\'s GST number, or change how the bill is marked.',
-            'hi-IN': 'Aise buyer hamesha registered hote hain. GST number bhariye, ya bill ki marking badliye.',
+            'hi-IN': 'ऐसे ख़रीदार हमेशा रजिस्टर्ड होते हैं. GST नंबर भरीए, या बिल की मार्किंग बदलीए.',
           },
           document,
         )],
@@ -317,12 +317,12 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
     if (NOTES.includes(document.kind)) {
       return classified('CDNR', document, reason(
         'A note against a supply to a buyer with a GST number.',
-        'GST number wale buyer ki supply ke against note.',
+        'GST नंबर वाले ख़रीदार की सप्लाई के अगेंस्ट नोट.',
       ), warnings);
     }
     return classified('B2B', document, reason(
       'A supply to a special economic zone or a deemed export. The form reports it with the business sales and marks what kind it is.',
-      'Special economic zone ya deemed export ki supply. Form ise business bikri ke saath, apni marking ke saath dikhata hai.',
+      'स्पेशल इकोनॉमिक ज़ोन या डीम्ड एक्सपोर्ट की सप्लाई. फ़ॉर्म इसे बिज़नेस बिक्री के साथ, अपनी मार्किंग के साथ दिखाता है.',
     ), warnings);
   }
 
@@ -330,12 +330,12 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
     if (NOTES.includes(document.kind)) {
       return classified('CDNR', document, reason(
         `A ${document.kind === 'CREDIT_NOTE' ? 'credit' : 'debit'} note to ${document.partyName}, a buyer with a GST number, so it is reported one by one against the original bill.`,
-        `${document.partyName} ko ${document.kind === 'CREDIT_NOTE' ? 'credit' : 'debit'} note, jinke paas GST number hai, isliye asli bill ke saath ek-ek karke report hoga.`,
+        `${document.partyName} को ${document.kind === 'CREDIT_NOTE' ? 'credit' : 'debit'} नोट, जिनके पास GST नंबर है, इसलिए असली बिल के साथ एक-एक करके रिपोर्ट होगा.`,
       ), warnings);
     }
     return classified('B2B', document, reason(
       `${document.partyName} has a GST number, so this bill is reported one by one and the buyer will see it against their own credit.`,
-      `${document.partyName} ke paas GST number hai, isliye yeh bill ek-ek karke report hoga aur unhe apne credit me dikhega.`,
+      `${document.partyName} के पास GST नंबर है, इसलिए यह बिल एक-एक करके रिपोर्ट होगा और उन्हें अपने क्रेडिट में दिखेगा.`,
     ), warnings);
   }
 
@@ -343,7 +343,7 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
   if (interState === false) {
     return classified('B2CS', document, reason(
       `A sale to a customer in ${stateName(document.placeOfSupplyStateCode)}, your own state, so it is added into the rate-wise total rather than listed.`,
-      `${stateName(document.placeOfSupplyStateCode)} — aapke apne state — ke customer ko bikri, isliye rate ke hisaab se total me judegi.`,
+      `${stateName(document.placeOfSupplyStateCode)} — आपके अपने राज्य — के ग्राहक को बिक्री, इसलिए रेट के हिसाब से टोटल में जुड़ेगी.`,
     ), warnings);
   }
 
@@ -356,11 +356,11 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
         'BLOCKING',
         {
           'en-IN': `Bill ${document.number} is a ${formatINR(document.invoiceValue)} sale to a customer in ${stateName(document.placeOfSupplyStateCode)} with no GST number. Above a certain value such a bill must be listed one by one, and this app does not yet hold a checked figure for where that line sits on ${document.documentDate}.`,
-          'hi-IN': `Bill ${document.number} ${stateName(document.placeOfSupplyStateCode)} ke bina GST number wale customer ko ${formatINR(document.invoiceValue)} ki bikri hai. Ek value se upar aise bill alag-alag dene hote hain, aur ${document.documentDate} ke liye woh figure abhi checked nahi hai.`,
+          'hi-IN': `बिल ${document.number} ${stateName(document.placeOfSupplyStateCode)} के बिना GST नंबर वाले ग्राहक को ${formatINR(document.invoiceValue)} की बिक्री है. एक वैल्यू से ऊपर ऐसे बिल अलग-अलग देने होते हैं, और ${document.documentDate} के लिए वह आँकड़ा अभी चेक नहीं हुआ है.`,
         },
         {
           'en-IN': 'Ask your accountant what the limit is for this month and enter it once, or wait for the checked figure. The app will not choose between the two tables on its own.',
-          'hi-IN': 'Apne accountant se is mahine ki limit poochh kar ek baar bhar dijiye, ya checked figure ka intezaar kijiye. App khud faisla nahi karega.',
+          'hi-IN': 'अपने अकाउंटेंट से इस महीने की लिमिट पूछकर एक बार भर दीजिए, या चेक किए हुए आँकड़े का इंतज़ार कीजिए. ऐप ख़ुद फ़ैसला नहीं करेगा.',
         },
         document,
       )],
@@ -380,11 +380,11 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
       'INFORMATION',
       {
         'en-IN': `The ${formatINR(lookup.threshold.aboveValue)} limit used for bill ${document.number} is one your business set, not one checked against a notification. ${lookup.declaredBy} entered it.`,
-        'hi-IN': `Bill ${document.number} par lagi ${formatINR(lookup.threshold.aboveValue)} ki limit aapke business ki set ki hui hai, notification se checked nahi. ${lookup.declaredBy} ne bhari thi.`,
+        'hi-IN': `बिल ${document.number} पर लगी ${formatINR(lookup.threshold.aboveValue)} की लिमिट आपके बिज़नेस की सेट की हुई है, नोटिफ़िकेशन से चेक नहीं. ${lookup.declaredBy} ने भरी थी.`,
       },
       {
         'en-IN': 'Nothing to do now. It is recorded this way so the return can be explained later.',
-        'hi-IN': 'Abhi kuch nahi karna. Baad me return samjhane ke liye aise likha gaya hai.',
+        'hi-IN': 'अभी कुछ नहीं करना. बाद में रिटर्न समझाने के लिए ऐसे लिखा गया है.',
       },
       document,
     ));
@@ -398,8 +398,8 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
         ? `A note on a large out-of-state sale to a customer without a GST number, so it is listed against the original bill.`
         : `A note on a small out-of-state sale to a customer without a GST number, so it is taken off the rate-wise total.`,
       large
-        ? `Bina GST number wale doosre state ke customer ki badi bikri ka note, isliye asli bill ke saath diya jayega.`
-        : `Bina GST number wale doosre state ke customer ki chhoti bikri ka note, isliye rate wale total me se ghata jayega.`,
+        ? `बिना GST नंबर वाले दूसरे राज्य के ग्राहक की बड़ी बिक्री का नोट, इसलिए असली बिल के साथ दिया जाएगा.`
+        : `बिना GST नंबर वाले दूसरे राज्य के ग्राहक की छोटी बिक्री का नोट, इसलिए रेट वाले टोटल में से घटा जाएगा.`,
     ), warnings, lookup);
   }
 
@@ -408,8 +408,8 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
       ? `${formatINR(document.invoiceValue)} to a customer in ${stateName(document.placeOfSupplyStateCode)} with no GST number, which is above the ${formatINR(lookup.threshold.aboveValue)} limit, so it is listed on its own.`
       : `${formatINR(document.invoiceValue)} to a customer in ${stateName(document.placeOfSupplyStateCode)} with no GST number, which is under the ${formatINR(lookup.threshold.aboveValue)} limit, so it is added into the rate-wise total.`,
     large
-      ? `${stateName(document.placeOfSupplyStateCode)} ke bina GST number wale customer ko ${formatINR(document.invoiceValue)}, jo ${formatINR(lookup.threshold.aboveValue)} se upar hai, isliye alag dikhega.`
-      : `${stateName(document.placeOfSupplyStateCode)} ke bina GST number wale customer ko ${formatINR(document.invoiceValue)}, jo ${formatINR(lookup.threshold.aboveValue)} se kam hai, isliye rate wale total me judega.`,
+      ? `${stateName(document.placeOfSupplyStateCode)} के बिना GST नंबर वाले ग्राहक को ${formatINR(document.invoiceValue)}, जो ${formatINR(lookup.threshold.aboveValue)} से ऊपर है, इसलिए अलग दिखेगा.`
+      : `${stateName(document.placeOfSupplyStateCode)} के बिना GST नंबर वाले ग्राहक को ${formatINR(document.invoiceValue)}, जो ${formatINR(lookup.threshold.aboveValue)} से कम है, इसलिए रेट वाले टोटल में जुड़ेगा.`,
   ), warnings, lookup);
 };
 

@@ -279,11 +279,11 @@ const buildHsn = (documents: readonly OutwardDocument[]): { rows: HsnRow[]; find
       origin: 'VALIDATION',
       message: {
         'en-IN': `${numbers.length === 1 ? 'One bill has' : `${numbers.length} bills have`} a line with no goods or services code on it: ${numbers.join(', ')}.`,
-        'hi-IN': `${numbers.length === 1 ? 'Ek bill' : `${numbers.length} bill`} par kisi line ka saaman ya service code nahi hai: ${numbers.join(', ')}.`,
+        'hi-IN': `${numbers.length === 1 ? 'एक बिल' : `${numbers.length} बिल`} पर किसी लाइन का सामान या सर्विस कोड नहीं है: ${numbers.join(', ')}.`,
       },
       whatToDo: {
         'en-IN': 'Add the code on the item so it reaches the code-wise summary. The rest of the return is unaffected, but the summary will be short by this much.',
-        'hi-IN': 'Item par code bhariye taki code wale summary me aaye. Baaki return par asar nahi, par summary itna kam rahega.',
+        'hi-IN': 'सामान पर कोड भरीए ताकि कोड वाले सारांश में आए. बाक़ी रिटर्न पर असर नहीं, पर सारांश इतना कम रहेगा.',
       },
     });
   }
@@ -369,13 +369,14 @@ const buildDocumentSeries = (
 
 const sectionSentence = (id: Gstr1SectionId, rows: readonly Gstr1Row[], totals: TaxAmounts, documents: number): Bilingual => {
   if (rows.length === 0) {
-    return { 'en-IN': 'Nothing in this part.', 'hi-IN': 'Is hisse me kuch nahi.' };
+    return { 'en-IN': 'Nothing in this part.', 'hi-IN': 'इस हिस्से में कुछ नहीं.' };
   }
   const tax = totalTaxOf(totals);
   const thing = LISTED.includes(id) ? (documents === 1 ? '1 document' : `${documents} documents`) : (rows.length === 1 ? '1 line' : `${rows.length} lines`);
+  const thingHindi = LISTED.includes(id) ? (documents === 1 ? '1 दस्तावेज़' : `${documents} दस्तावेज़`) : (rows.length === 1 ? '1 लाइन' : `${rows.length} लाइनें`);
   return {
     'en-IN': `${thing}, ${formatINR(totals.taxableValue)} before tax and ${formatINR(tax)} of GST.`,
-    'hi-IN': `${thing}, tax se pehle ${formatINR(totals.taxableValue)} aur ${formatINR(tax)} GST.`,
+    'hi-IN': `${thingHindi}, टैक्स से पहले ${formatINR(totals.taxableValue)} और ${formatINR(tax)} GST.`,
   };
 };
 
@@ -451,7 +452,7 @@ export const buildGstr1 = (input: Gstr1BuildInput, context: ClassifyContext): Gs
       documentCount: placed.length,
       sentence: {
         'en-IN': `${formatTaxPeriod(input.period)}: ${placed.length === 1 ? '1 document' : `${placed.length} documents`} worth ${formatINR(totals.taxableValue)} before tax, carrying ${formatINR(tax)} of GST.`,
-        'hi-IN': `${formatTaxPeriod(input.period)}: ${placed.length === 1 ? '1 document' : `${placed.length} document`}, tax se pehle ${formatINR(totals.taxableValue)}, aur ${formatINR(tax)} GST.`,
+        'hi-IN': `${formatTaxPeriod(input.period)}: ${placed.length === 1 ? '1 दस्तावेज़' : `${placed.length} दस्तावेज़`}, टैक्स से पहले ${formatINR(totals.taxableValue)}, और ${formatINR(tax)} GST.`,
       },
     },
     unresolved,

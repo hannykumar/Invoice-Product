@@ -45,7 +45,7 @@ export const placeOfSupplyGoodsApproved: Rule = {
   appliesWhen: (facts) => facts.value('supply.type') === 'GOODS',
   explanation: {
     'en-IN': 'The goods finish their journey in state {deliveryState}. A sale counts where the goods end up, so this one counts in state {placeOfSupply}.',
-    'hi-IN': 'Maal ka safar rajya {deliveryState} mein khatam hota hai. Bikri wahin ki maani jaati hai, isliye yeh rajya {placeOfSupply} ki hai.',
+    'hi-IN': 'माल का सफ़र राज्य {deliveryState} में ख़त्म होता है. बिक्री वहीं की मानी जाती है, इसलिए यह राज्य {placeOfSupply} की है.',
   },
   evaluate: (facts): RuleOutcome => {
     if (facts.value('supply.type') !== 'GOODS') {
@@ -97,7 +97,7 @@ export const placeOfSupplyServicesApproved: Rule = {
   appliesWhen: (facts) => facts.value('supply.type') === 'SERVICES',
   explanation: {
     'en-IN': 'This is a service for {recipientKind}, so it counts {where}, which is state {placeOfSupply}.',
-    'hi-IN': 'Yeh {recipientKind} ke liye service hai, isliye yeh rajya {placeOfSupply} ki maani jaati hai ({where}).',
+    'hi-IN': 'यह {recipientKind} के लिए service है, इसलिए यह राज्य {placeOfSupply} की मानी जाती है ({where}).',
   },
   evaluate: (facts): RuleOutcome => {
     if (facts.value('supply.type') !== 'SERVICES') {
@@ -170,7 +170,7 @@ export const taxSplitApproved: Rule = {
   reviewState: 'APPROVED',
   explanation: {
     'en-IN': 'You are in state {supplierState} and this sale counts in state {placeOfSupply}, so {splitPlain}.',
-    'hi-IN': 'Aap rajya {supplierState} mein hain aur yeh bikri rajya {placeOfSupply} ki hai, isliye {splitPlain}.',
+    'hi-IN': 'आप राज्य {supplierState} में हैं और यह बिक्री राज्य {placeOfSupply} की है, इसलिए {splitPlain}.',
   },
   evaluate: (facts): RuleOutcome => {
     const supplier = String(facts.value('supply.supplierStateCode'));
@@ -250,7 +250,7 @@ export const compositionChargingApproved: Rule = {
   priority: 200,
   explanation: {
     'en-IN': 'Your business is registered as {registration}, so GST {verdict} be charged on this bill.',
-    'hi-IN': 'Aapka business {registration} ke roop mein registered hai, isliye is bill par GST {verdict}.',
+    'hi-IN': 'आपका बिज़नेस {registration} के रूप में registered है, इसलिए इस बिल पर GST {verdict}.',
   },
 };
 

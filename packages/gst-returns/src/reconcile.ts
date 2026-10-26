@@ -89,6 +89,13 @@ const HEAD_WORDS: Readonly<Record<ReconciliationHead['head'], string>> = {
   CESS: 'the extra charge on some goods',
 };
 
+const HEAD_WORDS_HI: Readonly<Record<ReconciliationHead['head'], string>> = {
+  CGST: 'GST के केंद्रीय हिस्से',
+  SGST: 'GST के राज्य हिस्से',
+  IGST: 'दूसरे राज्यों की बिक्री पर GST',
+  CESS: 'कुछ सामान पर अतिरिक्त चार्ज',
+};
+
 export interface ReconcileInput {
   readonly period: TaxPeriod;
   /** The return's own totals, across every table. */
@@ -139,7 +146,7 @@ export const reconcile = (input: ReconcileInput): Reconciliation => {
       origin: 'RECONCILIATION' as const,
       message: {
         'en-IN': `For ${HEAD_WORDS[head.head]}, the return says ${formatINR(head.onTheReturn)} but your books say ${formatINR(head.inTheBooks)} — a difference of ${formatINR(absolute(head.difference))}.`,
-        'hi-IN': `${HEAD_WORDS[head.head]} par return ${formatINR(head.onTheReturn)} keh raha hai aur books ${formatINR(head.inTheBooks)} — ${formatINR(absolute(head.difference))} ka antar.`,
+        'hi-IN': `${HEAD_WORDS_HI[head.head]} पर रिटर्न ${formatINR(head.onTheReturn)} कह रहा है और बुक्स ${formatINR(head.inTheBooks)} — ${formatINR(absolute(head.difference))} का अंतर.`,
       },
       whatToDo: {
         'en-IN':
@@ -150,10 +157,10 @@ export const reconcile = (input: ReconcileInput): Reconciliation => {
             : 'The books have more tax in them than the return does. Usually a sale was entered straight into the accounts as a journal rather than as a bill, so the return never saw it. The list of vouchers below shows which ones the return does not account for.',
         'hi-IN':
           unresolvedCount > 0
-            ? `${unresolvedCount} document books me hain par un par faisla baaki hai, isliye woh abhi return me nahi aaye. Pehle exceptions list ke sawal ka jawab dijiye; antar aksar apne aap mit jayega.`
+            ? `${unresolvedCount} दस्तावेज़ बुक्स में हैं पर उन पर फ़ैसला बाक़ी है, इसलिए वे अभी रिटर्न में नहीं आए. पहले exceptions सूची के सवालों का जवाब दीजिए; अंतर अक्सर अपने आप मिट जाएगा.`
             : head.difference.minor > 0n
-            ? 'Return me books se zyada tax hai. Aksar bill books me reverse ho gaya hota hai par bill khud cancel nahi hua. Is hisse ke bill kholkar wahi dhoondhiye.'
-            : 'Books me return se zyada tax hai. Aksar bikri seedhe journal se daal di jaati hai, bill nahi banta, isliye return me nahi aati. Neeche ki voucher list wahi dikhati hai.',
+            ? 'रिटर्न में बुक्स से ज़्यादा टैक्स है. अक्सर बिल बुक्स में रिवर्स हो गया होता है पर बिल ख़ुद कैंसल नहीं हुआ. इस हिस्से के बिल खोलकर वही ढूँढिए.'
+            : 'बुक्स में रिटर्न से ज़्यादा टैक्स है. अक्सर बिक्री सीधे जर्नल से डाल दी जाती है, बिल नहीं बनता, इसलिए रिटर्न में नहीं आती. नीचे की वाउचर सूची वही दिखाती है.',
       },
     }));
 
@@ -166,11 +173,11 @@ export const reconcile = (input: ReconcileInput): Reconciliation => {
       origin: 'RECONCILIATION',
       message: {
         'en-IN': `${unexplained.length === 1 ? 'One entry' : `${unexplained.length} entries`} in your books touched a GST account this month without belonging to any bill on the return, even though the totals happen to agree.`,
-        'hi-IN': `Books me ${unexplained.length === 1 ? 'ek entry' : `${unexplained.length} entry`} ne is mahine GST account ko chhua par return ke kisi bill se judi nahi hai, halanki total mil rahe hain.`,
+        'hi-IN': `बुक्स में ${unexplained.length === 1 ? 'एक एंट्री' : `${unexplained.length} एंट्रियाँ`} ने इस महीने GST अकाउंट को छुआ पर रिटर्न के किसी बिल से जुड़ी नहीं है, हालाँकि टोटल मिल रहे हैं.`,
       },
       whatToDo: {
         'en-IN': 'Have a look at those entries before approving. Totals that agree by accident is a thing that happens.',
-        'hi-IN': 'Approve karne se pehle un entries ko dekh lijiye. Total sanyog se bhi mil sakte hain.',
+        'hi-IN': 'अप्रूव करने से पहले उन एंट्रियों को देख लीजिए. टोटल संयोग से भी मिल सकते हैं.',
       },
     });
   }
@@ -191,11 +198,11 @@ export const reconcile = (input: ReconcileInput): Reconciliation => {
     sentence: agrees
       ? {
           'en-IN': `${formatTaxPeriod(input.period)}: the return and your books both show ${formatINR(returnTax)} of GST on sales.`,
-          'hi-IN': `${formatTaxPeriod(input.period)}: return aur books dono bikri par ${formatINR(returnTax)} GST dikha rahe hain.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न और बुक्स दोनों बिक्री पर ${formatINR(returnTax)} GST दिखा रहे हैं.`,
         }
       : {
           'en-IN': `${formatTaxPeriod(input.period)}: the return shows ${formatINR(returnTax)} of GST on sales and your books show ${formatINR(bookTax)}. They have to agree before this can be filed.`,
-          'hi-IN': `${formatTaxPeriod(input.period)}: return bikri par ${formatINR(returnTax)} GST dikha raha hai aur books ${formatINR(bookTax)}. File karne se pehle dono ka milna zaroori hai.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न बिक्री पर ${formatINR(returnTax)} GST दिखा रहा है और बुक्स ${formatINR(bookTax)}. फ़ाइल करने से पहले दोनों का मिलना ज़रूरी है.`,
         },
   };
 };
@@ -244,6 +251,13 @@ const HEAD_WORDS_IN: Readonly<Record<PurchaseReconciliationHead['head'], string>
   CESS: 'credit of the extra charge on some goods',
 };
 
+const HEAD_WORDS_IN_HI: Readonly<Record<PurchaseReconciliationHead['head'], string>> = {
+  CGST: 'GST क्रेडिट का केंद्रीय हिस्सा',
+  SGST: 'GST क्रेडिट का राज्य हिस्सा',
+  IGST: 'IGST क्रेडिट',
+  CESS: 'कुछ सामान के अतिरिक्त चार्ज का क्रेडिट',
+};
+
 /**
  * Issue #249 — the credit side: the return's credit against the input GST in the books.
  *
@@ -290,16 +304,16 @@ export const reconcilePurchases = (input: ReconcilePurchasesInput): PurchaseReco
       origin: 'RECONCILIATION' as const,
       message: {
         'en-IN': `For ${HEAD_WORDS_IN[head.head]}, the return claims ${formatINR(head.onTheReturn)} but your books show ${formatINR(head.inTheBooks)}${head.explained.minor === 0n ? '' : ` (${formatINR(absolute(head.explained))} of the gap is explained by the purchase check)`} — ${formatINR(absolute(head.unexplained))} ${over ? 'more' : 'less'} than the books support.`,
-        'hi-IN': `${HEAD_WORDS_IN[head.head]} par return ${formatINR(head.onTheReturn)} le raha hai par books ${formatINR(head.inTheBooks)} dikhati hain — books se ${formatINR(absolute(head.unexplained))} ${over ? 'zyada' : 'kam'}.`,
+        'hi-IN': `${HEAD_WORDS_IN_HI[head.head]} पर रिटर्न ${formatINR(head.onTheReturn)} ले रहा है पर बुक्स ${formatINR(head.inTheBooks)} दिखाती हैं — बुक्स से ${formatINR(absolute(head.unexplained))} ${over ? 'ज़्यादा' : 'कम'}.`,
       },
       whatToDo: over
         ? {
           'en-IN': 'Claiming more credit than your books hold is an over-claim, and it comes back with interest. Usually a purchase was reversed or goods were sent back without the purchase check seeing it. Open the purchase check for this month and find the bill.',
-          'hi-IN': 'Books se zyada credit lena over-claim hai, jo byaj ke saath wapas dena padta hai. Aksar koi kharid reverse hui ya maal wapas gaya aur purchase check ne nahin dekha. Is mahine ka purchase check kholkar woh bill dhoondhiye.',
+          'hi-IN': 'बुक्स से ज़्यादा क्रेडिट लेना ओवर-क्लेम है, जो ब्याज के साथ वापस देना पड़ता है. अक्सर कोई ख़रीद रिवर्स हुई या माल वापस गया और purchase check ने नहीं देखा. इस महीने का purchase check खोलकर वह बिल ढूँढिए.',
         }
         : {
           'en-IN': 'Your books hold more credit than the return claims. Usually input GST was entered as a journal rather than as a purchase bill, so the purchase check never saw it.',
-          'hi-IN': 'Books mein return se zyada credit hai. Aksar input GST bill ki jagah journal se daala gaya, isliye purchase check ne use nahin dekha.',
+          'hi-IN': 'बुक्स में रिटर्न से ज़्यादा क्रेडिट है. अक्सर input GST बिल की जगह जर्नल से डाला गया, इसलिए purchase check ने उसे नहीं देखा.',
         },
     };
   });
@@ -315,15 +329,15 @@ export const reconcilePurchases = (input: ReconcilePurchasesInput): PurchaseReco
       ? explained.minor === 0n
         ? {
           'en-IN': `${formatTaxPeriod(input.period)}: the return and your books both show ${formatINR(onTheReturn)} of GST credit on purchases.`,
-          'hi-IN': `${formatTaxPeriod(input.period)}: return aur books dono kharid par ${formatINR(onTheReturn)} GST credit dikha rahe hain.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न और बुक्स दोनों ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट दिखा रहे हैं.`,
         }
         : {
           'en-IN': `${formatTaxPeriod(input.period)}: the return claims ${formatINR(onTheReturn)} of GST credit on purchases and your books show ${formatINR(inTheBooks)}. The ${formatINR(absolute(explained))} between them is ${explained.minor < 0n ? 'credit on this month\'s bills still waiting on the purchase check' : 'credit on earlier months\' bills settled this month'}, so the two agree.`,
-          'hi-IN': `${formatTaxPeriod(input.period)}: return kharid par ${formatINR(onTheReturn)} GST credit le raha hai aur books ${formatINR(inTheBooks)} dikhati hain. Beech ka ${formatINR(absolute(explained))} purchase check mein ruka ya pichhle mahine ka credit hai, isliye dono milte hain.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट ले रहा है और बुक्स ${formatINR(inTheBooks)} दिखाती हैं. बीच का ${formatINR(absolute(explained))} purchase check में रुका या पिछले महीने का क्रेडिट है, इसलिए दोनों मिलते हैं.`,
         }
       : {
         'en-IN': `${formatTaxPeriod(input.period)}: the return claims ${formatINR(onTheReturn)} of GST credit on purchases and your books show ${formatINR(inTheBooks)}, and the purchase check does not account for the difference.`,
-        'hi-IN': `${formatTaxPeriod(input.period)}: return kharid par ${formatINR(onTheReturn)} GST credit le raha hai aur books ${formatINR(inTheBooks)} dikhati hain, aur purchase check is antar ko nahin samjhata.`,
+        'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट ले रहा है और बुक्स ${formatINR(inTheBooks)} दिखाती हैं, और purchase check इस अंतर को नहीं समझाता.`,
       },
   };
 };

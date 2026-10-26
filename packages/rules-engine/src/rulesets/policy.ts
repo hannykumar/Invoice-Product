@@ -31,7 +31,7 @@ const roundingRule: Rule = {
   reviewState: 'APPROVED',
   explanation: {
     'en-IN': 'The bill came to {before}, so {difference} was {direction} to make it {rounded}.',
-    'hi-IN': 'Bill {before} bana, isliye {difference} {direction} karke {rounded} kiya gaya.',
+    'hi-IN': 'बिल {before} बना, इसलिए {difference} {direction} करके {rounded} किया गया.',
   },
   evaluate: (facts): RuleOutcome => {
     const before = asMoney(facts, 'invoice.totalBeforeRounding');
@@ -69,7 +69,7 @@ const creditLimitRule: Rule = {
   reviewState: 'APPROVED',
   explanation: {
     'en-IN': 'This customer may owe up to {limit}. They already owe {outstanding}, {pending} is on unfinished bills, and this bill is {sale}, which comes to {total}.',
-    'hi-IN': 'Is customer par {limit} tak baaki ho sakta hai. Pehle se {outstanding} baaki hai, {pending} adhoore bill ka hai, aur yeh bill {sale} ka hai, kul {total}.',
+    'hi-IN': 'इस कस्टमर पर {limit} तक बाक़ी हो सकता है. पहले से {outstanding} बाक़ी है, {pending} अधूरे बिल का है, और यह बिल {sale} का है, कुल {total}.',
   },
   evaluate: (facts): RuleOutcome => {
     const limit = asMoney(facts, 'party.creditLimit');
@@ -112,7 +112,7 @@ const negativeStockRule: Rule = {
   reviewState: 'APPROVED',
   explanation: {
     'en-IN': 'You can sell {available} {unit}. This bill needs {required} {unit}{shortfallClause}.',
-    'hi-IN': 'Aap {available} {unit} bech sakte hain. Is bill ko {required} {unit} chahiye{shortfallClause}.',
+    'hi-IN': 'आप {available} {unit} बेच सकते हैं. इस बिल को {required} {unit} चाहिए{shortfallClause}.',
   },
   evaluate: (facts): RuleOutcome => {
     const available = asNumber(facts, 'stock.availableScaled');
