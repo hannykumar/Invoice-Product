@@ -143,6 +143,11 @@ test('#287: a service bill takes no vehicle, transporter, destination or e-way b
   assert.match(JSON.stringify(moved.body), /SERVICE_NO_TRANSPORT/);
   assert.match(JSON.stringify(moved.body), /service is not sent in a vehicle/);
 
+  // Distance alone is still a movement answer — a service never travels kilometres.
+  const distanced = await request('POST', '/api/sales/preview', { ...serviceSale(mehta, '60000', 'svc-287-dist'), distanceKm: '120' }, owner);
+  assert.equal(distanced.status, 422, JSON.stringify(distanced.body));
+  assert.match(JSON.stringify(distanced.body), /SERVICE_NO_TRANSPORT/);
+
   // The same answers are refused at the estimate, as data rather than an error.
   const estimate = await request('POST', '/api/sales/estimate', { ...serviceSale(mehta, '60000', 'svc-287-moved-est'), vehicleNumber: 'KA01AB1234' }, owner);
   assert.equal(estimate.status, 200, JSON.stringify(estimate.body));

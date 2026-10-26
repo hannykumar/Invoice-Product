@@ -7115,10 +7115,10 @@ export class DemoApplication {
     }
     // CGST Rule 138(1): an e-way bill is only for goods that move, so a service bill also takes none
     // of the delivery box's movement answers — they would otherwise print on it as though goods went.
-    const transport = ['transporterId', 'vehicleNumber', 'lrNumber', 'lrDate', 'destination', 'ewayBillNumber']
+    const transport = ['transporterId', 'vehicleNumber', 'lrNumber', 'lrDate', 'destination', 'distanceKm', 'ewayBillNumber']
       .filter((field) => String(input[field] ?? '').trim() !== '');
     if (transport.length > 0) {
-      throw invalid('SERVICE_NO_TRANSPORT', 'A service is not sent in a vehicle, so a service bill takes no transporter, vehicle, transport receipt, destination or e-way bill number. Leave the transport boxes empty — if goods are going too, they need their own bill.');
+      throw invalid('SERVICE_NO_TRANSPORT', 'A service is not sent in a vehicle, so a service bill takes no transporter, vehicle, transport receipt, destination, journey distance or e-way bill number. Leave the transport boxes empty — if goods are going too, they need their own bill.');
     }
     return 'SERVICES';
   }
