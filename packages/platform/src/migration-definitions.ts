@@ -7,6 +7,7 @@ import { purchasePostingMigrations } from "../../purchasing/src/posting-migratio
 import { purchaseMatchingMigrations } from "../../purchasing/src/matching-migrations.ts";
 import { supplierRiskMigrations } from "../../purchasing/src/supplier-risk-migrations.ts";
 import { reverseChargeMigrations } from "../../purchasing/src/reverse-charge-migrations.ts";
+import { purchaseInboxMigrations } from "../../purchasing/src/inbox-migrations.ts";
 import { eInvoiceMigrations } from "../../gst/src/einvoice-migrations.ts";
 import { gstReturnMigrations } from "../../gst-returns/src/migrations.ts";
 import { itcMigrations } from "../../itc/src/migrations.ts";
@@ -237,5 +238,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...immutabilityMigrations, ...storageMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations, ...onboardingMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...immutabilityMigrations, ...storageMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations, ...onboardingMigrations, ...purchaseInboxMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );
