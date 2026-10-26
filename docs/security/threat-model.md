@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 175 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 186 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -423,3 +423,14 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/books/undo` | `ledger.reverse` |
 | GET | `/api/books/entries` | service |
 | GET | `/api/books/book` | service |
+| POST | `/api/privacy/notice` | `privacy.manage` |
+| POST | `/api/privacy/consents` | `privacy.manage` |
+| GET | `/api/privacy/consents` | service |
+| POST | `/api/privacy/legal-holds` | `privacy.manage` |
+| POST | `/api/privacy/legal-holds/:param/release` | `privacy.manage` |
+| POST | `/api/privacy/retention` | `privacy.manage` |
+| GET | `/api/privacy/requests/:param` | service |
+| POST | `/api/privacy/export` | `privacy.export` |
+| POST | `/api/privacy/deletion` | `privacy.delete` |
+| POST | `/api/backups` | `backup.manage` |
+| GET | `/api/backups/drills` | service |

@@ -15,7 +15,8 @@ import { WebhookNotAuthenticated } from '../../../packages/gsp/src/index.ts';
 import { permissionPortFromActor, type ActorContext } from '@invoice/ledger';
 import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
 import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
-import { openPersistence } from './persistence.ts';
+import { openPersistence, securityOf } from './persistence.ts';
+import { sealStoredAppRecords } from './field-encryption.ts';
 import { configureGovernmentWebhooks } from './government-webhooks.ts';
 import { asOneAction, asOneRead } from './durable.ts';
 import { annotate, inRequest, log } from './log.ts';
@@ -260,6 +261,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   installErrorReporting();
   // Issue #340 — the database is chosen before the first request, and production without one stops here.
   const persistence = await openPersistence();
+  // #352 — seal anything a pre-encryption database still holds in the clear, before requests begin.
+  if (persistence.kind === 'postgres') await sealStoredAppRecords(persistence.db, securityOf(persistence).encryption);
   startRuntime(persistence);
   configureGovernmentWebhooks(persistence.kind === 'postgres' ? persistence.db : null, process.env, (message) => log.warn(message, {}));
   log.info('The API keeps its books', { in: persistence.kind });

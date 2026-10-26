@@ -574,9 +574,11 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
     });
     // Issue #294 — the expense heads and drawings, added once to a company whose books were set up
     // before they existed. Only missing codes are added; a code already there is left as it is.
+    // Issue #295 — '1470' TDS receivable joins them: books made before it existed need it for a
+    // receipt with TDS to post.
     await store.transaction(seed.companyId, async (uow) => {
       const missing: Account[] = [];
-      for (const account of chart.filter((a) => BOOKS_ENTRY_CODES.includes(a.code))) {
+      for (const account of chart.filter((a) => BOOKS_ENTRY_CODES.includes(a.code) || a.code === '1470')) {
         if ((await uow.accounts.findByCode(seed.companyId, account.code)) === null) missing.push(account);
       }
       if (missing.length > 0) await uow.accounts.insertMany(missing);

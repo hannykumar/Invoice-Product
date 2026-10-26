@@ -12,12 +12,17 @@ import { PostgresOperationsStore } from '../../../ops/operations/src/postgres-st
 import { PostgresRecurringWork } from '../../../ops/operations/src/recurring-postgres.ts';
 import { OutboxRelay } from '../../../packages/platform/src/outbox.ts';
 import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
-import { MEMORY, recordId, type Persistence } from './persistence.ts';
+import { MEMORY, recordId, securityOf, type Persistence } from './persistence.ts';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { recordMasterDataAs } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
 import { log } from './log.ts';
+import { AuditLog } from '../../../packages/platform/src/index.ts';
+import { PrivacyService } from '../../../ops/security/src/privacy.ts';
+import { BackupRecoveryService, type BackupSource } from '../../../ops/security/src/recovery.ts';
+import { APP_BACKUP_KEY_ID } from './field-encryption.ts';
+import { MemoryAccountDataStore, PostgresBackupSource } from './privacy-application.ts';
 
 export { AuthenticationError };
 
@@ -137,6 +142,12 @@ export class ApiRuntime {
   /** Issue #345 — on PostgreSQL: the schedule and the outbox are rows, run by the worker. */
   readonly #recurring: PostgresRecurringWork | null;
   readonly #relay: OutboxRelay | null;
+  /** #352 — what a backup of the company is taken from. */
+  readonly #backupSource: BackupSource | null;
+
+  /** #352 — the account's privacy register and its backups, on PostgreSQL when there is one. */
+  readonly privacy: PrivacyService;
+  readonly recovery: BackupRecoveryService;
   /** Each company's recurring jobs and the service actor that runs them, once its application is open. */
   readonly #jobs = new Map<string, { readonly context: RequestContext; readonly definitions: readonly RecurringJobDefinition[] }>();
 
@@ -155,6 +166,14 @@ export class ApiRuntime {
     this.#recurring = persistence.kind === 'postgres' ? new PostgresRecurringWork(persistence.db) : null;
     // A message whose sender died is sent again once its lease has passed (60 s unless set).
     this.#relay = persistence.kind === 'postgres' ? new OutboxRelay(persistence.db, { leaseSeconds: Number(process.env.WORKER_OUTBOX_LEASE_SECONDS ?? 60), maxAttempts: OUTBOX_MAX_ATTEMPTS }) : null;
+    // #352 — the privacy register and the backup service, finally composed on the real stores.
+    const securityAudit: PostgresAuditLog | AuditLog = persistence.kind === 'postgres' ? new PostgresAuditLog(persistence.db) : new AuditLog();
+    const security = securityOf(persistence);
+    this.privacy = new PrivacyService(securityAudit, security.accountData, () => new Date(), security.privacyRecords);
+    this.recovery = new BackupRecoveryService(securityAudit, security.backups, security.encryption, APP_BACKUP_KEY_ID);
+    this.#backupSource = persistence.kind === 'postgres'
+      ? new PostgresBackupSource(persistence.db, security.encryption)
+      : { snapshot: async (companyId) => Buffer.from(JSON.stringify(await new MemoryAccountDataStore().exportSubject(companyId, companyId))) };
     // The made-up incident below is demo data, which a database never receives.
     if (persistence.kind === 'postgres') return;
     const demo = SYNTHETIC_PLATFORM_COMPANIES[0];
@@ -316,6 +335,9 @@ export class ApiRuntime {
 
   /** Whether write requests run as one unit of work, and on which database. */
   get database() { return this.#persistence.kind === 'postgres' ? this.#persistence.db : null; }
+
+  /** #352 — what a backup of the company is taken from. */
+  get backupSource(): BackupSource { return this.#backupSource!; }
 }
 
 /** How many times the worker tries a queued job before it is left, dead, for a person. */
@@ -346,7 +368,7 @@ export const startRuntime = (persistence: Persistence): ApiRuntime => {
   if (runtimeInstance !== undefined) throw new Error('The API runtime has already started.');
   if (persistence.kind === 'postgres') {
     // A record written outside anybody's request (the main godown, on first opening) is the owner's.
-    enableDurability(persistence.db);
+    enableDurability(persistence.db, securityOf(persistence).encryption);
     recordMasterDataAs((companyId) => SYNTHETIC_PLATFORM_COMPANIES.find((company) => company.companyId === companyId)?.userId ?? companyId);
   }
   return (runtimeInstance = new ApiRuntime(persistence));
