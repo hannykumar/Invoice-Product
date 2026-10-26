@@ -91,12 +91,27 @@ export interface SalesPriceCorrectionCommand {
   /**
    * Why the price changes. `INVOICE_ERROR`: the bill carried the wrong price, so its taxable value or
    * tax was wrong (s.34(1)/(3)). `DISCOUNT_AFTER_SALE`: a discount agreed after the sale, which only
-   * comes off the value under s.15(3)(b) and is refused here (see `previewPriceCorrection`).
+   * comes off the value under s.15(3)(b) — that is, only when its evidence is declared (see
+   * `previewPriceCorrection`; without it the discount is an expense, not a GST change).
    */
   readonly cause: 'INVOICE_ERROR' | 'DISCOUNT_AFTER_SALE';
   readonly newUnitPrice?: Money;
   readonly amountOff?: Money;
   readonly periodOverrideReason?: string;
+  /**
+   * Issue #295 — a post-sale discount may cut the value (and so GST) only while CGST Act
+   * s.15(3)(b) (in force 1 July 2017) holds: the discount was agreed at or before the supply, it
+   * is linked to this invoice, and the buyer reversed the input tax credit on it. The person
+   * records the two facts they can know; the invoice link is this note itself. Circular
+   * 212/6/2024-GST (26 Jun 2024) once wanted a CA/CMA certificate for the buyer's reversal, but
+   * Circular 253/10/2025-GST (1 Oct 2025) withdrew it, so the recorded declaration is what is
+   * kept. Without both declarations the note is refused — a discount outside s.15(3)(b) can still
+   * be given as an expense, with no GST change.
+   */
+  readonly discountEvidence?: {
+    readonly agreedBeforeSupply: boolean;
+    readonly buyerReversedItc: boolean;
+  };
 }
 
 export interface SalesPriceCorrectionPreview extends SalesReturnPreview {
@@ -339,14 +354,19 @@ export class ReturnService {
     // 2017) keeps it out of the value only if it was agreed at or before the supply, is linked to
     // the invoices, and the buyer has reversed the credit; s.34(2)'s proviso refuses the cut where
     // the tax was passed on; Circular 92/11/2019-GST (7 Mar 2019) allows a commercial credit note
-    // that leaves GST alone; Circular 212/6/2024-GST (26 Jun 2024) wants evidence that the buyer
-    // reversed its credit. None of that is recorded here yet, so such a note is refused rather
-    // than cutting GST without the conditions. (Any Finance Act 2025 change to s.15(3)(b) or to the
-    // s.34(2) proviso is not verified.)
+    // that leaves GST alone. Circular 212/6/2024-GST (26 Jun 2024) once wanted a CA/CMA certificate
+    // for the buyer's reversal; Circular 253/10/2025-GST (1 Oct 2025) withdrew it, so the two
+    // declarations recorded here are the evidence kept. (Any Finance Act 2025 change to s.15(3)(b)
+    // or to the s.34(2) proviso is not verified.)
     if (command.cause === 'DISCOUNT_AFTER_SALE') {
-      throw invalid('PRICE_CORRECTION_DISCOUNT_AFTER_SALE', 'A discount agreed after the sale cannot reduce GST here yet: the law asks for the agreement made before the sale and proof that the buyer gave back their GST credit. Nothing was recorded. If the bill simply had the wrong price, choose "The bill had the wrong price".');
+      const evidence = command.discountEvidence;
+      if (evidence?.agreedBeforeSupply !== true || evidence.buyerReversedItc !== true) {
+        throw invalid('PRICE_CORRECTION_DISCOUNT_AFTER_SALE', 'A discount after the sale can reduce GST only when the discount was agreed at or before the sale and the buyer has given back their GST credit on it. Tick both to say so, or leave the discount off GST and book it as an expense instead.');
+      }
     }
-    if (command.cause !== 'INVOICE_ERROR') throw invalid('PRICE_CORRECTION_CAUSE_REQUIRED', 'Say why the price changes: the bill had the wrong price, or a discount was given after the sale.');
+    // Issue #295 — a discount after the sale reaches here when its s.15(3)(b) evidence was given
+    // above; a missing cause still says so plainly.
+    if (command.cause !== 'INVOICE_ERROR' && command.cause !== 'DISCOUNT_AFTER_SALE') throw invalid('PRICE_CORRECTION_CAUSE_REQUIRED', 'Say why the price changes: the bill had the wrong price, or a discount was given after the sale.');
     const byPrice = command.newUnitPrice !== undefined, byAmount = command.amountOff !== undefined;
     if (byPrice === byAmount) throw invalid('PRICE_CORRECTION_ONE_FIGURE', 'Type either the new rate per unit or the amount off, not both.');
     if (byPrice && command.newUnitPrice!.minor < 0n) throw invalid('PRICE_CORRECTION_NEGATIVE_PRICE', 'The new rate cannot be below zero.');
