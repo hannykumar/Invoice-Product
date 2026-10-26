@@ -31,6 +31,7 @@ import { immutabilityMigrations } from "./immutability-migrations.ts";
 import { storageMigrations } from "./storage-migrations.ts";
 import { appRecordMigrations } from "./app-record-migrations.ts";
 import { actionAgentMigrations } from "../../action-agent/src/migrations.ts";
+import { onboardingMigrations } from "../../onboarding/src/migrations.ts";
 
 const platformMigrations: readonly Migration[] = [{
   id: "0001_platform_foundation",
@@ -257,5 +258,5 @@ const platformMigrations: readonly Migration[] = [{
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...immutabilityMigrations, ...storageMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...immutabilityMigrations, ...storageMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations, ...onboardingMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );

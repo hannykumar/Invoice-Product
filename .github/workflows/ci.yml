@@ -101,6 +101,55 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  browser:
+    # Issue #355 — the flows that must never break, in a real browser against the real app on
+    # real PostgreSQL: sign-up and sign-in (stand-in code), make a bill, record a purchase,
+    # prepare a GST return, upgrade plan, and invite a teammate (skipped until #343 lands).
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: invoice
+          POSTGRES_PASSWORD: invoice
+          POSTGRES_DB: invoice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U invoice -d invoice"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://invoice:invoice@localhost:5432/invoice
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # The browser download is the slow, network-dependent part; it is cached per
+      # @playwright/test version. --with-deps still runs every job: the apt packages it
+      # installs are not in the cache and are fast beside it.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-playwright-
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   container:
     # Builds the production image (#356). Until #356 adds a Dockerfile there is nothing to build,
     # and the job says so rather than passing silently.
