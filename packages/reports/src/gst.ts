@@ -86,7 +86,7 @@ export const gstSummaryBody = (books: LoadedBooks): GstSummaryBody => {
       'en-IN':
         'This is what your books show. How much you actually pay is worked out when the return is prepared. The order in which these are adjusted is fixed by the rules.',
       'hi-IN':
-        'यह आपकी बुक्स का हिसाब है। असली भरना कितना है, यह रिटर्न बनाते वक़्त तय होता है। एडजस्ट करने का क्रम नियम से बँधा हुआ है।',
+        'यह आपकी बुक्स का हिसाब है। असली भरना रिटर्न बनाते वक़्त तय होता है। एडजस्ट का क्रम नियम से बँधा है।',
     },
   };
 };

@@ -157,7 +157,7 @@ export class ReportService {
       header: this.#header('profit_and_loss', actor, filter, [
         {
           'en-IN': 'The cost of goods sold is counted only as far as it has been written into the books. Goods bought but not yet recorded are listed under things worth a second look.',
-          'hi-IN': 'बेचे गए माल की लागत उतनी ही गिनी गई है जितनी बुक्स में लिखी है। जो माल आया पर दर्ज नहीं हुआ, वो दोबारा देखने वाली चीज़ों में है।',
+          'hi-IN': 'बेचे माल की लागत वही गिनी गई जो बुक्स में लिखी है। बिना दर्ज आया माल दोबारा देखने वालों में है।',
         },
       ], asAt),
       body,

@@ -140,7 +140,7 @@ export const discountDecision = (
     sentence: needsApproval
       ? bilingual(
           `${what['en-IN']}. A price more than ${allowed}% lower needs approval: the owner, or someone allowed to approve discounts, has to approve it before the bill is issued.`,
-          `${what['hi-IN']}। ${allowed}% से ज़्यादा कम रेट के लिए मंज़ूरी चाहिए: मालिक या डिस्काउंट मंज़ूर करने वाला कोई व्यक्ति बिल जारी होने से पहले मंज़ूरी दे।`,
+          `${what['hi-IN']}। ${allowed}% से ज़्यादा छूट के लिए मालिक या अप्रूवल देने वाले की मंज़ूरी पहले चाहिए।`,
         )
       : bilingual(
           `${what['en-IN']}: ${formatINR(amountOff)} less on this line.`,

@@ -309,11 +309,11 @@ export const reconcilePurchases = (input: ReconcilePurchasesInput): PurchaseReco
       whatToDo: over
         ? {
           'en-IN': 'Claiming more credit than your books hold is an over-claim, and it comes back with interest. Usually a purchase was reversed or goods were sent back without the purchase check seeing it. Open the purchase check for this month and find the bill.',
-          'hi-IN': 'बुक्स से ज़्यादा क्रेडिट लेना ओवर-क्लेम है, जो ब्याज के साथ वापस देना पड़ता है. अक्सर कोई ख़रीद रिवर्स हुई या माल वापस गया और purchase check ने नहीं देखा. इस महीने का purchase check खोलकर वह बिल ढूँढिए.',
+          'hi-IN': 'बुक्स से ज़्यादा क्रेडिट लेना ओवर-क्लेम है, जो ब्याज के साथ वापस देना पड़ता है. अक्सर कोई ख़रीद रिवर्स हुई या माल वापस गया और ख़रीद जाँच ने नहीं देखा. इस महीने की ख़रीद जाँच खोलकर वह बिल ढूँढिए.',
         }
         : {
           'en-IN': 'Your books hold more credit than the return claims. Usually input GST was entered as a journal rather than as a purchase bill, so the purchase check never saw it.',
-          'hi-IN': 'बुक्स में रिटर्न से ज़्यादा क्रेडिट है. अक्सर input GST बिल की जगह जर्नल से डाला गया, इसलिए purchase check ने उसे नहीं देखा.',
+          'hi-IN': 'बुक्स में रिटर्न से ज़्यादा क्रेडिट है. अक्सर इनपुट GST बिल की जगह जर्नल से डाला गया, इसलिए ख़रीद जाँच ने उसे नहीं देखा.',
         },
     };
   });
@@ -333,11 +333,11 @@ export const reconcilePurchases = (input: ReconcilePurchasesInput): PurchaseReco
         }
         : {
           'en-IN': `${formatTaxPeriod(input.period)}: the return claims ${formatINR(onTheReturn)} of GST credit on purchases and your books show ${formatINR(inTheBooks)}. The ${formatINR(absolute(explained))} between them is ${explained.minor < 0n ? 'credit on this month\'s bills still waiting on the purchase check' : 'credit on earlier months\' bills settled this month'}, so the two agree.`,
-          'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट ले रहा है और बुक्स ${formatINR(inTheBooks)} दिखाती हैं. बीच का ${formatINR(absolute(explained))} purchase check में रुका या पिछले महीने का क्रेडिट है, इसलिए दोनों मिलते हैं.`,
+          'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट ले रहा है और बुक्स ${formatINR(inTheBooks)} दिखाती हैं. बीच का ${formatINR(absolute(explained))} ख़रीद जाँच में रुका या पिछले महीने का क्रेडिट है, इसलिए दोनों मिलते हैं.`,
         }
       : {
         'en-IN': `${formatTaxPeriod(input.period)}: the return claims ${formatINR(onTheReturn)} of GST credit on purchases and your books show ${formatINR(inTheBooks)}, and the purchase check does not account for the difference.`,
-        'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट ले रहा है और बुक्स ${formatINR(inTheBooks)} दिखाती हैं, और purchase check इस अंतर को नहीं समझाता.`,
+        'hi-IN': `${formatTaxPeriod(input.period)}: रिटर्न ख़रीद पर ${formatINR(onTheReturn)} GST क्रेडिट ले रहा है और बुक्स ${formatINR(inTheBooks)} दिखाती हैं, और ख़रीद जाँच इस अंतर को नहीं समझाती.`,
       },
   };
 };

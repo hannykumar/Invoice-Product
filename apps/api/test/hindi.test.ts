@@ -59,8 +59,13 @@ const englishProse = (s: string): boolean => {
 // Lowercase Latin words allowed inside a hi-IN sentence because they are data, not prose: the
 // seeded warehouse 'Peenya godown' is a name. Everything else lowercase is a leftover to fail on.
 const LATIN_OK = new Set(['godown']);
+// Whole words only: a token is a whitespace-separated piece with its punctuation stripped, so a
+// filename like gstr1_29AAA_082026.json or a code passes, but a bare 'nahi' or 'hai.' fails.
 const latinLeft = (s: string): string[] =>
-  (s.match(/[a-zA-Z]+/g) ?? []).filter((word) => word.length >= 3 && word === word.toLowerCase() && !LATIN_OK.has(word));
+  s
+    .split(/\s+/)
+    .map((token) => token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+    .filter((word) => /^[a-z]{3,}$/.test(word) && !LATIN_OK.has(word));
 
 const englishSentences = (value: unknown, path: string, found: string[] = []): string[] => {
   if (typeof value === 'string') {

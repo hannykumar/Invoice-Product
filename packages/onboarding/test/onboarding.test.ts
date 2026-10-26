@@ -420,7 +420,7 @@ test('the checklist screen renders, escapes what was typed, and shows the rate w
 
   const hindi = renderChecklist(nasty, 'hi-IN');
   assert.ok(hindi.includes('lang="hi"'));
-  assert.ok(hindi.includes('Aap jo GST lagate hain'));
+  assert.ok(hindi.includes('आप जो GST लगाते हैं'));
 });
 
 test('accepting a difference adds one visible, named line', () => {

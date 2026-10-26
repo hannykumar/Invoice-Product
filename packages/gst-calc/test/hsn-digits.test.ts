@@ -73,7 +73,7 @@ test('not sure counts as above ₹5 crore: 4 digits to a registered customer is 
   const refused = tooShort(shop('3923', 'UNKNOWN').compute(sale(REGISTERED)));
   assert.ok(refused);
   assert.match(refused.message['en-IN'], /at least 6 digits until you tell us/);
-  assert.ok(refused.message['hi-IN'].includes('6 ank'), 'the Hindi message names 6 digits too');
+  assert.ok(refused.message['hi-IN'].includes('6 अंक'), 'the Hindi message names 6 digits too');
 });
 
 test('a year nobody answered for counts as not sure, so 1 April asks again', () => {

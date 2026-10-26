@@ -29,7 +29,7 @@ describe('a file has a row limit', () => {
         assert.match(error.message, /at most 5,000/);
         assert.match(error.message, /Split it into smaller files/);
         assert.equal(error.details.limit, String(MAX_ROWS_PER_FILE));
-        assert.match(error.details['hi-IN'] ?? '', /chhoti files/);
+        assert.match(error.details['hi-IN'] ?? '', /छोटी फ़ाइलों/);
         return true;
       },
     );

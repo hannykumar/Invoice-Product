@@ -834,13 +834,13 @@ test("#307: the WhatsApp message and its UPI link, in English and Hindi — the 
   const hi = locales["hi-IN"]!;
 
   assert.equal(shareMessage(cashSale, en, rupees("en-IN")), "Hello, thank you for shopping at Sampoorna Traders. Bill INV/26-27/000005: ₹126.00.\nPaid in full.");
-  assert.equal(shareMessage(cashSale, hi, rupees("hi-IN")), "Namaste, Sampoorna Traders se khareedne ke liye dhanyavaad. Bill INV/26-27/000005: ₹126.00.\nPoora bhugtaan mil gaya.");
+  assert.equal(shareMessage(cashSale, hi, rupees("hi-IN")), "नमस्ते, Sampoorna Traders से ख़रीदने के लिए धन्यवाद। बिल INV/26-27/000005: ₹126.00।\nपूरा भुगतान मिल गया।");
   assert.doesNotMatch(shareMessage(cashSale, en, rupees("en-IN")), /upi:/, "nothing is due, so nothing is asked for");
 
   const english = shareMessage(partSale, en, rupees("en-IN"));
   assert.equal(english, `Hello ABC Traders, thank you for shopping at Sampoorna Traders. Bill INV/26-27/000006: ₹126.00.\nStill to pay: ₹26.00.\nPay by UPI: ${UPI}`);
   const hindi = shareMessage(partSale, hi, rupees("hi-IN"));
-  assert.equal(hindi, `Namaste ABC Traders, Sampoorna Traders se khareedne ke liye dhanyavaad. Bill INV/26-27/000006: ₹126.00.\nAbhi baaki: ₹26.00.\nUPI se chukayein: ${UPI}`);
+  assert.equal(hindi, `नमस्ते ABC Traders, Sampoorna Traders से ख़रीदने के लिए धन्यवाद। बिल INV/26-27/000006: ₹126.00।\nअभी बाक़ी: ₹26.00।\nUPI से चुकाइए: ${UPI}`);
   for (const message of [english, hindi]) {
     const link = new URL(/upi:\S+/.exec(message)![0]);
     assert.equal(link.searchParams.get("am"), "26.00", "the amount still due, never the bill total");
@@ -863,10 +863,10 @@ test("#307: the done screen's one line says where the money went, in English and
   const { doneLine } = await doneScreen();
   const locales = await localeCopy();
   assert.equal(doneLine(cashSale, locales["en-IN"], rupees("en-IN")), "Cash received from Walk-in. Stock updated.");
-  assert.equal(doneLine(cashSale, locales["hi-IN"], rupees("hi-IN")), "walk-in grahak se nakad mil gaya. Stock update ho gaya.");
+  assert.equal(doneLine(cashSale, locales["hi-IN"], rupees("hi-IN")), "वॉक-इन ग्राहक से नक़द मिल गया। स्टॉक अपडेट हो गया।");
   const credit = { ...partSale, paid: null, due: 126 };
   assert.equal(doneLine(credit, locales["en-IN"], rupees("en-IN")), "Added to ABC Traders’ khata. Stock updated.");
-  assert.equal(doneLine(credit, locales["hi-IN"], rupees("hi-IN")), "ABC Traders ke khate mein jud gaya. Stock update ho gaya.");
+  assert.equal(doneLine(credit, locales["hi-IN"], rupees("hi-IN")), "ABC Traders के खाते में जुड़ गया। स्टॉक अपडेट हो गया।");
   assert.equal(doneLine(partSale, locales["en-IN"], rupees("en-IN")), "UPI payment of ₹100.00 received; ₹26.00 added to ABC Traders’ khata. Stock updated.");
 });
 

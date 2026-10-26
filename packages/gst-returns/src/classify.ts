@@ -330,7 +330,7 @@ export const classifyDocument = (document: OutwardDocument, context: ClassifyCon
     if (NOTES.includes(document.kind)) {
       return classified('CDNR', document, reason(
         `A ${document.kind === 'CREDIT_NOTE' ? 'credit' : 'debit'} note to ${document.partyName}, a buyer with a GST number, so it is reported one by one against the original bill.`,
-        `${document.partyName} को ${document.kind === 'CREDIT_NOTE' ? 'credit' : 'debit'} नोट, जिनके पास GST नंबर है, इसलिए असली बिल के साथ एक-एक करके रिपोर्ट होगा.`,
+        `${document.partyName} को ${document.kind === 'CREDIT_NOTE' ? 'क्रेडिट' : 'डेबिट'} नोट, जिनके पास GST नंबर है, इसलिए असली बिल के साथ एक-एक करके रिपोर्ट होगा.`,
       ), warnings);
     }
     return classified('B2B', document, reason(

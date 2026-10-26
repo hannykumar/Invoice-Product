@@ -103,7 +103,7 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       },
       why: {
         'en-IN': 'The value of goods is not yet written into the books when they move. Until purchase recording is finished, the balance sheet shows what the books hold and this page shows what the godown holds.',
-        'hi-IN': 'माल की कीमत अभी मूवमेंट के साथ बुक्स में नहीं लिखी जाती। ख़रीद का हिस्सा पूरा होने तक, बैलेंस शीट बुक्स का आँकड़ा दिखाती है और यह पन्ना गोदाम का।',
+        'hi-IN': 'माल की कीमत बुक्स में नहीं लिखी जाती। ख़रीद पूरी होने तक बैलेंस शीट बुक्स का आँकड़ा दिखाती है और यह पन्ना गोदाम का।',
       },
       amount: gap,
       records: [...counted.contributors, ...booked.contributors],

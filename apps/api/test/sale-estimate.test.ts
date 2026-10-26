@@ -134,7 +134,7 @@ test('#306: for random bills the estimate is exactly the review, head by head', 
     splits.add(draft.pricing.split);
     assert.equal(estimate.body.placeOfSupply.stateCode, draft.pricing.placeOfSupplyStateCode, what);
     assert.match(estimate.body.placeOfSupply['en-IN'], draft.pricing.split === 'IGST' ? / sale · IGST$/ : / sale · CGST \+ SGST$/);
-    assert.ok(estimate.body.placeOfSupply['hi-IN'].includes('ki bikri'));
+    assert.ok(estimate.body.placeOfSupply['hi-IN'].includes('की बिक्री'));
     assert.ok(estimate.body.eInvoice['en-IN'] && estimate.body.eInvoice['hi-IN']);
   }
   assert.deepEqual([...splits].sort(), ['CGST_SGST', 'IGST'], 'both kinds of GST were tried');
@@ -169,7 +169,7 @@ test('#306: what would stop the bill comes back as data, in both languages', asy
   assert.equal(short.body.refusals[0].code, 'STOCK_NOT_ENOUGH');
   assert.equal(short.body.refusals[0].itemId, soap.id);
   assert.match(short.body.refusals[0]['en-IN'], /This bill asks for 99999999 PCS/);
-  assert.match(short.body.refusals[0]['hi-IN'], /maangta hai/);
+  assert.match(short.body.refusals[0]['hi-IN'], /माँगता है/);
   assert.equal(typeof short.body.total, 'number', 'the figures are still shown beside the refusal');
 
   const nobody = await request('POST', '/api/sales/estimate', { date: DATE, lines: JSON.stringify([{ itemId: soap.id, quantity: '1', rate: '10' }]) }, owner);
@@ -187,7 +187,7 @@ test('#306: what would stop the bill comes back as data, in both languages', asy
   assert.deepEqual([ok.body.totals.taxableValue, ok.body.totals.cgst, ok.body.totals.sgst, ok.body.total], [100, 9, 9, 118]);
   assert.equal(ok.body.placeOfSupply['en-IN'], 'Karnataka sale · CGST + SGST');
   assert.equal(ok.body.eInvoice.needed, 'NO');
-  assert.deepEqual([ok.body.eInvoice['en-IN'], ok.body.eInvoice['hi-IN']], ['No e-invoice needed', 'E-invoice ki zaroorat nahin']);
+  assert.deepEqual([ok.body.eInvoice['en-IN'], ok.body.eInvoice['hi-IN']], ['No e-invoice needed', 'ई-इनवॉइस की ज़रूरत नहीं']);
 });
 
 test('#306: estimating needs the permission to start a bill — a viewer is refused', async () => {
