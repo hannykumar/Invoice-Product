@@ -457,4 +457,113 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
     ${frozen('payments', 'state', 'allocated_paise,cheque_state,reversal_voucher_id,reversal_reason,updated_at,version', 'RECORDED>REVERSED').replace(/\n\s*CREATE TRIGGER payments_no_truncate[\s\S]*$/, '')}
     ALTER TABLE payments DROP COLUMN IF EXISTS refunded_paise;
   `,
+}, {
+  // Issue #295 — the non-cash ways a bill on a receipt is settled: TDS the customer deducted, a
+  // discount allowed, or a small balance written off. Like allocations, each is its own row the
+  // database moves a running figure for — `document_settlements.adjusted_paise` — and can only be
+  // released, never changed. Settlements do not touch `payments.allocated_paise`: that figure
+  // stays money only, so a receipt's cash is never said to be more than it was.
+  id: '20261026T001107193Z_receivables_b047ad5f0e27_payment_settlements',
+  up: `
+    CREATE TABLE payment_settlements (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id uuid NOT NULL REFERENCES companies(id),
+      payment_id uuid NOT NULL,
+      document_kind text NOT NULL CHECK (document_kind IN (${DOCUMENT_KINDS})),
+      document_id text NOT NULL CHECK (document_id <> ''),
+      document_number text NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('TDS_DEDUCTED','DISCOUNT_ALLOWED','BALANCE_WRITTEN_OFF')),
+      amount_paise bigint NOT NULL CHECK (amount_paise > 0),
+      -- TDS only: the Income-tax Act section (194C/194J/194Q, or the Income-tax Act 2025's
+      -- s.392/393 from 1 April 2026), the quarter it counts in for Form 26AS, and the certificate.
+      tds_section text,
+      tds_quarter text,
+      tds_certificate text,
+      released_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      FOREIGN KEY (company_id, payment_id) REFERENCES payments(company_id, id)
+    );
+    CREATE INDEX payment_settlements_payment_idx ON payment_settlements(company_id, payment_id);
+    CREATE INDEX payment_settlements_document_idx ON payment_settlements(company_id, document_kind, document_id) WHERE released_at IS NULL;
+    CREATE INDEX payment_settlements_tds_idx ON payment_settlements(company_id, tds_quarter) WHERE kind = 'TDS_DEDUCTED' AND released_at IS NULL;
+
+    -- What TDS, a discount or a write-off settled on a bill is kept by the database like the paid
+    -- figure, so money plus adjustments on one bill never come to more than it still owes.
+    ALTER TABLE document_settlements ADD COLUMN adjusted_paise bigint NOT NULL DEFAULT 0 CHECK (adjusted_paise >= 0);
+    ALTER TABLE document_settlements DROP CONSTRAINT document_settlements_allocated_within_value,
+      ADD CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise + adjusted_paise BETWEEN 0 AND value_paise + debited_paise);
+    -- PostgreSQL 16 cannot change a generated column's expression: the column (and its two
+    -- indexes) is made again. Adjusted counts toward SETTLED and PARTLY_PAID, as allocated does.
+    ALTER TABLE document_settlements DROP COLUMN status;
+    ALTER TABLE document_settlements ADD COLUMN status text NOT NULL GENERATED ALWAYS AS (CASE
+        WHEN cancelled THEN 'CANCELLED'
+        WHEN allocated_paise + adjusted_paise >= value_paise - credited_paise + debited_paise THEN 'SETTLED'
+        WHEN allocated_paise + adjusted_paise > 0 THEN 'PARTLY_PAID'
+        ELSE 'OPEN' END) STORED;
+    CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    DROP TRIGGER document_settlements_frozen ON document_settlements;
+    CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,debited_paise,adjusted_paise,cancelled,status,updated_at', '');
+
+    -- Recording a settlement moves the adjusted figure; releasing it moves it back. The CHECK on
+    -- document_settlements refuses one that is too large.
+    CREATE FUNCTION payment_settlement_moves_balances() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+    DECLARE
+      change bigint := CASE WHEN TG_OP = 'INSERT' THEN NEW.amount_paise ELSE -NEW.amount_paise END;
+      settled integer;
+      live text;
+    BEGIN
+      IF TG_OP = 'INSERT' AND NEW.released_at IS NOT NULL THEN
+        RAISE EXCEPTION 'A settlement is recorded first and released later.' USING ERRCODE = 'check_violation', TABLE = 'payment_settlements';
+      END IF;
+      SELECT state INTO live FROM payments WHERE company_id = NEW.company_id AND id = NEW.payment_id;
+      IF live IS DISTINCT FROM 'RECORDED' THEN
+        RAISE EXCEPTION 'A payment that was undone settles nothing.'
+          USING ERRCODE = 'check_violation', TABLE = 'payment_settlements', CONSTRAINT = 'payment_settlements_payment_is_live';
+      END IF;
+      UPDATE document_settlements SET adjusted_paise = adjusted_paise + change, updated_at = now()
+        WHERE company_id = NEW.company_id AND document_kind = NEW.document_kind AND document_id = NEW.document_id;
+      GET DIAGNOSTICS settled = ROW_COUNT;
+      IF settled = 0 AND NEW.document_kind = 'SALES_INVOICE' THEN
+        RAISE EXCEPTION 'A settlement cannot be applied to a bill that was never issued.'
+          USING ERRCODE = 'foreign_key_violation', TABLE = 'payment_settlements', CONSTRAINT = 'payment_settlements_bill_is_issued';
+      END IF;
+      RETURN NULL;
+    END;
+    $$;
+    CREATE TRIGGER payment_settlements_recorded AFTER INSERT ON payment_settlements
+      FOR EACH ROW EXECUTE FUNCTION payment_settlement_moves_balances();
+    CREATE TRIGGER payment_settlements_released AFTER UPDATE OF released_at ON payment_settlements
+      FOR EACH ROW WHEN (OLD.released_at IS NULL AND NEW.released_at IS NOT NULL) EXECUTE FUNCTION payment_settlement_moves_balances();
+    CREATE TRIGGER payment_settlements_release_final BEFORE UPDATE ON payment_settlements
+      FOR EACH ROW WHEN (OLD.released_at IS NOT NULL AND NEW.released_at IS DISTINCT FROM OLD.released_at)
+      EXECUTE FUNCTION platform_refuse('A settlement that was released cannot be brought back. Record a new one.');
+
+    ${frozen('payment_settlements', '', 'released_at,updated_at')}
+    ${tenantPolicy('payment_settlements')}
+    REVOKE UPDATE ON payment_settlements FROM invoice_app;
+    GRANT UPDATE (released_at, updated_at) ON payment_settlements TO invoice_app;
+    REVOKE INSERT ON payment_settlements FROM invoice_app;
+    GRANT INSERT (id, company_id, payment_id, document_kind, document_id, document_number, kind, amount_paise, tds_section, tds_quarter, tds_certificate, released_at, created_at, updated_at) ON payment_settlements TO invoice_app;
+  `,
+  down: `
+    DROP TABLE IF EXISTS payment_settlements;
+    DROP FUNCTION IF EXISTS payment_settlement_moves_balances();
+    DROP TRIGGER document_settlements_frozen ON document_settlements;
+    CREATE TRIGGER document_settlements_frozen BEFORE UPDATE OR DELETE ON document_settlements
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', 'allocated_paise,credited_paise,debited_paise,cancelled,status,updated_at', '');
+    ALTER TABLE document_settlements DROP COLUMN status;
+    ALTER TABLE document_settlements ADD COLUMN status text NOT NULL GENERATED ALWAYS AS (CASE
+        WHEN cancelled THEN 'CANCELLED'
+        WHEN allocated_paise >= value_paise - credited_paise + debited_paise THEN 'SETTLED'
+        WHEN allocated_paise > 0 THEN 'PARTLY_PAID'
+        ELSE 'OPEN' END) STORED;
+    CREATE INDEX document_settlements_open_idx ON document_settlements(company_id, party_id, document_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    CREATE INDEX document_settlements_due_idx ON document_settlements(company_id, due_date) WHERE status IN ('OPEN','PARTLY_PAID');
+    ALTER TABLE document_settlements DROP CONSTRAINT document_settlements_allocated_within_value,
+      ADD CONSTRAINT document_settlements_allocated_within_value CHECK (allocated_paise BETWEEN 0 AND value_paise + debited_paise);
+    ALTER TABLE document_settlements DROP COLUMN IF EXISTS adjusted_paise;
+  `,
 }]);

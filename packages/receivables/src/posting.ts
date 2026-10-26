@@ -8,7 +8,7 @@
 import { invalid, isZero, subtract, sum, zero, type AccountId, type Money, type PartyId } from '@invoice/kernel';
 import type { AccountRepository } from '@invoice/ledger';
 import type { CompanyId } from '@invoice/kernel';
-import type { Direction, PaymentMode } from './model.ts';
+import type { BillSettlement, Direction, PaymentMode } from './model.ts';
 
 export interface PostingLineOut {
   readonly accountId: AccountId;
@@ -117,6 +117,42 @@ export const buildPaymentPosting = (
         { accountId: partyAccount, partyId, debit: amount, credit: nil(), narration: 'Reduces what we owe' },
         { accountId: settlement, partyId: null, debit: nil(), credit: amount, narration },
       ];
+};
+
+/**
+ * Issue #295 — the non-cash ways a receipt settles bills, posted on the same voucher: TDS kept
+ * back is a receivable from the government (not the customer's debt), a discount allowed is an
+ * expense, and a small balance written off is a bad debt. The customer is credited for the money
+ * plus every adjustment, so what they owe falls by all of it.
+ */
+export interface SettlementAccounts {
+  readonly tdsReceivable: AccountId;
+  readonly discountAllowed: AccountId;
+  readonly badDebts: AccountId;
+}
+
+export const buildSettlementPostings = (
+  partyAccount: AccountId,
+  partyId: PartyId,
+  settlements: readonly BillSettlement[],
+  accounts: SettlementAccounts,
+): PostingLineOut[] => {
+  const accountFor = (settlement: BillSettlement): AccountId =>
+    settlement.kind === 'TDS_DEDUCTED' ? accounts.tdsReceivable
+      : settlement.kind === 'DISCOUNT_ALLOWED' ? accounts.discountAllowed
+        : accounts.badDebts;
+  const words = (settlement: BillSettlement): string =>
+    settlement.kind === 'TDS_DEDUCTED'
+      ? `TDS deducted by the customer on ${settlement.documentNumber}, s.${settlement.tdsSection ?? ''}`
+      : settlement.kind === 'DISCOUNT_ALLOWED'
+        ? `Discount allowed on ${settlement.documentNumber}`
+        : `Small balance written off on ${settlement.documentNumber}`;
+  return [
+    ...settlements.map((settlement) => ({
+      accountId: accountFor(settlement), partyId: null, debit: settlement.amount, credit: nil(), narration: words(settlement),
+    })),
+    { accountId: partyAccount, partyId, debit: nil(), credit: sum(settlements.map((s) => s.amount)), narration: 'Settled without money: TDS, discount or write-off' },
+  ];
 };
 
 /**

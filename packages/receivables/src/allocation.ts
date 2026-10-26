@@ -10,7 +10,7 @@
  *     another, and a bill already settled cannot absorb more.
  */
 import { compareDates, invalid, isZero, subtract, sum, formatINR, toDecimalString, zero, type IsoDate, type Money } from '@invoice/kernel';
-import type { Allocation, DocumentPosition, OpenDocument, Payment } from './model.ts';
+import type { Allocation, BillSettlement, DocumentPosition, OpenDocument, Payment } from './model.ts';
 
 const nil = (): Money => zero('INR');
 
@@ -29,12 +29,15 @@ export const positionOf = (
   payments: readonly Payment[],
   today: IsoDate,
 ): DocumentPosition => {
+  const live = payments.filter((p) => p.state === 'RECORDED');
   const allocated = sum(
-    payments
-      .filter((p) => p.state === 'RECORDED')
-      .flatMap((p) => p.allocations.filter((a) => a.documentId === document.documentId).map((a) => a.amount)),
+    live.flatMap((p) => p.allocations.filter((a) => a.documentId === document.documentId).map((a) => a.amount)),
   );
-  const outstanding = subtract(document.value, allocated);
+  // Issue #295 — what TDS, a discount or a write-off settled on the bill is not owed either.
+  const adjusted = sum(
+    live.flatMap((p) => (p.settlements ?? []).filter((s) => s.documentId === document.documentId).map((s) => s.amount)),
+  );
+  const outstanding = subtract(document.value, sum([allocated, adjusted]));
   const daysOverdue = document.dueDate === null ? 0 : daysBetween(today, document.dueDate);
   const status: DocumentPosition['status'] = isZero(outstanding)
     ? 'SETTLED'
@@ -157,4 +160,67 @@ export const totalOutstanding = (positions: readonly DocumentPosition[]): Money 
   sum(positions.map((p) => p.outstanding));
 
 export const allocatedTotal = (allocations: readonly Allocation[]): Money => sum(allocations.map((a) => a.amount));
+
+/**
+ * Issue #295 — checks the non-cash ways chosen bills are settled alongside the money.
+ *
+ * A settlement is only on one of the party's open bills, always positive, and money plus
+ * settlements on one bill never come to more than it still owes. TDS needs its Income-tax Act
+ * section; a write-off stays within the limit the owner set in Business details.
+ */
+export const validateSettlements = (
+  allocations: readonly Allocation[],
+  settlements: readonly BillSettlement[],
+  positions: readonly DocumentPosition[],
+  writeOffLimit: Money,
+): void => {
+  const byDocument = new Map(positions.map((p) => [p.document.documentId, p]));
+  const seen = new Set<string>();
+  for (const settlement of settlements) {
+    const key = `${settlement.documentId}:${settlement.kind}`;
+    if (settlement.amount.minor <= 0n) {
+      throw invalid('SETTLEMENT_NOT_POSITIVE', `The ${settlementWords(settlement.kind)} on ${settlement.documentNumber} must be more than zero.`);
+    }
+    if (seen.has(key)) {
+      throw invalid('SETTLEMENT_DUPLICATE', `${settlement.documentNumber} has ${settlementWords(settlement.kind)} twice. Put the whole amount once.`);
+    }
+    seen.add(key);
+    const position = byDocument.get(settlement.documentId);
+    if (position === undefined) {
+      throw invalid('SETTLEMENT_UNKNOWN_DOCUMENT', `${settlement.documentNumber} is not one of their open bills, so nothing can be settled on it.`);
+    }
+    if (settlement.kind === 'TDS_DEDUCTED' && (settlement.tdsSection ?? '').trim() === '') {
+      throw invalid('TDS_SECTION_REQUIRED', `Say which section the customer deducted the ${formatINR(settlement.amount)} of tax under, for example 194C or 194Q.`);
+    }
+    if (settlement.kind !== 'TDS_DEDUCTED') continue;
+    seen.add(`${settlement.documentId}:tds-checked`);
+  }
+  for (const settlement of settlements) {
+    if (settlement.kind === 'BALANCE_WRITTEN_OFF' && settlement.amount.minor > writeOffLimit.minor) {
+      throw invalid(
+        'WRITE_OFF_OVER_LIMIT',
+        `${formatINR(settlement.amount)} is more than the ${formatINR(writeOffLimit)} the owner allows writing off on one bill. Raise the limit in Business details, or collect it.`,
+        { details: { limit: toDecimalString(writeOffLimit) } },
+      );
+    }
+  }
+  // Money plus adjustments on one bill never comes to more than it still owes.
+  const onBill = new Map<string, bigint>();
+  for (const allocation of allocations) onBill.set(allocation.documentId, (onBill.get(allocation.documentId) ?? 0n) + allocation.amount.minor);
+  for (const settlement of settlements) onBill.set(settlement.documentId, (onBill.get(settlement.documentId) ?? 0n) + settlement.amount.minor);
+  for (const [documentId, settled] of onBill) {
+    const position = byDocument.get(documentId);
+    if (position !== undefined && settled > position.outstanding.minor) {
+      throw invalid(
+        'SETTLEMENT_EXCEEDS_OUTSTANDING',
+        `${position.document.number} only has ${formatINR(position.outstanding)} left to pay, but ${formatINR(money(settled))} of money and adjustments were put on it.`,
+        { details: { documentNumber: position.document.number, outstanding: toDecimalString(position.outstanding) } },
+      );
+    }
+  }
+};
+
+/** The shopkeeper's name for each kind, used in refusals and previews. */
+export const settlementWords = (kind: BillSettlement['kind']): string =>
+  kind === 'TDS_DEDUCTED' ? 'TDS deducted' : kind === 'DISCOUNT_ALLOWED' ? 'discount allowed' : 'amount written off';
 
