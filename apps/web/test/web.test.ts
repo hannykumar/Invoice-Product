@@ -400,7 +400,7 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
   const saleHeading = section('<section class="view" id="view-sale"', "</form>");
   assert.match(saleHeading, /id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"/);
   assert.equal(en.otherBills, "Other bills");
-  assert.equal(locales["hi-IN"]!.otherBills, "दूसरे बिल");
+  assert.equal(locales["hi-IN"]!.otherBills, "Dusre bill");
   assert.match(script, /querySelector\("#other-bills"\)\.addEventListener\("click", openBillSheet\)/);
   assert.match(script, /function openView[\s\S]*?if \(sheet\?\.open\) sheet\.close\(\);/);
 
@@ -421,9 +421,10 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
   assert.match(script, /if \(!document\.querySelector\("\.app-tabbar \[aria-current\]"\)\) document\.querySelector\("#more-tab"\)\?\.setAttribute\("aria-current", "page"\)/);
   assert.ok(more.length > 0);
 
-  // Hindi has every new word, in Devanagari.
+  // Hindi has every new word. Issue #298 picked Roman Hindi over Devanagari (docs/ux
+  // 00-design-principles.md §6), so nothing but the language's own name may stay in Devanagari.
   for (const key of ["mainNavigation", "tabHome", "tabKhata", "tabBill", "tabItems", "tabMore", "billSheetTitle", "navQuotation", "navReturn", "navExpense", "expenseSoon", "navGroupPeople", "navGroupBusiness", "navGroupReports", "moreTitle", "itemsTitle"]) {
-    assert.match(locales["hi-IN"]![key]!, /[ऀ-ॿ]/, key);
+    assert.ok(!/[ऀ-ॿ]/.test(locales["hi-IN"]![key]!), key);
   }
 });
 
