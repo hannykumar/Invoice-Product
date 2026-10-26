@@ -500,8 +500,8 @@ test("one company cannot read another company's inbox", async () => {
   const { inbox } = setup();
   const result = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "hash-D", storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, scanVerdict: "clean", deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   const otherCompany = { companyId: "company-b", branchId: "branch-b", actorId: "owner-b", permissions: new Set(), sessionId: "s" } as never;
-  assert.throws(() => inbox.document(otherCompany, result.document.id), /not found/);
-  assert.equal(inbox.inbox(otherCompany).length, 0);
+  await assert.rejects(() => inbox.document(otherCompany, result.document.id), /not found/);
+  assert.equal((await inbox.inbox(otherCompany)).length, 0);
 });
 
 test("an outage marks the document for retry and the retry does not re-read what was already read", async () => {
@@ -569,10 +569,10 @@ test("#400: a forged JSON naming a victim's GST number never reaches the victim'
   const nowhere = await send("random@invoices.example", "forged-2");
   assert.equal(nowhere.document.status, "quarantined");
   assert.equal(nowhere.document.quarantineReason, "COMPANY_NOT_IDENTIFIED");
-  assert.throws(() => inbox.assignCompany(contextFor("company-a"), nowhere.document.id, "it names our GST number"), /not found/);
-  assert.throws(() => inbox.assignCompany(contextFor("company-x"), nowhere.document.id, "mine"), /not found/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-a"), nowhere.document.id, "it names our GST number"), /not found/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-x"), nowhere.document.id, "mine"), /not found/);
 
-  assert.equal(inbox.inbox(contextFor("company-a")).length, 0);
+  assert.equal((await inbox.inbox(contextFor("company-a"))).length, 0);
 });
 
 test("#400: an unsigned JSON sent to the right address is drafted, but every value needs a person's eye", async () => {
@@ -619,7 +619,7 @@ test("#400: a genuinely signed invoice for one business, sent to another's addre
   });
   assert.equal(result.document.companyId, "company-b");
   assert.equal(result.document.quarantineReason, "COMPANY_MISMATCH");
-  assert.equal(inbox.inbox(contextFor("company-a")).length, 0);
+  assert.equal((await inbox.inbox(contextFor("company-a"))).length, 0);
 });
 
 test("#400: an upload takes its company from the session, and a printed buyer of another business holds it", async () => {
@@ -639,10 +639,10 @@ test("#400: another company cannot assign a document held in this company", asyn
   const held = await inbox.receive({ channel: "whatsapp", sender: whatsapp(), attachment: attachment({ sha256: "held-a", storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, scanVerdict: "clean", deliveredTo: "+91 98450 12345", idempotencyKey: "k1" });
   assert.equal(held.document.companyId, "company-a");
   assert.equal(held.document.quarantineReason, "COMPANY_MISMATCH");
-  assert.throws(() => inbox.assignCompany(contextFor("company-b"), held.document.id, "the GST number is ours"), /not found/);
-  assert.equal(inbox.document(contextFor("company-a"), held.document.id).companyId, "company-a");
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-b"), held.document.id, "the GST number is ours"), /not found/);
+  assert.equal((await inbox.document(contextFor("company-a"), held.document.id)).companyId, "company-a");
   // Its own company may confirm it.
-  const confirmed = inbox.assignCompany(contextFor("company-a"), held.document.id, "a branch we bought for");
+  const confirmed = await inbox.assignCompany(contextFor("company-a"), held.document.id, "a branch we bought for");
   assert.equal(confirmed.companyId, "company-a");
   assert.match(confirmed.routing?.evidence ?? "", /owner-company-a/);
 });
@@ -653,15 +653,15 @@ test("#400: a document on a shared address can be claimed only by a business tha
   assert.equal(result.document.quarantineReason, "COMPANY_NOT_IDENTIFIED");
   assert.deepEqual(inbox.awaitingAssignment(contextFor("company-a")).map((item) => item.id), [result.document.id]);
   assert.deepEqual(Object.keys(inbox.awaitingAssignment(contextFor("company-a"))[0] ?? {}).sort(), ["channel", "fileName", "id", "receivedAt", "sizeBytes"]);
-  assert.throws(() => inbox.assignCompany(contextFor("company-a", []), result.document.id, "ours"), /permission/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-a", []), result.document.id, "ours"), /permission/);
   assert.deepEqual(inbox.awaitingAssignment(contextFor("company-x")), []);
-  assert.throws(() => inbox.assignCompany(contextFor("company-x"), result.document.id, "mine"), /not found/);
-  assert.throws(() => inbox.assignCompany(contextFor("company-a"), result.document.id, "   "), /say why/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-x"), result.document.id, "mine"), /not found/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-a"), result.document.id, "   "), /say why/);
 
-  const claimed = inbox.assignCompany(contextFor("company-a"), result.document.id, "our supplier");
+  const claimed = await inbox.assignCompany(contextFor("company-a"), result.document.id, "our supplier");
   assert.equal(claimed.companyId, "company-a");
   // Once claimed, the other owner of the address cannot take it.
-  assert.throws(() => inbox.assignCompany(contextFor("company-b"), result.document.id, "ours"), /not found/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-b"), result.document.id, "ours"), /not found/);
   // The hold is lifted cleanly, and the same file arriving again is a duplicate in its new home.
   assert.equal(claimed.quarantineReason, undefined);
   const again = await inbox.receive({ channel: "manual_upload", sender: { channel: "manual_upload", address: "owner-company-a" }, attachment: attachment({ sha256: "shared-1", storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, scanVerdict: "clean", uploader: contextFor("company-a"), idempotencyKey: "k2" });
@@ -674,13 +674,13 @@ test("#400: assigning cannot clear a hold that was not about the company", async
   const infected = await inbox.receive({ channel: "email", sender: { channel: "email", address: "a@b.example" }, attachment: attachment({ sha256: "bad-1" }), bytes: PDF_HEAD, scanVerdict: "infected", deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k1" });
   assert.equal(infected.document.quarantineReason, "MALWARE_SUSPECTED");
   // Screened out before routing, so it belongs to nobody and nobody can claim it.
-  assert.throws(() => inbox.assignCompany(contextFor("company-a"), infected.document.id, "looks fine"), /not found/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-a"), infected.document.id, "looks fine"), /not found/);
 
   const tampered = signedEinvoice({ number: "SRS/2026/0070", key: FORGER.privateKey });
   const held = await inbox.receive({ channel: "email", sender: { channel: "email", address: "a@b.example" }, attachment: jsonAttachment("tampered-1"), bytes: bytes(tampered), scanVerdict: "clean", deliveredTo: "bills-sampoorna@invoices.example", idempotencyKey: "k2" });
   assert.equal(held.document.companyId, "company-a");
   assert.equal(held.document.quarantineReason, "SIGNATURE_INVALID");
-  assert.throws(() => inbox.assignCompany(contextFor("company-a"), held.document.id, "looks fine"), /cannot be cleared/);
+  await assert.rejects(() => inbox.assignCompany(contextFor("company-a"), held.document.id, "looks fine"), /cannot be cleared/);
 });
 
 test("#400: another company cannot retry this company's document", async () => {
@@ -693,7 +693,7 @@ test("#400: another company cannot retry this company's document", async () => {
   // Inside the company, a person without the permission cannot ask for a paid re-read either.
   await assert.rejects(() => inbox.retry(contextFor("company-a", []), failed.document.id), /permission/);
   assert.equal(ocr.callCount, calls);
-  assert.equal(inbox.document(contextFor("company-a"), failed.document.id).status, "failed");
+  assert.equal((await inbox.document(contextFor("company-a"), failed.document.id)).status, "failed");
 });
 
 test("#400: a retry goes through the same company cross-check as the first read", async () => {
