@@ -16,11 +16,11 @@ export interface AgeingBucket {
 }
 
 export const AGEING_BANDS: readonly { label: { 'en-IN': string; 'hi-IN': string }; from: number; to: number | null }[] = [
-  { label: { 'en-IN': 'Not due yet', 'hi-IN': 'Abhi baaki nahin' }, from: Number.NEGATIVE_INFINITY, to: 0 },
-  { label: { 'en-IN': 'Up to 30 days late', 'hi-IN': '30 din tak late' }, from: 1, to: 30 },
-  { label: { 'en-IN': '31 to 60 days late', 'hi-IN': '31 se 60 din late' }, from: 31, to: 60 },
-  { label: { 'en-IN': '61 to 90 days late', 'hi-IN': '61 se 90 din late' }, from: 61, to: 90 },
-  { label: { 'en-IN': 'More than 90 days late', 'hi-IN': '90 din se zyada late' }, from: 91, to: null },
+  { label: { 'en-IN': 'Not due yet', 'hi-IN': 'अभी बाक़ी नहीं' }, from: Number.NEGATIVE_INFINITY, to: 0 },
+  { label: { 'en-IN': 'Up to 30 days late', 'hi-IN': '30 दिन तक देर से' }, from: 1, to: 30 },
+  { label: { 'en-IN': '31 to 60 days late', 'hi-IN': '31 से 60 दिन देर से' }, from: 31, to: 60 },
+  { label: { 'en-IN': '61 to 90 days late', 'hi-IN': '61 से 90 दिन देर से' }, from: 61, to: 90 },
+  { label: { 'en-IN': 'More than 90 days late', 'hi-IN': '90 दिन से ज़्यादा देर से' }, from: 91, to: null },
 ];
 
 export const ageingOf = (positions: readonly DocumentPosition[], today: IsoDate): readonly AgeingBucket[] =>
@@ -74,8 +74,8 @@ export const overdueSummaries = (
               : `${name} still owes you ${amount}.`,
           'hi-IN':
             oldest > 0
-              ? `${name} se ${amount} lena baaki hai, aur sabse purana bill ${oldest} din late hai.`
-              : `${name} se ${amount} lena baaki hai.`,
+              ? `${name} से ${amount} लेना बाक़ी है, और सबसे पुराना बिल ${oldest} दिन देर से है।`
+              : `${name} से ${amount} लेना बाक़ी है।`,
         },
       };
     })

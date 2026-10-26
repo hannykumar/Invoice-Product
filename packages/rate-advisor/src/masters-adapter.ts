@@ -74,8 +74,8 @@ export const mastersLearning = (
           `${percent(written.record.gstRateBasisPoints)} saved for this item from ${written.version.effectiveFrom}. `
           + 'The next bill for it will use this without asking.',
         'hi-IN':
-          `${percent(written.record.gstRateBasisPoints)} is item ke liye ${written.version.effectiveFrom} se save ho gaya. `
-          + 'Agle bill mein yeh apne aap lag jaayega.',
+          `${percent(written.record.gstRateBasisPoints)} इस आइटम के लिए ${written.version.effectiveFrom} से सेव हो गया। `
+          + 'अगले बिल में यह अपने आप लग जाएगा।',
       },
     };
   },

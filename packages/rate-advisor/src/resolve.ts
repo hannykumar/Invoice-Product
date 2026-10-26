@@ -67,38 +67,42 @@ export const agree = (left: RegisterRate, right: RegisterRate): boolean =>
  */
 const cite = (source: string): string => source.trim().replace(/\.$/, '');
 
-const describeSubject = (subject: RateSubject): string =>
+const describeSubject = (subject: RateSubject, hi: boolean): string =>
   subject.kind === 'ITEM'
-    ? `${subject.itemName ?? 'this item'}${subject.hsnSac === null ? '' : ` (HSN ${subject.hsnSac})`}`
+    ? `${subject.itemName ?? (hi ? 'यह आइटम' : 'this item')}${subject.hsnSac === null ? '' : ` (HSN ${subject.hsnSac})`}`
     : `HSN ${subject.hsnSac}${subject.describedAs === null ? '' : `, ${subject.describedAs}`}`;
 
 /** The extra clause a rate with cess or reverse charge needs, so a suggestion never under-bills. */
-const extras = (rate: RegisterRate): string => {
+const extras = (rate: RegisterRate, hi: boolean): string => {
   const parts: string[] = [];
   if (rate.cessRateBasisPoints !== undefined && rate.cessRateBasisPoints > 0) {
-    parts.push(`plus cess at ${percent(rate.cessRateBasisPoints)}`);
+    parts.push(hi ? `और ${percent(rate.cessRateBasisPoints)} की दर से सेस` : `plus cess at ${percent(rate.cessRateBasisPoints)}`);
   }
   if (rate.cessPerUnitPaise !== undefined && rate.cessPerUnitPaise > 0n) {
-    parts.push(`plus cess of ${formatINR({ currency: 'INR', minor: rate.cessPerUnitPaise })} a unit`);
+    parts.push(hi
+      ? `और हर यूनिट पर ${formatINR({ currency: 'INR', minor: rate.cessPerUnitPaise })} का सेस`
+      : `plus cess of ${formatINR({ currency: 'INR', minor: rate.cessPerUnitPaise })} a unit`);
   }
   if (rate.reverseCharge) {
-    parts.push('and the tax on this is paid by the buyer, not charged by the supplier');
+    parts.push(hi
+      ? 'और इसका टैक्स ख़रीदने वाला देता है, सप्लायर नहीं वसूलता'
+      : 'and the tax on this is paid by the buyer, not charged by the supplier');
   }
   return parts.length === 0 ? '' : ` — ${parts.join(', ')}`;
 };
 
 export const reasonFor = (rate: RegisterRate, asOf: IsoDate): Bilingual => ({
   'en-IN':
-    `${percent(rate.gstRateBasisPoints)} — because this is ${describeSubject(rate.subject)}, `
-    + `per ${cite(rate.citation.source)}, in force from ${rate.citation.effectiveFrom} and on ${asOf}${extras(rate)}.`,
+    `${percent(rate.gstRateBasisPoints)} — because this is ${describeSubject(rate.subject, false)}, `
+    + `per ${cite(rate.citation.source)}, in force from ${rate.citation.effectiveFrom} and on ${asOf}${extras(rate, false)}.`,
   'hi-IN':
-    `${percent(rate.gstRateBasisPoints)} — kyunki yeh ${describeSubject(rate.subject)} hai, `
-    + `${cite(rate.citation.source)} ke anusaar, jo ${rate.citation.effectiveFrom} se laagu hai${extras(rate)}.`,
+    `${percent(rate.gstRateBasisPoints)} — क्योंकि यह ${describeSubject(rate.subject, true)} है, `
+    + `${cite(rate.citation.source)} के अनुसार, जो ${rate.citation.effectiveFrom} से लागू है${extras(rate, true)}।`,
 });
 
 const askToUse = (rate: RegisterRate): Bilingual => ({
   'en-IN': `Use ${percent(rate.gstRateBasisPoints)}?`,
-  'hi-IN': `${percent(rate.gstRateBasisPoints)} lagayein?`,
+  'hi-IN': `${percent(rate.gstRateBasisPoints)} लगाइए?`,
 });
 
 /**
@@ -130,12 +134,12 @@ export const resolve = (input: {
           `We read "${proposal.fromText}" as ${proposal.hsnSac === undefined ? 'an item in your list' : `HSN ${proposal.hsnSac}`}. `
           + 'That was worked out by the app, not read off the bill. Is it right?',
         'hi-IN':
-          `Humne "${proposal.fromText}" ko ${proposal.hsnSac === undefined ? 'aapki suchi ka item' : `HSN ${proposal.hsnSac}`} samjha. `
-          + 'Yeh app ne socha hai, bill par likha nahi tha. Kya yeh sahi hai?',
+          `हमने "${proposal.fromText}" को ${proposal.hsnSac === undefined ? 'आपकी सूची का आइटम' : `HSN ${proposal.hsnSac}`} समझा। `
+          + 'यह ऐप ने सोचा है, बिल पर लिखा नहीं था। क्या यह सही है?',
       },
       whatWouldHelp: {
         'en-IN': 'Confirm what these goods are, and the rate for them follows from your register.',
-        'hi-IN': 'Bataiye yeh saamaan kya hai, phir rate aapke register se aa jaayega.',
+        'hi-IN': 'बताइए यह सामान क्या है, फिर रेट आपके रजिस्टर से आ जाएगा।',
       },
       awaitingConfirmationOf: proposal,
     };
@@ -149,20 +153,20 @@ export const resolve = (input: {
       question: input.hadSomethingToMatchOn
         ? {
           'en-IN': 'Your records do not have a GST rate for this yet. What rate should it use?',
-          'hi-IN': 'Aapke record mein iska GST rate abhi nahi hai. Kaunsa rate lagana chahiye?',
+          'hi-IN': 'आपके रिकॉर्ड में इसका GST रेट अभी नहीं है। कौनसा रेट लगाना चाहिए?',
         }
         : {
           'en-IN': 'We could not tell what these goods are, so there is nothing to look the rate up by. What are they?',
-          'hi-IN': 'Yeh saamaan kya hai, yeh samajh nahi aaya, isliye rate dhoondhne ka koi zariya nahi. Yeh kya hai?',
+          'hi-IN': 'यह सामान क्या है, यह समझ नहीं आया, इसलिए रेट ढूंढने का कोई ज़रिया नहीं। यह क्या है?',
         },
       whatWouldHelp: input.hadSomethingToMatchOn
         ? {
           'en-IN': 'Set a rate for this item or its HSN code once, and every later bill will use it.',
-          'hi-IN': 'Is item ya iske HSN ka rate ek baar set kar dein, aage ke sabhi bill use lenge.',
+          'hi-IN': 'इस आइटम या इसके HSN का रेट एक बार सेट कर दीजिए, आगे के सभी बिल उसे लेंगे।',
         }
         : {
           'en-IN': 'Add the HSN code from the bill, or pick the item from your list.',
-          'hi-IN': 'Bill se HSN code bharein, ya apni suchi se item chunein.',
+          'hi-IN': 'बिल से HSN कोड भरिए, या अपनी सूची से आइटम चुनिए।',
         },
     };
   }
@@ -183,12 +187,12 @@ export const resolve = (input: {
           `Your records hold ${rates.length} different GST rates for this — `
           + `${[...new Set(rates.map((rate) => percent(rate.gstRateBasisPoints)))].join(' and ')}. Which one is right?`,
         'hi-IN':
-          `Aapke record mein iske liye ${rates.length} alag GST rate hain — `
-          + `${[...new Set(rates.map((rate) => percent(rate.gstRateBasisPoints)))].join(' aur ')}. Sahi kaunsa hai?`,
+          `आपके रिकॉर्ड में इसके लिए ${rates.length} अलग GST रेट हैं — `
+          + `${[...new Set(rates.map((rate) => percent(rate.gstRateBasisPoints)))].join(' और ')}। सही कौनसा है?`,
       },
       whatWouldHelp: {
         'en-IN': 'Remove the entries that are wrong, so there is one answer for this in your records.',
-        'hi-IN': 'Galat entry hata dein, taaki record mein iska ek hi jawaab rahe.',
+        'hi-IN': 'ग़लत एंट्री हटा दीजिए, ताकि रिकॉर्ड में इसका एक ही जवाब रहे।',
       },
     };
   }

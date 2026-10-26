@@ -147,7 +147,7 @@ export class TradeTermsService {
       outcome = 'ALLOW';
       reasons.push({
         'en-IN': `Allowed anyway, because: ${request.override.reason}`,
-        'hi-IN': `Phir bhi ijaazat di gayi, kyunki: ${request.override.reason}`,
+        'hi-IN': `फिर भी इजाज़त दी गई, क्योंकि: ${request.override.reason}`,
       });
     }
 

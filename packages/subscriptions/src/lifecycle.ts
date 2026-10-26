@@ -53,22 +53,22 @@ export const writingStopsOn = (subscription: Subscription, plan: Plan): IsoDate 
 };
 
 export const STATE_WORDS: Readonly<Record<SubscriptionState, { 'en-IN': string; 'hi-IN': string }>> = {
-  TRIALING: { 'en-IN': 'You are trying the product out.', 'hi-IN': 'Aap product aazma rahe hain.' },
-  ACTIVE: { 'en-IN': 'Everything is running normally.', 'hi-IN': 'Sab kuch theek chal raha hai.' },
+  TRIALING: { 'en-IN': 'You are trying the product out.', 'hi-IN': 'आप प्रोडक्ट आज़मा रहे हैं।' },
+  ACTIVE: { 'en-IN': 'Everything is running normally.', 'hi-IN': 'सब कुछ ठीक चल रहा है।' },
   PAST_DUE: {
     'en-IN': 'Payment did not go through. Nothing has stopped — please pay when you can.',
-    'hi-IN': 'Bhugtan nahin hua. Abhi kuch band nahin hua hai — jab ho sake, bhar dein.',
+    'hi-IN': 'भुगतान नहीं हुआ। अभी कुछ बंद नहीं हुआ है — जब हो सके, भर दीजिए।',
   },
   GRACE: {
     'en-IN': 'Still unpaid. Everything works for now, and you will be told before anything stops.',
-    'hi-IN': 'Abhi tak bhugtan nahin hua. Filhaal sab chalta rahega, aur kuch band hone se pehle aapko bata diya jayega.',
+    'hi-IN': 'अभी तक भुगतान नहीं हुआ। फ़िलहाल सब चलता रहेगा, और कुछ बंद होने से पहले आपको बता दिया जाएगा।',
   },
   READ_ONLY: {
     'en-IN': 'You can read and download everything, but not record anything new until this is paid. Nothing has been deleted.',
-    'hi-IN': 'Aap sab kuch dekh aur download kar sakte hain, par bhugtan tak naya kuch likh nahin sakte. Kuch bhi mitaya nahin gaya hai.',
+    'hi-IN': 'आप सब कुछ देख और डाउनलोड कर सकते हैं, पर भुगतान तक नया कुछ लिख नहीं सकते। कुछ भी मिटाया नहीं गया है।',
   },
   CANCELLED: {
     'en-IN': 'This subscription is cancelled. Your books are still here, and still yours to download.',
-    'hi-IN': 'Yeh subscription band hai. Aapki bahi yahin hai, aur aap use download kar sakte hain.',
+    'hi-IN': 'यह सब्सक्रिप्शन बंद है। आपकी बही यहीं है, और आप उसे डाउनलोड कर सकते हैं।',
   },
 };

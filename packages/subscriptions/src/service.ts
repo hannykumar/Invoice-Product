@@ -75,7 +75,7 @@ export interface AccountView {
 
 export const PRICING_PROMISE: Bilingual = {
   'en-IN': 'Every plan gets every warning, every check and your data whenever you want it. Plans differ in how much you do, never in how carefully it is done.',
-  'hi-IN': 'Har plan mein har chetavni, har jaanch, aur jab chahein apna data milta hai. Plan sirf itne mein alag hain ki aap kitna kaam karte hain — kaam kitni savdhani se hota hai, usme nahin.',
+  'hi-IN': 'हर प्लान में हर चेतावनी, हर जाँच, और जब चाहें अपना डेटा मिलता है। प्लान सिर्फ़ इसमें अलग हैं कि आप कितना काम करते हैं — काम कितनी सावधानी से होता है, उसमें नहीं।',
 };
 
 export class SubscriptionService {

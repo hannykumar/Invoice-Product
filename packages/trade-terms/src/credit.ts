@@ -72,15 +72,15 @@ export const decideCredit = async (
       sentence: tooLate
         ? {
             'en-IN': `${name}'s oldest unpaid bill is ${overdueDays} days late, so this bill is on hold.`,
-            'hi-IN': `${name} ka sabse purana bina chukaya bill ${overdueDays} din late hai, isliye yeh bill roka gaya hai.`,
+            'hi-IN': `${name} का सबसे पुराना बिना चुकाया बिल ${overdueDays} दिन देर से है, इसलिए यह बिल रोका गया है।`,
           }
         : {
             'en-IN': `No credit limit has been set for ${name}, so we cannot say whether this bill crosses one.`,
-            'hi-IN': `${name} ke liye koi udhaar seema tay nahin hai, isliye yeh nahin keh sakte ki yeh bill use paar karta hai ya nahin.`,
+            'hi-IN': `${name} के लिए कोई उधार सीमा तय नहीं है, इसलिए यह नहीं कह सकते कि यह बिल उसे पार करता है या नहीं।`,
           },
       why: {
         'en-IN': 'We do not guess a limit. Set one for this customer and we will check every bill against it.',
-        'hi-IN': 'Hum seema ka andaaza nahin lagate. Is customer ke liye ek tay karein, phir hum har bill jaanchenge.',
+        'hi-IN': 'हम सीमा का अंदाज़ा नहीं लगाते। इस ग्राहक के लिए एक तय कीजिए, फिर हम हर बिल जाँचेंगे।',
       },
     };
   }
@@ -117,27 +117,27 @@ export const decideCredit = async (
   const held = pending.minor > 0n;
   const owedNow = {
     'en-IN': `${name} owes ${formatINR(position.total)}.${held ? ` Bills held for them and not yet issued come to ${formatINR(pending)}.` : ''} This bill is ${formatINR(request.saleValue)}.`,
-    'hi-IN': `${name} par ${formatINR(position.total)} baaki hai.${held ? ` Unke roke gaye, abhi jaari na hue bill ${formatINR(pending)} ke hain.` : ''} Yeh bill ${formatINR(request.saleValue)} ka hai.`,
+    'hi-IN': `${name} पर ${formatINR(position.total)} बाक़ी है।${held ? ` उनके रोके गए, अभी जारी न हुए बिल ${formatINR(pending)} के हैं।` : ''} यह बिल ${formatINR(request.saleValue)} का है।`,
   };
   const parts = [position.total, ...(held ? [pending] : []), request.saleValue].map(formatINR).join(' + ');
   const together = {
     'en-IN': `Together ${parts} = ${formatINR(exposure)}`,
-    'hi-IN': `Kul ${parts} = ${formatINR(exposure)}`,
+    'hi-IN': `कुल ${parts} = ${formatINR(exposure)}`,
   };
 
   const sentence = tooLate
     ? {
         'en-IN': `${name}'s oldest unpaid bill is ${overdueDays} days late, so this bill is on hold until something is collected.`,
-        'hi-IN': `${name} ka sabse purana bina chukaya bill ${overdueDays} din late hai, isliye kuch vasooli hone tak yeh bill roka gaya hai.`,
+        'hi-IN': `${name} का सबसे पुराना बिना चुकाया बिल ${overdueDays} दिन देर से है, इसलिए कुछ वसूली होने तक यह बिल रोका गया है।`,
       }
     : overLimit
       ? {
           'en-IN': `${owedNow['en-IN']} ${together['en-IN']}. That is ${formatINR(exposure)} − ${formatINR(limit)} = ${formatINR(excess)} over their ${formatINR(limit)} limit.`,
-          'hi-IN': `${owedNow['hi-IN']} ${together['hi-IN']}. Yeh unki ${formatINR(limit)} ki seema se ${formatINR(exposure)} − ${formatINR(limit)} = ${formatINR(excess)} zyada hai.`,
+          'hi-IN': `${owedNow['hi-IN']} ${together['hi-IN']}। यह उनकी ${formatINR(limit)} की सीमा से ${formatINR(exposure)} − ${formatINR(limit)} = ${formatINR(excess)} ज़्यादा है।`,
         }
       : {
           'en-IN': `${owedNow['en-IN']} ${together['en-IN']}. That is within their ${formatINR(limit)} limit.`,
-          'hi-IN': `${owedNow['hi-IN']} ${together['hi-IN']}. Yeh unki ${formatINR(limit)} ki seema ke andar hai.`,
+          'hi-IN': `${owedNow['hi-IN']} ${together['hi-IN']}। यह उनकी ${formatINR(limit)} की सीमा के अंदर है।`,
         };
 
   return {
@@ -155,7 +155,7 @@ export const decideCredit = async (
     sentence,
     why: {
       'en-IN': 'We add what they owe after payments and credit notes, bills held back for them, and this whole bill with GST and charges.',
-      'hi-IN': 'Hum jodte hain: payment aur credit note ke baad ka baaki, unke roke gaye bill, aur GST aur kharchon samet yeh poora bill.',
+      'hi-IN': 'हम जोड़ते हैं: पेमेंट और क्रेडिट नोट के बाद का बाक़ी, उनके रोके गए बिल, और GST और ख़र्चों समेत यह पूरा बिल।',
     },
   };
 };
