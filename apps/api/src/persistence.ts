@@ -91,11 +91,14 @@ export const securityOf = (persistence: Persistence): SecurityStores => {
       };
     })()
     : memorySecurityStores();
-  persistence.security = stores;
+  Object.defineProperty(persistence, 'security', { value: stores, enumerable: false, writable: true, configurable: true });
   return stores;
 };
 
-export const MEMORY: Persistence = { kind: 'memory', get security() { return memorySecurityStores(); } };
+// Non-enumerable so `{ kind: 'memory' }` stays the whole observable shape — the stores appear only
+// when something asks for them.
+export const MEMORY: Persistence = { kind: 'memory' };
+Object.defineProperty(MEMORY, 'security', { get: memorySecurityStores, enumerable: false });
 
 /**
  * A fixed UUID for one of the app's own named records (an account code, the main godown), so the

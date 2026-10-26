@@ -6,6 +6,7 @@
  * Needs DATABASE_URL (the owner). Skipped locally without it; fails in CI.
  */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test, { after, before } from 'node:test';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 
@@ -64,20 +65,28 @@ test('#352: export carries the tenant\'s rows only, a legal hold blocks deletion
     for (const row of rows) if (row && typeof row === 'object' && 'company_id' in row) assert.equal((row as { company_id: string }).company_id, KONKAN, `${table} leaked another tenant`);
   }
   assert.ok(Object.keys(tables).length > 5, 'the dump covers the tenant tables');
+  // Deletion runs against a company made for the test, so the seeded companies stay signed-in-able.
+  const probe = randomUUID();
+  const probeUser = randomUUID();
+  await db.query('INSERT INTO companies (id, legal_name) VALUES ($1, $2)', [probe, 'Probe Traders']);
+  await db.query('INSERT INTO users (id, email, display_name, active) VALUES ($1, $2, $3, true)', [probeUser, 'probe@probe.example.invalid', 'Probe Owner']);
+  await db.query("INSERT INTO memberships (company_id, user_id, permissions, active) VALUES ($1, $2, '[]'::jsonb, true)", [probe, probeUser]);
+  await db.query("INSERT INTO app_records (company_id, kind, key, value) VALUES ($1, 'privacy_probe', 'probe', '\"x\"'::jsonb)", [probe]);
+  const probeContext = { companyId: probe, actorId: probeUser, requestId: 'probe-2', permissions: context.permissions } as any;
   // Hold: deletion answers blocked, not erased.
-  await privacy.placeLegalHold(context, KONKAN, 'assessment under way');
-  const blockedKey = `del-${Date.now()}-held`;
-  const heldRequest = await privacy.request(context, KONKAN, 'deletion', blockedKey);
-  const blockedOutcome = await privacy.executeDeletion(context, heldRequest.id);
+  await privacy.placeLegalHold(probeContext, probe, 'assessment under way');
+  const heldRequest = await privacy.request(probeContext, probe, 'deletion', `del-${Date.now()}-held`);
+  const blockedOutcome = await privacy.executeDeletion(probeContext, heldRequest.id);
   assert.equal(blockedOutcome.request.status, 'blocked');
-  // Release and delete: sessions and memberships go, the books stay.
-  const { rows: holdRows } = await db.query('SELECT id FROM privacy_legal_holds WHERE company_id = $1', [KONKAN]);
-  await privacy.releaseLegalHold(context, String((holdRows[0] as { id: string }).id), 'resolved');
-  const delRequest = await privacy.request(context, KONKAN, 'deletion', `del-${Date.now()}-go`);
-  const outcome = await privacy.executeDeletion(context, delRequest.id);
-  assert.ok((outcome.result?.deletedRecords ?? 0) > 0, 'rows were removed');
-  assert.ok((outcome.result?.retainedRecords ?? 0) > 0, 'the books were kept');
-  const { rows: frozen } = await db.query("SELECT count(*)::int AS n FROM app_records WHERE company_id = $1 AND frozen = true", [KONKAN]);
-  const { rows: remaining } = await db.query("SELECT count(*)::int AS n FROM app_records WHERE company_id = $1 AND value <> 'null'::jsonb", [KONKAN]);
-  assert.equal((remaining[0] as { n: number }).n, (frozen[0] as { n: number }).n, 'only frozen posted rows survive');
+  // Release and delete: the account's access goes, its register and audit stay.
+  const { rows: holdRows } = await db.query('SELECT id FROM privacy_legal_holds WHERE company_id = $1', [probe]);
+  await privacy.releaseLegalHold(probeContext, String((holdRows[0] as { id: string }).id), 'resolved');
+  const delRequest = await privacy.request(probeContext, probe, 'deletion', `del-${Date.now()}-go`);
+  const outcome = await privacy.executeDeletion(probeContext, delRequest.id);
+  assert.ok((outcome.result?.deletedRecords ?? 0) >= 3, `app record + membership + user removed: ${JSON.stringify(outcome.result)}`);
+  assert.ok((outcome.result?.retainedRecords ?? 0) > 0, 'the audit trail and register are kept');
+  const { rows: alive } = await db.query("SELECT count(*)::int AS n FROM app_records WHERE company_id = $1 AND value <> 'null'::jsonb", [probe]);
+  assert.equal((alive[0] as { n: number }).n, 0, 'every unfrozen record is tombstoned');
+  const { rows: member } = await db.query('SELECT count(*)::int AS n FROM memberships WHERE company_id = $1 AND active = true', [probe]);
+  assert.equal((member[0] as { n: number }).n, 0, 'nobody can sign in to the removed account');
 });
