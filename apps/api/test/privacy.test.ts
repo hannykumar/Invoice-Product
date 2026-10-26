@@ -71,8 +71,8 @@ test('#352: a master with bigint money seals and reopens, and a production serve
 
 test('#352: an account scrub skips the frozen copies of issued documents', async () => {
   const { DurableMap, scrubDurableRecords } = await import('../src/durable.ts');
-  const open = new DurableMap<unknown>(`test_open_${Date.now()}`, () => 'co-1');
-  const frozen = new DurableMap<unknown>(`test_frozen_${Date.now()}`, () => 'co-1', { frozen: true });
+  const open = new DurableMap<{ note: string }>(`test_open_${Date.now()}`, () => 'co-1');
+  const frozen = new DurableMap<{ note: string }>(`test_frozen_${Date.now()}`, () => 'co-1', { frozen: true });
   open.set('k1', { note: 'mutable' });
   frozen.set('print-1', { note: 'issued copy' });
   assert.equal(scrubDurableRecords('co-1'), 1);
