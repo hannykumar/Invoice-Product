@@ -33,6 +33,7 @@ import {
   type StepId,
 } from '@invoice/onboarding';
 import { recordTurnoverAnswer, rememberBusinessPrefill } from './business-details-application.ts';
+import { say } from './language.ts';
 
 const ONBOARDING_PERMISSIONS = ['ledger.setup', 'ledger.post.opening_balance', 'onboarding.run', 'onboarding.finish'];
 
@@ -214,7 +215,7 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean, company
   else session = await service.skipStep(actor, session.id, 'opening_balances', 'The business will add opening balances later.');
 
   const problems = (Object.keys(session.steps) as StepId[]).flatMap((step) =>
-    session.steps[step].problems.map((problem) => ({ step, field: problem.field ?? null, message: problem.message['en-IN'] })),
+    session.steps[step].problems.map((problem) => ({ step, field: problem.field ?? null, message: say(problem.message) })),
   );
 
   const checklist = checklistFor(session, 'en-IN');

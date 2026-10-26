@@ -43,6 +43,7 @@ import {
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
 import { masterData, mastersContext } from './master-data.ts';
+import { both, say } from './language.ts';
 import { OUTSIDE_INDIA, addressesOf, billingAddressOf, customerPrint, customerView, resolveCustomer } from './catalogue-application.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
@@ -85,8 +86,8 @@ export const createTransporter = (companyId: CompanyId | string, body: unknown) 
   );
   return {
     state: 'recorded' as const,
-    title: 'Transporter added',
-    message: `${created.record.name} is in your transporter list.`,
+    title: both('Transporter added', 'Transporter juda'),
+    message: both(`${created.record.name} is in your transporter list.`, `${created.record.name} aapki transporter suchi mein hai.`),
     transporter: { id: created.record.id, name: created.record.name, transporterId: created.record.transporterId },
   };
 };
@@ -132,8 +133,8 @@ export const addShippingAddress = (companyId: CompanyId | string, body: unknown)
   );
   return {
     state: 'recorded' as const,
-    title: 'Delivery address added',
-    message: `Goods for ${customer.legalName} can now be sent to ${city}.`,
+    title: both('Delivery address added', 'Delivery ka pata juda'),
+    message: both(`Goods for ${customer.legalName} can now be sent to ${city}.`, `${customer.legalName} ka maal ab ${city} bheja ja sakta hai.`),
     address: describeAddress(created.record),
   };
 };
@@ -207,8 +208,8 @@ export const correctCustomerAddress = (companyId: CompanyId | string, body: unkn
   );
   return {
     state: 'recorded' as const,
-    title: 'Address corrected',
-    message: `${customer.legalName}'s address now reads ${corrected.record.line1}, ${corrected.record.city} ${corrected.record.pincode}. Bills already issued keep the address they were issued with.`,
+    title: both('Address corrected', 'Pata theek kiya'),
+    message: both(`${customer.legalName}'s address now reads ${corrected.record.line1}, ${corrected.record.city} ${corrected.record.pincode}. Bills already issued keep the address they were issued with.`, `${customer.legalName} ka pata ab ${corrected.record.line1}, ${corrected.record.city} ${corrected.record.pincode} hai. Pehle se bane bills apne purane pate ke saath rahenge.`),
     address: describeAddress(corrected.record),
   };
 };
@@ -309,7 +310,7 @@ export const deliveryDetails = (
   let shipTo: RenderableParty | null = null;
   let deliverTo: MovementParty | null = null;
   let placeOfSupplyStateCode = billing.stateCode;
-  let placeOfSupplyReason = `Place of supply: ${stateName(billing.stateCode)} (${billing.stateCode}) — the goods go to ${billedTo.legalName}'s billing address.`;
+  let placeOfSupplyReason = both(`Place of supply: ${stateName(billing.stateCode)} (${billing.stateCode}) — the goods go to ${billedTo.legalName}'s billing address.`, `Supply ka sthan: ${stateName(billing.stateCode)} (${billing.stateCode}) — maal ${billedTo.legalName} ke billing pate par jaata hai.`);
 
   if (kind === 'address') {
     const addressId = str(body.shipToAddressId);
@@ -322,7 +323,7 @@ export const deliveryDetails = (
     deliverTo = movementPartyOf(billedTo.legalName, address.gstin ?? '', address);
     // Section 10(1)(a) — the movement ends here, so the supply counts in this state.
     placeOfSupplyStateCode = address.stateCode;
-    placeOfSupplyReason = `Place of supply: ${stateName(address.stateCode)} (${address.stateCode}) — the goods finish their journey at ${billedTo.legalName}'s ${address.city} address.`;
+    placeOfSupplyReason = both(`Place of supply: ${stateName(address.stateCode)} (${address.stateCode}) — the goods finish their journey at ${billedTo.legalName}'s ${address.city} address.`, `Supply ka sthan: ${stateName(address.stateCode)} (${address.stateCode}) — maal apni yatra ${billedTo.legalName} ke ${address.city} pate par poori karta hai.`);
   }
 
   if (kind === 'party') {
@@ -340,7 +341,7 @@ export const deliveryDetails = (
     // the wrong tax on the bill and the credit in the wrong state's hands.
     placeOfSupplyStateCode = billing.stateCode;
     const consigneeView = customerView(companyId, consignee.id);
-    placeOfSupplyReason = `Place of supply: ${stateName(billing.stateCode)} (${billing.stateCode}) — the goods are delivered to ${block.name}${consigneeView.stateName === null ? '' : ` in ${consigneeView.stateName}`} on ${billedTo.legalName}'s instructions, so the sale counts where ${billedTo.legalName} is.`;
+    placeOfSupplyReason = both(`Place of supply: ${stateName(billing.stateCode)} (${billing.stateCode}) — the goods are delivered to ${block.name}${consigneeView.stateName === null ? '' : ` in ${consigneeView.stateName}`} on ${billedTo.legalName}'s instructions, so the sale counts where ${billedTo.legalName} is.`, `Supply ka sthan: ${stateName(billing.stateCode)} (${billing.stateCode}) — maal ${billedTo.legalName} ke kehne par ${block.name}${consigneeView.stateName === null ? '' : ` ${consigneeView.stateName} mein`} tak pahuncha hai, isliye bikri wahin gini jaati hai jahan ${billedTo.legalName} hai.`);
   }
 
   const transporterId = str(body.transporterId);
