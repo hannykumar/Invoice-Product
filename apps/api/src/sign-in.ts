@@ -15,6 +15,7 @@ import {
 import { AddressNotReadable, CodeNotAccepted, identityProviderFor, readSignInAddress, type IdentityProvider, type VerifiedIdentity } from '../../../packages/platform/src/identity.ts';
 import { DEMO_SIGN_IN_CODE, SYNTHETIC_PLATFORM_USERS } from '../../../packages/platform/src/seed.ts';
 import type { Persistence } from './persistence.ts';
+import type { TeamStore } from '../../../packages/platform/src/team.ts';
 import { PostgresAccessControl, PostgresAuthenticationService } from '../../../packages/platform/src/postgres-platform.ts';
 
 type Maybe<T> = T | Promise<T>;
@@ -27,7 +28,12 @@ export interface SignInStore {
   revokeSession(sessionIdOrToken: string): Maybe<void>;
   /** Ends a live session and says when it would have ended; `undefined` if it had already ended. */
   closeSession(sessionId: Id): Maybe<number | undefined>;
+  /** Issue #343 — takes up an invitation, for the person who proved the address it was sent to. */
+  acceptInvitation(token: string, userId: Id, provedAddress: string): Maybe<unknown>;
 }
+
+/** An invitation that is old, used, withdrawn, or meant for another address. */
+export const INVITATION_NOT_ACCEPTED = 'This invitation cannot be used: it is more than 7 days old, it was already used, or it was sent to a different number or email. Ask for a new one.';
 
 export class AuthenticationError extends Error {
   readonly status = 401;
@@ -57,6 +63,12 @@ export const sessionTokenFrom = (cookieHeader: string | undefined): string | und
   return undefined;
 };
 
+/** A phone number or email as typed, made canonical; one that is neither is refused in plain words (400). */
+export const canonicalAddress = (typed: string) => {
+  try { return readSignInAddress(typed); }
+  catch (error) { if (error instanceof AddressNotReadable) throw new Error(error.message); throw error; }
+};
+
 export interface Opened { readonly token: string; readonly companyId: Id; readonly expiresAt: string }
 
 export class SignIn {
@@ -76,15 +88,21 @@ export class SignIn {
    * The code is checked, the person found (or, the first time, recorded), and a session opened in the
    * company they asked for — if it is one of theirs — or else the first of theirs.
    */
-  async checkCode(typed: string, code: string, companyId?: string): Promise<Opened> {
+  async checkCode(typed: string, code: string, companyId?: string, invitation?: string): Promise<Opened> {
     const address = this.#address(typed);
     let identity: VerifiedIdentity;
     try { identity = await this.#provider(() => this.#identity.checkCode(address, code)); }
     catch (error) { if (error instanceof CodeNotAccepted) throw new AuthenticationError(CODE_NOT_ACCEPTED); throw error; }
     const userId = await this.#store.userFor(identity);
+    // Issue #343 — joining a business: the invitation is taken up by the person who just proved its address.
+    let joined: string | undefined;
+    if (invitation !== undefined && invitation !== '') {
+      try { joined = ((await this.#store.acceptInvitation(invitation, userId, address.value)) as { companyId: string }).companyId; }
+      catch (error) { if ((error as Error).message === 'INVALID_INVITATION') throw new Error(INVITATION_NOT_ACCEPTED); throw error; }
+    }
     const companies = await this.#store.companiesOf(userId);
     if (companies.length === 0) throw new PlatformError('FORBIDDEN', 'You are signed up, but no business has added you yet. Ask the owner of the business to add you, then sign in again.');
-    const chosen = companies.find((membership) => membership.companyId === companyId) ?? companies[0]!;
+    const chosen = companies.find((membership) => membership.companyId === (joined ?? companyId)) ?? companies[0]!;
     return this.#open(chosen.companyId, chosen.branchIds[0]!, userId);
   }
 
@@ -126,10 +144,7 @@ export class SignIn {
     return { token: session.id, companyId, expiresAt: new Date(session.expiresAt).toISOString() };
   }
 
-  #address(typed: string) {
-    try { return readSignInAddress(typed); }
-    catch (error) { if (error instanceof AddressNotReadable) throw new Error(error.message); throw error; }
-  }
+  #address(typed: string) { return canonicalAddress(typed); }
 
   async #provider<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); }
@@ -141,16 +156,16 @@ export class SignIn {
  * Where sessions and members live: the persistence #340 chose at start-up. PostgreSQL keeps them
  * across restarts; memory (a developer's machine, a test) holds the seed's synthetic people.
  */
-export const signInStore = (persistence: Persistence): SignInStore => {
+export const signInStore = (persistence: Persistence): SignInStore & TeamStore => {
   if (persistence.kind === 'postgres') return new PostgresAuthenticationService(persistence.db, new PostgresAccessControl(persistence.db));
   const access = new AccessControl();
   const store = new AuthenticationService(access);
   for (const person of SYNTHETIC_PLATFORM_USERS) {
     store.addUser({ id: person.userId, email: person.email });
-    access.grant({ companyId: person.companyId, userId: person.userId, branchIds: new Set([person.branchId]), active: true, permissions: new Set(person.permissions) });
+    access.grant({ companyId: person.companyId, userId: person.userId, branchIds: new Set([person.branchId]), active: true, permissions: new Set(person.permissions), role: person.role });
   }
   return store;
 };
 
-export const createSignIn = (persistence: Persistence, env: Readonly<Record<string, string | undefined>> = process.env): SignIn =>
-  new SignIn(signInStore(persistence), identityProviderFor(env, DEMO_SIGN_IN_CODE));
+export const createSignIn = (store: SignInStore, env: Readonly<Record<string, string | undefined>> = process.env): SignIn =>
+  new SignIn(store, identityProviderFor(env, DEMO_SIGN_IN_CODE));

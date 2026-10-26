@@ -16,7 +16,8 @@ import { MEMORY, recordId, securityOf, type Persistence } from './persistence.ts
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { recordMasterDataAs } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
-import { AuthenticationError, createSignIn, type SignIn } from './sign-in.ts';
+import { AuthenticationError, createSignIn, signInStore, type SignIn } from './sign-in.ts';
+import { Team } from '../../../packages/platform/src/team.ts';
 import { log } from './log.ts';
 import { AuditLog } from '../../../packages/platform/src/index.ts';
 import { PrivacyService } from '../../../ops/security/src/privacy.ts';
@@ -139,6 +140,8 @@ export class ApiRuntime {
   readonly #recurringRegistered = new Set<string>();
   /** Issue #342 — codes, sessions, signing out and switching company. */
   readonly signIn: SignIn;
+  /** Issue #343 — who is in the business, and what each may do. */
+  readonly team: Team;
   /** Issue #345 — on PostgreSQL: the schedule and the outbox are rows, run by the worker. */
   readonly #recurring: PostgresRecurringWork | null;
   readonly #relay: OutboxRelay | null;
@@ -151,13 +154,15 @@ export class ApiRuntime {
   /** Each company's recurring jobs and the service actor that runs them, once its application is open. */
   readonly #jobs = new Map<string, { readonly context: RequestContext; readonly definitions: readonly RecurringJobDefinition[] }>();
 
-  constructor(persistence: Persistence = MEMORY, signIn: SignIn = createSignIn(persistence)) {
+  constructor(persistence: Persistence = MEMORY) {
     this.#persistence = persistence;
-    this.signIn = signIn;
+    const people = signInStore(persistence);
+    this.signIn = createSignIn(people);
+    this.team = new Team(people);
     // Issue #342 — the stand-in accepts one code for everybody. On a database it can only be there
     // because NODE_ENV says development; say so loudly at every start, so a real server set up that
     // way by mistake is noticed in its first log line rather than by the first stranger who signs in.
-    if (signIn.provider === 'mock' && persistence.kind === 'postgres') {
+    if (this.signIn.provider === 'mock' && persistence.kind === 'postgres') {
       log.warn('The demo sign-in is on, with a database: anyone can sign in with the demo code. This must only ever be a developer\'s machine. A real server needs NODE_ENV=production, SUPABASE_URL and SUPABASE_ANON_KEY.');
     }
     this.#operations = persistence.kind === 'postgres'
