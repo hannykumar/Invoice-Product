@@ -55,6 +55,26 @@ export interface Allocation {
   readonly adjustedFromAdvance?: boolean;
 }
 
+/**
+ * Issue #295 — a way a bill on a receipt is settled without money: tax the customer deducted
+ * (`TDS_DEDUCTED`, a receivable from the government), a discount allowed (`DISCOUNT_ALLOWED`, an
+ * expense — the s.34 GST credit note is a separate choice made at the counter), or a small balance
+ * the business gives up (`BALANCE_WRITTEN_OFF`, bad debts, capped by the owner's limit).
+ * Each is an adjustment against the bill, never money that moved.
+ */
+export type SettlementKind = 'TDS_DEDUCTED' | 'DISCOUNT_ALLOWED' | 'BALANCE_WRITTEN_OFF';
+
+export interface BillSettlement {
+  readonly documentId: string;
+  readonly documentNumber: string;
+  readonly kind: SettlementKind;
+  readonly amount: Money;
+  /** TDS only: the Income-tax Act section the customer deducted under, and the certificate/quarter if given. */
+  readonly tdsSection?: string | null;
+  readonly tdsQuarter?: string | null;
+  readonly tdsCertificate?: string | null;
+}
+
 /** Issue #274 — a document number and its date, as a voucher prints a reference to it. */
 export interface DocumentReference {
   readonly number: string;
@@ -87,6 +107,8 @@ export interface Payment {
   readonly bankAccountCode: string | null;
   readonly cheque: ChequeDetails | null;
   readonly allocations: readonly Allocation[];
+  /** Issue #295 — the non-cash ways bills on this receipt were settled. Absent means none. */
+  readonly settlements?: readonly BillSettlement[];
   /**
    * Issue #165 — set on money paid back to a customer out of an earlier receipt that no bill used,
    * such as a refunded advance. It returns money held on account, so it lowers that figure rather

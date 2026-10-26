@@ -79,6 +79,11 @@ export interface BusinessDetails {
   readonly declaration: string | null;
   readonly terms: string | null;
   readonly signatureDataUri: string | null;
+  /**
+   * Issue #295 — the most a single "write off small balance" on Money received may be, in paise.
+   * `null` means the owner never set one, and the default ₹100 applies.
+   */
+  readonly writeOffLimitPaise: string | null;
 }
 
 /** What the screen shows before anybody has saved anything, so the form opens part-filled. */
@@ -164,6 +169,8 @@ export const readBusinessDetails = (
     states: currentStates().some((state) => state.code === stateCode) ? currentStates() : [...currentStates(), { code: stateCode, name: STATE_NAMES[stateCode] ?? stateCode }],
     turnover: turnoverView(companyId),
     eInvoiceExemption: eInvoiceExemptionOf(companyId),
+    // Issue #295 — the owner's write-off limit, in rupees as the form shows it (₹100 → 100).
+    writeOffLimit: Number(writeOffLimitOf(companyId)) / 100,
   };
 };
 
@@ -311,6 +318,18 @@ export const saveBusinessDetails = (
     signatureDataUri = signature;
   }
 
+  // Issue #295 — the write-off limit, blank meaning keep the saved one (or the ₹100 default).
+  // A typed limit is rupees to paise; above ₹1,00,000 it is more likely a typo than a decision.
+  const writeOffLimitText = str(input.writeOffLimit);
+  let writeOffLimitPaise: string | null = current?.writeOffLimitPaise ?? null;
+  if (writeOffLimitText !== '') {
+    const limit = paise(writeOffLimitText);
+    if (limit < 0n || limit > 100_000_00n) {
+      throw invalid('BUSINESS_WRITE_OFF_LIMIT', 'The most you can write off on one bill must be between ₹0 and ₹1,00,000.');
+    }
+    writeOffLimitPaise = limit.toString();
+  }
+
   const bankAccountId = saveBankAccount(companyId, legalName, input, clear, current);
   recordTurnoverAnswer(companyId, { band: input.turnoverBand, above5Crore: input.turnoverAbove5Crore });
   recordEInvoiceExemption(companyId, input.eInvoiceExemption);
@@ -332,10 +351,24 @@ export const saveBusinessDetails = (
     declaration: str(input.declaration) === '' ? null : str(input.declaration),
     terms: str(input.terms) === '' ? null : str(input.terms),
     signatureDataUri,
+    writeOffLimitPaise,
   };
   details.set(String(companyId), next);
   return { details: next, bank: bankAccountOf(companyId, bankAccountId), turnover: turnoverView(companyId), eInvoiceExemption: eInvoiceExemptionOf(companyId) };
 };
+
+/** Issue #295 — the owner's write-off limit in paise; ₹100 when they never set one. */
+/** Issue #295 — reads a rupee figure ("1500" or "1,500.50") to paise; refuses anything else. */
+const paise = (value: unknown): bigint => {
+  const normalized = String(value ?? '').replace(/,/g, '').trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw invalid('API_AMOUNT_INVALID', 'Enter a valid amount greater than zero.');
+  const [whole = '0', fraction = ''] = normalized.split('.');
+  return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+};
+
+export const WRITE_OFF_LIMIT_DEFAULT = 100_00n;
+export const writeOffLimitOf = (companyId: CompanyId | string): bigint =>
+  BigInt(businessDetailsOf(companyId)?.writeOffLimitPaise ?? WRITE_OFF_LIMIT_DEFAULT.toString());
 
 /** Writes the bank account into `packages/masters`, or leaves the saved one alone. */
 const saveBankAccount = (

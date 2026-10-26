@@ -124,3 +124,94 @@ test('#342: the idle clock cannot be pushed into the future, and a switched-off 
     await assert.rejects(one.checkCode('viewer@sampoorna.example.invalid', DEMO_SIGN_IN_CODE), /switched off/);
   } finally { await db.query('UPDATE users SET active = true WHERE id = $1', [viewer]); }
 });
+
+test('#343: the team on PostgreSQL — invite by phone, join at sign-in, remove ends the session, the only owner cannot leave until they hand over', { skip }, async () => {
+  const { Team } = await import('../../../packages/platform/src/team.ts');
+  const companyId = crypto.randomUUID(); const branchId = crypto.randomUUID(); const ownerId = crypto.randomUUID();
+  const ownerEmail = `team-owner-${ownerId}@example.invalid`;
+  await owner.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Team Traders')", [companyId]);
+  await owner.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, 'Main shop')", [branchId, companyId]);
+  await owner.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic team owner')", [ownerId, ownerEmail]);
+  const db = createDb(appUrl);
+  pools.push(db);
+  const { ROLES } = await import('../../../packages/platform/src/roles.ts');
+  const store = new PostgresAuthenticationService(db, new PostgresAccessControl(db));
+  await store.grantMember({ companyId, userId: ownerId, branchIds: new Set([branchId]), active: true, permissions: new Set(ROLES.owner.permissions), role: 'owner' });
+  const signIn = new SignIn(store, new MockIdentityProvider(DEMO_SIGN_IN_CODE));
+  const team = new Team(store);
+
+  const ownerToken = (await signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE)).token;
+  const ownerContext = await signIn.authenticate(bearer(ownerToken));
+  const phone = `+9198${String(randomBytes(4).readUInt32BE() % 100_000_000).padStart(8, '0')}`;
+  const { token } = await team.invite(ownerContext, phone, 'admin');
+  const joined = await signIn.checkCode(phone, DEMO_SIGN_IN_CODE, undefined, token);
+  assert.equal(joined.companyId, companyId);
+  const adminContext = await signIn.authenticate(bearer(joined.token));
+  assert.ok(adminContext.permissions.has('access.review'));
+  assert.ok(!adminContext.permissions.has('business.transfer'));
+  assert.deepEqual((await team.list(ownerContext)).members.map((member) => member.role).sort(), ['admin', 'owner']);
+
+  await assert.rejects(team.leave(ownerContext), /only owner/);
+  // An invitation never replaces an existing member's role: the admin cannot demote the owner this way.
+  const lure = await team.invite(adminContext, ownerEmail, 'viewer');
+  await assert.rejects(signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE, undefined, lure.token), /cannot be used/);
+  assert.equal((await team.list(ownerContext)).members.find((member) => member.userId === ownerId)!.role, 'owner');
+  // What the admin sent and nobody took up is withdrawn when they are removed.
+  const pending = await team.invite(adminContext, `+9197${String(randomBytes(4).readUInt32BE() % 100_000_000).padStart(8, '0')}`, 'staff');
+  await team.transfer(ownerContext, adminContext.actorId);
+  const roles = Object.fromEntries((await team.list(ownerContext)).members.map((member) => [member.userId, member.role]));
+  assert.equal(roles[adminContext.actorId], 'owner');
+  assert.equal(roles[ownerId], 'admin');
+
+  void pending;
+  // The new owner removes the old one: every session the old owner had in this business ends at once.
+  await team.remove(await signIn.authenticate(bearer(joined.token)), ownerId);
+  await assert.rejects(signIn.authenticate(bearer(ownerToken)), /Sign in again/);
+  await assert.rejects(signIn.checkCode(ownerEmail, DEMO_SIGN_IN_CODE), /no business has added you yet/);
+});
+
+test('#343: a database from before roles keeps every member\'s reads, and its owner becomes the owner', { skip }, async () => {
+  const { migrations } = await import('../../../packages/platform/src/migration-definitions.ts');
+  const { ROLES } = await import('../../../packages/platform/src/roles.ts');
+  const roles = migrations.find((migration) => migration.id.endsWith('_membership_roles'))!;
+  const companyId = crypto.randomUUID(); const branchId = crypto.randomUUID();
+  const people = { owner: crypto.randomUUID(), cashier: crypto.randomUUID(), viewer: crypto.randomUUID() };
+  const NEW: readonly string[] = ['sales.view', 'purchases.view', 'masters.read', 'business.settings.read', 'business.transfer'];
+  const before = {
+    owner: ROLES.owner.permissions.filter((permission) => !NEW.includes(permission)),
+    cashier: ['dashboard.read', 'sales.draft.write', 'sales.finalise', 'payments.record'],
+    viewer: ['dashboard.read'],
+  };
+  // On a database of its own: rolling the migration back on the shared one would pull the column
+  // out from under every other test file running at the same time.
+  const name = `roles_backfill_${randomBytes(6).toString('hex')}`;
+  await owner.query(`CREATE DATABASE ${name}`);
+  const scratchUrl = new URL(url as string);
+  scratchUrl.pathname = `/${name}`;
+  const scratch = createDb(scratchUrl.toString());
+  let rows: Record<string, { role: string; permissions: string[] }>;
+  try {
+    const { migrate } = await import('../../../packages/platform/src/migrations.ts');
+    await migrate(scratch);
+    await scratch.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Old Traders')", [companyId]);
+    await scratch.query("INSERT INTO branches (id, company_id, name) VALUES ($1, $2, 'Main shop')", [branchId, companyId]);
+    // Rolled back first, so the rows are written exactly as a database from before #343 holds them.
+    await scratch.query(roles.down);
+    for (const [who, id] of Object.entries(people)) {
+      await scratch.query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Synthetic old member')", [id, `old-${id}@example.invalid`]);
+      await scratch.query('INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb)', [companyId, id, JSON.stringify(before[who as keyof typeof before])]);
+    }
+    await scratch.query(roles.up);
+    rows = Object.fromEntries((await scratch.query('SELECT user_id, role, permissions FROM memberships WHERE company_id = $1', [companyId])).rows
+      .map((row) => [String(row.user_id), { role: String(row.role), permissions: row.permissions as string[] }]));
+  } finally {
+    await scratch.close();
+    await owner.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+  }
+  assert.equal(rows[people.owner]!.role, 'owner');
+  for (const permission of NEW) assert.ok(rows[people.owner]!.permissions.includes(permission), `the owner keeps ${permission}`);
+  assert.equal(rows[people.cashier]!.role, 'custom');
+  assert.ok(rows[people.cashier]!.permissions.includes('sales.view') && rows[people.cashier]!.permissions.includes('masters.read'), 'the cashier can still see bills and customers');
+  assert.ok(!rows[people.cashier]!.permissions.includes('business.settings.read'), 'but not the business PAN and bank');
+  assert.deepEqual(rows[people.viewer]!.permissions, ['dashboard.read'], 'and a viewer gains nothing');
+});

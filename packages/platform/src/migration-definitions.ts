@@ -32,6 +32,7 @@ import { immutabilityMigrations } from "./immutability-migrations.ts";
 import { storageMigrations } from "./storage-migrations.ts";
 import { appRecordMigrations } from "./app-record-migrations.ts";
 import { actionAgentMigrations } from "../../action-agent/src/migrations.ts";
+import { onboardingMigrations } from "../../onboarding/src/migrations.ts";
 
 const platformMigrations: readonly Migration[] = [{
   id: "0001_platform_foundation",
@@ -199,8 +200,43 @@ const platformMigrations: readonly Migration[] = [{
     ALTER TABLE users DROP COLUMN IF EXISTS phone;
     ALTER TABLE users DROP COLUMN IF EXISTS identity_subject;
   `,
+}, {
+  // Issue #343 — the role each membership and invitation was given (roles.ts). Permissions stay the
+  // list the server checks; the role is what "change role" sets them back to, and what decides who
+  // owns the business: the last owner can neither leave nor be removed.
+  id: "20261021T200729200Z_platform_4f50c8a47c7b_membership_roles",
+  up: `
+    ALTER TABLE memberships ADD COLUMN role text NOT NULL DEFAULT 'custom'
+      CHECK (role IN ('owner', 'admin', 'accountant', 'staff', 'viewer', 'custom'));
+    ALTER TABLE invitations ADD COLUMN role text NOT NULL DEFAULT 'custom'
+      CHECK (role IN ('owner', 'admin', 'accountant', 'staff', 'viewer', 'custom'));
+    -- Who sent it: removing that person withdraws the invitations nobody has taken up yet.
+    ALTER TABLE invitations ADD COLUMN invited_by uuid;
+    -- Members from before #343 keep what they could read: each gets the new read permission that
+    -- goes with what they could already do, and whoever held the owner's powers is the owner. Done
+    -- across every company at once, so the tenant policy is lifted for these statements only.
+    ALTER TABLE memberships NO FORCE ROW LEVEL SECURITY;
+    ALTER TABLE memberships DISABLE ROW LEVEL SECURITY;
+    UPDATE memberships SET permissions = permissions || '["sales.view"]'::jsonb
+      WHERE NOT permissions ? 'sales.view' AND permissions ?| array['sales.draft.write', 'sales.finalise', 'einvoice.view', 'returns.create'];
+    UPDATE memberships SET permissions = permissions || '["purchases.view"]'::jsonb
+      WHERE NOT permissions ? 'purchases.view' AND permissions ?| array['ledger.post.purchase', 'purchase.order.write', 'itc.view', 'returns.create'];
+    UPDATE memberships SET permissions = permissions || '["masters.read"]'::jsonb
+      WHERE NOT permissions ? 'masters.read' AND permissions ?| array['masters.party.write', 'masters.item.write', 'sales.draft.write', 'ledger.post.purchase'];
+    UPDATE memberships SET permissions = permissions || '["business.settings.read"]'::jsonb
+      WHERE NOT permissions ? 'business.settings.read' AND permissions ?| array['business.settings.write', 'branding.write', 'access.review'];
+    UPDATE memberships SET role = 'owner', permissions = permissions || '["business.transfer"]'::jsonb
+      WHERE role = 'custom' AND permissions ?& array['access.review', 'subscription.manage'] AND NOT permissions ? 'business.transfer';
+    ALTER TABLE memberships ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE memberships FORCE ROW LEVEL SECURITY;
+  `,
+  down: `
+    ALTER TABLE invitations DROP COLUMN IF EXISTS invited_by;
+    ALTER TABLE invitations DROP COLUMN IF EXISTS role;
+    ALTER TABLE memberships DROP COLUMN IF EXISTS role;
+  `,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(
-  [...platformMigrations, ...immutabilityMigrations, ...storageMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations, ...purchaseInboxMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  [...platformMigrations, ...immutabilityMigrations, ...storageMigrations, ...appRecordMigrations, ...salesMigrations, ...inventoryMigrations, ...receivablesMigrations, ...masterDataMigrations, ...notificationMigrations, ...securityMigrations, ...operationsMigrations, ...purchasePostingMigrations, ...purchaseMatchingMigrations, ...supplierRiskMigrations, ...reverseChargeMigrations, ...eInvoiceMigrations, ...gstReturnMigrations, ...itcMigrations, ...complianceCalendarMigrations, ...gspMigrations, ...returnMigrations, ...ledgerMigrations, ...ewayBillMigrations, ...vehicleSuitabilityMigrations, ...vehicleRecordMigrations, ...collectionMigrations, ...bankFeedMigrations, ...bankReconciliationMigrations, ...subscriptionMigrations, ...actionAgentMigrations, ...onboardingMigrations, ...purchaseInboxMigrations].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
 );

@@ -433,6 +433,97 @@ export function receivablesContract(label: string, makeWorld: () => World, skip:
     const settled = [await s.world.settled?.(s.companyId, first.id), await s.world.settled?.(s.companyId, second.id)];
     if (settled[0] !== undefined) assert.deepEqual(settled.sort(), [0n, BILL]);
   });
+
+  // Issue #295 — the bill can also be settled without money: TDS the customer deducted (a
+  // receivable from the government, never the customer's debt), a discount allowed, or a small
+  // balance written off. Each books its own account and frees the bill.
+  test(`${label}: TDS deducted, a discount and a write-off settle bills, and the receipt carries them`, { skip }, async () => {
+    const s = await shop();
+    const [tdsBill, discountBill, smallBill] = [await s.issueBill(), await s.issueBill(), await s.issueBill()];
+    const recorded = await s.receivables.recordPayment(s.actor, {
+      idempotencyKey: 'settle-1', direction: 'RECEIPT', partyId: s.ids.customer as PartyId, mode: 'BANK_TRANSFER', bankAccountCode: '1121',
+      amount: paise(3n * BILL - 5_000n - 2_000n - 60n), date: on('2026-04-11'),
+      allocations: [
+        { documentId: tdsBill.id, documentNumber: tdsBill.number, amount: paise(BILL - 5_000n) },
+        { documentId: discountBill.id, documentNumber: discountBill.number, amount: paise(BILL - 2_000n) },
+        { documentId: smallBill.id, documentNumber: smallBill.number, amount: paise(BILL - 60n) },
+      ],
+      settlements: [
+        { documentId: tdsBill.id, documentNumber: tdsBill.number, kind: 'TDS_DEDUCTED', amount: paise(5_000n), tdsSection: '194Q', tdsQuarter: 'Q1-2026-27', tdsCertificate: null },
+        { documentId: discountBill.id, documentNumber: discountBill.number, kind: 'DISCOUNT_ALLOWED', amount: paise(2_000n) },
+        { documentId: smallBill.id, documentNumber: smallBill.number, kind: 'BALANCE_WRITTEN_OFF', amount: paise(60n) },
+      ],
+      writeOffLimit: paise(100n),
+    });
+    const read = await s.receivables.payment(s.actor, recorded.id);
+    assert.equal(read?.settlements?.length, 3);
+    const position = await s.receivables.position(s.actor, s.ids.customer as PartyId, on('2026-04-11'));
+    assert.equal(position.totalOutstanding.minor, 0n, 'the three bills are settled, not partly owed');
+    // The cash received is only the money: allocations, never the adjustments.
+    assert.equal(recorded.allocations.reduce((t, a) => t + a.amount.minor, 0n), 3n * BILL - 5_000n - 2_000n - 60n);
+    // The TDS receivable report carries the deduction with its quarter.
+    const tds = await s.receivables.tdsReceivable(s.actor);
+    assert.equal(tds.length, 1);
+    assert.equal(tds[0]?.settlement.amount.minor, 5_000n);
+    assert.equal(tds[0]?.settlement.tdsQuarter, 'Q1-2026-27');
+    // A retry of the same command finds the same payment and never settles twice.
+    assert.deepEqual(await s.receivables.recordPayment(s.actor, { idempotencyKey: 'settle-1', direction: 'RECEIPT', partyId: s.ids.customer as PartyId, mode: 'BANK_TRANSFER', amount: paise(1n), date: on('2026-04-11') }), read);
+  });
+
+  test(`${label}: undoing a receipt releases its settlements, and the bills are owed again`, { skip }, async () => {
+    const s = await shop();
+    const bill = await s.issueBill();
+    const recorded = await s.receivables.recordPayment(s.actor, {
+      idempotencyKey: 'settle-undo', direction: 'RECEIPT', partyId: s.ids.customer as PartyId, mode: 'CASH', amount: paise(BILL - 500n), date: on('2026-04-11'),
+      allocations: [{ documentId: bill.id, documentNumber: bill.number, amount: paise(BILL - 500n) }],
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'TDS_DEDUCTED', amount: paise(500n), tdsSection: '194C', tdsQuarter: 'Q1-2026-27', tdsCertificate: null }],
+    });
+    assert.equal((await s.receivables.position(s.actor, s.ids.customer as PartyId, on('2026-04-11'))).totalOutstanding.minor, 0n);
+    const reversed = await s.receivables.reversePayment(s.actor, recorded.id, { on: on('2026-04-12'), reason: 'Entered on the wrong day' });
+    assert.equal(reversed.settlements, undefined, 'the released settlements fall away entirely');
+    assert.equal((await s.receivables.position(s.actor, s.ids.customer as PartyId, on('2026-04-12'))).totalOutstanding.minor, BILL);
+    assert.equal((await s.receivables.tdsReceivable(s.actor)).length, 0, 'an undone receipt owes no TDS back');
+  });
+
+  test(`${label}: the rules on a settlement are refused before anything is kept`, { skip }, async () => {
+    const s = await shop();
+    const bill = await s.issueBill();
+    const base = { direction: 'RECEIPT' as const, partyId: s.ids.customer as PartyId, mode: 'CASH' as const, amount: paise(BILL), date: on('2026-04-11') };
+    // TDS without its section.
+    await assert.rejects(() => s.receivables.recordPayment(s.actor, {
+      ...base, idempotencyKey: 'bad-tds',
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'TDS_DEDUCTED', amount: paise(100n), tdsSection: null, tdsQuarter: null, tdsCertificate: null }],
+    }), refusedWith('TDS_SECTION_REQUIRED'));
+    // A write-off past the owner's limit.
+    await assert.rejects(() => s.receivables.recordPayment(s.actor, {
+      ...base, idempotencyKey: 'bad-write-off', writeOffLimit: paise(100n),
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'BALANCE_WRITTEN_OFF', amount: paise(10_001n) }],
+    }), refusedWith('WRITE_OFF_OVER_LIMIT'));
+    // More settled than is owed.
+    await assert.rejects(() => s.receivables.recordPayment(s.actor, {
+      ...base, idempotencyKey: 'bad-total', writeOffLimit: paise(BILL),
+      allocations: [{ documentId: bill.id, documentNumber: bill.number, amount: paise(BILL) }],
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'DISCOUNT_ALLOWED', amount: paise(1n) }],
+    }), refusedWith('SETTLEMENT_EXCEEDS_OUTSTANDING'));
+    // A bill nobody knows.
+    await assert.rejects(() => s.receivables.recordPayment(s.actor, {
+      ...base, idempotencyKey: 'bad-bill',
+      settlements: [{ documentId: 'ghost', documentNumber: 'GHOST-1', kind: 'DISCOUNT_ALLOWED', amount: paise(1n) }],
+    }), refusedWith('SETTLEMENT_UNKNOWN_DOCUMENT'));
+    // Any of them on money paid out.
+    await assert.rejects(() => s.receivables.recordPayment(s.actor, {
+      idempotencyKey: 'bad-paid', direction: 'PAYMENT', partyId: s.ids.supplier as PartyId, mode: 'CASH', amount: paise(100n), date: on('2026-04-11'),
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'BALANCE_WRITTEN_OFF', amount: paise(50n) }],
+    }), refusedWith('SETTLEMENT_ON_MONEY_PAID'));
+    // A write-off needs the write-off permission even when it arrives on a receipt.
+    const clerk: ActorContext = { ...s.actor, permissions: s.actor.permissions.filter((p) => p !== 'payments.write_off') };
+    await assert.rejects(() => s.receivables.recordPayment(clerk, {
+      ...base, idempotencyKey: 'clerk-write-off', writeOffLimit: paise(BILL),
+      settlements: [{ documentId: bill.id, documentNumber: bill.number, kind: 'BALANCE_WRITTEN_OFF', amount: paise(50n) }],
+    }), refusedWith('PERMISSION_DENIED'));
+    // Nothing was kept.
+    assert.equal((await s.receivables.paymentsFor(s.actor, s.ids.customer as PartyId)).filter((p) => p.idempotencyKey.startsWith('bad-')).length, 0);
+  });
 }
 
 export type Shop = Awaited<ReturnType<typeof openShop>>;

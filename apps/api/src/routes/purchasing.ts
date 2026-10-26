@@ -3,7 +3,7 @@
  * comparison with the bill (#18), and recording the supplier's bill (#17).
  */
 import { DemoApplication } from '../demo-application.ts';
-import { anything, fields, get, list, need, nothing, post, text, READ, type Route } from './route.ts';
+import { anything, fields, get, list, need, nothing, post, text, type Route } from './route.ts';
 
 const RECORD_BILL = need('record a supplier bill', 'ledger.post.purchase');
 
@@ -26,7 +26,7 @@ const selfInvoice = fields({ billId: text, date: text, idempotencyKey: text });
 
 export const PURCHASING_ROUTES: readonly Route[] = [
   // Issue #19 — what we know about a supplier, and the evidence behind each warning.
-  get('/api/suppliers/choices', { access: READ, input: nothing }, () => ({ choices: DemoApplication.supplierChoices() })),
+  get('/api/suppliers/choices', { access: need('see suppliers', 'masters.read'), input: nothing }, () => ({ choices: DemoApplication.supplierChoices() })),
   post('/api/suppliers/check', { access: need('check suppliers', 'supplier.risk.view'), input: supplierCheck }, ({ app, actor, input }) => app.checkSupplier(actor, input)),
   post('/api/suppliers/check/acknowledge', { access: need('accept a supplier warning', 'supplier.risk.acknowledge'), input: supplierCheck },
     ({ app, actor, input }) => app.acknowledgeSupplierRisk(actor, input)),
@@ -41,6 +41,6 @@ export const PURCHASING_ROUTES: readonly Route[] = [
   // Issue #289, part 2b — the self-invoice (CGST s.31(3)(f), Rule 47A): issue it, print it, and the list of those due.
   post('/api/purchases/self-invoice', { access: RECORD_BILL, input: selfInvoice }, ({ app, actor, input }) => app.issueSelfInvoice(actor, input)),
   post('/api/purchases/self-invoice/print', { access: RECORD_BILL, input: selfInvoice }, ({ app, actor, input }) => app.selfInvoicePrint(actor, input)),
-  list('/api/purchases/self-invoices', { access: READ, key: 'items' }, ({ app, actor }) => app.selfInvoiceList(actor)),
-  get('/api/purchases/:id', { access: READ, input: nothing }, ({ app, actor, params }) => app.purchase(actor, params.id!)),
+  list('/api/purchases/self-invoices', { access: need('see supplier bills', 'purchases.view'), key: 'items' }, ({ app, actor }) => app.selfInvoiceList(actor)),
+  get('/api/purchases/:id', { access: need('see supplier bills', 'purchases.view'), input: nothing }, ({ app, actor, params }) => app.purchase(actor, params.id!)),
 ];

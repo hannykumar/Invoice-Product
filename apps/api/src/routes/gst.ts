@@ -3,7 +3,7 @@
  * (#28), purchase tax credit against the government's record (#31) and GST returns (#30).
  */
 import { DemoApplication } from '../demo-application.ts';
-import { anything, fields, get, need, nothing, list, post, replyPdf, text, READ, type Route } from './route.ts';
+import { anything, fields, get, need, needAny, nothing, list, post, replyPdf, text, REFERENCE, type Route } from './route.ts';
 
 const EINVOICE = need('register e-invoices', 'einvoice.generate');
 const EWAY_VIEW = need('see e-way bills', 'eway.view');
@@ -32,7 +32,7 @@ const gstReturn = fields({ period: text, reference: text, note: text, reason: te
 
 export const GST_ROUTES: readonly Route[] = [
   // Issue #26 — does this bill need an IRN, and its life with the government.
-  list('/api/einvoices/invoices', { access: READ, key: 'invoices' }, ({ app, actor }) => app.issuedInvoices(actor)),
+  list('/api/einvoices/invoices', { access: needAny('see issued bills', 'einvoice.view', 'sales.view'), key: 'invoices' }, ({ app, actor }) => app.issuedInvoices(actor)),
   post('/api/einvoices/preview', { access: need('see e-invoices', 'einvoice.view'), input: einvoice }, ({ app, actor, input }) => app.previewEInvoice(actor, input)),
   post('/api/einvoices/register', { access: EINVOICE, input: einvoice }, ({ app, actor, input }) => app.registerEInvoice(actor, input)),
   post('/api/einvoices/reconcile', { access: EINVOICE, input: einvoice }, ({ app, actor, input }) => app.reconcileEInvoice(actor, input)),
@@ -40,11 +40,11 @@ export const GST_ROUTES: readonly Route[] = [
   post('/api/einvoices/offline', { access: EINVOICE, input: einvoice }, ({ app, actor, input }) => app.eInvoiceOfflineJson(actor, input)),
 
   // Issue #27 — do these goods need an e-way bill, and its life with the portal.
-  get('/api/eway/states', { access: READ, input: nothing }, () => DemoApplication.ewayStates()),
-  list('/api/eway/on-the-road', { access: READ, key: 'consignments' }, ({ app, actor }) => app.ewayBillsOnTheRoad(actor)),
+  get('/api/eway/states', { access: REFERENCE, input: nothing }, () => DemoApplication.ewayStates()),
+  list('/api/eway/on-the-road', { access: EWAY_VIEW, key: 'consignments' }, ({ app, actor }) => app.ewayBillsOnTheRoad(actor)),
   post('/api/eway/preview', { access: EWAY_VIEW, input: eway }, ({ app, actor, input }) => app.previewEwayBill(actor, input)),
   // Issue #240 — the bills to choose from, and one bill's e-way bill filled in from the bill.
-  list('/api/eway/bills', { access: READ, key: 'invoices' }, ({ app, actor }) => app.ewayBillChoices(actor)),
+  list('/api/eway/bills', { access: EWAY_VIEW, key: 'invoices' }, ({ app, actor }) => app.ewayBillChoices(actor)),
   post('/api/eway/for-bill', { access: EWAY_VIEW, input: eway }, ({ app, actor, input }) => app.ewayBillForBill(actor, input)),
   post('/api/eway/generate', { access: EWAY_MAKE, input: eway }, ({ app, actor, input }) => app.generateEwayBill(actor, input)),
   post('/api/eway/vehicle', { access: EWAY_CHANGE, input: eway }, ({ app, actor, input }) => app.updateEwayVehicle(actor, input)),
@@ -55,15 +55,15 @@ export const GST_ROUTES: readonly Route[] = [
   post('/api/eway/offline', { access: EWAY_MAKE, input: eway }, ({ app, actor, input }) => app.ewayOfflineJson(actor, input)),
   // Issue #191 — the driver's copy: the portal's own page, on screen and as a PDF.
   post('/api/eway/print', { access: EWAY_VIEW, input: eway }, ({ app, actor, input }) => app.ewayPrint(actor, input)),
-  get('/api/eway/:invoice/pdf', { access: READ, input: nothing }, async ({ app, actor, params }) => {
+  get('/api/eway/:invoice/pdf', { access: EWAY_VIEW, input: nothing }, async ({ app, actor, params }) => {
     const result = await app.ewayPrint(actor, { invoice: params.invoice! }, { pdf: true });
     if (!('pdf' in result)) throw new TypeError('The e-way bill PDF was not produced.');
     return replyPdf(`eway-${result.ewayBillNumber.replace(/[^0-9]/g, '')}.pdf`, result.pdf);
   }),
 
   // Issue #28 — can this lorry carry this load, and who said to send it anyway.
-  get('/api/vehicles/choices', { access: READ, input: nothing }, () => DemoApplication.vehicleChoices()),
-  list('/api/vehicles/held', { access: READ, key: 'held' }, ({ app, actor }) => app.blockedVehicleChecks(actor)),
+  get('/api/vehicles/choices', { access: need('see vehicles', 'transport.vehicle.view'), input: nothing }, () => DemoApplication.vehicleChoices()),
+  list('/api/vehicles/held', { access: need('see vehicles', 'transport.vehicle.view'), key: 'held' }, ({ app, actor }) => app.blockedVehicleChecks(actor)),
   post('/api/vehicles/record', { access: VEHICLES, input: vehicle }, ({ app, actor, input }) => app.lookupVehicleRecord(actor, input)),
   post('/api/vehicles/check', { access: VEHICLES, input: vehicle }, ({ app, actor, input }) => app.checkVehicle(actor, input)),
   post('/api/vehicles/check/override', { access: need('send a held vehicle anyway', 'transport.vehicle.override'), input: vehicle },
