@@ -48,6 +48,19 @@ export class PostgresWebhookEvents implements WebhookEventRepository {
     );
   }
 
+  /**
+   * Re-writes a delivery's record, but only while it still says UNMATCHED (#477): a callback that
+   * arrived before the call it answered is matched again when it is re-delivered. A record that
+   * already settled a call is never rewritten.
+   */
+  async update(record: WebhookEventRecord): Promise<void> {
+    await this.#db.query(
+      `UPDATE government_webhook_events SET provider_request_id = $3, call_id = $4, company_id = $5, outcome = $6, government_reference = $7, received_at = $8
+       WHERE connector = $1 AND event_id = $2 AND outcome = 'UNMATCHED'`,
+      [record.kind, record.eventId, record.providerRequestId, record.callId, record.companyId, record.outcome, record.governmentReference, record.receivedAt],
+    );
+  }
+
   async recordRejected(input: { readonly kind: string; readonly digest: string; readonly at: string; readonly reason: string }): Promise<void> {
     await this.#db.query(
       'INSERT INTO government_webhook_rejections (connector, digest, reason, received_at) VALUES ($1, $2, $3, $4)',

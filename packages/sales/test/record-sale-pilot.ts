@@ -62,6 +62,20 @@ export interface PilotHooks {
   beforeCommit?: () => Promise<void>;
 }
 
+/**
+ * What a till does when the shop is too busy to save: the same request again, with the same key
+ * (unit-of-work-v1, TRY_AGAIN). Anything else is the answer.
+ */
+export const likeATill = async <T>(send: () => Promise<T>, attempts = 5): Promise<T> => {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await send();
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'TRY_AGAIN' || attempt >= attempts) throw error;
+    }
+  }
+};
+
 export interface PilotIds { companyId: string; userId: string; partyId: string }
 
 export const makePilot = (db: TransactionalExecutor, ids: PilotIds, hooks: PilotHooks = {}) => {
