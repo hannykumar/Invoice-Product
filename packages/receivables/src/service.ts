@@ -318,7 +318,7 @@ export class ReceivablesService {
                 history: [{ state: 'PENDING', on: command.date, by: actor.userId, at, note: null }],
               },
         allocations,
-        settlements,
+        ...(settlements.length === 0 ? {} : { settlements }),
         refundOf,
         ...(advance ? { advanceToSupplier: true } : {}),
         ...(advance && command.advanceParticulars !== undefined ? { advanceParticulars: command.advanceParticulars } : {}),
@@ -496,13 +496,16 @@ export class ReceivablesService {
       state = 'REVERSED';
     }
 
+    // Issue #295 — a bounced cheque settles nothing, so its allocations fall away — but the
+    // history says why. Its settlements fall away too: a bounced cheque owes the TDS receivable
+    // back, so its rows are released and the bills are owed again.
+    const { settlements: _released, ...withoutSettlements } = payment;
     const next: Payment = {
-      ...payment,
+      ...(to === 'BOUNCED' ? withoutSettlements : payment),
       cheque: { ...payment.cheque, history: [...payment.cheque.history, event] },
       state,
       reversalVoucherId,
       reversalReason: to === 'BOUNCED' ? (input.note ?? null) : payment.reversalReason,
-      // A bounced cheque settles nothing, so its allocations fall away — but the history says why.
       allocations: to === 'BOUNCED' ? [] : payment.allocations,
       version: payment.version + 1,
     };
@@ -542,8 +545,11 @@ export class ReceivablesService {
       date: input.on,
       reason: input.reason,
     });
+    // Issue #295 — undoing the receipt also releases what it settled without money, so the
+    // bills are owed again and the TDS comes off the receivable report.
+    const { settlements: _released, ...withoutSettlements } = payment;
     const next: Payment = {
-      ...payment,
+      ...withoutSettlements,
       state: 'REVERSED',
       reversalVoucherId: reversed.voucher.id,
       reversalReason: input.reason,

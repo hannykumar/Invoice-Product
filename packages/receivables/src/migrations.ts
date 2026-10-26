@@ -519,7 +519,9 @@ export const receivablesMigrations: readonly Migration[] = Object.freeze([{
         RAISE EXCEPTION 'A settlement is recorded first and released later.' USING ERRCODE = 'check_violation', TABLE = 'payment_settlements';
       END IF;
       SELECT state INTO live FROM payments WHERE company_id = NEW.company_id AND id = NEW.payment_id;
-      IF live IS DISTINCT FROM 'RECORDED' THEN
+      -- A settlement is recorded on a live payment only; releasing one is always allowed, because
+      -- releasing is exactly how an undone payment lets its bills be owed again (issue #295).
+      IF TG_OP = 'INSERT' AND live IS DISTINCT FROM 'RECORDED' THEN
         RAISE EXCEPTION 'A payment that was undone settles nothing.'
           USING ERRCODE = 'check_violation', TABLE = 'payment_settlements', CONSTRAINT = 'payment_settlements_payment_is_live';
       END IF;

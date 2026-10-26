@@ -502,7 +502,7 @@ const paymentSettlementsOf = (input: Record<string, unknown>, direction: 'RECEIP
     if (tds !== null) {
       const amount = paise(tds.amount);
       const section = String(tds.section ?? '').trim().toUpperCase();
-      if (!TDS_SECTION.test(section)) {
+      if (section !== '' && !TDS_SECTION.test(section)) {
         throw invalid('TDS_SECTION_INVALID', `The TDS section on ${number} should look like 194C, 194J or 194Q. Check the customer's certificate.`);
       }
       const quarter = String(tds.quarter ?? '').trim() || tdsQuarterOf(date);
@@ -583,8 +583,10 @@ const paymentVoucherHtml = (input: {
   readonly seller: RenderableParty;
   readonly party: RenderableParty;
   readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint; adjusted: boolean }[];
-  /** Issue #295 — TDS deducted, discount allowed or a balance written off, and any s.34 note issued. */
-  readonly adjustments?: readonly { bill: string; kind: BillSettlement['kind']; amount: bigint; section: string | null; quarter: string | null; certificate: string | null; creditNote: string | null }[];
+  /** Issue #295 — TDS deducted, discount allowed or a balance written off on the bills. */
+  readonly adjustments?: readonly { bill: string; kind: BillSettlement['kind']; amount: bigint; section: string | null; quarter: string | null; certificate: string | null }[];
+  /** Issue #295 — the s.34 credit notes issued on the bills this receipt settled. */
+  readonly creditNotes?: readonly { bill: string; number: string }[];
   /**
    * Issue #289, part 2b — the reverse-charge bills this payment pays. When there are any, this is
    * also the payment voucher of CGST s.31(3)(g), and carries Rule 52's particulars for them:
@@ -644,9 +646,9 @@ const paymentVoucherHtml = (input: {
         : 'Balance written off';
   const adjustmentTable = adjustments.length === 0 ? '' : `<table><tr><th>Bill</th><th>Settled without money</th><th>Amount</th></tr>
 ${adjustments.map((item) => `<tr><td>${escapeHtml(item.bill)}</td><td>${escapeHtml(adjustmentWords(item))}</td><td>${formatPaise(item.amount)}</td></tr>`).join('')}</table>`;
-  const creditNotesPrinted = adjustments.filter((item) => item.creditNote !== null);
+  const creditNotesPrinted = input.creditNotes ?? [];
   const creditNoteTable = creditNotesPrinted.length === 0 ? '' : `<table><tr><th>Bill</th><th>Credit note issued for the discount</th></tr>
-${creditNotesPrinted.map((item) => `<tr><td>${escapeHtml(item.bill)}</td><td>${escapeHtml(item.creditNote ?? '')}</td></tr>`).join('')}</table>`;
+${creditNotesPrinted.map((item) => `<tr><td>${escapeHtml(item.bill)}</td><td>${escapeHtml(item.number)}</td></tr>`).join('')}</table>`;
   const adjustedTable = !advance || adjusted.length === 0 ? '' : `<table><tr><th>Adjusted against bill</th><th>Bill date</th><th>Bill amount</th><th>Amount adjusted</th></tr>${adjusted.map(billRow).join('')}</table>
 <p>Unadjusted advance: ${formatPaise(onAccount - adjustedTotal)}</p>`;
   const narration = advance
@@ -4500,18 +4502,26 @@ export class DemoApplication {
         const bill = documents.find((d) => d.documentId === allocation.documentId);
         return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor, adjusted: allocation.adjustedFromAdvance === true };
       }),
-      // Issue #295 — TDS, discount or write-off the receipt settled bills by, and the credit notes
-      // issued against them — the receipt prints all three, as the issue asks.
-      adjustments: await Promise.all((payment.settlements ?? []).map(async (settlement) => ({
+      // Issue #295 — TDS, discount or write-off the receipt settled bills by.
+      adjustments: (payment.settlements ?? []).map((settlement) => ({
         bill: settlement.documentNumber,
         kind: settlement.kind,
         amount: settlement.amount.minor,
         section: settlement.tdsSection ?? null,
         quarter: settlement.tdsQuarter ?? null,
         certificate: settlement.tdsCertificate ?? null,
-        creditNote: settlement.kind === 'DISCOUNT_ALLOWED' ? null
-          : (await this.returnNotes.listForOriginal(companyId, settlement.documentId)).find((note) => note.priceCorrection)?.number ?? null,
-      }))),
+      })),
+      // …and the s.34 credit notes a discount issued on any bill this receipt touched.
+      creditNotes: (await Promise.all(
+        [...new Set([...payment.allocations.map((a) => a.documentId), ...(payment.settlements ?? []).map((s) => s.documentId)])]
+          .map(async (documentId) => {
+            const bill = payment.allocations.find((a) => a.documentId === documentId)?.documentNumber
+              ?? (payment.settlements ?? []).find((s) => s.documentId === documentId)?.documentNumber ?? documentId;
+            return (await this.returnNotes.listForOriginal(companyId, documentId))
+              .filter((note) => note.priceCorrection)
+              .map((note) => ({ bill, number: note.number }));
+          }),
+      )).flat(),
       // Issue #289, part 2b — s.31(3)(g): paying a reverse-charge bill, this voucher is the payment voucher.
       reverseCharge: payment.direction !== 'PAYMENT' ? [] : (await Promise.all(payment.allocations.map(async (allocation) => {
         const purchase = await this.shop.reverseCharge.purchaseFor(companyId, allocation.documentId);

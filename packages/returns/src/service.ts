@@ -91,7 +91,8 @@ export interface SalesPriceCorrectionCommand {
   /**
    * Why the price changes. `INVOICE_ERROR`: the bill carried the wrong price, so its taxable value or
    * tax was wrong (s.34(1)/(3)). `DISCOUNT_AFTER_SALE`: a discount agreed after the sale, which only
-   * comes off the value under s.15(3)(b) and is refused here (see `previewPriceCorrection`).
+   * comes off the value under s.15(3)(b) — that is, only when its evidence is declared (see
+   * `previewPriceCorrection`; without it the discount is an expense, not a GST change).
    */
   readonly cause: 'INVOICE_ERROR' | 'DISCOUNT_AFTER_SALE';
   readonly newUnitPrice?: Money;
@@ -361,7 +362,9 @@ export class ReturnService {
         throw invalid('PRICE_CORRECTION_DISCOUNT_AFTER_SALE', 'A discount after the sale can reduce GST only when the discount was agreed at or before the sale and the buyer has given back their GST credit on it. Tick both to say so, or leave the discount off GST and book it as an expense instead.');
       }
     }
-    if (command.cause !== 'INVOICE_ERROR') throw invalid('PRICE_CORRECTION_CAUSE_REQUIRED', 'Say why the price changes: the bill had the wrong price, or a discount was given after the sale.');
+    // Issue #295 — a discount after the sale reaches here when its s.15(3)(b) evidence was given
+    // above; a missing cause still says so plainly.
+    if (command.cause !== 'INVOICE_ERROR' && command.cause !== 'DISCOUNT_AFTER_SALE') throw invalid('PRICE_CORRECTION_CAUSE_REQUIRED', 'Say why the price changes: the bill had the wrong price, or a discount was given after the sale.');
     const byPrice = command.newUnitPrice !== undefined, byAmount = command.amountOff !== undefined;
     if (byPrice === byAmount) throw invalid('PRICE_CORRECTION_ONE_FIGURE', 'Type either the new rate per unit or the amount off, not both.');
     if (byPrice && command.newUnitPrice!.minor < 0n) throw invalid('PRICE_CORRECTION_NEGATIVE_PRICE', 'The new rate cannot be below zero.');

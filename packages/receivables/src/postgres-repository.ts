@@ -314,10 +314,10 @@ const toPayment = (r: Row, events: Row[], allocations: Row[], settlements: Row[]
     documentId: String(a.document_id), documentNumber: String(a.document_number), amount: paise(a.amount_paise),
     ...(a.adjusted_from_advance === true ? { adjustedFromAdvance: true } : {}),
   })),
-  settlements: settlements.map((s): BillSettlement => ({
+  ...(settlements.length === 0 ? {} : { settlements: settlements.map((s): BillSettlement => ({
     documentId: String(s.document_id), documentNumber: String(s.document_number), kind: s.kind as BillSettlement['kind'], amount: paise(s.amount_paise),
     tdsSection: text(s.tds_section), tdsQuarter: text(s.tds_quarter), tdsCertificate: text(s.tds_certificate),
-  })),
+  })) }),
   refundOf: text(r.refund_of),
   // Absent means false, as the service writes it. Particulars are kept on an advance only.
   ...(r.advance_to_supplier === true ? {

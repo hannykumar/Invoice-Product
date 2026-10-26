@@ -123,17 +123,18 @@ test('the migrations of #365 run up, down and up again on a database of their ow
     const tables = async () => (await scratch.query(
       "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename ~ '^(sales_invoice|presale_document|delivery_challan|stock_|payment|cheque_events|document_settlements|advance_|refund_vouchers)' ORDER BY 1",
     )).rows.map((r) => String(r.tablename));
-    assert.equal(mine.length, 4);
+    // Issue #295 added receivables' payment_settlements to the set the same pattern names.
+    assert.equal(mine.length, 5);
     await migrate(scratch);
     const created = await tables();
-    assert.equal(created.length, 17, created.join(', '));
+    assert.equal(created.length, 18, created.join(', '));
     // As a real rollback would: every migration newer than #365's first is undone, newest first, so
     // later modules' foreign keys onto these tables (and onto master_records) go before they do.
     const firstOfMine = migrations.indexOf(mine[0] as (typeof migrations)[number]);
     const fromMine = migrations.slice(firstOfMine);
     for (const migration of [...fromMine].reverse()) await scratch.query(migration.down);
     assert.deepEqual(await tables(), []);
-    const left = (await scratch.query("SELECT proname FROM pg_proc WHERE proname IN ('document_lines_add_up','sales_return_within_original','sales_discard_draft','stock_movement_moves_balance','payment_allocation_moves_balances','payment_refund_moves_receipt','advance_not_overused')")).rows;
+    const left = (await scratch.query("SELECT proname FROM pg_proc WHERE proname IN ('document_lines_add_up','sales_return_within_original','sales_discard_draft','stock_movement_moves_balance','payment_allocation_moves_balances','payment_refund_moves_receipt','payment_settlement_moves_balances','advance_not_overused')")).rows;
     assert.deepEqual(left, [], 'the down migrations leave no function behind');
     for (const migration of fromMine) await scratch.query(migration.up);
     assert.deepEqual(await tables(), created);
