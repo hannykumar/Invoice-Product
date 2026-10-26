@@ -141,7 +141,7 @@ export class AssistantService {
       draft.assumptions.push(
         plainSentence(
           'Part of your question read like an instruction to the app rather than a question about your business. I answered the question and ignored the rest.',
-          'Aapke sawaal ka ek hissa business ke sawaal ki jagah app ko diya gaya nirdesh lag raha tha. Maine sawaal ka jawab diya hai, baaki chhod diya.',
+          'आपके सवाल का एक हिस्सा बिज़नेस के सवाल की जगह ऐप को दिया गया निर्देश लग रहा था. मैंने सवाल का जवाब दिया है, बाक़ी छोड़ दिया.',
         ),
       );
     }
@@ -234,7 +234,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'I am not sure which of these you meant, so I would rather ask than answer the wrong one.',
-          'Mujhe pakka nahin ki aap inmein se kya poochh rahe hain, isliye galat jawab dene se behtar hai poochh loon.',
+          'मुझे पक्का नहीं कि आप इनमें से क्या पूछ रहे हैं, इसलिए ग़लत जवाब देने से बेहतर है पूछ लूँ.',
         ),
       );
       for (const candidate of [intent, ...reading.alternatives].slice(0, 3)) {
@@ -245,7 +245,7 @@ export class AssistantService {
     draft.sentences.push(
       plainSentence(
         'I answer questions about your own books — what you sold, what you are owed, what is in the godown, your GST for a period, and what a rule we hold says. I could not match your question to any of those.',
-        'Main aapki apni books ke sawaalon ka jawab deta hoon — kitna becha, kitna lena hai, godown mein kya hai, kisi samay ka GST, aur hamare paas darj niyam kya kehta hai. Aapka sawaal inmein se kisi se nahin mila.',
+        'मैं आपकी अपनी बहीखाते के सवालों का जवाब देता हूँ — कितना बेचा, कितना लेना है, गोदाम में क्या है, किसी समय का GST, और हमारे पास दर्ज नियम क्या कहता है. आपका सवाल इनमें से किसी से नहीं मिला.',
       ),
     );
     for (const example of ANSWERABLE_INTENTS.slice(0, 4)) {
@@ -306,8 +306,8 @@ export class AssistantService {
 
   async #dues(actor: ActorContext, filter: ReportFilter, incoming: boolean, draft: Draft): Promise<void> {
     const what: Bilingual = incoming
-      ? { 'en-IN': 'who owes you money', 'hi-IN': 'kisse paisa lena hai' }
-      : { 'en-IN': 'who you owe money to', 'hi-IN': 'kisko paisa dena hai' };
+      ? { 'en-IN': 'who owes you money', 'hi-IN': 'किससे पैसा लेना है' }
+      : { 'en-IN': 'who you owe money to', 'hi-IN': 'किसको पैसा देना है' };
     const report = this.#took(
       draft,
       await fetchReport(what, () =>
@@ -326,46 +326,46 @@ export class AssistantService {
           ? wording`Your customers owe you ${draft.amounts[0]?.formatted ?? ''} across ${plural(body.rows.length, 'customer', 'customers')}.`
           : wording`You owe ${draft.amounts[0]?.formatted ?? ''} across ${plural(body.rows.length, 'supplier', 'suppliers')}.`,
         incoming
-          ? wording`Aapke customers se ${draft.amounts[0]?.formatted ?? ''} lena hai, ${plural(body.rows.length, 'customer', 'customers')} se.`
-          : wording`Aapko ${draft.amounts[0]?.formatted ?? ''} dena hai, ${plural(body.rows.length, 'supplier', 'suppliers')} ko.`,
+          ? wording`आपके ${plural(body.rows.length, 'ग्राहक', 'ग्राहक')} से ${draft.amounts[0]?.formatted ?? ''} लेना है.`
+          : wording`आपको ${plural(body.rows.length, 'सप्लायर', 'सप्लायर')} को ${draft.amounts[0]?.formatted ?? ''} देना है.`,
       ),
     );
     if (worst !== undefined && worst.oldestDaysOverdue > 0) {
       draft.sentences.push(
         plainSentence(
           wording`The one waiting longest is ${worst.partyName}: ${worst.oldestDaysOverdue} days past due.`,
-          wording`Sabse purana ${worst.partyName} ka hai: ${worst.oldestDaysOverdue} din se baaki.`,
+          wording`सबसे पुराना ${worst.partyName} का है: ${worst.oldestDaysOverdue} दिन से बाक़ी.`,
         ),
       );
     }
     draft.nextSteps.push({
       label: incoming
-        ? { 'en-IN': 'Open who owes money, and for how long', 'hi-IN': 'Kholein: kiska paisa baaki hai, aur kab se' }
-        : { 'en-IN': 'Open what you owe', 'hi-IN': 'Kholein: aapko kya dena hai' },
+        ? { 'en-IN': 'Open who owes money, and for how long', 'hi-IN': 'खोलिए: किसका पैसा बाक़ी है, और कब से' }
+        : { 'en-IN': 'Open what you owe', 'hi-IN': 'खोलिए: आपको क्या देना है' },
       action: 'reports:ageing',
     });
   }
 
   async #sales(actor: ActorContext, filter: ReportFilter, period: ResolvedPeriod, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'your sales', 'hi-IN': 'aapki bikri' };
+    const what: Bilingual = { 'en-IN': 'your sales', 'hi-IN': 'आपकी बिक्री' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.salesRegister(actor, filter)));
     if (report === null) return;
 
     const body = report.body;
-    const total = citeFrom(report, { 'en-IN': 'what you billed', 'hi-IN': 'aapne kitne ka bill banaya' }, body.total);
-    const taxable = citeFrom(report, { 'en-IN': 'value before GST', 'hi-IN': 'GST se pehle ki keemat' }, body.taxableValue);
+    const total = citeFrom(report, { 'en-IN': 'what you billed', 'hi-IN': 'आपने कितने का बिल बनाया' }, body.total);
+    const taxable = citeFrom(report, { 'en-IN': 'value before GST', 'hi-IN': 'GST से पहले की कीमत' }, body.taxableValue);
     draft.amounts.push(total, taxable);
     draft.sentences.push(
       plainSentence(
         wording`You billed ${total.formatted} ${period.described['en-IN']}, across ${plural(body.rows.length, 'bill', 'bills')}. Before GST that is ${taxable.formatted}.`,
-        wording`${period.described['hi-IN']} aapne ${total.formatted} ka bill banaya, ${plural(body.rows.length, 'bill', 'bill')} mein. GST se pehle yeh ${taxable.formatted} hai.`,
+        wording`${period.described['hi-IN']} आपने ${total.formatted} का बिल बनाया, ${plural(body.rows.length, 'बिल', 'बिल')} में. GST से पहले यह ${taxable.formatted} है.`,
       ),
     );
-    draft.nextSteps.push({ label: { 'en-IN': 'Open every bill you gave out', 'hi-IN': 'Kholein: aapke diye hue saare bill' }, action: 'reports:sales_register' });
+    draft.nextSteps.push({ label: { 'en-IN': 'Open every bill you gave out', 'hi-IN': 'खोलिए: आपके दिए हुए सारे बिल' }, action: 'reports:sales_register' });
   }
 
   async #purchases(actor: ActorContext, filter: ReportFilter, period: ResolvedPeriod, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'your purchases', 'hi-IN': 'aapki kharid' };
+    const what: Bilingual = { 'en-IN': 'your purchases', 'hi-IN': 'आपकी ख़रीद' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.purchaseRegister(actor, filter)));
     if (report === null) return;
 
@@ -375,36 +375,36 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'Supplier bills are not recorded in this business yet, so there is nothing to add up. This is not the same as having bought nothing.',
-          'Is business mein supplier ke bill abhi darj nahin hote, isliye jodne ko kuch nahin hai. Iska matlab yeh nahin ki kharid hui hi nahin.',
+          'इस बिज़नेस में सप्लायर के बिल अभी दर्ज नहीं होते, इसलिए जोड़ने को कुछ नहीं है. इसका मतलब यह नहीं कि ख़रीद हुई ही नहीं.',
         ),
       );
       return;
     }
-    const total = citeFrom(report, { 'en-IN': 'what you were billed', 'hi-IN': 'aapko kitne ka bill mila' }, body.total);
+    const total = citeFrom(report, { 'en-IN': 'what you were billed', 'hi-IN': 'आपको कितने का बिल मिला' }, body.total);
     draft.amounts.push(total);
     draft.sentences.push(
       plainSentence(
         wording`You were billed ${total.formatted} ${period.described['en-IN']}, across ${plural(body.rows.length, 'supplier bill', 'supplier bills')}.`,
-        wording`${period.described['hi-IN']} aapko ${total.formatted} ke bill mile, ${plural(body.rows.length, 'bill', 'bill')}.`,
+        wording`${period.described['hi-IN']} आपको ${total.formatted} के बिल मिले, ${plural(body.rows.length, 'बिल', 'बिल')}.`,
       ),
     );
   }
 
   async #profit(actor: ActorContext, filter: ReportFilter, period: ResolvedPeriod, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'what you earned and what you spent', 'hi-IN': 'kitna kamaya aur kitna kharch hua' };
+    const what: Bilingual = { 'en-IN': 'what you earned and what you spent', 'hi-IN': 'कितना कमाया और कितना ख़र्च हुआ' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.profitAndLoss(actor, filter)));
     if (report === null) return;
 
     const body = report.body;
-    const result = citeFrom(report, { 'en-IN': 'what you kept', 'hi-IN': 'kitna bacha' }, body.result);
-    const income = citeFrom(report, { 'en-IN': 'everything you earned', 'hi-IN': 'jo kuch kamaya' }, body.income.total);
-    const expenses = citeFrom(report, { 'en-IN': 'everything you spent', 'hi-IN': 'jo kuch kharch hua' }, body.expenses.total);
+    const result = citeFrom(report, { 'en-IN': 'what you kept', 'hi-IN': 'कितना बचा' }, body.result);
+    const income = citeFrom(report, { 'en-IN': 'everything you earned', 'hi-IN': 'जो कुछ कमाया' }, body.income.total);
+    const expenses = citeFrom(report, { 'en-IN': 'everything you spent', 'hi-IN': 'जो कुछ ख़र्च हुआ' }, body.expenses.total);
     draft.amounts.push(result, income, expenses);
 
     draft.sentences.push(
       plainSentence(
         wording`${period.described['en-IN']} you earned ${income.formatted} and spent ${expenses.formatted}, so you ${body.madeMoney ? 'kept' : 'were short by'} ${result.formatted}.`,
-        wording`${period.described['hi-IN']} aapne ${income.formatted} kamaya aur ${expenses.formatted} kharch kiya, isliye ${body.madeMoney ? 'bacha' : 'ghata raha'} ${result.formatted}.`,
+        wording`${period.described['hi-IN']} आपने ${income.formatted} कमाए और ${expenses.formatted} ख़र्च किए, इसलिए ${result.formatted} ${body.madeMoney ? 'बचे' : 'का घाटा रहा'}.`,
       ),
     );
     if (!body.costOfGoodsInBooks) {
@@ -412,7 +412,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'Goods were sold but what they cost has not been written into the books yet, so this figure is higher than what you really kept.',
-          'Maal bika hai par uski lagat abhi books mein nahin likhi gayi, isliye yeh aankda asli bachat se zyada hai.',
+          'माल बिका है पर उसकी लागत अभी बहीखाते में नहीं लिखी गई, इसलिए यह आंकड़ा असली बचत से ज़्यादा है.',
         ),
       );
     }
@@ -420,18 +420,18 @@ export class AssistantService {
   }
 
   async #balanceSheet(actor: ActorContext, filter: ReportFilter, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'what the business owns and owes', 'hi-IN': 'business ke paas kya hai aur kya dena hai' };
+    const what: Bilingual = { 'en-IN': 'what the business owns and owes', 'hi-IN': 'बिज़नेस के पास क्या है और क्या देना है' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.balanceSheet(actor, filter)));
     if (report === null) return;
 
     const body = report.body;
-    const assets = citeFrom(report, { 'en-IN': 'what the business owns', 'hi-IN': 'business ke paas jo hai' }, body.totalAssets);
-    const claims = citeFrom(report, { 'en-IN': 'what is claimed against it', 'hi-IN': 'uspar jo dawe hain' }, body.totalClaims);
+    const assets = citeFrom(report, { 'en-IN': 'what the business owns', 'hi-IN': 'बिज़नेस के पास जो है' }, body.totalAssets);
+    const claims = citeFrom(report, { 'en-IN': 'what is claimed against it', 'hi-IN': 'उस पर जो दावे हैं' }, body.totalClaims);
     draft.amounts.push(assets, claims);
     draft.sentences.push(
       plainSentence(
         wording`The business owns ${assets.formatted}, and ${claims.formatted} of that is claimed by others or is your own money in it.`,
-        wording`Business ke paas ${assets.formatted} hai, aur usmein se ${claims.formatted} par doosron ka ya aapka apna dawa hai.`,
+        wording`बिज़नेस के पास ${assets.formatted} है, और उसमें से ${claims.formatted} पर दूसरों का या आपका अपना दावा है.`,
       ),
     );
     if (!body.balanced) {
@@ -439,7 +439,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'The two sides do not come to the same figure, so something is missing from the books. That has to be sorted out before this page can be relied on.',
-          'Dono taraf ka jod barabar nahin hai, matlab books mein kuch chhoot raha hai. Is panne par bharosa karne se pehle use theek karna hoga.',
+          'दोनों तरफ़ का जोड़ बराबर नहीं है, मतलब बहीखाते में कुछ छूट रहा है. इस पन्ने पर भरोसा करने से पहले उसे ठीक करना होगा.',
         ),
       );
       await this.#raise(actor, draft, 'The balance sheet does not balance for the period the owner asked about.', [
@@ -450,7 +450,7 @@ export class AssistantService {
   }
 
   async #stock(actor: ActorContext, filter: ReportFilter, reading: Understanding, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'what is left in the godown', 'hi-IN': 'godown mein kya bacha hai' };
+    const what: Bilingual = { 'en-IN': 'what is left in the godown', 'hi-IN': 'गोदाम में क्या बचा है' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.stock(actor, filter)));
     if (report === null) return;
 
@@ -463,7 +463,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           wording`I could not find an item called "${reading.slots.itemText ?? ''}" in your godown. Check the name on the item list.`,
-          wording`"${reading.slots.itemText ?? ''}" naam ka koi saman aapke godown mein nahin mila. Item list mein naam dekh lein.`,
+          wording`"${reading.slots.itemText ?? ''}" नाम का कोई सामान आपके गोदाम में नहीं मिला. सामान की सूची में नाम देख लीजिए.`,
         ),
       );
       return;
@@ -474,56 +474,56 @@ export class AssistantService {
         draft.sentences.push(
           plainSentence(
             wording`${row.itemName} at ${row.warehouseName}: ${row.closing} ${row.unitCode} in the godown, ${row.available} ${row.unitCode} free to sell${row.reserved === '0' ? '' : wording` (${row.reserved} ${row.unitCode} held by unfinished bills)`}.`,
-            wording`${row.itemName}, ${row.warehouseName}: godown mein ${row.closing} ${row.unitCode}, bechne ke liye ${row.available} ${row.unitCode}${row.reserved === '0' ? '' : wording` (${row.reserved} ${row.unitCode} adhoore bill ne rok rakha hai)`}.`,
+            wording`${row.itemName}, ${row.warehouseName}: गोदाम में ${row.closing} ${row.unitCode}, बेचने के लिए ${row.available} ${row.unitCode}${row.reserved === '0' ? '' : wording` (${row.reserved} ${row.unitCode} अधूरे बिल ने रोक रखा है)`}.`,
           ),
         );
       }
-      draft.nextSteps.push({ label: { 'en-IN': 'Open what is left in the godown', 'hi-IN': 'Kholein: godown mein kya bacha hai' }, action: 'reports:stock' });
+      draft.nextSteps.push({ label: { 'en-IN': 'Open what is left in the godown', 'hi-IN': 'खोलिए: गोदाम में क्या बचा है' }, action: 'reports:stock' });
       return;
     }
 
-    const value = citeFrom(report, { 'en-IN': 'what the goods are worth', 'hi-IN': 'maal ki keemat' }, body.value);
+    const value = citeFrom(report, { 'en-IN': 'what the goods are worth', 'hi-IN': 'माल की कीमत' }, body.value);
     draft.amounts.push(value);
     draft.sentences.push(
       plainSentence(
         wording`You are holding ${plural(body.rows.length, 'item', 'items')} worth ${value.formatted} at what they cost.`,
-        wording`Aapke paas ${plural(body.rows.length, 'saman', 'saman')} hai, lagat ke hisaab se ${value.formatted} ka.`,
+        wording`आपके पास ${plural(body.rows.length, 'सामान', 'सामान')} है, लागत के हिसाब से ${value.formatted} का.`,
       ),
     );
   }
 
   async #gst(actor: ActorContext, filter: ReportFilter, period: ResolvedPeriod, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'GST you collected and GST you paid', 'hi-IN': 'aapne jo GST liya aur jo diya' };
+    const what: Bilingual = { 'en-IN': 'GST you collected and GST you paid', 'hi-IN': 'आपने जो GST लिया और जो दिया' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.gstSummary(actor, filter)));
     if (report === null) return;
 
     const body = report.body;
-    const collected = citeFrom(report, { 'en-IN': 'GST you collected', 'hi-IN': 'aapne jo GST liya' }, body.totalCollected);
-    const paid = citeFrom(report, { 'en-IN': 'GST you already paid', 'hi-IN': 'aap pehle jo GST de chuke' }, body.totalAlreadyPaid);
+    const collected = citeFrom(report, { 'en-IN': 'GST you collected', 'hi-IN': 'आपने जो GST लिया' }, body.totalCollected);
+    const paid = citeFrom(report, { 'en-IN': 'GST you already paid', 'hi-IN': 'आप पहले जो GST दे चुके' }, body.totalAlreadyPaid);
     draft.amounts.push(collected, paid);
 
     draft.sentences.push(
       plainSentence(
         wording`${period.described['en-IN']} you collected ${collected.formatted} of GST and had already paid ${paid.formatted} on your own purchases.`,
-        wording`${period.described['hi-IN']} aapne ${collected.formatted} GST liya aur apni kharid par ${paid.formatted} pehle hi de chuke the.`,
+        wording`${period.described['hi-IN']} आपने ${collected.formatted} GST लिया और अपनी ख़रीद पर ${paid.formatted} पहले ही दे चुके थे.`,
       ),
     );
     // The difference is a bookkeeping figure, not a return. Saying what it turns into on a return is
     // a compliance statement, and this module does not make those without a rule behind them.
     draft.sentences.push(body.caution);
     draft.state = 'PARTLY_ANSWERED';
-    draft.nextSteps.push({ label: { 'en-IN': 'Open the GST summary', 'hi-IN': 'GST ka saar kholein' }, action: 'reports:gst_summary' });
+    draft.nextSteps.push({ label: { 'en-IN': 'Open the GST summary', 'hi-IN': 'GST का सार खोलिए' }, action: 'reports:gst_summary' });
   }
 
   async #attention(actor: ActorContext, filter: ReportFilter, draft: Draft): Promise<void> {
-    const what: Bilingual = { 'en-IN': 'things worth a second look', 'hi-IN': 'dobara dekhne layak cheezein' };
+    const what: Bilingual = { 'en-IN': 'things worth a second look', 'hi-IN': 'दोबारा देखने लायक़ चीज़ें' };
     const report = this.#took(draft, await fetchReport(what, () => this.#deps.reports.exceptions(actor, filter)));
     if (report === null) return;
 
     const body = report.body;
     if (body.clean) {
       draft.sentences.push(
-        plainSentence('Nothing is waiting for you. Your books hold together for this period.', 'Aapke liye kuch baaki nahin hai. Is samay ka hisaab theek hai.'),
+        plainSentence('Nothing is waiting for you. Your books hold together for this period.', 'आपके लिए कुछ बाक़ी नहीं है. इस समय का हिसाब ठीक है.'),
       );
       return;
     }
@@ -535,7 +535,7 @@ export class AssistantService {
       });
     }
     draft.state = 'PARTLY_ANSWERED';
-    draft.nextSteps.push({ label: { 'en-IN': 'Open things worth a second look', 'hi-IN': 'Kholein: dobara dekhne layak cheezein' }, action: 'reports:exceptions' });
+    draft.nextSteps.push({ label: { 'en-IN': 'Open things worth a second look', 'hi-IN': 'खोलिए: दोबारा देखने लायक़ चीज़ें' }, action: 'reports:exceptions' });
   }
 
   /**
@@ -553,7 +553,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'I cannot see why a bill is held up on this setup. Open the bill and the screen will say what is in the way.',
-          'Is setup par main nahin dekh sakta ki bill kyun ruka hai. Bill kholein, screen batayegi ki kya rok raha hai.',
+          'इस सेटअप पर मैं नहीं देख सकता कि बिल क्यों रुका है. बिल खोलिए, स्क्रीन बताएगी कि क्या रोक रहा है.',
         ),
       );
       return;
@@ -566,7 +566,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'You do not have access to that bill. Ask the owner if you need to see bills and stock.',
-          'Aapko us bill ko dekhne ki ijazat nahin hai. Bill aur stock dekhna ho to malik se ijazat maangein.',
+          'आपको उस बिल को देखने की इजाज़त नहीं है. बिल और स्टॉक देखना हो तो मालिक से इजाज़त माँगिए.',
         ),
       );
       return;
@@ -576,7 +576,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'Tell me which bill you mean — its number, such as INV-1042 — and I will say exactly what is holding it up.',
-          'Batayein kaunsa bill — uska number, jaise INV-1042 — main theek batata hoon ki use kya rok raha hai.',
+          'बताइए कौनसा बिल — उसका नंबर, जैसे INV-1042 — मैं ठीक बताता हूँ कि उसे क्या रोक रहा है.',
         ),
       );
       return;
@@ -588,7 +588,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           wording`I could not find ${reference} in this business.`,
-          wording`${reference} is business mein nahin mila.`,
+          wording`${reference} इस बिज़नेस में नहीं मिला.`,
         ),
       );
       return;
@@ -597,7 +597,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           wording`${document.number ?? reference} is not blocked by anything. If it still will not go out, open it and try again.`,
-          wording`${document.number ?? reference} ko kuch rok nahin raha. Phir bhi na jaaye to use kholkar dobara koshish karein.`,
+          wording`${document.number ?? reference} को कुछ रोक नहीं रहा. फिर भी न जाए तो उसे खोलकर दोबारा कोशिश कीजिए.`,
         ),
       );
       return;
@@ -607,7 +607,7 @@ export class AssistantService {
     draft.sentences.push(
       plainSentence(
         wording`${document.number ?? reference}${document.partyName === null ? '' : wording` for ${document.partyName}`} is held up by ${plural(document.reasons.length, 'thing', 'things')}.`,
-        wording`${document.number ?? reference}${document.partyName === null ? '' : wording`, ${document.partyName} ke liye,`} ${plural(document.reasons.length, 'cheez', 'cheezein')} ki wajah se ruka hai.`,
+        wording`${document.number ?? reference}${document.partyName === null ? '' : wording`, ${document.partyName} के लिए,`} ${plural(document.reasons.length, 'चीज़', 'चीज़ें')} की वजह से रुका है.`,
       ),
     );
 
@@ -632,7 +632,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'I only answer rule questions where we hold an approved rule with the notification it comes from, and I do not have one for this. Your accountant can tell you, and we will not guess.',
-          'Main niyam ke sawaal ka jawab tabhi deta hoon jab hamare paas manzoor kiya niyam aur uska notification ho; iske liye nahin hai. Aapke accountant bata sakte hain, hum andaaza nahin lagayenge.',
+          'मैं नियम के सवाल का जवाब तभी देता हूँ जब हमारे पास मंज़ूर किया नियम और उसका नोटिफ़िकेशन हो; इसके लिए नहीं है. आपके अकाउंटेंट बता सकते हैं, हम अंदाज़ा नहीं लगाएंगे.',
         ),
       );
       return;
@@ -644,7 +644,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           'We do not hold a rule for that yet, so I will not put a position on it.',
-          'Uske liye abhi hamare paas niyam nahin hai, isliye main koi raay nahin dunga.',
+          'उसके लिए अभी हमारे पास नियम नहीं है, इसलिए मैं कोई राय नहीं दूँगा.',
         ),
       );
       return;
@@ -663,7 +663,7 @@ export class AssistantService {
       draft.sentences.push(
         plainSentence(
           wording`To answer this for one of your bills I need: ${citation.missing.map((fact) => fact.label).join(', ')}. Open the bill and I can answer it exactly.`,
-          wording`Aapke kisi bill ke liye yeh batane ko chahiye: ${citation.missing.map((fact) => fact.label).join(', ')}. Bill kholein, phir main theek bata sakta hoon.`,
+          wording`आपके किसी बिल के लिए यह बताने को चाहिए: ${citation.missing.map((fact) => fact.label).join(', ')}. बिल खोलिए, फिर मैं ठीक बता सकता हूँ.`,
         ),
       );
     }
@@ -674,7 +674,7 @@ export class AssistantService {
       draft.assumptions.push(
         plainSentence(
           'I cannot see your filing dates or reminders here yet, so nothing in this answer is about when something is due.',
-          'Abhi main aapki filing ki taareekhen ya yaad-dilane wale nahin dekh sakta, isliye is jawab mein kab tak karna hai, yeh shaamil nahin hai.',
+          'अभी मैं आपकी फ़ाइलिंग की तारीख़ें या याद-दिलाने वाले नहीं देख सकता, इसलिए इस जवाब में कब तक करना है, यह शामिल नहीं है.',
         ),
       );
     }
@@ -711,7 +711,7 @@ export class AssistantService {
    * quoting a profit as though it were settled.
    */
   async #checkBooksHoldTogether(actor: ActorContext, filter: ReportFilter, draft: Draft): Promise<void> {
-    const fetched = await fetchReport({ 'en-IN': 'whether the books hold together', 'hi-IN': 'kya books ka hisaab mil raha hai' }, () =>
+    const fetched = await fetchReport({ 'en-IN': 'whether the books hold together', 'hi-IN': 'क्या बहीखाते का हिसाब मिल रहा है' }, () =>
       this.#deps.reports.trialBalance(actor, filter),
     );
     if (!fetched.ok) return;
@@ -721,7 +721,7 @@ export class AssistantService {
     draft.sentences.push(
       plainSentence(
         'Be careful with this figure: the two sides of your books do not add up to the same total, so something is missing.',
-        'Is aankde se saavdhaan rahein: aapki books ke dono taraf ka jod barabar nahin hai, kuch chhoot raha hai.',
+        'इस आंकड़े से सावधान रहिए: आपकी बहीखाते के दोनों तरफ़ का जोड़ बराबर नहीं है, कुछ छूट रहा है.',
       ),
     );
   }
@@ -732,7 +732,7 @@ export class AssistantService {
     const item = await queue.raise({ companyId: actor.companyId, summary, evidence });
     draft.exceptionId = item.id;
     draft.nextSteps.push({
-      label: { 'en-IN': 'A person has been asked to look at this', 'hi-IN': 'Ek vyakti se ise dekhne ko kaha gaya hai' },
+      label: { 'en-IN': 'A person has been asked to look at this', 'hi-IN': 'एक व्यक्ति से इसे देखने को कहा गया है' },
       action: `exception:${item.id}`,
     });
   }
@@ -741,18 +741,18 @@ export class AssistantService {
 /** How each supported question reads when it is offered as an example. */
 export const describeIntent = (intent: Intent): Bilingual => {
   const table: Record<Intent, Bilingual> = {
-    MONEY_OWED_TO_ME: { 'en-IN': 'Who owes me money?', 'hi-IN': 'Mujhe kisse paisa lena hai?' },
-    MONEY_I_OWE: { 'en-IN': 'Who do I owe money to?', 'hi-IN': 'Mujhe kisko paisa dena hai?' },
-    SALES_IN_PERIOD: { 'en-IN': 'How much did I sell last month?', 'hi-IN': 'Pichhle mahine kitna becha?' },
-    PURCHASES_IN_PERIOD: { 'en-IN': 'How much did I buy this month?', 'hi-IN': 'Is mahine kitni kharid hui?' },
-    PROFIT_IN_PERIOD: { 'en-IN': 'Did I make money this month?', 'hi-IN': 'Is mahine munafa hua?' },
-    WHAT_I_OWN: { 'en-IN': 'What does the business own and owe?', 'hi-IN': 'Business ke paas kya hai aur kya dena hai?' },
-    STOCK_POSITION: { 'en-IN': 'How much rice is left?', 'hi-IN': 'Chawal kitna bacha hai?' },
-    GST_IN_PERIOD: { 'en-IN': 'How much GST did I collect this month?', 'hi-IN': 'Is mahine kitna GST liya?' },
-    NEEDS_ATTENTION: { 'en-IN': 'What needs my attention?', 'hi-IN': 'Mujhe kis par dhyan dena chahiye?' },
-    WHY_BLOCKED: { 'en-IN': 'Why is INV-1042 blocked?', 'hi-IN': 'INV-1042 kyun ruka hai?' },
-    COMPLIANCE_QUESTION: { 'en-IN': 'Do I need an e-way bill for this?', 'hi-IN': 'Iske liye e-way bill zaroori hai kya?' },
-    UNSUPPORTED: { 'en-IN': 'Something about your books', 'hi-IN': 'Aapki books ke baare mein kuch' },
+    MONEY_OWED_TO_ME: { 'en-IN': 'Who owes me money?', 'hi-IN': 'मुझे किससे पैसा लेना है?' },
+    MONEY_I_OWE: { 'en-IN': 'Who do I owe money to?', 'hi-IN': 'मुझे किसको पैसा देना है?' },
+    SALES_IN_PERIOD: { 'en-IN': 'How much did I sell last month?', 'hi-IN': 'पिछले महीने कितना बेचा?' },
+    PURCHASES_IN_PERIOD: { 'en-IN': 'How much did I buy this month?', 'hi-IN': 'इस महीने कितनी ख़रीद हुई?' },
+    PROFIT_IN_PERIOD: { 'en-IN': 'Did I make money this month?', 'hi-IN': 'इस महीने मुनाफ़ा हुआ?' },
+    WHAT_I_OWN: { 'en-IN': 'What does the business own and owe?', 'hi-IN': 'बिज़नेस के पास क्या है और क्या देना है?' },
+    STOCK_POSITION: { 'en-IN': 'How much rice is left?', 'hi-IN': 'चावल कितना बचा है?' },
+    GST_IN_PERIOD: { 'en-IN': 'How much GST did I collect this month?', 'hi-IN': 'इस महीने कितना GST लिया?' },
+    NEEDS_ATTENTION: { 'en-IN': 'What needs my attention?', 'hi-IN': 'मुझे किस पर ध्यान देना चाहिए?' },
+    WHY_BLOCKED: { 'en-IN': 'Why is INV-1042 blocked?', 'hi-IN': 'INV-1042 क्यों रुका है?' },
+    COMPLIANCE_QUESTION: { 'en-IN': 'Do I need an e-way bill for this?', 'hi-IN': 'इसके लिए ई-वे बिल ज़रूरी है क्या?' },
+    UNSUPPORTED: { 'en-IN': 'Something about your books', 'hi-IN': 'आपकी बहीखाते के बारे में कुछ' },
   };
   return table[intent];
 };
