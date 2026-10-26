@@ -106,7 +106,7 @@ jobs:
     # real PostgreSQL: sign-up and sign-in (stand-in code), make a bill, record a purchase,
     # prepare a GST return, upgrade plan, and invite a teammate (skipped until #343 lands).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       db:
         image: postgres:16-alpine
@@ -131,6 +131,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The browser download is the slow, network-dependent part; it is cached per
+      # @playwright/test version. --with-deps still runs every job: the apt packages it
+      # installs are not in the cache and are fast beside it.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-playwright-
       - run: npx playwright install --with-deps chromium
       - run: npm run db:migrate
       - run: npm run db:seed
