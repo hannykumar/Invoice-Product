@@ -80,10 +80,12 @@ test('#395: every GET in the route table, as a viewer and as the owner, writes n
   assert.deepEqual(wrote, [], 'these GETs wrote');
 });
 
-test('#395: a viewer opening the catalogue opens no ledger account, and the walk-in customer is already listed', async (context) => {
-  const { viewer } = await openCompany();
+test('#395: opening the catalogue opens no ledger account, and the walk-in customer is already listed', async (context) => {
+  const { owner, viewer } = await openCompany();
   const writes = watchWrites(context);
-  const catalogue = await get('/api/catalogue', viewer);
+  // #343: the catalogue carries every customer's GST number and address, so a viewer is refused it (#348) — and the refusal writes nothing either.
+  assert.equal((await get('/api/catalogue', viewer)).status, 403);
+  const catalogue = await get('/api/catalogue', owner);
   assert.equal(catalogue.status, 200);
   assert.ok(catalogue.body!.customers.some((customer: any) => customer.walkIn), 'the walk-in customer is on the list');
   assert.deepEqual(writes.taken(), []);
