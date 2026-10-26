@@ -58,12 +58,10 @@ export async function moneyCardFigures(store: LedgerStore, companyId: CompanyId,
   return { cashInDrawer: cash, bankInToday };
 }
 
-// Issue #298 — Karobar's Hindi is Roman script (docs/ux/00-design-principles.md §6), so dates in
-// Hindi sentences are written the Latin way too rather than letting 'hi-IN' emit Devanagari.
 const shortDate = (iso: string, locale: 'en-IN' | 'hi-IN') =>
-  new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(`${iso}T12:00:00+05:30`));
+  new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(`${iso}T12:00:00+05:30`));
 const monthName = (key: string, locale: 'en-IN' | 'hi-IN') =>
-  new Intl.DateTimeFormat('en-IN', { month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date(`${key}-15T12:00:00+05:30`));
+  new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date(`${key}-15T12:00:00+05:30`));
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
 // ------------------------------------------------------------------------------------ the tasks
@@ -78,11 +76,11 @@ export function ewayTask(bill: {
   readonly failure: { readonly retryable: boolean; readonly distanceKm: number } | null;
 }, canAct: boolean): HomeTask {
   const who = bill.customer ?? '';
-  const open: HomeAction = { label: say('Raise', 'Banayen'), open: { view: 'eway', bill: bill.id } };
+  const open: HomeAction = { label: say('Raise', 'बनाइए'), open: { view: 'eway', bill: bill.id } };
   if (bill.failure === null) {
     return {
       id: `eway:${bill.id}`, kind: 'EWAY', rank: 10,
-      title: say(`${who}: e-way bill needed before the goods leave (${bill.number})`, `${who}: maal nikalne se pehle e-way bill chahiye (${bill.number})`),
+      title: say(`${who}: e-way bill needed before the goods leave (${bill.number})`, `${who}: माल निकलने से पहले ई-वे बिल चाहिए (${bill.number})`),
       action: canAct ? open : null,
     };
   }
@@ -90,8 +88,8 @@ export function ewayTask(bill: {
     return {
       id: `eway:${bill.id}`, kind: 'EWAY', rank: 10,
       title: say(`The e-way bill for ${bill.number} could not be made — the government site refused it, so something on it needs correcting`,
-        `${bill.number} ka e-way bill nahi bana — sarkari site ne lauta diya, ismein kuch theek karna hai`),
-      action: canAct ? { label: say('Open', 'Kholen'), open: open.open } : null,
+        `${bill.number} का ई-वे बिल नहीं बना — सरकारी साइट ने लौटा दिया, इसमें कुछ ठीक करना है`),
+      action: canAct ? { label: say('Open', 'खोलिए'), open: open.open } : null,
     };
   }
   // The same request the E-way bill screen sends: the bill's own details, and the distance last sent.
@@ -99,8 +97,8 @@ export function ewayTask(bill: {
   return {
     id: `eway:${bill.id}`, kind: 'EWAY', rank: 10,
     title: say(`The e-way bill for ${bill.number} could not be made — the government site did not answer`,
-      `${bill.number} ka e-way bill nahi bana — sarkari site ne jawab nahi diya`),
-    action: canAct ? { label: say('Retry', 'Phir bhejen'), post: { path: '/api/eway/generate', body } } : null,
+      `${bill.number} का ई-वे बिल नहीं बना — सरकारी साइट ने जवाब नहीं दिया`),
+    action: canAct ? { label: say('Retry', 'फिर भेजिए'), post: { path: '/api/eway/generate', body } } : null,
   };
 }
 
@@ -110,17 +108,17 @@ export function eInvoiceTask(bill: { readonly id: string; readonly number: strin
   const refused = bill.eInvoiceStatus === 'FAILED' && bill.needed === 'YES';
   if (!waiting && !unsent && !refused) return null;
   const title = waiting
-    ? say(`${bill.number} is waiting for its e-invoice number from the government`, `${bill.number} ke e-invoice number ka sarkar se intezaar hai`)
+    ? say(`${bill.number} is waiting for its e-invoice number from the government`, `${bill.number} के ई-इनवॉइस नंबर का सरकार से इंतज़ार है`)
     : unsent
-      ? say(`${bill.number} needs an e-invoice number and has not been sent yet`, `${bill.number} ko e-invoice number chahiye, abhi bheja nahi gaya`)
+      ? say(`${bill.number} needs an e-invoice number and has not been sent yet`, `${bill.number} को ई-इनवॉइस नंबर चाहिए, अभी भेजा नहीं गया`)
       : bill.canRetry
-        ? say(`The e-invoice for ${bill.number} could not be sent — the government site did not answer`, `${bill.number} ka e-invoice nahi gaya — sarkari site ne jawab nahi diya`)
-        : say(`${bill.number}: the government refused the e-invoice`, `${bill.number}: sarkar ne e-invoice lauta diya`);
+        ? say(`The e-invoice for ${bill.number} could not be sent — the government site did not answer`, `${bill.number} का ई-इनवॉइस नहीं गया — सरकारी साइट ने जवाब नहीं दिया`)
+        : say(`${bill.number}: the government refused the e-invoice`, `${bill.number}: सरकार ने ई-इनवॉइस लौटा दिया`);
   const action: HomeAction = waiting
-    ? { label: say('Check again', 'Phir dekhen'), post: { path: '/api/einvoices/reconcile', body: { invoice: bill.id } } }
+    ? { label: say('Check again', 'फिर देखिए'), post: { path: '/api/einvoices/reconcile', body: { invoice: bill.id } } }
     : unsent || bill.canRetry
-      ? { label: say('Retry', 'Phir bhejen'), post: { path: '/api/einvoices/register', body: { invoice: bill.id } } }
-      : { label: say('Open', 'Kholen'), open: { view: 'einvoice', bill: bill.id } };
+      ? { label: say('Retry', 'फिर भेजिए'), post: { path: '/api/einvoices/register', body: { invoice: bill.id } } }
+      : { label: say('Open', 'खोलिए'), open: { view: 'einvoice', bill: bill.id } };
   return { id: `einvoice:${bill.id}`, kind: 'EINVOICE', rank: refused ? 20 : 25, title, action: canAct ? action : null };
 }
 
@@ -161,7 +159,7 @@ export async function gstReturnTasks(
   // the platform's roles have no calendar permission of their own yet.
   const view = await calendar.calendar({ ...actor, permissions: [CALENDAR_PERMISSIONS.view] });
   const tasks: HomeTask[] = [];
-  for (const [code, en, hi] of [['GSTR1', 'GSTR-1 (sales list)', 'GSTR-1 (bikri ki soochi)'], ['GSTR3B', 'GSTR-3B (tax payment)', 'GSTR-3B (tax bharna)']] as const) {
+  for (const [code, en, hi] of [['GSTR1', 'GSTR-1 (sales list)', 'GSTR-1 (बिक्री की सूची)'], ['GSTR3B', 'GSTR-3B (tax payment)', 'GSTR-3B (टैक्स भरना)']] as const) {
     const open = view.entries
       .filter((entry) => entry.occurrence.code === code && ['DUE_SOON', 'DUE_TODAY', 'OVERDUE'].includes(entry.state) && !doneMonths.has(entry.occurrence.period.key))
       .sort((a, b) => a.occurrence.dueDate.localeCompare(b.occurrence.dueDate));
@@ -172,13 +170,13 @@ export async function gstReturnTasks(
     const late = -first.daysRemaining;
     const title = late > 0
       ? say(`${en} for ${months('en-IN')} not filed: due ${shortDate(due, 'en-IN')}, ${late} ${late === 1 ? 'day' : 'days'} late`,
-        `${hi} ${months('hi-IN')} ka nahi bhara: ${shortDate(due, 'hi-IN')} tak tha, ${late} din der`)
+        `${hi} ${months('hi-IN')} का नहीं भरा: ${shortDate(due, 'hi-IN')} तक था, ${late} दिन देर`)
       : late === 0
-        ? say(`${en} for ${months('en-IN')} is due today`, `${hi} ${months('hi-IN')} ka aaj bharna hai`)
-        : say(`${en} for ${months('en-IN')} is due ${shortDate(due, 'en-IN')}`, `${hi} ${months('hi-IN')} ka ${shortDate(due, 'hi-IN')} tak bharna hai`);
+        ? say(`${en} for ${months('en-IN')} is due today`, `${hi} ${months('hi-IN')} का आज भरना है`)
+        : say(`${en} for ${months('en-IN')} is due ${shortDate(due, 'en-IN')}`, `${hi} ${months('hi-IN')} का ${shortDate(due, 'hi-IN')} तक भरना है`);
     tasks.push({
       id: `gst:${code}:${first.occurrence.period.key}`, kind: 'GST_RETURN', rank: late > 0 ? 30 : 35, title,
-      action: canAct ? { label: say('Check', 'Dekhen'), open: { view: 'gst-returns', period: first.occurrence.period.key } } : null,
+      action: canAct ? { label: say('Check', 'देखिए'), open: { view: 'gst-returns', period: first.occurrence.period.key } } : null,
     });
   }
   return tasks;
@@ -191,8 +189,8 @@ export function lateCustomersTask(late: readonly { readonly outstanding: bigint 
   return {
     id: 'late-customers', kind: 'LATE_CUSTOMERS', rank: 40,
     title: say(`${late.length} ${one ? 'customer is' : 'customers are'} more than 30 days late: ${amount} to collect`,
-      `${late.length} graahak 30 din se zyada der se: ${amount} lena hai`),
-    action: canAct ? { label: say('Remind all', 'Sabko yaad dilayen'), post: { path: '/api/reminders/send-all', body: {} } } : null,
+      `${late.length} ग्राहक 30 दिन से ज़्यादा देर से: ${amount} लेना है`),
+    action: canAct ? { label: say('Remind all', 'सबको याद दिलाइए'), post: { path: '/api/reminders/send-all', body: {} } } : null,
   };
 }
 
@@ -200,15 +198,15 @@ export function stockTask(low: readonly { readonly itemId: string; readonly name
   const first = low[0];
   if (first === undefined) return null;
   const left = (item: typeof first, locale: 'en-IN' | 'hi-IN') => item.quantity <= 0
-    ? (locale === 'en-IN' ? `${item.name}: none left` : `${item.name}: khatam`)
-    : (locale === 'en-IN' ? `${item.name}: only ${item.quantity} ${item.unit} left` : `${item.name}: sirf ${item.quantity} ${item.unit} bacha`);
+    ? (locale === 'en-IN' ? `${item.name}: none left` : `${item.name}: ख़त्म`)
+    : (locale === 'en-IN' ? `${item.name}: only ${item.quantity} ${item.unit} left` : `${item.name}: सिर्फ़ ${item.quantity} ${item.unit} बचा`);
   const more = low.length - 1;
   return {
     id: 'stock', kind: 'STOCK', rank: 50,
     title: more === 0 ? say(left(first, 'en-IN'), left(first, 'hi-IN'))
-      : say(`${left(first, 'en-IN')}, and ${more} more ${more === 1 ? 'item' : 'items'} running low`, `${left(first, 'hi-IN')}, aur ${more} saman kam`),
+      : say(`${left(first, 'en-IN')}, and ${more} more ${more === 1 ? 'item' : 'items'} running low`, `${left(first, 'hi-IN')}, और ${more} सामान कम`),
     // One item: its purchase bill. Several: the item list, where every stock figure is.
-    action: canAct ? { label: say('Order', 'Mangayen'), open: { view: more === 0 ? 'purchase' : 'items' } } : null,
+    action: canAct ? { label: say('Order', 'मँगाइए'), open: { view: more === 0 ? 'purchase' : 'items' } } : null,
   };
 }
 
@@ -223,9 +221,9 @@ export function approvalChallanTask(challan: { readonly id: string; readonly num
     id: `challan-approval:${challan.id}`, kind: 'CHALLAN', rank: challan.overdue ? 15 : 35,
     title: challan.overdue
       ? say(`Goods sent on approval on ${challan.number} had to be billed by ${date}. Make the bill now, or record that they came back`,
-        `${challan.number} par approval par bheje maal ka bill ${date} tak banna tha. Abhi bill banayen, ya likhen ki maal wapas aa gaya`)
-      : say(`Goods sent on approval on ${challan.number} must be billed by ${date}`, `${challan.number} par approval par bheje maal ka bill ${date} tak banana hai`),
-    action: canAct ? { label: say('Open', 'Kholen'), open: { view: 'challan' } } : null,
+        `${challan.number} पर अप्रूवल पर भेजे माल का बिल ${date} तक बनना था। अभी बिल बनाइए, या लिखिए कि माल वापस आ गया`)
+      : say(`Goods sent on approval on ${challan.number} must be billed by ${date}`, `${challan.number} पर अप्रूवल पर भेजे माल का बिल ${date} तक बनाना है`),
+    action: canAct ? { label: say('Open', 'खोलिए'), open: { view: 'challan' } } : null,
   };
 }
 
@@ -234,8 +232,8 @@ export function turnoverTask(financialYear: string, canAct: boolean): HomeTask {
   return {
     id: `turnover:${financialYear}`, kind: 'TURNOVER', rank: 45,
     title: say(`One question for ${financialYear}: has your turnover been over ₹5 crore? It decides whether bills need e-invoices`,
-      `${financialYear} ke liye ek sawaal: kya aapka turnover ₹5 crore se upar gaya hai? Isi se tay hota hai ki bill par e-invoice chahiye ya nahin`),
-    action: canAct ? { label: say('Answer', 'Jawab den'), open: { view: 'business', turnover: true } } : null,
+      `${financialYear} के लिए एक सवाल: क्या आपका टर्नओवर ₹5 करोड़ से ऊपर गया है? इसी से तय होता है कि बिल पर ई-इनवॉइस चाहिए या नहीं`),
+    action: canAct ? { label: say('Answer', 'जवाब दीजिए'), open: { view: 'business', turnover: true } } : null,
   };
 }
 

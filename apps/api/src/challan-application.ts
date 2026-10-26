@@ -163,8 +163,8 @@ export class ChallanDesk {
     if (!working.ok) {
       return {
         state: 'problems' as const,
-        title: both('This challan cannot be issued yet', 'Ye challan abhi nahi ban sakta'),
-        message: both('Everything stopping it is listed below. Nothing was saved and no number was used.', 'Jo rok raha hai wo neeche likha hai. Kuch save nahi hua aur koi number nahi laga.'),
+        title: both('This challan cannot be issued yet', 'ये चालान अभी नहीं बन सकता'),
+        message: both('Everything stopping it is listed below. Nothing was saved and no number was used.', 'जो रोक रहा है वो नीचे लिखा है। कुछ सहेजा नहीं गया और कोई नंबर नहीं लगा।'),
         problems: working.problems.map((p) => ({ code: p.code, message: p.message })),
       };
     }
@@ -174,8 +174,8 @@ export class ChallanDesk {
     if (short !== null) {
       return {
         state: 'problems' as const,
-        title: both('This challan cannot be issued yet', 'Ye challan abhi nahi ban sakta'),
-        message: both('Everything stopping it is listed below. Nothing was saved and no number was used.', 'Jo rok raha hai wo neeche likha hai. Kuch save nahi hua aur koi number nahi laga.'),
+        title: both('This challan cannot be issued yet', 'ये चालान अभी नहीं बन सकता'),
+        message: both('Everything stopping it is listed below. Nothing was saved and no number was used.', 'जो रोक रहा है वो नीचे लिखा है। कुछ सहेजा नहीं गया और कोई नंबर नहीं लगा।'),
         problems: [{ code: 'CHALLAN_STOCK_NOT_ENOUGH', message: short }],
       };
     }
@@ -239,11 +239,11 @@ export class ChallanDesk {
     }
     const eway = challan.state === 'ISSUED' ? this.hooks.eway(challan) : null;
     return {
-      state: 'recorded' as const, title: both('Challan issued', 'Challan bana'),
-      message: both(`${challan.number} was issued. The goods may move on it, and they are kept off sale until it is billed or cancelled.`, `${challan.number} ban gaya. Maal is par ja sakta hai, aur jab tak ye bill nahi banta ya radd nahi hota, maal bikri se baahar rakha hai.`),
+      state: 'recorded' as const, title: both('Challan issued', 'चालान बना'),
+      message: both(`${challan.number} was issued. The goods may move on it, and they are kept off sale until it is billed or cancelled.`, `${challan.number} बन गया। माल इस पर जा सकता है, और जब तक ये बिल नहीं बनता या रद्द नहीं होता, माल बिक्री से बाहर रखा है।`),
       challan: this.#json(challan),
       // Issue #290 — offered on the spot, as on a bill (#240).
-      ewayBill: eway?.outcome === 'REQUIRED' ? { needed: true, message: both('This consignment needs an e-way bill before the vehicle leaves.', 'Gaadi chalne se pehle is consignment ka e-way bill zaroori hai.'), reason: eway.reason } : null,
+      ewayBill: eway?.outcome === 'REQUIRED' ? { needed: true, message: both('This consignment needs an e-way bill before the vehicle leaves.', 'गाड़ी चलने से पहले इस माल का ई-वे बिल ज़रूरी है।'), reason: eway.reason } : null,
     };
   }
 
@@ -348,7 +348,7 @@ export class ChallanDesk {
       transporter: String(input.transporter ?? '').trim() || null,
       source: 'TYPED',
     });
-    return { state: 'recorded' as const, title: both('E-way bill recorded', 'E-way bill darj hua'), message: both(`E-way bill ${challan.ewayBill?.number} will print on ${challan.number}.`, `E-way bill ${challan.ewayBill?.number} ${challan.number} par chhapega.`), challan: this.#json(challan) };
+    return { state: 'recorded' as const, title: both('E-way bill recorded', 'ई-वे बिल दर्ज हुआ'), message: both(`E-way bill ${challan.ewayBill?.number} will print on ${challan.number}.`, `ई-वे बिल ${challan.ewayBill?.number} ${challan.number} पर छपेगा।`), challan: this.#json(challan) };
   }
 
   /** Called after the e-way bill service raised one for this challan, so the number lands on it. */
@@ -364,7 +364,7 @@ export class ChallanDesk {
     return {
       state: 'recorded' as const,
       title: differences.length === 0 ? 'Invoice linked' : 'Invoice linked — with differences',
-      message: both(`${challan.number} is billed on invoice ${challan.invoice?.invoiceNumber}.`, `${challan.number} invoice ${challan.invoice?.invoiceNumber} par bill hua.`),
+      message: both(`${challan.number} is billed on invoice ${challan.invoice?.invoiceNumber}.`, `${challan.number} इनवॉइस ${challan.invoice?.invoiceNumber} पर बिल हुआ।`),
       effects: differences,
       challan: this.#json(challan),
     };
@@ -378,7 +378,7 @@ export class ChallanDesk {
     });
     // Issue #290 — a cancelled challan sent nothing, so its goods are on sale again.
     await this.hooks.release(actor, challan.id);
-    return { state: 'recorded' as const, title: both('Challan cancelled', 'Challan radd'), message: both(`${challan.number} is cancelled. Its number stays used, so the series has no gap.`, `${challan.number} radd ho gaya. Uska number use hua rahega, taaki series mein koi gap na ho.`), challan: this.#json(challan) };
+    return { state: 'recorded' as const, title: both('Challan cancelled', 'चालान रद्द'), message: both(`${challan.number} is cancelled. Its number stays used, so the series has no gap.`, `${challan.number} रद्द हो गया। उसका नंबर इस्तेमाल हुआ रहेगा, ताकि सीरीज़ में कोई गैप न हो।`), challan: this.#json(challan) };
   }
 
   /** Issued challans the goods may still move on, for the e-way bill screen's picker. */
