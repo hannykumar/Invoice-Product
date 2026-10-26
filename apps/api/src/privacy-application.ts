@@ -28,8 +28,11 @@ import { allMasterRecords } from './master-data.ts';
 /** Plain words for what a deletion keeps and why — the shopkeeper's answer, not a table list. */
 export const RETAINED_PLAINLY = Object.freeze([
   'Posted bills, vouchers and GST records stay because the law keeps the books for eight years after the financial year ends (CGST Act section 36; Companies Act section 128). Names inside a posted bill stay with the bill.',
+  'The names and addresses of customers, suppliers and people the kept books name stay with those records, for the same eight years.',
   'The audit trail stays so it can always be shown who did what.',
   'The consent, hold and request records of this privacy register stay so the request itself can be shown later.',
+  'The sign-in address of a person stays in the identity table, which only the platform may change; their name inside this business is removed.',
+  'A removed account can never be signed in to again.',
 ]);
 
 /**
@@ -98,8 +101,11 @@ export class PostgresAccountDataStore implements PrivacyDataStore {
       deleted += (await uow.sql.query('DELETE FROM user_branch_access WHERE company_id = $1 RETURNING user_id', [companyId])).rows.length;
       deleted += (await uow.sql.query('UPDATE sessions SET revoked_at = now() WHERE company_id = $1 AND revoked_at IS NULL RETURNING id', [companyId])).rows.length;
       deleted += (await uow.sql.query('UPDATE memberships SET active = false WHERE company_id = $1 AND active = true RETURNING user_id', [companyId])).rows.length;
+      // The application role may change only `display_name` and `active` on `users` — the sign-in
+      // address is deliberately out of its reach (the grant's own comment says so). What the role
+      // may do is done here; the email is kept by the identity table and named in `kept`.
       deleted += (await uow.sql.query(
-        `UPDATE users u SET display_name = 'Removed account', email = 'removed-' || u.id || '@removed.invalid', active = false
+        `UPDATE users u SET display_name = 'Removed account', active = false
           WHERE EXISTS (SELECT 1 FROM memberships m WHERE m.company_id = $1 AND m.user_id = u.id)
             AND NOT EXISTS (SELECT 1 FROM memberships m2 WHERE m2.user_id = u.id AND m2.company_id <> $1 AND m2.active = true) RETURNING u.id`, [companyId])).rows.length;
       deleted += (await uow.sql.query('UPDATE notification_preferences SET enabled = false WHERE company_id = $1 AND enabled = true RETURNING recipient_id', [companyId])).rows.length;

@@ -8,6 +8,8 @@
  * module's request register, so a repeated `requestId` replays the same request and a legal hold
  * or an unexpired retention stops a deletion with its reasons.
  */
+import { invalid } from '@invoice/kernel';
+import type { RequestContext } from '../../../../packages/platform/src/types.ts';
 import { RETAINED_PLAINLY } from '../privacy-application.ts';
 import { anything, fields, get, list, need, nothing, post, text, type Route } from './route.ts';
 
@@ -20,6 +22,20 @@ const DRILLS = need('see restore checks', 'backup.restore');
 const purposesOf = (input: { readonly purposes?: unknown }): string[] =>
   Array.isArray(input.purposes) ? input.purposes.map((purpose) => String(purpose)) : [];
 
+/**
+ * Who a privacy record may name. The register is account-scoped: holds, retention and deletion
+ * act on the account, and a consent may be recorded for the account or by the person calling —
+ * never for a third party, or a manager could forge another person's consent.
+ */
+const subjectOf = (input: { readonly subjectId?: unknown }, context: RequestContext, allowSelf: boolean): string => {
+  const subjectId = String(input.subjectId ?? context.companyId);
+  const allowed = allowSelf && subjectId === context.actorId;
+  if (subjectId !== context.companyId && !allowed) {
+    throw invalid('PRIVACY_SUBJECT', 'A privacy record can only be for this business or for yourself.');
+  }
+  return subjectId;
+};
+
 export const PRIVACY_ROUTES: readonly Route[] = [
   post('/api/privacy/notice', { access: MANAGE, input: fields({ version: text, effectiveAt: text, purposes: anything }) }, async ({ runtime, context, input }) => ({
     notice: await runtime.privacy.publishNotice(context, {
@@ -31,19 +47,20 @@ export const PRIVACY_ROUTES: readonly Route[] = [
 
   post('/api/privacy/consents', { access: MANAGE, input: fields({ subjectId: text, noticeVersion: text, decision: text, purposes: anything }) }, async ({ runtime, context, input }) => ({
     consent: await runtime.privacy.recordConsent(context,
-      String(input.subjectId ?? context.companyId),
+      subjectOf(input, context, true),
       String(input.noticeVersion ?? ''),
       String(input.decision ?? '') as 'granted' | 'withdrawn',
       purposesOf(input)),
   })),
 
   list('/api/privacy/consents', { access: MANAGE, key: 'consents' }, async ({ runtime, context, input }) => ({
-    consents: await runtime.privacy.consents(context, context.companyId,
-      { ...(input.limit === undefined ? {} : { limit: input.limit }), ...(input.cursor === undefined ? {} : { after: input.cursor }) }),
+    // One paging layer: the whole register page goes back and the dispatcher's pageOf slices it —
+    // the store's own UUID cursor is not mixed with the offset cursor it does not understand.
+    consents: await runtime.privacy.consents(context, context.companyId),
   })),
 
   post('/api/privacy/legal-holds', { access: MANAGE, input: fields({ subjectId: text, reason: text }) }, async ({ runtime, context, input }) => ({
-    hold: await runtime.privacy.placeLegalHold(context, String(input.subjectId ?? context.companyId), String(input.reason ?? '')),
+    hold: await runtime.privacy.placeLegalHold(context, subjectOf(input, context, false), String(input.reason ?? '')),
   })),
 
   post('/api/privacy/legal-holds/:id/release', { access: MANAGE, input: fields({ reason: text }) }, async ({ runtime, context, params, input }) => ({
@@ -51,7 +68,7 @@ export const PRIVACY_ROUTES: readonly Route[] = [
   })),
 
   post('/api/privacy/retention', { access: MANAGE, input: fields({ subjectId: text, retainUntil: text }) }, async ({ runtime, context, input }) => {
-    await runtime.privacy.setRetention(context, String(input.subjectId ?? context.companyId), String(input.retainUntil ?? ''));
+    await runtime.privacy.setRetention(context, subjectOf(input, context, false), String(input.retainUntil ?? ''));
     return { retained: true };
   }),
 
@@ -81,7 +98,6 @@ export const PRIVACY_ROUTES: readonly Route[] = [
   })),
 
   list('/api/backups/drills', { access: DRILLS, key: 'drills' }, async ({ runtime, context, input }) => ({
-    drills: await runtime.recovery.drills(context,
-      { ...(input.limit === undefined ? {} : { limit: input.limit }), ...(input.cursor === undefined ? {} : { after: input.cursor }) }),
+    drills: await runtime.recovery.drills(context),
   })),
 ];

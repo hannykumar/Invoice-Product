@@ -69,7 +69,7 @@ test('#352: export carries the tenant\'s rows only, a legal hold blocks deletion
   const probe = randomUUID();
   const probeUser = randomUUID();
   await db.query('INSERT INTO companies (id, legal_name) VALUES ($1, $2)', [probe, 'Probe Traders']);
-  await db.query('INSERT INTO users (id, email, display_name, active) VALUES ($1, $2, $3, true)', [probeUser, 'probe@probe.example.invalid', 'Probe Owner']);
+  await db.query('INSERT INTO users (id, email, display_name, active) VALUES ($1, $2, $3, true)', [probeUser, `probe-${probeUser}@example.invalid`, 'Probe Owner']);
   await db.query("INSERT INTO memberships (company_id, user_id, permissions, active) VALUES ($1, $2, '[]'::jsonb, true)", [probe, probeUser]);
   await db.query("INSERT INTO app_records (company_id, kind, key, value) VALUES ($1, 'privacy_probe', 'probe', '\"x\"'::jsonb)", [probe]);
   const probeContext = { companyId: probe, actorId: probeUser, requestId: 'probe-2', permissions: context.permissions } as any;

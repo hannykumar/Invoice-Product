@@ -8,9 +8,10 @@
  *
  * Where keys come from: `APP_ENCRYPTION_KEYS`, a comma list of `keyId:base64` 32-byte keys —
  * a provider, never the database and never this repository. On a developer's machine or in a
- * test (the same places `isLocal` already allows memory and the demo sign-in) a fixed,
- * well-known key stands in so nothing else has to be set up; anywhere else a missing or
- * malformed variable fails closed at the first seal, like DATABASE_URL does.
+ * test (the same places `isLocal` already allows memory and the demo sign-in) a random key is
+ * generated once and kept in `~/.karobar-dev-field-key` (0600), so a laptop needs no setup yet a
+ * dump alone still does not open. Anywhere else a missing or malformed variable fails closed at
+ * the first seal, like DATABASE_URL does.
  *
  * Rotation: every sealed value names its `keyId`; several keys can be configured at once and old
  * rows still open. The newest key in the list is the write key.
@@ -18,9 +19,14 @@
  * Bound ciphertext: every value is sealed with the company and the record it belongs to as
  * authenticated data, so a ciphertext copied into another company or another row does not open.
  */
-import { createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { AesGcmEncryptionService, type EncryptedPayload, type EncryptionKeyProvider } from '../../../ops/security/src/encryption.ts';
 import { registerSecretValues } from '../../../packages/platform/src/credentials.ts';
+import { canonicalJson } from '../../../packages/platform/src/platform.ts';
+import { reviveJson } from '../../../packages/platform/src/postgres-audit.ts';
 import { PlatformError } from '../../../packages/platform/src/types.ts';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 
@@ -34,10 +40,21 @@ export const APP_FIELD_KEY_ID = 'app-field-v1';
 export const APP_BACKUP_KEY_ID = 'app-backup-v1';
 
 /**
- * The development stand-in key, named so nobody mistakes it for a real one. 32 bytes derived
- * from a public constant — it keeps dumps honest on a laptop, nothing more.
+ * The development stand-in key: random per machine, generated once and kept next to the user's
+ * other local-only state (0600). A stolen dump then opens nothing, while the same key survives
+ * restarts so rows sealed on one boot still load on the next.
  */
-const DEVELOPMENT_KEY = createHash('sha256').update('karobar-development-field-key').digest();
+const DEVELOPMENT_KEY_FILE = join(homedir(), '.karobar-dev-field-key');
+const developmentKey = (): Buffer => {
+  try {
+    const existing = readFileSync(DEVELOPMENT_KEY_FILE);
+    if (existing.length === 32) return existing;
+  } catch { /* first boot on this machine */ }
+  const generated = randomBytes(32);
+  mkdirSync(homedir(), { recursive: true });
+  writeFileSync(DEVELOPMENT_KEY_FILE, generated, { mode: 0o600 });
+  return generated;
+};
 
 class EnvironmentKeyProvider implements EncryptionKeyProvider {
   readonly #keys: ReadonlyMap<string, Buffer>;
@@ -66,8 +83,9 @@ const parseKeys = (env: NodeJS.ProcessEnv): Map<string, Buffer> => {
     return keys;
   }
   if (isLocalEnvironment(env.NODE_ENV)) {
-    keys.set(APP_FIELD_KEY_ID, DEVELOPMENT_KEY);
-    keys.set(APP_BACKUP_KEY_ID, DEVELOPMENT_KEY);
+    const local = developmentKey();
+    keys.set(APP_FIELD_KEY_ID, local);
+    keys.set(APP_BACKUP_KEY_ID, local);
     return keys;
   }
   throw new Error('APP_ENCRYPTION_KEYS is not set. The server cannot protect customer data without its keys.');
@@ -119,14 +137,16 @@ export const sealMasterData = async <T extends { readonly id: string; readonly c
   encryption: AesGcmEncryptionService, data: T, boundTo: string,
 ): Promise<{ readonly id: string; readonly companyId: string; readonly __sealed: EncryptedPayload }> => {
   const { id, companyId, ...rest } = data;
-  return { id, companyId, __sealed: await sealJson(encryption, APP_FIELD_KEY_ID, JSON.stringify(rest), boundTo) };
+  // canonicalJson: masters carry bigint paise and micro-units, which plain JSON.stringify cannot
+  // write at all; reviveJson on open turns the markers back into bigints.
+  return { id, companyId, __sealed: await sealJson(encryption, APP_FIELD_KEY_ID, canonicalJson(rest), boundTo) };
 };
 
 /** Opens a stored master row: the sealed part is decrypted and merged back over the ids. */
 export const unsealMasterData = async <T>(encryption: AesGcmEncryptionService, stored: unknown, boundTo: string): Promise<T> => {
   if (typeof stored !== 'object' || stored === null || !isEncryptedPayload((stored as { __sealed?: unknown }).__sealed)) return stored as T;
   const { __sealed, ...ids } = stored as { __sealed: EncryptedPayload } & Record<string, unknown>;
-  return { ...ids, ...JSON.parse((await encryption.decrypt(__sealed, boundTo)).toString('utf8')) } as T;
+  return { ...ids, ...reviveJson(JSON.parse((await encryption.decrypt(__sealed, boundTo)).toString('utf8'))) } as T;
 };
 
 /**

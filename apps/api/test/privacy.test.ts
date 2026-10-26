@@ -59,3 +59,32 @@ test('#352: field sealing round-trips and refuses a ciphertext moved to a differ
   assert.deepEqual(await unsealMasterData(encryption, master, 'master-versions/co/party'), { id: 'p1', companyId: 'co', pan: 'ABCDE1234F', name: 'Rao' });
 });
 
+test('#352: a master with bigint money seals and reopens, and a production server without keys fails closed', async () => {
+  const { appEncryption, sealMasterData, unsealMasterData } = await import('../src/field-encryption.ts');
+  const encryption = appEncryption({ NODE_ENV: 'test' });
+  // Masters carry bigint paise; plain JSON.stringify would throw before the seal even starts.
+  const master = await sealMasterData(encryption, { id: 'p2', companyId: 'co', creditLimitPaise: 10000n } as any, 'master-versions/co/party');
+  assert.deepEqual(await unsealMasterData(encryption, master, 'master-versions/co/party'), { id: 'p2', companyId: 'co', creditLimitPaise: 10000n });
+  assert.throws(() => appEncryption({ NODE_ENV: 'production' }), /APP_ENCRYPTION_KEYS/);
+  assert.throws(() => appEncryption({ NODE_ENV: 'production', APP_ENCRYPTION_KEYS: 'bad' }), /32-byte/);
+});
+
+test('#352: an account scrub skips the frozen copies of issued documents', async () => {
+  const { DurableMap, scrubDurableRecords } = await import('../src/durable.ts');
+  const open = new DurableMap<unknown>(`test_open_${Date.now()}`, () => 'co-1');
+  const frozen = new DurableMap<unknown>(`test_frozen_${Date.now()}`, () => 'co-1', { frozen: true });
+  open.set('k1', { note: 'mutable' });
+  frozen.set('print-1', { note: 'issued copy' });
+  assert.equal(scrubDurableRecords('co-1'), 1);
+  assert.equal(open.has('k1'), false, 'the mutable record went');
+  assert.equal(frozen.get('print-1')?.note, 'issued copy', 'the issued copy stayed — the law keeps it');
+});
+
+test('#352: a privacy record cannot be placed for somebody else', async () => {
+  const owner = await signInAs('owner@sampoorna.example.invalid', COMPANY);
+  const forged = await post('/api/privacy/consents', owner, { subjectId: 'someone-else', noticeVersion: 'v1', decision: 'granted' });
+  assert.equal(forged.status, 422, JSON.stringify(forged.body));
+  const held = await post('/api/privacy/legal-holds', owner, { subjectId: 'someone-else', reason: 'x' });
+  assert.equal(held.status, 422, JSON.stringify(held.body));
+});
+

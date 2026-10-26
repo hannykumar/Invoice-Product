@@ -61,10 +61,21 @@ export async function openPersistence(env: NodeJS.ProcessEnv = process.env): Pro
       encryption,
       privacyRecords: new PostgresPrivacyStore(db),
       accountData: new PostgresAccountDataStore(db, encryption),
-      backups: new PostgresBackupRepository(db, new LocalBackupObjectStore(env.APP_BACKUP_DIR?.trim() || join(tmpdir(), 'karobar-backups'))),
+      backups: new PostgresBackupRepository(db, new LocalBackupObjectStore(backupObjectStoreDir(env))),
     },
   };
 }
+
+/**
+ * Where backup objects live. They outlive the process, so outside development/test a configured
+ * directory is required — the temporary directory would lose bytes the backup register still
+ * lists. Consistent with DATABASE_URL and APP_ENCRYPTION_KEYS failing closed the same way.
+ */
+const backupObjectStoreDir = (env: NodeJS.ProcessEnv): string => {
+  const dir = env.APP_BACKUP_DIR?.trim() || (isLocal(env.NODE_ENV) ? join(tmpdir(), 'karobar-backups') : '');
+  if (dir === '') throw new Error('APP_BACKUP_DIR is not set. Backups need a configured object store directory outside development and test.');
+  return dir;
+};
 
 let memorySecurity: SecurityStores | null = null;
 const memorySecurityStores = (): SecurityStores => memorySecurity ??= {
@@ -87,7 +98,7 @@ export const securityOf = (persistence: Persistence): SecurityStores => {
         encryption,
         privacyRecords: new PostgresPrivacyStore(persistence.db),
         accountData: new PostgresAccountDataStore(persistence.db, encryption),
-        backups: new PostgresBackupRepository(persistence.db, new LocalBackupObjectStore(process.env.APP_BACKUP_DIR?.trim() || join(tmpdir(), 'karobar-backups'))),
+        backups: new PostgresBackupRepository(persistence.db, new LocalBackupObjectStore(backupObjectStoreDir(process.env))),
       };
     })()
     : memorySecurityStores();

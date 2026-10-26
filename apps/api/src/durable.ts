@@ -157,6 +157,8 @@ export class DurableMap<V> extends Map<string, V> {
   readonly #kind: string;
   readonly #companyOf: (key: string) => string;
   readonly #frozen: boolean;
+  /** Frozen maps hold copies of issued documents: never scrubbed (#352) — the database refuses them and the law keeps them. */
+  readonly frozen: boolean;
   readonly #replayed: ((value: V, key: string) => void) | undefined;
   readonly #forgotten: ((companyId: string) => void) | undefined;
   #replaying = false;
@@ -174,6 +176,7 @@ export class DurableMap<V> extends Map<string, V> {
     this.#kind = kind;
     this.#companyOf = companyOf;
     this.#frozen = options.frozen === true;
+    this.frozen = this.#frozen;
     this.#replayed = options.replayed;
     this.#forgotten = options.forgotten;
     const same = maps.get(kind) ?? new Set();
@@ -279,6 +282,9 @@ export const scrubDurableRecords = (companyId: string): number => {
   let removed = 0;
   for (const same of maps.values()) {
     for (const map of live(same)) {
+      // Frozen maps are issued-document copies: the database refuses their tombstone writes and
+      // the law keeps them, so they are skipped, not deleted.
+      if (map.frozen) continue;
       for (const key of [...map.keys()]) {
         if (map.holds(companyId, key) && map.delete(key)) removed += 1;
       }
