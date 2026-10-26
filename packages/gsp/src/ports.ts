@@ -12,6 +12,7 @@
  * first place.
  */
 import type { CompanyId, IsoDate } from '@invoice/kernel';
+import type { ConnectorKind } from '../../platform/src/connectors.ts';
 import type {
   GovernmentScope,
   GstinAuthorisation,
@@ -48,15 +49,25 @@ export interface CallLogRepository {
   /** The calls whose fate we never learned, oldest first. What reconciliation reads. */
   listUnsettled(companyId: CompanyId, before: string, page?: Page): Promise<readonly ProviderCall[]>;
   /**
-   * The call a provider's callback is about.
+   * Which company a provider's callback is about — the id only, never the call itself.
    *
-   * Looked up across companies on purpose, and it is the only lookup here that is: a callback
-   * arrives with no session and no company, and the company is then taken *from the row it
-   * matched* rather than from anything the caller said. That is what stops a forged callback
-   * naming somebody else's company — it never gets to name one.
+   * The one cross-company lookup here, and it is cross-company on purpose: a callback arrives
+   * with no session and no company, and the company is then taken *from the row it matched*
+   * rather than from anything the caller said. That is what stops a forged callback naming
+   * somebody else's company — it never gets to name one. The reference is matched against this
+   * connector's calls only: the provider's request id answers first, our own correlation id
+   * only when no call carries that request id, and a reference that could name two companies'
+   * calls answers null rather than guessing — through the fallback too. On PostgreSQL this goes through a SECURITY DEFINER function that
+   * returns one uuid or none (#477); row-level security is never bypassed, the finder's own
+   * policy is what shows it the match columns and nothing else.
    */
-  findByProviderRequestId(providerRequestId: string): Promise<ProviderCall | null>;
-  findByCorrelationId(correlationId: string): Promise<ProviderCall | null>;
+  companyForRequest(kind: ConnectorKind, reference: string): Promise<CompanyId | null>;
+  /**
+   * The call a provider's callback is about, inside the company the lookup found. Once the
+   * company is known the row is read in its own tenant context like every other read here.
+   */
+  findByProviderRequestId(kind: ConnectorKind, companyId: CompanyId, providerRequestId: string): Promise<ProviderCall | null>;
+  findByCorrelationId(companyId: CompanyId, correlationId: string): Promise<ProviderCall | null>;
   /** In the order they started; calls that started at the same instant, in the order they were written. */
   list(companyId: CompanyId, gstin?: string, page?: Page): Promise<readonly ProviderCall[]>;
 }
@@ -156,6 +167,12 @@ export interface WebhookEventRepository {
   /** Null when this event id has not been seen for this connector before. */
   find(kind: string, eventId: string): Promise<WebhookEventRecord | null>;
   insert(record: WebhookEventRecord): Promise<void>;
+  /**
+   * Re-writes a delivery's record, but only while it still says UNMATCHED: a callback that
+   * arrived before the call it answered is matched again when it is re-delivered, and must not
+   * stay lost as a "duplicate" (#477). A settled record is never rewritten.
+   */
+  update(record: WebhookEventRecord): Promise<void>;
   /** An unverified delivery, recorded by digest. Nothing inside it is read or stored. */
   recordRejected(input: { readonly kind: string; readonly digest: string; readonly at: string; readonly reason: string }): Promise<void>;
   listRejected(): Promise<readonly { readonly kind: string; readonly digest: string; readonly reason: string }[]>;

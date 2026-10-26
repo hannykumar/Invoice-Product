@@ -21,9 +21,13 @@ import { reviveJson } from '../../../packages/platform/src/postgres-audit.ts';
 import { PlatformError } from '../../../packages/platform/src/types.ts';
 import type { SqlExecutor, TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
+import type { AesGcmEncryptionService } from '../../../ops/security/src/encryption.ts';
+import { appRecordBoundTo, sealJson, unsealJson, APP_FIELD_KEY_ID } from './field-encryption.ts';
 
 interface Durability {
   readonly db: TransactionalExecutor;
+  /** Seals each record before it is stored (#352); null only in tests that never configured it. */
+  readonly encryption: AesGcmEncryptionService | null;
   /** Companies whose records have been read back since the process started (or last forgot). */
   readonly loaded: Set<string>;
 }
@@ -43,9 +47,12 @@ const forgetters: ((companyId: string) => void)[] = [];
 /** The database writes go to, or null in memory. */
 export const durableDatabase = (): TransactionalExecutor | null => durability?.db ?? null;
 
+/** The sealer every durable write goes through (#352), or null when none was configured. */
+export const durableEncryption = (): AesGcmEncryptionService | null => durability?.encryption ?? null;
+
 /** Called once at start-up, before any store is written. */
-export const enableDurability = (db: TransactionalExecutor): void => {
-  durability = { db, loaded: new Set() };
+export const enableDurability = (db: TransactionalExecutor, encryption: AesGcmEncryptionService | null = null): void => {
+  durability = { db, encryption, loaded: new Set() };
 };
 
 /**
@@ -150,6 +157,8 @@ export class DurableMap<V> extends Map<string, V> {
   readonly #kind: string;
   readonly #companyOf: (key: string) => string;
   readonly #frozen: boolean;
+  /** Frozen maps hold copies of issued documents: never scrubbed (#352) — the database refuses them and the law keeps them. */
+  readonly frozen: boolean;
   readonly #replayed: ((value: V, key: string) => void) | undefined;
   readonly #forgotten: ((companyId: string) => void) | undefined;
   #replaying = false;
@@ -167,6 +176,7 @@ export class DurableMap<V> extends Map<string, V> {
     this.#kind = kind;
     this.#companyOf = companyOf;
     this.#frozen = options.frozen === true;
+    this.frozen = this.#frozen;
     this.#replayed = options.replayed;
     this.#forgotten = options.forgotten;
     const same = maps.get(kind) ?? new Set();
@@ -178,13 +188,19 @@ export class DurableMap<V> extends Map<string, V> {
     super.set(key, value);
     if (this.#replaying) return this;
     const companyId = this.#companyOf(key);
-    persist(companyId, (sql) => sql.query(
-      this.#frozen
-        ? 'INSERT INTO app_records (company_id, kind, key, value, frozen) VALUES ($1, $2, $3, $4::jsonb, true) ON CONFLICT (company_id, kind, key) DO NOTHING'
-        : `INSERT INTO app_records (company_id, kind, key, value) VALUES ($1, $2, $3, $4::jsonb)
-           ON CONFLICT (company_id, kind, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [companyId, this.#kind, key, canonicalJson(value)],
-    ));
+    persist(companyId, async (sql) => {
+      // #352 — the stored value is sealed, so a dump of app_records never shows a bank number or a PAN.
+      const stored = durability?.encryption === null || durability?.encryption === undefined
+        ? canonicalJson(value)
+        : canonicalJson(await sealJson(durability.encryption, APP_FIELD_KEY_ID, canonicalJson(value), appRecordBoundTo(companyId, this.#kind, key)));
+      return sql.query(
+        this.#frozen
+          ? 'INSERT INTO app_records (company_id, kind, key, value, frozen) VALUES ($1, $2, $3, $4::jsonb, true) ON CONFLICT (company_id, kind, key) DO NOTHING'
+          : `INSERT INTO app_records (company_id, kind, key, value) VALUES ($1, $2, $3, $4::jsonb)
+             ON CONFLICT (company_id, kind, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [companyId, this.#kind, key, stored],
+      );
+    });
     return this;
   }
 
@@ -233,10 +249,46 @@ onReload(
     const { rows } = await db.tenantTransaction(companyId, (sql) => sql.query(
       "SELECT kind, key, value FROM app_records WHERE company_id = $1 AND value <> 'null'::jsonb ORDER BY kind, key", [companyId]));
     for (const row of rows) {
+      const kind = String(row.kind);
       const key = String(row.key);
-      for (const map of live(maps.get(String(row.kind)) ?? new Set())) {
-        if (map.holds(companyId, key)) map.replay(key, reviveJson(row.value));
+      const opened = durability?.encryption === null || durability?.encryption === undefined
+        ? row.value
+        : await unsealJson(durability.encryption, row.value, appRecordBoundTo(companyId, kind, key));
+      for (const map of live(maps.get(kind) ?? new Set())) {
+        if (map.holds(companyId, key)) map.replay(key, reviveJson(opened));
       }
     }
   },
 );
+
+/** #352 — every entry every durable map holds for one company: the account export's memory side. */
+export const durableEntries = (companyId: string): Record<string, Record<string, unknown>> => {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [kind, same] of maps) {
+    for (const map of live(same)) {
+      for (const [key, value] of map) {
+        if (map.holds(companyId, key)) (out[kind] ??= {})[key] = value;
+      }
+    }
+  }
+  return out;
+};
+
+/**
+ * #352 — removes everything the durable maps hold for one company: on the database each `delete`
+ * writes the 'null' tombstone the no-delete role (#368) allows, in memory it just goes.
+ */
+export const scrubDurableRecords = (companyId: string): number => {
+  let removed = 0;
+  for (const same of maps.values()) {
+    for (const map of live(same)) {
+      // Frozen maps are issued-document copies: the database refuses their tombstone writes and
+      // the law keeps them, so they are skipped, not deleted.
+      if (map.frozen) continue;
+      for (const key of [...map.keys()]) {
+        if (map.holds(companyId, key) && map.delete(key)) removed += 1;
+      }
+    }
+  }
+  return removed;
+};

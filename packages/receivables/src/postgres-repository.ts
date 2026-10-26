@@ -15,7 +15,7 @@
 import { conflict, invalid, money, notFound, type CompanyId, type IsoDate, type Money, type PartyId } from '@invoice/kernel';
 import type { SqlExecutor, TransactionalExecutor } from '../../platform/src/database.ts';
 import type { AdvanceReceipt, AdvanceRepository, AdvanceTax, TaxHeads } from './advance.ts';
-import type { Allocation, ChequeEvent, DocumentKind, Payment } from './model.ts';
+import type { Allocation, BillSettlement, ChequeEvent, DocumentKind, Payment } from './model.ts';
 import type { Page, PaymentRepository } from './ports.ts';
 
 type Row = Record<string, unknown>;
@@ -76,6 +76,12 @@ const refusal = (error: unknown): Error => {
   if (code === '23503' && constraint === 'payment_allocations_bill_is_issued') {
     return invalid('ALLOCATION_UNKNOWN_DOCUMENT', 'That bill was never issued, so this money cannot be put against it.');
   }
+  if (code === '23514' && constraint === 'payment_settlements_payment_is_live') {
+    return invalid('SETTLEMENT_ON_UNDONE_PAYMENT', 'This payment was undone while you were working on it, so nothing can be settled on it. Open it again to see what happened.');
+  }
+  if (code === '23503' && constraint === 'payment_settlements_bill_is_issued') {
+    return invalid('SETTLEMENT_UNKNOWN_DOCUMENT', 'That bill was never issued, so nothing can be settled on it.');
+  }
   return error as Error;
 };
 
@@ -126,6 +132,7 @@ export class PostgresPaymentRepository implements PaymentRepository {
     }
     await this.#appendCheque(sql, payment, 0);
     await this.#allocate(sql, payment, []);
+    await this.#settle(sql, payment, []);
   }
 
   async update(payment: Payment, expectedVersion: number): Promise<void> {
@@ -150,6 +157,12 @@ export class PostgresPaymentRepository implements PaymentRepository {
       [payment.companyId, payment.id],
     );
     await this.#allocate(sql, payment, live.rows);
+    const liveSettlements = await sql.query(
+      `SELECT id, document_id, document_number, kind, amount_paise, tds_section, tds_quarter, tds_certificate FROM payment_settlements
+        WHERE company_id = $1 AND payment_id = $2 AND released_at IS NULL ORDER BY created_at, id`,
+      [payment.companyId, payment.id],
+    );
+    await this.#settle(sql, payment, liveSettlements.rows);
   }
 
   /** A cheque's history is only added to: the steps after the first `known` are new. */
@@ -197,6 +210,38 @@ export class PostgresPaymentRepository implements PaymentRepository {
     }
   }
 
+  /**
+   * Issue #295 — makes the live settlement rows match `payment.settlements`, exactly like
+   * `#allocate`: released when they fall away, inserted when new, left alone when unchanged.
+   */
+  async #settle(sql: SqlExecutor, payment: Payment, live: Row[]): Promise<void> {
+    const same = (row: Row, s: BillSettlement) => row.document_id === s.documentId && row.document_number === s.documentNumber
+      && row.kind === s.kind && BigInt(String(row.amount_paise)) === s.amount.minor
+      && row.tds_section === (s.tdsSection ?? null) && row.tds_quarter === (s.tdsQuarter ?? null) && row.tds_certificate === (s.tdsCertificate ?? null);
+    const unmatched = [...live];
+    const added: BillSettlement[] = [];
+    for (const settlement of payment.settlements ?? []) {
+      const at = unmatched.findIndex((row) => same(row, settlement));
+      if (at === -1) added.push(settlement); else unmatched.splice(at, 1);
+    }
+    try {
+      if (unmatched.length > 0) {
+        await sql.query('UPDATE payment_settlements SET released_at = now(), updated_at = now() WHERE company_id = $1 AND id = ANY($2::uuid[]) AND released_at IS NULL',
+          [payment.companyId, unmatched.map((row) => row.id)]);
+      }
+      for (const settlement of added) {
+        await sql.query(
+          `INSERT INTO payment_settlements (company_id, payment_id, document_kind, document_id, document_number, kind, amount_paise, tds_section, tds_quarter, tds_certificate, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp())`,
+          [payment.companyId, payment.id, kindFor(payment.direction), settlement.documentId, settlement.documentNumber,
+            settlement.kind, settlement.amount.minor.toString(), settlement.tdsSection ?? null, settlement.tdsQuarter ?? null, settlement.tdsCertificate ?? null],
+        );
+      }
+    } catch (error) {
+      throw refusal(error);
+    }
+  }
+
   async findById(companyId: CompanyId, id: string): Promise<Payment | null> {
     if (!isUuid(id)) return null;
     return (await this.#select(companyId, 'id = $2', [id], undefined))[0] ?? null;
@@ -235,14 +280,20 @@ export class PostgresPaymentRepository implements PaymentRepository {
           WHERE company_id = $1 AND payment_id = ANY($2::uuid[]) AND released_at IS NULL ORDER BY payment_id, created_at, id`,
         [companyId, ids],
       );
+      const settlements = await sql.query(
+        `SELECT payment_id, document_id, document_number, kind, amount_paise, tds_section, tds_quarter, tds_certificate FROM payment_settlements
+          WHERE company_id = $1 AND payment_id = ANY($2::uuid[]) AND released_at IS NULL ORDER BY payment_id, created_at, id`,
+        [companyId, ids],
+      );
       const eventsOf = groupBy(events.rows, 'payment_id');
       const allocationsOf = groupBy(allocations.rows, 'payment_id');
-      return payments.rows.map((r) => toPayment(r, eventsOf.get(String(r.id)) ?? [], allocationsOf.get(String(r.id)) ?? []));
+      const settlementsOf = groupBy(settlements.rows, 'payment_id');
+      return payments.rows.map((r) => toPayment(r, eventsOf.get(String(r.id)) ?? [], allocationsOf.get(String(r.id)) ?? [], settlementsOf.get(String(r.id)) ?? []));
     });
   }
 }
 
-const toPayment = (r: Row, events: Row[], allocations: Row[]): Payment => ({
+const toPayment = (r: Row, events: Row[], allocations: Row[], settlements: Row[]): Payment => ({
   id: String(r.id),
   companyId: r.company_id as CompanyId,
   branchId: branchOut(r.branch_id),
@@ -263,6 +314,10 @@ const toPayment = (r: Row, events: Row[], allocations: Row[]): Payment => ({
     documentId: String(a.document_id), documentNumber: String(a.document_number), amount: paise(a.amount_paise),
     ...(a.adjusted_from_advance === true ? { adjustedFromAdvance: true } : {}),
   })),
+  ...(settlements.length === 0 ? {} : { settlements: settlements.map((s): BillSettlement => ({
+    documentId: String(s.document_id), documentNumber: String(s.document_number), kind: s.kind as BillSettlement['kind'], amount: paise(s.amount_paise),
+    tdsSection: text(s.tds_section), tdsQuarter: text(s.tds_quarter), tdsCertificate: text(s.tds_certificate),
+  })) }),
   refundOf: text(r.refund_of),
   // Absent means false, as the service writes it. Particulars are kept on an advance only.
   ...(r.advance_to_supplier === true ? {

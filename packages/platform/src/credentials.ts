@@ -75,7 +75,7 @@ export class FileCredentialVault implements CredentialVault {
     requiredKeys: readonly string[],
     secretKeys: readonly string[],
     connectors: readonly ConnectorKind[],
-    warn: ((message: string) => void) | undefined = (message) => console.warn(message),
+    warn: ((message: string) => void) | undefined = (message) => console.warn(redactSecretText(message)),
   ): FileCredentialVault | null {
     const env = readEnv(path);
     if (!requiredKeys.some((key) => (env[key] ?? "") !== "")) return null;

@@ -28,14 +28,16 @@ import {
   type VoucherId,
 } from '@invoice/kernel';
 import type { ActorContext, AuditPort, LedgerService, LedgerStore, PermissionPort } from '@invoice/ledger';
-import { advancesPaidOf, onAccountOf, positionOf, suggestAllocation, validateAllocation } from './allocation.ts';
+import { advancesPaidOf, onAccountOf, positionOf, suggestAllocation, validateAllocation, validateSettlements } from './allocation.ts';
 import {
   buildAdvanceUsePosting,
   buildChequeClearingPosting,
+  buildSettlementPostings,
   buildSupplierAdvancePosting,
   buildPaymentPosting,
   buildWriteOffPosting,
   resolveAccounts,
+  type SettlementAccounts,
 } from './posting.ts';
 import {
   RECEIVABLES_PERMISSIONS,
@@ -46,6 +48,7 @@ import {
   type Direction,
   type PartyPosition,
   type AdvanceParticulars,
+  type BillSettlement,
   type Payment,
   type PaymentMode,
 } from './model.ts';
@@ -90,6 +93,13 @@ export interface RecordPaymentCommand {
   readonly advanceToSupplier?: boolean;
   /** Issue #274 — what the advance is paid against. Kept only when part of the payment is an advance. */
   readonly advanceParticulars?: AdvanceParticulars;
+  /**
+   * Issue #295 — bills on a receipt settled without money: TDS the customer deducted, a discount
+   * allowed, or a small balance written off. Receipts only, never on money paid out.
+   */
+  readonly settlements?: readonly BillSettlement[];
+  /** Issue #295 — the most a single write-off on one bill may be; the owner sets it (₹100 default). */
+  readonly writeOffLimit?: Money;
 }
 
 /** Issue #261 — one advance set against one supplier bill. */
@@ -200,9 +210,24 @@ export class ReceivablesService {
     const today = command.date;
     const position = await this.position(actor, command.partyId, today);
     const allocations = command.allocations ?? [];
-    if (allocations.length > 0) {
+    const settlements = command.settlements ?? [];
+    if (allocations.length > 0 || settlements.length > 0) {
       this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.allocate, 'choose which bills this settles');
-      validateAllocation(command.amount, allocations, position.documents.filter((d) => d.document.side === sideOf(command.direction)));
+    }
+    if (settlements.length > 0 && command.direction !== 'RECEIPT') {
+      throw invalid('SETTLEMENT_ON_MONEY_PAID', 'TDS, a discount or a write-off settles a bill on money received, never on money paid out.');
+    }
+    const theirs = position.documents.filter((d) => d.document.side === sideOf(command.direction));
+    if (allocations.length > 0) {
+      validateAllocation(command.amount, allocations, theirs);
+    }
+    if (settlements.length > 0) {
+      // Issue #295 — a write-off stays a write-off whoever submits it: the same permission the
+      // Write-off action demands, even when it comes in on a receipt.
+      if (settlements.some((settlement) => settlement.kind === 'BALANCE_WRITTEN_OFF')) {
+        this.#permissions.require(actor, RECEIVABLES_PERMISSIONS.writeOff, 'write off a small balance');
+      }
+      validateSettlements(allocations, settlements, theirs, command.writeOffLimit ?? zero('INR'));
     }
     // Issue #261 — money paid to a supplier that no bill takes is an advance, and only when a person
     // said so. It is never left in the supplier's account as a negative amount owed.
@@ -235,16 +260,31 @@ export class ReceivablesService {
       if (advance && advances === null) {
         throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books have nowhere to keep an advance paid to a supplier yet.', { details: { role: 'ADVANCES_TO_SUPPLIERS' } });
       }
+      // Issue #295 — where each kind of non-cash settlement is posted. Only the accounts the
+      // settlements actually use are looked up: a chart without an unused role still records the rest.
+      const settlementRole = { TDS_DEDUCTED: 'TDS_RECEIVABLE', DISCOUNT_ALLOWED: 'DISCOUNT_ALLOWED', BALANCE_WRITTEN_OFF: 'BAD_DEBTS' } as const;
+      const settlementAccounts: SettlementAccounts = {};
+      for (const kind of new Set(settlements.map((settlement) => settlement.kind))) {
+        const role = settlementRole[kind];
+        const found = await uow.accounts.findBySystemRole(actor.companyId, role);
+        if (found === null) {
+          throw invalid('PAYMENT_ACCOUNT_MISSING', 'Your books do not have somewhere to record this settlement yet.', { details: { role } });
+        }
+        settlementAccounts[kind] = found.id;
+      }
       const lines = advance && advances !== null
         ? buildSupplierAdvancePosting(accounts.settlement, accounts.party, advances.id, command.partyId, againstBills, leftOver, narration)
-        : buildPaymentPosting(
-          command.direction,
-          accounts.settlement,
-          accounts.party,
-          command.partyId,
-          command.amount,
-          narration,
-        );
+        : [
+          ...buildPaymentPosting(
+            command.direction,
+            accounts.settlement,
+            accounts.party,
+            command.partyId,
+            command.amount,
+            narration,
+          ),
+          ...(settlements.length === 0 ? [] : buildSettlementPostings(accounts.party, command.partyId, settlements, settlementAccounts)),
+        ];
       const posted = await this.#ledger.postVoucherIn(uow, actor, {
         idempotencyKey: `payment:${command.idempotencyKey}`,
         type: command.direction,
@@ -275,6 +315,7 @@ export class ReceivablesService {
                 history: [{ state: 'PENDING', on: command.date, by: actor.userId, at, note: null }],
               },
         allocations,
+        ...(settlements.length === 0 ? {} : { settlements }),
         refundOf,
         ...(advance ? { advanceToSupplier: true } : {}),
         ...(advance && command.advanceParticulars !== undefined ? { advanceParticulars: command.advanceParticulars } : {}),
@@ -317,6 +358,7 @@ export class ReceivablesService {
         amount: toDecimalString(command.amount),
         mode: command.mode,
         allocated: toDecimalString(sum(allocations.map((a) => a.amount))),
+        settledWithoutMoney: toDecimalString(sum(settlements.map((s) => s.amount))),
         reference: command.reference ?? '',
       },
     });
@@ -451,13 +493,16 @@ export class ReceivablesService {
       state = 'REVERSED';
     }
 
+    // Issue #295 — a bounced cheque settles nothing, so its allocations fall away — but the
+    // history says why. Its settlements fall away too: a bounced cheque owes the TDS receivable
+    // back, so its rows are released and the bills are owed again.
+    const { settlements: _released, ...withoutSettlements } = payment;
     const next: Payment = {
-      ...payment,
+      ...(to === 'BOUNCED' ? withoutSettlements : payment),
       cheque: { ...payment.cheque, history: [...payment.cheque.history, event] },
       state,
       reversalVoucherId,
       reversalReason: to === 'BOUNCED' ? (input.note ?? null) : payment.reversalReason,
-      // A bounced cheque settles nothing, so its allocations fall away — but the history says why.
       allocations: to === 'BOUNCED' ? [] : payment.allocations,
       version: payment.version + 1,
     };
@@ -497,8 +542,11 @@ export class ReceivablesService {
       date: input.on,
       reason: input.reason,
     });
+    // Issue #295 — undoing the receipt also releases what it settled without money, so the
+    // bills are owed again and the TDS comes off the receivable report.
+    const { settlements: _released, ...withoutSettlements } = payment;
     const next: Payment = {
-      ...payment,
+      ...withoutSettlements,
       state: 'REVERSED',
       reversalVoucherId: reversed.voucher.id,
       reversalReason: input.reason,
@@ -670,6 +718,18 @@ export class ReceivablesService {
 
   async paymentsFor(actor: ActorContext, partyId: PartyId): Promise<Payment[]> {
     return this.#repo.listForParty(actor.companyId, partyId);
+  }
+
+  /**
+   * Issue #295 — every live TDS deduction a customer made, for the report matched with Form 26AS.
+   * Reversed payments contribute nothing: their settlements were released with them.
+   */
+  async tdsReceivable(actor: ActorContext): Promise<readonly { payment: Payment; settlement: BillSettlement }[]> {
+    return (await this.#repo.list(actor.companyId))
+      .filter((p) => p.state === 'RECORDED')
+      .flatMap((payment) => (payment.settlements ?? [])
+        .filter((s) => s.kind === 'TDS_DEDUCTED')
+        .map((settlement) => ({ payment, settlement })));
   }
 
   async #require(actor: ActorContext, id: string): Promise<Payment> {
