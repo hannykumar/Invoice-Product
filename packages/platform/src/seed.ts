@@ -25,6 +25,8 @@ export const PRODUCT_OWNER_PERMISSIONS: readonly Permission[] = [
   "collections.reminders.view", "collections.reminders.send", "collections.promise.record", "collections.dispute.manage",
   "subscription.view", "subscription.manage",
   "operations.read", "operations.manage", "support.access.grant", "queue.replay", "incident.manage", "feature-flags.manage",
+  // #352 — the account's privacy register (export, deletion, holds, retention) and its backups.
+  "privacy.manage", "privacy.export", "privacy.delete", "backup.manage", "backup.restore",
   "assistant.ask",
   "assistant.ask",
   "agent.plan", "agent.approve", "agent.execute",
@@ -54,6 +56,8 @@ export const COUNTER_PERMISSIONS: readonly Permission[] = ["dashboard.read", "sa
 export const ACCOUNTANT_PERMISSIONS: readonly Permission[] = PRODUCT_OWNER_PERMISSIONS.filter((permission) => ![
   "access.review", "subscription.manage", "business.settings.write", "branding.write", "payments.upi.write",
   "support.access.grant", "feature-flags.manage", "incident.manage", "operations.manage", "migration.commit", "migration.rollback",
+  // #352 — deleting the account's data or taking backups is the owner's call, not the accountant's.
+  "privacy.manage", "privacy.export", "privacy.delete", "backup.manage", "backup.restore",
 ].includes(permission));
 
 /**
