@@ -31,9 +31,9 @@ export interface CreditNoteDeadlineCheck {
   /** The note is dated after the deadline, so it cannot reduce GST. */
   readonly late: boolean;
   /** The sentence to show in the last 30 days before the deadline, or `null`. */
-  readonly warning: string | null;
+  readonly warning: { readonly 'en-IN': string; readonly 'hi-IN': string } | null;
   /** The refusal, when `late`. */
-  readonly refusal: string | null;
+  readonly refusal: { readonly 'en-IN': string; readonly 'hi-IN': string } | null;
 }
 
 export const checkCreditNoteDeadline = (invoiceDate: IsoDate, noteDate: IsoDate): CreditNoteDeadlineCheck => {
@@ -45,10 +45,12 @@ export const checkCreditNoteDeadline = (invoiceDate: IsoDate, noteDate: IsoDate)
     deadline,
     late,
     warning: !late && left <= CREDIT_NOTE_WARNING_DAYS
-      ? `The last day to issue a credit note that reduces GST for bills of ${year} is ${formatDate(deadline)}.`
+      ? { 'en-IN': `The last day to issue a credit note that reduces GST for bills of ${year} is ${formatDate(deadline)}.`,
+          'hi-IN': `${year} ke bills ke liye GST ghatane wala credit note ${formatDate(deadline)} tak hi ban sakta hai.` }
       : null,
     refusal: late
-      ? `Credit notes that reduce GST for bills of ${year} could only be issued up to ${formatDate(deadline)}. Talk to your accountant: this return can be settled without reducing GST.`
+      ? { 'en-IN': `Credit notes that reduce GST for bills of ${year} could only be issued up to ${formatDate(deadline)}. Talk to your accountant: this return can be settled without reducing GST.`,
+          'hi-IN': `${year} ke bills ke liye GST ghatane wale credit note sirf ${formatDate(deadline)} tak ban sakte the. Apne accountant se baat karein: ye wapsi GST ghataye bina settle ho sakti hai.` }
       : null,
   };
 };

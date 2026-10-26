@@ -70,9 +70,9 @@ export interface SalesReturnPreview {
   readonly lines: readonly ReturnNoteLine[];
   readonly totals: ReturnTaxAmounts;
   readonly complianceStatus: ReturnNote['complianceStatus'];
-  readonly summary: string;
+  readonly summary: { readonly 'en-IN': string; readonly 'hi-IN': string };
   /** Issue #186 — e.g. the credit-note deadline is less than 30 days away. Empty when nothing to say. */
-  readonly warnings: readonly string[];
+  readonly warnings: readonly { readonly 'en-IN': string; readonly 'hi-IN': string }[];
 }
 
 /**
@@ -194,7 +194,7 @@ export class ReturnService {
     // Issue #186 — section 34(2): past 30 November after the bill's financial year, a credit note
     // can no longer reduce GST, so this module refuses to post one that claims to.
     const deadline = checkCreditNoteDeadline(original.date, command.documentDate);
-    if (deadline.late) throw invalid('RETURN_CREDIT_NOTE_TOO_LATE', deadline.refusal as string);
+    if (deadline.late) throw invalid('RETURN_CREDIT_NOTE_TOO_LATE', (deadline.refusal as { 'en-IN': string; 'hi-IN': string })['en-IN'], { details: { 'hi-IN': (deadline.refusal as { 'en-IN': string; 'hi-IN': string })['hi-IN'] } });
 
     const previous = await this.#repo.listForOriginal(actor.companyId, original.id);
     const already = new Map<string, bigint>();
@@ -256,8 +256,10 @@ export class ReturnService {
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
     const summary = command.wholeBill === true
-      ? `The whole of ${original.number} (${lines.length} line${lines.length === 1 ? '' : 's'}, charges included) will be credited for ${formatINR(totals.total)}.`
-      : `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ${formatINR(totals.total)}.`;
+      ? { 'en-IN': `The whole of ${original.number} (${lines.length} line${lines.length === 1 ? '' : 's'}, charges included) will be credited for ${formatINR(totals.total)}.`,
+          'hi-IN': `${original.number} ka poora bill (${lines.length} line${lines.length === 1 ? '' : 's'}, charges samet) ${formatINR(totals.total)} ka credit hoga.` }
+      : { 'en-IN': `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will be credited for ${formatINR(totals.total)}.`,
+          'hi-IN': `${original.number} ke ${lines.length} item${lines.length === 1 ? '' : 's'} ka ${formatINR(totals.total)} credit hoga.` };
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: deadline.warning === null ? [] : [deadline.warning] };
   }
 
@@ -371,7 +373,7 @@ export class ReturnService {
     }
     const kind = difference < 0n ? 'SALES_RETURN' as const : 'SALES_DEBIT_NOTE' as const;
     const deadline = checkCreditNoteDeadline(original.date, command.documentDate);
-    if (kind === 'SALES_RETURN' && deadline.late) throw invalid('RETURN_CREDIT_NOTE_TOO_LATE', deadline.refusal as string);
+    if (kind === 'SALES_RETURN' && deadline.late) throw invalid('RETURN_CREDIT_NOTE_TOO_LATE', (deadline.refusal as { 'en-IN': string; 'hi-IN': string })['en-IN'], { details: { 'hi-IN': (deadline.refusal as { 'en-IN': string; 'hi-IN': string })['hi-IN'] } });
     if (command.documentDate < original.date) throw invalid('PRICE_CORRECTION_BEFORE_BILL', `The note cannot be dated before ${original.number} of ${original.date}.`);
     const size = difference < 0n ? -difference : difference;
     const share = (amount: Money): Money => money(divideHalfUp(amount.minor * size, source.taxableValue.minor));
@@ -390,8 +392,10 @@ export class ReturnService {
       unitPrice: money(divideHalfUp(size * 1_000_000n, kept)),
     };
     const summary = kind === 'SALES_RETURN'
-      ? `The price of ${source.description} on ${original.number} comes down by ${formatINR(taxableValue)} before GST. A credit note for ${formatINR(amounts.total)} reduces what the customer owes. No goods come back.`
-      : `The price of ${source.description} on ${original.number} goes up by ${formatINR(taxableValue)} before GST. A debit note for ${formatINR(amounts.total)} adds to what the customer owes. No goods move.`;
+      ? { 'en-IN': `The price of ${source.description} on ${original.number} comes down by ${formatINR(taxableValue)} before GST. A credit note for ${formatINR(amounts.total)} reduces what the customer owes. No goods come back.`,
+          'hi-IN': `${original.number} par ${source.description} ka daam GST se pehle ${formatINR(taxableValue)} kam hoga. ${formatINR(amounts.total)} ka credit note graahak ka baaki ghata dega. Maal waapas nahi aata.` }
+      : { 'en-IN': `The price of ${source.description} on ${original.number} goes up by ${formatINR(taxableValue)} before GST. A debit note for ${formatINR(amounts.total)} adds to what the customer owes. No goods move.`,
+          'hi-IN': `${original.number} par ${source.description} ka daam GST se pehle ${formatINR(taxableValue)} badhega. ${formatINR(amounts.total)} ka debit note graahak ke baaki mein judega. Maal nahi chalta.` };
     return {
       kind, originalNumber: original.number, lines: [line], totals: amounts,
       complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary,
@@ -502,7 +506,8 @@ export class ReturnService {
       });
     }
     const totals = addAmounts(lines.map((line) => line.amounts));
-    const summary = `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will reduce the supplier balance by ${formatINR(totals.total)}.`;
+    const summary = { 'en-IN': `${lines.length} item${lines.length === 1 ? '' : 's'} from ${original.number} will reduce the supplier balance by ${formatINR(totals.total)}.`,
+      'hi-IN': `${original.number} ke ${lines.length} item${lines.length === 1 ? '' : 's'} supplier ka baaki ${formatINR(totals.total)} se ghatayenge.` };
     return { originalNumber: original.number, lines, totals, complianceStatus: original.governmentRegistered ? 'PENDING_ADJUSTMENT' : 'NOT_APPLICABLE', summary, warnings: [] };
   }
 
