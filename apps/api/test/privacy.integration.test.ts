@@ -31,18 +31,18 @@ after(async () => { await db?.close(); });
 
 test('#352: app_records rows written through the durable map are sealed, and no dump shows a PAN', { skip }, async () => {
   const { appEncryption, isEncryptedPayload } = await import('../src/field-encryption.ts');
-  const { enableDurability, DurableMap, durableEntries } = await import('../src/durable.ts');
+  const { enableDurability, DurableMap, durableEntries, asOneAction } = await import('../src/durable.ts');
   const encryption = appEncryption({ NODE_ENV: 'test' });
   enableDurability(db, encryption);
-  const marker = `pan-probe-${Date.now()}`;
-  new DurableMap('privacy-probe', () => SAMPOORNA).set(marker, { pan: 'ABCDE1234F', bank: '12345678901' });
+  const marker = `pan_probe_${Date.now()}`;
+  await asOneAction(db, SAMPOORNA, async () => { new DurableMap('privacy_probe', () => SAMPOORNA).set(marker, { pan: 'ABCDE1234F', bank: '12345678901' }); });
   const { rows } = await db.query("SELECT value::text AS value FROM app_records WHERE company_id = $1 AND key = $2", [SAMPOORNA, marker]);
   const stored = JSON.parse(String(rows[0]?.value));
   assert.ok(isEncryptedPayload(stored), `the row is sealed: ${stored}`);
   assert.ok(!String(rows[0]?.value).includes('ABCDE1234F'), 'no plain PAN in the column');
   // And the read path opens it back.
   const reloaded = await durableEntries(SAMPOORNA);
-  assert.equal(JSON.stringify(reloaded['privacy-probe']).includes('ABCDE1234F'), true);
+  assert.equal(JSON.stringify(reloaded['privacy_probe']).includes('ABCDE1234F'), true);
 });
 
 test('#352: export carries the tenant\'s rows only, a legal hold blocks deletion, and deletion keeps the books', { skip }, async () => {
@@ -53,7 +53,7 @@ test('#352: export carries the tenant\'s rows only, a legal hold blocks deletion
   const { appEncryption } = await import('../src/field-encryption.ts');
   const encryption = appEncryption({ NODE_ENV: 'test' });
   const privacy = new PrivacyService(new PostgresAuditLog(db), new PostgresAccountDataStore(db, encryption), () => new Date(), new PostgresPrivacyStore(db));
-  const context = { companyId: KONKAN, userId: '00000000-0000-4000-8000-000000000004', requestId: 'probe-1' } as any;
+  const context = { companyId: KONKAN, actorId: '00000000-0000-4000-8000-000000000013', requestId: 'probe-1', permissions: new Set(['privacy.manage', 'privacy.export', 'privacy.delete']) } as any;
   // Export: the company's own rows, never the other tenant's.
   const request = await privacy.request(context, KONKAN, 'export', `exp-${Date.now()}`);
   const exported = await privacy.executeExport(context, request.id);

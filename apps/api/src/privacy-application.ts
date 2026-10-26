@@ -59,7 +59,7 @@ export const dumpAccount = async (db: TransactionalExecutor, encryption: AesGcmE
         ? await Promise.all(rows.map(async (row) => ({ ...row, value: await unsealJson(encryption, row.value, appRecordBoundTo(companyId, String(row.kind), String(row.key))) })))
         : rows;
     }
-    const { rows: company } = await sql.query('SELECT id, name, gstin, created_at FROM companies WHERE id = $1', [companyId]);
+    const { rows: company } = await sql.query('SELECT id, legal_name, created_at FROM companies WHERE id = $1', [companyId]);
     out.companies = company;
     return out;
   });
