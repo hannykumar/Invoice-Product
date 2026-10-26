@@ -32,7 +32,7 @@
 import { createHash } from 'node:crypto';
 import type { Clock, CompanyId } from '@invoice/kernel';
 import type { AuditPort } from '@invoice/ledger';
-import { ConnectorError, type ConnectorGateway, type ConnectorKind } from '../../platform/src/connectors.ts';
+import { ConnectorError, type ConnectorGateway, type ConnectorKind, type ConnectorWebhook } from '../../platform/src/connectors.ts';
 import { governmentReferenceOf } from './channel.ts';
 import { redactDetails } from './redact.ts';
 import type {
@@ -67,6 +67,12 @@ export interface WebhookReceiverDeps {
   readonly audit: AuditPort;
   readonly clock: Clock;
   readonly exceptions?: GovernmentExceptionSink;
+  /**
+   * The matched company's unit of work (#477). Optional: the in-memory path needs none. On
+   * PostgreSQL the dedup row, the settle and the audit line then commit in one transaction,
+   * and the company's advisory lock makes two deliveries of the same callback take turns.
+   */
+  readonly unitOfWork?: <T>(companyId: CompanyId, work: () => Promise<T>) => Promise<T>;
 }
 
 /** Raised when the signature does not verify. The delivery is recorded; the body is not read. */
@@ -123,14 +129,35 @@ export class GovernmentWebhookReceiver {
 
     const webhook = verified.webhook;
     const seen = await this.#deps.events.find(kind, webhook.eventId);
-    if (seen !== null || verified.duplicate) {
-      // The provider resending is ordinary. Answering "yes, we have it" is what stops it resending.
-      return { kind: 'DUPLICATE', eventId: webhook.eventId };
-    }
+    // A delivery recorded UNMATCHED is matched again every time it comes back: the call it
+    // answers may have been written after the callback first arrived, and it must not stay lost
+    // as a "duplicate" (#477). Answering "yes, we have it" for anything else is what stops the
+    // provider resending.
+    if (seen !== null && seen.outcome !== 'UNMATCHED') return { kind: 'DUPLICATE', eventId: webhook.eventId };
+    if (seen === null && verified.duplicate) return { kind: 'DUPLICATE', eventId: webhook.eventId };
 
-    const call = await this.#match(webhook.providerRequestId);
+    // The company comes from our own call rows through a lookup that returns only the company id
+    // — never the call itself, and never another company's row (#477). Rule 2 is kept: the
+    // callback never gets to name a company; the company is taken from the row it matched.
+    const companyId = await this.#deps.calls.companyForRequest(kind, webhook.providerRequestId);
+    const unitOfWork = this.#deps.unitOfWork;
+    // Once the company is known, the dedup row, the settle and the audit line commit in that
+    // company's transaction, and the company's own lock makes racing deliveries take turns.
+    const work = (): Promise<WebhookOutcome> => this.#apply(kind, webhook, at, companyId);
+    return companyId !== null && unitOfWork !== undefined ? unitOfWork(companyId, work) : work();
+  }
+
+  async #apply(kind: ConnectorKind, webhook: ConnectorWebhook, at: string, companyId: CompanyId | null): Promise<WebhookOutcome> {
+    // Read again inside the company's transaction: a delivery that committed while this one
+    // waited on the company's lock is a duplicate, not a second answer — except one that stayed
+    // UNMATCHED, which is matched again.
+    const stored = await this.#deps.events.find(kind, webhook.eventId);
+    if (stored !== null && stored.outcome !== 'UNMATCHED') return { kind: 'DUPLICATE', eventId: webhook.eventId };
+    const rematch = stored !== null;
+
+    const call = companyId === null ? null : await this.#match(kind, companyId, webhook.providerRequestId);
     if (call === null) {
-      await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, null, null, 'UNMATCHED', null);
+      await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, null, null, 'UNMATCHED', null, rematch);
       return { kind: 'UNMATCHED', eventId: webhook.eventId };
     }
 
@@ -138,30 +165,30 @@ export class GovernmentWebhookReceiver {
     // ours and not the caller's.
     const authorisation = await this.#deps.authorisations.find(call.companyId, call.gstin);
     if (authorisation === null) {
-      await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'REFUSED', null);
+      await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'REFUSED', null, rematch);
       await this.#audit(call, 'gsp.webhook.refused', `A callback arrived for GST number ${call.gstin}, which is not connected to this business.`, { eventId: webhook.eventId });
       return { kind: 'REFUSED', reason: 'UNAUTHORISED_GSTIN', callId: call.id };
     }
 
     const theirs = governmentReferenceOf(webhook.payload);
     if (theirs === null) {
-      await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'IGNORED', null);
+      await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'IGNORED', null, rematch);
       return { kind: 'IGNORED', eventId: webhook.eventId, detail: 'The callback carried no acknowledgement number.' };
     }
 
     // Our record already has an answer for this document.
     if (call.governmentReference !== null) {
       if (call.governmentReference === theirs) {
-        await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'CONFIRMED', theirs);
+        await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'CONFIRMED', theirs, rematch);
         return { kind: 'CONFIRMED', callId: call.id };
       }
-      return this.#conflict(kind, webhook.eventId, webhook.providerRequestId, at, call, call.governmentReference, theirs);
+      return this.#conflict(kind, webhook.eventId, webhook.providerRequestId, at, call, call.governmentReference, theirs, rematch);
     }
 
     // We recorded that it never arrived, and the government says otherwise. That is a disagreement
     // about a document, not a late answer, and it is not settled by the newer message winning.
     if (call.outcome === 'REJECTED') {
-      return this.#conflict(kind, webhook.eventId, webhook.providerRequestId, at, call, call.errorCode ?? 'we recorded that it never reached the government', theirs);
+      return this.#conflict(kind, webhook.eventId, webhook.providerRequestId, at, call, call.errorCode ?? 'we recorded that it never reached the government', theirs, rematch);
     }
 
     const settled: ProviderCall = {
@@ -172,7 +199,7 @@ export class GovernmentWebhookReceiver {
       reconciledAt: at,
     };
     await this.#deps.calls.settle(settled);
-    await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'SETTLED', theirs);
+    await this.#remember(kind, webhook.eventId, webhook.providerRequestId, at, call.id, call.companyId, 'SETTLED', theirs, rematch);
     await this.#audit(call, 'gsp.webhook.settled', `${call.operation} for ${call.gstin} did reach the government; the provider's callback settled it.`, {
       eventId: webhook.eventId,
       governmentReference: theirs,
@@ -180,12 +207,12 @@ export class GovernmentWebhookReceiver {
     return { kind: 'SETTLED', callId: call.id, governmentReference: theirs };
   }
 
-  async #match(providerRequestId: string): Promise<ProviderCall | null> {
-    const byRequest = await this.#deps.calls.findByProviderRequestId(providerRequestId);
+  async #match(kind: ConnectorKind, companyId: CompanyId, providerRequestId: string): Promise<ProviderCall | null> {
+    const byRequest = await this.#deps.calls.findByProviderRequestId(kind, companyId, providerRequestId);
     if (byRequest !== null) return byRequest;
     // A call that timed out never learned its provider request id. The correlation id is ours and
     // travelled out with the request, which is what makes the unknown call findable at all.
-    return this.#deps.calls.findByCorrelationId(providerRequestId);
+    return this.#deps.calls.findByCorrelationId(companyId, providerRequestId);
   }
 
   async #conflict(
@@ -196,6 +223,7 @@ export class GovernmentWebhookReceiver {
     call: ProviderCall,
     ours: string,
     theirs: string,
+    rematch: boolean,
   ): Promise<WebhookOutcome> {
     const question = bilingual(
       `Our record for this document says ${ours}, and the provider's callback says ${theirs}. Somebody needs to look at both before anything else is sent for it.`,
@@ -203,7 +231,7 @@ export class GovernmentWebhookReceiver {
     );
     // The call is left exactly as it was. Only the fact that it has been looked at is written.
     await this.#deps.calls.settle({ ...call, reconciledAt: at });
-    await this.#remember(kind, eventId, providerRequestId, at, call.id, call.companyId, 'CONFLICT', theirs);
+    await this.#remember(kind, eventId, providerRequestId, at, call.id, call.companyId, 'CONFLICT', theirs, rematch);
     await this.#deps.exceptions?.raise({
       companyId: call.companyId,
       gstin: call.gstin,
@@ -227,8 +255,13 @@ export class GovernmentWebhookReceiver {
     companyId: CompanyId | null,
     outcome: string,
     governmentReference: string | null,
+    rematch: boolean,
   ): Promise<void> {
-    await this.#deps.events.insert({ kind, eventId, providerRequestId, receivedAt: at, callId, companyId, outcome, governmentReference });
+    const record = { kind, eventId, providerRequestId, receivedAt: at, callId, companyId, outcome, governmentReference };
+    // A redelivery of an event already recorded UNMATCHED re-writes the record instead of
+    // inserting again — the (connector, event id) key is the dedup key. `update` refuses to
+    // touch a settled record, so a settled delivery can never be overwritten by a rematch.
+    if (rematch) await this.#deps.events.update(record); else await this.#deps.events.insert(record);
   }
 
   async #audit(call: ProviderCall, action: string, summary: string, details: Readonly<Record<string, string>>): Promise<void> {

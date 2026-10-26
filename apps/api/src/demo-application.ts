@@ -81,7 +81,7 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
-import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor } from './business-details-application.ts';
+import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor, writeOffLimitOf } from './business-details-application.ts';
 import { approvalChallanTask, eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { validatePincodeForState } from '../../../packages/masters/src/validation.ts';
@@ -89,7 +89,7 @@ import { STATE_NAMES, consignmentFromChallan } from '@invoice/transport';
 import { challanReason } from '@invoice/sales';
 import { ChallanDesk, type ChallanFacts, type ChallanHooks } from './challan-application.ts';
 import { PreSaleDesk } from './presale-application.ts';
-import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode, type AdvanceParticulars, type DocumentReference } from '@invoice/receivables';
+import { AdvanceService, InMemoryAdvanceRepository, InMemoryPaymentRepository, ReceivablesService, settlementWords, validateSettlements, type BillSettlement, type DocumentLedgerPort, type DocumentPosition, type OpenDocument, type Payment, type PaymentMode, type AdvanceParticulars, type DocumentReference } from '@invoice/receivables';
 import {
   TRADE_TERMS_PERMISSIONS,
   TradeTermsService,
@@ -433,6 +433,127 @@ const paidNowOf = (input: Record<string, unknown>): PaidNow | null => {
   return { ...how, amount: String(input.paidAmount ?? '').trim() === '' ? null : paise(input.paidAmount) };
 };
 
+/**
+ * Issue #295 — the income-tax section a customer deducted tax under. Sections 192–194T of the
+ * Income-tax Act 1961 read like "194C"/"194IA"; from 1 April 2026 the Income-tax Act 2025 carries
+ * the same deductions under s.392 (salary) and s.393 (other payments, tables 1–3). Three digits
+ * plus up to two letters covers both Acts' numbering.
+ */
+const TDS_SECTION = /^[0-9]{3}[A-Z]{0,2}$/;
+
+/** The TDS sections the screen offers: the ones a shopkeeper's customer most often deducts. */
+export const TDS_SECTIONS = ['194C', '194H', '194I', '194J', '194Q', '194A'] as const;
+
+/**
+ * Issue #295 — the quarter a TDS deduction counts in, as a Form 26AS lists them: an Indian
+ * financial year's Q1 is April–June. "Q2-2026-27" is what the report and the voucher print.
+ */
+export const tdsQuarterOf = (date: string): string => {
+  const month = Number(date.slice(5, 7));
+  const year = Number(date.slice(0, 4));
+  const fyStart = month >= 4 ? year : year - 1;
+  const quarter = month >= 4 ? Math.floor((month - 4) / 3) + 1 : 4;
+  return `Q${quarter}-${fyStart}-${String(fyStart + 1).slice(2)}`;
+};
+
+export interface PaymentSettlementPlan {
+  /** Settlement rows passed to `payments.recordPayment` (TDS, discount-as-expense, write-off). */
+  readonly settlements: BillSettlement[];
+  /** Discounts chosen as GST credit notes — issued through returns before the payment is recorded. */
+  readonly creditNotes: readonly {
+    readonly position: DocumentPosition;
+    readonly declared: bigint;
+    /** The amount the note will actually credit (±1–2 paise of rounding), used for cash planning. */
+    readonly noteTotal: bigint;
+    readonly evidence: { agreedBeforeSupply: boolean; buyerReversedItc: boolean };
+  }[];
+}
+
+/**
+ * Issue #295 — reads the "how else this bill was settled" entries the Money received form sends:
+ * one entry per bill, any of TDS deducted, discount allowed or a small write-off. A discount may
+ * instead be a GST credit note (CGST Act s.34 via s.15(3)(b)); that is not a settlement row here
+ * but a real note, listed in `creditNotes` for the app to issue.
+ */
+const paymentSettlementsOf = (input: Record<string, unknown>, direction: 'RECEIPT' | 'PAYMENT', open: readonly DocumentPosition[], date: string): PaymentSettlementPlan => {
+  const raw = input.settlements;
+  if (raw === undefined || raw === null || raw === '' || raw === '[]') return { settlements: [], creditNotes: [] };
+  let parsed: unknown;
+  try {
+    parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    throw invalid('PAYMENT_SETTLEMENTS_INVALID', 'The adjustments on this payment could not be read. Reload the page and enter them again.');
+  }
+  if (!Array.isArray(parsed)) throw invalid('PAYMENT_SETTLEMENTS_INVALID', 'The adjustments on this payment could not be read. Reload the page and enter them again.');
+  if (direction !== 'RECEIPT' && parsed.length > 0) {
+    throw invalid('SETTLEMENT_ON_MONEY_PAID', 'TDS, a discount or a write-off settles a bill on money received, never on money paid out.');
+  }
+  const settlements: BillSettlement[] = [];
+  const creditNotes: PaymentSettlementPlan['creditNotes'][number][] = [];
+  for (const entry of parsed) {
+    const item = (entry ?? {}) as Record<string, unknown>;
+    const billId = String(item.bill ?? '').trim();
+    const position = open.find((d) => d.document.documentId === billId);
+    if (position === undefined) {
+      throw invalid('SETTLEMENT_BILL_NOT_THEIRS', 'An adjustment names a bill that is not open for this customer. Open the payment again and check the bills ticked.');
+    }
+    const number = position.document.number;
+    const tds = (item.tds ?? null) as Record<string, unknown> | null;
+    if (tds !== null) {
+      const amount = paise(tds.amount);
+      const section = String(tds.section ?? '').trim().toUpperCase();
+      if (section !== '' && !TDS_SECTION.test(section)) {
+        throw invalid('TDS_SECTION_INVALID', `The TDS section on ${number} should look like 194C, 194J or 194Q. Check the customer's certificate.`);
+      }
+      const quarter = String(tds.quarter ?? '').trim() || tdsQuarterOf(date);
+      const certificate = String(tds.certificate ?? '').trim() || null;
+      settlements.push({
+        documentId: position.document.documentId, documentNumber: number, kind: 'TDS_DEDUCTED', amount: money(amount),
+        tdsSection: section, tdsQuarter: quarter, tdsCertificate: certificate,
+      });
+    }
+    const discount = (item.discount ?? null) as Record<string, unknown> | null;
+    if (discount !== null) {
+      const declared = paise(discount.amount);
+      if (discount.creditNote === true || discount.creditNote === 'yes' || discount.creditNote === 'true') {
+        const agreedBeforeSupply = discount.agreedBeforeSupply === true || discount.agreedBeforeSupply === 'yes' || discount.agreedBeforeSupply === 'true';
+        const buyerReversedItc = discount.buyerReversedItc === true || discount.buyerReversedItc === 'yes' || discount.buyerReversedItc === 'true';
+        if (!agreedBeforeSupply || !buyerReversedItc) {
+          throw invalid('DISCOUNT_EVIDENCE_REQUIRED', `A GST credit note for the discount on ${number} needs both answers: the discount was agreed at or before the sale, and the customer has given back their GST credit on it. Without them, book the discount as an expense instead.`);
+        }
+        creditNotes.push({ position, declared, noteTotal: declared, evidence: { agreedBeforeSupply, buyerReversedItc } });
+      } else {
+        settlements.push({ documentId: position.document.documentId, documentNumber: number, kind: 'DISCOUNT_ALLOWED', amount: money(declared) });
+      }
+    }
+    const writeOff = (item.writeOff ?? null) as Record<string, unknown> | null;
+    if (writeOff !== null) {
+      settlements.push({ documentId: position.document.documentId, documentNumber: number, kind: 'BALANCE_WRITTEN_OFF', amount: money(paise(writeOff.amount)) });
+    }
+  }
+  return { settlements, creditNotes };
+};
+
+/**
+ * Issue #295 — the TDS receivable report's rows: quarter, then customer, one line per deduction.
+ * `nameOf` resolves the party as the app's own screens name them.
+ */
+const tdsRows = (
+  entries: readonly { payment: Payment; settlement: BillSettlement }[],
+  nameOf: (partyId: string) => string,
+): { quarter: string; customer: string; bill: string; section: string | null; date: string; certificate: string | null; amount: number }[] =>
+  entries
+    .map(({ payment, settlement }) => ({
+      quarter: settlement.tdsQuarter ?? tdsQuarterOf(payment.date),
+      customer: nameOf(payment.partyId),
+      bill: settlement.documentNumber,
+      section: settlement.tdsSection ?? null,
+      date: payment.date,
+      certificate: settlement.tdsCertificate ?? null,
+      amount: jsonAmount(settlement.amount.minor),
+    }))
+    .sort((a, b) => a.quarter.localeCompare(b.quarter) || a.customer.localeCompare(b.customer) || a.date.localeCompare(b.date));
+
 const modeWords = (payment: Payment): string => {
   switch (payment.mode) {
     case 'CASH': return 'Cash';
@@ -462,6 +583,10 @@ const paymentVoucherHtml = (input: {
   readonly seller: RenderableParty;
   readonly party: RenderableParty;
   readonly bills: readonly { number: string; date: string | null; total: bigint | null; settled: bigint; adjusted: boolean }[];
+  /** Issue #295 — TDS deducted, discount allowed or a balance written off on the bills. */
+  readonly adjustments?: readonly { bill: string; kind: BillSettlement['kind']; amount: bigint; section: string | null; quarter: string | null; certificate: string | null }[];
+  /** Issue #295 — the s.34 credit notes issued on the bills this receipt settled. */
+  readonly creditNotes?: readonly { bill: string; number: string }[];
   /**
    * Issue #289, part 2b — the reverse-charge bills this payment pays. When there are any, this is
    * also the payment voucher of CGST s.31(3)(g), and carries Rule 52's particulars for them:
@@ -509,6 +634,21 @@ const paymentVoucherHtml = (input: {
   const billTable = advance
     ? bills.length === 0 ? '' : `<table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${bills.map(billRow).join('')}</table>`
     : `<table><tr><th>Bill</th><th>Bill date</th><th>Bill amount</th><th>Settled by this payment</th></tr>${bills.length === 0 ? '<tr><td colspan="4">Not put against any bill.</td></tr>' : bills.map(billRow).join('')}</table>`;
+  // Issue #295 — the adjustments this receipt settled bills by: TDS the customer kept (a
+  // receivable from the government, matched with Form 26AS), a discount, a write-off, and the
+  // credit note issued for a discount chosen the s.34 way.
+  const adjustments = input.adjustments ?? [];
+  const adjustmentWords = (item: NonNullable<typeof input.adjustments>[number]): string =>
+    item.kind === 'TDS_DEDUCTED'
+      ? `TDS deducted by the customer under s.${item.section}${item.quarter === null ? '' : ` (${item.quarter})`}${item.certificate === null ? '' : `, certificate ${item.certificate}`}`
+      : item.kind === 'DISCOUNT_ALLOWED'
+        ? 'Discount allowed'
+        : 'Balance written off';
+  const adjustmentTable = adjustments.length === 0 ? '' : `<table><tr><th>Bill</th><th>Settled without money</th><th>Amount</th></tr>
+${adjustments.map((item) => `<tr><td>${escapeHtml(item.bill)}</td><td>${escapeHtml(adjustmentWords(item))}</td><td>${formatPaise(item.amount)}</td></tr>`).join('')}</table>`;
+  const creditNotesPrinted = input.creditNotes ?? [];
+  const creditNoteTable = creditNotesPrinted.length === 0 ? '' : `<table><tr><th>Bill</th><th>Credit note issued for the discount</th></tr>
+${creditNotesPrinted.map((item) => `<tr><td>${escapeHtml(item.bill)}</td><td>${escapeHtml(item.number)}</td></tr>`).join('')}</table>`;
   const adjustedTable = !advance || adjusted.length === 0 ? '' : `<table><tr><th>Adjusted against bill</th><th>Bill date</th><th>Bill amount</th><th>Amount adjusted</th></tr>${adjusted.map(billRow).join('')}</table>
 <p>Unadjusted advance: ${formatPaise(onAccount - adjustedTotal)}</p>`;
   const narration = advance
@@ -522,6 +662,8 @@ const paymentVoucherHtml = (input: {
 <table><tr>${block(receipt ? 'Received by' : 'Paid by', seller)}${block(receipt ? 'Received from' : 'Paid to', party)}</tr></table>
 <table>${facts.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('')}</table>
 ${billTable}
+${adjustmentTable}
+${creditNoteTable}
 ${adjustedTable}
 ${!advance && onAccount > 0n ? `<p>On account, not yet put against a bill: ${formatPaise(onAccount)}</p>` : ''}
 ${narration}
@@ -1998,6 +2140,7 @@ export class DemoApplication {
   async booksBook(actor: ActorContext, input: Record<string, unknown>) { this.companyOf(actor); return this.booksDesk.book(actor, input); }
 
   async reports(actor: ActorContext) {
+    const companyId = actor.companyId;
     this.companyOf(actor);
     // Issue #234 — the financial year today falls in (1 April to 31 March), worked out from today in
     // India; days late are counted to today, or to the end of the period if that came first.
@@ -2086,6 +2229,13 @@ export class DemoApplication {
         clean: pack.exceptions.body.clean,
         sentence: pack.exceptions.body.sentence,
         items: pack.exceptions.body.exceptions.map((e) => ({ code: e.code, severity: e.severity, what: e.what, why: e.why, amount: e.amount === null ? null : jsonAmount(e.amount.minor) })),
+      },
+      // Issue #295 — the TDS customers deducted, by customer and financial-year quarter, for
+      // matching against Form 26AS before the return is filed. A reversed receipt contributes nothing.
+      tds: {
+        title: 'TDS deducted by customers, by quarter',
+        sentence: 'Tax your customers kept back on their payments — money the government owes you, matched with Form 26AS.',
+        rows: tdsRows(await this.payments.tdsReceivable(actor), (partyId) => this.partyName(companyId, partyId)),
       },
     };
   }
@@ -4155,13 +4305,24 @@ export class DemoApplication {
         paid: jsonAmount(d.allocated.minor),
         outstanding: jsonAmount(d.outstanding.minor),
       })),
+      // Issue #295 — what the screen may offer on money received: the owner's write-off limit in
+      // rupees, the TDS sections to pick from, and the quarter this date falls in.
+      ...(direction === 'RECEIPT' ? {
+        writeOffLimit: Number(writeOffLimitOf(companyId)) / 100,
+        tdsSections: [...TDS_SECTIONS],
+        tdsQuarter: tdsQuarterOf(date),
+      } : {}),
     };
   }
 
   async previewPayment(actor: ActorContext, input: Record<string, unknown>) {
     const plan = await this.paymentPlan(actor, input);
     const { direction, party, amount, how, applied, leftOver, owedBefore } = plan;
-    const owedAfter = owedBefore - (amount - leftOver);
+    // Issue #295 — TDS, discount, write-off and credit notes close a bill without money: the
+    // review counts them too, or it would promise a debt that is not really left.
+    const adjustments = plan.settlements.reduce((total, settlement) => total + settlement.amount.minor, 0n)
+      + plan.creditNotes.reduce((total, note) => total + note.noteTotal, 0n);
+    const owedAfter = owedBefore - (amount - leftOver) - adjustments;
     if (plan.advance > 0n) return this.previewSupplierAdvance(actor, plan, owedAfter);
     const whose = direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`;
     return {
@@ -4176,6 +4337,13 @@ export class DemoApplication {
         `${direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${party.name} by ${how.words}.`,
         ...applied.map(({ position, amount: put }) =>
           `${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} still due on this bill`),
+        // Issue #295 — what each adjustment does, in words a shopkeeper can check.
+        ...plan.settlements.map((settlement) => settlement.kind === 'TDS_DEDUCTED'
+          ? `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} of tax deducted under s.${settlement.tdsSection} (${settlement.tdsQuarter}) — kept as TDS to come back from the government, not as money ${party.name} still owes.`
+          : settlement.kind === 'DISCOUNT_ALLOWED'
+            ? `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} discount allowed — counted as an expense, no GST change.`
+            : `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} written off — counted as money you could not collect.`),
+        ...plan.creditNotes.map((note) => `${note.position.document.number}: a GST credit note for ${formatPaise(note.noteTotal)} will be issued for the discount of ${formatPaise(note.declared)}.`),
         ...(leftOver > 0n
           ? [applied.length === 0
             ? `${formatPaise(leftOver)} is not put against any bill yet, so it stays on account for ${party.name}.`
@@ -4250,18 +4418,40 @@ export class DemoApplication {
       bankAccountCode: how.bankAccountCode,
       ...(how.cheque === undefined ? {} : { cheque: how.cheque }),
       ...(applied.length === 0 ? {} : { allocations: applied.map(({ position, amount: put }) => ({ documentId: position.document.documentId, documentNumber: position.document.number, amount: money(put) })) }),
+      ...(plan.settlements.length === 0 ? {} : { settlements: plan.settlements }),
+      writeOffLimit: money(writeOffLimitOf(companyId)),
       ...(plan.advance > 0n ? { advanceToSupplier: true } : {}),
       ...(plan.particulars === undefined ? {} : { advanceParticulars: plan.particulars }),
       ...(plan.narration === undefined ? {} : { narration: plan.narration }),
     });
-    // The same request twice is one payment. The same key for a different payment is a mistake, not a retry.
+    // The same request twice is one payment. The same key for a different payment is a mistake,
+    // not a retry — checked before any credit note is issued, so a refused retry leaves nothing behind.
     if (payment.partyId !== party.id || payment.amount.minor !== amount || payment.direction !== direction) {
       throw conflict('PAYMENT_KEY_REUSED', 'This entry was already used for a different payment. Nothing new was recorded; start a fresh entry.');
     }
-    return this.paymentRecordedJson(actor, payment, party, false);
+    // Issue #295 — a discount chosen as a GST credit note is a real note (CGST Act s.34 with
+    // s.15(3)(b)), issued per line. Each note's own idempotency key makes a retried record find
+    // the note rather than make it twice, and lets the receipt show only this payment's notes.
+    const issuedNotes: { bill: string; number: string; total: bigint }[] = [];
+    for (const request of plan.creditNotes) {
+      for (const line of request.lines) {
+        const { note } = await this.returns.postPriceCorrection(actor, {
+          idempotencyKey: `${plan.key}:credit-note:${line.lineId}`,
+          originalInvoiceId: request.position.document.documentId,
+          originalLineId: line.lineId,
+          documentDate: plan.date,
+          reason: `Discount allowed while receiving payment${plan.reference === null ? '' : ` ${plan.reference}`} on ${request.position.document.number}`,
+          cause: 'DISCOUNT_AFTER_SALE',
+          amountOff: money(line.amountOff),
+          discountEvidence: request.evidence,
+        });
+        issuedNotes.push({ bill: request.position.document.number, number: note.number, total: note.totals.total.minor });
+      }
+    }
+    return this.paymentRecordedJson(actor, payment, party, false, issuedNotes);
   }
 
-  private async paymentRecordedJson(actor: ActorContext, payment: Payment, party: { id: string; name: string }, deduplicated: boolean) {
+  private async paymentRecordedJson(actor: ActorContext, payment: Payment, party: { id: string; name: string }, deduplicated: boolean, issuedNotes: readonly { bill: string; number: string; total: bigint }[] = []) {
     const direction = payment.direction;
     const earlier = deduplicated ? payment : null;
     const position = await this.payments.position(actor, party.id as PartyId, payment.date);
@@ -4292,6 +4482,12 @@ export class DemoApplication {
       outstanding: jsonAmount(owed.minor),
       onAccount: direction === 'RECEIPT' ? jsonAmount(position.onAccount.minor) : 0,
       settled: payment.allocations.map((allocation) => ({ number: allocation.documentNumber, amount: jsonAmount(allocation.amount.minor) })),
+      // Issue #295 — the non-cash ways the bills were settled, and any credit notes issued.
+      adjustments: (payment.settlements ?? []).map((settlement) => ({
+        number: settlement.documentNumber, kind: settlement.kind, amount: jsonAmount(settlement.amount.minor),
+        section: settlement.tdsSection ?? null, quarter: settlement.tdsQuarter ?? null, certificate: settlement.tdsCertificate ?? null,
+      })),
+      creditNotes: issuedNotes.map((note) => ({ bill: note.bill, number: note.number, total: jsonAmount(note.total) })),
       // Kept for callers written before #230; it is the chosen party's figure now, never the demo customer's.
       customerOutstanding: jsonAmount(owed.minor),
     };
@@ -4314,6 +4510,27 @@ export class DemoApplication {
         const bill = documents.find((d) => d.documentId === allocation.documentId);
         return { number: allocation.documentNumber, date: bill?.date ?? null, total: bill?.value.minor ?? null, settled: allocation.amount.minor, adjusted: allocation.adjustedFromAdvance === true };
       }),
+      // Issue #295 — TDS, discount or write-off the receipt settled bills by.
+      adjustments: (payment.settlements ?? []).map((settlement) => ({
+        bill: settlement.documentNumber,
+        kind: settlement.kind,
+        amount: settlement.amount.minor,
+        section: settlement.tdsSection ?? null,
+        quarter: settlement.tdsQuarter ?? null,
+        certificate: settlement.tdsCertificate ?? null,
+      })),
+      // …and the s.34 credit notes THIS receipt's discount issued — matched by the key they were
+      // posted under, so a note from another receipt or an earlier correction is never claimed here.
+      creditNotes: (await Promise.all(
+        [...new Set([...payment.allocations.map((a) => a.documentId), ...(payment.settlements ?? []).map((s) => s.documentId)])]
+          .map(async (documentId) => {
+            const bill = payment.allocations.find((a) => a.documentId === documentId)?.documentNumber
+              ?? (payment.settlements ?? []).find((s) => s.documentId === documentId)?.documentNumber ?? documentId;
+            return (await this.returnNotes.listForOriginal(companyId, documentId))
+              .filter((note) => note.priceCorrection === true && note.idempotencyKey.startsWith(`${payment.idempotencyKey}:credit-note:`))
+              .map((note) => ({ bill, number: note.number }));
+          }),
+      )).flat(),
       // Issue #289, part 2b — s.31(3)(g): paying a reverse-charge bill, this voucher is the payment voucher.
       reverseCharge: payment.direction !== 'PAYMENT' ? [] : (await Promise.all(payment.allocations.map(async (allocation) => {
         const purchase = await this.shop.reverseCharge.purchaseFor(companyId, allocation.documentId);
@@ -4357,7 +4574,22 @@ export class DemoApplication {
     const position = await this.payments.position(actor, party.id as PartyId, date);
     const open = openBillsOf(position.documents, direction);
     const theirs = position.documents.filter((d) => d.document.side === (direction === 'RECEIPT' ? 'RECEIVABLE' : 'PAYABLE'));
-    const chosenIds = [...new Set(billIdsOf(input))];
+    // Issue #295 — the adjustments on the bills: TDS deducted, discount allowed, write-off. A bill
+    // an adjustment is on is a chosen bill even when its box was left unticked.
+    const settlementPlan = paymentSettlementsOf(input, direction, open, date);
+    const creditNotes = await Promise.all(settlementPlan.creditNotes.map(async (request) => ({
+      ...request,
+      ...(await this.creditNoteLinesOf(companyId, request)),
+    })));
+    // Issue #295 — a GST credit note needs the returns permission. The review refuses here, not
+    // after the clerk pressed Record.
+    if (creditNotes.length > 0) {
+      permissionPortFromActor.require(actor, 'returns.create', 'issue a GST credit note for the discount');
+    }
+    const adjustmentOn = (documentId: string): bigint =>
+      settlementPlan.settlements.filter((s) => s.documentId === documentId).reduce((total, s) => total + s.amount.minor, 0n)
+        + creditNotes.filter((note) => note.position.document.documentId === documentId).reduce((total, note) => total + note.noteTotal, 0n);
+    const chosenIds = [...new Set([...billIdsOf(input), ...settlementPlan.settlements.map((s) => s.documentId), ...creditNotes.map((note) => note.position.document.documentId)])];
     const chosen = chosenIds.map((id) => {
       const found = open.find((d) => d.document.documentId === id);
       if (found !== undefined) return found;
@@ -4365,15 +4597,26 @@ export class DemoApplication {
       if (settled !== undefined) throw invalid('PAYMENT_BILL_ALREADY_PAID', `${settled.document.number} is already fully paid, so nothing more can be put against it.`);
       throw invalid('PAYMENT_BILL_NOT_THEIRS', `That bill is not one of the open bills of ${party.name}, so this money cannot be put against it.`);
     }).sort((a, b) => a.document.date.localeCompare(b.document.date) || a.document.number.localeCompare(b.document.number));
-    // Oldest chosen bill first, each up to what is still due on it. Nothing goes on a bill nobody chose.
+    // Oldest chosen bill first, each up to what is still due on it after its adjustments. Nothing
+    // goes on a bill nobody chose.
     let remaining = amount;
     const applied: { position: DocumentPosition; amount: bigint }[] = [];
     for (const position of chosen) {
       if (remaining <= 0n) break;
-      const put = remaining < position.outstanding.minor ? remaining : position.outstanding.minor;
-      applied.push({ position, amount: put });
-      remaining -= put;
+      const due = position.outstanding.minor - adjustmentOn(position.document.documentId);
+      const put = remaining < due ? remaining : due;
+      if (put > 0n) {
+        applied.push({ position, amount: put });
+        remaining -= put;
+      }
     }
+    // Issue #295 — the same refusal the service makes, made here so the review says it too.
+    validateSettlements(
+      applied.map(({ position, amount: put }) => ({ documentId: position.document.documentId, documentNumber: position.document.number, amount: money(put) })),
+      settlementPlan.settlements,
+      theirs,
+      money(writeOffLimitOf(companyId)),
+    );
     // Issue #261 — paying a supplier before their bill is allowed, but only as an advance the person
     // chose with its own click. Without that click, money no bill takes is refused, as before.
     const advanceChosen = direction === 'PAYMENT' && chosenAsAdvance(input);
@@ -4394,9 +4637,47 @@ export class DemoApplication {
     return {
       direction, party, amount, date, how, reference, applied, leftOver: remaining, particulars, narration,
       advance: direction === 'PAYMENT' ? remaining : 0n,
+      settlements: settlementPlan.settlements,
+      creditNotes,
       owedBefore: sum(open.map((d) => d.outstanding)).minor,
       key,
     };
+  }
+
+  /**
+   * Issue #295 — one credit note per line of the bill the discount is on (price corrections are
+   * per original line, CGST s.34). The declared discount is shared across the bill's taxable
+   * lines in proportion to their value; the note's own total is what it will actually credit,
+   * within a paise or two of the declared figure.
+   */
+  private async creditNoteLinesOf(companyId: CompanyId, request: { position: DocumentPosition; declared: bigint }): Promise<{ lines: { lineId: string; amountOff: bigint }[]; noteTotal: bigint }> {
+    const bill = await this.salesRepository.findById(companyId, request.position.document.documentId);
+    if (bill === null || bill.state !== 'FINAL' || bill.pricing === null) {
+      throw invalid('DISCOUNT_CREDIT_NOTE_UNAVAILABLE', `A GST credit note cannot be made on ${request.position.document.number}. Book the discount as an expense instead.`);
+    }
+    const halfUp = (numerator: bigint, denominator: bigint): bigint => denominator <= 0n ? 0n : (numerator + denominator / 2n) / denominator;
+    const eligible = bill.pricing.lines.filter((line) => !isChargeLine(line) && line.taxableValue.minor > 0n && line.cess.minor === 0n);
+    if (eligible.length === 0) {
+      throw invalid('DISCOUNT_CREDIT_NOTE_UNAVAILABLE', `A GST credit note cannot be made on ${request.position.document.number}: nothing on it can be re-priced. Book the discount as an expense instead.`);
+    }
+    const grossOf = (line: (typeof eligible)[number]): bigint =>
+      line.taxableValue.minor + line.cgst.minor + line.sgst.minor + line.utgst.minor + line.igst.minor + line.cess.minor;
+    const totalGross = eligible.reduce((total, line) => total + grossOf(line), 0n);
+    let given = 0n;
+    const lines: { lineId: string; amountOff: bigint; expectedTax: bigint }[] = [];
+    for (const [index, line] of eligible.entries()) {
+      const credit = index === eligible.length - 1 ? request.declared - given : halfUp(request.declared * grossOf(line), totalGross);
+      given += credit;
+      const amountOff = halfUp(credit * line.taxableValue.minor, grossOf(line));
+      if (amountOff <= 0n) continue;
+      const expectedTax = [line.cgst, line.sgst, line.utgst, line.igst, line.cess]
+        .reduce((total, head) => total + halfUp(head.minor * amountOff, line.taxableValue.minor), 0n);
+      lines.push({ lineId: line.lineId, amountOff, expectedTax });
+    }
+    if (lines.length === 0) {
+      throw invalid('DISCOUNT_CREDIT_NOTE_UNAVAILABLE', `A GST credit note cannot be made on ${request.position.document.number}. Book the discount as an expense instead.`);
+    }
+    return { lines, noteTotal: lines.reduce((total, line) => total + line.amountOff + line.expectedTax, 0n) };
   }
 
   private paymentPartyPrint(companyId: CompanyId, partyId: string): RenderableParty {
@@ -7122,6 +7403,13 @@ export class DemoApplication {
     if (!kinds.has('service')) return 'GOODS';
     if (!['', 'same'].includes(String(input.shipTo ?? '').trim().toLowerCase())) {
       throw invalid('SERVICE_NO_SHIP_TO', 'A service is not sent anywhere, so a service bill has no delivery address. Choose "Same as billing address".');
+    }
+    // CGST Rule 138(1): an e-way bill is only for goods that move, so a service bill also takes none
+    // of the delivery box's movement answers — they would otherwise print on it as though goods went.
+    const transport = ['transporterId', 'vehicleNumber', 'lrNumber', 'lrDate', 'destination', 'distanceKm', 'ewayBillNumber']
+      .filter((field) => String(input[field] ?? '').trim() !== '');
+    if (transport.length > 0) {
+      throw invalid('SERVICE_NO_TRANSPORT', 'A service is not sent in a vehicle, so a service bill takes no transporter, vehicle, transport receipt, destination, journey distance or e-way bill number. Leave the transport boxes empty — if goods are going too, they need their own bill.');
     }
     return 'SERVICES';
   }

@@ -23,13 +23,14 @@ function sandboxTokens(tag: string): string[] | undefined {
   return value === undefined ? undefined : value.split(/\s+/).filter(Boolean).sort();
 }
 
-/** The frame tag a selector in app.js picks out: `#id` or `[data-attribute]`. */
-function frameFor(tags: string[], selector: string): string | undefined {
+/** Every frame tag a selector in app.js picks out: `#id` or `[data-attribute]` (which can mark
+ *  several frames, as `[data-voucher-frame]` does). */
+function framesFor(tags: string[], selector: string): string[] {
   const id = /^#([\w-]+)$/.exec(selector)?.[1];
-  if (id) return tags.find((tag) => new RegExp(`\\sid="${id}"`).test(tag));
+  if (id) return tags.filter((tag) => new RegExp(`\\sid="${id}"`).test(tag));
   const attribute = /^\[([\w-]+)\]$/.exec(selector)?.[1];
-  if (attribute) return tags.find((tag) => new RegExp(`\\s${attribute}(?=[\\s>=])`).test(tag));
-  return undefined;
+  if (attribute) return tags.filter((tag) => new RegExp(`\\s${attribute}(?=[\\s>=])`).test(tag));
+  return [];
 }
 
 /** Every selector whose frame app.js fills with `srcdoc` or prints through `contentWindow`. */
@@ -68,9 +69,11 @@ test("every frame app.js fills or prints is one of the sandboxed frames in the p
     assert.ok(selectors.includes(expected), `app.js no longer uses ${expected}; update this test`);
   }
   for (const selector of selectors) {
-    const tag = frameFor(tags, selector);
-    assert.ok(tag, `${selector} is filled or printed by app.js but is not a frame in index.html`);
-    assert.deepEqual(sandboxTokens(tag), BILL_FRAME_SANDBOX, `${selector} is not sandboxed`);
+    const tagsForSelector = framesFor(tags, selector);
+    assert.ok(tagsForSelector.length > 0, `${selector} is filled or printed by app.js but is not a frame in index.html`);
+    for (const tag of tagsForSelector) {
+      assert.deepEqual(sandboxTokens(tag), BILL_FRAME_SANDBOX, `${selector} is not sandboxed`);
+    }
   }
 });
 

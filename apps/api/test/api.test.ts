@@ -1157,10 +1157,12 @@ test('a provider callback needs no session, but does need a signature over the b
   // This process made no such call, so the callback matched nothing — recorded, not acted on.
   assert.equal(accepted.body.outcome.kind, 'UNMATCHED');
 
-  // The provider resending is ordinary, and must not be treated as a second acknowledgement.
+  // The provider resending is ordinary. A delivery that still matches no call is matched again on
+  // every resend rather than deduplicated away (#477) — a callback that arrived before its call
+  // must not be lost as a "duplicate" — so a never-matching one stays UNMATCHED.
   const again = await postCallback('irp', body, signWebhook(DEVELOPMENT_WEBHOOK_SECRET, body, appClock.now()));
   assert.equal(again.status, 202);
-  assert.equal(again.body.outcome.kind, 'DUPLICATE');
+  assert.equal(again.body.outcome.kind, 'UNMATCHED');
 });
 
 test('#389 — the old fixed signature, a forged one, a stale one and a malformed body are all refused', async () => {

@@ -26,6 +26,8 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `agent.plan` | ✓ | ✓ | ✓ |  |  |
 | `approval.decide` | ✓ | ✓ | ✓ |  |  |
 | `assistant.ask` | ✓ | ✓ | ✓ | ✓ |  |
+| `backup.manage` | ✓ | ✓ |  |  |  |
+| `backup.restore` | ✓ | ✓ |  |  |  |
 | `bank.balance.read` | ✓ | ✓ | ✓ |  |  |
 | `bank.feed.manage` | ✓ | ✓ | ✓ |  |  |
 | `bank.feed.sync` | ✓ | ✓ | ✓ |  |  |
@@ -89,6 +91,9 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `payments.reverse` | ✓ | ✓ | ✓ |  |  |
 | `payments.upi.write` | ✓ | ✓ |  |  |  |
 | `payments.write_off` | ✓ | ✓ | ✓ |  |  |
+| `privacy.delete` | ✓ | ✓ |  |  |  |
+| `privacy.export` | ✓ | ✓ |  |  |  |
+| `privacy.manage` | ✓ | ✓ |  |  |  |
 | `proforma.cancel` | ✓ | ✓ | ✓ |  |  |
 | `proforma.issue` | ✓ | ✓ | ✓ | ✓ |  |
 | `purchase.inbox.manage` | ✓ | ✓ | ✓ |  |  |
@@ -125,10 +130,13 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (179)
+## Routes (193)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
+| `POST /api/files/uploads` | `ledger.post.purchase` or `branding.write` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/files/:file/complete` | `ledger.post.purchase` or `branding.write` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/files/:file/link` | `purchases.view` or `business.settings.read` or `branding.write` or `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/auth/code` | nobody signed in: asking for a sign-in code: there is no session yet | — | — | — | — | — |
 | `POST /api/auth/sign-in` | nobody signed in: signing in: there is no session yet to hold a permission | — | — | — | — | — |
 | `POST /api/auth/sign-out` | any member: anyone signed in may end their own session | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -308,3 +316,14 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/books/undo` | `ledger.reverse` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/books/entries` | `reports.view.financial` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/books/book` | `reports.view.financial` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/privacy/notice` | `privacy.manage` | ✓ | ✓ |  |  |  |
+| `POST /api/privacy/consents` | `privacy.manage` | ✓ | ✓ |  |  |  |
+| `GET /api/privacy/consents` | `privacy.manage` | ✓ | ✓ |  |  |  |
+| `POST /api/privacy/legal-holds` | `privacy.manage` | ✓ | ✓ |  |  |  |
+| `POST /api/privacy/legal-holds/:id/release` | `privacy.manage` | ✓ | ✓ |  |  |  |
+| `POST /api/privacy/retention` | `privacy.manage` | ✓ | ✓ |  |  |  |
+| `GET /api/privacy/requests/:id` | `privacy.export` | ✓ | ✓ |  |  |  |
+| `POST /api/privacy/export` | `privacy.export` | ✓ | ✓ |  |  |  |
+| `POST /api/privacy/deletion` | `privacy.delete` | ✓ | ✓ |  |  |  |
+| `POST /api/backups` | `backup.manage` | ✓ | ✓ |  |  |  |
+| `GET /api/backups/drills` | `backup.restore` | ✓ | ✓ |  |  |  |

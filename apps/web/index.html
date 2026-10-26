@@ -1408,6 +1408,12 @@
               <label><span data-i18n="businessDeclaration"></span><textarea name="declaration" rows="3"></textarea></label>
               <label><span data-i18n="businessTerms"></span><textarea name="terms" rows="3"></textarea></label>
             </fieldset>
+            <!-- Issue #295 — how much one "write off small balance" on Money received may be. -->
+            <fieldset>
+              <legend data-i18n="writeOffLimit"></legend>
+              <label><span data-i18n="writeOffLimit"></span><span class="input-with-prefix"><span>₹</span><input name="writeOffLimit" type="number" min="0" step="0.01" /></span></label>
+              <p class="setup-hint" data-i18n="writeOffLimitHelpForm"></p>
+            </fieldset>
             <fieldset>
               <legend data-i18n="businessSignatureLegend"></legend>
               <p class="setup-hint" data-i18n="businessSignatureHint"></p>

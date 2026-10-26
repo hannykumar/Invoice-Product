@@ -89,7 +89,7 @@ for (const role of ROLE_NAMES) {
 
 // ------------------------------------------------------------------ another company's resources
 
-const fixtures = { invoice: '', note: '', id: '', invoiceNumber: '', customer: '' };
+const fixtures = { invoice: '', note: '', id: '', file: '', hold: '', invoiceNumber: '', customer: '' };
 
 before(async () => {
   const owner = await signIn(ADDRESS.owner, SAMPOORNA);
@@ -114,10 +114,25 @@ before(async () => {
   });
   assert.equal(returned.status, 200, returned.text);
   fixtures.note = String(returned.body.note.id);
+  // #341's private files: a Sampoorna logo upload, still waiting for its bytes, is enough to ask after.
+  const upload = await call({ method: 'POST', path: '/api/files/uploads' }, owner, '/api/files/uploads', { purpose: 'branding_logo', fileName: 'logo.png', contentType: 'image/png', sizeBytes: 208 });
+  assert.equal(upload.status, 200, upload.text);
+  fixtures.file = String(upload.body.file.id);
+  // #352's legal holds: one on Sampoorna's books, for Konkan to try to release.
+  const hold = await call({ method: 'POST', path: '/api/privacy/legal-holds' }, owner, '/api/privacy/legal-holds', { reason: 'Matrix test' });
+  assert.equal(hold.status, 200, hold.text);
+  fixtures.hold = String(hold.body.hold.id);
 });
 
 /** What each `:param` in a path names. A new kind of param must be added here, with a real fixture. */
-const PARAM_FIXTURE: Readonly<Record<string, keyof typeof fixtures>> = { invoice: 'invoice', note: 'note', id: 'id' };
+const PARAM_FIXTURE: Readonly<Record<string, keyof typeof fixtures>> = { invoice: 'invoice', note: 'note', id: 'id', file: 'file' };
+/** Where the same name means a different resource on one route. */
+const ROUTE_PARAM_FIXTURE: Readonly<Record<string, Readonly<Record<string, keyof typeof fixtures>>>> = {
+  '/api/privacy/legal-holds/:id/release': { id: 'hold' },
+};
+const fixtureFor = (path: string, name: string) => ROUTE_PARAM_FIXTURE[path]?.[name] ?? PARAM_FIXTURE[name]!;
+/** A route that checks its input before it looks the record up gets valid input, so the lookup is what is tested. */
+const VALID_BODY: Readonly<Record<string, unknown>> = { '/api/privacy/legal-holds/:id/release': { reason: 'Matrix test' } };
 
 test('#343: another company\'s id in the path is "not found" (404), never its data', async () => {
   assert.ok(fixtures.invoice && fixtures.id, `fixtures were made: ${JSON.stringify(fixtures)}`);
@@ -126,9 +141,9 @@ test('#343: another company\'s id in the path is "not found" (404), never its da
   for (const route of SESSIONS.filter((candidate) => candidate.path.includes(':'))) {
     const names = [...route.path.matchAll(/:(\w+)/g)].map((match) => match[1]!);
     for (const name of names) assert.ok(name in PARAM_FIXTURE, `${route.path}: say which resource :${name} names in PARAM_FIXTURE`);
-    if (names.some((name) => fixtures[PARAM_FIXTURE[name]!] === '')) { wrong.push(`${route.path}: no fixture`); continue; }
-    const path = route.path.replace(/:(\w+)/g, (_whole, name: string) => encodeURIComponent(fixtures[PARAM_FIXTURE[name]!]));
-    const reply = await call(route, konkan, path);
+    if (names.some((name) => fixtures[fixtureFor(route.path, name)] === '')) { wrong.push(`${route.path}: no fixture`); continue; }
+    const path = route.path.replace(/:(\w+)/g, (_whole, name: string) => encodeURIComponent(fixtures[fixtureFor(route.path, name)]));
+    const reply = await call(route, konkan, path, VALID_BODY[route.path] ?? {});
     if (reply.status !== 404) wrong.push(`${route.method} ${path} → ${reply.status}`);
     if (reply.text.includes(fixtures.invoiceNumber) || reply.text.includes(fixtures.customer)) wrong.push(`${route.method} ${path} answered with Sampoorna's data`);
   }
