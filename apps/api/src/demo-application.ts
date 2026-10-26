@@ -126,7 +126,7 @@ import { citeReverseChargeEntry, reverseChargeDecisionFor, type ReverseChargeDec
 import { checkReverseChargeEntry, type RegisterParty, type ReverseChargeLine, type SelfInvoice } from '../../../packages/purchasing/src/reverse-charge-register.ts';
 import { rcmTimeOfSupply, selfInvoiceDue, type RcmSupplyKind } from '../../../packages/purchasing/src/reverse-charge-timing.ts';
 import { BLOCKED_CREDIT_REASONS, blockedCreditReasonFor } from '../../../packages/purchasing/src/blocked-credit.ts';
-import type { Party } from '../../../packages/masters/src/types.ts';
+import type { Party, TaxDefault } from '../../../packages/masters/src/types.ts';
 import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
 import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/src/validation.ts';
@@ -229,7 +229,8 @@ import {
 import { BANK_RETURN_PATH, BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
 import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
-import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
+import { ITC_PERMISSIONS, sumAmounts as sumItcAmounts, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
+import { sumAmounts as sumReturnAmounts } from '../../../packages/gst-returns/src/types.ts';
 import { formatClaimDate } from '../../../packages/itc/src/deadline.ts';
 import {
   GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInputBookTaxPort, ledgerInwardTaxPort,
@@ -238,6 +239,23 @@ import {
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
 import { DurableMap, persist } from './durable.ts';
+// Issue #297 — the four packages the audit found finished but unreachable, composed here for real:
+// the compliance calendar behind Home's "Coming up" and the deadlines routes, the bank
+// reconciliation behind the Reconcile tab, and the rate advisor behind the item form's hint.
+import {
+  BankReconciliationService, InMemoryReconciliationStore, fromBankTransaction, fromPayment,
+  type BookPayment, type ReconciliationMatch, type ReconciliationRun, type ReconciliationStore,
+} from '../../../packages/bank-reconciliation/src/index.ts';
+import { PostgresReconciliationStore } from '../../../packages/bank-reconciliation/src/postgres-store.ts';
+import {
+  CALENDAR_PERMISSIONS, CatalogueDefinitions, ComplianceCalendarService,
+  eInvoiceBacklogSignals, InMemoryAlerts, InMemoryComplianceExceptions, InMemoryOccurrences,
+  purchaseMismatchSignals, returnReadinessSignals,
+  type CompanyProfilePort, type EInvoiceBacklogReader, type ReturnReadinessReader, type UnresolvedPurchaseReader,
+} from '../../../packages/compliance-calendar/src/index.ts';
+import { PostgresAlerts, PostgresComplianceExceptions, PostgresOccurrences } from '../../../packages/compliance-calendar/src/postgres.ts';
+import { mastersLearning, mastersRegistry, RateAdvisorService, type TaxDefaultRegistryPort } from '../../../packages/rate-advisor/src/index.ts';
+import { comingUpRows } from './home-application.ts';
 
 /** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
@@ -1002,6 +1020,11 @@ export class DemoApplication {
   private readonly booksDesk: BooksDesk;
   private readonly agent: ActionAgentService;
   private readonly gstReturns: GstReturnService;
+  // Issue #297 — the modules wired in by this issue.
+  private readonly calendar: ComplianceCalendarService;
+  private readonly reconciliation: BankReconciliationService;
+  private readonly reconciliationStore: ReconciliationStore;
+  private readonly rateAdvisor: RateAdvisorService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
   readonly challans: ChallanDesk;
   /** Issue #142 — quotations and proforma invoices, the papers sent before a sale. */
@@ -1030,6 +1053,12 @@ export class DemoApplication {
     challans: ChallanDesk,
     presale: PreSaleDesk,
     exportSales: DurableMap<ExportParticulars>,
+    wired: {
+      calendar: ComplianceCalendarService;
+      reconciliation: BankReconciliationService;
+      reconciliationStore: ReconciliationStore;
+      rateAdvisor: RateAdvisorService;
+    },
   ) {
     this.config = config;
     // Issue #340 — the copies frozen when a bill, note or e-way bill is issued, and what was said
@@ -1062,6 +1091,10 @@ export class DemoApplication {
     this.bankFeeds = bankFeeds;
     this.booksDesk = new BooksDesk({ ledger: shop.ledger, store: shop.store, companyId: config.companyId, gstin: config.gstin });
     this.gstReturns = gstReturns;
+    this.calendar = wired.calendar;
+    this.reconciliation = wired.reconciliation;
+    this.reconciliationStore = wired.reconciliationStore;
+    this.rateAdvisor = wired.rateAdvisor;
   }
 
   /**
@@ -1766,7 +1799,100 @@ export class DemoApplication {
       advances,
     }), advances);
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, gstReturns, challans, presale, exportSales);
+    // Issue #297 — the three packages the audit found finished but unreachable, composed for real.
+
+    // Bank reconciliation (#22): the store #472 built is the one used on PostgreSQL; in memory the
+    // same port keeps the demo working. Matching itself never moves money — posting a line the bank
+    // shows but the books lack still goes through `payments.recordPayment` like any other entry.
+    const reconciliationStore: ReconciliationStore = pick(() => new InMemoryReconciliationStore(), (db) => new PostgresReconciliationStore(db));
+    const reconciliation = new BankReconciliationService(undefined, () => appClock.now(), reconciliationStore);
+
+    // Compliance calendar (#32): the company's profile is derived from facts the app already holds —
+    // its GSTIN, its books' start, the e-invoice answer and whether it sells goods — never asked again.
+    // A quarterly (QRMP) shop needs a Business details answer the app does not ask yet (ponytail, same
+    // as gstReturnTasks): monthly, because the GST returns screen prepares one return a month.
+    const calendarProfiles: CompanyProfilePort = {
+      async profileFor(companyId) {
+        const booksStart = (await shop.store.read().settings.get(companyId))?.booksStartDate ?? currentFinancialYear().from;
+        return {
+          companyId,
+          legalName: config.name,
+          gstin: config.gstin,
+          registrationType: { value: config.gstin === '' ? 'UNREGISTERED' : 'REGULAR', basis: 'DERIVED' },
+          gstFilingFrequency: { value: 'MONTHLY', basis: 'DERIVED', basisNote: 'The GST returns screen prepares one return a month.' },
+          eInvoiceApplicable: { value: eInvoiceExemptionOf(companyId) === 'NONE', basis: 'DERIVED', basisNote: 'The business answered the e-invoice question.' },
+          movesGoods: { value: catalogueItems(companyId).some((item) => item.kind === 'goods'), basis: 'DERIVED' },
+          stateCode: { value: config.gstin.slice(0, 2), basis: 'DERIVED' },
+          calendarFrom: booksStart,
+          timeZone: 'Asia/Kolkata',
+          saturdayIsWorking: true,
+        };
+      },
+    };
+    let app!: DemoApplication;
+    // Real readers, not fixtures: the signals on a deadline come from the return workspace (#30),
+    // the e-invoice queue (#26) and the purchase comparison (#31) of this same company.
+    const returnReadiness: ReturnReadinessReader = { readinessFor: (companyId, periodKey) => app.returnReadiness(companyId, periodKey) };
+    const eInvoiceBacklog: EInvoiceBacklogReader = { pendingFor: (companyId, periodKey) => app.eInvoiceBacklog(companyId, periodKey) };
+    const unresolvedPurchases: UnresolvedPurchaseReader = { unresolvedFor: (companyId, periodKey) => app.unresolvedPurchases(companyId, periodKey) };
+    const calendar = new ComplianceCalendarService({
+      definitions: new CatalogueDefinitions(),
+      profiles: calendarProfiles,
+      occurrences: pick(() => new InMemoryOccurrences(), (db) => new PostgresOccurrences(db)),
+      alerts: pick(() => new InMemoryAlerts(), (db) => new PostgresAlerts(db)),
+      exceptions: pick(() => new InMemoryComplianceExceptions(), (db) => new PostgresComplianceExceptions(db)),
+      audit: shop.audit,
+      clock: appClock,
+      signals: [returnReadinessSignals(returnReadiness), eInvoiceBacklogSignals(eInvoiceBacklog), purchaseMismatchSignals(unresolvedPurchases)],
+    });
+
+    // Rate advisor (#59). Its register here is two registers read together: the rates the business
+    // itself declared on items and codes (`declaredRatesOf` — the very register a bill's rate line
+    // is chosen from, so what the advisor suggests is what the business actually charges) and #5's
+    // tax defaults, where `remember` puts an approved suggestion. A rate declared for another item
+    // counts as code-level evidence only — issue #281 says a rate pinned to an item belongs to that
+    // item alone, so the suggestion never claims to be that item's own rate. And a suggestion only
+    // ever asks: the owner still declares the new item's rate themselves.
+    const mastersRegistryPort = mastersRegistry(masterDataService(), mastersContext);
+    const declaredRegistry: TaxDefaultRegistryPort = {
+      async candidates(companyId, lookup, asOf) {
+        const code = lookup.hsnSac?.trim();
+        const declared = declaredRatesOf(companyId).list(companyId)
+          .filter((rate) =>
+            asOf >= rate.effectiveFrom
+            && (rate.effectiveTo === null || asOf <= rate.effectiveTo)
+            && ((lookup.itemId !== undefined && rate.itemId === lookup.itemId)
+              || (code !== undefined && code !== '' && (code.startsWith(rate.code) || rate.code.startsWith(code)))))
+          .map((rate) => ({
+            entry: {
+              id: `declared:${rate.itemId ?? rate.code}:${rate.declaredOn}`,
+              companyId,
+              ...(lookup.itemId !== undefined && rate.itemId === lookup.itemId ? { itemId: rate.itemId } : {}),
+              hsnSac: rate.code,
+              gstRateBasisPoints: Number(rate.ratePercentTimes100),
+              ...(rate.cess?.percentTimes100 === undefined ? {} : { cessRateBasisPoints: Number(rate.cess.percentTimes100) }),
+              ...(rate.cess?.perUnitPaise === undefined ? {} : { cessPerUnitPaise: rate.cess.perUnitPaise }),
+              reverseCharge: false,
+              source: `${rate.basis} — declared on ${rate.declaredOn}`,
+            } satisfies TaxDefault,
+            effectiveFrom: rate.effectiveFrom,
+          }));
+        return [...declared, ...(await mastersRegistryPort.candidates(companyId, lookup, asOf))];
+      },
+      async item(companyId, itemId, asOf) {
+        const found = catalogueItems(companyId).find((entry) => entry.id === itemId);
+        if (found !== undefined) return { name: found.name, hsnSac: found.hsnSac ?? null };
+        return mastersRegistryPort.item(companyId, itemId, asOf);
+      },
+    };
+    const rateAdvisor = new RateAdvisorService({
+      registry: declaredRegistry,
+      learning: mastersLearning(masterDataService(), mastersContext),
+      audit: shop.audit,
+      clock: () => appClock.now(),
+    });
+
+    app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, gstReturns, challans, presale, exportSales, { calendar, reconciliation, reconciliationStore, rateAdvisor });
     app.cancelGuard = cancellationGuard;
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
@@ -1988,9 +2114,10 @@ export class DemoApplication {
         if (task !== null) tasks.push(task);
       }
     }
+    const doneMonths = may('gst_returns.view') ? doneReturnMonths(await this.gstReturns.list(actor)) : new Set<string>();
     if (may('gst_returns.view')) {
       const booksStart = (await this.shop.store.read().settings.get(companyId))?.booksStartDate ?? currentFinancialYear().from;
-      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneReturnMonths(await this.gstReturns.list(actor)), may('gst_returns.prepare')));
+      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneMonths, may('gst_returns.prepare')));
     }
     // Customers more than 30 days late, while the reminder plan still has something to send them.
     const late = read.receivables.rows.filter((row) => row.oldestDaysOverdue > 30);
@@ -2028,6 +2155,9 @@ export class DemoApplication {
         toPay: { amount: jsonAmount(read.suppliersOwed), opens: opens('report-dues') },
       },
       tasks,
+      // Issue #297 — the deadlines ahead, from the real compliance calendar: return readiness, the
+      // IRN backlog and purchase mismatches ride along as its signals. A month already filed hides.
+      comingUp: may('compliance.calendar.view') ? comingUpRows(await this.calendar.calendar(actor), doneMonths) : [],
       recentBills,
     };
   }
@@ -4701,13 +4831,19 @@ export class DemoApplication {
   // for the bank reconciliation engine; these endpoints never post ledger entries or move money.
   async bankFeedWorkspace(actor: ActorContext) {
     const context = this.bankContext(actor);
+    const payments = await this.paymentRepository.list(actor.companyId);
+    const transactionIds = (await Promise.all((await this.bankFeeds.connections(context)).map((connection) => this.bankFeeds.transactions(context, connection.id)))).flat().map((transaction) => transaction.id);
+    const matched = await this.reconciliationStore.matchedLines(String(actor.companyId), transactionIds, payments.map((payment) => payment.id));
+    const matchedBank = new Set(matched.bankTransactionIds);
     return {
       providers: [{ id: 'sandbox-aa', name: 'Sandbox authorised bank feed' }],
       connections: await Promise.all((await this.bankFeeds.connections(context)).map(async (connection) => ({
         ...this.bankConnectionJson(connection),
         accounts: (await this.bankFeeds.accounts(context, connection.id)).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
-        transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
+        transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString(), matched: matchedBank.has(transaction.id) })),
       }))),
+      // Issue #297 — which imported lines a match not undone already covers, for the Reconcile tab.
+      reconciliation: { matchedTransactionIds: matched.bankTransactionIds, matchedPaymentIds: matched.paymentIds },
     };
   }
 
@@ -4736,6 +4872,198 @@ export class DemoApplication {
 
   private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
   private bankConnectionJson(connection: BankFeedConnection) { return { ...connection }; }
+
+  // ------------------------------------------------------------------ issue #22 [E22]: bank reconciliation
+  //
+  // Wired in for #297. The check matches imported bank lines against recorded bank receipts and
+  // payments; it writes only its own match records — a bank line becomes money in the books only
+  // through `payments.recordPayment`, with the party and the account chosen by a person.
+
+  private reconciliationContext(actor: ActorContext) { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
+
+  /** Every imported bank line, across every connection, oldest first. */
+  private async bankFeedTransactions(actor: ActorContext) {
+    const context = this.bankContext(actor);
+    const lines = [] as Awaited<ReturnType<BankFeedService['transactions']>>[number][];
+    for (const connection of await this.bankFeeds.connections(context)) lines.push(...await this.bankFeeds.transactions(context, connection.id));
+    return lines.sort((a, b) => a.bookedOn.localeCompare(b.bookedOn));
+  }
+
+  private matchJson(match: ReconciliationMatch) {
+    return {
+      id: match.id, candidateId: match.candidateId, bankTransactionIds: match.bankTransactionIds, paymentIds: match.paymentIds,
+      confidence: match.confidence, amountDifferencePaise: match.amountDifferencePaise.toString(), reasons: match.reasons,
+      status: match.status, remainingBankPaise: match.remainingBankPaise.toString(), remainingBookPaise: match.remainingBookPaise.toString(),
+      confirmedBy: match.confirmedBy, confirmedAt: match.confirmedAt,
+    };
+  }
+
+  private runJson(run: ReconciliationRun) {
+    return {
+      candidates: run.candidates.map((candidate) => ({ ...candidate, amountDifferencePaise: candidate.amountDifferencePaise.toString() })),
+      matches: run.matches.map((match) => this.matchJson(match)),
+      exceptions: run.exceptions,
+      suggestedPayments: run.suggestedPayments.map((suggestion) => ({ ...suggestion, amountPaise: suggestion.amountPaise.toString() })),
+    };
+  }
+
+  async runBankReconciliation(actor: ActorContext) {
+    const bankLines = (await this.bankFeedTransactions(actor)).map((transaction) => fromBankTransaction(transaction));
+    const bookPayments = (await this.paymentRepository.list(actor.companyId))
+      .map((payment) => fromPayment(payment)).filter((payment): payment is BookPayment => payment !== null);
+    return this.runJson(await this.reconciliation.reconcile(this.reconciliationContext(actor), bankLines, bookPayments));
+  }
+
+  async confirmReconciliation(actor: ActorContext, input: Record<string, unknown>) {
+    const candidateId = String(input.candidateId ?? '').trim();
+    if (candidateId === '') throw invalid('RECONCILIATION_CANDIDATE_REQUIRED', 'Say which suggested match you are confirming.');
+    return this.matchJson(await this.reconciliation.confirm(this.reconciliationContext(actor), candidateId));
+  }
+
+  async unmatchReconciliation(actor: ActorContext, input: Record<string, unknown>) {
+    const matchId = String(input.matchId ?? '').trim();
+    const reason = String(input.reason ?? '').trim();
+    if (matchId === '') throw invalid('RECONCILIATION_MATCH_REQUIRED', 'Say which match to undo.');
+    if (reason === '') throw invalid('RECONCILIATION_REASON_REQUIRED', 'Undoing a match needs a reason — it goes on the record.');
+    return this.matchJson(await this.reconciliation.unmatch(this.reconciliationContext(actor), matchId, reason));
+  }
+
+  /**
+   * A bank line with nothing in the books becomes a receipt or a payment the usual way — through
+   * the receivables service, with the person naming the customer or supplier. The next run matches
+   * it to the bank line on its own.
+   */
+  async recordBankSuggestion(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const transactionId = String(input.transactionId ?? '').trim();
+    const line = (await this.bankFeedTransactions(actor)).find((transaction) => transaction.id === transactionId);
+    if (line === undefined) throw notFound('BANK_LINE_NOT_FOUND', 'That bank line is not in this business\'s imported transactions.');
+    const direction = line.creditPaise > 0n ? 'RECEIPT' : 'PAYMENT';
+    const { party } = this.paymentParty(companyId, { direction, partyId: input.partyId });
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id as PartyId, name: party.name, kind: direction === 'RECEIPT' ? 'CUSTOMER' : 'SUPPLIER' });
+    const payment = await this.payments.recordPayment(actor, {
+      // One press or a retried request records this bank line once.
+      idempotencyKey: `bank-reconcile:${transactionId}`,
+      direction,
+      partyId: party.id as PartyId,
+      mode: 'BANK_TRANSFER',
+      amount: money(line.creditPaise > 0n ? line.creditPaise : line.debitPaise),
+      date: isoDate(line.bookedOn),
+      reference: line.reference ?? null,
+      bankAccountCode: CURRENT_ACCOUNT,
+      narration: `Recorded from the bank feed: ${line.description}`,
+      ...(direction === 'PAYMENT' ? { advanceToSupplier: true } : {}),
+    });
+    return { state: 'success', paymentId: payment.id };
+  }
+
+  // ------------------------------------------------------------------ issue #32 [E32]: the compliance calendar
+
+  /** The calendar as the deadlines screen and Home's "Coming up" read it. */
+  async complianceCalendar(actor: ActorContext) {
+    const view = await this.calendar.calendar(actor);
+    return {
+      today: view.today, from: view.from, to: view.to, exceptions: view.exceptions,
+      entries: view.entries.map((entry) => ({
+        occurrence: entry.occurrence, daysRemaining: entry.daysRemaining, state: entry.state,
+        signals: entry.signals.map((signal) => ({ ...signal, ...(signal.amount === undefined ? {} : { amount: jsonAmount(signal.amount.minor) }) })),
+        nextAction: entry.nextAction, reviewNote: entry.reviewNote,
+      })),
+    };
+  }
+
+  /** Mark a deadline done with what proves it — an ARN or challan, or a typed confirmation. */
+  async completeObligation(actor: ActorContext, input: Record<string, unknown>) {
+    const key = String(input.key ?? '').trim();
+    if (key === '') throw invalid('OBLIGATION_REQUIRED', 'Say which deadline was done.');
+    const reference = String(input.reference ?? '').trim();
+    const note = String(input.note ?? '').trim();
+    const filedOn = input.filedOn === undefined || String(input.filedOn).trim() === '' ? appToday() : isoDate(String(input.filedOn).trim());
+    const evidence = reference !== ''
+      ? { kind: 'PORTAL_RECEIPT' as const, reference, filedOn, note: note === '' ? `Shown on the portal as ${reference}.` : note }
+      : { kind: 'TYPED_CONFIRMATION' as const, reference: '', filedOn, note };
+    const record = await this.calendar.complete(actor, {
+      key,
+      evidence,
+      idempotencyKey: String(input.idempotencyKey ?? '') || `calendar-complete:${key}:${actor.userId}`,
+    });
+    return { state: 'success', occurrence: record };
+  }
+
+  // The three readers the calendar's signals get their truth from. They run as the app's own actor:
+  // what they read is company data already checked for permission on the way in.
+
+  async returnReadiness(companyId: CompanyId, periodKey: string) {
+    const preparations = (await this.gstReturns.list(this.shop.setupActor as ActorContext)).filter((preparation) => preparation.period === periodKey);
+    if (preparations.length === 0) return { prepared: false, taxPayable: money(0n), blockingIssues: 0 };
+    const gstr3b = preparations.find((preparation) => preparation.returnType === 'GSTR3B');
+    const blockingIssues = preparations.reduce((count, preparation) =>
+      count + preparation.findings.filter((finding) => finding.severity === 'BLOCKING').length, 0);
+    // Tax payable = outward tax − claimable credit + reverse-charge liability, floored at zero.
+    let taxPayable = 0n;
+    if (gstr3b !== undefined) {
+      const outward = totalTaxOf(sumReturnAmounts(gstr3b.snapshot.documents.flatMap((document) => document.lines.map((line) => line.amounts))));
+      const credit = totalTaxOf(sumReturnAmounts([gstr3b.snapshot.inward.allOtherItc, gstr3b.snapshot.inward.reverseChargeItc, gstr3b.snapshot.inward.importItc])).minor - totalTaxOf(gstr3b.snapshot.inward.reversedItc).minor;
+      taxPayable = outward.minor - credit + totalTaxOf(gstr3b.snapshot.inward.reverseChargeLiability).minor;
+      if (taxPayable < 0n) taxPayable = 0n;
+    }
+    return { prepared: true, taxPayable: money(taxPayable), blockingIssues };
+  }
+
+  async eInvoiceBacklog(companyId: CompanyId, periodKey: string) {
+    const bills = (await this.issuedInvoices(this.shop.setupActor as ActorContext)).invoices;
+    const pending = bills.filter((bill) =>
+      bill.date.startsWith(periodKey) && bill.needed === 'YES' && (bill.eInvoiceStatus === 'NOT_SENT' || bill.eInvoiceStatus === 'FAILED'));
+    return {
+      count: pending.length,
+      records: pending.map((bill) => ({ kind: 'sales_invoice', id: bill.id, label: `Invoice ${bill.number ?? bill.id} dated ${bill.date}` })),
+    };
+  }
+
+  async unresolvedPurchases(companyId: CompanyId, periodKey: string) {
+    const workspace = await this.shop.itc.workspace(this.shop.setupActor as ActorContext, taxPeriod(periodKey));
+    // Nothing imported for the month is not "unresolved" — it is nothing to compare yet.
+    if (!workspace.portalDataPresent) return null;
+    const unresolved = workspace.lines.filter((line) => line.decision === null && line.status !== 'EXACT');
+    return {
+      count: unresolved.length,
+      amount: totalItcTaxOf(sumItcAmounts(unresolved.map((line) => line.claimable))),
+      records: unresolved.map((line) => ({ kind: 'purchase_invoice', id: line.key, label: line.book?.number ?? line.portal?.number ?? line.key })),
+    };
+  }
+
+  // ------------------------------------------------------------------ issue #59 [E59]: the rate advisor
+
+  /**
+   * A rate suggestion for the item form. It reads the tax-default register (#5) and never writes —
+   * accepting it is the ordinary item-save path, so the business's declared rate is never overridden.
+   */
+  async rateHint(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const hsnSac = String(input.hsnSac ?? '').trim();
+    const itemId = String(input.itemId ?? '').trim();
+    if (hsnSac === '' && itemId === '') throw invalid('RATE_HINT_NEEDS_A_CLUE', 'Give an item or an HSN/SAC code to suggest a rate for.');
+    const advice = await this.rateAdvisor.suggest(String(actor.companyId), {
+      index: 0,
+      description: String(input.description ?? ''),
+      ...(itemId === '' ? {} : { itemId }),
+      ...(hsnSac === '' ? {} : { hsnSac }),
+    }, appToday());
+    const rate = advice.kind === 'SUGGESTED' ? advice.suggestion.rate : null;
+    return {
+      kind: advice.kind,
+      ...(rate === null ? {} : {
+        ratePercentTimes100: Number(rate.gstRateBasisPoints) / 100,
+        basis: rate.basis,
+        reverseCharge: rate.reverseCharge,
+        citation: rate.citation,
+        cessPerUnitPaise: rate.cessPerUnitPaise?.toString() ?? null,
+      }),
+      ...(advice.kind === 'SUGGESTED'
+        ? { reason: advice.suggestion.reason, question: advice.suggestion.question, restingOn: advice.suggestion.restingOn ?? null }
+        : { reason: advice.reason, question: advice.question, whatWouldHelp: advice.whatWouldHelp }),
+    };
+  }
 
   // ------------------------------------------------------------------ issue #30: GST returns
   //

@@ -166,6 +166,8 @@ export const CORE_ROUTES: readonly Route[] = [
   // Issue #308 — the item's own edit dialog, and what the item picker ranks and prices with.
   post('/api/items/edit', { access: ITEMS, input: itemForm }, ({ app, actor, input }) => app.editItem(actor, input)),
   post('/api/items/selling', { access: need('start a bill', 'sales.draft.write'), input: customerOnly }, ({ app, actor, input }) => app.itemSelling(actor, input)),
+  // Issue #297 — the rate advisor on the item form: a suggestion only, it never writes a rate.
+  post('/api/items/rate-hint', { access: ITEMS, input: fields({ itemId: text, hsnSac: text, description: text }) }, ({ app, actor, input }) => app.rateHint(actor, input)),
   // Issue #182 — where the goods go and who carries them.
   post('/api/delivery/choices', { access: needAny('choose where goods go', 'sales.draft.write', 'challan.issue'), input: customerOnly },
     ({ app, actor, input }) => app.deliveryChoices(actor, String(input.customerId ?? ''))),

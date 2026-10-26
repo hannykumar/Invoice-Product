@@ -418,6 +418,22 @@ Do not reimplement dependency-owned modules. If a dependency is unfinished, work
 **Definition of done**
 
 - Implementation, migrations, API contracts and UI states are complete.
+
+**Status note (recorded for #297, October 2026)**
+
+`packages/voice-assistant` is built and tested — the lexicon, the parser, the session machine and
+the `TranscriptionPort` contract — but it stays unwired from the running app, by choice:
+
+- The module's only external edge is `TranscriptionPort` (sound → text + confidence). No real
+  transcription provider exists yet: there is no speech adapter behind `connector-v1`, and no
+  provider has been chosen or contracted for (e.g. Bhashini or a private model host).
+- Wiring a fake transcriber would put a microphone button on the screen that pretends to listen —
+  exactly the kind of silent gap this product forbids. Wiring text-only duplicates the Ask screen,
+  which already takes a typed instruction through the assistant service.
+- When a transcription provider is chosen (an owner decision — which vendor, where audio is
+  processed and kept, what it costs), the wiring is a `TranscriptionPort` adapter in
+  `connector-v1`, a capture step on the Ask screen, and a `VoiceSession` per company in
+  `demo-application.ts`. Nothing in the package needs to change for that day.
 - Automated tests cover the acceptance criteria and important edge cases.
 - User-facing wording is understandable without accounting knowledge.
 - Documentation explains assumptions, supported scenarios and known limitations.

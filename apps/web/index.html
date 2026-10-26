@@ -77,6 +77,12 @@
               <ul class="task-list" id="home-tasks"></ul>
               <p class="line-ok" id="home-all-clear" hidden><span aria-hidden="true">✓</span><span data-i18n="homeAllClear"></span></p>
             </section>
+            <!-- Issue #297 — the deadlines ahead, from the real compliance calendar. -->
+            <section class="panel home-coming" aria-labelledby="home-coming-title">
+              <h2 id="home-coming-title" data-i18n="homeComingUpTitle"></h2>
+              <ul class="task-list" id="home-coming"></ul>
+              <p class="line-ok" id="home-coming-clear" hidden><span aria-hidden="true">✓</span><span data-i18n="homeComingClear"></span></p>
+            </section>
             <section class="panel home-bills" aria-labelledby="home-bills-title">
               <div class="panel-heading"><h2 id="home-bills-title" data-i18n="homeRecentBills"></h2><button type="button" class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
               <ul class="bill-list" id="home-bills"></ul>
@@ -462,6 +468,11 @@
             </aside>
           </div>
           <article class="panel"><h2 data-i18n="importedBankTransactions"></h2><div class="activity-list" id="bank-feed-transactions" aria-live="polite"><p class="loading-copy" data-i18n="noBankTransactions"></p></div></article>
+          <!-- Issue #297 — the Reconcile tab: match the bank's lines against the books. -->
+          <article class="panel"><h2 data-i18n="reconcileTitle"></h2><p data-i18n="reconcileHelp"></p>
+            <button type="button" class="primary-button wide" id="bank-reconcile-run" data-i18n="checkBank"></button>
+            <div class="activity-list" id="bank-reconcile" aria-live="polite"></div>
+          </article>
         </section>
 
         <section class="view" id="view-returns" aria-labelledby="returns-title">
@@ -1727,6 +1738,8 @@
         <label><span data-i18n="itemHsn"></span><input name="hsnSac" inputmode="numeric" required /><small data-i18n="itemHsnHelp"></small></label>
         <label><span data-i18n="itemUnit"></span><select name="unit" id="item-units"></select></label>
         <label><span data-i18n="itemTax"></span><select name="taxChoice" id="item-tax"></select><small data-i18n="itemTaxHelp"></small></label>
+        <!-- Issue #297 — the rate advisor's suggestion. It never fills the rate in on its own. -->
+        <p class="rate-hint" id="item-rate-hint" hidden></p>
         <label id="item-other-rate" hidden><span data-i18n="itemOtherRate"></span><input name="otherRate" type="number" min="0" max="100" step="0.01" /></label>
         <label><span data-i18n="itemBasis"></span><input name="basis" /><small data-i18n="itemBasisHelp"></small></label>
         <label><span data-i18n="itemRateFrom"></span><input name="effectiveFrom" type="date" /><small data-i18n="itemRateFromHelp"></small></label>
