@@ -12,12 +12,15 @@
  * resolves it); a one-time password is never on the record, only the challenge's id, expiry, tries
  * left and the last digits of the phone.
  *
- * Provider callbacks are kept by `PostgresWebhookEvents` (#389). The two cross-company lookups of
- * the call log find nothing here: a callback names no company, and these tables are closed to a
- * connection that has none. That waits for #345 (see government-access-v1, "Storage").
+ * Provider callbacks are kept by `PostgresWebhookEvents` (#389). A callback names no company, so
+ * `companyForRequest` asks `government_call_company` — a narrow SECURITY DEFINER function that
+ * returns only a company id (#477, see government-access-v1, "Storage") — and the call is then
+ * read inside that company's own transaction. Row-level security is never bypassed.
  */
 import { notAllowed, type CompanyId, type UserId } from '@invoice/kernel';
 import type { SqlExecutor, TransactionalExecutor } from '../../platform/src/database.ts';
+import type { ConnectorKind } from '../../platform/src/connectors.ts';
+import { scopesForConnector } from './channel.ts';
 import type { AuthorisationRepository, CallLogRepository, Page } from './ports.ts';
 import type { ConsentRecord, CredentialHandle, GstinAuthorisation, OtpChallenge, ProviderCall } from './types.ts';
 
@@ -296,19 +299,25 @@ export class PostgresCallLog implements CallLogRepository {
   }
 
   /**
-   * Always null on the database, for now. A callback names no company, and `government_calls` is
-   * closed to a connection without one, so the honest answer is what row-level security shows:
-   * nothing. The callback is recorded as UNMATCHED and reconciliation settles the call by polling.
-   * Today that is also the exact answer, because the running app makes no government calls yet
-   * (#51). Before the channel is wired on PostgreSQL, #345 must resolve the company from the
-   * provider request id first; no bypass of row-level security is built here.
+   * Which company a callback is about, and nothing else. A callback arrives with no session and
+   * no company, so the answer comes from `government_call_company` — a SECURITY DEFINER function
+   * that returns one uuid or none (#477). It joins the open unit of work when there is one, like
+   * `query` on every other repository; the function sees only what its finder role may read and
+   * row-level security is never bypassed. The call itself is then read inside that company's own
+   * transaction, where row-level security is the same as on every other read here.
    */
-  async findByProviderRequestId(): Promise<ProviderCall | null> {
-    return null;
+  async companyForRequest(kind: ConnectorKind, reference: string): Promise<CompanyId | null> {
+    const { rows } = await this.#db.query(`SELECT government_call_company($1, $2::text[]) AS "companyId"`,
+      [reference, [...scopesForConnector(kind)]]);
+    return rows[0]?.companyId === null || rows[0]?.companyId === undefined ? null : String(rows[0].companyId) as CompanyId;
   }
 
-  async findByCorrelationId(): Promise<ProviderCall | null> {
-    return null;
+  async findByProviderRequestId(kind: ConnectorKind, companyId: CompanyId, providerRequestId: string): Promise<ProviderCall | null> {
+    return (await this.#select(companyId, 'c.provider_request_id = $2 AND c.scope = ANY ($3::text[])', [providerRequestId, [...scopesForConnector(kind)]], 'ORDER BY c.seq LIMIT 1'))[0] ?? null;
+  }
+
+  async findByCorrelationId(companyId: CompanyId, correlationId: string): Promise<ProviderCall | null> {
+    return (await this.#select(companyId, 'c.correlation_id = $2', [correlationId], 'ORDER BY c.seq LIMIT 1'))[0] ?? null;
   }
 
   #select(companyId: CompanyId, where: string, values: unknown[], tail: string): Promise<ProviderCall[]> {

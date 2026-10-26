@@ -28,7 +28,8 @@ import type { Id, IsoDate } from '../../../packages/masters/src/types.ts';
 import { PostgresVersionedStore } from '../../../packages/masters/src/postgres-masters.ts';
 import { reviveJson } from '../../../packages/platform/src/postgres-audit.ts';
 import { requestScope } from './log.ts';
-import { durableDatabase, onReload, persist } from './durable.ts';
+import { durableDatabase, durableEncryption, onReload, persist } from './durable.ts';
+import { masterVersionBoundTo, sealMasterData, unsealMasterData } from './field-encryption.ts';
 
 type Record_ = { readonly id: Id; readonly companyId: Id };
 
@@ -59,7 +60,12 @@ class MirroredStore<T extends Record_> extends VersionedStore<T> {
     if (db === null || this.#replaying) return version;
     const user = requestScope().user_id ?? fallbackUser(data.companyId);
     // The PostgreSQL store writes on whichever unit of work `persist` gives it (the action's, or its own).
-    persist(data.companyId, () => new PostgresVersionedStore<T>(db, this.#kind).append(data, effectiveFrom, user, reason));
+    // #352 — what is stored carries only the ids in the clear; everything else is sealed.
+    persist(data.companyId, async () => {
+      const encryption = durableEncryption();
+      const stored = encryption === null ? data : await sealMasterData(encryption, data, masterVersionBoundTo(data.companyId, this.#kind));
+      return new PostgresVersionedStore<T>(db, this.#kind).append(stored as T, effectiveFrom, user, reason);
+    });
     return version;
   }
 
@@ -92,6 +98,14 @@ const masters = () => {
 
 /** The one master-data service this process keeps. */
 export const masterData = (): MasterDataService => masters().service;
+
+/** #352 — every master record one company keeps, by kind: the privacy export's master side. */
+export const allMasterRecords = (companyId: string): Record<string, unknown[]> => {
+  const { stores } = masters();
+  const out: Record<string, unknown[]> = {};
+  for (const [kind, store] of stores) out[kind] = [...(store.list(companyId, '9999-12-31') as readonly unknown[])];
+  return out;
+};
 
 /** Issue #391 — the signed-in person a request's master-data writes are made by. */
 const caller = new AsyncLocalStorage<RequestContext>();
@@ -141,7 +155,9 @@ onReload(
          FROM master_versions v JOIN master_records r ON r.company_id = v.company_id AND r.id = v.record_id
         WHERE v.company_id = $1 ORDER BY v.recorded_at, v.version`, [companyId]));
     for (const row of rows) {
-      stores.get(row.kind as MasterStoreKind)?.replay(reviveJson<Record_>(row.data), String(row.effective_from), String(row.recorded_by), row.reason === null ? undefined : String(row.reason));
+      const encryption = durableEncryption();
+      const data = encryption === null ? reviveJson<Record_>(row.data) : reviveJson<Record_>(await unsealMasterData(encryption, row.data, masterVersionBoundTo(companyId, String(row.kind))));
+      stores.get(row.kind as MasterStoreKind)?.replay(data, String(row.effective_from), String(row.recorded_by), row.reason === null ? undefined : String(row.reason));
     }
   },
 );
