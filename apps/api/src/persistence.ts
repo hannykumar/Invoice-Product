@@ -8,11 +8,33 @@
  *   live in memory and vanish on the next restart.
  */
 import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { assertLeastPrivilege, createDatabase, type TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import type { AesGcmEncryptionService } from '../../../ops/security/src/encryption.ts';
+import type { PrivacyDataStore } from '../../../ops/security/src/privacy.ts';
+import { InMemoryPrivacyStore, MemoryBackupRepository, type BackupRepository, type PrivacyStore } from '../../../ops/security/src/store.ts';
+import { PostgresBackupRepository, PostgresPrivacyStore } from '../../../ops/security/src/postgres-store.ts';
+import { appEncryption } from './field-encryption.ts';
+import { LocalBackupObjectStore, MemoryAccountDataStore, PostgresAccountDataStore } from './privacy-application.ts';
+
+/**
+ * Issue #352 — the security stores the running app uses, decided with the rest of persistence:
+ * on PostgreSQL the privacy register and the backup manifests are rows (#471's stores, finally
+ * composed); in memory they are the in-memory ones. `accountData` is where export and deletion
+ * actually find the account's data; `encryption` is the AES-256-GCM service whose keys come only
+ * from `APP_ENCRYPTION_KEYS`, never the database or the repository.
+ */
+export interface SecurityStores {
+  readonly encryption: AesGcmEncryptionService;
+  readonly privacyRecords: PrivacyStore;
+  readonly accountData: PrivacyDataStore;
+  readonly backups: BackupRepository;
+}
 
 export type Persistence =
-  | { readonly kind: 'memory' }
-  | { readonly kind: 'postgres'; readonly db: TransactionalExecutor };
+  | { readonly kind: 'memory'; security?: SecurityStores }
+  | { readonly kind: 'postgres'; readonly db: TransactionalExecutor; security?: SecurityStores };
 
 const LOCAL_ENVIRONMENTS = new Set(['', 'development', 'test']);
 export const isLocal = (environment: string | undefined): boolean => LOCAL_ENVIRONMENTS.has((environment ?? '').trim().toLowerCase());
@@ -22,7 +44,7 @@ export async function openPersistence(env: NodeJS.ProcessEnv = process.env): Pro
   const url = env.DATABASE_URL?.trim() ?? '';
   if (url === '') {
     if (!isLocal(env.NODE_ENV)) throw new Error('DATABASE_URL is not set. The server will not start without its database outside development.');
-    return { kind: 'memory' };
+    return MEMORY;
   }
   const db = createDatabase(url);
   try {
@@ -32,10 +54,48 @@ export async function openPersistence(env: NodeJS.ProcessEnv = process.env): Pro
     await db.close();
     throw error;
   }
-  return { kind: 'postgres', db };
+  const encryption = appEncryption(env);
+  return {
+    kind: 'postgres', db,
+    security: {
+      encryption,
+      privacyRecords: new PostgresPrivacyStore(db),
+      accountData: new PostgresAccountDataStore(db, encryption),
+      backups: new PostgresBackupRepository(db, new LocalBackupObjectStore(env.APP_BACKUP_DIR?.trim() || join(tmpdir(), 'karobar-backups'))),
+    },
+  };
 }
 
-export const MEMORY: Persistence = { kind: 'memory' };
+let memorySecurity: SecurityStores | null = null;
+const memorySecurityStores = (): SecurityStores => memorySecurity ??= {
+  encryption: appEncryption(process.env),
+  privacyRecords: new InMemoryPrivacyStore(),
+  accountData: new MemoryAccountDataStore(),
+  backups: new MemoryBackupRepository(),
+};
+
+/**
+ * The security stores for one persistence, filled in once when first asked for: a hand-made
+ * `{ kind: 'postgres', db }` in a test gets the same composition the opened one got.
+ */
+export const securityOf = (persistence: Persistence): SecurityStores => {
+  if (persistence.security !== undefined) return persistence.security;
+  const stores: SecurityStores = persistence.kind === 'postgres'
+    ? (() => {
+      const encryption = appEncryption(process.env);
+      return {
+        encryption,
+        privacyRecords: new PostgresPrivacyStore(persistence.db),
+        accountData: new PostgresAccountDataStore(persistence.db, encryption),
+        backups: new PostgresBackupRepository(persistence.db, new LocalBackupObjectStore(process.env.APP_BACKUP_DIR?.trim() || join(tmpdir(), 'karobar-backups'))),
+      };
+    })()
+    : memorySecurityStores();
+  persistence.security = stores;
+  return stores;
+};
+
+export const MEMORY: Persistence = { kind: 'memory', get security() { return memorySecurityStores(); } };
 
 /**
  * A fixed UUID for one of the app's own named records (an account code, the main godown), so the

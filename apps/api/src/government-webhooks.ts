@@ -32,7 +32,7 @@
 import { appClock } from './app-clock.ts';
 import { InMemoryAuditPort } from '@invoice/ledger';
 import { ConnectorGateway, HmacWebhookVerifier, isLocalEnvironment, MockConnector, type ConnectorKind, type WebhookSigningSecrets } from '../../../packages/platform/src/connectors.ts';
-import { registerSecretValues } from '../../../packages/platform/src/credentials.ts';
+import { redactSecretText, registerSecretValues } from '../../../packages/platform/src/credentials.ts';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import {
   GovernmentWebhookReceiver,
@@ -78,7 +78,7 @@ let receiver: GovernmentWebhookReceiver | undefined;
  * Built once, at start-up when the server starts (`server.ts`), otherwise on the first callback.
  * With a database the seen events are kept there; without one (development, tests) in memory.
  */
-export const configureGovernmentWebhooks = (db: TransactionalExecutor | null, env: NodeJS.ProcessEnv = process.env, warn: (message: string) => void = console.warn): GovernmentWebhookReceiver => {
+export const configureGovernmentWebhooks = (db: TransactionalExecutor | null, env: NodeJS.ProcessEnv = process.env, warn: (message: string) => void = (message) => console.warn(redactSecretText(message))): GovernmentWebhookReceiver => {
   const secrets = governmentWebhookSecrets(env);
   if (secrets.missing.length > 0) {
     warn(`Government callbacks will be refused for ${secrets.missing.join(', ')}: no signing secret is set. Set ${secrets.missing.map(secretVariable).join(', ')}.`);
