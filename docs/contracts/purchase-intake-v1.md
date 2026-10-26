@@ -191,3 +191,26 @@ An `ExtractionDraft` with the fields above, `fieldsNeedingReview`, `arithmeticPr
 Approving or posting a purchase; three-way matching (#18); supplier risk (#19); duplicate
 *invoice* detection beyond the file level (#16); unofficial WhatsApp scraping — intake uses the
 official WhatsApp Business channel through GPT 2's adapter only.
+
+## Storage (#366)
+
+Lane owner GPT 3. A document is stored once it is routed to a company, behind `InboxStore`
+(`packages/purchasing/src/inbox-store.ts`): `InMemoryInboxStore` by default,
+`PostgresInboxStore` (`inbox-postgres.ts`) on PostgreSQL, one contract suite for both
+(`test/inbox-store-contract.ts`). Tables, from migration `…_purchasing_5fb63110524b_inbox_documents`:
+
+| Table | Holds | Refuses |
+| --- | --- | --- |
+| `purchase_inbox_documents` | the routed document; the attachment as storage key and measured metadata, never the bytes | a second document for one `(company_id, message_key)` (#406); any change once `draft_ready` or `discarded`; any change to what arrived (only status, hold reason and message, duplicate link, attempts and routing are granted) |
+| `purchase_inbox_contents` | which document of a company first held a file (SHA-256) | a second claim on the same file |
+| `purchase_inbox_drafts` | the reviewable draft, paise as exact strings | a second draft for a document; any change |
+
+All three force row-level security on `app.company_id`; nothing is granted `DELETE`.
+
+- `PurchaseInboxService` takes `{ store, unitOfWork }`. It opens each step's unit of work itself,
+  for the company routing chose, and never across the OCR call. Commands that read (`document`,
+  `draft`, `inbox`) and `assignCompany` are now `async`; `inbox` takes an optional keyset `page`.
+- A document whose company is not known yet (screening, `AWAITING_SCAN`, an address shared by
+  several companies or by none) is **not stored**: it stays in the service's process until it is
+  routed or claimed, and is lost if the process restarts. Keeping it durably needs a pre-tenant
+  holding table of the kind `government_webhook_events` uses (#345/#389); there is none yet.
