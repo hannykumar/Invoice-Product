@@ -133,6 +133,32 @@ test('#287: goods and a service on one bill, or a service sent to a delivery add
   assert.match(JSON.stringify(shipped.body), /SERVICE_NO_SHIP_TO/);
 });
 
+test('#287: a service bill takes no vehicle, transporter, destination or e-way bill number (Rule 138)', async () => {
+  const { owner, mehta } = await shop();
+  const moved = await request('POST', '/api/sales/preview', {
+    ...serviceSale(mehta, '60000', 'svc-287-moved'),
+    vehicleNumber: 'KA01AB1234', ewayBillNumber: '123456789012', destination: 'Pune',
+  }, owner);
+  assert.equal(moved.status, 422, JSON.stringify(moved.body));
+  assert.match(JSON.stringify(moved.body), /SERVICE_NO_TRANSPORT/);
+  assert.match(JSON.stringify(moved.body), /service is not sent in a vehicle/);
+
+  // Distance alone is still a movement answer — a service never travels kilometres.
+  const distanced = await request('POST', '/api/sales/preview', { ...serviceSale(mehta, '60000', 'svc-287-dist'), distanceKm: '120' }, owner);
+  assert.equal(distanced.status, 422, JSON.stringify(distanced.body));
+  assert.match(JSON.stringify(distanced.body), /SERVICE_NO_TRANSPORT/);
+
+  // The same answers are refused at the estimate, as data rather than an error.
+  const estimate = await request('POST', '/api/sales/estimate', { ...serviceSale(mehta, '60000', 'svc-287-moved-est'), vehicleNumber: 'KA01AB1234' }, owner);
+  assert.equal(estimate.status, 200, JSON.stringify(estimate.body));
+  assert.ok(estimate.body.refusals.some((refusal: any) => refusal.code === 'SERVICE_NO_TRANSPORT'), JSON.stringify(estimate.body.refusals));
+
+  // And at Record, the same refusal — nothing is issued for a service "sent" somewhere.
+  const recorded = await request('POST', '/api/sales/record', { ...serviceSale(mehta, '60000', 'svc-287-moved-rec'), transporterId: 'trans-1' }, owner);
+  assert.equal(recorded.status, 422, JSON.stringify(recorded.body));
+  assert.match(JSON.stringify(recorded.body), /SERVICE_NO_TRANSPORT/);
+});
+
 test('#287: goods are still goods — the e-way reminder and the goods wording are unchanged', async () => {
   const { owner, mehta } = await shop();
   const estimate = await request('POST', '/api/sales/estimate', { customerId: mehta, item: 'TMT Steel Bar 12mm', quantity: '1', rate: '90', date: DATE, terms: '0' }, owner);
