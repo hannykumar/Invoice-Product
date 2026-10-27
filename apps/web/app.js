@@ -364,7 +364,11 @@ const copy = {
     homeTasksTitle: "Needs you today", homeAllClear: "All clear for today", homeRecentBills: "Recent bills", homeNoBills: "No bills yet. Press + Bill to make the first one.",
     homeComingUpTitle: "Coming up", homeComingClear: "Nothing due soon.", homeComingDone: "Done", homeComingDoneConfirm: "Mark it done only if it really is — this stays on the record.",
     homeChipPaid: "Paid", homeChipDue: "{amount} due", homeChipLate: "{amount} · {days} days late", homeChipLateOne: "{amount} · 1 day late",
-    payCash: "Cash", payUpi: "UPI", payCard: "Card", payBank: "Bank", payCheque: "Cheque", payUdhaar: "Udhaar"
+    payCash: "Cash", payUpi: "UPI", payCard: "Card", payBank: "Bank", payCheque: "Cheque", payUdhaar: "Udhaar",
+    // Issue #353 — the four screen states (loading, empty, error, success) and the keyboard help.
+    stateLoading: "Loading…", stateRetry: "Try again", stateOffline: "We can't reach Karobar right now. Check that this phone or computer is online, then press Try again. Nothing you have done has been lost.", stateServerProblem: "Karobar had a problem on its side. Nothing you have done has been lost. Press Try again in a minute.", stateGenericProblem: "That did not work. Press Try again. If it keeps failing, tell us what you were doing.", stateNothingYet: "Nothing here yet.",
+    designStatesTitle: "Screen states and shared pieces", designStatesHelp: "Every screen that reads from the books draws loading, nothing-yet, a problem and the result the same way, from one piece of code. These are live: press Try again.", designStateLoading: "Loading", designStateEmpty: "Nothing here yet (with the next step)", designStateOffline: "Problem: no internet", designStateServer: "Problem: on our side", designStateRefused: "Problem: Karobar said no, in its own words", designStateReady: "Done: the result, with the success line", designFormTitle: "A form: the button waits, the mistake is beside the box", designFieldLabel: "GST number", designFieldHelp: "15 letters and digits, like 29ABCDE1234F1Z5.", designFieldWrong: "This GST number does not match the rest of it, so a digit was probably mistyped. Check it against the supplier's bill.", designDemoSave: "Save (works)", designDemoFail: "Save (fails)", designDemoSaved: "Saved. Nothing else to do.", designDemoDialog: "Open a box", designDialogTitle: "A box on top of the page", designDialogHelp: "Tab stays inside this box. Esc closes it and puts you back on the button you pressed.", designTokens: "Colours, type and spacing (these follow the Light / Dark choice above)", designDemoEmpty: "No bills yet. A bill you make will appear here.", designDemoRow: "Sample bill · ₹1,180.00",
+    shortcutsTitle: "Keyboard keys", shortcutsHelp: "Everything in Karobar can be done without a mouse. Tab moves forward, Shift+Tab goes back, Enter or Space presses a button, Esc closes a box.", shortcutNewBill: "F2 or Alt+N: start a new bill", shortcutSkip: "Tab at the top of any page: Skip to the main part", shortcutEsc: "Esc: close the open box and go back to where you were", shortcutArrows: "Arrow keys: move through the choices in a list",
   },
   "hi-IN": {
     // Issue #305 / #311 — the four-slide sale and the checks inside the bill.
@@ -727,7 +731,11 @@ const copy = {
     homeTasksTitle: "आज आपके लिए", homeAllClear: "आज सब ठीक है", homeRecentBills: "हाल के बिल", homeNoBills: "अभी कोई बिल नहीं। पहला बिल बनाने के लिए + बिल दबाइए।",
     homeComingUpTitle: "आगे आने वाला", homeComingClear: "अभी कुछ देय नहीं।", homeComingDone: "हो गया", homeComingDoneConfirm: "तभी हो गया कहिए जब सच में हो गया हो — यह दर्ज रहता है।",
     homeChipPaid: "चुकाया", homeChipDue: "{amount} बाक़ी", homeChipLate: "{amount} · {days} दिन देर", homeChipLateOne: "{amount} · 1 दिन देर",
-    payCash: "नक़द", payUpi: "UPI", payCard: "कार्ड", payBank: "बैंक", payCheque: "चेक", payUdhaar: "उधार"
+    payCash: "नक़द", payUpi: "UPI", payCard: "कार्ड", payBank: "बैंक", payCheque: "चेक", payUdhaar: "उधार",
+    // Issue #353 — the four screen states (loading, empty, error, success) and the keyboard help.
+    stateLoading: "लोड हो रहा है…", stateRetry: "फिर कोशिश कीजिए", stateOffline: "अभी कारोबार तक नहीं पहुँच पा रहे। देखिए कि ये फ़ोन या कंप्यूटर इंटरनेट पर है, फिर \"फिर कोशिश कीजिए\" दबाइए। आपका किया हुआ काम गुम नहीं हुआ।", stateServerProblem: "कारोबार की तरफ़ से कोई गड़बड़ हुई। आपका किया हुआ काम गुम नहीं हुआ। एक मिनट बाद \"फिर कोशिश कीजिए\" दबाइए।", stateGenericProblem: "ये नहीं हो पाया। \"फिर कोशिश कीजिए\" दबाइए। बार-बार हो तो बताइए कि आप क्या कर रहे थे।", stateNothingYet: "यहाँ अभी कुछ नहीं है।",
+    designStatesTitle: "स्क्रीन की हालतें और साझा हिस्से", designStatesHelp: "बही से पढ़ने वाली हर स्क्रीन लोड होना, अभी कुछ नहीं, गड़बड़ और नतीजा एक ही तरह दिखाती है, एक ही कोड से। ये असली हैं: \"फिर कोशिश कीजिए\" दबाकर देखिए।", designStateLoading: "लोड हो रहा है", designStateEmpty: "अभी कुछ नहीं (अगले क़दम के साथ)", designStateOffline: "गड़बड़: इंटरनेट नहीं", designStateServer: "गड़बड़: हमारी तरफ़", designStateRefused: "गड़बड़: कारोबार ने अपने शब्दों में मना किया", designStateReady: "हो गया: नतीजा और सफलता की पंक्ति", designFormTitle: "फ़ॉर्म: बटन इंतज़ार करता है, ग़लती डिब्बे के पास दिखती है", designFieldLabel: "GST नंबर", designFieldHelp: "15 अक्षर और अंक, जैसे 29ABCDE1234F1Z5।", designFieldWrong: "ये GST नंबर बाक़ी नंबर से मेल नहीं खाता, इसलिए कोई अंक शायद ग़लत लिखा गया। सप्लायर के बिल से मिलाइए।", designDemoSave: "सेव (हो जाएगा)", designDemoFail: "सेव (नहीं होगा)", designDemoSaved: "सेव हो गया। और कुछ नहीं करना।", designDemoDialog: "डिब्बा खोलिए", designDialogTitle: "पेज के ऊपर एक डिब्बा", designDialogHelp: "Tab इसी डिब्बे के अंदर रहता है। Esc इसे बंद करता है और आपको उसी बटन पर लौटाता है जो आपने दबाया था।", designTokens: "रंग, अक्षर और जगह (ये ऊपर के उजला / अँधेरा चुनाव के साथ बदलते हैं)", designDemoEmpty: "अभी कोई बिल नहीं। आप जो बिल बनाएँगे वो यहाँ दिखेगा।", designDemoRow: "नमूना बिल · ₹1,180.00",
+    shortcutsTitle: "कीबोर्ड की कुंजियाँ", shortcutsHelp: "कारोबार में हर काम बिना माउस के हो सकता है। Tab आगे ले जाता है, Shift+Tab पीछे, Enter या Space बटन दबाता है, Esc डिब्बा बंद करता है।", shortcutNewBill: "F2 या Alt+N: नया बिल शुरू करें", shortcutSkip: "किसी भी पेज के ऊपर Tab: सीधे मुख्य हिस्से पर जाएँ", shortcutEsc: "Esc: खुला डिब्बा बंद करें और वहीं लौटें जहाँ थे", shortcutArrows: "तीर वाली कुंजियाँ: सूची के विकल्पों में चलें",
   }
 };
 
@@ -744,7 +752,7 @@ const storage = (() => {
 // address bar at once so it is not left in the history or a bookmark.
 const invitationToken = location.hash.startsWith("#join=") ? decodeURIComponent(location.hash.slice("#join=".length)) : null;
 if (invitationToken !== null) history.replaceState(null, "", "#dashboard");
-const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.hash.slice(1) || "dashboard", dashboard: null, returnDocuments: [], pendingForm: null, pendingInput: null, pendingReturnInput: null, signedIn: storage?.getItem("karobar.signedIn") === "1", draftStatuses: {} };
+const state = { locale: storage?.getItem("karobar.locale") ?? "en-IN", view: location.pathname === "/design" ? "design" : location.hash.slice(1) || "dashboard", dashboard: null, returnDocuments: [], pendingForm: null, pendingInput: null, pendingReturnInput: null, signedIn: storage?.getItem("karobar.signedIn") === "1", draftStatuses: {} };
 if (!(state.locale in copy)) state.locale = "en-IN";
 
 const REPORT_TEXT = {
@@ -917,6 +925,29 @@ function translate() {
 // Issue #241 — an entry may open one part of a screen ("What is in the godown" is the stock part of
 // Reports). Only the entry for what is on screen is marked as the current one. Issue #304 — of the
 // five tabs, + Bill is current on a bill it opens, and More on any screen no other tab stands for.
+// Issue #353 — the composition screen (#296) is its own file too; a failed fetch of it is drawn here, with Try again.
+async function openCompositionScreen() {
+  try {
+    const screen = await import("/composition.js");
+    await screen.openComposition({ api, locale: () => state.locale, words: () => copy[state.locale] });
+  } catch (error) {
+    console.error("The composition screen could not open.", error);
+    screenFailed("composition", error, openCompositionScreen);
+  }
+}
+
+// Issue #353 — the books screen is its own file, fetched when first opened. With no network that fetch
+// fails before the screen's own states exist, so the failure is drawn here, with Try again.
+async function openBooksScreen() {
+  try {
+    const books = await import("/books.js");
+    await books.openBooks({ api, words: copy[state.locale] });
+  } catch (error) {
+    console.error("The expenses screen could not open.", error);
+    screenFailed("books", error, openBooksScreen);
+  }
+}
+
 function openView(view, section = null) {
   const target = document.querySelector(`#view-${view}`) ? view : "dashboard";
   state.view = target;
@@ -933,8 +964,11 @@ function openView(view, section = null) {
   if (!document.querySelector(".app-tabbar [aria-current]")) document.querySelector("#more-tab")?.setAttribute("aria-current", "page");
   const sheet = document.querySelector("#bill-sheet");
   if (sheet?.open) sheet.close();
-  history.replaceState(null, "", `#${target}`);
-  document.querySelector(`#view-${target} h1`)?.focus?.();
+  history.replaceState(null, "", `${location.pathname === "/design" ? "/" : location.pathname}#${target}`);
+  // Issue #353 — moving to a screen puts focus on its heading, so a keyboard or screen-reader user starts at the top of it.
+  // The very first screen is not announced that way: the page has just opened, and the skip link must be the first Tab stop.
+  if (state.opened) document.querySelector(`#view-${target} h1`)?.focus?.();
+  state.opened = true;
   if (target === "purchase") loadSelfInvoices();
   // Issue #310 — Home is read afresh every time it is opened, so a task done elsewhere is gone.
   if (target === "dashboard" && state.dashboard) loadDashboard();
@@ -944,8 +978,9 @@ function openView(view, section = null) {
   if (target === "migration") startMigration();
   if (target === "returns") { loadReturnDocuments(); loadReturnNotes(); }
   // Issue #294 — expenses, contra and journal entries, and the cash and bank books.
-  if (target === "books") import("/books.js").then((books) => books.openBooks({ api, words: copy[state.locale] })).catch((error) => console.error("The expenses screen could not open.", error));
+  if (target === "books") openBooksScreen();
   if (target === "reminders") loadReminders();
+  if (target === "activity") loadActivity();
   if (target === "plan") loadPlan();
   if (target === "team") loadTeam();
   if (target === "vehicle") loadVehiclesHeld();
@@ -961,7 +996,7 @@ function openView(view, section = null) {
   if (target === "itc") openItc();
   if (target === "gst-returns") openGstReturns();
   // Issue #296 — the composition scheme: the setting, CMP-08 by quarter and GSTR-4 by year.
-  if (target === "composition") import("/composition.js").then((screen) => screen.openComposition({ api, locale: () => state.locale })).catch((error) => console.error("The composition screen could not open.", error));
+  if (target === "composition") openCompositionScreen();
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
   if (target === "ask") loadAskExamples();
@@ -989,7 +1024,59 @@ async function openDesign() {
   if (owner) renderDesign();
 }
 
+/**
+ * Issue #353 — the four screen states, a form and a box, built by the very helpers every screen uses,
+ * so this page cannot drift from the product. The tokens are read from the stylesheet, not retyped.
+ */
+const DESIGN_TOKENS = ["--brand", "--brand-ink", "--canvas", "--surface", "--ink", "--muted", "--label", "--line", "--action", "--focus", "--paid", "--due", "--late", "--info", "--fs-sm", "--fs-md", "--tap", "--radius", "--radius-field"];
+
+function renderDesignStates() {
+  const words = copy[state.locale];
+  const demo = (id) => document.querySelector(`#design-demo-${id}`);
+  const fail = (message, status) => () => Promise.reject(Object.assign(new Error(message), { status }));
+  KarobarStates.showLoading(demo("loading"), words);
+  KarobarStates.showEmpty(demo("empty"), { message: words.designDemoEmpty, action: { label: words.tabBill, run: () => openView("sale") } });
+  const again = (id, kind) => () => KarobarStates.loadInto(demo(id), { words, load: kind, render: (_data, region) => region.append(el("p", "", words.designDemoRow)) });
+  const offline = again("offline", () => Promise.reject(Object.assign(new Error(), { offline: true })));
+  KarobarStates.showError(demo("offline"), Object.assign(new Error(), { offline: true }), words, offline);
+  KarobarStates.showError(demo("server"), Object.assign(new Error(), { status: 503 }), words, again("server", fail("", 503)));
+  KarobarStates.showError(demo("refused"), Object.assign(new Error(words.designFieldWrong), { status: 409 }), words, again("refused", fail(words.designFieldWrong, 409)));
+  KarobarStates.loadInto(demo("ready"), { words, load: async () => ({}), render: (_data, region) => {
+    const saved = el("p", "action-status", words.designDemoSaved);
+    saved.dataset.kind = "success";
+    region.append(el("p", "", words.designDemoRow), saved);
+  } });
+
+  const field = document.querySelector("#design-demo-field");
+  document.querySelector("#design-demo-field-help").textContent = words.designFieldHelp;
+  field.removeAttribute("aria-invalid");
+  const status = document.querySelector("#design-demo-status");
+  const form = document.querySelector("#design-demo-form");
+  const wrong = () => { field.setAttribute("aria-invalid", "true"); document.querySelector("#design-demo-field-help").textContent = words.designFieldWrong; field.focus(); };
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(field.value.trim().toUpperCase())) return wrong();
+    field.removeAttribute("aria-invalid");
+    document.querySelector("#design-demo-field-help").textContent = words.designFieldHelp;
+    KarobarStates.runAction(form.querySelector('[type="submit"]'), { words, run: () => new Promise((done) => setTimeout(done, 600)), success: words.designDemoSaved, status });
+  };
+  document.querySelector("#design-demo-fail").onclick = (event) => KarobarStates.runAction(event.currentTarget, { words, run: fail("", 503), status });
+  document.querySelector("#design-demo-dialog").onclick = () => document.querySelector("#design-demo-dialog-box").showModal();
+
+  document.querySelector("#design-keys").replaceChildren(...["shortcutNewBill", "shortcutSkip", "shortcutEsc", "shortcutArrows"].map((key) => el("li", "", words[key])));
+  const style = getComputedStyle(document.documentElement);
+  document.querySelector("#design-tokens").replaceChildren(...DESIGN_TOKENS.map((name) => {
+    const row = el("li");
+    const swatch = el("span", "design-swatch");
+    swatch.setAttribute("aria-hidden", "true");
+    swatch.style.background = `var(${name})`;
+    row.append(swatch, el("code", "", name), el("span", "", style.getPropertyValue(name).trim()));
+    return row;
+  }));
+}
+
 function renderDesign() {
+  renderDesignStates();
   const metrics = state.dashboard?.metrics ?? {};
   const figures = { customersOwe: metrics.customersOwe ?? 0, salesToday: metrics.salesToday ?? 0, suppliersOwed: state.dashboard?.supplier?.outstanding ?? 0, specimen: 118944 };
   const template = document.querySelector("#design-specimen");
@@ -1203,6 +1290,16 @@ function forgetPendingDraft(form) {
 storage?.removeItem("karobar.session");
 const SIGN_IN_PATHS = new Set(["/api/auth/code", "/api/auth/sign-in"]);
 
+/** The submit buttons of the form the shopkeeper has just sent (within a second), or null. */
+let lastSubmit = null;
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (form instanceof HTMLFormElement) lastSubmit = { buttons: [...form.querySelectorAll('button[type="submit"], button:not([type])')], at: performance.now() };
+}, true);
+function busyForm() {
+  return lastSubmit && performance.now() - lastSubmit.at < 1000 ? lastSubmit.buttons.filter((button) => !button.disabled) : null;
+}
+
 async function api(path, options = {}) {
   // Issue #298 — the screen's language goes with every call so the server's sentences come back
   // in it: inside the body on writes, in the query on reads.
@@ -1211,14 +1308,29 @@ async function api(path, options = {}) {
   } else {
     path = `${path}${path.includes("?") ? "&" : "?"}locale=${encodeURIComponent(state.locale)}`;
   }
-  const response = await fetch(path, {
-    ...options,
-    credentials: "same-origin",
-    headers: { "content-type": "application/json", ...(options.headers || {}) },
-  });
-  const payload = await response.json();
+  // Issue #353 — a form that is being sent cannot be sent twice: the button that sent it stays off
+  // until the answer is back, and says it is busy to a screen reader.
+  const sending = String(options.method ?? "GET").toUpperCase() !== "GET" ? busyForm() : null;
+  sending?.forEach((button) => { button.disabled = true; button.setAttribute("aria-busy", "true"); });
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      credentials: "same-origin",
+      headers: { "content-type": "application/json", ...(options.headers || {}) },
+    });
+  } catch {
+    // Issue #353 — no network: say so in words, never "Failed to fetch".
+    sending?.forEach((button) => { button.disabled = false; button.removeAttribute("aria-busy"); });
+    const offline = new Error(copy[state.locale].stateOffline);
+    offline.offline = true;
+    throw offline;
+  }
+  // A reply that is not JSON (a gateway page, a timeout) is a fault on the server's side, not a crash here.
+  const payload = await response.json().catch(() => ({}));
+  sending?.forEach((button) => { button.disabled = false; button.removeAttribute("aria-busy"); });
   if (!response.ok) {
-    const error = new Error(payload.message || copy[state.locale].requestFailed);
+    const error = new Error(response.status >= 500 ? copy[state.locale].stateServerProblem : payload.message || copy[state.locale].requestFailed);
     error.status = response.status;
     error.code = payload.code;
     // Issue #262 — the facts behind a refusal (the Hindi sentence, the goods that are short).
@@ -1249,6 +1361,31 @@ async function apiList(path, key) {
   }
   const { nextCursor: _last, ...rest } = first;
   return { ...rest, [key]: items };
+}
+
+/**
+ * Issue #353 — reads one screen's data through the four states (loading, empty, error, ready) in the
+ * region the screen's markup holds for it. `content` is the part of the screen that is only shown
+ * once there is something to show: "rest" is everything but the heading and the state region, or a
+ * selector for one part. Failure is a plain sentence and a Try again button, never a raw error.
+ */
+function readScreen(view, options) {
+  const section = document.querySelector(`#view-${view}`);
+  const region = section.querySelector("[data-state-region]");
+  let { content } = options;
+  if (content === "rest") content = [...section.children].filter((node) => !node.matches(".page-heading, [data-state-region]"));
+  else if (typeof content === "string") content = [...section.querySelectorAll(content)];
+  return KarobarStates.loadInto(region, { words: copy[state.locale], ...options, content });
+}
+
+/** Issue #353 — for a screen whose lists are read by more than one function: say it failed, with Try again; or clear the notice. */
+function screenFailed(view, error, retry) {
+  const region = document.querySelector(`#view-${view} [data-state-region]`);
+  KarobarStates.announce(KarobarStates.showError(region, error, copy[state.locale], retry), { urgent: true });
+}
+function screenOk(view) {
+  const region = document.querySelector(`#view-${view} [data-state-region]`);
+  if (region.dataset.state === "error") { region.replaceChildren(); region.dataset.state = "ready"; }
 }
 
 /**
@@ -1493,7 +1630,23 @@ async function completeComingUp(row, button) {
 // figures). "Change" opens #308's item editor (HSN code, barcode, usual price, other name).
 
 async function renderItems() {
-  if (!catalogueLoaded) await loadCatalogue();
+  const words = copy[state.locale];
+  await readScreen("items", {
+    content: "#view-items > article",
+    quiet: true,
+    load: async () => {
+      // Read again every time the screen opens: a stale list is how an item added elsewhere goes missing.
+      await loadCatalogue();
+      if (catalogueFailure !== null || !catalogueLoaded) throw catalogueFailure ?? new Error();
+      return catalogue;
+    },
+    isEmpty: (read) => read.items.length === 0,
+    empty: { message: words.itemsNone, action: { label: words.itemsAdd, run: () => document.querySelector("#items-add").click() } },
+    render: drawItems,
+  });
+}
+
+function drawItems() {
   const words = copy[state.locale];
   const stock = new Map((state.dashboard?.stockItems ?? []).map((row) => [row.itemId, row]));
   const list = document.querySelector("#items-list");
@@ -1512,7 +1665,6 @@ async function renderItems() {
     row.append(about, status, change);
     return row;
   }));
-  if (catalogue.items.length === 0) list.append(el("li", "loading-copy", words.itemsNone));
 }
 
 document.querySelector("#items-add")?.addEventListener("click", () => {
@@ -1590,17 +1742,30 @@ async function loadSalesWaiting() {
   }));
 }
 
+/** Issue #353 — the activity list is the dashboard's own data, read again each time it is opened. */
+async function loadActivity() {
+  const words = copy[state.locale];
+  await readScreen("activity", {
+    content: "rest",
+    quiet: true,
+    load: () => api("/api/dashboard"),
+    isEmpty: (data) => data.activity.length === 0,
+    empty: { message: words.noActivity, action: { label: words.tabBill, run: () => openView("sale") } },
+    render: renderDashboard,
+  });
+}
+
 async function loadDashboard() {
   const banner = document.querySelector("#connection-banner");
-  try {
-    renderDashboard(await api("/api/dashboard"));
-    // Issue #312 — nothing to say while the shop answers: the banner is only for a failure.
-    banner.hidden = true;
-  } catch (error) {
+  // Issue #353 — Home is drawn through the four states; the banner above stays for being signed out.
+  const read = await readScreen("dashboard", { content: ".home-grid", quiet: true, load: () => api("/api/dashboard"), render: renderDashboard });
+  if (read !== undefined) { banner.hidden = true; return; }
+  const refused = document.querySelector("#view-dashboard [data-state-region]").dataset.errorReason === "refused";
+  if (refused && !state.signedIn) {
     banner.hidden = false;
     banner.classList.add("failed");
-    banner.querySelector("strong").textContent = error.status === 401 ? copy[state.locale].signInRequired : copy[state.locale].nothingSaved;
-    banner.querySelector("span span").textContent = ` ${error.status === 401 ? copy[state.locale].signInAgain : copy[state.locale].requestFailed}`;
+    banner.querySelector("strong").textContent = copy[state.locale].signInRequired;
+    banner.querySelector("span span").textContent = ` ${copy[state.locale].signInAgain}`;
   }
 }
 
@@ -1807,16 +1972,7 @@ function renderReports(data) {
 }
 
 async function loadReports() {
-  const content = document.querySelector("#reports-content");
-  try {
-    renderReports(await api("/api/reports"));
-  } catch (error) {
-    content.replaceChildren();
-    const message = document.createElement("p");
-    message.className = "loading-copy";
-    message.textContent = `The reports could not be reached: ${error.message}`;
-    content.append(message);
-  }
+  await readScreen("reports", { content: "#reports-content", quiet: true, load: () => api("/api/reports"), render: renderReports });
 }
 
 /** Issue #237 — every current state, the same list Business details offers, read from the server. */
@@ -3782,6 +3938,9 @@ document.querySelector("#branding-mark-query")?.addEventListener("keydown", (eve
 document.querySelector("#branding-template")?.addEventListener("change", refreshBrandingPreview);
 document.querySelector("#branding-format")?.addEventListener("change", refreshBrandingPreview);
 
+// Issue #353 — the skip link moves focus to the main part. Left to the browser it would set the hash to
+// "#main", which this app reads as a screen name and answers by going Home.
+document.querySelector(".skip-link")?.addEventListener("click", (event) => { event.preventDefault(); document.querySelector("#main").focus(); });
 document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.view, button.dataset.section ?? null)));
 document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => openView(button.dataset.open)));
 // Issue #298 — switching the language re-renders the open screen too: translate() covers the page's
@@ -3947,8 +4106,7 @@ async function loadBankFeeds() {
   const connections = document.querySelector("#bank-feed-connections");
   const transactions = document.querySelector("#bank-feed-transactions");
   if (!connections || !transactions || !state.signedIn) return;
-  try {
-    const workspace = await api("/api/bank-feeds");
+  await readScreen("bank-feeds", { quiet: true, load: () => api("/api/bank-feeds"), render: (workspace) => {
     connections.replaceChildren(); transactions.replaceChildren();
     if (workspace.connections.length === 0) connections.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankConnections }));
     for (const connection of workspace.connections) {
@@ -3964,7 +4122,7 @@ async function loadBankFeeds() {
       connection.transactions.forEach((item) => transactions.append(bankActivityRow(item.matched ? "✓" : item.creditPaise !== "0" ? "+" : "−", item.description, `${item.bookedOn} · ${money(Number(item.creditPaise !== "0" ? item.creditPaise : item.debitPaise) / 100)}${item.reference ? ` · ${item.reference}` : ""}`, item.matched ? "green" : "amber")));
     }
     if (transactions.childElementCount === 0) transactions.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankTransactions }));
-  } catch (error) { connections.textContent = localizedError(error); }
+  } });
 }
 
 // ---------------------------------------------------------------- issue #297: the Reconcile tab
@@ -4622,6 +4780,7 @@ async function loadReturnDocuments() {
   if (!select || !state.signedIn) return;
   try {
     const result = await apiList("/api/returns/documents", "documents");
+    screenOk("returns");
     state.returnDocuments = result.documents;
     const selected = select.value;
     select.replaceChildren();
@@ -4641,7 +4800,7 @@ async function loadReturnDocuments() {
     }
     updateReturnLines();
   } catch (error) {
-    document.querySelector("#return-remaining").textContent = localizedError(error);
+    screenFailed("returns", error, loadReturnDocuments);
   }
 }
 
@@ -5151,10 +5310,9 @@ function renderTeam(data) {
 }
 
 async function loadTeam() {
-  const error = document.querySelector("#team-error");
-  if (!error) return;
-  error.textContent = "";
-  try { renderTeam(await api("/api/team")); } catch (failure) { error.textContent = failure.message; }
+  if (!document.querySelector("#team-error")) return;
+  document.querySelector("#team-error").textContent = "";
+  await readScreen("team", { content: "rest", quiet: true, load: () => api("/api/team"), render: renderTeam });
 }
 
 document.querySelector("#team-invite")?.addEventListener("submit", async (event) => {
@@ -5181,12 +5339,7 @@ document.querySelector("#team-leave")?.addEventListener("click", async () => {
 });
 
 async function loadPlan() {
-  try {
-    renderPlan(await api("/api/subscription"));
-  } catch (error) {
-    const state = document.querySelector("#plan-state");
-    if (state) state.textContent = error.message;
-  }
+  await readScreen("plan", { content: "rest", quiet: true, load: () => api("/api/subscription"), render: renderPlan });
 }
 
 document.querySelector("#plan-pay")?.addEventListener("click", async () => {
@@ -5441,12 +5594,7 @@ function renderReminderCustomers() {
 }
 
 async function loadReminders() {
-  try {
-    renderReminders(await api("/api/reminders"));
-  } catch (error) {
-    const summary = document.querySelector("#reminders-summary");
-    if (summary) summary.textContent = error.message;
-  }
+  await readScreen("reminders", { content: "rest", quiet: true, load: () => api("/api/reminders"), render: renderReminders });
 }
 
 async function sendOneReminder(documentId) {
@@ -5684,10 +5832,7 @@ function renderEInvoiceList(invoices) {
 }
 
 async function loadIssuedInvoices() {
-  try {
-    const { invoices } = await apiList("/api/einvoices/invoices", "invoices");
-    renderEInvoiceList(invoices);
-  } catch { /* the list is a convenience; the rest of the page still works */ }
+  await readScreen("einvoice", { quiet: true, load: () => apiList("/api/einvoices/invoices", "invoices"), render: ({ invoices }) => renderEInvoiceList(invoices) });
 }
 
 // Issue #239 — "Answer once in Business details": opens that one question, and brings the person
@@ -5802,7 +5947,10 @@ function presaleStatus(entry) {
 async function loadPresale() {
   const list = document.querySelector("#presale-list");
   if (!list) return;
-  const { documents } = await apiList("/api/presale", "documents");
+  await readScreen("presale", { quiet: true, load: () => apiList("/api/presale", "documents"), render: ({ documents }) => drawPresaleList(list, documents) });
+}
+
+function drawPresaleList(list, documents) {
   presaleState.list = documents;
   list.replaceChildren(...(documents.length === 0 ? [simpleRow(copy[state.locale].presaleNone, "")] : documents.map((entry) => {
     const row = detailRow(
@@ -5987,10 +6135,11 @@ async function openChallans() {
         return option;
       }));
     }
+    screenOk("challan");
     showChallanReason();
     await loadChallans();
   } catch (error) {
-    showDialog({ title: "The challan screen could not load", message: error.message }, "failed");
+    screenFailed("challan", error, openChallans);
   }
 }
 
@@ -6052,7 +6201,10 @@ document.querySelector("#challan-issue")?.addEventListener("click", async () => 
 async function loadChallans() {
   const list = document.querySelector("#challan-list");
   if (!list) return;
-  const { challans } = await apiList("/api/challans", "challans");
+  await readScreen("challan", { quiet: true, load: () => apiList("/api/challans", "challans"), render: ({ challans }) => drawChallans(list, challans) });
+}
+
+function drawChallans(list, challans) {
   challanState.list = challans;
   list.replaceChildren(...(challans.length === 0 ? [simpleRow(copy[state.locale].noChallans, "")] : challans.map((challan) => {
     const row = detailRow(
@@ -6401,6 +6553,7 @@ async function loadEwayRoad() {
     // Issue #240 — each bill with its customer, its total and whether it needs an e-way bill; the ones
     // that need one and have none come first.
     const [{ invoices }, { challans }] = await Promise.all([apiList("/api/eway/bills", "invoices"), apiList("/api/challans/movable", "challans")]);
+    screenOk("eway");
     const chosen = select.value;
     const make = (value, label, kind) => { const entry = document.createElement("option"); entry.value = value; entry.textContent = label; entry.dataset.kind = kind; return entry; };
     select.replaceChildren(
@@ -6425,7 +6578,7 @@ async function loadEwayRoad() {
         row.timeLeft,
       ));
     });
-  } catch { /* the picker and the list are conveniences; the rest of the page still works */ }
+  } catch (error) { screenFailed("eway", error, loadEwayRoad); }
 }
 
 async function loadOperations() {
@@ -6435,8 +6588,7 @@ async function loadOperations() {
   const recurring = document.querySelector("#operations-recurring");
   const incidents = document.querySelector("#operations-incidents");
   if (!health || !failures || !jobs || !recurring || !incidents) return;
-  try {
-    const data = await api("/api/operations");
+  await readScreen("operations", { quiet: true, load: () => api("/api/operations"), render: (data) => {
     health.replaceChildren(simpleRow(data.health.state === "healthy" ? copy[state.locale].operationsHealthy : copy[state.locale].operationsDegraded, Object.entries(data.health.checks).map(([name, value]) => `${name}: ${value}`).join(" · ")));
     failures.replaceChildren(...(data.failures.length ? data.failures.map((failure) => simpleRow(`${failure.connector} · ${failure.errorCode}`, `${failure.operation} · ${failure.correlationId}`)) : [simpleRow(copy[state.locale].operationsNoFailures, "")]));
     jobs.replaceChildren(...(data.jobs.length ? data.jobs.map((job) => {
@@ -6467,7 +6619,7 @@ async function loadOperations() {
       return simpleRow(item.name, detail);
     }) : [simpleRow(copy[state.locale].operationsNoRecurring, "")]));
     incidents.replaceChildren(...(data.incidents.length ? data.incidents.map((incident) => simpleRow(`${incident.title} · ${incident.state}`, incident.timeline.map((update) => update.message).join(" → "))) : [simpleRow(copy[state.locale].operationsNoIncidents, "")]));
-  } catch (error) { health.textContent = error.message; }
+  } });
 }
 
 document.querySelector("#operations-jobs")?.addEventListener("click", async (event) => {
@@ -6672,6 +6824,7 @@ async function loadVehiclesHeld() {
   if (!list || !select) return;
   try {
     const { invoices } = await apiList("/api/einvoices/invoices", "invoices");
+    screenOk("vehicle");
     const chosen = select.value;
     select.replaceChildren();
     invoices.forEach((invoice) => {
@@ -6689,7 +6842,7 @@ async function loadVehiclesHeld() {
       return;
     }
     held.forEach((row) => list.append(detailRow(`${row.vehicle ?? "no vehicle"} · ${row.outcome.toLowerCase().replace(/_/g, " ")}`, row.summary, row.outstanding.join("; "))));
-  } catch { /* the list is a convenience; the rest of the page still works */ }
+  } catch (error) { screenFailed("vehicle", error, loadVehiclesHeld); }
 }
 
 window.addEventListener("hashchange", () => openView(location.hash.slice(1)));
@@ -6725,11 +6878,16 @@ function openGstReturns() {
 }
 
 async function loadGstReturns() {
-  try {
-    renderGstWorkspace(await api("/api/gst-returns", { method: "POST", body: JSON.stringify({ period: gstPeriodValue() }) }));
-  } catch (error) {
-    showGstProblem(error.message, error.code);
-  }
+  // A refusal the server worded (a composition business has no GSTR-1) is shown by the screen itself, with its way forward;
+  // no network or a server fault gets the shared error block with Try again.
+  await readScreen("gst-returns", {
+    quiet: true,
+    load: async () => {
+      try { return await api("/api/gst-returns", { method: "POST", body: JSON.stringify({ period: gstPeriodValue() }) }); }
+      catch (error) { if (error.status !== undefined && error.status < 500) return { refused: error }; throw error; }
+    },
+    render: (read) => (read.refused ? showGstProblem(read.refused.message, read.refused.code) : renderGstWorkspace(read)),
+  });
 }
 
 function showGstProblem(message, code = "") {
@@ -6915,11 +7073,7 @@ function openItc() {
 }
 
 async function loadItc() {
-  try {
-    renderItc(await api("/api/itc", { method: "POST", body: JSON.stringify({ period: itcPeriodValue() }) }));
-  } catch (error) {
-    showItcProblem(error.message);
-  }
+  await readScreen("itc", { quiet: true, load: () => api("/api/itc", { method: "POST", body: JSON.stringify({ period: itcPeriodValue() }) }), render: renderItc });
 }
 
 function showItcProblem(message) {
@@ -7939,7 +8093,12 @@ globalThis.KarobarItemPicker?.listenForScanner(document, (code) => {
   else openNewItem({ name: "", barcode: code }, null, flow);
 });
 
+// Issue #353 — why the last read of the catalogue failed, so the Items screen can say so.
+let catalogueFailure = null;
+let catalogueReads = 0;
 async function loadCatalogue() {
+  // Two reads can overlap (start-up and opening Items); only the newest one may say whether it failed.
+  const mine = ++catalogueReads;
   try {
     const read = await api("/api/catalogue");
     catalogue.customers = read.customers;
@@ -7949,7 +8108,8 @@ async function loadCatalogue() {
     catalogue.rates = read.rates;
     catalogue.states = read.states;
     catalogueLoaded = true;
-  } catch { return; }
+    if (mine === catalogueReads) catalogueFailure = null;
+  } catch (error) { if (mine === catalogueReads) catalogueFailure = error; return; }
   for (const states of [document.querySelector("#customer-states"), document.querySelector("#supplier-states")]) {
     if (!states) continue;
     states.replaceChildren(...catalogue.states.map((row) => {

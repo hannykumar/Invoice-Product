@@ -241,7 +241,7 @@ test("#360: scripts and styles are named by their content and cached for a year;
   assert.equal(shell.cacheControl, "no-cache");
   const html = shell.body.toString("utf8");
   const names = [...html.matchAll(/(?:src|href)="(\/[\w-]+\.[0-9a-f]{12}\.(?:js|css))"/g)].map((match) => match[1]!);
-  assert.deepEqual(names.map((name) => name.replace(/\.[0-9a-f]{12}/, "")).sort(), ["/app.js", "/item-picker.js", "/sale-slides.js", "/styles.css"]);
+  assert.deepEqual(names.map((name) => name.replace(/\.[0-9a-f]{12}/, "")).sort(), ["/app.js", "/item-picker.js", "/sale-slides.js", "/states.js", "/styles.css"]);
   for (const name of names) {
     const asset = await loadWebAsset(name);
     assert.equal(asset.cacheControl, "public, max-age=31536000, immutable", name);
@@ -434,7 +434,7 @@ test("#304: five tabs — Home, Khata, + Bill, Items, More — instead of the 22
 
 test("#304: the Items tab lists every item with what is left, adds one, and changes one", async () => {
   const [html, script] = await Promise.all([read("index.html"), read("app.js")]);
-  assert.match(html, /<section class="view" id="view-items" aria-labelledby="items-title">/);
+  assert.match(html, /<section class="view" id="view-items" data-screen="data" aria-labelledby="items-title">/);
   assert.match(html, /id="items-add"/);
   // Add uses the item form every picker uses; Change opens #308's item editor.
   assert.match(script, /querySelector\("#items-add"\)\?\.addEventListener\("click", \(\) => \{\s*pickerAwaitingNewRecord = null;[\s\S]*?#item-dialog"\)\.showModal\(\)/);
