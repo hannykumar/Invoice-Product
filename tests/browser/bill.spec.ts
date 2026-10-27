@@ -33,7 +33,7 @@ test.describe("make a bill (#355)", () => {
     await signIn(page);
     await page.goto("/#sale");
     // The pickers fill once the catalogue has answered.
-    await expect(page.locator('[data-draft="sale"] [data-customer-picker] option').nth(1)).toBeAttached();
+    await expect(page.locator('[data-draft="sale"] select[name="party"] option').nth(1)).toBeAttached();
     await expect(page.locator("#sale-lines [data-item-search]").first()).toBeVisible();
 
     // Items: search, take the match, tap the quantity up.
@@ -47,7 +47,7 @@ test.describe("make a bill (#355)", () => {
     await expect(page.locator("#sale-customer-choices")).toBeVisible();
     const chip = page.locator("#sale-customer-choices button", { hasText: customerName }).first();
     if ((await chip.count()) > 0) await chip.click();
-    else await page.locator('[data-draft="sale"] [data-customer-picker]').selectOption({ value: customerId });
+    else await page.locator('[data-draft="sale"] select[name="party"]').selectOption({ value: customerId });
 
     // Payment: cash is already chosen; "Make bill" once the review says so.
     await page.locator("#sale-next").click();
