@@ -1243,8 +1243,28 @@ async function apiList(path, key) {
   return { ...rest, [key]: items };
 }
 
+/**
+ * The owner's request (27 Oct): no sign-in step while the product is being built. On a developer's
+ * machine — where /api/auth/tester exists — whoever is not signed in is signed in as the tester (the
+ * demo owner of Sampoorna Traders) without the dialog. Anywhere else that route is 404 and the dialog
+ * opens as before. Several screens can find the session missing at once; they share one attempt.
+ */
+let signingInQuietly = null;
 function showLogin() {
+  signingInQuietly ??= signInOrAsk().finally(() => { signingInQuietly = null; });
+  return signingInQuietly;
+}
+async function signInOrAsk() {
   const dialog = document.querySelector("#login-dialog");
+  if (!dialog.open && invitationToken === null) { // an invitation is taken up by its own address, never by the tester
+    try {
+      const offered = await fetch("/api/auth/tester", { credentials: "same-origin" });
+      if (offered.ok && (await offered.json()).automatic === true) {
+        const reply = await fetch("/api/auth/tester", { method: "POST", credentials: "same-origin" });
+        if (reply.ok) { await afterSignIn(); return; }
+      }
+    } catch { /* not reachable: ask */ }
+  }
   if (!dialog.open) dialog.showModal();
   showTesterButton();
 }

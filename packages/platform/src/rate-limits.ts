@@ -90,6 +90,8 @@ export interface Limit {
   readonly windowSeconds: number;
   /** What the shopkeeper is told, after "Please wait N minutes and try again." is added. */
   readonly words: string;
+  /** The same in Hindi, in Devanagari (#298, the owner's decision of 26 Oct). */
+  readonly hindi: string;
 }
 
 /** Too many, too fast: answered 429 with `Retry-After`. */
@@ -97,10 +99,14 @@ export class RateLimited extends Error {
   readonly status = 429;
   readonly retryAfterSeconds: number;
   readonly limit: string;
+  /** The message in Hindi; the API answers in the language the screen asked for. */
+  readonly hindi: string;
   constructor(limit: Limit, retryAfterSeconds: number) {
     const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-    const wait = limit.windowSeconds >= 24 * 60 * 60 ? "Please try again tomorrow." : `Please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`;
+    const daily = limit.windowSeconds >= 24 * 60 * 60;
+    const wait = daily ? "Please try again tomorrow." : `Please wait ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`;
     super(`${limit.words} ${wait}`);
+    this.hindi = `${limit.hindi} ${daily ? "कृपया कल फिर कोशिश करें।" : `कृपया ${minutes} मिनट रुककर फिर कोशिश करें।`}`;
     this.retryAfterSeconds = retryAfterSeconds;
     this.limit = limit.name;
   }
@@ -161,13 +167,13 @@ const DAY = 24 * 60 * 60;
  * the subscription meters (#42, `ai_requests`, `external_api_calls`).
  */
 export const LIMITS = {
-  codeRequestsPerAddress: { name: "code-address", max: 5, windowSeconds: 15 * MINUTE, words: "Too many codes have been asked for this number or email." },
-  codeRequestsPerIp: { name: "code-ip", max: 5, windowSeconds: 15 * MINUTE, words: "Too many codes have been asked for from here." },
-  codesPerAddressPerDay: { name: "code-address-day", max: 10, windowSeconds: DAY, words: "No more codes can be sent to this number or email today." },
-  wrongCodesPerAddress: { name: "wrong-code-address", max: 5, windowSeconds: 15 * MINUTE, words: "Too many wrong codes for this number or email." },
-  wrongCodesPerIp: { name: "wrong-code-ip", max: 5, windowSeconds: 15 * MINUTE, words: "Too many wrong codes from here." },
-  signedOutPerIp: { name: "public-ip", max: 60, windowSeconds: MINUTE, words: "Too many requests from here." },
-  perUser: { name: "user", max: 600, windowSeconds: MINUTE, words: "That was a lot of requests in a short time." },
+  codeRequestsPerAddress: { name: "code-address", max: 5, windowSeconds: 15 * MINUTE, words: "Too many codes have been asked for this number or email.", hindi: "इस नंबर या ईमेल के लिए बहुत सारे कोड माँगे जा चुके हैं।" },
+  codeRequestsPerIp: { name: "code-ip", max: 5, windowSeconds: 15 * MINUTE, words: "Too many codes have been asked for from here.", hindi: "यहाँ से बहुत सारे कोड माँगे जा चुके हैं।" },
+  codesPerAddressPerDay: { name: "code-address-day", max: 10, windowSeconds: DAY, words: "No more codes can be sent to this number or email today.", hindi: "आज इस नंबर या ईमेल पर और कोड नहीं भेजे जा सकते।" },
+  wrongCodesPerAddress: { name: "wrong-code-address", max: 5, windowSeconds: 15 * MINUTE, words: "Too many wrong codes for this number or email.", hindi: "इस नंबर या ईमेल के लिए बहुत बार ग़लत कोड डाला गया।" },
+  wrongCodesPerIp: { name: "wrong-code-ip", max: 5, windowSeconds: 15 * MINUTE, words: "Too many wrong codes from here.", hindi: "यहाँ से बहुत बार ग़लत कोड डाला गया।" },
+  signedOutPerIp: { name: "public-ip", max: 60, windowSeconds: MINUTE, words: "Too many requests from here.", hindi: "यहाँ से बहुत सारे अनुरोध आए हैं।" },
+  perUser: { name: "user", max: 600, windowSeconds: MINUTE, words: "That was a lot of requests in a short time.", hindi: "थोड़े समय में बहुत सारे अनुरोध हुए हैं।" },
 } as const satisfies Record<string, Limit>;
 
 /** Expensive work (PDFs, GST returns, e-invoice and e-way calls, reading bills, the assistant), per company per minute, by plan. */
@@ -175,11 +181,15 @@ export const EXPENSIVE_PER_MINUTE: Readonly<Record<string, number>> = { free: 20
 export const expensiveLimit = (planId: string): Limit => ({
   name: `expensive-${planId}`, max: EXPENSIVE_PER_MINUTE[planId] ?? EXPENSIVE_PER_MINUTE.free!, windowSeconds: MINUTE,
   words: "This business has asked for a lot of heavy work (PDFs, GST, government calls) in the last minute.",
+  hindi: "इस व्यवसाय ने पिछले एक मिनट में बहुत भारी काम (PDF, GST, सरकारी कॉल) माँगा है।",
 });
 
 /** Services that cost money per call. */
 export const PAID_SERVICES = ["llm", "ocr", "gsp", "sms"] as const;
 export type PaidService = (typeof PAID_SERVICES)[number];
+const SERVICE_HINDI: Readonly<Record<PaidService, string>> = {
+  llm: "सहायक", ocr: "सप्लायर के बिल पढ़ना", gsp: "सरकारी कॉल (ई-इनवॉइस, ई-वे बिल, GST)", sms: "SMS से कोड भेजना",
+};
 const SERVICE_WORDS: Readonly<Record<PaidService, string>> = {
   llm: "the assistant", ocr: "reading supplier bills", gsp: "government calls (e-invoice, e-way bill, GST)", sms: "sending codes by SMS",
 };
@@ -193,8 +203,10 @@ export const DAILY_SPEND_CAP_PAISE = 500_000n;
 export const companyQuota = (service: PaidService): Limit => ({
   name: `paid-${service}-company`, max: DAILY_QUOTA[service], windowSeconds: DAY,
   words: `This business has used today's allowance for ${SERVICE_WORDS[service]}.`,
+  hindi: `इस व्यवसाय ने आज के लिए ${SERVICE_HINDI[service]} की सीमा पूरी कर ली है।`,
 });
 export const globalCap = (service: PaidService): Limit => ({
   name: `paid-${service}-global`, max: Number(DAILY_SPEND_CAP_PAISE / UNIT_COST_PAISE[service]), windowSeconds: DAY,
   words: `${SERVICE_WORDS[service][0]!.toUpperCase()}${SERVICE_WORDS[service].slice(1)} is switched off for today, because Karobar's daily spending limit for it has been reached.`,
+  hindi: `${SERVICE_HINDI[service]} आज के लिए बंद है, क्योंकि Karobar की इसकी दैनिक ख़र्च सीमा पूरी हो गई है।`,
 });
