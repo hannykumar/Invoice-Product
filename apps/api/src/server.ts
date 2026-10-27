@@ -296,8 +296,7 @@ const answer = async (request: IncomingMessage, response: ServerResponse, method
   try { read = await readBody(request, bodyLimitFor(pathname)); }
   catch (error) {
     if (error instanceof BodyTooLarge) {
-      // The rest of the upload is not read; closing the connection stops the client sending it.
-      response.setHeader('connection', 'close');
+      // The rest of the upload is read and dropped (see `readLimitedBody`), so the 413 reaches the client intact.
       return failure(413, requestId, { title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: `That is too much to send at once (more than ${Math.round(error.limit / (1024 * 1024))} MB). If you were adding a picture or a file, use a smaller one.` });
     }
     return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because what was sent is not valid JSON.' });
@@ -317,7 +316,6 @@ const storedFile = async (request: IncomingMessage, response: ServerResponse, me
   if (method === 'PUT') {
     try { body = await readLimitedBody(request, MAX_STORED_FILE_BODY_BYTES); } catch (error) {
       if (!(error instanceof BodyTooLarge)) throw error;
-      response.setHeader('connection', 'close');
       return failure(413, requestId, { title: 'Nothing was saved', code: 'REQUEST_TOO_LARGE', message: 'This file is too large to keep.' });
     }
   }

@@ -95,3 +95,17 @@ read a changelog to know the suite still means what it says.
 A bug fix starts with the test that fails for the bug, then the change that turns it green —
 the test proves it could have caught the bug. This is the same contract the release gates keep:
 an invariant nobody proved can fail is an invariant nobody trusts.
+
+## Tests that talk to a raw socket or to an upload the server refuses (issue #497)
+
+`apps/api/test/http-hardening.test.ts` once never finished on macOS. A client that is still sending
+when the server closes the connection sees `EPIPE`/`ECONNRESET`: Linux usually still hands over the
+reply the server sent first, macOS reports the reset instead. A helper that ignored those errors left
+its promise pending for ever. The server now reads and drops the rest of a refused upload (so the 413
+arrives), and the test file follows these rules — copy them:
+
+- Connect to `127.0.0.1`, never `localhost` (macOS tries `::1` first).
+- Settle on **every** outcome: an `error` handler must reject, not return quietly.
+- Bound every wait and give every test its own `{ timeout }`, so a stall is a named failure.
+- `agent: false` (or a non-keep-alive agent) per request; in `after`, call `server.close()` and
+  `server.closeAllConnections()` so teardown never waits on a client.
