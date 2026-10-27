@@ -23,7 +23,7 @@ import type {
 import type { PageFormat } from './template.ts';
 import { printsReservedSlots, renderReservedSlot, reservedSlotStyles, type RenderPurpose } from './reserved.ts';
 import { renderBoxed } from './boxed.ts';
-import { PAGE, escapeHtml, exportParticulars, invoiceTitle, isZero, money, narrowLine, percent, t, taxTotalRows } from './parts.ts';
+import { PAGE, escapeHtml, exportParticulars, invoiceTitle, isZero, legendBlock, money, narrowLine, percent, t, taxTotalRows } from './parts.ts';
 import { hsnSummary } from './hsn-summary.ts';
 import { CHALLAN_COPIES, challanCopyMarking, copiesFor, copyMarking, type InvoiceCopy } from './copies.ts';
 import { renderChallanBoxed, renderChallanNarrow, type ChallanDocument } from './challan.ts';
@@ -81,16 +81,20 @@ const taxRows = (doc: InvoiceDocument, locale: Locale): string =>
     .map(([label, amount]) => `<tr><td>${escapeHtml(label)}</td><td class="num">${money(amount)}</td></tr>`)
     .join('');
 
-const complianceLineColumns = (locale: Locale, snapshot: TemplateSnapshot): string[] => {
+/** Issue #296 — a bill of supply carries no tax: no rate column, no tax column, no tax rows. */
+const isBillOfSupply = (doc: Pick<InvoiceDocument, 'title'>): boolean => doc.title === 'BILL_OF_SUPPLY';
+
+const complianceLineColumns = (locale: Locale, snapshot: TemplateSnapshot, withTax = true): string[] => {
   const columns = [t('item', locale), t('hsn', locale), t('qty', locale), t('rate', locale)];
   if (snapshot.lineColumns.includes('line.discount')) columns.push(t('discount', locale));
   if (snapshot.lineColumns.includes('line.batch')) columns.push(t('batch', locale));
   if (snapshot.lineColumns.includes('line.note')) columns.push(t('note', locale));
-  columns.push(t('taxable', locale), t('gstPercent', locale), t('gstAmount', locale));
+  columns.push(t('taxable', locale));
+  if (withTax) columns.push(t('gstPercent', locale), t('gstAmount', locale));
   return columns;
 };
 
-const lineRow = (line: RenderableLine, snapshot: TemplateSnapshot): string => {
+const lineRow = (line: RenderableLine, snapshot: TemplateSnapshot, withTax = true): string => {
   // A charge has no quantity and no rate a customer would recognise, so both are left blank rather
   // than filled with a made-up "1". Only a goods line invites the quantity-times-rate check.
   const charge = line.kind === 'CHARGE';
@@ -107,11 +111,13 @@ const lineRow = (line: RenderableLine, snapshot: TemplateSnapshot): string => {
   }
   if (snapshot.lineColumns.includes('line.batch')) cells.push(`<td>${charge ? '' : escapeHtml(line.batch ?? '—')}</td>`);
   if (snapshot.lineColumns.includes('line.note')) cells.push(`<td>${charge ? '' : escapeHtml(line.note ?? '')}</td>`);
-  cells.push(
-    `<td class="num">${money(line.taxableValue)}</td>`,
-    `<td class="num">${escapeHtml(percent(line.ratePercentTimes100))}</td>`,
-    `<td class="num">${money(line.taxAmount)}</td>`,
-  );
+  cells.push(`<td class="num">${money(line.taxableValue)}</td>`);
+  if (withTax) {
+    cells.push(
+      `<td class="num">${escapeHtml(percent(line.ratePercentTimes100))}</td>`,
+      `<td class="num">${money(line.taxAmount)}</td>`,
+    );
+  }
   return `<tr${charge ? ' class="charge"' : ''}>${cells.join('')}</tr>`;
 };
 
@@ -212,6 +218,7 @@ const styles = (snapshot: TemplateSnapshot, format: PageFormat): string => {
     .totals tr.grand td { border-top: 2px solid ${palette.accent}; font-weight: 700; font-size: ${typography.baseSizePt + 2}pt; }
     .words { margin-top: 2mm; border: 1px dashed ${palette.border}; padding: 2mm; }
     .ship-line { margin: 1.5mm 0; }
+    .composition-legend { text-align: center; border: 1.5px solid #000; padding: 2mm; margin-bottom: 3mm; font-size: 1.05em; }
     .notice { margin-top: 3mm; border-left: 3px solid ${palette.accent}; background: #fffbe6; padding: 2mm; }
     .tag { font-size: ${typography.baseSizePt - 1}pt; border: 1px solid ${palette.border}; padding: 0 .8mm; }
     table.items tbody.charges tr:first-child td { border-top: 1px solid ${palette.accent}; }
@@ -390,33 +397,34 @@ export const renderInvoice = (
   // is exactly quantity × rate less its shown discount, so the first check anyone makes succeeds.
   const goodsLines = doc.lines.filter((l) => l.kind !== 'CHARGE');
   const chargeLines = doc.lines.filter((l) => l.kind === 'CHARGE');
-  const columnCount = narrow ? 0 : complianceLineColumns(locale, snapshot).length;
+  const bos = isBillOfSupply(doc);
+  const columnCount = narrow ? 0 : complianceLineColumns(locale, snapshot, !bos).length;
   const goodsSubTotal = sum(goodsLines.map((l) => l.taxableValue));
 
   const chargeBody =
     chargeLines.length === 0
       ? ''
       : `<tbody class="charges">
-          <tr class="subtotal"><td colspan="${columnCount - 3}">${escapeHtml(t('subTotal', locale))}</td><td class="num">${money(goodsSubTotal)}</td><td></td><td></td></tr>
-          ${chargeLines.map((l) => lineRow(l, snapshot)).join('')}
+          <tr class="subtotal"><td colspan="${columnCount - (bos ? 1 : 3)}">${escapeHtml(t('subTotal', locale))}</td><td class="num">${money(goodsSubTotal)}</td>${bos ? '' : '<td></td><td></td>'}</tr>
+          ${chargeLines.map((l) => lineRow(l, snapshot, !bos)).join('')}
         </tbody>`;
 
   const itemsBlock = narrow
-    ? `<div class="items-narrow">${goodsLines.map((l) => narrowLine(l, locale)).join('')}${
+    ? `<div class="items-narrow">${goodsLines.map((l) => narrowLine(l, locale, !bos)).join('')}${
         chargeLines.length === 0
           ? ''
-          : `<div class="tcharges"><div class="tline-name">${escapeHtml(t('charges', locale))}</div>${chargeLines.map((l) => narrowLine(l, locale)).join('')}</div>`
+          : `<div class="tcharges"><div class="tline-name">${escapeHtml(t('charges', locale))}</div>${chargeLines.map((l) => narrowLine(l, locale, !bos)).join('')}</div>`
       }</div>`
     : `<table class="items">
-        <thead><tr>${complianceLineColumns(locale, snapshot).map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
-        <tbody>${goodsLines.map((l) => lineRow(l, snapshot)).join('')}</tbody>
+        <thead><tr>${complianceLineColumns(locale, snapshot, !bos).map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
+        <tbody>${goodsLines.map((l) => lineRow(l, snapshot, !bos)).join('')}</tbody>
         ${chargeBody}
       </table>`;
 
   const totals = `
     <table class="totals">
-      <tr><td>${escapeHtml(t('totalBeforeGst', locale))}</td><td class="num">${money(doc.totals.taxableValue)}</td></tr>
-      ${taxRows(doc, locale)}
+      ${bos ? '' : `<tr><td>${escapeHtml(t('totalBeforeGst', locale))}</td><td class="num">${money(doc.totals.taxableValue)}</td></tr>
+      ${taxRows(doc, locale)}`}
       ${isZero(doc.totals.roundOff) ? '' : `<tr><td>${escapeHtml(t('roundOff', locale))}</td><td class="num">${money(doc.totals.roundOff)}</td></tr>`}
       <tr class="grand"><td>${escapeHtml(t('total', locale))}</td><td class="num">${money(doc.totals.invoiceValue)}</td></tr>
       ${isZero(doc.totals.reverseChargeTax) ? '' : `<tr><td>${escapeHtml(t('rcmTax', locale))}</td><td class="num">${money(doc.totals.reverseChargeTax)}</td></tr>`}
@@ -446,7 +454,7 @@ export const renderInvoice = (
   // Issue #183 — the HSN-wise summary on narrow paper too. It is what a buyer's accountant matches
   // against the GST portal, and dropping it for want of width simply moves the work onto them. One
   // line per code and rate; on 58 mm it wraps, which is allowed, and disappearing is not.
-  const narrowSummary = !narrow
+  const narrowSummary = !narrow || bos
     ? ''
     : `<div class="hsn-narrow"><div class="tline-name">${escapeHtml(t('taxSummary', locale))}</div>${
       hsnSummary(doc).rows.map((row) => `
@@ -526,6 +534,7 @@ export const renderInvoice = (
   ${watermark(doc, format)}
   ${cancelStamp(doc, locale)}
   ${marking === null ? '' : `<div class="copy-mark">${escapeHtml(marking)}</div>`}
+  ${legendBlock(doc)}
   <div class="head">
     <div>
       ${logo}

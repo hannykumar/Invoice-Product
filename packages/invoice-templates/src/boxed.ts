@@ -18,7 +18,7 @@ import { formatDate, sum, type IsoDate, type Money } from '@invoice/kernel';
 import type { InvoiceDocument, RenderableLine, RenderableParty, TemplateSnapshot } from './document.ts';
 import type { PageFormat } from './template.ts';
 import { hsnSummary, hsnSummaryColumns, type HsnSummaryRow } from './hsn-summary.ts';
-import { escapeHtml, exportParticulars, invoiceTitle, isZero, money, percent, splitQuantity, t, taxTotalRows, totalQuantityText } from './parts.ts';
+import { escapeHtml, exportParticulars, invoiceTitle, isZero, legendBlock, money, percent, splitQuantity, t, taxTotalRows, totalQuantityText } from './parts.ts';
 import type { Locale } from './document.ts';
 import { renderReservedSlot, type RenderPurpose } from './reserved.ts';
 import { billHasSomethingToPay, paperFitsUpiSquare, upiSquareSvg } from './upi.ts';
@@ -61,6 +61,7 @@ export const itemTable = (
   charges: readonly RenderableLine[],
   snapshot: TemplateSnapshot,
   locale: Locale,
+  withTax = true,
 ): string => {
   const showDiscount = snapshot.lineColumns.includes('line.discount');
   const showBatch = snapshot.lineColumns.includes('line.batch');
@@ -83,7 +84,7 @@ export const itemTable = (
     { label: t('rate', locale), share: 9 },
     { label: t('per', locale), share: 5 },
     ...(showDiscount ? [{ label: t('discount', locale), share: 8 }] : []),
-    { label: t('gstPercent', locale), share: 6 },
+    ...(withTax ? [{ label: t('gstPercent', locale), share: 6 }] : []),
     { label: t('lineTotal', locale), share: 11 },
   ];
   const totalShare = headings.reduce((a, h) => a + h.share, 0);
@@ -101,7 +102,7 @@ export const itemTable = (
       <td class="num">${charge ? '' : money(line.unitPrice)}</td>
       <td>${charge ? '' : escapeHtml(q.unit)}</td>
       ${showDiscount ? `<td class="num">${charge || line.discount === null ? '' : money(line.discount)}</td>` : ''}
-      <td class="num">${escapeHtml(percent(line.ratePercentTimes100))}</td>
+      ${withTax ? `<td class="num">${escapeHtml(percent(line.ratePercentTimes100))}</td>` : ''}
       <td class="num">${money(line.taxableValue)}</td>
     </tr>`;
   };
@@ -140,8 +141,8 @@ export const itemTable = (
   </table>`;
 };
 
-export const totalsTable = (doc: Pick<InvoiceDocument, 'totals' | 'exportSupply'>, locale: Locale, shows: (f: string) => boolean): string => {
-  const rows: [string, Money][] = [[t('totalBeforeGst', locale), doc.totals.taxableValue], ...taxTotalRows(doc, locale)];
+export const totalsTable = (doc: Pick<InvoiceDocument, 'totals' | 'exportSupply'>, locale: Locale, shows: (f: string) => boolean, withTax = true): string => {
+  const rows: [string, Money][] = withTax ? [[t('totalBeforeGst', locale), doc.totals.taxableValue], ...taxTotalRows(doc, locale)] : [];
   const afterTotal: [string, Money | null | undefined][] = [
     [t('rcmTax', locale), isZero(doc.totals.reverseChargeTax) ? null : doc.totals.reverseChargeTax],
     [t('paid', locale), shows('totals.amountPaid') ? doc.totals.amountPaid : null],
@@ -228,6 +229,7 @@ export const renderBoxed = (
   purpose: RenderPurpose = 'ISSUED',
 ): string => {
   const shows = (fieldId: string): boolean => snapshot.optionalFields.includes(fieldId);
+  const bos = doc.title === 'BILL_OF_SUPPLY';
   const reserved = (id: Parameters<typeof renderReservedSlot>[0]): string =>
     renderReservedSlot(id, format, locale, escapeHtml, purpose);
 
@@ -408,6 +410,7 @@ export const renderBoxed = (
   // layout takes its widths from the first row, and the first row here is the title spanning the
   // whole width — so without them the seller's name is squeezed into a one-character column.
   return `
+  ${legendBlock(doc)}
   <table class="grid head${showEInvoice ? ' with-qr' : ''}">
     <tr><td class="title-cell" colspan="${showEInvoice ? 3 : 2}"><h1>${escapeHtml(invoiceTitle(doc, locale))}</h1>${
       copyMark === null ? '' : `<span class="copy-mark-inline">${escapeHtml(copyMark)}</span>`
@@ -483,16 +486,16 @@ export const renderBoxed = (
         .map(([label, value]) => `<tr><td>${label === '' ? `<strong>${escapeHtml(value)}</strong>` : `<span class="cap">${escapeHtml(label)}</span>${escapeHtml(value)}`}</td></tr>`)
         .join('')}</table>`
   }
-  ${itemTable(goods, charges, snapshot, locale)}
+  ${itemTable(goods, charges, snapshot, locale, !bos)}
   <table class="grid words">
     <tr><td><span class="cap">${escapeHtml(t('inWords', locale))}</span><strong>${escapeHtml(doc.amountInWordsText)}</strong></td></tr>
   </table>
-  ${totalsTable(doc, locale, shows)}
-  <table class="grid section"><tr><td>${escapeHtml(t('taxSummary', locale))}</td></tr></table>
+  ${totalsTable(doc, locale, shows, !bos)}
+  ${bos ? '' : `<table class="grid section"><tr><td>${escapeHtml(t('taxSummary', locale))}</td></tr></table>
   ${summaryTable(doc, locale)}
   <table class="grid words">
     <tr><td><span class="cap">${escapeHtml(t('taxInWords', locale))}</span>${escapeHtml(doc.taxAmountInWordsText)}</td></tr>
-  </table>
+  </table>`}
   ${doc.declaredRateNotice === null ? '' : `<table class="grid notice"><tr><td>${escapeHtml(doc.declaredRateNotice)}</td></tr></table>`}
   ${doc.terms !== null && shows('footer.terms') ? `<table class="grid words"><tr><td>${escapeHtml(doc.terms)}</td></tr></table>` : ''}
   ${footerCells.length === 0 ? '' : `<table class="grid foot"><tr>${footerCells.join('')}</tr></table>`}

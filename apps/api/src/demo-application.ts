@@ -4,7 +4,7 @@
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
 import { BooksDesk } from './books-entry-application.ts';
-import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { asId, conflict, DomainError, financialYearOf as financialYearName, financialYearRange, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine, type Discount } from '@invoice/gst-calc';
@@ -81,6 +81,8 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
+import { CompositionDesk } from './composition-application.ts';
+import { schemeDuring } from './composition-scheme.ts';
 import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor, writeOffLimitOf } from './business-details-application.ts';
 import { approvalChallanTask, eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
@@ -985,6 +987,8 @@ export class DemoApplication {
    * dated into a month whose return is already approved or filed.
    */
   private returnMonths: ReturnPreparationRepository = new InMemoryReturnPreparations();
+  /** Issue #296 — the composition scheme: the setting, CMP-08 and GSTR-4. Set once the shop is built. */
+  composition!: CompositionDesk;
   /**
    * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
    * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
@@ -1739,6 +1743,8 @@ export class DemoApplication {
       repository: gstPreparations,
       audit: shop.audit,
       clock: appClock,
+      // Issue #296 — a composition business files CMP-08 and GSTR-4, not these.
+      scheme: { async during(companyId, from, to) { return schemeDuring(companyId, from, to); } },
     });
 
     // Issue #141. Challans share the store, so a number is allocated in the same transaction that
@@ -1775,6 +1781,24 @@ export class DemoApplication {
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
     app.returnMonths = gstPreparations;
+    // Issue #296 — the composition scheme reads the same bills, notes and ledger as everything else.
+    app.composition = new CompositionDesk({
+      companyId: config.companyId, gstin: config.gstin, store: shop.store, ledger: shop.ledger, audit: shop.audit,
+      invoices: salesRepository, notes: returnNotes,
+      goodsItemCount: (companyId) => catalogueItems(companyId).filter((item) => item.kind !== 'service').length,
+      purchases: async (companyId, financialYear) => {
+        const range = financialYearRange(financialYear);
+        let registeredPaise = 0n;
+        let unregisteredPaise = 0n;
+        for (const bill of await shop.bills.list(companyId)) {
+          if (bill.state !== 'POSTED' || bill.invoiceDate < range.from || bill.invoiceDate > range.to) continue;
+          const taxable = bill.lines.reduce((sum, line) => sum + BigInt(line.taxableValuePaise), 0n);
+          const gstin = billingAddressOf(companyId, bill.supplierPartyId)?.gstin ?? (bill.supplierPartyId === config.supplierId ? config.supplierGstin : undefined);
+          if (gstin === undefined || gstin === null || gstin === '') unregisteredPaise += taxable; else registeredPaise += taxable;
+        }
+        return { registeredPaise, unregisteredPaise };
+      },
+    });
     if (demo) await app.seed();
     return app;
   }

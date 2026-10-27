@@ -59,6 +59,8 @@ export interface PrintingContext {
    * so the paper and the filing are built from one object.
    */
   readonly exportSupply?: ExportParticulars | null;
+  /** Issue #296 — the Rule 5 words, for a composition dealer's bill of supply. Absent on every other bill. */
+  readonly compositionLegend?: string | null;
 }
 
 const nil = (): Money => zero('INR');
@@ -155,6 +157,7 @@ export const toInvoiceDocument = (invoice: SalesInvoice, context: PrintingContex
     signatureDataUri: context.signatureDataUri ?? null,
     poReference: context.poReference ?? null,
     exportSupply: exportSupply === null ? null : printedExportSupply(exportSupply, totals.invoiceValue.minor),
+    compositionLegend: context.compositionLegend ?? null,
   };
 };
 
