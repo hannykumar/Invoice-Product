@@ -7,12 +7,19 @@
  *
  * Nothing leaves this machine: requests to anywhere but the local server are refused (the web
  * fonts have system fallbacks).
+ *
+ * THIS FILE RUNS ON THE IN-MEMORY STORE, on purpose (#494): it imports `webServer` and listens on it,
+ * so the API builds its in-memory runtime on the first request whatever DATABASE_URL says. That makes
+ * it fast and dependency-free (`npm test`) and good for the page itself — it proves nothing about
+ * PostgreSQL. The browser tests that do are `tests/browser/` (`npm run test:browser:pg`, the CI
+ * `browser` job). Merging the two drivers is #496.
  */
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import puppeteer, { type Browser, type Page } from 'puppeteer';
 import { webServer } from '../server.ts';
+import { apiRuntime } from '../../api/src/runtime.ts';
 import { HEADERS_TIMEOUT_MS, REQUEST_TIMEOUT_MS, SECURITY_HEADERS } from '../../api/src/http-hardening.ts';
 import { signInInBrowser, signInOverHttp } from '../../api/test/sign-in-helper.ts';
 
@@ -25,6 +32,8 @@ const dialogs: string[] = [];
 const violations: string[] = [];
 
 before(async () => {
+  // Say so loudly if this ever stops being the in-memory store: the file's name and header promise it.
+  assert.equal(apiRuntime().database, null, 'these page tests are the in-memory variant; PostgreSQL is covered by tests/browser (#494)');
   await new Promise<void>((resolve) => webServer.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(webServer.address() as AddressInfo).port}`;
   browser = await puppeteer.launch({ headless: true, args: process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : [] });

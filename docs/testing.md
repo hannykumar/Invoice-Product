@@ -24,7 +24,7 @@ Postgres for it.
 | --- | --- | --- | --- |
 | Unit | `npm test` | in-memory | Rules: arithmetic, verdicts, numbering, wording, edge cases. Fast, no setup. |
 | Integration | `npm run test:integration` | real PostgreSQL | Every API route: validation, tenancy, permissions, idempotency, immutability, transactions. |
-| Browser | `npm run test:browser` | real PostgreSQL + the real server | The flows below, driven as a shopkeeper drives them. |
+| Browser | `npm run test:browser:pg` | real PostgreSQL + the real server | The flows below, driven as a shopkeeper drives them. |
 | Release gates | `npm run gates` | real modules | The financial invariants in `docs/release/gates.md`, each proven to be able to fail. |
 
 `npm run verify` runs lint, unit, integration and gates — what CI runs on every push. The
@@ -32,7 +32,7 @@ browser suite is a separate CI job, because it needs a Chromium install.
 
 ## The flows that must never break
 
-Seven flows get a real-browser test, in `tests/browser/`, each driven through Chromium against
+Nine checks get a real-browser test, in `tests/browser/`, each driven through Chromium against
 the real web server on PostgreSQL:
 
 | Flow | Spec | What the test checks |
@@ -44,15 +44,47 @@ the real web server on PostgreSQL:
 | Prepare a GST return | `gst-returns.spec.ts` | A month with real purchases and sales is prepared and approved; the figures are then fixed. |
 | Upgrade plan | `plan.spec.ts` | Choosing a different plan changes the plan shown on the screen. |
 | Invite a teammate | `team.spec.ts` | The Team screen produces an invite link. |
+| The database is really used (#494) | `postgres.spec.ts` | A bill made through the app is a balanced `FINAL` row in the database — so the server is not on the in-memory store. |
+| Restart survival (#494) | `postgres.spec.ts` | The web server process is killed outright and started again on the same database; the page still shows the owner signed in with the bill, its print copy is there, and the next bill number continues. |
+| Company isolation (#494) | `postgres.spec.ts` | Company B signed in through the browser sees nothing of company A's bill on screen, and asking the API for it by id is a 404. |
 
 Browser tests assert what the shopkeeper reads — the bill number, the rupee total, the badge the
 books earn — not implementation details.
+
+## Running the browser tests (#494)
+
+They run on PostgreSQL, never the in-memory store. `npm run test:browser:pg` takes `DATABASE_URL`
+(a login that may create databases — compose's `invoice` login is one), makes a **new database
+beside it for that run**, migrates and seeds it, makes a login that is only a member of
+`invoice_app` (so row-level security applies to the server as in production), runs the suite and
+drops the database and the login afterwards, pass or fail. Two runs never share a row. With no
+`DATABASE_URL` it stops and says how to get one; it does not fall back.
+
+```sh
+docker compose up -d --wait db
+export DATABASE_URL=postgresql://invoice:invoice@localhost:5432/invoice
+npx playwright install chromium            # once
+npm run test:browser:pg                    # all of it
+npm run test:browser:pg -- tests/browser/postgres.spec.ts   # one file
+```
+
+The CI `browser` job runs exactly this against a PostgreSQL 16 service on every pull request.
+`npm run test:browser` alone runs the same specs against a database you migrated and seeded
+yourself (`db:migrate`, `db:seed`); it is for debugging, not for CI.
+
+The two Puppeteer files in `apps/web/test` (`sale-slides`, `security-headers`) are the only
+browser tests that run **in memory**, as part of `npm test`: they check the page, say so in their
+header, and assert they are on the in-memory store. They prove nothing about PostgreSQL. Folding
+them into this suite is #496.
 
 ## How a browser test is written here
 
 - **Arrange through the API, drive through the browser.** Goods, suppliers and customers are
   created through the same routes the screens call (`tests/browser/helpers.ts`), so a test needs
   no fixture database and nothing is pre-seeded it did not make itself.
+- **Spend sign-in codes sparingly.** #350 allows five code requests per address per 15 minutes
+  from one place, and the whole run shares them: `auth.spec.ts` walks the dialog; other specs
+  sign in over the API and hand the browser the cookie (`openSession` in `postgres.spec.ts`).
 - **Sign in on `/`, then navigate.** The app loads each screen's data when the screen is opened,
   and `openView` only re-runs on navigation — going to `/#plan` before signing in leaves the
   screen empty forever.
