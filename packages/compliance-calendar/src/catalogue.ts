@@ -245,8 +245,8 @@ export const OBLIGATION_CATALOGUE: readonly ObligationDefinition[] = Object.free
     kind: 'STATUTORY',
     title: bilingual('Report this invoice for its IRN', 'Is invoice ka IRN lena hai'),
     description: bilingual(
-      'An invoice that needs an e-invoice must be reported to the portal within thirty days of its date. After that the portal will not accept it at all.',
-      'Jis invoice par e-invoice zaroori hai, use invoice ki date se tees din ke andar portal par bhejna hota hai. Uske baad portal use leta hi nahin.',
+      'An invoice that needs an e-invoice should be sent to the portal soon after it is made. If your turnover last year was ₹10 crore or more, the portal will not accept it after thirty days from its date.',
+      'Jis invoice par e-invoice zaroori hai, use jaldi portal par bhejein. Pichhle saal ka turnover ₹10 crore ya zyada ho to invoice ki date se tees din baad portal use leta hi nahin.',
     ),
     cadence: 'EVENT',
     effectiveFrom: isoDate('2023-11-01'),
@@ -265,7 +265,9 @@ export const OBLIGATION_CATALOGUE: readonly ObligationDefinition[] = Object.free
     ),
     nextAction: bilingual('Send this invoice to the portal now.', 'Yeh invoice abhi portal par bhejein.'),
     actionCode: 'GENERATE_IRN',
-    sourceRef: 'cbic:irn-reporting-window',
+    // GSTN advisory of 5 Nov 2024 (30 days, AATO ₹10 crore and above, from 1 Apr 2025) — an advisory, not a
+    // CBIC notification; see packages/gst/src/reporting-window.ts. Below ₹10 crore no limit applies.
+    sourceRef: 'gstn:advisory-2024-11-05-irn-30-day-limit',
     reviewState: 'DRAFT',
   },
   {
@@ -349,8 +351,8 @@ export const OBLIGATION_CATALOGUE: readonly ObligationDefinition[] = Object.free
     dueDateShift: 'NONE',
     ladder: LADDER_PREVENTIVE,
     consequence: bilingual(
-      'An invoice that never reaches the portal cannot be reported at all after thirty days, and your buyer loses the credit on it.',
-      'Jo invoice portal tak pahunchi hi nahin, tees din baad bheji hi nahin ja sakti, aur buyer ka credit chala jaata hai.',
+      'An invoice without an IRN is not a valid invoice, and your buyer loses the credit on it. At ₹10 crore turnover or more the portal also refuses it after thirty days.',
+      'Bina IRN ke invoice valid nahin, aur buyer ka credit chala jaata hai. ₹10 crore ya zyada turnover par tees din baad portal use leta bhi nahin.',
     ),
     nextAction: bilingual('Send the remaining invoices to the portal.', 'Bachi hui invoices portal par bhej dein.'),
     actionCode: 'OPEN_EINVOICE_QUEUE',

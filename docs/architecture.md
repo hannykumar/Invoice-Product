@@ -176,7 +176,7 @@ log redaction, privacy export/delete, recovery), and the CLIs `gsp-selection`, `
 | Area | Today | Target | Issue |
 | --- | --- | --- | --- |
 | Data | All in memory in one process; `apps/api/src/demo-application.ts` builds `InMemory*` stores per company; a restart loses everything | Every store in Postgres through `tenantTransaction`, row-level security on `company_id`, one transaction per business action | #340, #363–#368 |
-| Postgres adapters | Only `ledger` and `returns`, neither wired | Every module | #366 |
+| Postgres adapters | Repositories exist and are composed for the ledger, inventory, sales, receivables, returns, masters, purchasing (bills, orders, receipts, matching, supplier risk, reverse charge), e-invoice, e-way, vehicle records, ITC, GST returns, GSP and more (#366). Still in memory behind their ports: the purchase inbox's screen (#489) and its pre-tenant holding table (#488) | The rest of #366's list | #366 |
 | Users and login | Hard-coded in `runtime.ts`, unsalted SHA-256 | Supabase Auth; our own session in Postgres | #342 (D1) |
 | Session | Bearer token in `localStorage` | `HttpOnly` cookie + Origin check | #342 (D2) |
 | Roles | None; 118 flat permissions | Owner, Admin, Accountant, Staff, Viewer; a table, tests generated from it | #343 |

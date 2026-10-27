@@ -651,10 +651,10 @@ test("#400: a document on a shared address can be claimed only by a business tha
   const { inbox } = setup();
   const result = await inbox.receive({ channel: "email", sender: { channel: "email", address: "accounts@shreeram.example" }, attachment: attachment({ sha256: "shared-1", storageKey: "s3://inbox/doc-1" }), bytes: PDF_HEAD, scanVerdict: "clean", deliveredTo: "shared-desk@invoices.example", idempotencyKey: "k1" });
   assert.equal(result.document.quarantineReason, "COMPANY_NOT_IDENTIFIED");
-  assert.deepEqual(inbox.awaitingAssignment(contextFor("company-a")).map((item) => item.id), [result.document.id]);
-  assert.deepEqual(Object.keys(inbox.awaitingAssignment(contextFor("company-a"))[0] ?? {}).sort(), ["channel", "fileName", "id", "receivedAt", "sizeBytes"]);
+  assert.deepEqual((await inbox.awaitingAssignment(contextFor("company-a"))).map((item) => item.id), [result.document.id]);
+  assert.deepEqual(Object.keys((await inbox.awaitingAssignment(contextFor("company-a")))[0] ?? {}).sort(), ["channel", "fileName", "id", "receivedAt", "sizeBytes"]);
   await assert.rejects(() => inbox.assignCompany(contextFor("company-a", []), result.document.id, "ours"), /permission/);
-  assert.deepEqual(inbox.awaitingAssignment(contextFor("company-x")), []);
+  assert.deepEqual(await inbox.awaitingAssignment(contextFor("company-x")), []);
   await assert.rejects(() => inbox.assignCompany(contextFor("company-x"), result.document.id, "mine"), /not found/);
   await assert.rejects(() => inbox.assignCompany(contextFor("company-a"), result.document.id, "   "), /say why/);
 

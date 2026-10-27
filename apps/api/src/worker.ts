@@ -18,10 +18,13 @@ import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
 import { log } from './log.ts';
 import { openPersistence } from './persistence.ts';
+import { sweepHeldInbox } from './purchase-inbox-holding.ts';
 import { startRuntime } from './runtime.ts';
 
 /** How often the worker looks for due work when it found none. */
 const IDLE_MS = Number(process.env.WORKER_IDLE_MS ?? 5_000);
+/** How often unrouted purchase documents past their retention period are removed (#488). */
+const HOLDING_SWEEP_MS = Number(process.env.WORKER_HOLDING_SWEEP_MS ?? 3_600_000);
 
 export async function runWorker(signal: AbortSignal): Promise<void> {
   const persistence = await openPersistence();
@@ -29,8 +32,20 @@ export async function runWorker(signal: AbortSignal): Promise<void> {
   const runtime = startRuntime(persistence);
   const db = persistence.db;
   log.info('The worker is running', {});
+  let lastSweep = 0;
   try {
     while (!signal.aborted) {
+      // Purchase documents no business has accepted are not kept past the retention period. Not
+      // tied to any company, so it is not part of a company's due work (#488).
+      if (Date.now() - lastSweep >= HOLDING_SWEEP_MS) {
+        lastSweep = Date.now();
+        try {
+          const swept = await sweepHeldInbox(db);
+          if (swept.expired > 0) log.info('Purchase documents held past the retention period were removed', { expired: swept.expired });
+        } catch (error) {
+          reportError('worker.holdingSweep', error);
+        }
+      }
       // Company ids only: the function cannot show anything else of any company (migration …worker_finds_due_work).
       const { rows } = await db.query('SELECT companies_with_due_work(make_interval(secs => $1)) AS id', [RECURRING_LEASE_MS / 1000]);
       let worked = false;

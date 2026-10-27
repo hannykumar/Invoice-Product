@@ -63,6 +63,15 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
   }
   // A stuck pool or a held lock fails loudly instead of hanging (ADR 0363 §1).
   const pool = new Pool({ connectionString, max: 5, connectionTimeoutMillis: 15_000, lock_timeout: 15_000 });
+  // Issue #504 — PostgreSQL ends connections for ordinary reasons (restart, failover, maintenance, an
+  // administrator). The pool reports that for a connection sitting idle as an `error` event, and with
+  // no listener Node turns it into an uncaught exception that stops the server (or fails whichever test
+  // is running). The pool has already dropped that connection; the next query opens a fresh one. A
+  // connection ended in the middle of an action still fails that action, through its own query.
+  pool.on("error", (error) => {
+    // The code and message only: they carry no connection string, query or customer data.
+    console.warn(`database: an idle connection was closed by the server (${(error as { code?: string }).code ?? "no code"}: ${error.message}); the pool will open a new one.`);
+  });
   const self = {};
 
   const openFor = (companyId: string | undefined): Open | undefined => {
@@ -89,6 +98,7 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
 
   const run = async <T>(companyId: string | undefined, asUnit: boolean, work: (open: Open | undefined, sql: SqlExecutor) => Promise<T>): Promise<T> => {
     let client: PoolClient;
+    let broken = false;
     try {
       client = await pool.connect();
     } catch (error) {
@@ -96,6 +106,11 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
       if (error instanceof Error && /timeout exceeded when trying to connect/i.test(error.message)) throw busy(error);
       throw error;
     }
+    // Issue #504 — while a client is checked out the pool no longer listens for its errors. A connection
+    // the server ends mid-action rejects the query in flight, which fails this action as it should;
+    // the client's own `error` event must not also escape as an uncaught exception.
+    const onClientError = (): void => { broken = true; };
+    client.on("error", onClientError);
     let finished = false;
     // One connection runs one statement at a time, so reads started together wait their turn.
     let queue: Promise<unknown> = Promise.resolve();
@@ -107,7 +122,6 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
         return result;
       },
     };
-    let broken = false;
     try {
       await client.query("BEGIN");
       if (companyId !== undefined) await client.query("SELECT set_config('app.company_id', $1, true)", [companyId]);
@@ -150,6 +164,7 @@ export function createDatabase(connectionString = process.env.DATABASE_URL): Tra
       throw error;
     } finally {
       // A connection whose rollback failed is discarded rather than handed to the next request.
+      client.removeListener("error", onClientError);
       client.release(broken);
     }
   };

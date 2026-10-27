@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import test, { after, before } from 'node:test';
 import type { ChildProcess } from 'node:child_process';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
+import { syntheticGstin } from '../../../packages/masters/src/fixtures.ts';
 import { signInOverHttp } from './sign-in-helper.ts';
 import { appDatabase, callApi, freePort, killProcess, startApi } from './processes.ts';
 
@@ -193,4 +194,49 @@ test('#366: on PostgreSQL a finished business setup is kept in its own company, 
   assert.deepEqual({ setup: made[0]!.setup, opening: String(made[0]!.opening), audits: String(made[0]!.audits) }, { setup: 'COMPLETED', opening: '1', audits: '2' });
   assert.notEqual(made[0]!.id, COMPANY, 'the setup is not written into the session\'s own company');
   assert.equal((await owner.query('SELECT count(*)::int AS n FROM companies WHERE legal_name = $1', [`Mistyped Bakers ${run}`])).rows[0]!.n, 0);
+});
+
+test('#366: on PostgreSQL an order and a delivery use the business\'s own supplier and item, and stock survives a restart', { skip }, async () => {
+  const run = randomBytes(3).toString('hex');
+  // A registration no earlier run used: five letters from the run, four digits, a letter.
+  const pan = `${[...randomBytes(5)].map((byte) => String.fromCharCode(65 + (byte % 26))).join('')}${String(randomBytes(2).readUInt16BE() % 10000).padStart(4, '0')}P`;
+  await stop();
+  await start();
+  const token = await signInHere('owner@sampoorna.example.invalid', COMPANY);
+  const supplier = await call('POST', '/api/suppliers', { legalName: `Peenya Steel ${run}`, acknowledgeSimilar: true, registration: 'regular', gstin: syntheticGstin('29', pan), line1: '4 Peenya Road', city: 'Bengaluru', pincode: '560058' }, token);
+  assert.equal(supplier.status, 200, JSON.stringify(supplier));
+  const item = await call('POST', '/api/items', { name: `TMT bar 12mm ${run}`, hsn: '72142090', unit: 'KGS', price: '60', kind: 'goods', ratePercent: '18', basis: 'Rate this business pays', effectiveFrom: '2026-04-01', acknowledgeSimilar: true }, token);
+  assert.equal(item.status, 200, JSON.stringify(item));
+  const itemId = String(item.item.id);
+  const supplierId = String(supplier.supplier.id);
+
+  // The built-in short ids are not records on PostgreSQL: they are refused in the shopkeeper's words.
+  const builtIn = await call('POST', '/api/purchase-orders', { orderNumber: `PO-${run}-0`, date: '2026-10-16', item: 'TMT12', supplierId, quantity: '10', rate: '60', gst: '1800' }, token);
+  assert.equal(builtIn.status, 422);
+  assert.equal(builtIn.code, 'ITEM_NOT_FOUND');
+  // A delivery is from a supplier on the list, never from the demo supplier.
+  const nobody = await call('POST', '/api/purchase-orders', { orderNumber: `PO-${run}-0`, date: '2026-10-16', item: itemId, quantity: '10', rate: '60', gst: '1800' }, token);
+  assert.equal(nobody.status, 422);
+  assert.equal(nobody.code, 'SUPPLIER_REQUIRED');
+
+  const order = await call('POST', '/api/purchase-orders', { orderNumber: `PO-${run}`, date: '2026-10-16', item: itemId, supplierId, quantity: '100', rate: '60', gst: '1800' }, token);
+  assert.equal(order.status, 200, JSON.stringify(order));
+  const before = Number(String(order.stock.onShelf).replace(/[^0-9.]/g, ''));
+  const receipt = await call('POST', '/api/goods-receipts', { receiptNumber: `GRN-${run}`, orderNumber: `PO-${run}`, date: '2026-10-17', item: itemId, received: '100', accepted: '90', rejectionNote: 'Ten bars bent' }, token);
+  assert.equal(receipt.status, 200, JSON.stringify(receipt));
+  assert.equal(Number(String(receipt.stock.onShelf).replace(/[^0-9.]/g, '')), before + 90, 'only what was kept goes on the shelf');
+
+  await stop();
+  await start();
+  const again = await call('POST', '/api/purchases/match', { reference: `SB-${run}`, orderNumber: `PO-${run}`, date: '2026-10-18', item: itemId, quantity: '100', rate: '60', gst: '1800' }, token);
+  assert.equal(again.status, 200, JSON.stringify(again));
+  assert.equal(Number(String(again.stock.onShelf).replace(/[^0-9.]/g, '')), before + 90, 'the delivery is still on the shelf after the restart');
+  assert.equal(again.outcome, 'HOLD_FOR_APPROVAL', 'billed 100 against 90 kept is held, not passed');
+
+  const rows = (await owner.query(
+    `SELECT (SELECT count(*) FROM purchase_orders WHERE company_id = $1 AND order_number = $2) AS orders,
+            (SELECT count(*) FROM goods_receipts WHERE company_id = $1 AND receipt_number = $3 AND supplier_party_id = $4) AS receipts,
+            (SELECT count(*) FROM stock_movements WHERE company_id = $1 AND item_id = $5) AS movements`,
+    [COMPANY, `PO-${run}`, `GRN-${run}`, supplierId, itemId])).rows[0]!;
+  assert.deepEqual({ ...rows }, { orders: '1', receipts: '1', movements: '1' });
 });

@@ -29,6 +29,7 @@ import { pageFromLines } from '../../../packages/purchasing/src/ocr.ts';
 import { PurchaseInboxService, REVIEW_CONFIDENCE, type ReceiveResult } from '../../../packages/purchasing/src/inbox.ts';
 import { InMemoryInboxStore } from '../../../packages/purchasing/src/inbox-store.ts';
 import { PostgresInboxStore } from '../../../packages/purchasing/src/inbox-postgres.ts';
+import { PostgresInboxHolding } from '../../../packages/purchasing/src/inbox-holding-postgres.ts';
 import { InMemoryInboxDecisionStore, PostgresInboxDecisionStore, type InboxDecision, type InboxDecisionStore } from '../../../packages/purchasing/src/inbox-decisions.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
 import type { CompanyRoutingProfile } from '../../../packages/purchasing/src/routing.ts';
@@ -36,7 +37,7 @@ import type { ExtractedField, ExtractionDraft, InboundDocument, IntakeChannel } 
 import { SYNTHETIC_PLATFORM_COMPANIES } from '../../../packages/platform/src/seed.ts';
 import { appClock } from './app-clock.ts';
 import type { ApiRuntime } from './runtime.ts';
-import { availableBill, malwareScanner, putObject } from './files-application.ts';
+import { MAX_STORED_FILE_BYTES, availableBill, malwareScanner, objectStore, putObject } from './files-application.ts';
 import { DevelopmentOcr, inboxOcr, sampleBillLines, sampleBillPdf } from './inbox-ocr.ts';
 import { billingAddressOf, items as itemsOf, suppliers as suppliersOf } from './catalogue-application.ts';
 
@@ -189,6 +190,10 @@ export class PurchaseInboxApplication {
     }));
     this.service = new PurchaseInboxService(new PlatformCommandService(audit, []), audit, this.#ocr, companies, {
       store: db === null ? new InMemoryInboxStore() : new PostgresInboxStore(db),
+      // #488 — documents whose company is not known yet are kept in PostgreSQL (in memory without it), and their file is
+      // read back from private storage rather than held in memory, so a restart loses neither.
+      ...(db === null ? {} : { holding: new PostgresInboxHolding(db) }),
+      readBytes: async (key: string) => (await objectStore().read(key, MAX_STORED_FILE_BYTES).catch(() => null))?.bytes ?? null,
       ...(db === null ? {} : { unitOfWork: <T,>(companyId: string, work: () => Promise<T>) => db.unitOfWork(companyId, () => work()) }),
     });
     this.#verifier = new HmacWebhookVerifier(inboxWebhookSecrets(), () => appClock.now());
@@ -226,7 +231,7 @@ export class PurchaseInboxApplication {
       else sameBill.set(document.id, earlier);
     }
     const items = documents.map((document) => summaryOf(document, decisions.get(document.id), drafts.get(document.id), sameBill.get(document.id)));
-    const waiting = this.service.awaitingAssignment(context).map((held) => ({
+    const waiting = (await this.service.awaitingAssignment(context)).map((held) => ({
       id: held.id, fileName: held.fileName, sizeBytes: held.sizeBytes, channel: held.channel, channelWords: CHANNEL_WORDS[held.channel], receivedAt: held.receivedAt,
       state: 'held' as const, next: 'This arrived on an address your business shares. Say whether it is yours.', message: 'Nothing has been read from it yet.',
       actions: { review: false, retry: false, assign: true, reject: false },
@@ -330,8 +335,11 @@ export class PurchaseInboxApplication {
       const fileName = String(input.fileName ?? '').trim() || 'e-invoice.json';
       // A resend of the same file text is the same delivery; the file itself is the key.
       const sha = createHash('sha256').update(bytes).digest('hex');
+      // Kept in private storage like any other file, so a document held for the virus check can be read again later.
+      const storageKey = `${context.companyId}/inbox_json/${sha.slice(0, 8)}-${sha.slice(8, 12)}-${sha.slice(12, 16)}-${sha.slice(16, 20)}-${sha.slice(20, 32)}`;
+      await putObject(storageKey, bytes, 'application/json');
       result = await this.#receive(context, {
-        channel: 'einvoice_json', address: context.actorId, providerMessageId: `json:${sha}`, fileName, mimeType: 'application/json', bytes, storageKey: `${context.companyId}/inbox/${sha}`,
+        channel: 'einvoice_json', address: context.actorId, providerMessageId: `json:${sha}`, fileName, mimeType: 'application/json', bytes, storageKey,
       });
     }
     return this.#received(context, result);

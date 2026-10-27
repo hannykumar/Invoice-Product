@@ -333,6 +333,7 @@ const copy = {
     colItem: "Item", colOrdered: "Ordered", colArrived: "Arrived", colKept: "Kept", colTurnedAway: "Turned away", colBilled: "Billed", colAgreedPrice: "Agreed price", colBilledPrice: "Billed price",
     differencesTitle: "What disagrees", approveReason: "Why is this difference acceptable?", approveDifferences: "Accept these differences",
     navCollections: "Collections", collectionsTitle: "Payment reminders", collectionsHelp: "Review exactly what will be sent, pause follow-up for promises or disputes, and keep the balance seen with every message.", reminderPlan: "Plan a reminder", reminderDate: "Balance as of", reminderChannel: "Send through", channelInApp: "In-app", channelEmail: "Email", channelWhatsapp: "WhatsApp", scheduleReminder: "Add to review", sendDueReminders: "Send reviewed reminders", scheduledMessages: "Scheduled messages", communicationHistory: "Communication history", collectionSafety: "The balance is checked again immediately before sending. Settled or disputed invoices are never chased.", optOutCustomer: "Customer has opted out of reminders", savePreference: "Save preference", promiseTitle: "Promise to pay", promisedAmount: "Amount promised", promisedDate: "Promised date", savePromise: "Record promise", disputeTitle: "Customer dispute", disputedInvoice: "Disputed invoice", disputeReason: "What does the customer dispute?", saveDispute: "Stop reminders for this invoice", noScheduled: "No reminders are waiting for review.", noCommunications: "No collection messages have been attempted yet.", navBankFeeds: "Bank feeds", bankFeedsTitle: "Import bank transactions automatically", bankFeedsHelp: "Give a provider permission to fetch transactions. Imported lines go to review and never move money.", connectBank: "Connect a bank", bankConsentHelp: "You approve access on the provider's page and can disconnect it at any time.", giveBankPermission: "Start bank permission", approveSandboxPermission: "Approve sandbox permission", bankFeedSafety: "We never ask for or store your bank password, PIN or OTP. Disconnecting keeps transactions already imported for your accounts.", connectedAccounts: "Connected accounts", importedBankTransactions: "Imported transactions", noBankConnections: "No bank is connected yet.", noBankTransactions: "No live bank transactions have been imported yet.", syncNow: "Import latest transactions", disconnectBank: "Disconnect bank", bankConnected: "Bank connected", bankSynced: "Bank transactions imported", bankDisconnected: "Bank disconnected", bankReturnRefused: "This reply from the bank does not match the request started in this window, so nothing was connected. Start again from Bank feeds.",
+    reconcileTitle: "Reconcile", reconcileHelp: "Match the bank's lines against your receipts and payments. Money is recorded only when you say so.", checkBank: "Check the bank", reconcileNone: "The bank and the books agree — nothing to match.", reconcileAutoMatched: "{count} bank line(s) matched on their own.", reconcileSuggested: "Looks like the same money", reconcileSame: "Same money", reconcileRecord: "Record as {kind}", reconcileReceipt: "receipt", reconcilePayment: "payment", reconcileUndo: "Undo match", reconcilePartyPrompt: "Whose money is it? Type the customer or supplier's name as it is in your list.", reconcileWhyPrompt: "Why is this match wrong? The reason stays on the record.", reconcileBillPrompt: "Which bill does this pay? Type the number before the bill, or leave blank if it is an advance.", reconcileBillInvalid: "Type the number before the bill you want.", reconcileChecked: "Bank checked", reconcileRecorded: "Recorded — the next check will match it", reconcileIssues: "Needs looking at", rateHintUse: "Use this rate", rateHintNone: "No rate on record for this code.",
     navOperations: "Operations", operationsEyebrow: "Service health", operationsTitle: "Is the service working?", operationsHelp: "See service checks, failed external calls, safe retries and customer incident updates without opening invoices or bank records.", operationsSafetyTitle: "Customer data stays private. ", operationsSafety: "This page shows error codes and correlation IDs only. A retry is offered only for work declared safe and duplicate-proof.", operationsHealth: "Health checks", operationsFailures: "External failures", operationsQueue: "Safe retry queue", operationsRecurring: "Recurring work", operationsIncidents: "Customer status timeline", operationsHealthy: "All checks are working", operationsDegraded: "One or more checks need attention", operationsNoFailures: "No external failures for this company.", operationsNoJobs: "No jobs are waiting.", operationsNoRecurring: "No recurring work is registered.", operationsNextRun: "Next", operationsLastRun: "Last", operationsNeverRun: "Not run yet", operationsRunning: "Running", operationsSucceeded: "Succeeded", operationsFailed: "Failed", operationsDeadLettered: "Stopped after repeated failures", operationsReplay: "Retry safely", operationsNoIncidents: "No current or recent incidents.",
     navBusiness: "Business details", businessEyebrow: "Your business", businessTitle: "Your business, as it prints on every bill", businessHelp: "The law asks every bill to carry your name, your address and your GST number. Type them once here and every bill, challan and quotation carries them.",
     businessNameLegend: "Name", businessLegalName: "Registered name", businessTradeName: "Trading name (optional)", businessTradeNameHint: "If you fill this in, the bill prints it instead of the registered name.",
@@ -359,6 +360,7 @@ const copy = {
     itemsLeft: "{quantity} {unit} left", itemsNoneLeft: "None left", itemsService: "Service", itemsLine: "HSN {code} · GST {rate}", itemsExempt: "exempt",
     homeGreeting: "Namaste, {company}", homeMoneyTitle: "Your money today", homeSalesToday: "Sales today", homeCash: "Cash in drawer", homeBank: "UPI and bank in today", homeToCollect: "To collect", homeToPay: "To pay",
     homeTasksTitle: "Needs you today", homeAllClear: "All clear for today", homeRecentBills: "Recent bills", homeNoBills: "No bills yet. Press + Bill to make the first one.",
+    homeComingUpTitle: "Coming up", homeComingClear: "Nothing due soon.", homeComingDone: "Done", homeComingDoneConfirm: "Mark it done only if it really is — this stays on the record.",
     homeChipPaid: "Paid", homeChipDue: "{amount} due", homeChipLate: "{amount} · {days} days late", homeChipLateOne: "{amount} · 1 day late",
     payCash: "Cash", payUpi: "UPI", payCard: "Card", payBank: "Bank", payCheque: "Cheque", payUdhaar: "Udhaar"
   },
@@ -692,6 +694,7 @@ const copy = {
     colItem: "सामान", colOrdered: "मँगाया", colArrived: "आया", colKept: "रखा", colTurnedAway: "वापस किया", colBilled: "बिल में", colAgreedPrice: "तय दाम", colBilledPrice: "बिल का दाम",
     differencesTitle: "क्या नहीं मिल रहा", approveReason: "ये अंतर क्यों ठीक है?", approveDifferences: "ये अंतर स्वीकार कीजिए",
     navCollections: "वसूली", collectionsTitle: "पेमेंट याद दिलाना", collectionsHelp: "भेजने से पहले संदेश देखिए, वादे या विवाद पर रोक लगाइए, और हर संदेश के साथ देखा गया बैलेंस संभल कर रखिए।", reminderPlan: "रिमाइंडर बनाइए", reminderDate: "इस तारीख़ का बैलेंस", reminderChannel: "इस ज़रिए भेजिए", channelInApp: "ऐप में", channelEmail: "ईमेल", channelWhatsapp: "WhatsApp", scheduleReminder: "रिव्यू में जोड़िए", sendDueReminders: "देखे हुए रिमाइंडर भेजिए", scheduledMessages: "तय संदेश", communicationHistory: "बात-चीत का इतिहास", collectionSafety: "भेजने से तुरंत पहले बैलेंस दोबारा देखा जाता है। चुकाए या विवाद वाले बिल पर रिमाइंडर नहीं जाता।", optOutCustomer: "ग्राहक ने रिमाइंडर बंद करने को कहा है", savePreference: "पसंद सेव कीजिए", promiseTitle: "पेमेंट का वादा", promisedAmount: "वादे की रकम", promisedDate: "वादे की तारीख़", savePromise: "वादा दर्ज कीजिए", disputeTitle: "ग्राहक का विवाद", disputedInvoice: "विवाद वाला इनवॉइस", disputeReason: "ग्राहक किस बात से असहमत है?", saveDispute: "इस इनवॉइस के रिमाइंडर रोकिए", noScheduled: "रिव्यू के लिए कोई रिमाइंडर नहीं है।", noCommunications: "अभी कोई कलेक्शन संदेश भेजने की कोशिश नहीं हुई।", navBankFeeds: "बैंक फ़ीड", bankFeedsTitle: "बैंक के लेन-देन अपने आप लाइए", bankFeedsHelp: "प्रोवाइडर को लेन-देन लाने की इजाज़त दीजिए। हर लाइन पहले रिव्यू में जाती है और पैसा कभी नहीं हिलता।", connectBank: "बैंक जोड़िए", bankConsentHelp: "प्रोवाइडर के पेज पर इजाज़त देते हैं और कभी भी कनेक्शन हटा सकते हैं।", giveBankPermission: "बैंक की इजाज़त शुरू कीजिए", approveSandboxPermission: "सैंडबॉक्स इजाज़त मंज़ूर कीजिए", bankFeedSafety: "हम बैंक पासवर्ड, PIN या OTP कभी नहीं माँगते या रखते। कनेक्शन हटाने पर पहले आए लेन-देन बही के लिए बचे रहते हैं।", connectedAccounts: "जुड़े बैंक खाते", importedBankTransactions: "आए हुए लेन-देन", noBankConnections: "अभी कोई बैंक नहीं जुड़ा है।", noBankTransactions: "अभी बैंक से कोई लेन-देन नहीं आया है।", syncNow: "नए लेन-देन लाइए", disconnectBank: "बैंक हटाइए", bankConnected: "बैंक जुड़ गया", bankSynced: "बैंक के लेन-देन आ गए", bankDisconnected: "बैंक हट गया", bankReturnRefused: "बैंक का ये जवाब इस विंडो में शुरू की गई रिक्वेस्ट से मेल नहीं खाता, इसलिए कुछ नहीं जुड़ा। बैंक फ़ीड से दोबारा शुरू कीजिए।",
+    reconcileTitle: "बैंक की जाँच", reconcileHelp: "बैंक की लाइनें अपनी रसीद और पेमेंट से मिलाइए। पैसा तभी दर्ज होता है जब आप कहें।", checkBank: "बैंक जाँचिए", reconcileNone: "बैंक और बही मिलती हैं — कुछ बाक़ी नहीं।", reconcileAutoMatched: "{count} बैंक लाइन अपने आप मिल गई।", reconcileSuggested: "एक जैसा पैसा लगता है", reconcileSame: "एक ही पैसा", reconcileRecord: "{kind} दर्ज कीजिए", reconcileReceipt: "रसीद", reconcilePayment: "पेमेंट", reconcileUndo: "मिलान हटाइए", reconcilePartyPrompt: "ये किसका पैसा है? अपनी लिस्ट में जैसा नाम है वैसा लिखिए।", reconcileWhyPrompt: "ये मिलान क्यों ग़लत है? वजह दर्ज रहती है।", reconcileBillPrompt: "ये किस बिल का पैसा है? बिल के आगे का नंबर लिखिए, या एडवांस के लिए ख़ाली छोड़िए।", reconcileBillInvalid: "जो बिल चाहिए उसके आगे का नंबर लिखिए।", reconcileChecked: "बैंक जाँचा गया", reconcileRecorded: "दर्ज हो गया — अगली जाँच में मिल जाएगा", reconcileIssues: "देखना है", rateHintUse: "ये दर लीजिए", rateHintNone: "इस कोड की कोई दर दर्ज नहीं है।",
     navOperations: "सेवा की स्थिति", operationsEyebrow: "सेवा की सेहत", operationsTitle: "क्या सेवा सही चल रही है?", operationsHelp: "इनवॉइस या बैंक रिकॉर्ड खोले बिना सर्विस चेक, बाहरी नाकामी, सुरक्षित रीट्राय और ग्राहक को दिखने वाली घटना देखिए।", operationsSafetyTitle: "ग्राहक का डेटा निजी रहता है। ", operationsSafety: "यहाँ सिर्फ़ एरर कोड और correlation ID दिखते हैं। रीट्राय तभी मिलता है जब काम सुरक्षित और डुप्लिकेट-प्रूफ़ घोषित हो।", operationsHealth: "सेहत की जाँच", operationsFailures: "बाहरी नाकामी", operationsQueue: "सुरक्षित रीट्राय क्यू", operationsRecurring: "नियमित काम", operationsIncidents: "ग्राहक स्थिति का इतिहास", operationsHealthy: "सभी जाँच सही चल रही हैं", operationsDegraded: "एक या अधिक जाँच पर ध्यान चाहिए", operationsNoFailures: "इस कंपनी के लिए कोई बाहरी नाकामी नहीं।", operationsNoJobs: "कोई काम इंतज़ार में नहीं।", operationsNoRecurring: "कोई नियमित काम दर्ज नहीं है।", operationsNextRun: "अगली बार", operationsLastRun: "पिछली बार", operationsNeverRun: "अभी नहीं चला", operationsRunning: "चल रहा है", operationsSucceeded: "पूरा हुआ", operationsFailed: "नाकाम हुआ", operationsDeadLettered: "बार-बार नाकामी के बाद रोका गया", operationsReplay: "सुरक्षित दोबारा चलाइए", operationsNoIncidents: "कोई मौजूदा या हाल की घटना नहीं।",
     navBusiness: "बिज़नेस की जानकारी", businessEyebrow: "आपका बिज़नेस", businessTitle: "आपका बिज़नेस, जैसा हर बिल पर छपता है", businessHelp: "क़ानून कहता है कि हर बिल पर आपका नाम, आपका पता और आपका GST नंबर हो। यहाँ एक बार लिखिए, फिर हर बिल, चालान और कोटेशन पर ये आएगा।",
     businessNameLegend: "नाम", businessLegalName: "रजिस्टर्ड नाम", businessTradeName: "काम का नाम (ऑप्शनल)", businessTradeNameHint: "ये भर दीजिए तो बिल पर रजिस्टर्ड नाम की जगह यही छपेगा।",
@@ -718,6 +721,7 @@ const copy = {
     itemsLeft: "{quantity} {unit} बचा", itemsNoneLeft: "ख़त्म", itemsService: "सेवा", itemsLine: "HSN {code} · GST {rate}", itemsExempt: "छूट",
     homeGreeting: "नमस्ते, {company}", homeMoneyTitle: "आज आपका पैसा", homeSalesToday: "आज की बिक्री", homeCash: "गल्ले में नक़द", homeBank: "आज UPI और बैंक में आया", homeToCollect: "लेना है", homeToPay: "देना है",
     homeTasksTitle: "आज आपके लिए", homeAllClear: "आज सब ठीक है", homeRecentBills: "हाल के बिल", homeNoBills: "अभी कोई बिल नहीं। पहला बिल बनाने के लिए + बिल दबाइए।",
+    homeComingUpTitle: "आगे आने वाला", homeComingClear: "अभी कुछ देय नहीं।", homeComingDone: "हो गया", homeComingDoneConfirm: "तभी हो गया कहिए जब सच में हो गया हो — यह दर्ज रहता है।",
     homeChipPaid: "चुकाया", homeChipDue: "{amount} बाक़ी", homeChipLate: "{amount} · {days} दिन देर", homeChipLateOne: "{amount} · 1 दिन देर",
     payCash: "नक़द", payUpi: "UPI", payCard: "कार्ड", payBank: "बैंक", payCheque: "चेक", payUdhaar: "उधार"
   }
@@ -1431,6 +1435,28 @@ function renderDashboard(data) {
   }));
   document.querySelector("#home-all-clear").hidden = home.tasks.length > 0;
 
+  // Issue #297 — the deadlines ahead, from the real compliance calendar. "Done" asks once, then
+  // the calendar writes it down with what the person said.
+  const comingRows = home.comingUp ?? [];
+  document.querySelector("#home-coming").replaceChildren(...comingRows.map((row) => {
+    const item = el("li", "task");
+    const dot = el("span", `task-dot ${row.blocking || row.daysLeft <= 0 ? "late" : "due"}`);
+    dot.setAttribute("aria-hidden", "true");
+    const body = el("span", "task-text", t(row.title));
+    (row.warnings ?? []).forEach((warning) => body.append(el("small", "", t(warning))));
+    item.append(dot, body);
+    const open = el("button", "secondary-button", words.viewAll);
+    open.type = "button";
+    open.addEventListener("click", () => openView(row.open.view));
+    item.append(open);
+    const done = el("button", "secondary-button", words.homeComingDone);
+    done.type = "button";
+    done.addEventListener("click", () => completeComingUp(row, done));
+    item.append(done);
+    return item;
+  }));
+  document.querySelector("#home-coming-clear").hidden = comingRows.length > 0;
+
   const bills = document.querySelector("#home-bills");
   bills.replaceChildren(...home.recentBills.map((bill) => { const item = el("li"); item.append(homeBillRow(bill)); return item; }));
   if (home.recentBills.length === 0) bills.append(el("li", "loading-copy", words.homeNoBills));
@@ -1443,6 +1469,18 @@ function renderDashboard(data) {
   // Issue #303 — the design page's money card shows these same figures.
   if (state.view === "design" && !document.querySelector("#design-content").hidden) renderDesign();
   if (state.view === "items") renderItems();
+}
+
+// Issue #297 — marking a deadline done asks the person to say so in words; the calendar writes
+// the typed confirmation down with who said it and when.
+async function completeComingUp(row, button) {
+  const note = window.prompt(text("homeComingDoneConfirm"), "");
+  if (note === null) return;
+  button.disabled = true;
+  try {
+    await api("/api/compliance/calendar/complete", { method: "POST", body: JSON.stringify({ key: row.id, note }) });
+    await loadDashboard();
+  } catch (error) { button.disabled = false; showDialog({ title: copy[state.locale].nothingSaved, message: localizedError(error) }, "failed"); }
 }
 
 // ------------------------------------------------ issue #304: the Items tab
@@ -3919,11 +3957,102 @@ async function loadBankFeeds() {
         row.append(actions);
       }
       connections.append(row);
-      connection.transactions.forEach((item) => transactions.append(bankActivityRow(item.creditPaise !== "0" ? "+" : "−", item.description, `${item.bookedOn} · ${money(Number(item.creditPaise !== "0" ? item.creditPaise : item.debitPaise) / 100)}${item.reference ? ` · ${item.reference}` : ""}`)));
+      connection.transactions.forEach((item) => transactions.append(bankActivityRow(item.matched ? "✓" : item.creditPaise !== "0" ? "+" : "−", item.description, `${item.bookedOn} · ${money(Number(item.creditPaise !== "0" ? item.creditPaise : item.debitPaise) / 100)}${item.reference ? ` · ${item.reference}` : ""}`, item.matched ? "green" : "amber")));
     }
     if (transactions.childElementCount === 0) transactions.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: copy[state.locale].noBankTransactions }));
   } catch (error) { connections.textContent = localizedError(error); }
 }
+
+// ---------------------------------------------------------------- issue #297: the Reconcile tab
+//
+// "Check the bank" matches imported lines against recorded receipts and payments. What it is sure
+// of it matches itself; what it guesses it offers with a "Same money" button; bank money the books
+// lack gets a "Record" button that posts through the ordinary receipt/payment path.
+
+async function runReconcile() {
+  const box = document.querySelector("#bank-reconcile");
+  const button = document.querySelector("#bank-reconcile-run");
+  if (!box || !button) return;
+  button.disabled = true;
+  try {
+    renderReconcile(await api("/api/bank-feeds/reconcile", { method: "POST", body: JSON.stringify({}) }));
+    await loadBankFeeds();
+  } catch (error) { box.textContent = localizedError(error); }
+  button.disabled = false;
+}
+
+function reconcileRow(iconText, title, detail, tone = "amber") { return bankActivityRow(iconText, title, detail, tone); }
+
+function renderReconcile(result) {
+  const box = document.querySelector("#bank-reconcile");
+  const words = copy[state.locale];
+  box.replaceChildren();
+  const live = result.matches.filter((match) => match.status !== "UNMATCHED");
+  const automatic = live.filter((match) => match.status === "AUTO_MATCHED");
+  if (automatic.length > 0) box.append(reconcileRow("✓", text("reconcileAutoMatched", { count: automatic.length }), "", "green"));
+  for (const match of live) {
+    const row = reconcileRow("⇄", `${Math.round(match.confidence)}% · ${match.reasons.join(" · ")}`, `${money(Number(match.amountDifferencePaise) / 100)} ${words.difference ?? ""}`.trim(), match.status === "CONFIRMED" ? "green" : "amber");
+    const actions = document.createElement("div");
+    const action = document.createElement("button");
+    action.type = "button"; action.className = "secondary-button";
+    if (match.status === "SUGGESTED") { action.textContent = words.reconcileSame; action.dataset.candidateId = match.candidateId; }
+    else { action.textContent = words.reconcileUndo; action.dataset.matchId = match.id; }
+    actions.append(action); row.append(actions); box.append(row);
+  }
+  // The pairs the check is not sure enough about to match by itself — a person says "Same money".
+  const matchedCandidates = new Set(live.map((match) => match.candidateId));
+  for (const candidate of result.candidates.filter((item) => !matchedCandidates.has(item.id))) {
+    const row = reconcileRow("?", `${Math.round(candidate.confidence)}% · ${candidate.reasons.join(" · ")}`, `${money(Number(candidate.amountDifferencePaise) / 100)} ${words.difference ?? ""}`.trim(), "amber");
+    const actions = document.createElement("div");
+    const action = document.createElement("button");
+    action.type = "button"; action.className = "secondary-button"; action.textContent = words.reconcileSame;
+    action.dataset.candidateId = candidate.id;
+    actions.append(action); row.append(actions); box.append(row);
+  }
+  for (const suggestion of result.suggestedPayments) {
+    const row = reconcileRow("?", suggestion.narration, `${suggestion.date} · ${money(Number(suggestion.amountPaise) / 100)}`, "amber");
+    const action = document.createElement("button");
+    action.type = "button"; action.className = "secondary-button";
+    action.textContent = text("reconcileRecord", { kind: suggestion.direction === "RECEIPT" ? words.reconcileReceipt : words.reconcilePayment });
+    action.dataset.transactionId = suggestion.bankTransactionId; action.dataset.direction = suggestion.direction; row.append(action); box.append(row);
+  }
+  for (const exception of result.exceptions) box.append(reconcileRow("!", exception.summary, words.reconcileIssues, "red"));
+  if (box.childElementCount === 0) box.append(Object.assign(document.createElement("p"), { className: "loading-copy", textContent: words.reconcileNone }));
+}
+
+document.querySelector("#bank-reconcile-run")?.addEventListener("click", () => runReconcile());
+
+document.querySelector("#bank-reconcile")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("button"); if (!button) return;
+  const words = copy[state.locale];
+  try {
+    if (button.dataset.candidateId) {
+      await api("/api/bank-feeds/reconcile/confirm", { method: "POST", body: JSON.stringify({ candidateId: button.dataset.candidateId }) });
+    } else if (button.dataset.matchId) {
+      const reason = window.prompt(words.reconcileWhyPrompt); if (reason === null) return;
+      await api("/api/bank-feeds/reconcile/unmatch", { method: "POST", body: JSON.stringify({ matchId: button.dataset.matchId, reason }) });
+    } else if (button.dataset.transactionId) {
+      const partyId = window.prompt(words.reconcilePartyPrompt); if (!partyId) return;
+      const body = { transactionId: button.dataset.transactionId, partyId };
+      // Money paid to a supplier settles a bill the person names; anything else stays an advance.
+      if (button.dataset.direction === "PAYMENT") {
+        const open = await api("/api/payments/open-bills", { method: "POST", body: JSON.stringify({ direction: "PAYMENT", partyId }) });
+        if (open.bills && open.bills.length > 0) {
+          const list = open.bills.map((bill, index) => `${index + 1}: ${bill.number} · ${bill.date} · ${money(Number(bill.outstanding) / 100)}`).join("\n");
+          const picked = window.prompt(`${words.reconcileBillPrompt}\n${list}`); if (picked === null) return;
+          const chosen = Number(picked.trim());
+          if (picked.trim() !== "") {
+            if (!Number.isInteger(chosen) || chosen < 1 || chosen > open.bills.length) { showDialog({ title: words.nothingSaved, message: words.reconcileBillInvalid }, "failed"); return; }
+            body.bills = JSON.stringify([open.bills[chosen - 1].id]);
+          }
+        }
+      }
+      await api("/api/bank-feeds/reconcile/record", { method: "POST", body: JSON.stringify(body) });
+      showDialog({ title: words.reconcileRecorded, message: "" }, "recorded");
+    }
+    await runReconcile();
+  } catch (error) { showDialog({ title: words.nothingSaved, message: localizedError(error) }, "failed"); }
+});
 
 document.querySelector("#bank-feed-connect")?.addEventListener("click", async () => {
   try {
@@ -7999,6 +8128,39 @@ document.querySelector("#new-supplier-form")?.addEventListener("submit", async (
     document.querySelector("#new-supplier-dialog").close();
   } catch (requestError) { error.textContent = requestError.message; }
 });
+
+// Issue #297 — the rate advisor on the item form: it suggests, it never fills the rate in. The
+// person reads the reason and the citation, then either taps "Use this rate" or keeps their own.
+document.querySelector('#item-form [name="hsnSac"]')?.addEventListener("change", async (event) => {
+  const hint = document.querySelector("#item-rate-hint");
+  if (!hint) return;
+  hint.hidden = true;
+  hint.replaceChildren();
+  const hsnSac = event.target.value.trim();
+  if (hsnSac === "") return;
+  try {
+    const advice = await api("/api/items/rate-hint", { method: "POST", body: JSON.stringify({ hsnSac }) });
+    const words = copy[state.locale];
+    hint.hidden = false;
+    if (advice.kind !== "SUGGESTED") { hint.textContent = `${advice.question ? `${t(advice.question)} ` : ""}${advice.whatWouldHelp ? t(advice.whatWouldHelp) : words.rateHintNone}`; return; }
+    hint.append(t(advice.reason), " ");
+    const use = el("button", "secondary-button", words.rateHintUse);
+    use.type = "button";
+    use.addEventListener("click", () => {
+      const select = document.querySelector("#item-tax");
+      const wanted = String(advice.ratePercentTimes100);
+      if ([...select.options].some((option) => option.value === wanted)) select.value = wanted;
+      else {
+        select.value = "other";
+        select.form.elements.namedItem("otherRate").value = String(advice.ratePercentTimes100 / 100);
+      }
+      document.querySelector("#item-other-rate").hidden = select.value !== "other";
+      hint.hidden = true;
+    });
+    hint.append(use);
+  } catch { hint.hidden = true; }
+});
+document.querySelector("#item-form")?.addEventListener("reset", () => { const hint = document.querySelector("#item-rate-hint"); if (hint) { hint.hidden = true; hint.replaceChildren(); } });
 
 document.querySelector("#item-tax")?.addEventListener("change", (event) => {
   document.querySelector("#item-other-rate").hidden = event.target.value !== "other";

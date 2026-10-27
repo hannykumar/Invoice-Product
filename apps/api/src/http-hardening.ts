@@ -75,21 +75,39 @@ export class BodyTooLarge extends Error {
 }
 
 /**
+ * How much of a refused upload is read and thrown away before the connection is dropped after all.
+ * More than the largest body any route accepts (25 MB), so an honest client finishes sending and
+ * reads its 413; an endless stream cannot keep the connection busy past this (nor past
+ * `REQUEST_TIMEOUT_MS`).
+ */
+export const MAX_DISCARDED_BYTES = 64 * 1024 * 1024;
+
+/** Reads and drops what is left of a refused request body; past `MAX_DISCARDED_BYTES` the connection is destroyed. */
+export const discardRest = (request: IncomingMessage, maxBytes: number = MAX_DISCARDED_BYTES): void => {
+  let dropped = 0;
+  request.on('data', (chunk: Buffer) => { dropped += chunk.length; if (dropped > maxBytes) request.destroy(); });
+  request.on('error', () => undefined);
+  request.resume();
+};
+
+/**
  * Reads the body, and stops as soon as it passes `limit`: a declared length that is too big is
  * refused before a byte is read, and a body sent without one stops being collected at the limit.
- * The stream is paused rather than destroyed, so the connection stays open long enough for the
- * 413 to reach the client; the response then closes it.
+ * The rest of an oversize body is read and thrown away (`discardRest`), not left unread and not cut
+ * off: closing a TCP connection that still has unread bytes makes the operating system reset it,
+ * and a reset can reach a client that is still uploading before it has read the 413 (a client on
+ * macOS then sees ECONNRESET/EPIPE instead of the message). Issue #497.
  */
 export const readLimitedBody = (request: IncomingMessage, limit: number): Promise<Buffer> => {
   const declared = Number(request.headers['content-length']);
-  if (Number.isFinite(declared) && declared > limit) return Promise.reject(new BodyTooLarge(limit));
+  if (Number.isFinite(declared) && declared > limit) { discardRest(request); return Promise.reject(new BodyTooLarge(limit)); }
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
     const stop = () => { request.off('data', onData); request.off('end', onEnd); request.off('error', onError); };
     const onData = (chunk: Buffer) => {
       size += chunk.length;
-      if (size > limit) { stop(); request.pause(); reject(new BodyTooLarge(limit)); return; }
+      if (size > limit) { stop(); discardRest(request); reject(new BodyTooLarge(limit)); return; }
       chunks.push(chunk);
     };
     const onEnd = () => { stop(); resolve(Buffer.concat(chunks)); };

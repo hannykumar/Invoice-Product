@@ -31,7 +31,10 @@ const EVERYTHING: readonly Permission[] = [
   "sales.draft.write", "sales.finalise", "sales.approve", "sales.cancel",
   "payments.record", "payments.allocate", "payments.reverse", "payments.write_off", "approval.decide", "access.review",
   "notification.send", "collections.manage", "collections.send",
-  "bank.balance.read", "bank.feed.manage", "bank.feed.sync",
+  "bank.balance.read", "bank.feed.manage", "bank.feed.sync", "bank.reconcile", "bank.reconcile.confirm",
+  // #297 — the deadlines screen and the warnings on Home the calendar drives.
+  "compliance.calendar.view", "compliance.calendar.refresh", "compliance.calendar.complete",
+  "compliance.calendar.snooze", "compliance.calendar.escalate",
   "sales.approve_discount", "sales.override_credit_limit",
   "reports.view.financial", "reports.view.sales", "reports.view.purchase", "reports.view.stock",
   "reports.view.dues", "reports.view.gst", "reports.view.exceptions", "reports.export",

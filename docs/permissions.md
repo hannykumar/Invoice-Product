@@ -31,6 +31,8 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `bank.balance.read` | ✓ | ✓ | ✓ |  |  |
 | `bank.feed.manage` | ✓ | ✓ | ✓ |  |  |
 | `bank.feed.sync` | ✓ | ✓ | ✓ |  |  |
+| `bank.reconcile` | ✓ | ✓ | ✓ |  |  |
+| `bank.reconcile.confirm` | ✓ | ✓ | ✓ |  |  |
 | `branding.write` | ✓ | ✓ |  |  |  |
 | `business.settings.read` | ✓ | ✓ | ✓ |  |  |
 | `business.settings.write` | ✓ | ✓ |  |  |  |
@@ -43,6 +45,11 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `collections.reminders.send` | ✓ | ✓ | ✓ |  |  |
 | `collections.reminders.view` | ✓ | ✓ | ✓ |  |  |
 | `collections.send` | ✓ | ✓ | ✓ |  |  |
+| `compliance.calendar.complete` | ✓ | ✓ | ✓ |  |  |
+| `compliance.calendar.escalate` | ✓ | ✓ | ✓ |  |  |
+| `compliance.calendar.refresh` | ✓ | ✓ | ✓ |  |  |
+| `compliance.calendar.snooze` | ✓ | ✓ | ✓ |  |  |
+| `compliance.calendar.view` | ✓ | ✓ | ✓ |  |  |
 | `dashboard.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `einvoice.cancel` | ✓ | ✓ | ✓ |  |  |
 | `einvoice.generate` | ✓ | ✓ | ✓ |  |  |
@@ -132,7 +139,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (204)
+## Routes (211)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
@@ -182,6 +189,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/items/code` | `masters.item.write` + `masters.item.rate.declare` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/items/edit` | `masters.item.write` + `masters.item.rate.declare` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/items/selling` | `sales.draft.write` | ✓ | ✓ | ✓ | ✓ |  |
+| `POST /api/items/rate-hint` | `masters.item.write` + `masters.item.rate.declare` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/delivery/choices` | `sales.draft.write` or `challan.issue` | ✓ | ✓ | ✓ | ✓ |  |
 | `POST /api/transporters` | `masters.party.write` | ✓ | ✓ | ✓ | ✓ |  |
 | `POST /api/shipping-addresses` | `masters.party.write` | ✓ | ✓ | ✓ | ✓ |  |
@@ -316,6 +324,10 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/bank-feeds/consent/complete` | `bank.feed.manage` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/bank-feeds/sync` | `bank.feed.sync` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/bank-feeds/disconnect` | `bank.feed.manage` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/bank-feeds/reconcile` | `bank.reconcile` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/bank-feeds/reconcile/confirm` | `bank.reconcile.confirm` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/bank-feeds/reconcile/unmatch` | `bank.reconcile.confirm` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/bank-feeds/reconcile/record` | `bank.reconcile.confirm` + `payments.record` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/books/heads` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/books/journal/accounts` | `ledger.post.journal` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/books/expense/preview` | `ledger.post.payment` | ✓ | ✓ | ✓ |  |  |
@@ -340,3 +352,5 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/privacy/deletion` | `privacy.delete` | ✓ | ✓ |  |  |  |
 | `POST /api/backups` | `backup.manage` | ✓ | ✓ |  |  |  |
 | `GET /api/backups/drills` | `backup.restore` | ✓ | ✓ |  |  |  |
+| `GET /api/compliance/calendar` | `compliance.calendar.view` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/compliance/calendar/complete` | `compliance.calendar.complete` | ✓ | ✓ | ✓ |  |  |
