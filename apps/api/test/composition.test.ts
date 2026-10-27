@@ -98,7 +98,7 @@ test('applying it twice with one request id applies it once, and leaves an audit
   assert.equal(applied.body.scheme, 'COMPOSITION');
   assert.equal(applied.body.deduplicated, false);
   assert.equal(applied.body.ratePercent, 1);
-  assert.equal(applied.body.rateBasis, 'SUGGESTED_UNVERIFIED', 'the usual rate is used, and recorded as not checked against a notice');
+  assert.equal(applied.body.rateBasis, 'BUSINESS_DECLARED', 'the owner confirmed the usual rate, so it is recorded as theirs, not as checked law');
   const again = await request('POST', '/api/composition/scheme', { ...CHOICE, token: preview.body.token }, session);
   assert.equal(again.status, 200);
   assert.equal(again.body.deduplicated, true);

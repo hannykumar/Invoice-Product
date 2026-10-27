@@ -197,7 +197,10 @@ export const previewSchemeChange = async (context: SchemeContext, input: Record<
       rateBasis = 'BUSINESS_DECLARED';
     }
     if (rateBasis === 'SUGGESTED_UNVERIFIED') {
-      if (!yes(input.rateConfirmed)) {
+      // Once the owner confirms the usual rate it is theirs to stand behind: recorded as declared
+      // by them, never as checked law (the same bargain as business-declared GST rates, option C).
+      if (yes(input.rateConfirmed)) rateBasis = 'BUSINESS_DECLARED';
+      else {
         blockers.push(pair(
           `The usual rate for this kind of business is ${Number(rateBasisPoints) / 100}% of sales, but we have not been able to check it against the government notice this month. Please confirm the rate with your accountant and tick "rate confirmed".`,
           `इस तरह के बिज़नेस का सामान्य रेट बिक्री का ${Number(rateBasisPoints) / 100}% है, पर हम इस महीने इसे सरकारी नोटिस से जाँच नहीं पाए हैं। कृपया अकाउंटेंट से रेट पक्का करके "rate confirmed" पर निशान लगाइए।`,

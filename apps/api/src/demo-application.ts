@@ -2992,9 +2992,15 @@ export class DemoApplication {
       // Issue #288 — money taken at the counter is recorded with the bill, so the review says so
       // instead of "the customer balance will increase".
       const paidNow = this.paidNowOn(input, draft, customer.legalName);
+      // Issue #296 — a composition business issues a Bill of Supply: said first, so nobody expects GST on it.
+      const billOfSupply = draft.pricing?.supplierRegistration === 'COMPOSITION';
+      const effects = paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect));
       return {
         ...checked,
-        effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect)),
+        billKind: billOfSupply ? 'BILL_OF_SUPPLY' as const : 'TAX_INVOICE' as const,
+        effects: billOfSupply
+          ? [both('This will be a Bill of Supply, not a tax invoice. Your business is on the composition scheme, so no GST is added and the bill says "composition taxable person, not eligible to collect tax on supplies".', 'यह टैक्स इनवॉइस नहीं, Bill of Supply होगा। आपका बिज़नेस कम्पोज़िशन स्कीम में है, इसलिए GST नहीं जुड़ता और बिल पर "composition taxable person, not eligible to collect tax on supplies" लिखा रहता है।'), ...effects]
+          : effects,
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
         placeOfSupply: draft.supplyKind === 'SERVICES'
