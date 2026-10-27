@@ -1252,7 +1252,7 @@ function showLogin() {
 }
 async function signInOrAsk() {
   const dialog = document.querySelector("#login-dialog");
-  if (!dialog.open) {
+  if (!dialog.open && invitationToken === null) { // an invitation is taken up by its own address, never by the tester
     try {
       const offered = await fetch("/api/auth/tester", { credentials: "same-origin" });
       if (offered.ok && (await offered.json()).automatic === true) {

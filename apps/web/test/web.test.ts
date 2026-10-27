@@ -941,3 +941,8 @@ test("#293: the Sale screen reaches every discount, and a price correction asks 
   assert.match(script, /if \(fields\) fields\.disabled = !price;/);
   for (const locale of ["en-IN", "hi-IN"]) assert.ok(copy[locale]?.causeChoose, `${locale} names the blank choice`);
 });
+
+test('an invitation link is never taken up by the automatic tester sign-in', async () => {
+  const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(app, /if \(!dialog\.open && invitationToken === null\) \{/);
+});
