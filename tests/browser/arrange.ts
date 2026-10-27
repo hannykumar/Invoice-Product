@@ -69,3 +69,12 @@ export async function recordSale(request: APIRequestContext, shop: Shop, input: 
 export async function addCustomer(request: APIRequestContext, shop: Shop, name: string) {
   return addCustomerWithPhone(request, shop, name, "");
 }
+
+/** A supplier new to this spec (no bills yet), with a GST number of its own. */
+export async function addSupplier(request: APIRequestContext, shop: Shop, name: string) {
+  const made = await apiCall(request, shop.cookie, "/api/suppliers", {
+    legalName: name, gstin: gstinFor("29"), registration: "regular", stateCode: "29", pincode: "560058",
+    line1: "Plot 9, Peenya Industrial Area", city: "Bengaluru", acknowledgeSimilar: true,
+  });
+  return { id: made.supplier.id as string, name };
+}
