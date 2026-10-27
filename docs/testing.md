@@ -32,7 +32,7 @@ browser suite is a separate CI job, because it needs a Chromium install.
 
 ## The flows that must never break
 
-Nine checks get a real-browser test, in `tests/browser/`, each driven through Chromium against
+Twelve checks get a real-browser test, in `tests/browser/`, each driven through Chromium against
 the real web server on PostgreSQL:
 
 | Flow | Spec | What the test checks |
@@ -47,6 +47,8 @@ the real web server on PostgreSQL:
 | The database is really used (#494) | `postgres.spec.ts` | A bill made through the app is a balanced `FINAL` row in the database — so the server is not on the in-memory store. |
 | Restart survival (#494) | `postgres.spec.ts` | The web server process is killed outright and started again on the same database; the page still shows the owner signed in with the bill, its print copy is there, and the next bill number continues. |
 | Company isolation (#494) | `postgres.spec.ts` | Company B signed in through the browser sees nothing of company A's bill on screen, and asking the API for it by id is a 404. |
+| Sale in slides | `sale-slides.spec.ts` | The sale by keyboard (₹50,150 and the e-way bill raised by itself), a three-tap walk-in sale, and the 600 KGS refusal with the purchase hand-off (#305, #311). |
+| Page security | `security-headers.spec.ts` | The page under its content policy, a hostile name staying text, the bill frame's policy and sandbox (#349, #399). |
 
 Browser tests assert what the shopkeeper reads — the bill number, the rupee total, the badge the
 books earn — not implementation details.
@@ -72,10 +74,9 @@ The CI `browser` job runs exactly this against a PostgreSQL 16 service on every 
 `npm run test:browser` alone runs the same specs against a database you migrated and seeded
 yourself (`db:migrate`, `db:seed`); it is for debugging, not for CI.
 
-The two Puppeteer files in `apps/web/test` (`sale-slides`, `security-headers`) are the only
-browser tests that run **in memory**, as part of `npm test`: they check the page, say so in their
-header, and assert they are on the in-memory store. They prove nothing about PostgreSQL. Folding
-them into this suite is #496.
+There are no browser tests outside `tests/browser/` (#496): `npm test` needs no browser. The one check
+from the old in-memory page tests that never needed one — every file carries the security headers —
+stays a unit test, `apps/web/test/security-headers.test.ts`.
 
 ## How a browser test is written here
 
@@ -95,7 +96,27 @@ them into this suite is #496.
   which is the flag the screen itself sends.
 - **Sales need the caller's `requestId`** (required since #392); purchases and returns need it
   on the same routes.
+- **The demo company is on the Free plan, which covers 50 bills.** A fresh database per run
+  (`test:browser:pg`) never gets near it; dozens of `test:browser` runs on one database you seeded
+  yourself do, and Make bill then answers "Nothing was saved". Drop it and seed again.
 - **A `.skip` carries its reason in words** — where it is blocked, and what unskips it.
+
+## One browser driver
+
+Every browser test is a Playwright spec in `tests/browser/`, run by `npm run test:browser:pg` (what
+the CI `browser` job runs; `npm run test:browser` is the same suite on a database you seeded
+yourself). There is no second driver and no browser test inside `apps/` or `packages/`; a unit test
+that needs a browser belongs here. (`puppeteer` stays in the dependencies for one reason only: it
+renders the bill PDFs in `packages/invoice-templates`, see ADR 0496.) `npm test` and
+`npm run verify` need no browser.
+
+Writing one: import `helpers.ts`, arrange through the API, sign in through the dialog, and wait with
+web-first assertions (`expect(locator).toHaveText(…)`, `expect.poll(…)`) — never a fixed sleep.
+`offline.ts` makes a page refuse any host but the local server. A name that must be new every run
+and not merely different in its last letters (the app treats those as the same item or customer)
+gets a random part, as `sale-slides.spec.ts` does. Things the API cannot arrange (the vehicle-record
+consent, `db.ts`) are written to the test database through the owner's login, which `global-setup.ts`
+already insists is a test one.
 
 ## What a test must do
 
