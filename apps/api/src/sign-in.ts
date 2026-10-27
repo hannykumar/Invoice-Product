@@ -46,10 +46,10 @@ export class SignInUnavailable extends Error {
   constructor() { super('Sign-in is not working just now. Nothing was changed. Please try again in a minute.'); }
 }
 
-/** One message for a wrong code, an old code and an address nobody uses, so nobody can probe for accounts. */
 /** The tester: the seeded demo owner of Sampoorna Traders (packages/platform/src/seed.ts). */
 const TESTER = SYNTHETIC_PLATFORM_USERS.find((user) => user.email === 'owner@sampoorna.example.invalid')!;
 
+/** One message for a wrong code, an old code and an address nobody uses, so nobody can probe for accounts. */
 export const CODE_NOT_ACCEPTED = 'That code is not right, or it is too old. Ask for a new code and type it in.';
 
 /** The cookie: `__Host-` so only this exact site can set it, `HttpOnly` so page script cannot read it (ADR D2). */
