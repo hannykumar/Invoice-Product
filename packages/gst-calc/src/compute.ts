@@ -43,7 +43,7 @@ import {
 // which is the convention their lane and GPT 2's already use for cross-package imports.
 import { GST_STATE_CODES } from '../../masters/src/validation.ts';
 import { minimumHsnDigitsOnInvoice, turnoverAnswerOn, type TurnoverAbove5Crore } from '../../masters/src/hsn-digits.ts';
-import type { MasterDataReader, TaxTreatment } from './master-data-port.ts';
+import { registrationOn, type MasterDataReader, type Registration, type TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
 import type { DeclaredRateReader } from './declared-rates.ts';
 
@@ -185,7 +185,8 @@ export interface BlockedReason {
     | 'RATE_NOT_FOUND'
     | 'RATE_NOT_REVIEWED'
     | 'INCLUSIVE_WITH_CESS_UNSUPPORTED'
-    | 'COMPOSITION_UNDECIDED';
+    | 'COMPOSITION_UNDECIDED'
+    | 'COMPOSITION_INTERSTATE_SUPPLY';
   readonly lineId?: string;
   /** Plain wording, from the issue #46 rules. */
   readonly message: { readonly 'en-IN': string; readonly 'hi-IN': string };
@@ -199,6 +200,8 @@ export type ComputeResult =
       readonly placeOfSupplyStateCode: string;
       readonly split: TaxSplit;
       readonly mayChargeGst: boolean;
+      /** Issue #296 — the scheme the business was under on the bill's date; a composition bill is a bill of supply. */
+      readonly supplierRegistration: Registration;
       readonly lines: readonly ComputedTaxLine[];
       readonly totals: TaxTotals;
       readonly decisions: readonly Decision[];
@@ -309,7 +312,7 @@ export class GstCalculator {
     // 1. May this business charge GST at all? A rule decides, not this file.
     const composition = this.#engine.evaluate({
       topic: 'gst.composition.charging',
-      facts: FactSet.of({ 'supply.supplierRegistration': company.registration }, 'MASTER_DATA'),
+      facts: FactSet.of({ 'supply.supplierRegistration': registrationOn(company, input.documentDate) }, 'MASTER_DATA'),
       documentDate: input.documentDate,
       stateCode: company.stateCode,
     }).decision;
@@ -337,6 +340,22 @@ export class GstCalculator {
     // involved, and an export's place of supply is outside India, which no state rule covers.
     const split = input.zeroRated !== undefined ? 'IGST' : this.#decideSplit(input, company.stateCode, placeOfSupply, decisions, reasons);
     if (split === null) return this.#refuse(input, reasons, decisions);
+
+    // Issue #296 — CGST Act s.10(2)(c): a person paying tax under the composition levy may not make
+    // an inter-State outward supply, and an export or SEZ supply is inter-State by IGST Act s.7(5).
+    // Whether this extends to inter-State *services* by an ordinary s.10(1) dealer is NOT VERIFIED
+    // (Notification 2/2019-CT(Rate) bars it for the services-only option), so it is refused too and
+    // the message sends the owner to their accountant rather than saying it is settled law.
+    if (registrationOn(company, input.documentDate) === 'COMPOSITION' && split === 'IGST') {
+      reasons.push(
+        blocked(
+          'COMPOSITION_INTERSTATE_SUPPLY',
+          'Your business is on the composition scheme, and the scheme does not allow selling to a customer in another state (or sending goods abroad). Sell this from a regular GST registration, or ask your accountant whether you should leave the composition scheme.',
+          'आपका बिज़नेस कम्पोज़िशन स्कीम में है, और यह स्कीम दूसरे राज्य (या विदेश) के ग्राहक को बिक्री की इजाज़त नहीं देती। यह बिक्री रेगुलर GST रजिस्ट्रेशन से करें, या अपने अकाउंटेंट से पूछें कि क्या आपको कम्पोज़िशन स्कीम छोड़नी चाहिए।',
+        ),
+      );
+      return this.#refuse(input, reasons, decisions);
+    }
 
     // 4. Line arithmetic.
     const prepared = input.lines.map((line) => {
@@ -408,6 +427,7 @@ export class GstCalculator {
       placeOfSupplyStateCode: placeOfSupply,
       split,
       mayChargeGst,
+      supplierRegistration: registrationOn(company, input.documentDate),
       lines: computedLines,
       totals,
       decisions,

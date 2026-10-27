@@ -9,6 +9,7 @@ export * from './validate.ts';
 export * from './json-export.ts';
 export * from './ports.ts';
 export * from './service.ts';
+export * from './composition.ts';
 export * from './adapters.ts';
 export * from './fixtures.ts';
 export { gstReturnMigrations } from './migrations.ts';

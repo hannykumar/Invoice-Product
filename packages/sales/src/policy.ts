@@ -10,6 +10,12 @@ import { DEFAULT_SERIES, type NumberSeries } from './numbering.ts';
 
 export interface SalesPolicy {
   readonly series: NumberSeries;
+  /**
+   * Issue #296 — the series a composition business's bills of supply are numbered in (Rule 49 asks
+   * for a consecutive serial number not exceeding sixteen characters, like Rule 46). Kept apart from
+   * `series` so a business that leaves the scheme keeps a clean run of tax invoices.
+   */
+  readonly billOfSupplySeries?: NumberSeries;
   /** A bill at or above this needs someone's approval. `null` means approval is never required. */
   readonly approvalRequiredAtOrAbove: Money | null;
   /** How many days after the document date a final invoice may still be cancelled. */
@@ -23,8 +29,11 @@ export interface SalesPolicy {
   readonly roundToWholeRupee: boolean;
 }
 
+export const DEFAULT_BILL_OF_SUPPLY_SERIES: NumberSeries = { prefix: 'BOS', branchCode: '' };
+
 export const DEFAULT_SALES_POLICY: SalesPolicy = {
   series: DEFAULT_SERIES,
+  billOfSupplySeries: DEFAULT_BILL_OF_SUPPLY_SERIES,
   approvalRequiredAtOrAbove: null,
   cancellationWindowDays: 7,
   allowCancelAfterGovernmentRegistration: false,

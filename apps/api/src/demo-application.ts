@@ -4,7 +4,7 @@
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
 import { BooksDesk } from './books-entry-application.ts';
-import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { asId, conflict, DomainError, financialYearOf as financialYearName, financialYearRange, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine, type Discount } from '@invoice/gst-calc';
@@ -81,6 +81,9 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
+import { COMPOSITION_LEGEND } from '@invoice/gst-returns';
+import { CompositionDesk, filedCalendarQuarters } from './composition-application.ts';
+import { COMPOSITION_NO_CREDIT_CLAUSE, schemeDuring, schemeOn } from './composition-scheme.ts';
 import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor, writeOffLimitOf } from './business-details-application.ts';
 import { approvalChallanTask, eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
@@ -127,7 +130,7 @@ import { citeReverseChargeEntry, reverseChargeDecisionFor, type ReverseChargeDec
 import { checkReverseChargeEntry, type RegisterParty, type ReverseChargeLine, type SelfInvoice } from '../../../packages/purchasing/src/reverse-charge-register.ts';
 import { rcmTimeOfSupply, selfInvoiceDue, type RcmSupplyKind } from '../../../packages/purchasing/src/reverse-charge-timing.ts';
 import { BLOCKED_CREDIT_REASONS, blockedCreditReasonFor } from '../../../packages/purchasing/src/blocked-credit.ts';
-import type { Party } from '../../../packages/masters/src/types.ts';
+import type { Party, TaxDefault } from '../../../packages/masters/src/types.ts';
 import { normaliseInvoiceNumber } from '../../../packages/purchasing/src/duplicates.ts';
 import { formatPaise } from '../../../packages/purchasing/src/money.ts';
 import { gstinStateCode, normaliseIdentifier } from '../../../packages/masters/src/validation.ts';
@@ -230,7 +233,8 @@ import {
 import { BANK_RETURN_PATH, BankFeedService, InMemoryBankFeedStore, SyntheticBankFeedProvider, type BankFeedConnection, type BankFeedContext } from '../../../packages/bank-feeds/src/index.ts';
 import { itcInwardTaxPort } from '../../../packages/itc/src/adapters.ts';
 import type { ItcWorkspace, ReconciliationLine } from '../../../packages/itc/src/types.ts';
-import { ITC_PERMISSIONS, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
+import { ITC_PERMISSIONS, sumAmounts as sumItcAmounts, totalTaxOf as totalItcTaxOf } from '../../../packages/itc/src/types.ts';
+import { sumAmounts as sumReturnAmounts } from '../../../packages/gst-returns/src/types.ts';
 import { formatClaimDate } from '../../../packages/itc/src/deadline.ts';
 import {
   GstReturnService, InMemoryReturnPreparations, ledgerBookTaxPort, ledgerInputBookTaxPort, ledgerInwardTaxPort,
@@ -239,6 +243,23 @@ import {
 } from '@invoice/gst-returns';
 import { standardRecurringJobs, type RecurringJobDefinition } from '../../../ops/operations/src/index.ts';
 import { DurableMap, persist } from './durable.ts';
+// Issue #297 — the four packages the audit found finished but unreachable, composed here for real:
+// the compliance calendar behind Home's "Coming up" and the deadlines routes, the bank
+// reconciliation behind the Reconcile tab, and the rate advisor behind the item form's hint.
+import {
+  BankReconciliationService, InMemoryReconciliationStore, fromBankTransaction, fromPayment,
+  type BookPayment, type ReconciliationMatch, type ReconciliationRun, type ReconciliationStore,
+} from '../../../packages/bank-reconciliation/src/index.ts';
+import { PostgresReconciliationStore } from '../../../packages/bank-reconciliation/src/postgres-store.ts';
+import {
+  CALENDAR_PERMISSIONS, CatalogueDefinitions, ComplianceCalendarService,
+  eInvoiceBacklogSignals, InMemoryAlerts, InMemoryComplianceExceptions, InMemoryOccurrences,
+  purchaseMismatchSignals, returnReadinessSignals,
+  type CompanyProfilePort, type EInvoiceBacklogReader, type ReturnReadinessReader, type UnresolvedPurchaseReader,
+} from '../../../packages/compliance-calendar/src/index.ts';
+import { PostgresAlerts, PostgresComplianceExceptions, PostgresOccurrences } from '../../../packages/compliance-calendar/src/postgres.ts';
+import { mastersLearning, mastersRegistry, RateAdvisorService, type TaxDefaultRegistryPort } from '../../../packages/rate-advisor/src/index.ts';
+import { comingUpRows } from './home-application.ts';
 
 /** Issue #233 — a GST return in one of these states has been approved (and perhaps filed); its month's bills are fixed. */
 /** Issue #233 — the Returns screen's choice that credits a whole sales bill, charges included. */
@@ -985,6 +1006,8 @@ export class DemoApplication {
    * dated into a month whose return is already approved or filed.
    */
   private returnMonths: ReturnPreparationRepository = new InMemoryReturnPreparations();
+  /** Issue #296 — the composition scheme: the setting, CMP-08 and GSTR-4. Set once the shop is built. */
+  composition!: CompositionDesk;
   /**
    * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
    * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
@@ -1006,6 +1029,11 @@ export class DemoApplication {
   private readonly booksDesk: BooksDesk;
   private readonly agent: ActionAgentService;
   private readonly gstReturns: GstReturnService;
+  // Issue #297 — the modules wired in by this issue.
+  private readonly calendar: ComplianceCalendarService;
+  private readonly reconciliation: BankReconciliationService;
+  private readonly reconciliationStore: ReconciliationStore;
+  private readonly rateAdvisor: RateAdvisorService;
   /** Issue #141 — delivery challans, for goods that move before the bill exists. */
   readonly challans: ChallanDesk;
   /** Issue #142 — quotations and proforma invoices, the papers sent before a sale. */
@@ -1034,6 +1062,12 @@ export class DemoApplication {
     challans: ChallanDesk,
     presale: PreSaleDesk,
     exportSales: DurableMap<ExportParticulars>,
+    wired: {
+      calendar: ComplianceCalendarService;
+      reconciliation: BankReconciliationService;
+      reconciliationStore: ReconciliationStore;
+      rateAdvisor: RateAdvisorService;
+    },
   ) {
     this.config = config;
     // Issue #340 — the copies frozen when a bill, note or e-way bill is issued, and what was said
@@ -1066,6 +1100,10 @@ export class DemoApplication {
     this.bankFeeds = bankFeeds;
     this.booksDesk = new BooksDesk({ ledger: shop.ledger, store: shop.store, companyId: config.companyId, gstin: config.gstin });
     this.gstReturns = gstReturns;
+    this.calendar = wired.calendar;
+    this.reconciliation = wired.reconciliation;
+    this.reconciliationStore = wired.reconciliationStore;
+    this.rateAdvisor = wired.rateAdvisor;
   }
 
   /**
@@ -1739,6 +1777,8 @@ export class DemoApplication {
       repository: gstPreparations,
       audit: shop.audit,
       clock: appClock,
+      // Issue #296 — a composition business files CMP-08 and GSTR-4, not these.
+      scheme: { async during(companyId, from, to) { return schemeDuring(companyId, from, to); } },
     });
 
     // Issue #141. Challans share the store, so a number is allocated in the same transaction that
@@ -1770,11 +1810,137 @@ export class DemoApplication {
       advances,
     }), advances);
 
-    const app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, gstReturns, challans, presale, exportSales);
+    // Issue #297 — the three packages the audit found finished but unreachable, composed for real.
+
+    // Bank reconciliation (#22): the store #472 built is the one used on PostgreSQL; in memory the
+    // same port keeps the demo working. Matching itself never moves money — posting a line the bank
+    // shows but the books lack still goes through `payments.recordPayment` like any other entry.
+    const reconciliationStore: ReconciliationStore = pick(() => new InMemoryReconciliationStore(), (db) => new PostgresReconciliationStore(db));
+    const reconciliation = new BankReconciliationService(undefined, () => appClock.now(), reconciliationStore);
+
+    // Compliance calendar (#32): the company's profile is derived from facts the app already holds —
+    // its GSTIN, its books' start, the e-invoice answer and whether it sells goods — never asked again.
+    // A quarterly (QRMP) shop needs a Business details answer the app does not ask yet (ponytail, same
+    // as gstReturnTasks): monthly, because the GST returns screen prepares one return a month.
+    const calendarProfiles: CompanyProfilePort = {
+      async profileFor(companyId) {
+        const booksStart = (await shop.store.read().settings.get(companyId))?.booksStartDate ?? currentFinancialYear().from;
+        return {
+          companyId,
+          legalName: config.name,
+          gstin: config.gstin,
+          registrationType: { value: config.gstin === '' ? 'UNREGISTERED' : 'REGULAR', basis: 'DERIVED' },
+          gstFilingFrequency: { value: 'MONTHLY', basis: 'DERIVED', basisNote: 'The GST returns screen prepares one return a month.' },
+          // The same turnover facts `eInvoiceDecisionFor` reads: e-invoice obliges only a business
+          // that has crossed ₹5 crore in any year since 2017-18 (CGST Rule 48(4), applied by
+          // Notf. 78/2020-CT as amended by 10/2023-CT for the ₹5-crore floor, effective
+          // 2023-11-01). An exemption means it never applies. When the turnover answer is missing
+          // the fact itself stays null — the obligation waits for an answer instead of scheduling
+          // deadlines a small business does not have.
+          eInvoiceApplicable: eInvoiceExemptionOf(companyId) !== 'NONE'
+            ? { value: false, basis: 'DERIVED', basisNote: 'Business details says the business is exempt from e-invoice.' }
+            : (() => {
+              const answers = turnoverAnswersOf(companyId);
+              const band = turnoverBandOn(answers, isoDate(appToday()));
+              const legacy = band === null ? turnoverAnswerOn(answers, isoDate(appToday())) : null;
+              const above = band === '5_TO_10_CRORE' || band === '10_CRORE_AND_ABOVE' || band === 'UP_TO_5_CRORE_EARLIER_ABOVE' || legacy === 'YES'
+                ? true : band === 'UP_TO_5_CRORE' || legacy === 'NO' ? false : null;
+              return above === null ? null : { value: above, basis: 'DERIVED', basisNote: 'From the turnover answer in Business details.' };
+            })(),
+          movesGoods: { value: catalogueItems(companyId).some((item) => item.kind === 'goods'), basis: 'DERIVED' },
+          stateCode: { value: config.gstin.slice(0, 2), basis: 'DERIVED' },
+          calendarFrom: booksStart,
+          timeZone: 'Asia/Kolkata',
+          saturdayIsWorking: true,
+        };
+      },
+    };
+    let app!: DemoApplication;
+    // Real readers, not fixtures: the signals on a deadline come from the return workspace (#30),
+    // the e-invoice queue (#26) and the purchase comparison (#31) of this same company.
+    const returnReadiness: ReturnReadinessReader = { readinessFor: (companyId, periodKey) => app.returnReadiness(companyId, periodKey) };
+    const eInvoiceBacklog: EInvoiceBacklogReader = { pendingFor: (companyId, periodKey) => app.eInvoiceBacklog(companyId, periodKey) };
+    const unresolvedPurchases: UnresolvedPurchaseReader = { unresolvedFor: (companyId, periodKey) => app.unresolvedPurchases(companyId, periodKey) };
+    const calendar = new ComplianceCalendarService({
+      definitions: new CatalogueDefinitions(),
+      profiles: calendarProfiles,
+      occurrences: pick(() => new InMemoryOccurrences(), (db) => new PostgresOccurrences(db)),
+      alerts: pick(() => new InMemoryAlerts(), (db) => new PostgresAlerts(db)),
+      exceptions: pick(() => new InMemoryComplianceExceptions(), (db) => new PostgresComplianceExceptions(db)),
+      audit: shop.audit,
+      clock: appClock,
+      signals: [returnReadinessSignals(returnReadiness), eInvoiceBacklogSignals(eInvoiceBacklog), purchaseMismatchSignals(unresolvedPurchases)],
+    });
+
+    // Rate advisor (#59). Its register here is two registers read together: the rates the business
+    // itself declared on items and codes (`declaredRatesOf` — the very register a bill's rate line
+    // is chosen from, so what the advisor suggests is what the business actually charges) and #5's
+    // tax defaults, where `remember` puts an approved suggestion. A rate declared for another item
+    // counts as code-level evidence only — issue #281 says a rate pinned to an item belongs to that
+    // item alone, so the suggestion never claims to be that item's own rate. And a suggestion only
+    // ever asks: the owner still declares the new item's rate themselves.
+    const mastersRegistryPort = mastersRegistry(masterDataService(), mastersContext);
+    const declaredRegistry: TaxDefaultRegistryPort = {
+      async candidates(companyId, lookup, asOf) {
+        const code = lookup.hsnSac?.trim();
+        const declared = declaredRatesOf(companyId).list(companyId)
+          .filter((rate) =>
+            asOf >= rate.effectiveFrom
+            && (rate.effectiveTo === null || asOf <= rate.effectiveTo)
+            && ((lookup.itemId !== undefined && rate.itemId === lookup.itemId)
+              || (code !== undefined && code !== '' && (code.startsWith(rate.code) || rate.code.startsWith(code)))))
+          .map((rate) => ({
+            entry: {
+              id: `declared:${rate.itemId ?? rate.code}:${rate.declaredOn}`,
+              companyId,
+              ...(lookup.itemId !== undefined && rate.itemId === lookup.itemId ? { itemId: rate.itemId } : {}),
+              hsnSac: rate.code,
+              gstRateBasisPoints: Number(rate.ratePercentTimes100),
+              ...(rate.cess?.percentTimes100 === undefined ? {} : { cessRateBasisPoints: Number(rate.cess.percentTimes100) }),
+              ...(rate.cess?.perUnitPaise === undefined ? {} : { cessPerUnitPaise: rate.cess.perUnitPaise }),
+              reverseCharge: false,
+              source: `${rate.basis} — declared on ${rate.declaredOn}`,
+            } satisfies TaxDefault,
+            effectiveFrom: rate.effectiveFrom,
+          }));
+        return [...declared, ...(await mastersRegistryPort.candidates(companyId, lookup, asOf))];
+      },
+      async item(companyId, itemId, asOf) {
+        const found = catalogueItems(companyId).find((entry) => entry.id === itemId);
+        if (found !== undefined) return { name: found.name, hsnSac: found.hsnSac ?? null };
+        return mastersRegistryPort.item(companyId, itemId, asOf);
+      },
+    };
+    const rateAdvisor = new RateAdvisorService({
+      registry: declaredRegistry,
+      learning: mastersLearning(masterDataService(), mastersContext),
+      audit: shop.audit,
+      clock: () => appClock.now(),
+    });
+
+    app = new DemoApplication(config, shop, sales, salesRepository, payments, paymentRepository, documents, reportService, assistant, terms, returns, returnNotes, collections, notifications, outbox, bankFeeds, subscriptions, agent, gstReturns, challans, presale, exportSales, { calendar, reconciliation, reconciliationStore, rateAdvisor });
     app.cancelGuard = cancellationGuard;
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
     app.returnMonths = gstPreparations;
+    // Issue #296 — the composition scheme reads the same bills, notes and ledger as everything else.
+    app.composition = new CompositionDesk({
+      companyId: config.companyId, gstin: config.gstin, store: shop.store, ledger: shop.ledger, audit: shop.audit,
+      invoices: salesRepository, notes: returnNotes,
+      goodsItemCount: (companyId) => catalogueItems(companyId).filter((item) => item.kind !== 'service').length,
+      purchases: async (companyId, financialYear) => {
+        const range = financialYearRange(financialYear);
+        let registeredPaise = 0n;
+        let unregisteredPaise = 0n;
+        for (const bill of await shop.bills.list(companyId)) {
+          if (bill.state !== 'POSTED' || bill.invoiceDate < range.from || bill.invoiceDate > range.to) continue;
+          const taxable = bill.lines.reduce((sum, line) => sum + BigInt(line.taxableValuePaise), 0n);
+          const gstin = billingAddressOf(companyId, bill.supplierPartyId)?.gstin ?? (bill.supplierPartyId === config.supplierId ? config.supplierGstin : undefined);
+          if (gstin === undefined || gstin === null || gstin === '') unregisteredPaise += taxable; else registeredPaise += taxable;
+        }
+        return { registeredPaise, unregisteredPaise };
+      },
+    });
     if (demo) await app.seed();
     return app;
   }
@@ -1992,9 +2158,11 @@ export class DemoApplication {
         if (task !== null) tasks.push(task);
       }
     }
+    const doneMonths = may('gst_returns.view') ? doneReturnMonths(await this.gstReturns.list(actor)) : new Set<string>();
     if (may('gst_returns.view')) {
       const booksStart = (await this.shop.store.read().settings.get(companyId))?.booksStartDate ?? currentFinancialYear().from;
-      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneReturnMonths(await this.gstReturns.list(actor)), may('gst_returns.prepare')));
+      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneMonths, may('gst_returns.prepare'),
+        { onScheme: schemeOn(companyId, appToday()) === 'COMPOSITION', filedQuarters: filedCalendarQuarters(String(companyId)) }));
     }
     // Customers more than 30 days late, while the reminder plan still has something to send them.
     const late = read.receivables.rows.filter((row) => row.oldestDaysOverdue > 30);
@@ -2032,6 +2200,9 @@ export class DemoApplication {
         toPay: { amount: jsonAmount(read.suppliersOwed), opens: opens('report-dues') },
       },
       tasks,
+      // Issue #297 — the deadlines ahead, from the real compliance calendar: return readiness, the
+      // IRN backlog and purchase mismatches ride along as its signals. A month already filed hides.
+      comingUp: may('compliance.calendar.view') ? comingUpRows(await this.calendar.calendar(actor), doneMonths) : [],
       recentBills,
     };
   }
@@ -2966,9 +3137,15 @@ export class DemoApplication {
       // Issue #288 — money taken at the counter is recorded with the bill, so the review says so
       // instead of "the customer balance will increase".
       const paidNow = this.paidNowOn(input, draft, customer.legalName);
+      // Issue #296 — a composition business issues a Bill of Supply: said first, so nobody expects GST on it.
+      const billOfSupply = draft.pricing?.supplierRegistration === 'COMPOSITION';
+      const effects = paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect));
       return {
         ...checked,
-        effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect)),
+        billKind: billOfSupply ? 'BILL_OF_SUPPLY' as const : 'TAX_INVOICE' as const,
+        effects: billOfSupply
+          ? [both('This will be a Bill of Supply, not a tax invoice. Your business is on the composition scheme, so no GST is added and the bill says "composition taxable person, not eligible to collect tax on supplies".', 'यह टैक्स इनवॉइस नहीं, Bill of Supply होगा। आपका बिज़नेस कम्पोज़िशन स्कीम में है, इसलिए GST नहीं जुड़ता और बिल पर "composition taxable person, not eligible to collect tax on supplies" लिखा रहता है।'), ...effects]
+          : effects,
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
         placeOfSupply: draft.supplyKind === 'SERVICES'
@@ -3263,7 +3440,7 @@ export class DemoApplication {
         ...(delivery === null || delivery.deliverTo === null ? {} : { shipTo: delivery.deliverTo }),
         documents: [{
           documentId: draft.id,
-          documentType: 'TAX_INVOICE',
+          documentType: pricing.supplierRegistration === 'COMPOSITION' ? 'BILL_OF_SUPPLY' : 'TAX_INVOICE',
           documentNumber: draft.number ?? draft.id,
           documentDate: draft.documentDate,
           lines: consignmentLinesOf(pricing.lines),
@@ -3953,7 +4130,10 @@ export class DemoApplication {
     const upiId = upiIdOf(invoice.companyId);
     this.invoicePrints.set(invoice.id, {
       document: { ...toInvoiceDocument(invoice, {
-        title: 'TAX_INVOICE',
+        // Issue #296 — a composition dealer issues a bill of supply (CGST Rule 49) headed by the
+        // words Rule 5 requires, with no tax on it (s.10(4)).
+        title: invoice.pricing?.supplierRegistration === 'COMPOSITION' ? 'BILL_OF_SUPPLY' : 'TAX_INVOICE',
+        ...(invoice.pricing?.supplierRegistration === 'COMPOSITION' ? { compositionLegend: COMPOSITION_LEGEND } : {}),
         seller: us.seller,
         bank: us.bank,
         declaration: us.declaration,
@@ -4733,13 +4913,21 @@ export class DemoApplication {
   // for the bank reconciliation engine; these endpoints never post ledger entries or move money.
   async bankFeedWorkspace(actor: ActorContext) {
     const context = this.bankContext(actor);
+    const payments = await this.paymentRepository.list(actor.companyId);
+    const transactionIds = (await Promise.all((await this.bankFeeds.connections(context)).map((connection) => this.bankFeeds.transactions(context, connection.id)))).flat().map((transaction) => transaction.id);
+    const matched = await this.reconciliationStore.matchedLines(String(actor.companyId), transactionIds, payments.map((payment) => payment.id));
+    const matchedBank = new Set(matched.bankTransactionIds);
     return {
       providers: [{ id: 'sandbox-aa', name: 'Sandbox authorised bank feed' }],
       connections: await Promise.all((await this.bankFeeds.connections(context)).map(async (connection) => ({
         ...this.bankConnectionJson(connection),
         accounts: (await this.bankFeeds.accounts(context, connection.id)).map((account) => ({ ...account, balancePaise: account.balancePaise?.toString() ?? null })),
-        transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString() })),
+        transactions: (await this.bankFeeds.transactions(context, connection.id)).map((transaction) => ({ ...transaction, debitPaise: transaction.debitPaise.toString(), creditPaise: transaction.creditPaise.toString(), matched: matchedBank.has(transaction.id) })),
       }))),
+      // Issue #297 — which imported lines a match not undone already covers, for the Reconcile tab.
+      // Payment ids are book data: a caller who may only read the bank balance gets the bank side,
+      // not the ids of the business's receipts and payments.
+      reconciliation: { matchedTransactionIds: matched.bankTransactionIds, matchedPaymentIds: actor.permissions.includes('bank.reconcile') ? matched.paymentIds : [] },
     };
   }
 
@@ -4768,6 +4956,203 @@ export class DemoApplication {
 
   private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
   private bankConnectionJson(connection: BankFeedConnection) { return { ...connection }; }
+
+  // ------------------------------------------------------------------ issue #22 [E22]: bank reconciliation
+  //
+  // Wired in for #297. The check matches imported bank lines against recorded bank receipts and
+  // payments; it writes only its own match records — a bank line becomes money in the books only
+  // through `payments.recordPayment`, with the party and the account chosen by a person.
+
+  private reconciliationContext(actor: ActorContext) { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
+
+  /** Every imported bank line, across every connection, oldest first. */
+  private async bankFeedTransactions(actor: ActorContext) {
+    const context = this.bankContext(actor);
+    const lines = [] as Awaited<ReturnType<BankFeedService['transactions']>>[number][];
+    for (const connection of await this.bankFeeds.connections(context)) lines.push(...await this.bankFeeds.transactions(context, connection.id));
+    return lines.sort((a, b) => a.bookedOn.localeCompare(b.bookedOn));
+  }
+
+  private matchJson(match: ReconciliationMatch) {
+    return {
+      id: match.id, candidateId: match.candidateId, bankTransactionIds: match.bankTransactionIds, paymentIds: match.paymentIds,
+      confidence: match.confidence, amountDifferencePaise: match.amountDifferencePaise.toString(), reasons: match.reasons,
+      status: match.status, remainingBankPaise: match.remainingBankPaise.toString(), remainingBookPaise: match.remainingBookPaise.toString(),
+      confirmedBy: match.confirmedBy, confirmedAt: match.confirmedAt,
+    };
+  }
+
+  private runJson(run: ReconciliationRun) {
+    return {
+      candidates: run.candidates.map((candidate) => ({ ...candidate, amountDifferencePaise: candidate.amountDifferencePaise.toString() })),
+      matches: run.matches.map((match) => this.matchJson(match)),
+      exceptions: run.exceptions,
+      suggestedPayments: run.suggestedPayments.map((suggestion) => ({ ...suggestion, amountPaise: suggestion.amountPaise.toString() })),
+    };
+  }
+
+  async runBankReconciliation(actor: ActorContext) {
+    const bankLines = (await this.bankFeedTransactions(actor)).map((transaction) => fromBankTransaction(transaction));
+    const bookPayments = (await this.paymentRepository.list(actor.companyId))
+      .map((payment) => fromPayment(payment)).filter((payment): payment is BookPayment => payment !== null);
+    return this.runJson(await this.reconciliation.reconcile(this.reconciliationContext(actor), bankLines, bookPayments));
+  }
+
+  async confirmReconciliation(actor: ActorContext, input: Record<string, unknown>) {
+    const candidateId = String(input.candidateId ?? '').trim();
+    if (candidateId === '') throw invalid('RECONCILIATION_CANDIDATE_REQUIRED', 'Say which suggested match you are confirming.');
+    return this.matchJson(await this.reconciliation.confirm(this.reconciliationContext(actor), candidateId));
+  }
+
+  async unmatchReconciliation(actor: ActorContext, input: Record<string, unknown>) {
+    const matchId = String(input.matchId ?? '').trim();
+    const reason = String(input.reason ?? '').trim();
+    if (matchId === '') throw invalid('RECONCILIATION_MATCH_REQUIRED', 'Say which match to undo.');
+    if (reason === '') throw invalid('RECONCILIATION_REASON_REQUIRED', 'Undoing a match needs a reason — it goes on the record.');
+    return this.matchJson(await this.reconciliation.unmatch(this.reconciliationContext(actor), matchId, reason));
+  }
+
+  /**
+   * A bank line with nothing in the books becomes a receipt or a payment the usual way — through
+   * the receivables service, with the person naming the customer or supplier. The next run matches
+   * it to the bank line on its own.
+   */
+  async recordBankSuggestion(actor: ActorContext, input: Record<string, unknown>) {
+    const companyId = this.companyOf(actor);
+    const transactionId = String(input.transactionId ?? '').trim();
+    const line = (await this.bankFeedTransactions(actor)).find((transaction) => transaction.id === transactionId);
+    if (line === undefined) throw notFound('BANK_LINE_NOT_FOUND', 'That bank line is not in this business\'s imported transactions.');
+    const direction = line.creditPaise > 0n ? 'RECEIPT' : 'PAYMENT';
+    const { party } = this.paymentParty(companyId, { direction, partyId: input.partyId });
+    await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: party.id as PartyId, name: party.name, kind: direction === 'RECEIPT' ? 'CUSTOMER' : 'SUPPLIER' });
+    const payment = await this.payments.recordPayment(actor, {
+      // One press or a retried request records this bank line once.
+      idempotencyKey: `bank-reconcile:${transactionId}`,
+      direction,
+      partyId: party.id as PartyId,
+      mode: 'BANK_TRANSFER',
+      amount: money(line.creditPaise > 0n ? line.creditPaise : line.debitPaise),
+      date: isoDate(line.bookedOn),
+      reference: line.reference ?? null,
+      bankAccountCode: CURRENT_ACCOUNT,
+      narration: `Recorded from the bank feed: ${line.description}`,
+      // The supplier bill this debit settles, when the person named one; anything left over — or a
+      // payment they said is on account — stays an advance, the same as the money-paid form.
+      ...(billIdsOf(input).length > 0 ? { bills: billIdsOf(input) } : {}),
+      ...(direction === 'PAYMENT' ? { advanceToSupplier: true } : {}),
+    });
+    return { state: 'success', paymentId: payment.id };
+  }
+
+  // ------------------------------------------------------------------ issue #32 [E32]: the compliance calendar
+
+  /** The calendar as the deadlines screen and Home's "Coming up" read it. */
+  async complianceCalendar(actor: ActorContext) {
+    const view = await this.calendar.calendar(actor);
+    return {
+      today: view.today, from: view.from, to: view.to, exceptions: view.exceptions,
+      entries: view.entries.map((entry) => ({
+        occurrence: entry.occurrence, daysRemaining: entry.daysRemaining, state: entry.state,
+        signals: entry.signals.map((signal) => ({ ...signal, ...(signal.amount === undefined ? {} : { amount: jsonAmount(signal.amount.minor) }) })),
+        nextAction: entry.nextAction, reviewNote: entry.reviewNote,
+      })),
+    };
+  }
+
+  /** Mark a deadline done with what proves it — an ARN or challan, or a typed confirmation. */
+  async completeObligation(actor: ActorContext, input: Record<string, unknown>) {
+    const key = String(input.key ?? '').trim();
+    if (key === '') throw invalid('OBLIGATION_REQUIRED', 'Say which deadline was done.');
+    const reference = String(input.reference ?? '').trim();
+    const note = String(input.note ?? '').trim();
+    const filedOn = input.filedOn === undefined || String(input.filedOn).trim() === '' ? appToday() : isoDate(String(input.filedOn).trim());
+    const evidence = reference !== ''
+      ? { kind: 'PORTAL_RECEIPT' as const, reference, filedOn, note: note === '' ? `Shown on the portal as ${reference}.` : note }
+      : { kind: 'TYPED_CONFIRMATION' as const, reference: '', filedOn, note };
+    const record = await this.calendar.complete(actor, {
+      key,
+      evidence,
+      idempotencyKey: String(input.idempotencyKey ?? '') || `calendar-complete:${key}:${actor.userId}`,
+    });
+    return { state: 'success', occurrence: record };
+  }
+
+  // The three readers the calendar's signals get their truth from. They run as the app's own actor:
+  // what they read is company data already checked for permission on the way in.
+
+  async returnReadiness(companyId: CompanyId, periodKey: string) {
+    const preparations = (await this.gstReturns.list(this.shop.setupActor as ActorContext)).filter((preparation) => preparation.period === periodKey);
+    if (preparations.length === 0) return { prepared: false, taxPayable: money(0n), blockingIssues: 0 };
+    const gstr3b = preparations.find((preparation) => preparation.returnType === 'GSTR3B');
+    const blockingIssues = preparations.reduce((count, preparation) =>
+      count + preparation.findings.filter((finding) => finding.severity === 'BLOCKING').length, 0);
+    // Tax payable = outward tax − claimable credit + reverse-charge liability, floored at zero.
+    let taxPayable = 0n;
+    if (gstr3b !== undefined) {
+      const outward = totalTaxOf(sumReturnAmounts(gstr3b.snapshot.documents.flatMap((document) => document.lines.map((line) => line.amounts))));
+      const credit = totalTaxOf(sumReturnAmounts([gstr3b.snapshot.inward.allOtherItc, gstr3b.snapshot.inward.reverseChargeItc, gstr3b.snapshot.inward.importItc])).minor - totalTaxOf(gstr3b.snapshot.inward.reversedItc).minor;
+      taxPayable = outward.minor - credit + totalTaxOf(gstr3b.snapshot.inward.reverseChargeLiability).minor;
+      if (taxPayable < 0n) taxPayable = 0n;
+    }
+    return { prepared: true, taxPayable: money(taxPayable), blockingIssues };
+  }
+
+  async eInvoiceBacklog(companyId: CompanyId, periodKey: string) {
+    const bills = (await this.issuedInvoices(this.shop.setupActor as ActorContext)).invoices;
+    const pending = bills.filter((bill) =>
+      bill.date.startsWith(periodKey) && bill.needed === 'YES' && (bill.eInvoiceStatus === 'NOT_SENT' || bill.eInvoiceStatus === 'FAILED'));
+    return {
+      count: pending.length,
+      records: pending.map((bill) => ({ kind: 'sales_invoice', id: bill.id, label: `Invoice ${bill.number ?? bill.id} dated ${bill.date}` })),
+    };
+  }
+
+  async unresolvedPurchases(companyId: CompanyId, periodKey: string) {
+    const workspace = await this.shop.itc.workspace(this.shop.setupActor as ActorContext, taxPeriod(periodKey));
+    // Nothing imported for the month is not "unresolved" — it is nothing to compare yet.
+    if (!workspace.portalDataPresent) return null;
+    const unresolved = workspace.lines.filter((line) => line.decision === null && line.status !== 'EXACT');
+    return {
+      count: unresolved.length,
+      amount: totalItcTaxOf(sumItcAmounts(unresolved.map((line) => line.claimable))),
+      records: unresolved.map((line) => ({ kind: 'purchase_invoice', id: line.key, label: line.book?.number ?? line.portal?.number ?? line.key })),
+    };
+  }
+
+  // ------------------------------------------------------------------ issue #59 [E59]: the rate advisor
+
+  /**
+   * A rate suggestion for the item form. It reads the tax-default register (#5) and never writes —
+   * accepting it is the ordinary item-save path, so the business's declared rate is never overridden.
+   */
+  async rateHint(actor: ActorContext, input: Record<string, unknown>) {
+    this.companyOf(actor);
+    const hsnSac = String(input.hsnSac ?? '').trim();
+    const itemId = String(input.itemId ?? '').trim();
+    if (hsnSac === '' && itemId === '') throw invalid('RATE_HINT_NEEDS_A_CLUE', 'Give an item or an HSN/SAC code to suggest a rate for.');
+    const advice = await this.rateAdvisor.suggest(String(actor.companyId), {
+      index: 0,
+      description: String(input.description ?? ''),
+      ...(itemId === '' ? {} : { itemId }),
+      ...(hsnSac === '' ? {} : { hsnSac }),
+    }, appToday());
+    const rate = advice.kind === 'SUGGESTED' ? advice.suggestion.rate : null;
+    return {
+      kind: advice.kind,
+      ...(rate === null ? {} : {
+        // The register and the item form both keep rates in basis points (5% = 500), so the
+        // suggestion travels in the same unit — the form only divides for its percent text field.
+        ratePercentTimes100: Number(rate.gstRateBasisPoints),
+        basis: rate.basis,
+        reverseCharge: rate.reverseCharge,
+        citation: rate.citation,
+        cessPerUnitPaise: rate.cessPerUnitPaise?.toString() ?? null,
+      }),
+      ...(advice.kind === 'SUGGESTED'
+        ? { reason: advice.suggestion.reason, question: advice.suggestion.question, restingOn: advice.suggestion.restingOn ?? null }
+        : { reason: advice.reason, question: advice.question, whatWouldHelp: advice.whatWouldHelp }),
+    };
+  }
 
   // ------------------------------------------------------------------ issue #30: GST returns
   //
@@ -5442,9 +5827,36 @@ export class DemoApplication {
     FRT: { description: 'Inward freight', hsnSac: '996511', unit: 'NOS', kind: 'SERVICES' },
   };
 
-  private catalogueItem(id: unknown) {
-    const key = String(id ?? 'SOAP');
-    return { id: key, ...(DemoApplication.CATALOGUE[key] ?? DemoApplication.CATALOGUE.SOAP!) };
+  /**
+   * Issue #366 — the item an order, a delivery or a bill check names. On a developer's machine the
+   * three built-in short ids still work; everywhere else, and for any other id or name, it is one of
+   * the business's own items (master data), so the stock it moves points at a real record and the
+   * delivery survives a restart. An item that is not on the list is refused with the plain sentence
+   * every other screen gives.
+   */
+  private catalogueItem(companyId: CompanyId | string, id: unknown) {
+    const key = String(id ?? '').trim();
+    const builtIn = DemoApplication.CATALOGUE[key === '' ? 'SOAP' : key];
+    if (this.shop.persistence.kind === 'memory' && builtIn !== undefined) return { id: key === '' ? 'SOAP' : key, ...builtIn };
+    const item = resolveItem(companyId, key);
+    return {
+      id: item.id, description: item.name, hsnSac: item.hsnSac, unit: item.baseUnit,
+      kind: item.kind === 'goods' ? 'GOODS' as const : 'SERVICES' as const, batchId: undefined as string | undefined,
+    };
+  }
+
+  /**
+   * Issue #366 — who an order or a delivery is from: a supplier on the business's own list. The demo
+   * supplier stands in only in memory and only when none was named, because on PostgreSQL a delivery
+   * must point at a real supplier record.
+   */
+  private orderSupplier(companyId: CompanyId | string, input: Record<string, unknown>): { readonly id: string; readonly name: string } {
+    const named = String(input.supplierId ?? '').trim();
+    if (named === '' && this.shop.persistence.kind === 'memory') {
+      return { id: this.config.supplierId, name: String(input.party || this.config.supplierName) };
+    }
+    const supplier = resolveSupplier(companyId, named || String(input.party ?? ''));
+    return { id: supplier.id, name: supplier.legalName };
   }
 
   /** Reads a typed quantity into micro-units without letting a float near it. */
@@ -5456,7 +5868,7 @@ export class DemoApplication {
 
   /** How much of an item is actually on the shelf, which is the figure #18 has to get right. */
   private async stockOf(actor: ActorContext, itemId: string) {
-    const item = this.catalogueItem(itemId);
+    const item = this.catalogueItem(this.companyOf(actor), itemId);
     const balance = await this.shop.inventoryService.balance(actor, {
       itemId: item.id, warehouseId: this.shop.warehouseId, batchId: item.batchId ?? null,
     });
@@ -5504,11 +5916,12 @@ export class DemoApplication {
   async recordOrder(actor: ActorContext, input: Record<string, unknown>) {
     const number = String(input.orderNumber ?? '').trim();
     if (!number) throw invalid('API_ORDER_NUMBER_REQUIRED', 'Enter an order number, for example PO/2026/0117.');
-    const item = this.catalogueItem(input.item);
+    const item = this.catalogueItem(this.companyOf(actor), input.item);
+    const supplier = this.orderSupplier(this.companyOf(actor), input);
     const created = await this.shop.matching.createOrder(actor, {
       orderNumber: number,
-      supplierPartyId: this.config.supplierId,
-      supplierName: String(input.party || this.config.supplierName),
+      supplierPartyId: supplier.id,
+      supplierName: supplier.name,
       orderDate: String(input.date ?? ''),
       lines: [{
         lineNumber: 1, itemId: item.id, description: item.description, hsnSac: item.hsnSac,
@@ -5534,9 +5947,11 @@ export class DemoApplication {
   async recordReceipt(actor: ActorContext, input: Record<string, unknown>) {
     const number = String(input.receiptNumber ?? '').trim();
     if (!number) throw invalid('API_RECEIPT_NUMBER_REQUIRED', 'Enter a delivery number, for example GRN/2026/0304.');
-    const item = this.catalogueItem(input.item);
+    const item = this.catalogueItem(this.companyOf(actor), input.item);
     const orderNumber = String(input.orderNumber ?? '').trim();
     const order = orderNumber === '' ? null : await this.orderNumbered(actor, orderNumber);
+    // A delivery against an order is from the order's own supplier.
+    const supplier = order === null ? this.orderSupplier(this.companyOf(actor), input) : { id: order.supplierPartyId, name: order.supplierName };
 
     const received = this.typedQuantity(input.received, item.unit);
     const accepted = this.typedQuantity(input.accepted, item.unit);
@@ -5545,8 +5960,8 @@ export class DemoApplication {
 
     const details = {
       receiptNumber: number,
-      supplierPartyId: this.config.supplierId,
-      supplierName: String(input.party || order?.supplierName || this.config.supplierName),
+      supplierPartyId: supplier.id,
+      supplierName: supplier.name,
       receiptDate: String(input.date ?? ''),
       ...(input.deliveryNote ? { deliveryNote: String(input.deliveryNote) } : {}),
       lines: [{
@@ -5587,21 +6002,22 @@ export class DemoApplication {
    * recorded and no stock moves, which is what lets a person look before deciding.
    */
   async matchPurchaseBill(actor: ActorContext, input: Record<string, unknown>) {
-    const item = this.catalogueItem(input.item);
+    const item = this.catalogueItem(this.companyOf(actor), input.item);
     const invoiceNumber = String(input.reference ?? '').trim();
     if (!invoiceNumber) throw invalid('API_REFERENCE_REQUIRED', 'Enter the supplier bill number.');
     const orderNumber = String(input.orderNumber ?? '').trim();
     const order = orderNumber === '' ? null : await this.orderNumbered(actor, orderNumber);
+    const supplier = order === null ? this.orderSupplier(this.companyOf(actor), input) : { id: order.supplierPartyId, name: order.supplierName };
 
     // With no order, every confirmed delivery from this supplier is what the bill is checked on.
     const receipts = order === null
-      ? (await this.shop.matching.receiptsForParty(actor, this.config.supplierId)).filter((receipt) => receipt.state === 'CONFIRMED')
+      ? (await this.shop.matching.receiptsForParty(actor, supplier.id)).filter((receipt) => receipt.state === 'CONFIRMED')
       : [];
 
     const match = await this.shop.matching.matchForInvoice(actor, {
       purchaseId: `web-purchase:${invoiceNumber}`,
       invoiceNumber,
-      supplierPartyId: this.config.supplierId,
+      supplierPartyId: supplier.id,
       lines: [{
         lineNumber: 1, itemId: item.id, description: item.description,
         quantity: this.typedQuantity(input.quantity, item.unit), ratePaise: paise(input.rate),
@@ -5886,12 +6302,14 @@ export class DemoApplication {
     });
   }
 
-  private applicabilityOf(bill: { readonly documentType?: EInvoiceDocument['documentType'] | undefined; readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null }) {
+  private applicabilityOf(bill: { readonly documentType?: EInvoiceDocument['documentType'] | undefined; readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null; readonly billOfSupply?: boolean }) {
     const exemption = eInvoiceExemptionOf(this.config.companyId);
     return {
       documentType: bill.documentType ?? 'INVOICE' as const,
       documentDate: bill.documentDate,
       recipientKind: bill.recipientKind,
+      // Issue #296 — a composition dealer's bill of supply carries no tax and is never reported.
+      ...(bill.billOfSupply === true ? { isBillOfSupply: true } : {}),
       ...(bill.recipientGstin === null || bill.recipientGstin === '' || bill.recipientGstin === 'URP' ? {} : { recipientGstin: bill.recipientGstin }),
       supplier: {
         gstin: this.config.gstin,
@@ -5910,7 +6328,7 @@ export class DemoApplication {
    * answer is "we don't know yet" with a pointer to Business details — never a guess either way.
    * It never stops a bill being issued (#210 part 3).
    */
-  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined; readonly documentType?: EInvoiceDocument['documentType'] }): {
+  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined; readonly documentType?: EInvoiceDocument['documentType']; readonly pricing?: { readonly supplierRegistration?: string } | null }): {
     readonly needed: 'YES' | 'NO' | 'UNKNOWN';
     readonly message: { readonly 'en-IN': string; readonly 'hi-IN': string };
     readonly askTurnover: boolean;
@@ -5922,7 +6340,7 @@ export class DemoApplication {
     // A party that is no longer a customer (merged, or a supplier's note) has no GSTIN to read here.
     try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch (error) { reportUnexpected('api.einvoiceRecipient', error); gstin = null; }
     const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
-    const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
+    const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin, billOfSupply: bill.pricing?.supplierRegistration === 'COMPOSITION' }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
     const NOT_NEEDED_HI = 'इस बिल को ई-इनवॉइस नंबर की ज़रूरत नहीं';
     if (decision.outcome === 'APPLICABLE') {
@@ -6186,7 +6604,7 @@ export class DemoApplication {
     const lines = consignmentLinesOf(pricing.lines);
     const document: ConsignmentDocument = {
       documentId: invoice.id,
-      documentType: 'TAX_INVOICE',
+      documentType: pricing.supplierRegistration === 'COMPOSITION' ? 'BILL_OF_SUPPLY' : 'TAX_INVOICE',
       documentNumber: invoice.number,
       documentDate: invoice.documentDate,
       lines,
@@ -7144,9 +7562,16 @@ export class DemoApplication {
     }
     // Issue #289, part 3 — a line with no GST at all (unregistered seller, exempt freight) has no
     // credit to block. Checked on the final rates, after reverse charge has set the law's rate.
+    // Issue #296 — CGST Act s.10(4): a composition dealer is not entitled to any input tax credit,
+    // so on a bill dated while the business is on the scheme every line's GST goes into cost, the
+    // same way credit blocked by s.17(5) does. The liability under reverse charge is unaffected.
+    const onComposition = schemeOn(companyId, date) === 'COMPOSITION';
     const finalLines = lines.map((line, index) => {
       const decided = reverseCharge.lines[index];
-      return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+      const priced = decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+      return onComposition && priced.gstRateBasisPoints > 0 && priced.itcEligibility === 'ELIGIBLE'
+        ? { ...priced, itcEligibility: 'INELIGIBLE' as const, blockedCreditClause: COMPOSITION_NO_CREDIT_CLAUSE }
+        : priced;
     });
     const untaxedBlocked = finalLines.find((line) => line.itcEligibility === 'INELIGIBLE' && line.gstRateBasisPoints === 0);
     if (untaxedBlocked !== undefined) {
@@ -7298,6 +7723,9 @@ export class DemoApplication {
       const tax = taxOn(line.taxableValuePaise, line.gstRateBasisPoints);
       const reason = BLOCKED_CREDIT_REASONS.find((candidate) => candidate.clause === line.blockedCreditClause);
       const owed = approved.taxLiability === 'REVERSE_CHARGE' ? ' You still pay this GST to the government under reverse charge; only the credit is lost.' : '';
+      if (line.blockedCreditClause === COMPOSITION_NO_CREDIT_CLAUSE) {
+        return `${line.description}: credit not available — your business is on the composition scheme, which does not allow claiming GST back (CGST s.10(4)). Its ${formatPaise(taxOn(line.taxableValuePaise, line.gstRateBasisPoints))} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you.${owed}`;
+      }
       return `${line.description}: credit not available — ${reason?.label.toLowerCase() ?? 'blocked'} (CGST s.${line.blockedCreditClause ?? '17(5)'}). Its ${formatPaise(tax)} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you, not to the GST you claim back.${owed}`;
     });
   }
