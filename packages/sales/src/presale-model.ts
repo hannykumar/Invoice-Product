@@ -47,8 +47,8 @@ export interface PreSaleKindRule {
 }
 
 export const PRESALE_KINDS: readonly PreSaleKindRule[] = [
-  { kind: 'QUOTATION', label: { 'en-IN': 'Quotation', 'hi-IN': 'Quotation' }, closedBy: 'SALE', needsPurpose: false },
-  { kind: 'PROFORMA', label: { 'en-IN': 'Proforma Invoice', 'hi-IN': 'Proforma invoice' }, closedBy: 'INVOICE', needsPurpose: true },
+  { kind: 'QUOTATION', label: { 'en-IN': 'Quotation', 'hi-IN': 'कोटेशन' }, closedBy: 'SALE', needsPurpose: false },
+  { kind: 'PROFORMA', label: { 'en-IN': 'Proforma Invoice', 'hi-IN': 'प्रोफ़ॉर्मा इनवॉइस' }, closedBy: 'INVOICE', needsPurpose: true },
 ];
 
 export const preSaleKind = (kind: PreSaleKind): PreSaleKindRule => {

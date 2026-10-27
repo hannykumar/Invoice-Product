@@ -75,7 +75,7 @@ export interface AccountView {
 
 export const PRICING_PROMISE: Bilingual = {
   'en-IN': 'Every plan gets every warning, every check and your data whenever you want it. Plans differ in how much you do, never in how carefully it is done.',
-  'hi-IN': 'Har plan mein har chetavni, har jaanch, aur jab chahein apna data milta hai. Plan sirf itne mein alag hain ki aap kitna kaam karte hain — kaam kitni savdhani se hota hai, usme nahin.',
+  'hi-IN': 'हर प्लान में हर चेतावनी, हर जाँच, और जब चाहें अपना डेटा मिलता है। प्लान सिर्फ़ इसमें अलग हैं कि आप कितना काम करते हैं — काम कितनी सावधानी से होता है, उसमें नहीं।',
 };
 
 export class SubscriptionService {
@@ -276,6 +276,11 @@ export class SubscriptionService {
         label: METER_LABELS[meter],
       };
     }));
+  }
+
+  /** Issue #350 — the plan a company is on, for its limits. Read-only; the company is the caller's own. */
+  async planOf(companyId: string): Promise<string> {
+    return (await this.#subscriptions.find(companyId as ActorContext['companyId']))?.planId ?? 'free';
   }
 
   async account(actor: ActorContext, today: IsoDate): Promise<AccountView> {

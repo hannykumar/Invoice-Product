@@ -119,6 +119,7 @@ import { salesInventoryAdapter, type InventoryStore, type StockItem, type StockM
 import { DEFAULT_SALES_POLICY } from '../../../packages/sales/src/policy.ts';
 import { lineTaxableValue, taxOn } from '../../../packages/purchasing/src/recompute.ts';
 import { formatQuantity } from '../../../packages/masters/src/units.ts';
+import { both, say, type Bilingual } from './language.ts';
 import type { ApprovedPurchase, ApprovedPurchaseLine, PurchaseBill, PurchasePostingPreview } from '../../../packages/purchasing/src/posting-types.ts';
 import { validatePurchase } from '../../../packages/purchasing/src/validate.ts';
 import { rulesEngineTaxSplit } from '../../../packages/purchasing/src/rules-adapter.ts';
@@ -318,11 +319,14 @@ const chosenAsAdvance = (input: Record<string, unknown>): boolean =>
   input.advance === true || input.advance === 'yes' || input.advance === 'true';
 
 /** The words on the choice, the same on the screen and in any refusal that points to it. */
-const advanceChoiceLabel = (supplier: string): string => `Record this as an advance to ${supplier}`;
+const advanceChoiceLabel = (supplier: string) => ({ 'en-IN': `Record this as an advance to ${supplier}`, 'hi-IN': `इसे ${supplier} को अडवांस के रूप में दर्ज कीजिए` });
 
-const advanceChoiceHelp = (supplier: string, openBills: number): string => openBills === 0
+const advanceChoiceHelp = (supplier: string, openBills: number) => ({ 'en-IN': openBills === 0
   ? `You have no bill from ${supplier} yet. This money will be kept as an advance and taken off their next bill.`
-  : `Whatever is not put against a bill ticked above will be kept as an advance and taken off ${supplier}'s next bill.`;
+  : `Whatever is not put against a bill ticked above will be kept as an advance and taken off ${supplier}'s next bill.`,
+  'hi-IN': openBills === 0
+  ? `${supplier} का अभी कोई बिल नहीं है। यह पैसा अडवांस के रूप में रखा जाएगा और उनके अगले बिल से घटा दिया जाएगा।`
+  : `जो पैसा ऊपर टिक किए बिल पर नहीं लगेगा, वह अडवांस के रूप में रखा जाएगा और ${supplier} के अगले बिल से घटा दिया जाएगा।` });
 
 /**
  * Issue #274 — a document number with its date, typed on Money paid: both or neither. `label` names
@@ -408,26 +412,26 @@ const CURRENT_ACCOUNT = '1121';
  * cash that came by bank puts money in the drawer that is really in the bank.
  */
 const paymentHow = (direction: 'RECEIPT' | 'PAYMENT', input: Record<string, unknown>): {
-  mode: PaymentMode; bankAccountCode: string | null; words: string;
+  mode: PaymentMode; bankAccountCode: string | null; words: { 'en-IN': string; 'hi-IN': string };
   cheque?: { number: string; chequeDate: IsoDate };
 } => {
   const chosen = String(input.method ?? input.mode ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   if (chosen === '') throw invalid('PAYMENT_MODE_REQUIRED', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
-  if (chosen === 'CASH') return { mode: 'CASH', bankAccountCode: null, words: 'cash' };
-  if (chosen === 'UPI') return { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: 'UPI' };
-  if (chosen === 'BANK_TRANSFER') return { mode: 'BANK_TRANSFER', bankAccountCode: CURRENT_ACCOUNT, words: 'bank transfer' };
+  if (chosen === 'CASH') return { mode: 'CASH', bankAccountCode: null, words: { 'en-IN': 'cash', 'hi-IN': 'नक़द' } };
+  if (chosen === 'UPI') return { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'UPI', 'hi-IN': 'UPI' } };
+  if (chosen === 'BANK_TRANSFER') return { mode: 'BANK_TRANSFER', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'bank transfer', 'hi-IN': 'बैंक' } };
   if (chosen === 'CHEQUE') {
     const number = String(input.chequeNumber ?? '').trim();
     const dated = String(input.chequeDate ?? '').trim();
     if (number === '' || dated === '') throw invalid('PAYMENT_CHEQUE_DETAILS_REQUIRED', 'Enter the cheque number and the date written on the cheque.');
     const chequeDate = isoDate(dated);
     // A cheque received waits in "cheques in hand" until it clears; a cheque given is drawn on our bank.
-    return { mode: 'CHEQUE', bankAccountCode: direction === 'PAYMENT' ? CURRENT_ACCOUNT : null, words: `cheque No. ${number} dated ${chequeDate}`, cheque: { number, chequeDate } };
+    return { mode: 'CHEQUE', bankAccountCode: direction === 'PAYMENT' ? CURRENT_ACCOUNT : null, words: { 'en-IN': `cheque No. ${number} dated ${chequeDate}`, 'hi-IN': `चेक नं. ${number} दिनांक ${chequeDate}` }, cheque: { number, chequeDate } };
   }
   throw invalid('PAYMENT_MODE_INVALID', 'Choose how the money was paid: UPI, cash, bank transfer or cheque.');
 };
 
-const BALANCE_WILL_INCREASE = 'The customer balance will increase.';
+const BALANCE_WILL_INCREASE = { 'en-IN': 'The customer balance will increase.', 'hi-IN': 'ग्राहक का बाक़ी बढ़ेगा।' };
 
 /** Issue #288 — CGST Rule 46(e): from this taxable value an unregistered buyer must be named on the bill. */
 const WALK_IN_LIMIT = 50_000_00n;
@@ -437,10 +441,10 @@ const WALK_IN_LIMIT = 50_000_00n;
  * recorded together with its receipt. `null` when the sale does not say (money to come later).
  * Nothing defaults to cash; an amount left out is the whole bill.
  */
-const PAID_NOW: Readonly<Record<string, { mode: PaymentMode; bankAccountCode: string | null; words: string }>> = {
-  CASH: { mode: 'CASH', bankAccountCode: null, words: 'cash' },
-  UPI: { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: 'UPI' },
-  CARD: { mode: 'CARD', bankAccountCode: CURRENT_ACCOUNT, words: 'card' },
+const PAID_NOW: Readonly<Record<string, { mode: PaymentMode; bankAccountCode: string | null; words: { 'en-IN': string; 'hi-IN': string } }>> = {
+  CASH: { mode: 'CASH', bankAccountCode: null, words: { 'en-IN': 'cash', 'hi-IN': 'नक़द' } },
+  UPI: { mode: 'UPI', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'UPI', 'hi-IN': 'UPI' } },
+  CARD: { mode: 'CARD', bankAccountCode: CURRENT_ACCOUNT, words: { 'en-IN': 'card', 'hi-IN': 'कार्ड' } },
 };
 type PaidNow = (typeof PAID_NOW)[string] & { readonly amount: bigint | null };
 const paidNowOf = (input: Record<string, unknown>): PaidNow | null => {
@@ -1178,7 +1182,7 @@ export class DemoApplication {
           if (prepared === null || !LOCKED_RETURN_STATES.has(prepared.state)) continue;
           found.push({
             code: 'SALES_CANCEL_MONTH_APPROVED',
-            message: `${number} cannot be cancelled: it is in the GST return for ${month}, which is ${prepared.state === 'FILED' ? 'filed' : 'approved'}. Make a credit note for the whole bill instead (Returns, choose "Whole bill"). The bill and the note both stay on record.`,
+            message: both(`${number} cannot be cancelled: it is in the GST return for ${month}, which is ${prepared.state === 'FILED' ? 'filed' : 'approved'}. Make a credit note for the whole bill instead (Returns, choose "Whole bill"). The bill and the note both stay on record.`, `${number} को रद्द नहीं किया जा सकता: यह ${month} के GST रिटर्न में है, जो ${prepared.state === 'FILED' ? 'फ़ाइल हुआ' : 'मंज़ूर'} है। उसके बदले पूरे बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)। बिल और नोट दोनों रिकॉर्ड में रहेंगे।`),
             clearable: null,
           });
           break;
@@ -1190,7 +1194,7 @@ export class DemoApplication {
         if (notes.length > 0) {
           found.push({
             code: 'SALES_CANCEL_HAS_CREDIT_NOTE',
-            message: `${number} cannot be cancelled: ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`,
+            message: both(`${number} cannot be cancelled: ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'credit note' : 'note'} ${notes.map((note) => note.number).join(', ')} has already been made against it. Make a credit note for the rest of the bill instead (Returns, choose "Whole bill").`, `${number} को रद्द नहीं किया जा सकता: उसके लिए ${notes.every((note) => note.kind === 'SALES_RETURN') ? 'क्रेडिट नोट' : 'नोट'} ${notes.map((note) => note.number).join(', ')} पहले से बना है। उसके बदले बाक़ी बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)।`),
             clearable: null,
           });
         }
@@ -1203,7 +1207,7 @@ export class DemoApplication {
         if (eInvoice?.status === 'PENDING') {
           found.push({
             code: 'SALES_CANCEL_EINVOICE_WAITING',
-            message: `${number} has been sent for its e-invoice number and the government has not answered yet. Wait for the answer on the E-invoice screen, then cancel.`,
+            message: both(`${number} has been sent for its e-invoice number and the government has not answered yet. Wait for the answer on the E-invoice screen, then cancel.`, `${number} का ई-इनवॉइस नंबर मँगाने के लिए भेजा गया है और सरकार का जवाब नहीं आया। ई-इनवॉइस स्क्रीन पर जवाब का इंतज़ार कीजिए, फिर रद्द कीजिए।`),
             clearable: null,
           });
         } else if (eInvoice?.status === 'REGISTERED') {
@@ -1211,12 +1215,12 @@ export class DemoApplication {
           found.push(open
             ? {
               code: 'SALES_CANCEL_EINVOICE_ACTIVE',
-              message: `${number} has a government e-invoice number (IRN). The e-invoice has to be cancelled with the government first, and that is allowed only within 24 hours of registering it. Cancel the e-invoice, then this bill.`,
+              message: both(`${number} has a government e-invoice number (IRN). The e-invoice has to be cancelled with the government first, and that is allowed only within 24 hours of registering it. Cancel the e-invoice, then this bill.`, `${number} का सरकारी ई-इनवॉइस नंबर (IRN) है। पहले सरकार के साथ ई-इनवॉइस रद्द करना ज़रूरी है, जो सिर्फ़ रजिस्टर होने के 24 घंटे के अंदर हो सकता है। ई-इनवॉइस रद्द कीजिए, फिर यह बिल।`),
               clearable: 'EINVOICE',
             }
             : {
               code: 'SALES_CANCEL_EINVOICE_WINDOW_CLOSED',
-              message: `${number} has a government e-invoice number, and the 24 hours in which the government allows it to be cancelled have passed. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`,
+              message: both(`${number} has a government e-invoice number, and the 24 hours in which the government allows it to be cancelled have passed. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`, `${number} का सरकारी ई-इनवॉइस नंबर है, और जिस 24 घंटे में सरकार रद्द करने देती है वह बीत गया है। उसके बदले पूरे बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)।`),
               clearable: null,
             });
         }
@@ -1227,12 +1231,12 @@ export class DemoApplication {
           found.push(open
             ? {
               code: 'SALES_CANCEL_EWAY_ACTIVE',
-              message: `${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}. It has to be cancelled on the portal first, which is allowed only within 24 hours of raising it. Cancel the e-way bill, then this bill.`,
+              message: both(`${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}. It has to be cancelled on the portal first, which is allowed only within 24 hours of raising it. Cancel the e-way bill, then this bill.`, `${number} का ई-वे बिल ${eway.acknowledgement.ewayBillNumber} है। उसे पहले पोर्टल पर रद्द करना ज़रूरी है, जो सिर्फ़ बनाए जाने के 24 घंटे के अंदर हो सकता है। ई-वे बिल रद्द कीजिए, फिर यह बिल।`),
               clearable: 'EWAY_BILL',
             }
             : {
               code: 'SALES_CANCEL_EWAY_WINDOW_CLOSED',
-              message: `${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}, and it can no longer be cancelled on the portal, so the government holds these goods as moved. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`,
+              message: both(`${number} has e-way bill ${eway.acknowledgement.ewayBillNumber}, and it can no longer be cancelled on the portal, so the government holds these goods as moved. Make a credit note for the whole bill instead (Returns, choose "Whole bill").`, `${number} का ई-वे बिल ${eway.acknowledgement.ewayBillNumber} है, और उसे अब पोर्टल पर रद्द नहीं किया जा सकता, इसलिए सरकार के नज़दीक यह माल पहुंच गया। उसके बदले पूरे बिल का क्रेडिट नोट बनाइए (रिटर्न्स में "Whole bill" चुनिए)।`),
               clearable: null,
             });
         }
@@ -1410,11 +1414,11 @@ export class DemoApplication {
               code: 'STOCK_SHORTFALL',
               what: {
                 'en-IN': `There is not enough ${line.itemId} in ${config.location}: the bill needs ${formatQuantity(line.quantity)} and ${formatQuantity(balance.available)} is free to sell.`,
-                'hi-IN': `${config.location} mein ${line.itemId} kam hai: bill ko ${formatQuantity(line.quantity)} chahiye aur bechne ke liye ${formatQuantity(balance.available)} hai.`,
+                'hi-IN': `${config.location} में ${line.itemId} कम है: बिल को ${formatQuantity(line.quantity)} चाहिए और बेचने के लिए ${formatQuantity(balance.available)} है।`,
               },
               nextStep: {
                 'en-IN': 'Receive more stock, or reduce the quantity on the bill.',
-                'hi-IN': 'Aur maal mangwayein, ya bill ki maatra kam karein.',
+                'hi-IN': 'और माल मँगाइए, या बिल की मात्रा कम कीजिए।',
               },
               action: 'purchase',
             });
@@ -1423,11 +1427,11 @@ export class DemoApplication {
             code: 'RULE_CHECK',
             what: {
               'en-IN': 'Which state this sale counts in has to be settled before the bill goes out.',
-              'hi-IN': 'Bill jaane se pehle tay karna hoga ki yeh bikri kis rajya ki hai.',
+              'hi-IN': 'बिल जाने से पहले तय करना होगा कि यह बिक्री किस राज्य की है।',
             },
             nextStep: {
               'en-IN': 'Check the delivery address on the bill.',
-              'hi-IN': 'Bill par delivery ka pata dekh lein.',
+              'hi-IN': 'बिल पर डिलीवरी का पता देख लीजिए।',
             },
             action: 'sale',
             topic: 'gst.place_of_supply',
@@ -2428,7 +2432,7 @@ export class DemoApplication {
     const advance = await this.supplierAdvanceFor(actor, approved, input);
     return {
       state: 'preview',
-      title: 'Ready to record',
+      title: both('Ready to record', 'दर्ज करने के लिए तैयार'),
       // Nothing has happened yet, so the review says what recording will do, not what it did.
       message: advance !== null && advance.used > 0n
         ? `Recording bill ${approved.invoiceNumber} from ${approved.supplierName} for ${formatPaise(preview.totalPaise)} will take the ${formatPaise(advance.used)} advance already paid off it, so you will owe them ${formatPaise(preview.totalPaise - advance.used)}, due on ${preview.dueDate}, and ${formatPaise(claimable)} of GST you can claim back.`
@@ -2482,7 +2486,7 @@ export class DemoApplication {
     if ('alreadyRecorded' in draft) {
       // Pressing Record twice, or typing the same bill in again, records it once.
       const dashboard = await state();
-      return { state: 'recorded', deduplicated: true, title: 'Already recorded once', message: `${draft.message} Stock and the supplier balance were not doubled.`, bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded), reverseCharge: await this.reverseChargeJson(actor, draft.alreadyRecorded) };
+      return { state: 'recorded', deduplicated: true, title: both('Already recorded once', 'पहले से एक बार दर्ज है'), message: both(`${draft.message} Stock and the supplier balance were not doubled.`, `${draft.message} स्टॉक और सप्लायर का बाक़ी दोबारा नहीं बढ़ा।`), bill: DemoApplication.purchaseBillJson(draft.alreadyRecorded), stock: DemoApplication.stockOf(dashboard, draft.alreadyRecorded.lines[0]?.itemId), supplier: dashboard.supplier, purchaseCheck: await this.purchaseCheckFor(actor, draft.alreadyRecorded), reverseCharge: await this.reverseChargeJson(actor, draft.alreadyRecorded) };
     }
     const { approved } = draft;
     // A supplier added a moment ago gets their own account in the books before the bill is posted to it.
@@ -2662,7 +2666,7 @@ export class DemoApplication {
         status: line.status, outcome: line.outcome, portalDataPresent: workspace.portalDataPresent,
         'en-IN': `${line.statusLabel['en-IN']} — ${line.outcomeLabel['en-IN']}`,
         'hi-IN': `${line.statusLabel['hi-IN']} — ${line.outcomeLabel['hi-IN']}`,
-        sentence: line.sentence['en-IN'],
+        sentence: say(line.sentence),
       };
     } catch (error) {
       // The bill is never held up by its purchase check; why the month could not be read is reported.
@@ -2787,8 +2791,8 @@ export class DemoApplication {
       state: reminder.state === 'SENT' ? 'recorded' : 'recorded',
       title: reminder.state === 'SENT' ? 'Reminder sent' : `Reminder ${reminder.state.toLowerCase()}`,
       message: reminder.state === 'FAILED'
-        ? (reminder.failureReason ?? 'The message could not be delivered.')
-        : reminder.message['en-IN'],
+        ? (reminder.failureReason ?? both('The message could not be delivered.', 'संदेश नहीं पहुंच पाया।'))
+        : say(reminder.message),
       reminder: this.reminderJson(reminder),
     };
   }
@@ -2798,10 +2802,10 @@ export class DemoApplication {
     const sent = await this.collections.sendPlanned(actor, DemoApplication.reminderDate());
     return {
       state: 'recorded',
-      title: sent.length === 0 ? 'Nothing needed sending' : `${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`,
+      title: sent.length === 0 ? both('Nothing needed sending', 'कुछ भेजना ज़रूरी नहीं था') : both(`${sent.length} reminder${sent.length === 1 ? '' : 's'} handled`, `${sent.length} रिमाइंडर संभाले`),
       message: sent.length === 0
-        ? 'Every open bill was deliberately left alone today. The reasons are on this screen.'
-        : `${sent.filter((r) => r.state === 'SENT').length} sent, ${sent.filter((r) => r.state !== 'SENT').length} not delivered.`,
+        ? both('Every open bill was deliberately left alone today. The reasons are on this screen.', 'हर खुला बिल आज जान-बूझकर छोड़ा गया। वजह इस स्क्रीन पर है।')
+        : both(`${sent.filter((r) => r.state === 'SENT').length} sent, ${sent.filter((r) => r.state !== 'SENT').length} not delivered.`, `${sent.filter((r) => r.state === 'SENT').length} भेजे गए, ${sent.filter((r) => r.state !== 'SENT').length} नहीं पहुंचे।`),
       reminders: sent.map((reminder) => this.reminderJson(reminder)),
     };
   }
@@ -2809,7 +2813,7 @@ export class DemoApplication {
   async retryReminder(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const reminder = await this.collections.retry(actor, String(input.reminderId ?? ''), DemoApplication.reminderDate());
-    return { state: 'recorded', title: `Reminder ${reminder.state.toLowerCase()}`, message: reminder.failureReason ?? reminder.message['en-IN'], reminder: this.reminderJson(reminder) };
+    return { state: 'recorded', title: both(`Reminder ${reminder.state.toLowerCase()}`, `रिमाइंडर ${reminder.state.toLowerCase()}`), message: reminder.failureReason ?? say(reminder.message), reminder: this.reminderJson(reminder) };
   }
 
   /**
@@ -2843,7 +2847,7 @@ export class DemoApplication {
       promisedOn: isoDate(String(input.promisedOn ?? '')),
       note: input.note === undefined ? null : String(input.note),
     });
-    return { state: 'recorded', title: 'Promise recorded', message: `${bill.name} promised ${formatINR(promise.amount)} against ${bill.number} by ${promise.promisedOn}. Reminders for this bill are paused until then.`, partyId: bill.partyId, party: bill.name };
+    return { state: 'recorded', title: both('Promise recorded', 'वादा दर्ज हुआ'), message: both(`${bill.name} promised ${formatINR(promise.amount)} against ${bill.number} by ${promise.promisedOn}. Reminders for this bill are paused until then.`, `${bill.name} ने ${bill.number} के लिए ${promise.promisedOn} तक ${formatINR(promise.amount)} देने का वादा किया। इस बिल के रिमाइंडर तब तक रुके हैं।`), partyId: bill.partyId, party: bill.name };
   }
 
   async raiseBillDispute(actor: ActorContext, input: Record<string, unknown>) {
@@ -2855,25 +2859,25 @@ export class DemoApplication {
       documentId,
       reason: String(input.reason ?? ''),
     });
-    return { state: 'recorded', title: 'Dispute recorded', message: documentId === null ? `${party.name}'s bills will not be chased until the dispute is closed.` : `${'number' in party ? party.number : 'This bill'} for ${party.name} will not be chased until the dispute is closed.`, partyId: party.partyId, party: party.name };
+    return { state: 'recorded', title: both('Dispute recorded', 'विवाद दर्ज हुआ'), message: documentId === null ? both(`${party.name}'s bills will not be chased until the dispute is closed.`, `${party.name} के बिलों के लिए विवाद बंद होने तक पैसा नहीं माँगा जाएगा।`) : both(`${'number' in party ? party.number : 'This bill'} for ${party.name} will not be chased until the dispute is closed.`, `${party.name} का ${'number' in party ? party.number : 'यह बिल'} विवाद बंद होने तक नहीं माँगा जाएगा।`), partyId: party.partyId, party: party.name };
   }
 
   async resolveBillDispute(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     await this.collections.resolveDispute(actor, String(input.disputeId ?? ''), String(input.resolution ?? 'Settled with the customer.'));
-    return { state: 'recorded', title: 'Dispute closed', message: 'The bill goes back into the reminder ladder at the rung its age has reached.' };
+    return { state: 'recorded', title: both('Dispute closed', 'विवाद बंद हुआ'), message: both('The bill goes back into the reminder ladder at the rung its age has reached.', 'बिल रिमाइंडर की सीढ़ी में अपनी उम्र के हिसाब से वापस चला गया।') };
   }
 
   async stopReminders(actor: ActorContext, input: Record<string, unknown>) {
     const party = this.chosenCustomer(actor, input);
     await this.collections.optOut(actor, party.partyId, String(input.reason ?? ''));
-    return { state: 'recorded', title: 'Reminders stopped', message: `${party.name} will not receive automatic reminders.`, partyId: party.partyId, party: party.name };
+    return { state: 'recorded', title: both('Reminders stopped', 'रिमाइंडर बंद'), message: both(`${party.name} will not receive automatic reminders.`, `${party.name} को अपने-आप रिमाइंडर नहीं जाएँगे।`), partyId: party.partyId, party: party.name };
   }
 
   async resumeReminders(actor: ActorContext, input: Record<string, unknown> = {}) {
     const party = this.chosenCustomer(actor, input);
     await this.collections.resumeReminders(actor, party.partyId);
-    return { state: 'recorded', title: 'Reminders started again', message: `${party.name} will receive automatic reminders again.`, partyId: party.partyId, party: party.name };
+    return { state: 'recorded', title: both('Reminders started again', 'रिमाइंडर फिर शुरू'), message: both(`${party.name} will receive automatic reminders again.`, `${party.name} को फिर से अपने-आप रिमाइंडर जाएँगे।`), partyId: party.partyId, party: party.name };
   }
 
   /**
@@ -3039,10 +3043,13 @@ export class DemoApplication {
     const limit = customer.creditLimitPaise ?? null;
     return {
       ...corrected,
-      title: 'Customer corrected',
-      message: `${corrected.message} ${limit === null
+      title: both('Customer corrected', 'ग्राहक ठीक किया गया'),
+      message: say({ 'en-IN': `${corrected.message} ${limit === null
         ? `${customer.legalName} has no credit limit, so bills to them are not checked against one.`
         : `${customer.legalName}'s credit limit is ${formatPaise(limit)}. Every bill to them is checked against it.`}`,
+        'hi-IN': `${corrected.message} ${limit === null
+        ? `${customer.legalName} की कोई उधार सीमा नहीं है, इसलिए उनके बिल सीमा से जाँचे नहीं जाते।`
+        : `${customer.legalName} की उधार सीमा ${formatPaise(limit)} है। हर बिल उसी से जाँचा जाता है।`}` }),
     };
   }
 
@@ -3106,14 +3113,14 @@ export class DemoApplication {
       const paidNow = this.paidNowOn(input, draft, customer.legalName);
       return {
         ...checked,
-        effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === BALANCE_WILL_INCREASE ? paidNow.sentence : effect)),
+        effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect)),
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
         placeOfSupply: draft.supplyKind === 'SERVICES'
           ? DemoApplication.servicePlaceOfSupplyReason(draft.pricing?.placeOfSupplyStateCode ?? null, customer, walkIn !== null)
           : walkIn === null
             ? delivery.placeOfSupplyReason
-            : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
+            : both(`Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`, `सप्लाई का स्थान: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — माल आपके काउंटर पर दिया जाता है।`),
         // Issue #143 — said on the review, so nobody issues an export thinking it is a local sale.
         exportSupply: exportSale === null ? null : {
           kind: exportSale.kind,
@@ -3124,7 +3131,7 @@ export class DemoApplication {
         ewayBill: await this.ewayReminder(actor, draft, delivery),
         // Issue #239 — whether this bill needs a government e-invoice number, decided here from
         // what the app already knows and said in one line. Never a reason to hold the bill back.
-        eInvoice: this.eInvoiceDecisionFor(draft),
+        eInvoice: ((decision) => ({ ...decision, message: say(decision.message) }))(this.eInvoiceDecisionFor(draft)),
       };
     } catch (error) {
       // Issue #256 — a review the app refused (600 KGS asked, 50 KGS in the godown) saved nothing
@@ -3168,7 +3175,7 @@ export class DemoApplication {
       if (pricing === null) return { ...refused(refusals), dateNotice };
       if (walkIn !== null && pricing.totals.taxableValue.minor >= WALK_IN_LIMIT) {
         const error = DemoApplication.walkInTooLarge(pricing.totals.taxableValue.minor);
-        refusals.push({ code: error.code, 'en-IN': error.message, 'hi-IN': `Is bill ka taxable value ${formatPaise(pricing.totals.taxableValue.minor)} hai. ${formatPaise(WALK_IN_LIMIT)} se upar kanoon (CGST Rule 46(e)) bill par kharidaar ka naam, pata aur rajya maangta hai. Customer ko naam aur pate ke saath joden, aur Walk-in ki jagah unhe chunen.` });
+        refusals.push({ code: error.code, 'en-IN': error.message, 'hi-IN': `इस बिल का टैक्सेबल वैल्यू ${formatPaise(pricing.totals.taxableValue.minor)} है। ${formatPaise(WALK_IN_LIMIT)} से ऊपर क़ानून (CGST Rule 46(e)) बिल पर ख़रीदार का नाम, पता और राज्य माँगता है। ग्राहक को नाम और पते के साथ जोड़िए, और Walk-in की जगह उन्हें चुनिए।` });
       }
       const customer = resolveCustomer(this.config.companyId, String(input.customerId ?? input.customer ?? input.party ?? ''));
       const delivery = deliveryDetails(this.config.companyId, customer, input);
@@ -3194,23 +3201,23 @@ export class DemoApplication {
         placeOfSupply: {
           stateCode: pricing.placeOfSupplyStateCode, split: pricing.split,
           'en-IN': `${state} sale · ${taxes}`,
-          'hi-IN': `${state} ki bikri · ${taxes}`,
+          'hi-IN': `${state} की बिक्री · ${taxes}`,
           reason: bill.supplyKind === 'SERVICES'
             ? DemoApplication.servicePlaceOfSupplyReason(pricing.placeOfSupplyStateCode, customer, walkIn !== null)
             : walkIn === null
             ? delivery.placeOfSupplyReason
-            : `Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`,
+            : both(`Place of supply: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — the goods are handed over at your counter.`, `सप्लाई का स्थान: ${STATE_NAMES[delivery.placeOfSupplyStateCode] ?? delivery.placeOfSupplyStateCode} (${delivery.placeOfSupplyStateCode}) — माल आपके काउंटर पर दिया जाता है।`),
         },
         ewayBill: eway === null ? null : eway.outcome === 'REQUIRED'
-          ? { needed: true, 'en-IN': 'Needs an e-way bill before the goods leave', 'hi-IN': 'Maal nikalne se pehle e-way bill chahiye', reason: eway.reason }
-          : { needed: false, 'en-IN': 'No e-way bill needed', 'hi-IN': 'E-way bill ki zaroorat nahin', reason: eway.reason },
+          ? { needed: true, 'en-IN': 'Needs an e-way bill before the goods leave', 'hi-IN': 'माल निकलने से पहले ई-वे बिल चाहिए', reason: eway.reason }
+          : { needed: false, 'en-IN': 'No e-way bill needed', 'hi-IN': 'ई-वे बिल की ज़रूरत नहीं', reason: eway.reason },
         eInvoice: {
-          needed: eInvoice.needed, askTurnover: eInvoice.askTurnover, message: eInvoice.message,
+          needed: eInvoice.needed, askTurnover: eInvoice.askTurnover, message: say(eInvoice.message),
           ...(eInvoice.needed === 'YES'
-            ? { 'en-IN': 'Needs a government e-invoice number, sent by itself when you issue the bill', 'hi-IN': 'Sarkari e-invoice number chahiye, bill jaari karte hi apne aap bheja jayega' }
+            ? { 'en-IN': 'Needs a government e-invoice number, sent by itself when you issue the bill', 'hi-IN': 'सरकारी ई-इनवॉइस नंबर चाहिए, बिल जारी करते ही अपने आप भेजा जाएगा' }
             : eInvoice.needed === 'NO'
-              ? { 'en-IN': 'No e-invoice needed', 'hi-IN': 'E-invoice ki zaroorat nahin' }
-              : { 'en-IN': 'E-invoice not decided yet: answer the turnover question in Business details', 'hi-IN': 'E-invoice abhi tay nahin: Business details mein turnover ka sawaal bharein' }),
+              ? { 'en-IN': 'No e-invoice needed', 'hi-IN': 'ई-इनवॉइस की ज़रूरत नहीं' }
+              : { 'en-IN': 'E-invoice not decided yet: answer the turnover question in Business details', 'hi-IN': 'ई-इनवॉइस अभी तय नहीं: बिज़नेस डिटेल्स में टर्नओवर का सवाल भरिए' }),
         },
         dateNotice,
         refusals,
@@ -3256,15 +3263,15 @@ export class DemoApplication {
       approvedMonth = true;
     }
     if (date === today) return null;
-    const lines = [`This bill will be dated ${formatClaimDate(date)}, which is before today, ${formatClaimDate(today)}.`];
+    const lines = [both(`This bill will be dated ${formatClaimDate(date)}, which is before today, ${formatClaimDate(today)}.`, `यह बिल ${formatClaimDate(date)} की तारीख़ का बनेगा, जो आज ${formatClaimDate(today)} से पहले की है।`)];
     if (approvedMonth) {
-      lines.push(`The GST return for ${month} is already approved without it, so that return will have to be reopened and approved again.`);
+      lines.push(both(`The GST return for ${month} is already approved without it, so that return will have to be reopened and approved again.`, `${month} का GST रिटर्न इसके बिना पहले से मंज़ूर है, इसलिए वह रिटर्न फिर से खोलकर दोबारा मंज़ूर करना होगा।`));
     }
     const later = (await this.salesRepository.list(companyId))
       .filter((bill) => bill.number !== null && financialYearOf(bill.documentDate) === financialYearOf(date) && bill.documentDate > date)
       .sort((a, b) => b.documentDate.localeCompare(a.documentDate))[0];
     if (later !== undefined) {
-      lines.push(`Bill ${later.number} is already issued with the date ${formatClaimDate(later.documentDate)}, so this bill will get a later number with an earlier date.`);
+      lines.push(both(`Bill ${later.number} is already issued with the date ${formatClaimDate(later.documentDate)}, so this bill will get a later number with an earlier date.`, `बिल ${later.number} ${formatClaimDate(later.documentDate)} की तारीख़ से पहले से बना है, इसलिए इस बिल को पहली तारीख़ के साथ बाद का नंबर मिलेगा।`));
     }
     return lines.join(' ');
   }
@@ -3295,7 +3302,7 @@ export class DemoApplication {
     if (decision === null || decision.outcome !== 'REQUIRED') return null;
     return {
       outcome: decision.outcome,
-      message: 'This consignment needs an e-way bill before the vehicle leaves.',
+      message: both('This consignment needs an e-way bill before the vehicle leaves.', 'गाड़ी चलने से पहले इस कंसाइनमेंट का ई-वे बिल ज़रूरी है।'),
       reason: decision.reason,
       ruleId: decision.ruleId,
     };
@@ -3490,7 +3497,7 @@ export class DemoApplication {
     const quote = await this.termsQuote(actor, draft);
     const gate = DemoApplication.approvalFor(actor, quote);
     if (!gate.required) return null;
-    const why = quote.reasons.map((reason) => reason['en-IN']).join(' ');
+    const why = quote.reasons.map((reason) => say(reason)).join(' ');
     const reason = approval.reason.trim();
     if (reason !== '' && gate.canApprove) {
       // Writes the approval, who gave it and why, to the audit trail; refuses an empty reason.
@@ -3512,8 +3519,8 @@ export class DemoApplication {
     }
     return {
       state: 'waiting',
-      title: 'Waiting for approval',
-      message: `${why} The bill was not issued. It is waiting for approval from ${gate.who}.`,
+      title: both('Waiting for approval', 'मंज़ूरी का इंतज़ार'),
+      message: both(`${why} The bill was not issued. It is waiting for approval from ${gate.who}.`, `${why} बिल नहीं बना। ${gate.who} की मंज़ूरी का इंतज़ार है।`),
       amount: jsonAmount(held.pricing?.totals.invoiceValue.minor ?? 0n),
       token: held.id,
       approver: gate.who,
@@ -3558,7 +3565,7 @@ export class DemoApplication {
   }
 
   private async checkSale(actor: ActorContext, draft: SalesInvoice) {
-    if (draft.pricing === null) throw new Error(draft.problems.map((problem) => problem.message['en-IN']).join(' '));
+    if (draft.pricing === null) throw new Error(draft.problems.map((problem) => say(problem.message)).join(' '));
     // Issue #229 — no selling more than is in the godown. Checked here, at the review, for every
     // way a bill is made (typed, or from a quotation), and nothing is taken out until Record.
     const stocked = await this.sales.checkStock(actor, draft.id);
@@ -3570,7 +3577,7 @@ export class DemoApplication {
       // Issue #290 — goods out on a challan are not available; say where they are.
       const out = (await Promise.all([...new Set(draft.lines.map((line) => line.itemId))].map((itemId) => this.challans.outOnChallans(actor, itemId)))).flat();
       const onChallans = out.length === 0 ? '' : ` ${out.map((entry) => `${entry.quantity} ${entry.unit} ${out.length === 1 ? 'is' : 'are'} out on ${entry.number}`).join(', ')}, not counted as available. To bill goods already sent, open the challan and press Make the bill.`;
-      throw notAllowed('SALES_STOCK_NOT_ENOUGH', short.map((problem) => problem.message['en-IN']).join(' ') + onChallans, {
+      throw notAllowed('SALES_STOCK_NOT_ENOUGH', short.map((problem) => say(problem.message)).join(' ') + onChallans, {
         messageId: 'stock.not_enough',
         details: {
           'hi-IN': short.map((problem) => problem.message['hi-IN']).join(' '),
@@ -3583,16 +3590,16 @@ export class DemoApplication {
     // given more credit. The draft is excluded from its own pending value.
     const quote = await this.termsQuote(actor, draft);
 
-    const effects = ['A numbered invoice will be issued.', BALANCE_WILL_INCREASE];
-    for (const reason of quote.reasons) effects.push(reason['en-IN']);
+    const effects = [both('A numbered invoice will be issued.', 'नंबर वाला बिल बनेगा।'), say(BALANCE_WILL_INCREASE)];
+    for (const reason of quote.reasons) effects.push(say(reason));
     for (const line of quote.lines) {
-      if (line.price.source !== 'NONE') effects.push(line.price.sentence['en-IN']);
+      if (line.price.source !== 'NONE') effects.push(say(line.price.sentence));
     }
 
     return {
       state: 'preview',
-      title: quote.outcome === 'BLOCK' ? 'This sale is on hold' : 'Sale checked',
-      message: draft.pricing.explanation['en-IN'],
+      title: quote.outcome === 'BLOCK' ? both('This sale is on hold', 'यह बिक्री रोकी हुई है') : both('Sale checked', 'बिक्री जाँची गई'),
+      message: say(draft.pricing.explanation),
       amount: jsonAmount(draft.pricing.totals.invoiceValue.minor),
       token: draft.id,
       effects,
@@ -3644,8 +3651,10 @@ export class DemoApplication {
     return {
       ...paid, amount, due,
       sentence: due === 0n
-        ? `Paid now by ${paid.words}: ${formatPaise(amount)}. Nothing is left to pay on this bill.`
-        : `Paid now by ${paid.words}: ${formatPaise(amount)}. ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} is added to what ${customer} owes.`,
+        ? { 'en-IN': `Paid now by ${paid.words['en-IN']}: ${formatPaise(amount)}. Nothing is left to pay on this bill.`,
+            'hi-IN': `${paid.words['hi-IN']} से अभी दिया: ${formatPaise(amount)}। इस बिल पर कुछ बाक़ी नहीं रहा।` }
+        : { 'en-IN': `Paid now by ${paid.words['en-IN']}: ${formatPaise(amount)}. ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} is added to what ${customer} owes.`,
+            'hi-IN': `${paid.words['hi-IN']} से अभी दिया: ${formatPaise(amount)}। ${formatPaise(total)} − ${formatPaise(amount)} = ${formatPaise(due)} ${customer} के बाक़ी में जुड़ेगा।` },
     };
   }
 
@@ -3824,18 +3833,18 @@ export class DemoApplication {
     const ewayRaised = ewayBill === null ? null : await this.raiseEwayByItself(actor, final.invoice.id, ewayDistanceKm);
     return {
       state: 'recorded', deduplicated: final.deduplicated,
-      title: final.deduplicated ? 'Sale already recorded once' : 'Sale recorded',
+      title: final.deduplicated ? both('Sale already recorded once', 'बिक्री पहले से एक बार दर्ज है') : both('Sale recorded', 'बिक्री दर्ज हुई'),
       message: receipt === null
-        ? `${final.invoice.number} was issued.`
-        : `${final.invoice.number} was issued. ${formatPaise(receipt.amount.minor)} received by ${paidNow?.words ?? receipt.mode.toLowerCase()}.`,
+        ? both(`${final.invoice.number} was issued.`, `${final.invoice.number} बन गया।`)
+        : both(`${final.invoice.number} was issued. ${formatPaise(receipt.amount.minor)} received by ${paidNow?.words['en-IN'] ?? receipt.mode.toLowerCase()}.`, `${final.invoice.number} बन गया। ${paidNow?.words['hi-IN'] ?? receipt.mode.toLowerCase()} से ${formatPaise(receipt.amount.minor)} मिला।`),
       // Said on the screen the moment the bill is issued, so nobody has to go looking for it.
       eInvoice: decision.needed === 'NO'
         ? { expected: false, needed: 'NO' as const, message: null, askTurnover: false }
         : decision.needed === 'UNKNOWN'
-          ? { expected: false, needed: 'UNKNOWN' as const, message: decision.message, askTurnover: decision.askTurnover }
+          ? { expected: false, needed: 'UNKNOWN' as const, message: say(decision.message), askTurnover: decision.askTurnover }
           : decision.lateForPortal === true
-            ? { expected: true, needed: 'YES' as const, message: decision.message, askTurnover: false }
-            : { expected: true, needed: 'YES' as const, askTurnover: false, message: 'This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.' },
+            ? { expected: true, needed: 'YES' as const, message: say(decision.message), askTurnover: false }
+            : { expected: true, needed: 'YES' as const, askTurnover: false, message: both('This bill has to carry a government e-invoice number. It is being sent now — the bill is already issued, and the number appears on the E-invoice screen when it comes back.', 'इस बिल पर सरकारी ई-इनवॉइस नंबर होना ज़रूरी है। उसे अब भेजा जा रहा है — बिल तो बन चुका है, और नंबर ई-इनवॉइस स्क्रीन पर आने पर दिखेगा।') },
       invoice: { id: final.invoice.id, number: final.invoice.number, amount: jsonAmount(final.invoice.pricing?.totals.invoiceValue.minor ?? 0n) },
       // Issue #240 — whether these goods need an e-way bill, so the screen can offer it in one press.
       ewayBill,
@@ -3948,7 +3957,7 @@ export class DemoApplication {
       invoiceId, reason, today: DemoApplication.cancelToday(), ignoreClearable: ['EINVOICE', 'EWAY_BILL'],
     });
     if (invoice.state === 'CANCELLED') {
-      return { state: 'preview' as const, title: `${invoice.number} is already cancelled`, message: 'Nothing more will change.', token: invoice.id, amount: 0, effects: [], clearFirst: [] };
+      return { state: 'preview' as const, title: both(`${invoice.number} is already cancelled`, `${invoice.number} पहले से रद्द है`), message: both('Nothing more will change.', 'अब कुछ और नहीं बदलेगा।'), token: invoice.id, amount: 0, effects: [], clearFirst: [] };
     }
     const clearFirst = (await this.cancelGuard.blockers(actor, invoice)).filter((blocker) => blocker.clearable !== null);
     const customer = customerView(companyId, String(invoice.partyId)).name;
@@ -3970,8 +3979,8 @@ export class DemoApplication {
     ];
     return {
       state: 'preview' as const,
-      title: `Cancel ${invoice.number}?`,
-      message: `${invoice.number} for ${formatPaise(value)} will be cancelled.`,
+      title: both(`Cancel ${invoice.number}?`, `${invoice.number} रद्द करें?`),
+      message: both(`${invoice.number} for ${formatPaise(value)} will be cancelled.`, `${invoice.number} ${formatPaise(value)} का रद्द हो जाएगा।`),
       token: invoice.id,
       amount: jsonAmount(value),
       effects,
@@ -4025,10 +4034,10 @@ export class DemoApplication {
       state: 'recorded' as const,
       deduplicated,
       title: deduplicated ? 'Bill already cancelled' : 'Bill cancelled',
-      message: `${invoice.number} is cancelled. The number stays used, the bill stays on record marked CANCELLED, ${customer}'s balance and the stock are back as they were, and the GST return counts it as cancelled.`,
+      message: both(`${invoice.number} is cancelled. The number stays used, the bill stays on record marked CANCELLED, ${customer}'s balance and the stock are back as they were, and the GST return counts it as cancelled.`, `${invoice.number} रद्द हो गया। नंबर वहीं का वहीं है, बिल रिकॉर्ड में CANCELLED मार्क के साथ है, ${customer} का बाक़ी और स्टॉक जैसे थे वैसे हो गए, और GST रिटर्न इसे रद्द गिनता है।`),
       onAccount: onAccount === 0n ? null : {
         amount: jsonAmount(onAccount),
-        message: `${formatPaise(onAccount)} received against ${invoice.number} is now held on account for ${customer}.`,
+        message: both(`${formatPaise(onAccount)} received against ${invoice.number} is now held on account for ${customer}.`, `${invoice.number} के लिए मिला ${formatPaise(onAccount)} अब ${customer} के ख़ाते में रखा है।`),
       },
       invoice: { id: invoice.id, number: invoice.number, state: invoice.state, reason: invoice.cancelReason },
     };
@@ -4046,7 +4055,7 @@ export class DemoApplication {
     const checked = await this.checkSale(actor, converted.invoice);
     return {
       ...checked,
-      title: `Bill ready from ${converted.quotation.number}`,
+      title: both(`Bill ready from ${converted.quotation.number}`, `${converted.quotation.number} से बिल तैयार`),
       effects: [...converted.notes, ...checked.effects],
       quotation: this.presale.describe(converted.quotation),
     };
@@ -4287,7 +4296,7 @@ export class DemoApplication {
   async agentApprove(actor: ActorContext, input: Record<string, unknown>) {
     this.companyOf(actor);
     const plan = await this.agent.approve(actor, String(input.planId ?? ''), String(input.fingerprint ?? ''));
-    return { state: 'recorded', title: 'Approved', message: 'The assistant will do exactly what you saw.', plan: this.agentPlanJson(plan) };
+    return { state: 'recorded', title: both('Approved', 'मंज़ूर'), message: both('The assistant will do exactly what you saw.', 'असिस्टेंट वैसे ही करेगा जैसे आपने देखा।'), plan: this.agentPlanJson(plan) };
   }
 
   async agentExecute(actor: ActorContext, input: Record<string, unknown>) {
@@ -4299,7 +4308,7 @@ export class DemoApplication {
     return {
       state: 'recorded',
       title: report.state === 'DONE' ? 'Done' : report.state === 'PARTLY_DONE' ? 'Partly done' : 'Nothing was done',
-      message: report.summary['en-IN'],
+      message: say(report.summary),
       report: this.agentReportJson(report),
     };
   }
@@ -4356,6 +4365,9 @@ export class DemoApplication {
     };
   }
 
+  /** Issue #350 — this business's plan, which sets how much heavy work it may ask for a minute. */
+  planId(actor: ActorContext): Promise<string> { return this.subscriptions.planOf(this.companyOf(actor)); }
+
   async subscriptionAccount(actor: ActorContext, input: Record<string, unknown> = {}) {
     this.companyOf(actor);
     const today = appToday();
@@ -4397,8 +4409,8 @@ export class DemoApplication {
       : await this.subscriptions.changePlan(actor, { planId, on: today, reason: String(input.reason ?? 'Changed from the account screen') });
     return {
       state: 'recorded',
-      title: 'Plan changed',
-      message: `This business is now on the ${subscription.planId} plan. Nothing that was already recorded has changed.`,
+      title: both('Plan changed', 'प्लान बदला'),
+      message: both(`This business is now on the ${subscription.planId} plan. Nothing that was already recorded has changed.`, `यह बिज़नेस अब ${subscription.planId} प्लान पर है। जो पहले दर्ज हुआ वह वैसे का वैसा है।`),
     };
   }
 
@@ -4437,7 +4449,7 @@ export class DemoApplication {
       onAccount: direction === 'RECEIPT' ? jsonAmount(position.onAccount.minor) : 0,
       // Issue #261 — advances already paid to this supplier and not yet taken off a bill.
       advancesPaid: direction === 'PAYMENT' ? jsonAmount(position.advancesPaid.minor) : 0,
-      advanceChoice: direction === 'PAYMENT' ? { label: advanceChoiceLabel(party.name), help: advanceChoiceHelp(party.name, open.length) } : null,
+      advanceChoice: direction === 'PAYMENT' ? { label: say(advanceChoiceLabel(party.name)), help: say(advanceChoiceHelp(party.name, open.length)) } : null,
       bills: open.map((d) => ({
         id: d.document.documentId,
         number: d.document.number,
@@ -4466,32 +4478,42 @@ export class DemoApplication {
       + plan.creditNotes.reduce((total, note) => total + note.noteTotal, 0n);
     const owedAfter = owedBefore - (amount - leftOver) - adjustments;
     if (plan.advance > 0n) return this.previewSupplierAdvance(actor, plan, owedAfter);
-    const whose = direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`;
+    const whose = direction === 'RECEIPT' ? `${party.name} का बाक़ी` : `${party.name} का आपका बाक़ी`;
     return {
       state: 'preview',
-      title: direction === 'RECEIPT' ? 'Money received — check it' : 'Money paid — check it',
-      message: `${formatPaise(amount)} will reduce ${whose}.`,
+      title: both(direction === 'RECEIPT' ? 'Money received — check it' : 'Money paid — check it', direction === 'RECEIPT' ? 'पैसा मिला — जाँच लीजिए' : 'पैसा दिया — जाँच लीजिए'),
+      message: both(`${formatPaise(amount)} will reduce ${direction === 'RECEIPT' ? `what ${party.name} owes` : `what you owe ${party.name}`}.`, `${formatPaise(amount)} ${whose} घटाएगा।`),
       amount: jsonAmount(amount),
       party,
       direction,
       token: plan.key,
       effects: [
-        `${direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${party.name} by ${how.words}.`,
+        both(`${direction === 'RECEIPT' ? 'Received from' : 'Paid to'} ${party.name} by ${how.words['en-IN']}.`,
+          `${party.name} ${direction === 'RECEIPT' ? 'से' : 'को'} ${how.words['hi-IN']} से ${direction === 'RECEIPT' ? 'मिला' : 'दिया'}।`),
         ...applied.map(({ position, amount: put }) =>
-          `${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} still due on this bill`),
+          both(`${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} still due on this bill`,
+            `${position.document.number}: ${formatPaise(position.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(position.outstanding.minor - put)} इस बिल पर अभी बाक़ी`)),
         // Issue #295 — what each adjustment does, in words a shopkeeper can check.
         ...plan.settlements.map((settlement) => settlement.kind === 'TDS_DEDUCTED'
-          ? `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} of tax deducted under s.${settlement.tdsSection} (${settlement.tdsQuarter}) — kept as TDS to come back from the government, not as money ${party.name} still owes.`
+          ? both(`${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} of tax deducted under s.${settlement.tdsSection} (${settlement.tdsQuarter}) — kept as TDS to come back from the government, not as money ${party.name} still owes.`,
+              `${settlement.documentNumber}: s.${settlement.tdsSection} (${settlement.tdsQuarter}) के तहत ${formatPaise(settlement.amount.minor)} का टैक्स कटा — यह सरकार से वापस मिलने वाला TDS है, ${party.name} का बाक़ी नहीं.`)
           : settlement.kind === 'DISCOUNT_ALLOWED'
-            ? `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} discount allowed — counted as an expense, no GST change.`
-            : `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} written off — counted as money you could not collect.`),
-        ...plan.creditNotes.map((note) => `${note.position.document.number}: a GST credit note for ${formatPaise(note.noteTotal)} will be issued for the discount of ${formatPaise(note.declared)}.`),
+            ? both(`${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} discount allowed — counted as an expense, no GST change.`,
+                `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} का डिस्काउंट दिया — खर्चे में गिना गया, GST में कोई बदलाव नहीं.`)
+            : both(`${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} written off — counted as money you could not collect.`,
+                `${settlement.documentNumber}: ${formatPaise(settlement.amount.minor)} बाक़ी माफ़ किया — ऐसा पैसा गिना गया जो वसूल नहीं हुआ.`)),
+        ...plan.creditNotes.map((note) =>
+          both(`${note.position.document.number}: a GST credit note for ${formatPaise(note.noteTotal)} will be issued for the discount of ${formatPaise(note.declared)}.`,
+            `${note.position.document.number}: ${formatPaise(note.declared)} की छूट के लिए ${formatPaise(note.noteTotal)} का GST क्रेडिट नोट बनेगा.`)),
         ...(leftOver > 0n
           ? [applied.length === 0
-            ? `${formatPaise(leftOver)} is not put against any bill yet, so it stays on account for ${party.name}.`
-            : `${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} is more than the bills chosen, so it stays on account for ${party.name}.`]
+            ? both(`${formatPaise(leftOver)} is not put against any bill yet, so it stays on account for ${party.name}.`,
+                `${formatPaise(leftOver)} अभी किसी बिल पर नहीं लगा, इसलिए ${party.name} के ख़ाते में रहेगा।`)
+            : both(`${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} is more than the bills chosen, so it stays on account for ${party.name}.`,
+                `${formatPaise(amount)} − ${formatPaise(amount - leftOver)} = ${formatPaise(leftOver)} चुने हुए बिल से ज़्यादा है, इसलिए ${party.name} के ख़ाते में रहेगा।`)]
           : []),
-        `${direction === 'RECEIPT' ? `${party.name} owes` : `You owe ${party.name}`} ${formatPaise(owedBefore)} on open bills now, and ${formatPaise(owedAfter < 0n ? 0n : owedAfter)} after this.`,
+        both(`${direction === 'RECEIPT' ? `${party.name} owes` : `You owe ${party.name}`} ${formatPaise(owedBefore)} on open bills now, and ${formatPaise(owedAfter < 0n ? 0n : owedAfter)} after this.`,
+          `${direction === 'RECEIPT' ? `${party.name} का` : `${party.name} को आपका`} ${formatPaise(owedBefore)} खुले बिल पर अभी है, और इसके बाद ${formatPaise(owedAfter < 0n ? 0n : owedAfter)}।`),
       ],
     };
   }
@@ -4507,27 +4529,30 @@ export class DemoApplication {
     const against = amount - advance;
     return {
       state: 'preview',
-      title: 'Advance to a supplier — check it',
+      title: both('Advance to a supplier — check it', 'सप्लायर को अडवांस — जाँच लीजिए'),
       message: owedAfter <= 0n
-        ? `Advance paid to ${party.name}: ${formatPaise(advance)}. You owe them nothing yet; when their bill is entered, ${formatPaise(advance)} will be taken off it.`
-        : `Advance paid to ${party.name}: ${formatPaise(advance)}. It is not taken off the ${formatPaise(owedAfter)} you already owe them on open bills; when their next bill is entered, ${formatPaise(advance)} will be taken off it.`,
+        ? both(`Advance paid to ${party.name}: ${formatPaise(advance)}. You owe them nothing yet; when their bill is entered, ${formatPaise(advance)} will be taken off it.`,
+          `${party.name} को अडवांस दिया: ${formatPaise(advance)}। अभी आपका कोई बाक़ी नहीं है; जब उनका बिल आएगा, उसमें से ${formatPaise(advance)} घटा दिया जाएगा।`)
+        : both(`Advance paid to ${party.name}: ${formatPaise(advance)}. It is not taken off the ${formatPaise(owedAfter)} you already owe them on open bills; when their next bill is entered, ${formatPaise(advance)} will be taken off it.`,
+          `${party.name} को अडवांस दिया: ${formatPaise(advance)}। यह खुले बिलों के ${formatPaise(owedAfter)} बाक़ी से नहीं घटा; जब उनका अगला बिल आएगा, उसमें से ${formatPaise(advance)} घटा दिया जाएगा।`),
       amount: jsonAmount(amount),
       advance: jsonAmount(advance),
       party,
       direction: plan.direction,
       token: plan.key,
       effects: [
-        `Paid to ${party.name} by ${how.words}.`,
+        both(`Paid to ${party.name} by ${how.words['en-IN']}.`, `${party.name} को ${how.words['hi-IN']} से दिया।`),
         ...applied.map(({ position: bill, amount: put }) =>
-          `${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} still due on this bill`),
-        ...(applied.length > 0 ? [`${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} is kept as an advance.`] : []),
-        ...(heldBefore > 0n ? [`Advances already with ${party.name}: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`] : []),
+          both(`${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} still due on this bill`,
+            `${bill.document.number}: ${formatPaise(bill.outstanding.minor)} − ${formatPaise(put)} = ${formatPaise(bill.outstanding.minor - put)} इस बिल पर अभी बाक़ी`)),
+        ...(applied.length > 0 ? [both(`${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} is kept as an advance.`, `${formatPaise(amount)} − ${formatPaise(against)} = ${formatPaise(advance)} अडवांस के रूप में रखा गया।`)] : []),
+        ...(heldBefore > 0n ? [both(`Advances already with ${party.name}: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}.`, `${party.name} के पास पहले से अडवांस: ${formatPaise(heldBefore)} + ${formatPaise(advance)} = ${formatPaise(heldBefore + advance)}।`)] : []),
         // Issue #274 — what the voucher will say it is against, before anything is saved.
-        `Against: ${advanceAgainstWords(plan.particulars)}.`,
-        ...(plan.particulars?.supplierReceiptVoucher ? [`Supplier's receipt voucher: No. ${plan.particulars.supplierReceiptVoucher.number} dated ${formatDate(plan.particulars.supplierReceiptVoucher.date)}.`] : []),
+        both(`Against: ${advanceAgainstWords(plan.particulars)}.`, `बदले में: ${advanceAgainstWords(plan.particulars)}।`),
+        ...(plan.particulars?.supplierReceiptVoucher ? [both(`Supplier's receipt voucher: No. ${plan.particulars.supplierReceiptVoucher.number} dated ${formatDate(plan.particulars.supplierReceiptVoucher.date)}.`, `सप्लायर की रसीद वाउचर: नं. ${plan.particulars.supplierReceiptVoucher.number} दिनांक ${formatDate(plan.particulars.supplierReceiptVoucher.date)}।`)] : []),
         `Narration: ${plan.narration ?? ''}`,
-        `In your books it is kept under "Advances paid to suppliers", not as money you owe.`,
-        'No GST is entered for this advance, and no GST credit is claimed on it. The credit comes with their bill.',
+        both(`In your books it is kept under "Advances paid to suppliers", not as money you owe.`, `आपकी बही में यह "Advances paid to suppliers" में रखा गया है, आपका बाक़ी नहीं।`),
+        both('No GST is entered for this advance, and no GST credit is claimed on it. The credit comes with their bill.', 'इस अडवांस पर कोई GST दर्ज नहीं, और न ही GST क्रेडिट लिया गया। क्रेडिट उनके बिल के साथ आएगा।'),
       ],
     };
   }
@@ -4603,14 +4628,16 @@ export class DemoApplication {
     return {
       state: 'recorded',
       deduplicated,
-      title: earlier !== null ? 'Already recorded once' : direction === 'RECEIPT' ? 'Money received recorded' : payment.advanceToSupplier === true ? 'Advance paid recorded' : 'Money paid recorded',
+      title: earlier !== null ? both('Already recorded once', 'पहले से एक बार दर्ज है') : direction === 'RECEIPT' ? both('Money received recorded', 'मिला हुआ पैसा दर्ज हुआ') : payment.advanceToSupplier === true ? both('Advance paid recorded', 'दिया हुआ अडवांस दर्ज हुआ') : both('Money paid recorded', 'दिया हुआ पैसा दर्ज हुआ'),
       message: earlier !== null
-        ? `${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'from' : 'to'} ${party.name} was already recorded. It was not recorded twice.`
-        : `${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'received from' : 'paid to'} ${party.name} is in your books${voucher === null ? '' : ` as ${voucher.number}`}.`,
+        ? both(`${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'from' : 'to'} ${party.name} was already recorded. It was not recorded twice.`,
+          `${party.name} ${direction === 'RECEIPT' ? 'से' : 'को'} ${formatPaise(payment.amount.minor)} पहले से दर्ज है। दो बार दर्ज नहीं हुआ।`)
+        : both(`${formatPaise(payment.amount.minor)} ${direction === 'RECEIPT' ? 'received from' : 'paid to'} ${party.name} is in your books${voucher === null ? '' : ` as ${voucher.number}`}.`,
+          `${party.name} ${direction === 'RECEIPT' ? 'से मिला' : 'को दिया'} ${formatPaise(payment.amount.minor)} आपकी बही में दर्ज है${voucher === null ? '' : `, वाउचर ${voucher.number} के रूप में`}।`),
       effects: [
-        direction === 'RECEIPT' ? `${party.name} now owes ${formatPaise(owed.minor)} on open bills.` : `You now owe ${party.name} ${formatPaise(owed.minor)}.`,
+        direction === 'RECEIPT' ? both(`${party.name} now owes ${formatPaise(owed.minor)} on open bills.`, `${party.name} का ${formatPaise(owed.minor)} खुले बिल पर बाक़ी है।`) : both(`You now owe ${party.name} ${formatPaise(owed.minor)}.`, `अब ${party.name} को आपका ${formatPaise(owed.minor)} बाक़ी है।`),
         ...(direction === 'PAYMENT' && position.advancesPaid.minor > 0n
-          ? [`Advance with ${party.name}, to be taken off their next bill: ${formatPaise(position.advancesPaid.minor)}.`]
+          ? [both(`Advance with ${party.name}, to be taken off their next bill: ${formatPaise(position.advancesPaid.minor)}.`, `${party.name} के पास अडवांस, जो उनके अगले बिल से घटेगा: ${formatPaise(position.advancesPaid.minor)}।`)]
           : []),
       ],
       advance: jsonAmount(advance),
@@ -4762,19 +4789,24 @@ export class DemoApplication {
     // Issue #261 — paying a supplier before their bill is allowed, but only as an advance the person
     // chose with its own click. Without that click, money no bill takes is refused, as before.
     const advanceChosen = direction === 'PAYMENT' && chosenAsAdvance(input);
-    const tick = `tick “${advanceChoiceLabel(party.name)}”`;
+    const tickEn = `tick “${advanceChoiceLabel(party.name)['en-IN']}”`;
+    const tickHi = `“${advanceChoiceLabel(party.name)['hi-IN']}” पर टिक कीजिए`;
     if (direction === 'PAYMENT' && remaining > 0n && !advanceChosen) {
       const covered = amount - remaining;
       throw invalid('PAYMENT_MORE_THAN_BILLS', chosen.length === 0
         ? open.length === 0
-          ? `You have no bill from ${party.name} yet. To pay them before their bill, ${tick}. Nothing was recorded.`
-          : `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. To pay them before a bill instead, ${tick}.`
-        : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills, pay ${formatPaise(covered)}, or ${tick} to keep ${formatPaise(remaining)} as an advance.`);
+          ? `You have no bill from ${party.name} yet. To pay them before their bill, ${tickEn}. Nothing was recorded.`
+          : `Choose the bill${open.length === 1 ? '' : 's'} of ${party.name} this pays. To pay them before a bill instead, ${tickEn}.`
+        : `The bills chosen come to ${formatPaise(covered)}, but ${formatPaise(amount)} is being paid. ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} would not settle any bill. Choose more bills, pay ${formatPaise(covered)}, or ${tickEn} to keep ${formatPaise(remaining)} as an advance.`, { details: { 'hi-IN': chosen.length === 0
+        ? open.length === 0
+          ? `${party.name} का अभी कोई बिल नहीं है। उनका बिल आने से पहले पैसा देने के लिए, ${tickHi}। कुछ दर्ज नहीं हुआ।`
+          : `${party.name} का वह बिल चुनिए जिसके लिए यह पैसा है। बिल से पहले पैसा देने के लिए, ${tickHi}।`
+        : `चुने हुए बिल ${formatPaise(covered)} के हैं, पर ${formatPaise(amount)} दिया जा रहा है। ${formatPaise(amount)} − ${formatPaise(covered)} = ${formatPaise(remaining)} किसी बिल पर नहीं लगेगा। और बिल चुनिए, ${formatPaise(covered)} दीजिए, या ${tickHi} ताकि ${formatPaise(remaining)} अडवांस रहे।` } });
     }
     // Issue #274 — what the advance is paid against, and its narration, only when there is an advance.
     const particulars = direction === 'PAYMENT' && remaining > 0n ? advanceParticularsOf(input, date) : undefined;
     const narration = particulars === undefined ? undefined : advanceNarration({
-      party: party.name, particulars, how: how.words, reference, bills: applied.map(({ position }) => position.document.number),
+      party: party.name, particulars, how: how.words['en-IN'], reference, bills: applied.map(({ position }) => position.document.number),
     });
     return {
       direction, party, amount, date, how, reference, applied, leftOver: remaining, particulars, narration,
@@ -4884,7 +4916,7 @@ export class DemoApplication {
   async disconnectBankFeed(actor: ActorContext, input: Record<string, unknown>) {
     const connectionId = String(input.connectionId ?? '');
     const connection = await this.bankFeeds.disconnect(this.bankContext(actor), connectionId, String(input.idempotencyKey ?? `web-bank-disconnect:${connectionId}`));
-    return { state: 'success', connection: this.bankConnectionJson(connection), message: 'Bank access was disconnected. Previously imported transactions remain available for your records.' };
+    return { state: 'success', connection: this.bankConnectionJson(connection), message: both('Bank access was disconnected. Previously imported transactions remain available for your records.', 'बैंक का ऐक्सेस बंद हो गया। पहले से लाई गई ट्रांज़ेक्शन आपके रिकॉर्ड में हैं।') };
   }
 
   private bankContext(actor: ActorContext): BankFeedContext { this.companyOf(actor); return { companyId: String(actor.companyId), actorId: String(actor.userId), permissions: new Set(actor.permissions) }; }
@@ -5118,22 +5150,22 @@ export class DemoApplication {
       periodLabel: workspace.periodLabel,
       gstin: workspace.gstin,
       status: workspace.state,
-      statusLabel: workspace.stateLabel['en-IN'],
-      summary: workspace.sentence['en-IN'],
+      statusLabel: say(workspace.stateLabel),
+      summary: say(workspace.sentence),
       // Whether a snapshot has actually been taken and stored. Looking at what a month *would* say
       // is free and needs nothing stored, so this is not the same as `mayApprove`: a month nobody
       // has prepared has nothing to approve, and the screen must not offer to.
       prepared: workspace.preparation !== null,
       mayApprove: workspace.mayApprove,
-      whyNotApprovable: workspace.whyNotApprovable.map((reason) => reason['en-IN']),
+      whyNotApprovable: workspace.whyNotApprovable.map((reason) => say(reason)),
       counts: workspace.counts,
       approvedAt: workspace.preparation?.approval?.approvedAt ?? null,
       exportedAt: workspace.preparation?.exportedAt ?? null,
       // Every table, with its rows and — on every row — the bills behind it.
       sections: workspace.gstr1.sections.map((section) => ({
         id: section.id,
-        name: section.name['en-IN'],
-        sentence: section.sentence['en-IN'],
+        name: say(section.name),
+        sentence: say(section.sentence),
         taxableValue: jsonAmount(section.totals.taxableValue.minor),
         tax: jsonAmount(totalTaxOf(section.totals).minor),
         rows: section.rows.map((row) => ({
@@ -5175,18 +5207,18 @@ export class DemoApplication {
       documentsIssued: workspace.gstr1.documents.map((row) => ({
         kind: row.kind, from: row.from, to: row.to, total: row.total, cancelled: row.cancelled, issued: row.issued,
       })),
-      reasons: workspace.reasons.map((reason) => ({ sourceId: reason.sourceId, section: reason.section, reason: reason.reason['en-IN'] })),
+      reasons: workspace.reasons.map((reason) => ({ sourceId: reason.sourceId, section: reason.section, reason: say(reason.reason) })),
       gstr3b: {
-        summary: workspace.gstr3b.sentence['en-IN'],
-        caution: workspace.gstr3b.caution['en-IN'],
+        summary: say(workspace.gstr3b.sentence),
+        caution: say(workspace.gstr3b.caution),
         outward: workspace.gstr3b.outward.map((box) => ({
-          boxId: box.boxId, label: box.label['en-IN'],
+          boxId: box.boxId, label: say(box.label),
           taxableValue: jsonAmount(box.amounts.taxableValue.minor),
           tax: jsonAmount(totalTaxOf(box.amounts).minor),
         })),
         // Issue #289, part 3 — Table 4 box by box, so 4(A) and the s.17(5) credit taken out in 4(B)(1) can be seen.
         credit: workspace.gstr3b.credit.map((box) => ({
-          boxId: box.boxId, label: box.label['en-IN'],
+          boxId: box.boxId, label: say(box.label),
           cgst: jsonAmount(box.amounts.cgst.minor), sgst: jsonAmount(box.amounts.sgst.minor),
           igst: jsonAmount(box.amounts.igst.minor), cess: jsonAmount(box.amounts.cess.minor),
           tax: jsonAmount(totalTaxOf(box.amounts).minor),
@@ -5203,7 +5235,7 @@ export class DemoApplication {
       },
       reconciliation: {
         agrees: workspace.reconciliation.agrees,
-        sentence: workspace.reconciliation.sentence['en-IN'],
+        sentence: say(workspace.reconciliation.sentence),
         heads: workspace.reconciliation.heads.map((head) => ({
           head: head.head,
           onTheReturn: jsonAmount(head.onTheReturn.minor),
@@ -5214,7 +5246,7 @@ export class DemoApplication {
       // Issue #249 — the credit side: what the return claims against the input GST in the books.
       purchaseReconciliation: workspace.purchaseReconciliation === null ? null : {
         agrees: workspace.purchaseReconciliation.agrees,
-        sentence: workspace.purchaseReconciliation.sentence['en-IN'],
+        sentence: say(workspace.purchaseReconciliation.sentence),
         onTheReturn: jsonAmount(workspace.purchaseReconciliation.onTheReturn.minor),
         inTheBooks: jsonAmount(workspace.purchaseReconciliation.inTheBooks.minor),
         heads: workspace.purchaseReconciliation.heads.map((head) => ({
@@ -5230,15 +5262,15 @@ export class DemoApplication {
         number: exception.document.number,
         party: exception.document.partyName,
         amount: jsonAmount(exception.document.invoiceValue.minor),
-        questions: exception.findings.map((finding) => ({ message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'] })),
+        questions: exception.findings.map((finding) => ({ message: say(finding.message), whatToDo: say(finding.whatToDo) })),
       })),
       findings: workspace.findings.map((finding) => ({
         code: finding.code, severity: finding.severity,
-        message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'],
+        message: say(finding.message), whatToDo: say(finding.whatToDo),
         document: finding.source?.number ?? null,
       })),
       drift: workspace.drift === null ? null : {
-        message: workspace.drift.message['en-IN'],
+        message: say(workspace.drift.message),
         added: workspace.drift.documentsAdded.map((document) => document.number),
         removed: workspace.drift.documentsRemoved.map((document) => document.number),
         changed: workspace.drift.documentsChanged.map((document) => document.number),
@@ -5263,21 +5295,21 @@ export class DemoApplication {
       date: document?.documentDate ?? null,
       kind: document?.kind ?? 'INVOICE',
       status: line.status,
-      statusLabel: line.statusLabel['en-IN'],
+      statusLabel: say(line.statusLabel),
       outcome: line.outcome,
-      outcomeLabel: line.outcomeLabel['en-IN'],
+      outcomeLabel: say(line.outcomeLabel),
       // Issue #192 — section 16(4)'s last date, beside the bill from the day it arrives rather than
       // on the day it is too late to do anything about it.
       lastClaimDate: line.lastClaimDate,
       lastClaimDateLabel: line.lastClaimDate === null ? null : formatClaimDate(line.lastClaimDate),
-      sentence: line.sentence['en-IN'],
-      matchNote: line.matchNote['en-IN'],
+      sentence: say(line.sentence),
+      matchNote: say(line.matchNote),
       claimable: jsonAmount(totalItcTaxOf(line.claimable).minor),
       heldBack: jsonAmount(totalItcTaxOf(line.heldBack).minor),
       // The whole of "match decisions show evidence": every field, both sides, and the verdict.
       evidence: line.evidence.map((row) => ({
         field: row.field,
-        label: row.label['en-IN'],
+        label: say(row.label),
         ours: row.ours,
         theirs: row.theirs,
         verdict: row.verdict,
@@ -5285,7 +5317,7 @@ export class DemoApplication {
       })),
       findings: line.findings.map((finding) => ({
         code: finding.code, severity: finding.severity,
-        message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'],
+        message: say(finding.message), whatToDo: say(finding.whatToDo),
       })),
       decision: line.decision === null ? null : {
         kind: line.decision.kind,
@@ -5306,13 +5338,13 @@ export class DemoApplication {
       state: 'itc' as const,
       period: workspace.period,
       periodLabel: workspace.periodLabel,
-      summary: workspace.sentence['en-IN'],
+      summary: say(workspace.sentence),
       portalDataPresent: workspace.portalDataPresent,
       lastImport: workspace.lastImport === null ? null : {
         source: workspace.lastImport.source,
         fileName: workspace.lastImport.fileName,
         importedAt: workspace.lastImport.importedAt,
-        sentence: workspace.lastImport.sentence['en-IN'],
+        sentence: say(workspace.lastImport.sentence),
         rejected: workspace.lastImport.rejected.map((row) => row.reason),
       },
       counts: workspace.counts,
@@ -5325,13 +5357,13 @@ export class DemoApplication {
       lines: workspace.lines.map((line) => this.itcLineJson(line)),
       findings: workspace.findings
         .filter((finding) => finding.lineKey === null)
-        .map((finding) => ({ code: finding.code, severity: finding.severity, message: finding.message['en-IN'], whatToDo: finding.whatToDo['en-IN'] })),
+        .map((finding) => ({ code: finding.code, severity: finding.severity, message: say(finding.message), whatToDo: say(finding.whatToDo) })),
       returnLinkage: {
         allOtherItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.allOtherItc).minor),
         reverseChargeItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.reverseChargeItc).minor),
         importItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.importItc).minor),
         reversedItc: jsonAmount(totalItcTaxOf(workspace.returnLinkage.reversedItc).minor),
-        caution: workspace.returnLinkage.caution['en-IN'],
+        caution: say(workspace.returnLinkage.caution),
       },
     };
   }
@@ -5357,7 +5389,7 @@ export class DemoApplication {
     });
     return {
       ...this.itcWorkspaceJson(await this.shop.itc.workspace(actor, period)),
-      imported: batch.sentence['en-IN'],
+      imported: say(batch.sentence),
     };
   }
 
@@ -5388,7 +5420,7 @@ export class DemoApplication {
     });
     return {
       ...this.itcWorkspaceJson(await this.shop.itc.workspace(actor, period)),
-      imported: batch.sentence['en-IN'],
+      imported: say(batch.sentence),
     };
   }
 
@@ -5444,8 +5476,8 @@ export class DemoApplication {
     const file = await this.gstReturns.exportFile(actor, { ...this.gstInput(input), returnType });
     return {
       state: 'gst-export' as const,
-      title: `${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} file ready`,
-      message: file.sentence['en-IN'],
+      title: both(`${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} file ready`, `${returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} फ़ाइल तैयार`),
+      message: say(file.sentence),
       fileName: file.fileName,
       payload: file.payload,
     };
@@ -5500,19 +5532,38 @@ export class DemoApplication {
     // Issue #293 — services and charges never go into or out of a godown, so the sentence says so.
     const stockMoves = preview.lines.some((line) => line.supplyKind === 'GOODS' && !isChargeLine(line));
     return {
-      state: 'preview', title: command.kind === 'SALES_RETURN' ? 'Customer return checked' : 'Supplier return checked',
-      message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.command.idempotencyKey,
+      state: 'preview', title: command.kind === 'SALES_RETURN' ? both('Customer return checked', 'ग्राहक वापसी जाँची गई') : both('Supplier return checked', 'सप्लायर वापसी जाँची गई'),
+      message: say(preview.summary), amount: jsonAmount(preview.totals.total.minor), token: command.command.idempotencyKey,
       stockMoves,
       effects: [
-        command.kind === 'SALES_RETURN' ? 'A credit note will reduce what the customer owes.' : 'A debit note will reduce what you owe the supplier.',
-        !stockMoves ? 'Nothing goes into or out of stock: this is for services, not goods.'
-          : command.kind === 'SALES_RETURN' ? 'Accepted goods will go back into stock.' : 'Returned goods will leave stock.',
-        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
-        ...preview.warnings,
+        command.kind === 'SALES_RETURN' ? both('A credit note will reduce what the customer owes.', 'एक क्रेडिट नोट ग्राहक का बाक़ी घटा देगा।') : both('A debit note will reduce what you owe the supplier.', 'एक डेबिट नोट सप्लायर का आपका बाक़ी घटा देगा।'),
+        !stockMoves ? both('Nothing goes into or out of stock: this is for services, not goods.', 'स्टॉक में कुछ नहीं आता-जाता: यह सेवाओं के लिए है, माल के लिए नहीं।')
+          : command.kind === 'SALES_RETURN' ? both('Accepted goods will go back into stock.', 'स्वीकृत माल स्टॉक में वापस जाएगा।') : both('Returned goods will leave stock.', 'वापसी का माल स्टॉक से चला जाएगा।'),
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? both('This bill has a government e-invoice number, so this note must be reported to the government too.', 'इस बिल का सरकारी ई-इनवॉइस नंबर है, इसलिए यह नोट भी सरकार को रिपोर्ट होना ज़रूरी है।') : both('Nothing about this note has to be reported to the government separately.', 'इस नोट के बारे में सरकार को अलग से कुछ रिपोर्ट नहीं करना।'),
+        ...preview.warnings.map(say),
       ],
       // Issue #186 — e.g. the 30 November deadline is close. Kept apart so every language shows it.
-      warnings: preview.warnings,
+      warnings: preview.warnings.map(say),
     };
+  }
+
+  /**
+   * Issue #298 — what the recorded note did, said in the session's language. `note.summary` is the
+   * frozen English record kept for the printed note; this pair is only the screen's sentence, and
+   * its en-IN side is the stored sentence verbatim so the two can never disagree.
+   */
+  private noteSummaryWords(note: ReturnNote): Bilingual {
+    const total = formatINR(note.totals.total);
+    const against = note.originalDocument.number;
+    if (note.priceCorrection === true && note.kind === 'SALES_DEBIT_NOTE')
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने ज़्यादा दाम के लिए ${against} पर ${total} और माँगा।` };
+    if (note.priceCorrection === true)
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने कम दाम के लिए ${against} पर ${total} का क्रेडिट दिया। माल वापस नहीं आया।` };
+    if (note.kind === 'PURCHASE_RETURN') {
+      const party = supplierParties(this.config.companyId).find((candidate) => candidate.id === note.partyId)?.legalName ?? note.partyId;
+      return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने ${against} के लिए ${party} का ${total} बाक़ी कम किया।` };
+    }
+    return { 'en-IN': note.summary, 'hi-IN': `${note.number} ने ${against} के लिए ${total} का क्रेडिट दिया।` };
   }
 
   async recordReturn(actor: ActorContext, input: Record<string, unknown>) {
@@ -5531,15 +5582,18 @@ export class DemoApplication {
     // of 13 December 2019; the businesses it covers named by Notification 13/2020-Central Tax of 21 March 2020).
     const eInvoice = result.note.kind !== 'PURCHASE_RETURN' ? await this.noteEInvoiceDecision(actor, result.note) : null;
     if (eInvoice?.needed === 'YES' && eInvoice.lateForPortal !== true && !result.deduplicated) this.startAutomaticEInvoice(actor, result.note.id);
-    const noteWords = result.note.kind === 'SALES_DEBIT_NOTE' ? 'This debit note' : 'This credit note';
+    const noteWords = result.note.kind === 'SALES_DEBIT_NOTE'
+      ? { 'en-IN': 'This debit note', 'hi-IN': 'इस डेबिट नोट' }
+      : { 'en-IN': 'This credit note', 'hi-IN': 'इस क्रेडिट नोट' };
+    const noteSummary = this.noteSummaryWords(result.note);
     return {
       state: 'recorded', deduplicated: result.deduplicated,
       title: price
-        ? (result.deduplicated ? 'Price correction already recorded once' : 'Price correction recorded')
-        : (result.deduplicated ? 'Return already recorded once' : 'Return recorded'),
+        ? (result.deduplicated ? both('Price correction already recorded once', 'दाम सुधार पहले से एक बार दर्ज है') : both('Price correction recorded', 'दाम सुधार दर्ज हुआ'))
+        : (result.deduplicated ? both('Return already recorded once', 'वापसी पहले से एक बार दर्ज है') : both('Return recorded', 'वापसी दर्ज हुई')),
       message: eInvoice?.needed === 'YES'
-        ? `${result.note.summary} ${eInvoice.lateForPortal === true ? eInvoice.message.replace('This bill', noteWords) : `${noteWords} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`}`
-        : result.note.summary,
+        ? `${say(noteSummary)} ${eInvoice.lateForPortal === true ? say({ 'en-IN': eInvoice.message['en-IN'].replace('This bill', noteWords['en-IN']), 'hi-IN': eInvoice.message['hi-IN'].replace('इस बिल', noteWords['hi-IN']) }) : both(`${noteWords['en-IN']} has to carry a government e-invoice number. It is being sent now, and the number appears on the E-invoice screen when it comes back.`, `${noteWords['hi-IN']} पर सरकारी ई-इनवॉइस नंबर होना ज़रूरी है। उसे अब भेजा जा रहा है, और नंबर ई-इनवॉइस स्क्रीन पर आने पर दिखेगा।`)}`
+        : say(noteSummary),
       note: { id: result.note.id, number: result.note.number, kind: result.note.kind, amount: jsonAmount(result.note.totals.total.minor), priceCorrection: result.note.priceCorrection === true },
     };
   }
@@ -5550,16 +5604,16 @@ export class DemoApplication {
     const preview = await this.returns.previewPriceCorrection(actor, command);
     const credit = preview.kind === 'SALES_RETURN';
     return {
-      state: 'preview', title: credit ? 'Lower price checked' : 'Higher price checked',
-      message: preview.summary, amount: jsonAmount(preview.totals.total.minor), token: command.idempotencyKey,
+      state: 'preview', title: credit ? both('Lower price checked', 'कम दाम जाँचा गया') : both('Higher price checked', 'ज़्यादा दाम जाँचा गया'),
+      message: say(preview.summary), amount: jsonAmount(preview.totals.total.minor), token: command.idempotencyKey,
       noteKind: preview.kind, stockMoves: false,
       effects: [
-        credit ? 'A credit note will reduce what the customer owes.' : 'A debit note will add to what the customer owes.',
-        'Nothing goes into or out of stock: only the price changes.',
-        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? 'This bill has a government e-invoice number, so this note must be reported to the government too.' : 'Nothing about this note has to be reported to the government separately.',
-        ...preview.warnings,
+        credit ? both('A credit note will reduce what the customer owes.', 'एक क्रेडिट नोट ग्राहक का बाक़ी घटा देगा।') : both('A debit note will add to what the customer owes.', 'एक डेबिट नोट ग्राहक के बाक़ी में जुड़ेगा।'),
+        both('Nothing goes into or out of stock: only the price changes.', 'स्टॉक में कुछ नहीं आता-जाता: सिर्फ़ दाम बदलता है।'),
+        preview.complianceStatus === 'PENDING_ADJUSTMENT' ? both('This bill has a government e-invoice number, so this note must be reported to the government too.', 'इस बिल का सरकारी ई-इनवॉइस नंबर है, इसलिए यह नोट भी सरकार को रिपोर्ट होना ज़रूरी है।') : both('Nothing about this note has to be reported to the government separately.', 'इस नोट के बारे में सरकार को अलग से कुछ रिपोर्ट नहीं करना।'),
+        ...preview.warnings.map(say),
       ],
-      warnings: preview.warnings,
+      warnings: preview.warnings.map(say),
     };
   }
 
@@ -5683,8 +5737,8 @@ export class DemoApplication {
       date: isoDate(String(input.supplierNoteDate ?? '')),
     });
     return {
-      state: 'recorded', title: "Supplier's credit note added",
-      message: `${note.number} now carries ${note.supplierCreditNote?.number ?? ''} dated ${note.supplierCreditNote?.date ?? ''}. The purchase check will look for it in the government's record.`,
+      state: 'recorded', title: both("Supplier's credit note added", 'सप्लायर का क्रेडिट नोट जोड़ा'),
+      message: both(`${note.number} now carries ${note.supplierCreditNote?.number ?? ''} dated ${note.supplierCreditNote?.date ?? ''}. The purchase check will look for it in the government's record.`, `${note.number} पर अब ${note.supplierCreditNote?.number ?? ''} दिनांक ${note.supplierCreditNote?.date ?? ''} है। पर्चेज़ चेक इसे सरकार के रिकॉर्ड में ढूँढेगा।`),
       note: { id: note.id, number: note.number, supplierCreditNote: note.supplierCreditNote ?? null },
     };
   }
@@ -5815,7 +5869,7 @@ export class DemoApplication {
     });
     const order = created.state === 'DRAFT' ? await this.shop.matching.placeOrder(actor, created.id) : created;
     return {
-      state: 'recorded', title: 'Order placed', message: order.summary,
+      state: 'recorded', title: both('Order placed', 'ऑर्डर दिया गया'), message: order.summary,
       order: this.orderJson(order), stock: await this.stockOf(actor, item.id),
     };
   }
@@ -5917,14 +5971,14 @@ export class DemoApplication {
     const reason = String(input.reason ?? '').trim();
     const rebuilt = await this.matchPurchaseBill(actor, input);
     if (rebuilt.outcome !== 'HOLD_FOR_APPROVAL') {
-      return { ...rebuilt, title: 'Nothing to approve', message: 'This bill is not on hold, so there is nothing to accept.' };
+      return { ...rebuilt, title: both('Nothing to approve', 'मंज़ूर करने को कुछ नहीं'), message: both('This bill is not on hold, so there is nothing to accept.', 'यह बिल होल्ड पर नहीं है, इसलिए मंज़ूर करने को कुछ नहीं।') };
     }
     const match = rebuilt.raw;
     await this.shop.matching.approveMatch(actor, match, reason);
     const cleared = await this.shop.matching.isClearedToPost(actor, match);
     return {
       ...DemoApplication.matchJson(match, cleared),
-      title: 'Differences accepted',
+      title: both('Differences accepted', 'फ़र्क़ मंज़ूर किया'),
       message: cleared.reason,
       stock: rebuilt.stock,
     };
@@ -6208,7 +6262,7 @@ export class DemoApplication {
    */
   private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined; readonly documentType?: EInvoiceDocument['documentType'] }): {
     readonly needed: 'YES' | 'NO' | 'UNKNOWN';
-    readonly message: string;
+    readonly message: { readonly 'en-IN': string; readonly 'hi-IN': string };
     readonly askTurnover: boolean;
     readonly ruleId: string;
     /** Needed, but dated too long ago for the portal to take it (#236). */
@@ -6220,33 +6274,40 @@ export class DemoApplication {
     const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
     const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
+    const NOT_NEEDED_HI = 'इस बिल को ई-इनवॉइस नंबर की ज़रूरत नहीं';
     if (decision.outcome === 'APPLICABLE') {
       const deadline = reportingDeadline(bill.documentDate, this.turnoverFactsOn(bill.documentDate).lastYearTurnover ?? {}, appToday());
       // Issue #236 — a bill dated too long ago for the portal is not described as being sent.
       const late = deadline.kind === 'LIMIT' && deadline.closed;
       const message = late
-        ? `This bill needs a government e-invoice number, but it cannot be sent. ${deadline.message}`
-        : 'This bill needs a government e-invoice number. It is sent by itself when you issue it.';
+        ? { 'en-IN': `This bill needs a government e-invoice number, but it cannot be sent. ${deadline.message}`,
+            'hi-IN': `इस बिल को सरकारी ई-इनवॉइस नंबर चाहिए, पर उसे नहीं भेजा जा सकता। ${deadline.message}` }
+        : { 'en-IN': 'This bill needs a government e-invoice number. It is sent by itself when you issue it.',
+            'hi-IN': 'इस बिल को सरकारी ई-इनवॉइस नंबर चाहिए। जारी करते ही अपने आप भेजा जाता है।' };
       return { needed: 'YES', message, askTurnover: false, ruleId: decision.ruleId, lateForPortal: late };
     }
     if (decision.outcome === 'NOT_APPLICABLE') {
       const exemption = eInvoiceExemptionOf(this.config.companyId);
       const message = decision.ruleId === 'EINV.RECIPIENT.B2C'
-        ? `${NOT_NEEDED}: the customer has no GST number.`
+        ? { 'en-IN': `${NOT_NEEDED}: the customer has no GST number.`,
+            'hi-IN': `${NOT_NEEDED_HI}: ग्राहक के पास GST नंबर नहीं है।` }
         : decision.ruleId.startsWith('EINV.EXEMPT.') && exemption !== 'NONE'
-          ? `${NOT_NEEDED}: Business details says your business is ${EINVOICE_EXEMPTION_WORDS[exemption]}, and the e-invoice rules leave those out whatever the turnover.`
+          ? { 'en-IN': `${NOT_NEEDED}: Business details says your business is ${EINVOICE_EXEMPTION_WORDS[exemption]}, and the e-invoice rules leave those out whatever the turnover.`,
+              'hi-IN': `${NOT_NEEDED_HI}: बिज़नेस डिटेल्स कहता है आपका कारोबार ${EINVOICE_EXEMPTION_WORDS[exemption]} है, और ई-इनवॉइस के नियम उन्हें हर टर्नओवर पर छोड़ते हैं।` }
           : decision.ruleId.startsWith('EINV.THRESHOLD.')
-            ? `${NOT_NEEDED}: Business details says your turnover has never been over ₹5 crore in any year since 2017-18.`
-            : `${NOT_NEEDED}. ${decision.reason}`;
+            ? { 'en-IN': `${NOT_NEEDED}: Business details says your turnover has never been over ₹5 crore in any year since 2017-18.`,
+                'hi-IN': `${NOT_NEEDED_HI}: बिज़नेस डिटेल्स कहता है आपका टर्नओवर 2017-18 के बाद कभी ₹5 करोड़ से ऊपर नहीं गया।` }
+            : { 'en-IN': `${NOT_NEEDED}. ${decision.reason}`, 'hi-IN': `${NOT_NEEDED_HI}. ${decision.reason}` };
       return { needed: 'NO', message, askTurnover: false, ruleId: decision.ruleId };
     }
     if (decision.ruleId === 'EINV.TURNOVER.UNKNOWN') {
       return {
         needed: 'UNKNOWN', askTurnover: true, ruleId: decision.ruleId,
-        message: "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.",
+        message: { 'en-IN': "We don't know yet whether you need e-invoices: Business details does not say whether your turnover has been over ₹5 crore. Answer once in Business details. This bill can still be issued now.",
+                   'hi-IN': 'अभी पता नहीं कि आपको ई-इनवॉइस चाहिए या नहीं: बिज़नेस डिटेल्स में नहीं लिखा कि टर्नओवर ₹5 करोड़ से ऊपर गया है या नहीं। बिज़नेस डिटेल्स में एक बार जवाब दीजिए। यह बिल अभी भी जारी हो सकता है।' },
       };
     }
-    return { needed: 'UNKNOWN', askTurnover: false, ruleId: decision.ruleId, message: decision.reason };
+    return { needed: 'UNKNOWN', askTurnover: false, ruleId: decision.ruleId, message: { 'en-IN': decision.reason, 'hi-IN': decision.reason } };
   }
 
   /**
@@ -6279,8 +6340,8 @@ export class DemoApplication {
           // The bill is already issued, so "sent by itself when you issue it" is not said here;
           // the status line says where it stands.
           decision: decision.needed === 'YES' && decision.lateForPortal !== true
-            ? 'This bill needs a government e-invoice number.'
-            : decision.message,
+            ? both('This bill needs a government e-invoice number.', 'इस बिल को सरकारी ई-इनवॉइस नंबर चाहिए।')
+            : say(decision.message),
           askTurnover: decision.askTurnover,
           statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
           canRetry: status === 'FAILED' && record?.failure?.retryable === true && decision.needed === 'YES',
@@ -6323,8 +6384,9 @@ export class DemoApplication {
         eInvoiceStatus: status,
         needed: decision.needed,
         decision: decision.lateForPortal === true
-          ? decision.message.replace('This bill', debit ? 'This debit note' : 'This credit note')
-          : `This ${debit ? 'debit' : 'credit'} note against ${note.originalDocument.number} needs a government e-invoice number.`,
+          ? say(decision.message).replace('This bill', debit ? 'This debit note' : 'This credit note')
+          : both(`This ${debit ? 'debit' : 'credit'} note against ${note.originalDocument.number} needs a government e-invoice number.`,
+                 `${note.originalDocument.number} के लिए इस ${debit ? 'डेबिट' : 'क्रेडिट'} नोट को सरकारी ई-इनवॉइस नंबर चाहिए।`),
         askTurnover: false,
         statusText: DemoApplication.eInvoiceStatusText(status, record?.failure ?? null, decision.needed),
         canRetry: status === 'FAILED' && record?.failure?.retryable === true,
@@ -6993,7 +7055,7 @@ export class DemoApplication {
     if (result.kind === 'FOUND') {
       return {
         ...base,
-        title: `${base.vehicle} is on the registering authority's record`,
+        title: both(`${base.vehicle} is on the registering authority's record`, `${base.vehicle} रजिस्टरिंग अथॉरिटी के रिकॉर्ड में है`),
         provider: result.provenance.provider,
         providerReference: result.provenance.providerReference,
         retrievedAt: result.provenance.retrievedAt,
@@ -7005,7 +7067,7 @@ export class DemoApplication {
     if (result.kind === 'NOT_FOUND') {
       return {
         ...base,
-        title: `The authority holds no vehicle with the number ${base.vehicle}`,
+        title: both(`The authority holds no vehicle with the number ${base.vehicle}`, `अथॉरिटी के पास ${base.vehicle} नंबर की कोई गाड़ी नहीं है`),
         provider: result.provenance.provider,
         providerReference: result.provenance.providerReference,
         retrievedAt: result.provenance.retrievedAt,
@@ -7016,7 +7078,7 @@ export class DemoApplication {
     }
     return {
       ...base,
-      title: 'This vehicle has not been checked',
+      title: both('This vehicle has not been checked', 'यह गाड़ी अभी जाँची नहीं गई'),
       code: result.code,
       retryable: result.retryable,
       provider: null,
@@ -7270,11 +7332,11 @@ export class DemoApplication {
     const reason = String(input.reason ?? '').trim();
     const rebuilt = await this.checkSupplier(actor, input);
     if (rebuilt.level === 'INFORMATION') {
-      return { ...rebuilt, title: 'Nothing to accept', message: 'There is nothing on this supplier that needs accepting.' };
+      return { ...rebuilt, title: both('Nothing to accept', 'मान्यता देने को कुछ नहीं'), message: both('There is nothing on this supplier that needs accepting.', 'इस सप्लायर के बारे में कुछ मान्यता देने की ज़रूरत नहीं।') };
     }
     await this.shop.risk.acknowledge(actor, rebuilt.raw, reason);
     const cleared = await this.shop.risk.isClearedToProceed(actor, rebuilt.raw);
-    return { ...DemoApplication.riskJson(rebuilt.raw, cleared), title: 'Accepted', message: cleared.reason };
+    return { ...DemoApplication.riskJson(rebuilt.raw, cleared), title: both('Accepted', 'मान्यता दी गई'), message: cleared.reason };
   }
 
   /** The assessment as a screen needs it: every warning with the evidence behind it. */
@@ -7765,10 +7827,11 @@ export class DemoApplication {
   private static servicePlaceOfSupplyReason(stateCode: string | null, customer: { readonly legalName: string; readonly gstRegistrationType: string }, walkIn: boolean): string {
     const code = stateCode ?? '';
     const where = `Place of supply: ${STATE_NAMES[code] ?? code} (${code})`;
-    if (walkIn) return `${where} — the service is supplied at your counter, so it counts in your own state.`;
+    const whereHi = `सप्लाई का स्थान: ${STATE_NAMES[code] ?? code} (${code})`;
+    if (walkIn) return both(`${where} — the service is supplied at your counter, so it counts in your own state.`, `${whereHi} — सेवा आपके काउंटर पर दी गई, इसलिए यह आपके अपने राज्य में गिनी जाती है।`);
     return customer.gstRegistrationType === 'unregistered'
-      ? `${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`
-      : `${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`;
+      ? both(`${where} — the service is supplied to ${customer.legalName}, at the address saved for them.`, `${whereHi} — सेवा ${customer.legalName} को दी गई, उनका सेव किया पता वहीं है।`)
+      : both(`${where} — the service is supplied to ${customer.legalName}, who is registered for GST there.`, `${whereHi} — सेवा ${customer.legalName} को दी गई, जो वहाँ GST के लिए रजिस्टर्ड हैं।`);
   }
 
   private saleInput(input: Record<string, unknown>) {

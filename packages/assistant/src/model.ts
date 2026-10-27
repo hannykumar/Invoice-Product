@@ -162,18 +162,18 @@ export const RULE_DISCLAIMER: Bilingual = {
   'en-IN':
     'This is what the rule we have on record says, with the notification it comes from. It is not legal advice, and your accountant may know something about your business that we do not.',
   'hi-IN':
-    'Yeh wahi hai jo hamare paas darj niyam kehta hai, us notification ke saath jahan se aaya hai. Yeh kanooni salah nahin hai, aur aapke accountant ko aapke business ki koi baat pata ho sakti hai jo humein nahin.',
+    'यह वही है जो हमारे पास दर्ज नियम कहता है, उस नोटिफ़िकेशन के साथ जहां से आया है. यह क़ानूनी सलाह नहीं है, और आपके अकाउंटेंट को आपके बिज़नेस की कोई बात पता हो सकती है जो हमें नहीं.',
 };
 
 export const FIGURE_DISCLAIMER: Bilingual = {
   'en-IN': 'Every figure here is taken from your own books, and you can open the same report to check it.',
-  'hi-IN': 'Yahan har aankda aapki apni books se liya gaya hai, aur aap wahi report kholkar use jaanch sakte hain.',
+  'hi-IN': 'यहां हर आंकड़ा आपकी अपनी बहीखाते से लिया गया है, और आप वही रिपोर्ट खोलकर उसे जांच सकते हैं.',
 };
 
 /** How a period is said back to the person, so they can see what we took their words to mean. */
 export const describePeriod = (from: IsoDate, to: IsoDate): Bilingual => ({
   'en-IN': `${formatDate(from)} to ${formatDate(to)}`,
-  'hi-IN': `${formatDate(from)} se ${formatDate(to)} tak`,
+  'hi-IN': `${formatDate(from)} से ${formatDate(to)} तक`,
 });
 
 export const formatAmount = (amount: Money): string => formatINR(amount);

@@ -235,6 +235,27 @@ const platformMigrations: readonly Migration[] = [{
     ALTER TABLE invitations DROP COLUMN IF EXISTS role;
     ALTER TABLE memberships DROP COLUMN IF EXISTS role;
   `,
+}, {
+  // Issue #350, ADR D6 — rate limits and daily spending caps, shared by every server and kept across
+  // deploys. Buckets are hashes: no phone number, email or IP address is stored. Not company data, so
+  // no tenant policy. One row per bucket, reset in place when its window passes, so the application
+  // never needs to delete (#368: it may delete from one table only).
+  id: "20261025T234310256Z_platform_c089a19c3a1d_rate_limit_counters",
+  up: `
+    CREATE TABLE rate_limit_counters (
+      bucket text NOT NULL,
+      window_start timestamptz NOT NULL,
+      window_end timestamptz NOT NULL,
+      count integer NOT NULL CHECK (count >= 0),
+      PRIMARY KEY (bucket)
+    );
+    DO $$ BEGIN
+      IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'invoice_app') THEN
+        GRANT SELECT, INSERT, UPDATE ON rate_limit_counters TO invoice_app;
+      END IF;
+    END $$;
+  `,
+  down: `DROP TABLE IF EXISTS rate_limit_counters;`,
 }];
 
 export const migrations: readonly Migration[] = Object.freeze(

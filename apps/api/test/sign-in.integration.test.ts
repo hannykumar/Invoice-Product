@@ -182,15 +182,11 @@ test('#343: a database from before roles keeps every member\'s reads, and its ow
     cashier: ['dashboard.read', 'sales.draft.write', 'sales.finalise', 'payments.record'],
     viewer: ['dashboard.read'],
   };
-  // On a database of its own: rolling the migration back on the shared one would pull the column
-  // out from under every other test file running at the same time.
-  const name = `roles_backfill_${randomBytes(6).toString('hex')}`;
-  await owner.query(`CREATE DATABASE ${name}`);
-  const scratchUrl = new URL(url as string);
-  scratchUrl.pathname = `/${name}`;
-  const scratch = createDb(scratchUrl.toString());
-  let rows: Record<string, { role: string; permissions: string[] }>;
-  try {
+  // On a database of its own (#445's helper: up/down tests take turns, and the drop never ends anyone
+  // else's connection) — rolling the migration back on the shared one would pull the column out from
+  // under every other test file running at the same time.
+  const { withScratchDatabase } = await import('../../../packages/platform/test/scratch-database.ts');
+  const rows = await withScratchDatabase(owner, url as string, 'roles_backfill', async (scratch) => {
     const { migrate } = await import('../../../packages/platform/src/migrations.ts');
     await migrate(scratch);
     await scratch.query("INSERT INTO companies (id, legal_name) VALUES ($1, 'Synthetic Old Traders')", [companyId]);
@@ -202,12 +198,9 @@ test('#343: a database from before roles keeps every member\'s reads, and its ow
       await scratch.query('INSERT INTO memberships (company_id, user_id, permissions) VALUES ($1, $2, $3::jsonb)', [companyId, id, JSON.stringify(before[who as keyof typeof before])]);
     }
     await scratch.query(roles.up);
-    rows = Object.fromEntries((await scratch.query('SELECT user_id, role, permissions FROM memberships WHERE company_id = $1', [companyId])).rows
-      .map((row) => [String(row.user_id), { role: String(row.role), permissions: row.permissions as string[] }]));
-  } finally {
-    await scratch.close();
-    await owner.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-  }
+    return Object.fromEntries((await scratch.query('SELECT user_id, role, permissions FROM memberships WHERE company_id = $1', [companyId])).rows
+      .map((row) => [String(row.user_id), { role: String(row.role), permissions: row.permissions as string[] }])) as Record<string, { role: string; permissions: string[] }>;
+  });
   assert.equal(rows[people.owner]!.role, 'owner');
   for (const permission of NEW) assert.ok(rows[people.owner]!.permissions.includes(permission), `the owner keeps ${permission}`);
   assert.equal(rows[people.cashier]!.role, 'custom');

@@ -93,5 +93,5 @@ export const understandRequest = (text: string): UnderstoodRequest => {
 
 export const WHAT_I_CAN_DO: Bilingual = {
   'en-IN': 'I can show who owes you money, send reminders about overdue bills, and stop reminding a customer. Anything that moves money, files a return or cancels a bill I can only prepare for you.',
-  'hi-IN': 'Main bata sakta hoon kisse paisa lena baaki hai, late bill ke liye reminder bhej sakta hoon, aur kisi grahak ko reminder bhejna band kar sakta hoon. Paisa bhejna, return file karna ya bill radd karna — yeh sirf taiyar kar sakta hoon, karna aapko hoga.',
+  'hi-IN': 'मैं बता सकता हूँ किससे पैसा लेना बाक़ी है, देर से बाक़ी बिलों के लिए रिमाइंडर भेज सकता हूँ, और किसी ग्राहक को रिमाइंडर भेजना बंद कर सकता हूँ. पैसा भेजना, रिटर्न फ़ाइल करना या बिल रद्द करना — यह सिर्फ़ तैयार कर सकता हूँ, करना आपको होगा.',
 };

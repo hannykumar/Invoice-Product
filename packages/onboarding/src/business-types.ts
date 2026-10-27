@@ -31,8 +31,8 @@ export interface BusinessTypeProfile {
 export const BUSINESS_TYPE_PROFILES: readonly BusinessTypeProfile[] = [
   {
     type: 'WHOLESALE',
-    name: { 'en-IN': 'Wholesale or trading', 'hi-IN': 'Thok ya trading' },
-    soundsLike: { 'en-IN': 'You buy in bulk and sell to other businesses.', 'hi-IN': 'Aap thok mein kharidte hain aur doosre businesses ko bechte hain.' },
+    name: { 'en-IN': 'Wholesale or trading', 'hi-IN': 'थोक या ट्रेडिंग' },
+    soundsLike: { 'en-IN': 'You buy in bulk and sell to other businesses.', 'hi-IN': 'आप थोक में ख़रीदते हैं और दूसरे बिज़नेस को बेचते हैं।' },
     suggestedTemplateId: 'wholesale-classic',
     commonUnits: ['BOX', 'BAG', 'KG', 'QUINTAL', 'PCS'],
     keepsStock: true,
@@ -41,8 +41,8 @@ export const BUSINESS_TYPE_PROFILES: readonly BusinessTypeProfile[] = [
   },
   {
     type: 'RETAIL',
-    name: { 'en-IN': 'Shop or counter sales', 'hi-IN': 'Dukaan ya counter' },
-    soundsLike: { 'en-IN': 'Customers come to your shop and buy in small amounts.', 'hi-IN': 'Customer dukaan par aate hain aur thoda-thoda lete hain.' },
+    name: { 'en-IN': 'Shop or counter sales', 'hi-IN': 'दुकान या काउंटर' },
+    soundsLike: { 'en-IN': 'Customers come to your shop and buy in small amounts.', 'hi-IN': 'ग्राहक दुकान पर आते हैं और थोड़ा-थोड़ा लेते हैं।' },
     suggestedTemplateId: 'counter-thermal',
     commonUnits: ['PCS', 'KG', 'LTR', 'PACKET'],
     keepsStock: true,
@@ -51,8 +51,8 @@ export const BUSINESS_TYPE_PROFILES: readonly BusinessTypeProfile[] = [
   },
   {
     type: 'BAKERY',
-    name: { 'en-IN': 'Bakery or food making', 'hi-IN': 'Bakery ya khaane ka kaam' },
-    soundsLike: { 'en-IN': 'You make what you sell — cakes, bread, snacks.', 'hi-IN': 'Jo bechte hain woh khud banate hain — cake, bread, namkeen.' },
+    name: { 'en-IN': 'Bakery or food making', 'hi-IN': 'बेकरी या खाने का काम' },
+    soundsLike: { 'en-IN': 'You make what you sell — cakes, bread, snacks.', 'hi-IN': 'जो बेचते हैं वो ख़ुद बनाते हैं — केक, ब्रेड, नमकीन।' },
     suggestedTemplateId: 'bakery-warm',
     commonUnits: ['PCS', 'KG', 'DOZEN', 'TRAY'],
     keepsStock: true,
@@ -61,8 +61,8 @@ export const BUSINESS_TYPE_PROFILES: readonly BusinessTypeProfile[] = [
   },
   {
     type: 'SERVICES',
-    name: { 'en-IN': 'Services', 'hi-IN': 'Service ka kaam' },
-    soundsLike: { 'en-IN': 'You charge for work done, not for goods.', 'hi-IN': 'Aap kaam ka paisa lete hain, saaman ka nahin.' },
+    name: { 'en-IN': 'Services', 'hi-IN': 'सर्विस का काम' },
+    soundsLike: { 'en-IN': 'You charge for work done, not for goods.', 'hi-IN': 'आप काम का पैसा लेते हैं, सामान का नहीं।' },
     suggestedTemplateId: 'services-simple',
     commonUnits: ['JOB', 'HOUR', 'DAY', 'MONTH'],
     keepsStock: false,
@@ -71,8 +71,8 @@ export const BUSINESS_TYPE_PROFILES: readonly BusinessTypeProfile[] = [
   },
   {
     type: 'TRANSPORT',
-    name: { 'en-IN': 'Transport', 'hi-IN': 'Transport' },
-    soundsLike: { 'en-IN': 'You move goods for other people.', 'hi-IN': 'Aap doosron ka maal le jaate hain.' },
+    name: { 'en-IN': 'Transport', 'hi-IN': 'ट्रांसपोर्ट' },
+    soundsLike: { 'en-IN': 'You move goods for other people.', 'hi-IN': 'आप दूसरों का माल ले जाते हैं।' },
     suggestedTemplateId: 'transport-consignment',
     commonUnits: ['TRIP', 'KM', 'TONNE'],
     keepsStock: false,
@@ -81,8 +81,8 @@ export const BUSINESS_TYPE_PROFILES: readonly BusinessTypeProfile[] = [
   },
   {
     type: 'MANUFACTURING',
-    name: { 'en-IN': 'Manufacturing', 'hi-IN': 'Manufacturing' },
-    soundsLike: { 'en-IN': 'You turn raw material into something else and sell that.', 'hi-IN': 'Kachche maal se kuch banate hain aur wahi bechte hain.' },
+    name: { 'en-IN': 'Manufacturing', 'hi-IN': 'मैन्युफ़ैक्चरिंग' },
+    soundsLike: { 'en-IN': 'You turn raw material into something else and sell that.', 'hi-IN': 'कच्चे माल से कुछ बनाते हैं और वही बेचते हैं।' },
     suggestedTemplateId: 'wholesale-classic',
     commonUnits: ['PCS', 'KG', 'METRE', 'SET'],
     keepsStock: true,

@@ -288,17 +288,17 @@ export class GstCalculator {
     const company = this.#masterData.company(input.companyId);
     const party = this.#masterData.party(input.companyId, input.partyId);
     if (company === undefined) {
-      reasons.push(blocked('COMPANY_NOT_FOUND', 'We do not have your business details yet.', 'Aapke business ki jaankari abhi nahin hai.'));
+      reasons.push(blocked('COMPANY_NOT_FOUND', 'We do not have your business details yet.', 'आपके बिज़नेस की जानकारी अभी नहीं है.'));
     }
     if (party === undefined) {
-      reasons.push(blocked('PARTY_NOT_FOUND', 'We do not have this customer’s details yet.', 'Is customer ki jaankari abhi nahin hai.'));
+      reasons.push(blocked('PARTY_NOT_FOUND', 'We do not have this customer’s details yet.', 'इस ग्राहक की जानकारी अभी नहीं है.'));
     }
     if (company !== undefined && company.gstin !== null && company.gstin.slice(0, 2) !== company.stateCode) {
       reasons.push(
         blocked(
           'GSTIN_STATE_MISMATCH',
           'Your GST number and your state do not agree, so we will not choose between them.',
-          'Aapka GST number aur rajya aapas mein mel nahin khaate, isliye hum inmein se chunav nahin karenge.',
+          'आपका GST नंबर और राज्य आपस में मेल नहीं खाते, इसलिए हम इनमें से चुनाव नहीं करेंगे.',
         ),
       );
     }
@@ -319,7 +319,7 @@ export class GstCalculator {
         blocked(
           'COMPOSITION_UNDECIDED',
           'We cannot tell yet whether your business may charge GST on this bill.',
-          'Abhi pata nahin ki aapka business is bill par GST le sakta hai ya nahin.',
+          'अभी पता नहीं कि आपका बिज़नेस इस बिल पर GST ले सकता है या नहीं.',
         ),
       );
       return this.#refuse(input, reasons, decisions);
@@ -343,7 +343,7 @@ export class GstCalculator {
       const item = this.#masterData.item(input.companyId, line.itemId);
       if (item === undefined) {
         reasons.push(
-          blocked('ITEM_NOT_FOUND', `We do not have details for one of the items on this bill.`, 'Is bill ke ek item ki jaankari nahin hai.', undefined, line.lineId),
+          blocked('ITEM_NOT_FOUND', `We do not have details for one of the items on this bill.`, 'इस बिल के एक सामान की जानकारी नहीं है.', undefined, line.lineId),
         );
         return null;
       }
@@ -352,7 +352,7 @@ export class GstCalculator {
           blocked(
             'ITEM_NOT_CLASSIFIED',
             `We do not know yet how "${item.name}" is taxed.`,
-            `"${item.name}" par tax kaise lagta hai, yeh abhi pata nahin.`,
+            `"${item.name}" पर टैक्स कैसे लगता है, यह अभी पता नहीं.`,
             undefined,
             line.lineId,
           ),
@@ -403,7 +403,7 @@ export class GstCalculator {
           ? null
           : {
               'en-IN': 'The GST rates on this bill are the ones your business set. We have not checked them against a government notification.',
-              'hi-IN': 'Is bill ke GST rate aapke business ne tay kiye hain. Humne inhe sarkari notification se nahin jaancha.',
+              'hi-IN': 'इस बिल के GST रेट आपके बिज़नेस ने तय किए हैं. हमने इन्हें सरकारी नोटिफ़िकेशन से नहीं जाँचा.',
             },
       placeOfSupplyStateCode: placeOfSupply,
       split,
@@ -414,7 +414,7 @@ export class GstCalculator {
       explanation: input.zeroRated === 'WITHOUT_TAX'
         ? {
             'en-IN': `This is an export or a supply to an SEZ made under bond or LUT, so no GST is charged. The bill comes to ${formatINR(totals.invoiceValue)}.`,
-            'hi-IN': `Yeh bond ya LUT par niryat ya SEZ ko supply hai, isliye GST nahin lagta. Bill ${formatINR(totals.invoiceValue)} ka hai.`,
+            'hi-IN': `यह बॉन्ड या LUT पर निर्यात या SEZ को सप्लाई है, इसलिए GST नहीं लगता. बिल ${formatINR(totals.invoiceValue)} का है.`,
           }
         : this.#explainDocument(split, placeOfSupply, totals, mayChargeGst),
     };
@@ -441,7 +441,7 @@ export class GstCalculator {
         blocked(
           'TAX_SPLIT_UNKNOWN',
           'We cannot work out which GST applies to this sale yet.',
-          'Abhi tay nahin ho pa raha ki is bikri par kaunsa GST lagega.',
+          'अभी तय नहीं हो पा रहा कि इस बिक्री पर कौनसा GST लगेगा.',
           'tax.scenario_not_supported',
         ),
       );
@@ -486,7 +486,7 @@ export class GstCalculator {
         blocked(
           'PLACE_OF_SUPPLY_UNKNOWN',
           'We cannot work out the GST yet. We do not know which state this sale counts in.',
-          'GST abhi tay nahin ho sakta. Pata nahin yeh bikri kis rajya ki maani jayegi.',
+          'GST अभी तय नहीं हो सकता. पता नहीं यह बिक्री किस राज्य की मानी जाएगी.',
           'tax.place_of_supply_missing',
         ),
       );
@@ -514,7 +514,7 @@ export class GstCalculator {
     if (item.hsnOrSac === null) {
       reasons.push(
         blocked('HSN_MISSING', `"${item.name}" has no government code yet, so we cannot find its rate.`,
-          `"${item.name}" ka sarkari code abhi nahin hai, isliye rate nahin mil raha.`, undefined, line.lineId),
+          `"${item.name}" का सरकारी कोड अभी नहीं है, इसलिए रेट नहीं मिल रहा.`, undefined, line.lineId),
       );
       return null;
     }
@@ -529,22 +529,22 @@ export class GstCalculator {
         hsnRule.turnover === 'NO'
           ? {
               en: 'Bills to a GST-registered customer need at least 4 digits.',
-              hi: 'GST-registered customer ke bill par kam se kam 4 ank chahiye.',
+              hi: 'GST-रजिस्टर्ड ग्राहक के बिल पर कम से कम 4 अंक चाहिए.',
             }
           : hsnRule.turnover === 'YES'
             ? {
                 en: 'Your turnover last year was above ₹5 crore, so every bill needs at least 6 digits.',
-                hi: 'Pichhle saal aapka turnover ₹5 crore se zyada tha, isliye har bill par kam se kam 6 ank chahiye.',
+                hi: 'पिछले साल आपका टर्नओवर ₹5 करोड़ से ज़्यादा था, इसलिए हर बिल पर कम से कम 6 अंक चाहिए.',
               }
             : {
                 en: 'Every bill needs at least 6 digits until you tell us, in Business details, that your turnover last year was ₹5 crore or less.',
-                hi: 'Jab tak aap Business details mein nahin batate ki pichhle saal turnover ₹5 crore ya kam tha, har bill par kam se kam 6 ank chahiye.',
+                hi: 'जब तक आप Business details में नहीं बताते कि पिछले साल टर्नओवर ₹5 करोड़ या कम था, हर बिल पर कम से कम 6 अंक चाहिए.',
               };
       reasons.push(
         blocked(
           'HSN_TOO_SHORT',
           `"${item.name}" has the code ${item.hsnOrSac} (${digits} digits). ${why.en} Update the item's HSN code.`,
-          `"${item.name}" ka code ${item.hsnOrSac} hai (${digits} ank). ${why.hi} Item ka HSN code badlein.`,
+          `"${item.name}" का कोड ${item.hsnOrSac} है (${digits} अंक). ${why.hi} सामान का HSN कोड बदलें.`,
           undefined,
           line.lineId,
         ),
@@ -561,7 +561,7 @@ export class GstCalculator {
           ? blocked(
               'RATE_NOT_REVIEWED',
               `The GST rate we hold for "${item.name}" has not been checked against an official notification yet, so we will not use it. You can enter the rate you charge.`,
-              `"${item.name}" ka GST rate abhi sarkari notification se jaancha nahin gaya, isliye hum use nahin karenge. Aap apna rate bhar sakte hain.`,
+              `"${item.name}" का GST रेट अभी सरकारी नोटिफ़िकेशन से जाँचा नहीं गया, इसलिए हम उसका इस्तेमाल नहीं करेंगे. आप अपना रेट भर सकते हैं.`,
               undefined,
               line.lineId,
             )
@@ -569,14 +569,14 @@ export class GstCalculator {
             ? blocked(
                 'RATE_NOT_FOUND',
                 `The ${percentOf(later.ratePercentTimes100)}% saved for "${item.name}" applies from ${later.effectiveFrom}, and this bill is dated ${input.documentDate}, before then. Date the bill on or after ${later.effectiveFrom}, or enter the rate you charge.`,
-                `"${item.name}" ka ${percentOf(later.ratePercentTimes100)}% rate ${later.effectiveFrom} se lagu hai, aur yeh bill ${input.documentDate} ka hai, usse pehle ka. Bill ${later.effectiveFrom} ya uske baad ki tareekh ka banayein, ya apna rate bharein.`,
+                `"${item.name}" का ${percentOf(later.ratePercentTimes100)}% रेट ${later.effectiveFrom} से लागू है, और यह बिल ${input.documentDate} का है, उससे पहले का. बिल ${later.effectiveFrom} या उसके बाद की तारीख़ का बनाइए, या अपना रेट भरीए.`,
                 undefined,
                 line.lineId,
               )
           : blocked(
               'RATE_NOT_FOUND',
               `We do not have a GST rate for "${item.name}". You can enter the rate you charge.`,
-              `"${item.name}" ka GST rate hamare paas nahin hai. Aap apna rate bhar sakte hain.`,
+              `"${item.name}" का GST रेट हमारे पास नहीं है. आप अपना रेट भर सकते हैं.`,
               undefined,
               line.lineId,
             ),
@@ -591,7 +591,7 @@ export class GstCalculator {
         blocked(
           'INCLUSIVE_WITH_CESS_UNSUPPORTED',
           `"${item.name}" carries an extra tax, so a price that already includes tax is not supported here yet. Enter the price without tax.`,
-          `"${item.name}" par extra tax lagta hai, isliye tax-shaamil rate abhi nahin chalega. Bina tax wala rate bharein.`,
+          `"${item.name}" पर अतिरिक्त टैक्स लगता है, इसलिए टैक्स-शामिल रेट अभी नहीं चलेगा. बिना टैक्स वाला रेट भरीए.`,
           undefined,
           line.lineId,
         ),
@@ -934,7 +934,7 @@ export class GstCalculator {
       exceptions,
       explanation: {
         'en-IN': `We cannot work out the GST on this bill yet. ${reasons.map((r) => r.message['en-IN']).join(' ')}`,
-        'hi-IN': `Is bill ka GST abhi tay nahin ho sakta. ${reasons.map((r) => r.message['hi-IN']).join(' ')}`,
+        'hi-IN': `इस बिल का GST अभी तय नहीं हो सकता. ${reasons.map((r) => r.message['hi-IN']).join(' ')}`,
       },
     };
   }
@@ -943,19 +943,19 @@ export class GstCalculator {
     if (!mayChargeGst) {
       return {
         'en-IN': `Your business does not charge GST on its bills, so no GST has been added. The bill comes to ${formatINR(totals.invoiceValue)}.`,
-        'hi-IN': `Aapka business bill par GST nahin leta, isliye GST nahin joda gaya. Bill ${formatINR(totals.invoiceValue)} ka hai.`,
+        'hi-IN': `आपका बिज़नेस बिल पर GST नहीं लेता, इसलिए GST नहीं जोड़ा गया. बिल ${formatINR(totals.invoiceValue)} का है.`,
       };
     }
     const words: Record<TaxSplit, { en: string; hi: string }> = {
-      CGST_SGST: { en: 'two separate GST amounts apply', hi: 'do alag GST lagte hain' },
-      CGST_UTGST: { en: 'two separate GST amounts apply', hi: 'do alag GST lagte hain' },
-      IGST: { en: 'one combined GST applies', hi: 'ek hi GST lagta hai' },
+      CGST_SGST: { en: 'two separate GST amounts apply', hi: 'दो अलग GST लगते हैं' },
+      CGST_UTGST: { en: 'two separate GST amounts apply', hi: 'दो अलग GST लगते हैं' },
+      IGST: { en: 'one combined GST applies', hi: 'एक ही GST लगता है' },
     };
     // Issue #237 — the state by name as well as its code: "Maharashtra (27)", not "state 27".
     const where = GST_STATE_CODES[placeOfSupply] === undefined ? `state ${placeOfSupply}` : `${GST_STATE_CODES[placeOfSupply]!.name} (${placeOfSupply})`;
     return {
       'en-IN': `This sale counts in ${where}, so ${words[split].en}. GST of ${formatINR(totals.totalTax)} has been added to ${formatINR(totals.taxableValue)}, and the bill comes to ${formatINR(totals.invoiceValue)}.`,
-      'hi-IN': `Yeh bikri ${where} ki hai, isliye ${words[split].hi}. ${formatINR(totals.taxableValue)} par ${formatINR(totals.totalTax)} GST joda gaya, aur bill ${formatINR(totals.invoiceValue)} ka hai.`,
+      'hi-IN': `यह बिक्री ${where} की है, इसलिए ${words[split].hi}. ${formatINR(totals.taxableValue)} पर ${formatINR(totals.totalTax)} GST जोड़ा गया, और बिल ${formatINR(totals.invoiceValue)} का है.`,
     };
   }
 }
@@ -972,7 +972,7 @@ const withoutTax = (line: ComputedTaxLine): ComputedTaxLine => ({
   lineTotal: line.taxableValue,
   explanation: {
     'en-IN': `${line.itemName}: ${formatINR(line.taxableValue)}. Supplied under bond or LUT, so no GST is charged.`,
-    'hi-IN': `${line.itemName}: ${formatINR(line.taxableValue)}. Bond ya LUT par supply, isliye GST nahin.`,
+    'hi-IN': `${line.itemName}: ${formatINR(line.taxableValue)}. बॉन्ड या LUT पर सप्लाई, इसलिए GST नहीं.`,
   },
 });
 
@@ -990,11 +990,11 @@ const blocked = (
 });
 
 const TREATMENT_WORDS: Record<TaxTreatment, { en: string; hi: string }> = {
-  TAXABLE: { en: 'is taxed', hi: 'par tax lagta hai' },
-  NIL_RATED: { en: 'is taxed at nothing', hi: 'par tax shoonya hai' },
-  EXEMPT: { en: 'is free of tax', hi: 'tax se mukt hai' },
-  NON_GST: { en: 'is outside GST', hi: 'GST ke bahar hai' },
-  UNKNOWN: { en: 'has not been classified', hi: 'abhi classify nahin hua' },
+  TAXABLE: { en: 'is taxed', hi: 'पर टैक्स लगता है' },
+  NIL_RATED: { en: 'is taxed at nothing', hi: 'पर टैक्स शून्य है' },
+  EXEMPT: { en: 'is free of tax', hi: 'टैक्स से मुक़्त है' },
+  NON_GST: { en: 'is outside GST', hi: 'GST के बाहर है' },
+  UNKNOWN: { en: 'has not been classified', hi: 'अभी क्लासिफ़ाई नहीं हुआ' },
 };
 
 const explainLine = (
@@ -1010,26 +1010,26 @@ const explainLine = (
   if (!mayChargeGst) {
     return {
       'en-IN': `${item.name}: ${formatINR(taxableValue)}. Your business does not charge GST on its bills.`,
-      'hi-IN': `${item.name}: ${formatINR(taxableValue)}. Aapka business bill par GST nahin leta.`,
+      'hi-IN': `${item.name}: ${formatINR(taxableValue)}. आपका बिज़नेस बिल पर GST नहीं लेता.`,
     };
   }
   if (item.treatment !== 'TAXABLE' || rate === null) {
     return {
       'en-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].en}, so nothing has been added to ${formatINR(taxableValue)}.`,
-      'hi-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].hi}, isliye ${formatINR(taxableValue)} par kuch nahin joda gaya.`,
+      'hi-IN': `${item.name} ${TREATMENT_WORDS[item.treatment].hi}, इसलिए ${formatINR(taxableValue)} पर कुछ नहीं जोड़ा गया.`,
     };
   }
   const percent = `${Number(rate) / 100}%`;
   const who = reverseCharge
-    ? { en: ' You pay this GST to the government yourself, so it is not on the bill.', hi: ' Yeh GST aap khud sarkar ko bharenge, isliye bill par nahin hai.' }
+    ? { en: ' You pay this GST to the government yourself, so it is not on the bill.', hi: ' यह GST आप ख़ुद सरकार को भरेंगे, इसलिए बिल पर नहीं है.' }
     : { en: '', hi: '' };
-  const kind = split === 'IGST' ? { en: 'one combined GST', hi: 'ek hi GST' } : { en: 'two separate GST amounts', hi: 'do alag GST' };
+  const kind = split === 'IGST' ? { en: 'one combined GST', hi: 'एक ही GST' } : { en: 'two separate GST amounts', hi: 'दो अलग GST' };
   const whose =
     rateBasis === 'BUSINESS_DECLARED'
-      ? { en: ' This is the rate your business set.', hi: ' Yeh rate aapke business ne tay kiya hai.' }
+      ? { en: ' This is the rate your business set.', hi: ' यह रेट आपके बिज़नेस ने तय किया है.' }
       : { en: '', hi: '' };
   return {
     'en-IN': `${item.name}: ${formatINR(taxableValue)} at ${percent} gives ${formatINR(totalTax)} as ${kind.en}.${who.en}${whose.en}`,
-    'hi-IN': `${item.name}: ${formatINR(taxableValue)} par ${percent} se ${formatINR(totalTax)} bana, ${kind.hi} ke roop mein.${who.hi}${whose.hi}`,
+    'hi-IN': `${item.name}: ${formatINR(taxableValue)} पर ${percent} से ${formatINR(totalTax)} बना, ${kind.hi} के रूप में.${who.hi}${whose.hi}`,
   };
 };

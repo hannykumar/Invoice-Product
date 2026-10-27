@@ -44,14 +44,14 @@ export interface EntitlementInput {
  */
 const overLimitWords = (meter: MeterId, limit: bigint, planName: Bilingual, next: Plan | null): Bilingual => {
   const wayOut = next === null
-    ? { 'en-IN': ' Please get in touch and we will sort it out.', 'hi-IN': ' Humse baat karein, hum iska hal nikal denge.' }
+    ? { 'en-IN': ' Please get in touch and we will sort it out.', 'hi-IN': ' हमसे बात कीजिए, हम इसका हल निकाल देंगे।' }
     : {
         'en-IN': ` Moving to ${next.name['en-IN']} (${formatINR(next.monthlyPrice)} a month) lets you carry on.`,
-        'hi-IN': ` ${next.name['hi-IN']} plan (${formatINR(next.monthlyPrice)} maheena) lene par aage badh sakte hain.`,
+        'hi-IN': ` ${next.name['hi-IN']} प्लान (${formatINR(next.monthlyPrice)} महीना) लेने पर आगे बढ़ सकते हैं।`,
       };
   return {
     'en-IN': `Your ${planName['en-IN']} plan covers ${limit} ${METER_LABELS[meter]['en-IN']}, and you have used them all. Everything you have already recorded is safe and unchanged.${wayOut['en-IN']}`,
-    'hi-IN': `Aapke ${planName['hi-IN']} plan mein ${limit} ${METER_LABELS[meter]['hi-IN']} milte hain, aur woh poore ho gaye. Jo aap pehle likh chuke hain woh surakshit hai aur waisa hi hai.${wayOut['hi-IN']}`,
+    'hi-IN': `आपके ${planName['hi-IN']} प्लान में ${limit} ${METER_LABELS[meter]['hi-IN']} मिलते हैं, और वो पूरे हो गए। जो आप पहले लिख चुके हैं वो सुरक्षित है और वैसा ही है।${wayOut['hi-IN']}`,
   };
 };
 
@@ -74,7 +74,7 @@ export const decide = (input: EntitlementInput): Entitlement => {
       limit: null,
       reason: {
         'en-IN': 'Every plan includes this. Warnings, checks and getting your own data out are never withheld.',
-        'hi-IN': 'Yeh har plan mein hai. Chetavni, jaanch aur apna data le jaana kabhi roka nahin jata.',
+        'hi-IN': 'यह हर प्लान में है। चेतावनी, जाँच और अपना डेटा ले जाना कभी रोका नहीं जाता।',
       },
     };
   }
@@ -86,7 +86,7 @@ export const decide = (input: EntitlementInput): Entitlement => {
     return {
       capability: capability.name, outcome: 'ALLOWED', state, essential: false,
       meter: null, used: null, limit: null,
-      reason: { 'en-IN': 'Reading your own books is always allowed.', 'hi-IN': 'Apni bahi dekhna hamesha khula hai.' },
+      reason: { 'en-IN': 'Reading your own books is always allowed.', 'hi-IN': 'अपनी बही देखना हमेशा खुला है।' },
     };
   }
 
@@ -110,10 +110,10 @@ export const decide = (input: EntitlementInput): Entitlement => {
     capability: capability.name, outcome: 'ALLOWED', state, essential: false,
     meter, used: meter === null ? null : input.used, limit,
     reason: limit === null
-      ? { 'en-IN': 'Your plan has no limit on this.', 'hi-IN': 'Aapke plan mein iski koi seema nahin hai.' }
+      ? { 'en-IN': 'Your plan has no limit on this.', 'hi-IN': 'आपके प्लान में इसकी कोई सीमा नहीं है।' }
       : {
           'en-IN': `${limit - input.used} of ${limit} ${METER_LABELS[meter as MeterId]['en-IN']} left this month.`,
-          'hi-IN': `Is mahine ${limit} mein se ${limit - input.used} ${METER_LABELS[meter as MeterId]['hi-IN']} baaki hain.`,
+          'hi-IN': `इस महीने ${limit} में से ${limit - input.used} ${METER_LABELS[meter as MeterId]['hi-IN']} बाक़ी हैं।`,
         },
   };
 };

@@ -588,7 +588,7 @@ test('goods returned are taken off sales and purchases, with net sales and net p
   const table = profitAndLossTable(body, 'en-IN');
   assert.ok(table.rows.some((row) => row[1] === 'Less: goods returned by customers' && row[2] === '-500.00'));
   assert.ok(table.rows.some((row) => row[1] === 'Net sales' && row[2] === '2500.00'));
-  assert.ok(profitAndLossTable(body, 'hi-IN').rows.some((row) => row[1] === 'Net bikri' && row[2] === '2500.00'));
+  assert.ok(profitAndLossTable(body, 'hi-IN').rows.some((row) => row[1] === 'नेट बिक्री' && row[2] === '2500.00'));
   // The balance sheet is unaffected: the same books, only shown differently.
   const sheet = await business.reports.balanceSheet(business.actor, APRIL_TO_MAY);
   assert.equal(sheet.body.resultSoFar.amount.minor, -1500_00n);

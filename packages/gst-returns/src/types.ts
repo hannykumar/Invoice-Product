@@ -317,22 +317,22 @@ export type Gstr1SectionId =
   | 'CDNURA';
 
 export const GSTR1_SECTION_NAMES: Readonly<Record<Gstr1SectionId, Bilingual>> = Object.freeze({
-  B2B: { 'en-IN': 'Sales to businesses with a GST number', 'hi-IN': 'GST number wale businesses ko bikri' },
-  B2CL: { 'en-IN': 'Large sales to consumers in another state', 'hi-IN': 'Doosre state ke customer ko badi bikri' },
-  B2CS: { 'en-IN': 'Everyday sales to consumers', 'hi-IN': 'Aam customer ko rozana bikri' },
-  CDNR: { 'en-IN': 'Credit and debit notes to businesses', 'hi-IN': 'Business ko credit aur debit note' },
-  CDNUR: { 'en-IN': 'Credit and debit notes to consumers', 'hi-IN': 'Customer ko credit aur debit note' },
-  EXP: { 'en-IN': 'Sales outside India', 'hi-IN': 'India ke bahar bikri' },
-  NIL: { 'en-IN': 'Sales that carried no GST', 'hi-IN': 'Bina GST wali bikri' },
-  HSN: { 'en-IN': 'Summary by goods and services code', 'hi-IN': 'Saaman aur service code ka summary' },
-  DOCS: { 'en-IN': 'Bill numbers used this month', 'hi-IN': 'Is mahine ke bill number' },
-  AT: { 'en-IN': 'Advances received', 'hi-IN': 'Pehle mila paisa' },
-  TXPD: { 'en-IN': 'Advances from earlier months used against bills', 'hi-IN': 'Pichhle mahine ke advance jo bill me lage' },
-  B2BA: { 'en-IN': 'Corrections to business sales already filed', 'hi-IN': 'Pehle bheji business bikri ke sudhaar' },
-  B2CLA: { 'en-IN': 'Corrections to large consumer sales already filed', 'hi-IN': 'Pehle bheji badi bikri ke sudhaar' },
-  B2CSA: { 'en-IN': 'Corrections to everyday sales already filed', 'hi-IN': 'Pehle bheji rozana bikri ke sudhaar' },
-  CDNRA: { 'en-IN': 'Corrections to business credit notes already filed', 'hi-IN': 'Pehle bheje business note ke sudhaar' },
-  CDNURA: { 'en-IN': 'Corrections to consumer credit notes already filed', 'hi-IN': 'Pehle bheje customer note ke sudhaar' },
+  B2B: { 'en-IN': 'Sales to businesses with a GST number', 'hi-IN': 'GST नंबर वाले बिज़नेस को बिक्री' },
+  B2CL: { 'en-IN': 'Large sales to consumers in another state', 'hi-IN': 'दूसरे राज्य के ग्राहक को बड़ी बिक्री' },
+  B2CS: { 'en-IN': 'Everyday sales to consumers', 'hi-IN': 'आम ग्राहक को रोज़ाना बिक्री' },
+  CDNR: { 'en-IN': 'Credit and debit notes to businesses', 'hi-IN': 'बिज़नेस को क्रेडिट और डेबिट नोट' },
+  CDNUR: { 'en-IN': 'Credit and debit notes to consumers', 'hi-IN': 'ग्राहक को क्रेडिट और डेबिट नोट' },
+  EXP: { 'en-IN': 'Sales outside India', 'hi-IN': 'भारत के बाहर बिक्री' },
+  NIL: { 'en-IN': 'Sales that carried no GST', 'hi-IN': 'बिना GST वाली बिक्री' },
+  HSN: { 'en-IN': 'Summary by goods and services code', 'hi-IN': 'सामान और सर्विस कोड का सारांश' },
+  DOCS: { 'en-IN': 'Bill numbers used this month', 'hi-IN': 'इस महीने के बिल नंबर' },
+  AT: { 'en-IN': 'Advances received', 'hi-IN': 'पहले मिला पैसा' },
+  TXPD: { 'en-IN': 'Advances from earlier months used against bills', 'hi-IN': 'पिछले महीने के एडवांस जो बिल में लगे' },
+  B2BA: { 'en-IN': 'Corrections to business sales already filed', 'hi-IN': 'पहले भेजी बिज़नेस बिक्री के सुधार' },
+  B2CLA: { 'en-IN': 'Corrections to large consumer sales already filed', 'hi-IN': 'पहले भेजी बड़ी बिक्री के सुधार' },
+  B2CSA: { 'en-IN': 'Corrections to everyday sales already filed', 'hi-IN': 'पहले भेजी रोज़ाना बिक्री के सुधार' },
+  CDNRA: { 'en-IN': 'Corrections to business credit notes already filed', 'hi-IN': 'पहले भेजे बिज़नेस नोट के सुधार' },
+  CDNURA: { 'en-IN': 'Corrections to consumer credit notes already filed', 'hi-IN': 'पहले भेजे ग्राहक नोट के सुधार' },
 });
 
 /** One row of a GSTR-1 table: a bill, or a rate-wise line within one, with its sources. */
@@ -496,13 +496,13 @@ export type ReturnState =
   | 'SUBMISSION_FAILED';
 
 export const RETURN_STATE_PLAIN: Readonly<Record<ReturnState, Bilingual>> = Object.freeze({
-  DRAFT: { 'en-IN': 'Being prepared', 'hi-IN': 'Tayyar ho raha hai' },
-  NEEDS_ATTENTION: { 'en-IN': 'Something must be decided first', 'hi-IN': 'Pehle kuch tay karna hai' },
-  APPROVED: { 'en-IN': 'Checked and approved, not yet sent', 'hi-IN': 'Jaanch kar approve kiya, abhi bheja nahi' },
-  EXPORTED: { 'en-IN': 'File downloaded for upload', 'hi-IN': 'File download ho gayi' },
-  SUBMITTING: { 'en-IN': 'Being sent to the government', 'hi-IN': 'Government ko bheja ja raha hai' },
-  FILED: { 'en-IN': 'Filed with the government', 'hi-IN': 'Government ke paas file ho gaya' },
-  SUBMISSION_FAILED: { 'en-IN': 'It did not go through. Nothing was filed.', 'hi-IN': 'Nahi gaya. Kuch file nahi hua.' },
+  DRAFT: { 'en-IN': 'Being prepared', 'hi-IN': 'तैयार हो रहा है' },
+  NEEDS_ATTENTION: { 'en-IN': 'Something must be decided first', 'hi-IN': 'पहले कुछ तय करना है' },
+  APPROVED: { 'en-IN': 'Checked and approved, not yet sent', 'hi-IN': 'जाँच कर अप्रूव किया, अभी भेजा नहीं' },
+  EXPORTED: { 'en-IN': 'File downloaded for upload', 'hi-IN': 'फ़ाइल डाउनलोड हो गई' },
+  SUBMITTING: { 'en-IN': 'Being sent to the government', 'hi-IN': 'सरकार को भेजा जा रहा है' },
+  FILED: { 'en-IN': 'Filed with the government', 'hi-IN': 'सरकार के पास फ़ाइल हो गया' },
+  SUBMISSION_FAILED: { 'en-IN': 'It did not go through. Nothing was filed.', 'hi-IN': 'नहीं गया. कुछ फ़ाइल नहीं हुआ.' },
 });
 
 /**

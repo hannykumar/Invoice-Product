@@ -389,7 +389,7 @@ export class GstReturnService {
       payload,
       sentence: {
         'en-IN': `Save ${fileName} and upload it on the government portal under ${input.returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} for ${formatTaxPeriod(input.period)}. Nothing has been sent from here.`,
-        'hi-IN': `${fileName} save karke government portal par ${formatTaxPeriod(input.period)} ke ${input.returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} me upload kijiye. Yahan se kuch bheja nahi gaya hai.`,
+        'hi-IN': `${fileName} सेव करके सरकारी पोर्टल पर ${formatTaxPeriod(input.period)} के ${input.returnType === 'GSTR1' ? 'GSTR-1' : 'GSTR-3B'} में अपलोड कीजिए. यहाँ से कुछ नहीं भेजा गया है.`,
       },
     };
   }
@@ -575,7 +575,7 @@ export class GstReturnService {
     if (blocking.length > 0) {
       whyNot.push({
         'en-IN': `${blocking.length === 1 ? 'One thing has' : `${blocking.length} things have`} to be decided first.`,
-        'hi-IN': `${blocking.length === 1 ? 'Ek cheez' : `${blocking.length} cheezein`} pehle tay karni hain.`,
+        'hi-IN': `${blocking.length === 1 ? 'एक चीज़' : `${blocking.length} चीज़ें`} पहले तय करनी हैं.`,
       });
     }
     if (policy.requireClosedPeriod && this.#periods !== undefined) {
@@ -583,7 +583,7 @@ export class GstReturnService {
       if (state === 'OPEN') {
         whyNot.push({
           'en-IN': `${formatTaxPeriod(snapshot.period)} is still open in your books, and this business has asked that a month be closed before its return is approved.`,
-          'hi-IN': `${formatTaxPeriod(snapshot.period)} abhi books me khula hai, aur is business ne kaha hai ki return approve karne se pehle mahina band ho.`,
+          'hi-IN': `${formatTaxPeriod(snapshot.period)} अभी बुक्स में खुला है, और इस बिज़नेस ने कहा है कि रिटर्न अप्रूव करने से पहले महीना बंद हो.`,
         });
       }
     }
@@ -612,7 +612,7 @@ export class GstReturnService {
       reasons: build.reasons,
       sentence: {
         'en-IN': `${build.return.sentence['en-IN']}${build.unresolved.length === 0 ? '' : ` ${build.unresolved.length === 1 ? 'One document is' : `${build.unresolved.length} documents are`} waiting on a decision and ${build.unresolved.length === 1 ? 'is' : 'are'} not on the return yet.`}`,
-        'hi-IN': `${build.return.sentence['hi-IN']}${build.unresolved.length === 0 ? '' : ` ${build.unresolved.length} document par faisla baaki hai, woh abhi return me nahi hain.`}`,
+        'hi-IN': `${build.return.sentence['hi-IN']}${build.unresolved.length === 0 ? '' : ` ${build.unresolved.length} दस्तावेज़ पर फ़ैसला बाक़ी है, वे अभी रिटर्न में नहीं हैं.`}`,
       },
     };
   }
@@ -635,9 +635,10 @@ export class GstReturnService {
       .map(([, document]) => refOf(document));
 
     const parts: string[] = [];
-    if (added.length > 0) parts.push(`${added.length} new`);
-    if (removed.length > 0) parts.push(`${removed.length} removed`);
-    if (changed.length > 0) parts.push(`${changed.length} changed`);
+    const partsHi: string[] = [];
+    if (added.length > 0) { parts.push(`${added.length} new`); partsHi.push(`${added.length} नए`); }
+    if (removed.length > 0) { parts.push(`${removed.length} removed`); partsHi.push(`${removed.length} हटाए`); }
+    if (changed.length > 0) { parts.push(`${changed.length} changed`); partsHi.push(`${changed.length} बदले`); }
 
     return {
       approvedAt,
@@ -648,7 +649,7 @@ export class GstReturnService {
       documentsChanged: changed,
       message: {
         'en-IN': `Your books have moved since this return was approved on ${approvedAt.slice(0, 10)}: ${parts.join(', ')}. The figures below are the ones that were approved; they have not been changed underneath you.`,
-        'hi-IN': `Yeh return ${approvedAt.slice(0, 10)} ko approve hone ke baad books badli hain: ${parts.join(', ')}. Neeche wale figure wahi hain jo approve hue the; chupke se badle nahi gaye.`,
+        'hi-IN': `यह रिटर्न ${approvedAt.slice(0, 10)} को अप्रूव होने के बाद बुक्स बदली हैं: ${partsHi.join(', ')}. नीचे वाले आँकड़े वही हैं जो अप्रूव हुए थे; चुपके से नहीं बदले गए.`,
       },
     };
   }
@@ -765,7 +766,7 @@ const driftFinding = (drift: DriftReport): ReturnFinding => ({
   message: drift.message,
   whatToDo: {
     'en-IN': 'If those changes belong in this month, reopen the return, prepare it again and approve it again. If they belong in a later month, leave this one alone.',
-    'hi-IN': 'Agar woh badlav is mahine ke hain to return reopen karke dobara banaiye aur approve kijiye. Agar aage ke mahine ke hain to ise waise hi rehne dijiye.',
+    'hi-IN': 'अगर वे बदलाव इस महीने के हैं तो रिटर्न दोबारा खोलकर फिर से बनाइए और अप्रूव कीजिए. अगर आगे के महीने के हैं तो इसे वैसे ही रहने दीजिए.',
   },
 });
 

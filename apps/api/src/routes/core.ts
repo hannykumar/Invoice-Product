@@ -12,7 +12,9 @@ import { completeUpload, downloadLink, requestUpload } from '../files-applicatio
 import { analyseFile, approveAndPreview, commitImport, previewImport, remapColumns, rollbackImport, startMigration } from '../migration-application.ts';
 import { isGovernmentConnector, receiveGovernmentWebhook } from '../government-webhooks.ts';
 import { anything, fields, get, need, needAny, nothing, post, publicRoute, replyJson, replyWithCookie, signedIn, text, REFERENCE, type Route } from './route.ts';
-import { canonicalAddress, clearedSessionCookie, sessionCookie } from '../sign-in.ts';
+import { AuthenticationError, canonicalAddress, clearedSessionCookie, sessionCookie } from '../sign-in.ts';
+import { LIMITS, type Limit } from '../../../../packages/platform/src/rate-limits.ts';
+import { spend, usageToday } from '../spending.ts';
 import { outsideUnitOfWork } from '../../../../packages/platform/src/database.ts';
 import type { ApiRuntime } from '../runtime.ts';
 import type { RequestContext } from '../../../../packages/platform/src/index.ts';
@@ -58,11 +60,33 @@ export const CORE_ROUTES: readonly Route[] = [
     ({ runtime, actor, params }) => downloadLink(runtime.database, actor, params.file!)),
   // Issue #342 — signing in with a one-time code to a phone number or email (ADR D1). The session
   // comes back only as an HttpOnly cookie (ADR D2): the reply body never carries it.
+  // Issue #350 — every code costs an SMS: per number or email, per day, per IP, and Karobar's daily cap.
   post('/api/auth/code', { access: publicRoute('asking for a sign-in code: there is no session yet'), input: fields({ address: text }) },
-    ({ runtime, input }) => runtime.signIn.sendCode(String(input.address ?? ''))),
+    async ({ runtime, input, clientIp }) => {
+      const address = canonicalAddress(String(input.address ?? '')).value;
+      if (clientIp !== undefined) await runtime.limits.take(LIMITS.codeRequestsPerIp, clientIp);
+      await runtime.limits.take(LIMITS.codeRequestsPerAddress, address);
+      await runtime.limits.take(LIMITS.codesPerAddressPerDay, address);
+      await spend(runtime.limits, 'sms', null);
+      return runtime.signIn.sendCode(address);
+    }),
   post('/api/auth/sign-in', { access: publicRoute('signing in: there is no session yet to hold a permission'), input: fields({ address: text, code: text, companyId: text, invitation: text }) },
-    async ({ runtime, input, authorization }) => {
-      const opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId), input.invitation === undefined ? undefined : String(input.invitation));
+    async ({ runtime, input, authorization, clientIp }) => {
+      // Issue #350 — every attempt is counted before the code is checked, so guesses sent all at once
+      // are counted too; a right code is given back, so only wrong ones add up. Once there are too
+      // many, even the right one waits.
+      const address = canonicalAddress(String(input.address ?? '')).value;
+      const counters: [Limit, string][] = [[LIMITS.wrongCodesPerAddress, address], ...(clientIp === undefined ? [] : [[LIMITS.wrongCodesPerIp, clientIp] as [Limit, string]])];
+      for (const [limit, key] of counters) await runtime.limits.take(limit, key);
+      let opened;
+      try {
+        opened = await runtime.signIn.checkCode(String(input.address ?? ''), String(input.code ?? ''), input.companyId === undefined ? undefined : String(input.companyId), input.invitation === undefined ? undefined : String(input.invitation));
+      } catch (error) {
+        // A wrong code stays counted; anything else (no business yet, an outage) was not a guess.
+        if (!(error instanceof AuthenticationError)) for (const [limit, key] of counters) await runtime.limits.giveBack(limit, key);
+        throw error;
+      }
+      for (const [limit, key] of counters) await runtime.limits.giveBack(limit, key);
       await runtime.signIn.replaceSession(/^Bearer\s+(\S+)$/i.exec(authorization ?? '')?.[1]);
       return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
     }),
@@ -104,6 +128,10 @@ export const CORE_ROUTES: readonly Route[] = [
     async ({ runtime, context, input }) => { await runtime.team.transfer(context, String(input.userId ?? '')); return runtime.team.list(context); }),
   post('/api/team/leave', { access: signedIn('anyone may leave a business they belong to; the last owner is refused by the team service'), input: nothing },
     async ({ runtime, context }) => { await runtime.team.leave(context); await runtime.signIn.signOut(context); return replyWithCookie({ left: true }, clearedSessionCookie()); }),
+
+  // Issue #350 — what this business used today of each paid service, and its daily allowance.
+  get('/api/usage', { access: need('see your plan', 'subscription.view'), input: nothing },
+    async ({ runtime, context }) => ({ services: await usageToday(runtime.limits, context.companyId) })),
 
   get('/api/session', { access: signedIn('who is signed in, where, and their own businesses: every member may see their own'), input: nothing }, ({ runtime, context }) => sessionView(runtime, context)),
   get('/api/dashboard', { access: need('see the Home page', 'dashboard.read'), input: nothing }, ({ app, actor }) => app.dashboard(actor)),

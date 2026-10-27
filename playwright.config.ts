@@ -9,6 +9,8 @@ import { defineConfig } from "@playwright/test";
  * payments).
  *
  * Migrate and seed the database first: `npm run db:migrate && npm run db:seed`.
+ * Run it with NODE_ENV=test and a test database (its name contains "test", or KAROBAR_TEST_DATABASE=1):
+ * the setup clears its rate-limit counters (#350) and refuses any other database.
  */
 const port = Number(process.env.WEB_PORT ?? process.env.PORT ?? 4173);
 const baseURL = `http://127.0.0.1:${port}`;
@@ -16,6 +18,8 @@ const databaseUrl = process.env.DATABASE_URL ?? "postgresql://invoice:invoice@lo
 
 export default defineConfig({
   testDir: "./tests/browser",
+  // #350: rate-limit counters start fresh each run (they live in PostgreSQL, across restarts).
+  globalSetup: "./tests/browser/global-setup.ts",
   // One shared demo company in one database. The flows run in sequence; each leaves records
   // behind that the others must tolerate, the way the shop's own books accumulate.
   workers: 1,

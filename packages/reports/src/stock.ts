@@ -161,7 +161,7 @@ export const stockReportBody = async (
     value,
     sentence: {
       'en-IN': `You are holding goods worth ${worth}, across ${rows.length} item and godown ${rows.length === 1 ? 'pair' : 'pairs'}.`,
-      'hi-IN': `Aapke paas ${rows.length} item aur godown ke jodon mein ${worth} ka maal pada hai.`,
+      'hi-IN': `आपके पास ${rows.length} आइटम और गोदाम के जोड़ों में ${worth} का माल पड़ा है।`,
     },
   };
 };

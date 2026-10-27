@@ -237,10 +237,10 @@ const summarise = (candidates: readonly ReminderCandidate[]): Bilingual => {
   const escalate = candidates.filter((c) => c.decision === 'ESCALATE').length;
   const skipped = candidates.filter((c) => c.decision === 'SKIP').length;
   const tail = escalate === 0 ? '' : ` ${escalate} bill${escalate === 1 ? '' : 's'} need${escalate === 1 ? 's' : ''} you to decide what happens next.`;
-  const tailHi = escalate === 0 ? '' : ` ${escalate} bill par aage kya karna hai, yeh aapko tay karna hai.`;
+  const tailHi = escalate === 0 ? '' : ` ${escalate} बिल पर आगे क्या करना है, यह आपको तय करना है.`;
   return {
     'en-IN': `${send} reminder${send === 1 ? '' : 's'} ready to send, ${skipped} bill${skipped === 1 ? '' : 's'} deliberately left alone.${tail}`,
-    'hi-IN': `${send} reminder bhejne ke liye taiyar, ${skipped} bill jaan-boojh kar chhode gaye.${tailHi}`,
+    'hi-IN': `${send} रिमाइंडर भेजने के लिए तैयार, ${skipped} बिल जान-बूझकर छोड़े गए.${tailHi}`,
   };
 };
 

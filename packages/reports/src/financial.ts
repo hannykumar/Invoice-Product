@@ -179,7 +179,7 @@ const groupWithReturns = (
   if (returned === undefined || returnedAmount.amount.minor === 0n) return lines;
   return [
     ...lines,
-    { kind: 'LESS', label: { 'en-IN': `Less: ${returned.name.toLowerCase()}`, 'hi-IN': `Ghatayein: ${returned.name.toLowerCase()}` }, amount: negated(returnedAmount) },
+    { kind: 'LESS', label: { 'en-IN': `Less: ${returned.name.toLowerCase()}`, 'hi-IN': `घटाइए: ${returned.name.toLowerCase()}` }, amount: negated(returnedAmount) },
     { kind: 'NET', label: net, amount: subtractFigures(addFigures(accounts.map((r) => r.movement)), returnedAmount) },
   ];
 };
@@ -210,16 +210,16 @@ export const profitAndLossBody = (books: LoadedBooks): ProfitAndLossBody => {
   const incomeRows = [...salesAccounts, ...(salesReturnOnIncomeSide ? [salesReturnOnIncomeSide] : []), ...otherIncome];
   const expenseRows = [...purchaseAccounts, ...(purchaseReturnRow ? [purchaseReturnRow] : []), ...otherExpenses];
   const income: ProfitAndLossSection = {
-    ...sectionOf({ 'en-IN': 'Money the business earned', 'hi-IN': 'Business ne jo kamaya' }, incomeRows, (r) => r.movement),
+    ...sectionOf({ 'en-IN': 'Money the business earned', 'hi-IN': 'बिज़नेस ने जो कमाया' }, incomeRows, (r) => r.movement),
     lines: [
-      ...groupWithReturns(salesAccounts, salesReturnRow, salesReturns, { 'en-IN': 'Net sales', 'hi-IN': 'Net bikri' }),
+      ...groupWithReturns(salesAccounts, salesReturnRow, salesReturns, { 'en-IN': 'Net sales', 'hi-IN': 'नेट बिक्री' }),
       ...otherIncome.map((r): StatementLine => ({ kind: 'ACCOUNT', label: sameName(r.name), amount: r.movement })),
     ],
   };
   const expenses: ProfitAndLossSection = {
-    ...sectionOf({ 'en-IN': 'Money the business spent', 'hi-IN': 'Business ne jo kharch kiya' }, expenseRows, (r) => r.movement),
+    ...sectionOf({ 'en-IN': 'Money the business spent', 'hi-IN': 'बिज़नेस ने जो ख़र्च किया' }, expenseRows, (r) => r.movement),
     lines: [
-      ...groupWithReturns(purchaseAccounts, purchaseReturnRow, purchaseReturns, { 'en-IN': 'Net purchases', 'hi-IN': 'Net khareed' }),
+      ...groupWithReturns(purchaseAccounts, purchaseReturnRow, purchaseReturns, { 'en-IN': 'Net purchases', 'hi-IN': 'नेट ख़रीद' }),
       ...otherExpenses.map((r): StatementLine => ({ kind: 'ACCOUNT', label: sameName(r.name), amount: r.movement })),
     ],
   };
@@ -250,12 +250,12 @@ export const profitAndLossBody = (books: LoadedBooks): ProfitAndLossBody => {
             ? `You earned ${formatINR(income.total.amount)} and spent ${formatINR(expenses.total.amount)}, so you kept ${amount}.`
             : `You earned ${formatINR(income.total.amount)} and spent ${formatINR(expenses.total.amount)}, so you are short by ${amount}.`,
           'hi-IN': madeMoney
-            ? `Aapne ${formatINR(income.total.amount)} kamaye aur ${formatINR(expenses.total.amount)} kharch kiye, yaani ${amount} bache.`
-            : `Aapne ${formatINR(income.total.amount)} kamaye aur ${formatINR(expenses.total.amount)} kharch kiye, yaani ${amount} kam pade.`,
+            ? `आपने ${formatINR(income.total.amount)} कमाए और ${formatINR(expenses.total.amount)} ख़र्च किए, यानी ${amount} बचे।`
+            : `आपने ${formatINR(income.total.amount)} कमाए और ${formatINR(expenses.total.amount)} ख़र्च किए, यानी ${amount} कम पड़े।`,
         }
       : {
           'en-IN': `You earned ${formatINR(income.total.amount)} and spent ${formatINR(expenses.total.amount)}. What your goods cost is not in the books yet, so the ${amount} left over is higher than the real figure.`,
-          'hi-IN': `Aapne ${formatINR(income.total.amount)} kamaye aur ${formatINR(expenses.total.amount)} kharch kiye. Maal ki lagat abhi books mein nahin hai, isliye ${amount} bachat asli se zyada dikh rahi hai.`,
+          'hi-IN': `आपने ${formatINR(income.total.amount)} कमाए और ${formatINR(expenses.total.amount)} ख़र्च किए। माल की लागत अभी बुक्स में नहीं है, इसलिए ${amount} बचत असली से ज़्यादा दिख रही है।`,
         },
   };
 };
@@ -281,17 +281,17 @@ export interface BalanceSheetBody {
 export const balanceSheetBody = (books: LoadedBooks): BalanceSheetBody => {
   const rows = accountRows(books).filter((r) => appearsInProfitAndLoss(r.type) === false);
   const assets = sectionOf(
-    { 'en-IN': 'What the business owns', 'hi-IN': 'Business ke paas kya hai' },
+    { 'en-IN': 'What the business owns', 'hi-IN': 'बिज़नेस के पास क्या है' },
     rows.filter((r) => r.type === 'ASSET'),
     (r) => r.closing,
   );
   const liabilities = sectionOf(
-    { 'en-IN': 'What the business owes', 'hi-IN': 'Business ko kya dena hai' },
+    { 'en-IN': 'What the business owes', 'hi-IN': 'बिज़नेस को क्या देना है' },
     rows.filter((r) => r.type === 'LIABILITY'),
     (r) => r.closing,
   );
   const ownersMoney = sectionOf(
-    { 'en-IN': "The owner's money in the business", 'hi-IN': 'Malik ka paisa business mein' },
+    { 'en-IN': "The owner's money in the business", 'hi-IN': 'मालिक का पैसा बिज़नेस में' },
     rows.filter((r) => r.type === 'EQUITY'),
     (r) => r.closing,
   );
@@ -320,11 +320,11 @@ export const balanceSheetBody = (books: LoadedBooks): BalanceSheetBody => {
     sentence: balanced
       ? {
           'en-IN': `The business owns ${formatINR(totalAssets.amount)}, and that is fully accounted for.`,
-          'hi-IN': `Business ke paas ${formatINR(totalAssets.amount)} hai, aur poora hisaab mil raha hai.`,
+          'hi-IN': `बिज़नेस के पास ${formatINR(totalAssets.amount)} है, और पूरा हिसाब मिल रहा है।`,
         }
       : {
           'en-IN': `What the business owns and what is claimed against it differ by ${formatINR(difference)}. Someone should look at the entries below.`,
-          'hi-IN': `Business ke paas jo hai aur uspar jo dawa hai, unmein ${formatINR(difference)} ka farq hai. Neeche ki entries dekhni chahiye.`,
+          'hi-IN': `बिज़नेस के पास जो है और उस पर जो दावा है, उनमें ${formatINR(difference)} का फ़र्क़ है। नीचे की एंट्रियाँ देखनी चाहिए।`,
         },
   };
 };

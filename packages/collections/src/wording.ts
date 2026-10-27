@@ -57,7 +57,7 @@ export const reminderMessage = (input: ReminderWordingInput): Bilingual => {
     case 'ADVANCE':
       return safeBoth({
         'en-IN': `Hello ${name}, a friendly note from ${shop}: bill ${bill} for ${amount} is due in ${-late} day${late === -1 ? '' : 's'}. Please ignore this if you have already paid.`,
-        'hi-IN': `Namaste ${name}, ${shop} se ek yaad-dilava: bill ${bill} ka ${amount} ${-late} din mein dena hai. Agar aap pehle hi bhej chuke hain to is message ko chhod dein.`,
+        'hi-IN': `नमस्ते ${name}, ${shop} से एक याद-दिलाव: बिल ${bill} का ${amount} ${-late} दिन में देना है. अगर आप पहले ही भेज चुके हैं तो इस मैसेज को छोड़ दीजिए.`,
       });
     case 'GENTLE':
       return safeBoth({
@@ -65,23 +65,23 @@ export const reminderMessage = (input: ReminderWordingInput): Bilingual => {
           ? `Hello ${name}, bill ${bill} for ${amount} from ${shop} is due today. Please ignore this if you have already paid.`
           : `Hello ${name}, bill ${bill} for ${amount} from ${shop} became due ${late} days ago. Could you let us know when it will be paid? Please ignore this if you have already paid.`,
         'hi-IN': late <= 0
-          ? `Namaste ${name}, ${shop} ka bill ${bill} — ${amount} — aaj dena hai. Agar aap pehle hi bhej chuke hain to is message ko chhod dein.`
-          : `Namaste ${name}, ${shop} ka bill ${bill} — ${amount} — ${late} din pehle dena tha. Kripya bata dein kab bhej payenge. Agar aap pehle hi bhej chuke hain to is message ko chhod dein.`,
+          ? `नमस्ते ${name}, ${shop} का बिल ${bill} — ${amount} — आज देना है. अगर आप पहले ही भेज चुके हैं तो इस मैसेज को छोड़ दीजिए.`
+          : `नमस्ते ${name}, ${shop} का बिल ${bill} — ${amount} — ${late} दिन पहले देना था. कृपया बता दीजिए कब भेज पाएंगे. अगर आप पहले ही भेज चुके हैं तो इस मैसेज को छोड़ दीजिए.`,
       });
     case 'FIRM':
       return safeBoth({
         'en-IN': `Hello ${name}, bill ${bill} for ${amount} from ${shop} is now ${late} days past its due date. Please arrange the payment, or tell us if something about this bill is wrong so we can look at it.`,
-        'hi-IN': `Namaste ${name}, ${shop} ka bill ${bill} — ${amount} — ab ${late} din late hai. Kripya bhugtan kara dein, ya agar bill mein koi galti hai to bata dein, hum dekh lenge.`,
+        'hi-IN': `नमस्ते ${name}, ${shop} का बिल ${bill} — ${amount} — अब ${late} दिन देर से बाक़ी है. कृपया भुगतान करा दीजिए, या अगर बिल में कोई ग़लती है तो बता दीजिए, हम देख लेंगे.`,
       });
     case 'FINAL':
       return safeBoth({
         'en-IN': `Hello ${name}, this is the last automatic reminder for bill ${bill} for ${amount} from ${shop}, now ${late} days past its due date. Someone from ${shop} will call you next. If the payment is on its way, a quick reply saves that call.`,
-        'hi-IN': `Namaste ${name}, ${shop} ke bill ${bill} — ${amount} — ke liye yeh aakhri automatic message hai; yeh ${late} din late hai. Ab ${shop} se koi aapko phone karega. Agar paisa bhej diya hai to jawab de dein, phone ki zaroorat nahi padegi.`,
+        'hi-IN': `नमस्ते ${name}, ${shop} के बिल ${bill} — ${amount} — के लिए यह आख़िरी ऑटोमैटिक मैसेज है; यह ${late} दिन देर से बाक़ी है. अब ${shop} से कोई आपको फ़ोन करेगा. अगर पैसा भेज दिया है तो जवाब दे दीजिए, फ़ोन की ज़रूरत नहीं पड़ेगी.`,
       });
     case 'ESCALATE':
       return safeBoth({
         'en-IN': `${name} owes ${amount} on bill ${bill}, ${late} days past its due date. The automatic reminders have finished, so this one needs you to decide what happens next.`,
-        'hi-IN': `${name} se bill ${bill} ka ${amount} lena baaki hai, jo ${late} din late hai. Automatic reminder khatam ho chuke hain — ab aage kya karna hai, yeh aapko tay karna hoga.`,
+        'hi-IN': `${name} से बिल ${bill} का ${amount} लेना बाक़ी है, जो ${late} दिन देर से बाक़ी है. ऑटोमैटिक रिमाइंडर ख़त्म हो चुके हैं — अब आगे क्या करना है, यह आपको तय करना होगा.`,
       });
   }
 };
@@ -91,33 +91,33 @@ const plural = (days: number): string => (days === 1 ? 'day' : 'days');
 export const skipExplanation = (reason: SkipReason, detail: Readonly<Record<string, string>> = {}): Bilingual => {
   switch (reason) {
     case 'SETTLED':
-      return { 'en-IN': 'This bill is fully paid, so there is nothing to remind about.', 'hi-IN': 'Yeh bill pura chuk gaya hai, isliye koi reminder nahi jayega.' };
+      return { 'en-IN': 'This bill is fully paid, so there is nothing to remind about.', 'hi-IN': 'यह बिल पूरा चुक गया है, इसलिए कोई रिमाइंडर नहीं जाएगा.' };
     case 'NOT_YET_DUE':
-      return { 'en-IN': `This bill is not due yet — it is due on ${detail.dueDate ?? 'its due date'}.`, 'hi-IN': `Is bill ka samay abhi nahi aaya — yeh ${detail.dueDate ?? 'apni tarikh'} ko dena hai.` };
+      return { 'en-IN': `This bill is not due yet — it is due on ${detail.dueDate ?? 'its due date'}.`, 'hi-IN': `इस बिल का समय अभी नहीं आया — यह ${detail.dueDate ?? 'अपनी तारीख़'} को देना है.` };
     case 'NO_STEP_DUE':
-      return { 'en-IN': 'No reminder is due for this bill today.', 'hi-IN': 'Aaj is bill ke liye koi reminder nahi banta.' };
+      return { 'en-IN': 'No reminder is due for this bill today.', 'hi-IN': 'आज इस बिल के लिए कोई रिमाइंडर नहीं बनता.' };
     case 'ALREADY_SENT':
-      return { 'en-IN': `This reminder was already sent${detail.sentOn ? ` on ${detail.sentOn}` : ''}, so it will not be sent twice.`, 'hi-IN': `Yeh reminder${detail.sentOn ? ` ${detail.sentOn} ko` : ''} bhej diya gaya tha, dobara nahi jayega.` };
+      return { 'en-IN': `This reminder was already sent${detail.sentOn ? ` on ${detail.sentOn}` : ''}, so it will not be sent twice.`, 'hi-IN': `यह रिमाइंडर${detail.sentOn ? ` ${detail.sentOn} को` : ''} भेज दिया गया था, दोबारा नहीं जाएगा.` };
     case 'DISPUTED':
-      return { 'en-IN': `This bill is under dispute (${detail.reason ?? 'a query was raised'}), so it is not being chased until that is settled.`, 'hi-IN': `Is bill par sawaal uthaya gaya hai (${detail.reason ?? 'ek shikayat darj hai'}), isliye jab tak woh hal nahi hota, reminder nahi jayega.` };
+      return { 'en-IN': `This bill is under dispute (${detail.reason ?? 'a query was raised'}), so it is not being chased until that is settled.`, 'hi-IN': `इस बिल पर सवाल उठाया गया है (${detail.reason ?? 'एक शिकायत दर्ज है'}), इसलिए जब तक वह हल नहीं होता, रिमाइंडर नहीं जाएगा.` };
     case 'PROMISED':
-      return { 'en-IN': `${detail.partyName ?? 'The customer'} promised to pay by ${detail.promisedOn ?? 'an agreed date'}, so no reminder goes out before then.`, 'hi-IN': `${detail.partyName ?? 'Grahak'} ne ${detail.promisedOn ?? 'ek tarikh'} tak dene ka vaada kiya hai, isliye us se pehle reminder nahi jayega.` };
+      return { 'en-IN': `${detail.partyName ?? 'The customer'} promised to pay by ${detail.promisedOn ?? 'an agreed date'}, so no reminder goes out before then.`, 'hi-IN': `${detail.partyName ?? 'ग्राहक'} ने ${detail.promisedOn ?? 'एक तारीख़'} तक देने का वादा किया है, इसलिए उससे पहले रिमाइंडर नहीं जाएगा.` };
     case 'OPTED_OUT':
-      return { 'en-IN': `${detail.partyName ?? 'This customer'} asked not to receive reminders.`, 'hi-IN': `${detail.partyName ?? 'Is grahak'} ne reminder na bhejne ko kaha hai.` };
+      return { 'en-IN': `${detail.partyName ?? 'This customer'} asked not to receive reminders.`, 'hi-IN': `${detail.partyName ?? 'इस ग्राहक'} ने रिमाइंडर न भेजने को कहा है.` };
     case 'QUIET_PERIOD':
-      return { 'en-IN': 'It is night where the customer is. This will go out in the morning.', 'hi-IN': 'Grahak ke yahan raat hai. Yeh subah bheja jayega.' };
+      return { 'en-IN': 'It is night where the customer is. This will go out in the morning.', 'hi-IN': 'ग्राहक के यहां रात है. यह सुबह भेजा जाएगा.' };
     case 'TOO_SOON':
       return detail.sameRun === 'yes'
-        ? { 'en-IN': `${detail.partyName ?? 'This customer'} is already being reminded about another bill today, so this one waits its turn.`, 'hi-IN': `${detail.partyName ?? 'Is grahak'} ko aaj doosre bill ka reminder ja raha hai, isliye yeh apni baari ka intezar karega.` }
+        ? { 'en-IN': `${detail.partyName ?? 'This customer'} is already being reminded about another bill today, so this one waits its turn.`, 'hi-IN': `${detail.partyName ?? 'इस ग्राहक'} को आज दूसरे बिल का रिमाइंडर जा रहा है, इसलिए यह अपनी बारी का इंतज़ार करेगा.` }
         : Number(detail.daysAgo ?? 0) === 0
-          ? { 'en-IN': 'A reminder already went to this customer today. The next one waits.', 'hi-IN': 'Is grahak ko aaj hi ek reminder ja chuka hai. Agla thoda ruk kar jayega.' }
-          : { 'en-IN': `A reminder went to this customer ${detail.daysAgo} ${plural(Number(detail.daysAgo))} ago. The next one waits.`, 'hi-IN': `Is grahak ko ${detail.daysAgo} din pehle reminder gaya tha. Agla thoda ruk kar jayega.` };
+          ? { 'en-IN': 'A reminder already went to this customer today. The next one waits.', 'hi-IN': 'इस ग्राहक को आज ही एक रिमाइंडर जा चुका है. अगला थोड़ा रुक कर जाएगा.' }
+          : { 'en-IN': `A reminder went to this customer ${detail.daysAgo} ${plural(Number(detail.daysAgo))} ago. The next one waits.`, 'hi-IN': `इस ग्राहक को ${detail.daysAgo} दिन पहले रिमाइंडर गया था. अगला थोड़ा रुक कर जाएगा.` };
     case 'BELOW_MINIMUM':
-      return { 'en-IN': `${detail.outstanding ?? 'This amount'} is below the amount you chase for.`, 'hi-IN': `${detail.outstanding ?? 'Yeh rakam'} itni choti hai ki aap iske liye reminder nahi bhejte.` };
+      return { 'en-IN': `${detail.outstanding ?? 'This amount'} is below the amount you chase for.`, 'hi-IN': `${detail.outstanding ?? 'यह रकम'} इतनी छोटी है कि आप इसके लिए रिमाइंडर नहीं भेजते.` };
     case 'NO_CHANNEL':
-      return { 'en-IN': `There is no way to reach ${detail.partyName ?? 'this customer'} — no phone number or email is saved.`, 'hi-IN': `${detail.partyName ?? 'Is grahak'} tak pahunchne ka koi zariya nahi hai — na phone number hai na email.` };
+      return { 'en-IN': `There is no way to reach ${detail.partyName ?? 'this customer'} — no phone number or email is saved.`, 'hi-IN': `${detail.partyName ?? 'इस ग्राहक'} तक पहुँचने का कोई ज़रिया नहीं है — न फ़ोन नंबर है न ईमेल.` };
     case 'LADDER_EXHAUSTED':
-      return { 'en-IN': 'Every automatic reminder for this bill has been sent. It is with you now.', 'hi-IN': 'Is bill ke saare automatic reminder ja chuke hain. Ab yeh aapke haath mein hai.' };
+      return { 'en-IN': 'Every automatic reminder for this bill has been sent. It is with you now.', 'hi-IN': 'इस बिल के सारे ऑटोमैटिक रिमाइंडर जा चुके हैं. अब यह आपके हाथ में है.' };
   }
 };
 

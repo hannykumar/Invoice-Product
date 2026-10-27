@@ -333,7 +333,7 @@ describe('names in the books are data, not the assistant\'s own wording', () => 
 
     assert.equal(answer.state, 'ANSWERED');
     assert.ok(answer.sentences.some((sentence) => /waiting longest is Guaranteed Traders/.test(sentence['en-IN'])));
-    assert.ok(answer.sentences.some((sentence) => /Guaranteed Traders ka hai/.test(sentence['hi-IN'])));
+    assert.ok(answer.sentences.some((sentence) => /Guaranteed Traders का है/.test(sentence['hi-IN'])));
   });
 
   it('names an item called "Definitely Fresh Atta" kept at a godown called "You Must Visit"', async () => {
