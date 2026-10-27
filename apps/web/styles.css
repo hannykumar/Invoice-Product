@@ -26,9 +26,9 @@
   --action-ink: #2a1a02;
   --focus: light-dark(#b86e0a, #f2b54f);
   /* Status only: paid / money in, due / waiting, late / blocked */
-  --paid: light-dark(#1d7f55, #72d6a4);
+  --paid: light-dark(#197048, #72d6a4);
   --paid-bg: light-dark(#e2f4ea, #143328);
-  --due: light-dark(#9a6412, #f2bd62);
+  --due: light-dark(#8d5a0f, #f2bd62);
   --due-bg: light-dark(#fcf0da, #3a2b10);
   --due-line: light-dark(#f0d9b0, #5a4520);
   --late: light-dark(#ac3a34, #f39088);
@@ -536,3 +536,44 @@ button.money-figure:hover { background: rgba(255, 255, 255, .08); }
   .app-tabbar button[aria-current="page"]:not(.tab-main) { background: transparent; }
   .app-tabbar .tab-main > span { margin-top: -28px; }
 }
+
+/* Issue #353 — the four screen states, drawn by states.js. Colour is never the only signal: the error
+   block has its own words and a "!" mark, the empty block its own sentence and button. */
+.skeleton-list { display: grid; gap: .7rem; padding: .4rem 0; }
+.skeleton-bar { display: block; height: 1.05rem; border-radius: 8px; background: linear-gradient(90deg, var(--line) 25%, var(--brand-tint) 50%, var(--line) 75%); background-size: 200% 100%; animation: skeleton-move 1.4s linear infinite; }
+.skeleton-bar:nth-child(2) { width: 82%; }.skeleton-bar:nth-child(3) { width: 64%; }
+@keyframes skeleton-move { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.state-block { display: grid; justify-items: start; gap: .6rem; padding: 1rem; border: 1px dashed var(--field-line); border-radius: var(--radius-field); }
+.state-block .state-message, .state-block .state-title { margin: 0; }
+.state-block .state-title { font-size: 1rem; }
+.state-block .state-message { color: var(--label); font-size: var(--fs-sm); max-width: 46rem; }
+.state-error { border-style: solid; border-color: var(--late-line); background: var(--late-bg); }
+.state-error .state-message { color: var(--late); font-weight: 600; }
+.state-error .state-message::before { content: "! "; font-weight: 900; }
+.state-block .secondary-button { min-height: var(--tap); }
+.action-status { margin: .5rem 0 0; font-size: var(--fs-sm); min-height: 1.2rem; }
+.action-status[data-kind="success"] { color: var(--paid); }.action-status[data-kind="success"]::before { content: "✓ "; }
+.action-status[data-kind="error"] { color: var(--late); font-weight: 600; }.action-status[data-kind="error"]::before { content: "! "; }
+button[aria-busy="true"] { cursor: progress; opacity: .7; }
+.design-state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin: 1rem 0; }
+.design-state-grid h3, .design-states h3 { margin: 0 0 .4rem; font-size: 1rem; }
+.design-form { display: grid; gap: .6rem; max-width: 32rem; }
+.design-form label { display: grid; gap: .25rem; }
+.design-form input { min-height: var(--tap); padding: .5rem .7rem; border: 1px solid var(--field-line); border-radius: var(--radius-field); background: var(--surface); color: var(--ink); font: inherit; }
+.design-form input[aria-invalid="true"] { border: 2px solid var(--late); }
+.field-help { color: var(--label); }
+input[aria-invalid="true"] + .field-help, [aria-invalid="true"] ~ .field-help { color: var(--late); font-weight: 600; }
+.design-keys { margin: 0 0 1rem; padding-left: 1.2rem; display: grid; gap: .3rem; }
+.design-tokens { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .4rem; }
+.design-tokens li { display: flex; align-items: center; gap: .5rem; }
+.design-swatch { width: 1.6rem; height: 1.6rem; border-radius: 6px; border: 1px solid var(--field-line); flex: none; }
+
+/* Issue #353 — WCAG 1.4.10 reflow at 375px: a fieldset and a grid cell default to the width of their
+   widest content, which pushed Setup, Business details and Bill design sideways. */
+fieldset, .branding-grid > *, .branding-controls > * { min-width: 0; }
+.branding-logo-row { flex-wrap: wrap; }
+/* The file input inside a button-looking label is invisible, so the label carries the focus ring. */
+.file-button:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+label, .field-grid > *, .setup-form label { min-width: 0; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+.setup-form label.file-button { color: var(--on-brand); } /* inside a form, the grey label colour was winning over the button's own white: 2.1:1 */
