@@ -18,6 +18,9 @@ let today = '';
 before(async () => {
   harness = await startPageHarness();
   today = (await harness.api('/api/dashboard')).today;
+  // Some steel in stock, bought on the Purchase screen's own route, so a small sale goes through and a big one does not.
+  const steel = (await harness.api('/api/catalogue')).items.find((item: any) => item.name === 'TMT Steel Bar 12mm').id;
+  await harness.api('/api/purchases/record', { supplierId: 'sampoorna:party:supplier', reference: 'SRS-100', date: today, lines: JSON.stringify([{ itemId: steel, quantity: '500', unit: 'KGS', rate: '64', gst: '1800' }]) });
   page = await harness.signedIn('sale');
   await page.waitForFunction(() => document.querySelectorAll('#sale-lines [data-item-search]').length > 0 && (document.querySelector('[data-draft="sale"] [name="party"]') as HTMLSelectElement).value !== '');
 });
@@ -137,4 +140,68 @@ test('a sale for more than is in stock is refused with the way to fix it: the pu
   assert.equal(await page.$$eval('#purchase-lines [data-line-field="item"]', (lines) => lines.length), 1);
   assert.equal(await page.$eval('#purchase-lines [data-line-field="quantity"]', (input) => (input as HTMLInputElement).value), '1', 'a new line, with the form\'s own starting quantity — not the 600 just bought');
   assert.deepEqual(harness.problems, []);
+});
+
+/** Starts a new bill from wherever the sale is (the done slide's own "New bill" button, or a fresh screen). */
+async function newBill() {
+  await open('sale');
+  if (await slideNow() === 'done') await page.evaluate(() => ([...document.querySelectorAll('[data-slide="done"] button')].find((button) => (button as HTMLElement).innerText === 'New bill') as HTMLElement).click());
+  await page.waitForFunction(() => (document.querySelector('#sale-frame [data-slide]:not([hidden])') as HTMLElement).dataset.slide === 'items');
+}
+
+/** A sale screen with no draft behind it, as on the first visit of the day. */
+async function freshSale() {
+  // Leave the page first, so no timer of its own writes the draft again; then clear it and come back.
+  await page.goto(`${harness.base}/robots.txt`);
+  await page.evaluate(() => { localStorage.removeItem('karobar.draft.sale'); });
+  await page.goto(`${harness.base}/#sale`);
+  await page.waitForFunction(() => document.querySelectorAll('#sale-lines [data-item-search]').length > 0 && (document.querySelector('[data-draft="sale"] [name="party"]') as HTMLSelectElement).value !== '');
+}
+const sendsOf = (path: string, from: number) => harness.sent.slice(from).filter((request) => request.path === path).map((request) => JSON.parse(request.body!) as Record<string, string>);
+
+test('the payment slide offers six ways to pay: part paid asks for an amount, udhaar for the days, and a cheque is sent to its own screen', async () => {
+  const customer = await harness.api('/api/customers', { legalName: 'Kavita Stores', registration: 'unregistered', line1: '4 Market Road', city: 'Pune', pincode: '411001', phone: '98765 43210' });
+  assert.equal(customer.customer.name, 'Kavita Stores');
+  await freshSale();
+  await newBill();
+  await pickItem('TMT');
+  await typeInto('#sale-lines [data-line-field="quantity"]', '10');
+  await typeInto('#sale-lines [data-line-field="rate"]', '90');
+  await nextSlide('customer');
+  assert.equal(await page.$eval('#sale-customer-choices [aria-pressed="true"]', (button) => (button as HTMLElement).innerText), 'Walk-in / cash customer', 'a new sale starts with the walk-in customer chosen');
+  await page.evaluate(() => ([...document.querySelectorAll('#sale-customer-choices button')].find((button) => (button as HTMLElement).innerText.startsWith('Kavita')) as HTMLElement).click());
+  await nextSlide('payment');
+
+  const tiles = () => page.$$eval('#sale-frame [data-pay]', (all) => all.map((tile) => ({ way: (tile as HTMLElement).dataset.pay, label: (tile as HTMLElement).innerText, pressed: tile.getAttribute('aria-pressed'), disabled: (tile as HTMLButtonElement).disabled })));
+  assert.deepEqual(await tiles(), [
+    { way: 'CASH', label: 'Cash', pressed: 'true', disabled: false }, { way: 'UPI', label: 'UPI', pressed: 'false', disabled: false },
+    { way: 'CARD', label: 'Card', pressed: 'false', disabled: false }, { way: 'UDHAAR', label: 'Udhaar', pressed: 'false', disabled: false },
+    { way: 'PART', label: 'Part paid', pressed: 'false', disabled: false }, { way: 'CHEQUE', label: 'Cheque', pressed: 'false', disabled: true },
+  ]);
+  assert.equal(await isShown(page, '#sale-cheque-note'), true, 'the cheque tile is off, and the slide says where a cheque is entered');
+  assert.match(await textOf(page, '#sale-cheque-note'), /heque/);
+
+  // Cash, UPI and card: the money is received now, by that mode, and the amount box is off.
+  const paid = () => page.evaluate(() => { const box = (name: string) => document.querySelector(`[data-draft="sale"] [name="${name}"]`) as HTMLInputElement; return { terms: box('terms').value, paidBy: box('paidBy').value, paidByOff: box('paidBy').disabled, amountOff: box('paidAmount').disabled }; });
+  await page.click('[data-pay="UPI"]');
+  assert.deepEqual(await paid(), { terms: 'now', paidBy: 'UPI', paidByOff: false, amountOff: true });
+  await page.click('[data-pay="CARD"]');
+  assert.equal((await paid()).paidBy, 'CARD');
+  // Udhaar: nothing is received — no mode and no amount go to the server — and the days to pay within appear.
+  await page.click('[data-pay="UDHAAR"]');
+  const udhaar = await paid();
+  assert.deepEqual([udhaar.paidByOff, udhaar.amountOff], [true, true]);
+  assert.equal(await isShown(page, '#sale-udhaar-days'), true);
+  assert.deepEqual(await page.$$eval('#sale-udhaar-days [data-days]', (chips) => chips.map((chip) => (chip as HTMLElement).dataset.days)), ['0', '7', '15', '30']);
+  assert.equal(await page.$eval('#sale-udhaar-days [aria-pressed="true"]', (chip) => (chip as HTMLElement).dataset.days), '30');
+  await page.click('#sale-udhaar-days [data-days="7"]');
+  assert.equal(await page.$eval('[data-draft="sale"] [name="terms"]', (select) => (select as HTMLSelectElement).value), '7');
+  // Part paid: the amount box opens, and only now.
+  await page.click('[data-pay="PART"]');
+  assert.equal(await isShown(page, '#sale-part-paid'), true);
+  assert.equal((await paid()).amountOff, false);
+  assert.equal(await isShown(page, '#sale-udhaar-days'), false);
+  await page.click('[data-pay="CASH"]');
+  assert.equal(await isShown(page, '#sale-part-paid'), false);
+  assert.equal(await page.$eval('[data-draft="sale"] [name="paidAmount"]', (box) => (box as HTMLInputElement).disabled), true);
 });
