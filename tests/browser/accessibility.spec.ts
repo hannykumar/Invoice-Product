@@ -16,26 +16,30 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator("#home-money-main")).not.toBeEmpty();
 });
 
-for (const scheme of ["light", "dark"] as const) {
-  for (const width of [375, 1100]) {
-    test(`every screen passes the DOM checks: ${scheme}, ${width}px wide (#353)`, async ({ page }) => {
+// One visit to each screen, judged four ways (light and dark, phone and desktop width). Opening a screen
+// reads from the server, and the per-person limit of #350 is 600 requests a minute, so the screens are
+// opened once, not once per combination.
+test("every screen passes the DOM checks, light and dark, at 375 and 1100 px wide (#353)", async ({ page }) => {
+  const problems: string[] = [];
+  const looks = [
+    { scheme: "light", width: 375 }, { scheme: "light", width: 1100 }, { scheme: "dark", width: 375 }, { scheme: "dark", width: 1100 },
+  ] as const;
+  for (const view of await allViews(page)) {
+    await open(page, view);
+    // Let the screen's own read settle; a skeleton is judged on its own below.
+    await page.waitForFunction((v) => document.querySelector(`#view-${v} > [data-state="loading"]`) === null, view);
+    for (const { scheme, width } of looks) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.setViewportSize({ width, height: 800 });
-      const problems: string[] = [];
-      for (const view of await allViews(page)) {
-        await open(page, view);
-        // Let the screen's own read settle; a skeleton is judged on its own below.
-        await page.waitForFunction((v) => document.querySelector(`#view-${v} > [data-state="loading"]`) === null, view);
-        for (const found of await audit(page, `#view-${view}`)) problems.push(`${view}: ${found.rule} · ${found.where} · ${found.detail}`);
-        if (width === 375) {
-          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-          if (overflow > 0) problems.push(`${view}: 1.4.10 reflow · the page scrolls sideways by ${overflow}px`);
-        }
+      for (const found of await audit(page, `#view-${view}`)) problems.push(`${view} (${scheme}, ${width}px): ${found.rule} · ${found.where} · ${found.detail}`);
+      if (width === 375) {
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        if (overflow > 0) problems.push(`${view} (${scheme}, ${width}px): 1.4.10 reflow · the page scrolls sideways by ${overflow}px`);
       }
-      expect(problems, problems.join("\n")).toEqual([]);
-    });
+    }
   }
-}
+  expect(problems, problems.join("\n")).toEqual([]);
+});
 
 test("the whole shell has names, a landmark and live regions (#353)", async ({ page }) => {
   expect(await audit(page, "body > .app-shell")).toEqual([]);
