@@ -78,6 +78,28 @@ books earn — not implementation details.
   #367) are tested against real PostgreSQL; they belong to this suite's contract even though
   they live in `test:integration`.
 
+## Database connections in integration tests (#504)
+
+A flake that says `terminating connection due to administrator command` (57P01) or `Connection
+terminated unexpectedly` is a connection the server ended, reported on whichever test happens to be
+running. Its causes are all fixed in shared code, so a test never has to defend against them:
+
+- **Always get a pool from `createDatabase()`.** It handles the pool's `error` event (an idle
+  connection ended by a restart, failover or `pg_terminate_backend`) and the checked-out client's
+  `error` event (a connection ended mid-action), so neither becomes an uncaught exception.
+  `pool-errors.integration.test.ts` kills connections on purpose, 25 rounds in one process, to keep
+  this true. Never build a bare `new Pool()` in a test or in production code.
+- **A test that runs a migration down and up, or needs a schema of its own, uses
+  `withScratchDatabase(owner, url, prefix, work)`** from `packages/platform/test/scratch-database.ts`.
+  It takes the scratch-database advisory lock so such tests take turns, closes the scratch pool
+  *before* dropping the database, and drops without `WITH (FORCE)`, which would end other
+  connections. Do not hand-roll `CREATE DATABASE` / `DROP DATABASE`.
+- **Close every pool you open** (`await db.close()`, in `finally` or `after`). Only end connections
+  you named yourself (`application_name`), never `pg_terminate_backend` on a role or database other
+  files share.
+- Do not add `retries`, sleeps or a catch-all `uncaughtException` handler to make this go away: find
+  which connection was ended, and by whom.
+
 ## Finding a test that lies
 
 The suite is reviewed like the code is. The things that get an issue filed, not a quiet fix:
@@ -95,3 +117,17 @@ read a changelog to know the suite still means what it says.
 A bug fix starts with the test that fails for the bug, then the change that turns it green —
 the test proves it could have caught the bug. This is the same contract the release gates keep:
 an invariant nobody proved can fail is an invariant nobody trusts.
+
+## Tests that talk to a raw socket or to an upload the server refuses (issue #497)
+
+`apps/api/test/http-hardening.test.ts` once never finished on macOS. A client that is still sending
+when the server closes the connection sees `EPIPE`/`ECONNRESET`: Linux usually still hands over the
+reply the server sent first, macOS reports the reset instead. A helper that ignored those errors left
+its promise pending for ever. The server now reads and drops the rest of a refused upload (so the 413
+arrives), and the test file follows these rules — copy them:
+
+- Connect to `127.0.0.1`, never `localhost` (macOS tries `::1` first).
+- Settle on **every** outcome: an `error` handler must reject, not return quietly.
+- Bound every wait and give every test its own `{ timeout }`, so a stall is a named failure.
+- `agent: false` (or a non-keep-alive agent) per request; in `after`, call `server.close()` and
+  `server.closeAllConnections()` so teardown never waits on a client.

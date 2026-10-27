@@ -38,6 +38,7 @@
     "db:migrate": "node --experimental-strip-types packages/platform/src/migrations.ts up",
     "db:rollback": "node --experimental-strip-types packages/platform/src/migrations.ts down",
     "db:migration:id": "node --experimental-strip-types tools/migrations/new-id.ts",
+    "db:seal-frozen": "node --experimental-strip-types tools/seal-frozen-records.ts",
     "db:seed": "node --experimental-strip-types packages/platform/src/seed.ts",
     "permissions:docs": "node --experimental-strip-types tools/permissions/generate.ts",
     "demo:masters": "node --experimental-strip-types packages/masters/src/demo.ts",

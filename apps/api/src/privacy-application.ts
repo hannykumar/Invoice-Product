@@ -31,7 +31,7 @@ export const RETAINED_PLAINLY = Object.freeze([
   'The names and addresses of customers, suppliers and people the kept books name stay with those records, for the same eight years.',
   'The audit trail stays so it can always be shown who did what.',
   'The consent, hold and request records of this privacy register stay so the request itself can be shown later.',
-  'The sign-in address of a person stays in the identity table, which only the platform may change; their name inside this business is removed.',
+  'A removed person\'s sign-in address is replaced with a placeholder that can never receive mail, unless they also belong to another business, in which case it stays for that business.',
   'A removed account can never be signed in to again.',
 ]);
 
@@ -93,21 +93,26 @@ export class PostgresAccountDataStore implements PrivacyDataStore {
    * every access row is removed — the one table the app role may DELETE from — and a user with no
    * other live membership is anonymised. The books are never touched.
    */
-  async deleteSubject(companyId: string, subjectId: string): Promise<SubjectDeletionResult> {
+  async deleteSubject(companyId: string, subjectId: string, _retainUntil?: string, requestedBy?: { readonly actorId: string; readonly sessionId: string }): Promise<SubjectDeletionResult> {
     if (subjectId !== companyId) return { deletedRecords: 0, retainedRecords: 1 };
     const outcome = await this.#db.unitOfWork(companyId, async (uow) => {
       let deleted = 0;
+      // #500 (first, while the requester's membership is still active) — the application role cannot change `users.email`. The one audited way is the
+      // `anonymise_user` function: it removes the sign-in address of a person who belongs to no
+      // other live company, and refuses anyone outside this company. Without a named requester
+      // (a caller that predates the argument) nothing is removed and the address is kept.
+      if (requestedBy !== undefined) {
+        const { rows: members } = await uow.sql.query('SELECT DISTINCT user_id FROM memberships WHERE company_id = $1', [companyId]);
+        for (const member of members) {
+          const { rows } = await uow.sql.query('SELECT anonymise_user($1, $2, $3, $4, $5) AS removed',
+            [companyId, member.user_id, requestedBy.actorId, requestedBy.sessionId, 'Account deletion request (DPDP Act 2023, section 12)']);
+          if ((rows[0] as { removed: boolean }).removed) deleted += 1;
+        }
+      }
       deleted += (await uow.sql.query("UPDATE app_records SET value = 'null'::jsonb, updated_at = now() WHERE company_id = $1 AND frozen = false AND value <> 'null'::jsonb RETURNING key", [companyId])).rows.length;
       deleted += (await uow.sql.query('DELETE FROM user_branch_access WHERE company_id = $1 RETURNING user_id', [companyId])).rows.length;
       deleted += (await uow.sql.query('UPDATE sessions SET revoked_at = now() WHERE company_id = $1 AND revoked_at IS NULL RETURNING id', [companyId])).rows.length;
       deleted += (await uow.sql.query('UPDATE memberships SET active = false WHERE company_id = $1 AND active = true RETURNING user_id', [companyId])).rows.length;
-      // The application role may change only `display_name` and `active` on `users` — the sign-in
-      // address is deliberately out of its reach (the grant's own comment says so). What the role
-      // may do is done here; the email is kept by the identity table and named in `kept`.
-      deleted += (await uow.sql.query(
-        `UPDATE users u SET display_name = 'Removed account', active = false
-          WHERE EXISTS (SELECT 1 FROM memberships m WHERE m.company_id = $1 AND m.user_id = u.id)
-            AND NOT EXISTS (SELECT 1 FROM memberships m2 WHERE m2.user_id = u.id AND m2.company_id <> $1 AND m2.active = true) RETURNING u.id`, [companyId])).rows.length;
       deleted += (await uow.sql.query('UPDATE notification_preferences SET enabled = false WHERE company_id = $1 AND enabled = true RETURNING recipient_id', [companyId])).rows.length;
       const { rows } = await uow.sql.query(
         `SELECT (SELECT count(*)::int FROM app_records WHERE company_id = $1 AND value <> 'null'::jsonb)
