@@ -24,11 +24,11 @@ export const METERS: readonly MeterId[] = ['invoices', 'companies', 'storage_mb'
 
 /** Named without a period, so a sentence can add "this month" once rather than twice. */
 export const METER_LABELS: Readonly<Record<MeterId, Bilingual>> = {
-  invoices: { 'en-IN': 'bills', 'hi-IN': 'bill' },
-  companies: { 'en-IN': 'businesses', 'hi-IN': 'business' },
-  storage_mb: { 'en-IN': 'megabytes of bills and files', 'hi-IN': 'bill aur file ki jagah (MB)' },
-  ai_requests: { 'en-IN': 'questions to the assistant', 'hi-IN': 'assistant se sawaal' },
-  external_api_calls: { 'en-IN': 'government and bank calls', 'hi-IN': 'sarkar aur bank ko call' },
+  invoices: { 'en-IN': 'bills', 'hi-IN': 'बिल' },
+  companies: { 'en-IN': 'businesses', 'hi-IN': 'बिज़नेस' },
+  storage_mb: { 'en-IN': 'megabytes of bills and files', 'hi-IN': 'बिल और फ़ाइल की जगह (MB)' },
+  ai_requests: { 'en-IN': 'questions to the assistant', 'hi-IN': 'असिस्टेंट से सवाल' },
+  external_api_calls: { 'en-IN': 'government and bank calls', 'hi-IN': 'सरकार और बैंक को कॉल' },
 };
 
 /**

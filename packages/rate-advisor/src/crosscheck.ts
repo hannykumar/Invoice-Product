@@ -30,8 +30,8 @@ const disagreementFinding = (
       `This bill charges ${percent(printed)}, but your records say ${percent(register.gstRateBasisPoints)} `
       + `for this (${register.citation.source}). One of them is wrong.`,
     'hi-IN':
-      `Is bill par ${percent(printed)} laga hai, par aapke record mein iska ${percent(register.gstRateBasisPoints)} hai `
-      + `(${register.citation.source}). Dono mein se ek galat hai.`,
+      `इस बिल पर ${percent(printed)} लगा है, पर आपके रिकॉर्ड में इसका ${percent(register.gstRateBasisPoints)} है `
+      + `(${register.citation.source})। दोनों में से एक ग़लत है।`,
   },
   documentSays: String(printed),
   registerSays: String(register.gstRateBasisPoints),
@@ -47,9 +47,9 @@ const conflictedFinding = (index: number, printed: number, candidates: readonly 
       + `${[...new Set(candidates.map((rate) => percent(rate.gstRateBasisPoints)))].join(' and ')} — `
       + `so the ${percent(printed)} on this bill could not be checked. The records need fixing first.`,
     'hi-IN':
-      `Aapke record mein iske ek se zyaada GST rate hain — `
-      + `${[...new Set(candidates.map((rate) => percent(rate.gstRateBasisPoints)))].join(' aur ')} — `
-      + `isliye is bill ka ${percent(printed)} jaancha nahi ja saka. Pehle record theek karna hoga.`,
+      `आपके रिकॉर्ड में इसके एक से ज़्यादा GST रेट हैं — `
+      + `${[...new Set(candidates.map((rate) => percent(rate.gstRateBasisPoints)))].join(' और ')} — `
+      + `इसलिए इस बिल का ${percent(printed)} जाँचा नहीं जा सका। पहले रिकॉर्ड ठीक करना होगा।`,
   },
   documentSays: String(printed),
   registerSays: null,
@@ -65,7 +65,7 @@ const notInRegisterFinding = (index: number, printed: number): RateFinding => ({
     'en-IN':
       `This bill charges ${percent(printed)}. Your records have no rate for this yet, so nothing was checked against it.`,
     'hi-IN':
-      `Is bill par ${percent(printed)} laga hai. Aapke record mein iska rate abhi nahi hai, isliye jaanch nahi ho payi.`,
+      `इस बिल पर ${percent(printed)} लगा है। आपके रिकॉर्ड में इसका रेट अभी नहीं है, इसलिए जाँच नहीं हो पाई।`,
   },
   documentSays: String(printed),
   registerSays: null,
@@ -73,7 +73,7 @@ const notInRegisterFinding = (index: number, printed: number): RateFinding => ({
 
 const agreementMessage = (printed: number, register: RegisterRate): Bilingual => ({
   'en-IN': `${percent(printed)} matches your records (${register.citation.source}).`,
-  'hi-IN': `${percent(printed)} aapke record se milta hai (${register.citation.source}).`,
+  'hi-IN': `${percent(printed)} आपके रिकॉर्ड से मिलता है (${register.citation.source})।`,
 });
 
 export const crossCheck = (input: {
@@ -94,7 +94,7 @@ export const crossCheck = (input: {
       candidates: [],
       message: {
         'en-IN': `Nothing in your records to check ${percent(printed)} against.`,
-        'hi-IN': `${percent(printed)} ko jaanchne ke liye record mein kuch nahi hai.`,
+        'hi-IN': `${percent(printed)} को जाँचने के लिए रिकॉर्ड में कुछ नहीं है।`,
       },
       finding: notInRegisterFinding(input.lineIndex, printed),
     };
@@ -113,7 +113,7 @@ export const crossCheck = (input: {
       candidates: rates,
       message: {
         'en-IN': 'Your records disagree with themselves about this rate, so the bill could not be checked.',
-        'hi-IN': 'Aapke apne record is rate par ek doosre se alag hain, isliye bill jaancha nahi ja saka.',
+        'hi-IN': 'आपके अपने रिकॉर्ड इस रेट पर एक दूसरे से अलग हैं, इसलिए बिल जाँचा नहीं जा सका।',
       },
       finding: conflictedFinding(input.lineIndex, printed, rates),
     };
@@ -135,7 +135,7 @@ export const crossCheck = (input: {
       'en-IN':
         `This bill charges ${percent(printed)}, but your records say ${percent(first.gstRateBasisPoints)}. One of them is wrong.`,
       'hi-IN':
-        `Is bill par ${percent(printed)} laga hai, par aapke record ${percent(first.gstRateBasisPoints)} kehte hain. Ek galat hai.`,
+        `इस बिल पर ${percent(printed)} लगा है, पर आपके रिकॉर्ड ${percent(first.gstRateBasisPoints)} कहते हैं। एक ग़लत है।`,
     },
     finding: disagreementFinding(input.lineIndex, printed, first),
   };

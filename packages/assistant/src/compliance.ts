@@ -23,7 +23,7 @@ import type { Bilingual, Certainty, ComplianceCitation } from './model.ts';
 
 const NOTHING_ASSERTED: Bilingual = {
   'en-IN': 'We do not have an approved rule for this, so we will not tell you what the position is. Your accountant can.',
-  'hi-IN': 'Iske liye hamare paas manzoor kiya hua niyam nahin hai, isliye hum kuch nahin batayenge. Aapke accountant bata sakte hain.',
+  'hi-IN': 'इसके लिए हमारे पास मंज़ूर किया हुआ नियम नहीं है, इसलिए हम कुछ नहीं बताएंगे. आपके अकाउंटेंट बता सकते हैं.',
 };
 
 /**
@@ -116,13 +116,13 @@ export const describeCitation = (citation: ComplianceCitation): Bilingual => {
           : `${citation.explanation['en-IN']} To settle it we still need: ${needs}.`,
       'hi-IN':
         needs === ''
-          ? `${citation.explanation['hi-IN']} Is baare mein hum poori tarah nishchit nahin hain — apne accountant se jaanch lein.`
-          : `${citation.explanation['hi-IN']} Ise tay karne ke liye abhi chahiye: ${needs}.`,
+          ? `${citation.explanation['hi-IN']} इस बारे में हम पूरी तरह निश्चित नहीं हैं — अपने अकाउंटेंट से जांच लीजिए.`
+          : `${citation.explanation['hi-IN']} इसे तय करने के लिए अभी चाहिए: ${needs}.`,
     };
   }
   const source = citation.source;
   return {
     'en-IN': `${citation.explanation['en-IN']} This comes from ${source?.title ?? ''}${source?.provision === undefined || source.provision === '' ? '' : `, ${source.provision}`}, in force from ${citation.effectiveFrom ?? source?.effectiveFrom ?? ''}.`,
-    'hi-IN': `${citation.explanation['hi-IN']} Yeh ${source?.title ?? ''}${source?.provision === undefined || source.provision === '' ? '' : `, ${source.provision}`} se hai, jo ${citation.effectiveFrom ?? source?.effectiveFrom ?? ''} se laagu hai.`,
+    'hi-IN': `${citation.explanation['hi-IN']} यह ${source?.title ?? ''}${source?.provision === undefined || source.provision === '' ? '' : `, ${source.provision}`} से है, जो ${citation.effectiveFrom ?? source?.effectiveFrom ?? ''} से लागू है.`,
   };
 };

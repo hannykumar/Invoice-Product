@@ -75,7 +75,7 @@ const resolveParty = async (
     return {
       refusal: refusal('MISSING_FACT', {
         'en-IN': `I could not find a customer called "${text}" in your business, so I have not assumed who you meant.`,
-        'hi-IN': `Aapke business mein "${text}" naam ka koi grahak nahin mila, isliye maine andaza nahin lagaya ki aap kiski baat kar rahe hain.`,
+        'hi-IN': `आपके बिज़नेस में "${text}" नाम का कोई ग्राहक नहीं मिला, इसलिए मैंने अंदाज़ा नहीं लगाया कि आप किसकी बात कर रहे हैं.`,
       }),
     };
   }
@@ -83,7 +83,7 @@ const resolveParty = async (
   return {
     refusal: refusal('MISSING_FACT', {
       'en-IN': `"${text}" matches more than one customer — ${names}. Tell me which one and I will go ahead.`,
-      'hi-IN': `"${text}" se ek se zyada grahak milte hain — ${names}. Bata dein kaunsa, phir main aage badhta hoon.`,
+      'hi-IN': `"${text}" से एक से ज़्यादा ग्राहक मिलते हैं — ${names}. बता दीजिए कौनसा, फिर मैं आगे बढ़ता हूँ.`,
     }),
   };
 };
@@ -138,7 +138,7 @@ const notPermitted = (context: RecipeContext, toolName: string): Refusal | null 
   const tool = context.registry.require(toolName);
   return refusal('TOOL_NOT_PERMITTED', {
     'en-IN': `You do not have permission to ${tool.summary['en-IN']}, so I cannot do it for you either.`,
-    'hi-IN': `Aapko ${tool.summary['hi-IN']} ki ijazat nahin hai, isliye main bhi aapke liye yeh nahin kar sakta.`,
+    'hi-IN': `आपको ${tool.summary['hi-IN']} की इजाज़त नहीं है, इसलिए मैं भी आपके लिए यह नहीं कर सकता.`,
   }, toolName);
 };
 
@@ -152,17 +152,17 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
       return nothing(
         {
           'en-IN': 'This is not something I will finish on my own.',
-          'hi-IN': 'Yeh kaam main apne aap poora nahin karunga.',
+          'hi-IN': 'यह काम मैं अपने आप पूरा नहीं करूँगा.',
         },
         [
           refusal('HIGH_RISK_PREPARE_ONLY', understood.intent === 'MOVE_MONEY'
             ? {
                 'en-IN': 'Moving money is not something the assistant does. Record the payment yourself on the Payment screen, where you can see the account and the amount before it goes.',
-                'hi-IN': 'Paisa bhejna assistant ka kaam nahin hai. Payment screen par khud record karein, jahan account aur rakam bhejne se pehle dikh jayenge.',
+                'hi-IN': 'पैसा भेजना असिस्टेंट का काम नहीं है. पेमेंट स्क्रीन पर ख़ुद रिकॉर्ड कीजिए, जहां अकाउंट और रकम भेजने से पहले दिख जाएंगे.',
               }
             : {
                 'en-IN': 'Filing a return with the government is not something the assistant does. Prepare it on the GST screen and file it yourself, so the person filing is the person responsible.',
-                'hi-IN': 'Sarkar ko return file karna assistant ka kaam nahin hai. GST screen par taiyar karein aur khud file karein, taaki jo file kare wahi zimmedar ho.',
+                'hi-IN': 'सरकार को रिटर्न फ़ाइल करना असिस्टेंट का काम नहीं है. GST स्क्रीन पर तैयार कीजिए और ख़ुद फ़ाइल कीजिए, ताकि जो फ़ाइल करे वही ज़िम्मेदार हो.',
               }),
         ],
       );
@@ -180,7 +180,7 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
         reads: checked === null ? [read] : [read, checked.read],
         summary: {
           'en-IN': `${bills.length} unpaid bill${bills.length === 1 ? '' : 's'}, ${formatINR({ currency: 'INR', minor: total })} in all. Nothing here changes anything.`,
-          'hi-IN': `${bills.length} bill baaki hain, kul ${formatINR({ currency: 'INR', minor: total })}. Isse kuch badalta nahin.`,
+          'hi-IN': `${bills.length} बिल बाक़ी हैं, कुल ${formatINR({ currency: 'INR', minor: total })}. इससे कुछ बदलता नहीं.`,
         },
       };
     }
@@ -188,10 +188,10 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
     case 'STOP_REMINDING': {
       if (understood.partyText === null) {
         return nothing(
-          { 'en-IN': 'Which customer should I stop reminding?', 'hi-IN': 'Kis grahak ko reminder bhejna band karna hai?' },
+          { 'en-IN': 'Which customer should I stop reminding?', 'hi-IN': 'किस ग्राहक को रिमाइंडर भेजना बंद करना है?' },
           [refusal('MISSING_FACT', {
             'en-IN': 'Tell me which customer to stop reminding, and I will do it. I have not guessed.',
-            'hi-IN': 'Bata dein kis grahak ko reminder band karna hai, main kar dunga. Maine andaza nahin lagaya.',
+            'hi-IN': 'बता दीजिए किस ग्राहक को रिमाइंडर बंद करना है, मैं कर दूँगा. मैंने अंदाज़ा नहीं लगाया.',
           })],
         );
       }
@@ -205,7 +205,7 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
         reads: [],
         summary: {
           'en-IN': `${resolved.party.name} will stop receiving automatic reminders. Their bills stay exactly as they are.`,
-          'hi-IN': `${resolved.party.name} ko automatic reminder jana band ho jayega. Unke bill jaise hain waise hi rahenge.`,
+          'hi-IN': `${resolved.party.name} को ऑटोमैटिक रिमाइंडर जाना बंद हो जाएगा. उनके बिल जैसे हैं वैसे ही रहेंगे.`,
         },
       };
     }
@@ -213,10 +213,10 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
     case 'CANCEL_INVOICE': {
       if (understood.documentRef === null) {
         return nothing(
-          { 'en-IN': 'Which bill should be cancelled?', 'hi-IN': 'Kaunsa bill radd karna hai?' },
+          { 'en-IN': 'Which bill should be cancelled?', 'hi-IN': 'कौनसा बिल रद्द करना है?' },
           [refusal('MISSING_FACT', {
             'en-IN': 'Tell me the bill number. Cancelling the wrong bill is not something I can undo for you.',
-            'hi-IN': 'Bill number bata dein. Galat bill radd ho gaya to main use wapas nahin la sakta.',
+            'hi-IN': 'बिल नंबर बता दीजिए. ग़लत बिल रद्द हो गया तो मैं उसे वापस नहीं ला सकता.',
           })],
         );
       }
@@ -226,12 +226,12 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
         steps: [step(context, 'sales.cancel', { documentRef: understood.documentRef, reason: 'Prepared by the assistant at your request.' })],
         refusals: [refusal('HIGH_RISK_PREPARE_ONLY', {
           'en-IN': 'Cancelling a bill is yours to finish. I will prepare it and leave it waiting for you to confirm on the sales screen.',
-          'hi-IN': 'Bill radd karna aapke haath mein hai. Main use taiyar kar ke chhod dunga; sales screen par aap confirm kar dein.',
+          'hi-IN': 'बिल रद्द करना आपके हाथ में है. मैं उसे तैयार कर के छोड़ दूँगा; सेल्स स्क्रीन पर आप पक्का कर दीजिए.',
         }, 'sales.cancel')],
         reads: [],
         summary: {
           'en-IN': `I will prepare the cancellation of ${understood.documentRef} and stop there.`,
-          'hi-IN': `Main ${understood.documentRef} radd karne ki taiyari kar ke ruk jaunga.`,
+          'hi-IN': `मैं ${understood.documentRef} रद्द करने की तैयारी कर के रुक जाऊँगा.`,
         },
       };
     }
@@ -272,11 +272,11 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
         refusals.push(refusal('NOTHING_TO_DO', bills.length === 0
           ? {
               'en-IN': who === null ? 'Nobody owes you anything that is due, so there is nothing to send.' : `${who} has no unpaid bill that is due, so there is nothing to send.`,
-              'hi-IN': who === null ? 'Abhi kisi ka koi bill baaki nahin hai, isliye kuch bhejne ko nahin hai.' : `${who} ka koi baaki bill nahin hai, isliye kuch bhejne ko nahin hai.`,
+              'hi-IN': who === null ? 'अभी किसी का कोई बिल बाक़ी नहीं है, इसलिए कुछ भेजने को नहीं है.' : `${who} का कोई बाक़ी बिल नहीं है, इसलिए कुछ भेजने को नहीं है.`,
             }
           : {
               'en-IN': `Every one of these ${bills.length} bills is deliberately being left alone today. The reasons are on the reminders screen.`,
-              'hi-IN': `In ${bills.length} bills ko aaj jaan-boojh kar chhoda ja raha hai. Wajah reminders screen par likhi hai.`,
+              'hi-IN': `इन ${bills.length} बिलों को आज जान-बूझकर छोड़ा जा रहा है. वजह रिमाइंडर स्क्रीन पर लिखी है.`,
             }));
       }
 
@@ -286,10 +286,10 @@ export const expand = async (context: RecipeContext, understood: UnderstoodReque
         refusals,
         reads: checked === null ? [read] : [read, checked.read],
         summary: sending.length === 0
-          ? { 'en-IN': 'Nothing would be sent.', 'hi-IN': 'Kuch nahin bheja jayega.' }
+          ? { 'en-IN': 'Nothing would be sent.', 'hi-IN': 'कुछ नहीं भेजा जाएगा.' }
           : {
               'en-IN': `${sending.length} reminder${sending.length === 1 ? '' : 's'} about ${formatINR({ currency: 'INR', minor: total })}${leftAlone.length === 0 ? '' : `, and ${leftAlone.length} bill${leftAlone.length === 1 ? '' : 's'} left alone`}. Nothing goes until you say so.`,
-              'hi-IN': `${formatINR({ currency: 'INR', minor: total })} ke liye ${sending.length} reminder${leftAlone.length === 0 ? '' : `, aur ${leftAlone.length} bill chhod diye gaye`}. Aapke kahe bina kuch nahin jayega.`,
+              'hi-IN': `${formatINR({ currency: 'INR', minor: total })} के लिए ${sending.length} रिमाइंडर${leftAlone.length === 0 ? '' : `, और ${leftAlone.length} बिल छोड़ दिए गए`}. आपके कहे बिना कुछ नहीं जाएगा.`,
             },
       };
     }

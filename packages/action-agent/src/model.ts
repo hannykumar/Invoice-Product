@@ -151,5 +151,5 @@ export const AGENT_PERMISSIONS = {
 /** Every agent answer carries this. The product does the work; the owner stays responsible. */
 export const AGENT_DISCLAIMER: Bilingual = {
   'en-IN': 'The assistant only does things you can already do yourself, and only after you have seen exactly what it would do.',
-  'hi-IN': 'Assistant sirf wahi karta hai jo aap khud kar sakte hain, aur tabhi jab aap dekh lein ki woh theek kya karega.',
+  'hi-IN': 'असिस्टेंट सिर्फ़ वही करता है जो आप ख़ुद कर सकते हैं, और तभी जब आप देख लें कि वह ठीक क्या करेगा.',
 };

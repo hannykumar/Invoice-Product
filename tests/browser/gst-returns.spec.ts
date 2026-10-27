@@ -46,6 +46,11 @@ test("prepare this month's return and approve it (#355)", async ({ page, request
 
   const approve = page.locator("#gst-approve");
   await expect(page.locator("#gst-actions-panel")).toBeVisible();
+  // The free "what would it say" view renders first — it shows a draft month with the button
+  // disabled under the title "Prepare this month first." The prepare answer's own render sets
+  // the title to "" (a month somebody prepared needs no hint), so wait for that before reading
+  // the button, or a fast page can branch on the earlier render and pass the month by.
+  await expect(approve).toHaveAttribute("title", "");
   if (await approve.isEnabled()) {
     // First run on a fresh month: the owner approves, and the figures are fixed against their name.
     await approve.click();

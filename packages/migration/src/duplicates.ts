@@ -114,7 +114,7 @@ export const markDuplicates = (
               value: key,
               message: bilingual(
                 `The same entry already appears on row ${first} of this file. Two figures for one account are never added together, so please decide which one is right.`,
-                `Yahi entry is file ki row ${first} mein bhi hai. Ek khaate ke do aankde jode nahin jaate; batayein kaunsa sahi hai.`,
+                `यही एंट्री इस फ़ाइल की रो ${first} में भी है। एक खाते के दो आँकड़े जोड़े नहीं जाते; बताइए कौनसा सही है।`,
               ),
             },
           ],
@@ -145,7 +145,7 @@ export const markDuplicates = (
             value: matchable.name,
             message: bilingual(
               `"${matchable.name}" is already on row ${firstRow} of this file, so this row was left out.`,
-              `"${matchable.name}" is file ki row ${firstRow} mein pehle se hai, isliye yeh row chhod di gayi.`,
+              `"${matchable.name}" इस फ़ाइल की रो ${firstRow} में पहले से है, इसलिए यह रो छोड़ दी गई।`,
             ),
           },
         ],
@@ -172,7 +172,7 @@ export const markDuplicates = (
             value: matchable.name,
             message: bilingual(
               `You already have "${candidate?.record.name ?? matchable.name}". ${why} This row was left out, and what you already have was not changed.`,
-              `Aapke paas pehle se "${candidate?.record.name ?? matchable.name}" hai. ${why} Yeh row chhod di gayi aur purani entry badli nahin gayi.`,
+              `आपके पास पहले से "${candidate?.record.name ?? matchable.name}" है। ${why} यह रो छोड़ दी गई और पुरानी एंट्री बदली नहीं गई।`,
             ),
           },
         ],
@@ -182,7 +182,7 @@ export const markDuplicates = (
       const candidate = verdict.candidates[0];
       const why = bilingual(
         `"${matchable.name}" looks close to "${candidate?.record.name ?? ''}". ${candidate?.reasons.map((reason) => reason.detail).join(' ') ?? ''}`,
-        `"${matchable.name}" aur "${candidate?.record.name ?? ''}" milte-julte lagte hain.`,
+        `"${matchable.name}" और "${candidate?.record.name ?? ''}" मिलते-जुलते लगते हैं।`,
       );
       needsALook.push({ row: outcome.row, name: matchable.name, existing: candidate?.record.name ?? '', why });
       return {

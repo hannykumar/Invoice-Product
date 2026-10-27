@@ -52,7 +52,7 @@ export const suggestPrice = async (
       asOf: request.asOf,
       sentence: {
         'en-IN': `Last time you charged them ${formatINR(agreed.amount)} for ${request.itemName}, on bill ${agreed.documentNumber} of ${formatDate(agreed.on)}.`,
-        'hi-IN': `Pichhli baar aapne inse ${request.itemName} ke ${formatINR(agreed.amount)} liye the, ${formatDate(agreed.on)} ke bill ${agreed.documentNumber} par.`,
+        'hi-IN': `पिछली बार आपने इनसे ${request.itemName} के ${formatINR(agreed.amount)} लिए थे, ${formatDate(agreed.on)} के बिल ${agreed.documentNumber} पर।`,
       },
     };
   }
@@ -79,8 +79,8 @@ export const suggestPrice = async (
           ? `Your ${listed.priceListName} rate for ${request.itemName} is ${formatINR(listed.amount)}.`
           : `Your ${listed.priceListName} rate for ${request.itemName} is ${formatINR(listed.amount)} when buying ${slab} or more.`,
         'hi-IN': slab === undefined
-          ? `Aapki ${listed.priceListName} mein ${request.itemName} ka rate ${formatINR(listed.amount)} hai.`
-          : `Aapki ${listed.priceListName} mein ${slab} ya usse zyada par ${request.itemName} ka rate ${formatINR(listed.amount)} hai.`,
+          ? `आपकी ${listed.priceListName} में ${request.itemName} का रेट ${formatINR(listed.amount)} है।`
+          : `आपकी ${listed.priceListName} में ${slab} या उससे ज़्यादा पर ${request.itemName} का रेट ${formatINR(listed.amount)} है।`,
       },
     };
   }
@@ -94,7 +94,7 @@ export const suggestPrice = async (
     asOf: request.asOf,
     sentence: {
       'en-IN': `You have not sold ${request.itemName} to them before and it is not on a price list, so please type what you agreed.`,
-      'hi-IN': `Aapne inhe ${request.itemName} pehle nahin becha aur yeh kisi price list mein bhi nahin hai, isliye jo tay hua wo likhein.`,
+      'hi-IN': `आपने इन्हें ${request.itemName} पहले नहीं बेचा और यह किसी प्राइस लिस्ट में भी नहीं है, इसलिए जो तय हुआ वो लिखिए।`,
     },
   };
 };
@@ -129,8 +129,8 @@ export const discountDecision = (
   const charged = formatINR(input.chargedPrice);
   const lastTime = input.source === 'LAST_AGREED';
   const what = lastTime
-    ? bilingual(`${charged} is ${percent}% lower than the last price you charged them (${was})`, `${charged} unke pichhle rate (${was}) se ${percent}% kam hai`)
-    : bilingual(`${charged} is ${percent}% off the price list rate (${was})`, `${charged} price list rate (${was}) se ${percent}% kam hai`);
+    ? bilingual(`${charged} is ${percent}% lower than the last price you charged them (${was})`, `${charged} उनके पिछले रेट (${was}) से ${percent}% कम है`)
+    : bilingual(`${charged} is ${percent}% off the price list rate (${was})`, `${charged} प्राइस लिस्ट रेट (${was}) से ${percent}% कम है`);
 
   return {
     requestedBasisPoints: basisPoints,
@@ -140,11 +140,11 @@ export const discountDecision = (
     sentence: needsApproval
       ? bilingual(
           `${what['en-IN']}. A price more than ${allowed}% lower needs approval: the owner, or someone allowed to approve discounts, has to approve it before the bill is issued.`,
-          `${what['hi-IN']}. ${allowed}% se zyada kam rate ke liye manzoori chahiye: owner ya discount manzoor karne wala koi vyakti bill jaari hone se pehle manzoori de.`,
+          `${what['hi-IN']}। ${allowed}% से ज़्यादा छूट के लिए मालिक या अप्रूवल देने वाले की मंज़ूरी पहले चाहिए।`,
         )
       : bilingual(
           `${what['en-IN']}: ${formatINR(amountOff)} less on this line.`,
-          `${what['hi-IN']}: is line par ${formatINR(amountOff)} kam.`,
+          `${what['hi-IN']}: इस लाइन पर ${formatINR(amountOff)} कम।`,
         ),
   };
 };
@@ -171,7 +171,7 @@ export const marginWarning = async (
     shortfallOnLine,
     sentence: {
       'en-IN': `${input.itemName} costs you ${formatINR(unitCost)} each, so at this price you lose ${formatINR(shortfallOnLine)} on this line.`,
-      'hi-IN': `${input.itemName} aapko ${formatINR(unitCost)} ka padta hai, is rate par is line mein ${formatINR(shortfallOnLine)} ka nuksaan hai.`,
+      'hi-IN': `${input.itemName} आपको ${formatINR(unitCost)} का पड़ता है, इस रेट पर इस लाइन में ${formatINR(shortfallOnLine)} का नुक़सान है।`,
     },
   };
 };

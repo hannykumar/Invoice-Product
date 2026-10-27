@@ -12,6 +12,7 @@ import {
   METERS,
   isEssential,
   type Capability,
+  type EssentialCapability,
   type MeterId,
   type Plan,
   type PlanLimit,
@@ -70,10 +71,10 @@ export const definePlan = (draft: PlanDraft): Plan => {
 export const SHIPPED_PLANS: readonly Plan[] = [
   definePlan({
     id: 'free',
-    name: { 'en-IN': 'Free', 'hi-IN': 'Muft' },
+    name: { 'en-IN': 'Free', 'hi-IN': 'मुफ़्त' },
     description: {
       'en-IN': 'For a shop finding its feet. Every warning and every check, with smaller numbers.',
-      'hi-IN': 'Chhoti dukaan ke liye. Har chetavni aur har jaanch, bas ginti kam.',
+      'hi-IN': 'छोटी दुकान के लिए। हर चेतावनी और हर जाँच, बस गिनती कम।',
     },
     monthlyPrice: rupees(0),
     trialDays: 0,
@@ -88,10 +89,10 @@ export const SHIPPED_PLANS: readonly Plan[] = [
   }),
   definePlan({
     id: 'starter',
-    name: { 'en-IN': 'Starter', 'hi-IN': 'Shuruaat' },
+    name: { 'en-IN': 'Starter', 'hi-IN': 'शुरुआत' },
     description: {
       'en-IN': 'For a business billing every day, with room for a second branch.',
-      'hi-IN': 'Roz bill banane wale business ke liye, doosri branch ki gunjaish ke saath.',
+      'hi-IN': 'रोज़ बिल बनाने वाले बिज़नेस के लिए, दूसरी ब्रांच की गुंजाइश के साथ।',
     },
     monthlyPrice: rupees(499),
     trialDays: 14,
@@ -106,10 +107,10 @@ export const SHIPPED_PLANS: readonly Plan[] = [
   }),
   definePlan({
     id: 'growth',
-    name: { 'en-IN': 'Growth', 'hi-IN': 'Vriddhi' },
+    name: { 'en-IN': 'Growth', 'hi-IN': 'वृद्धि' },
     description: {
       'en-IN': 'For several businesses under one owner, with no monthly ceiling on billing.',
-      'hi-IN': 'Ek hi malik ke kai business ke liye, billing par koi mahine ki seema nahin.',
+      'hi-IN': 'एक ही मालिक के कई बिज़नेस के लिए, बिलिंग पर कोई महीने की सीमा नहीं।',
     },
     monthlyPrice: rupees(1_499),
     trialDays: 14,
@@ -136,22 +137,34 @@ export const limitFor = (plan: Plan, meter: MeterId): bigint | null =>
  * Everything essential is listed as a READ with no meter, so no plan and no state can stop it. That
  * is belt and braces with `definePlan`: one guards the catalogue, this guards the lookup.
  */
+const ESSENTIAL_LABELS_HI: Readonly<Record<EssentialCapability, string>> = {
+  'gst.compliance_warning': 'GST नियम चेतावनी',
+  'einvoice.applicability_warning': 'ई-इनवॉइस लागू होने की चेतावनी',
+  'supplier.risk_warning': 'सप्लायर जोखिम चेतावनी',
+  'stock.negative_warning': 'स्टॉक माइनस जाने की चेतावनी',
+  'ledger.balance_check': 'बही बराबरी जाँच',
+  'credit.overdue_warning': 'उधार में देर की चेतावनी',
+  'audit.read': 'ऑडिट देखना',
+  'data.export': 'अपना डेटा निकालना',
+  'reports.view.dues': 'बाक़ी राशि की रिपोर्ट देखना',
+};
+
 export const SHIPPED_CAPABILITIES: readonly Capability[] = [
-  { name: 'sales.issue_invoice', kind: 'WRITE', meter: 'invoices', label: { 'en-IN': 'issue a bill', 'hi-IN': 'bill banana' } },
-  { name: 'purchase.record_bill', kind: 'WRITE', meter: null, label: { 'en-IN': 'record a purchase bill', 'hi-IN': 'kharid ka bill likhna' } },
-  { name: 'payments.record', kind: 'WRITE', meter: null, label: { 'en-IN': 'record a payment', 'hi-IN': 'paisa aana likhna' } },
-  { name: 'collections.send_reminder', kind: 'WRITE', meter: 'external_api_calls', label: { 'en-IN': 'send a payment reminder', 'hi-IN': 'reminder bhejna' } },
-  { name: 'assistant.ask', kind: 'READ', meter: 'ai_requests', label: { 'en-IN': 'ask the assistant a question', 'hi-IN': 'assistant se sawaal poochhna' } },
-  { name: 'agent.execute', kind: 'WRITE', meter: 'ai_requests', label: { 'en-IN': 'have the assistant do something', 'hi-IN': 'assistant se kaam karwana' } },
-  { name: 'einvoice.generate', kind: 'WRITE', meter: 'external_api_calls', label: { 'en-IN': 'register an e-invoice', 'hi-IN': 'e-invoice register karna' } },
-  { name: 'company.create', kind: 'WRITE', meter: 'companies', label: { 'en-IN': 'set up another business', 'hi-IN': 'ek aur business banana' } },
-  { name: 'documents.store', kind: 'WRITE', meter: 'storage_mb', label: { 'en-IN': 'keep a document', 'hi-IN': 'document rakhna' } },
-  { name: 'reports.view.financial', kind: 'READ', meter: null, label: { 'en-IN': 'read your reports', 'hi-IN': 'apni report dekhna' } },
+  { name: 'sales.issue_invoice', kind: 'WRITE', meter: 'invoices', label: { 'en-IN': 'issue a bill', 'hi-IN': 'बिल बनाना' } },
+  { name: 'purchase.record_bill', kind: 'WRITE', meter: null, label: { 'en-IN': 'record a purchase bill', 'hi-IN': 'ख़रीद का बिल लिखना' } },
+  { name: 'payments.record', kind: 'WRITE', meter: null, label: { 'en-IN': 'record a payment', 'hi-IN': 'पैसा आना लिखना' } },
+  { name: 'collections.send_reminder', kind: 'WRITE', meter: 'external_api_calls', label: { 'en-IN': 'send a payment reminder', 'hi-IN': 'रिमाइंडर भेजना' } },
+  { name: 'assistant.ask', kind: 'READ', meter: 'ai_requests', label: { 'en-IN': 'ask the assistant a question', 'hi-IN': 'असिस्टेंट से सवाल पूछना' } },
+  { name: 'agent.execute', kind: 'WRITE', meter: 'ai_requests', label: { 'en-IN': 'have the assistant do something', 'hi-IN': 'असिस्टेंट से काम करवाना' } },
+  { name: 'einvoice.generate', kind: 'WRITE', meter: 'external_api_calls', label: { 'en-IN': 'register an e-invoice', 'hi-IN': 'ई-इनवॉइस रजिस्टर करना' } },
+  { name: 'company.create', kind: 'WRITE', meter: 'companies', label: { 'en-IN': 'set up another business', 'hi-IN': 'एक और बिज़नेस बनाना' } },
+  { name: 'documents.store', kind: 'WRITE', meter: 'storage_mb', label: { 'en-IN': 'keep a document', 'hi-IN': 'दस्तावेज़ रखना' } },
+  { name: 'reports.view.financial', kind: 'READ', meter: null, label: { 'en-IN': 'read your reports', 'hi-IN': 'अपनी रिपोर्ट देखना' } },
   ...ESSENTIAL_CAPABILITIES.map((name): Capability => ({
     name,
     kind: 'READ',
     meter: null,
-    label: { 'en-IN': name.replace(/[._]/g, ' '), 'hi-IN': name.replace(/[._]/g, ' ') },
+    label: { 'en-IN': name.replace(/[._]/g, ' '), 'hi-IN': ESSENTIAL_LABELS_HI[name] },
   })),
 ];
 

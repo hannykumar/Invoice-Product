@@ -40,15 +40,15 @@ const tableHtml = (table: ReportTable): string => `
 
 /** The labels the page puts on a total that opens. */
 const DRILL_LABELS = {
-  earned: { 'en-IN': 'Everything you earned', 'hi-IN': 'Jo kuch kamaya' },
-  spent: { 'en-IN': 'Everything you spent', 'hi-IN': 'Jo kuch kharch hua' },
-  owningSide: { 'en-IN': 'Everything put on the owning side', 'hi-IN': 'Apni taraf jo kuch daala gaya' },
-  owingSide: { 'en-IN': 'Everything put on the owing side', 'hi-IN': 'Dene ki taraf jo kuch daala gaya' },
-  everyBill: { 'en-IN': 'Total of every bill', 'hi-IN': 'Har bill ka kul' },
-  goodsWorth: { 'en-IN': 'What the goods are worth', 'hi-IN': 'Maal ki keemat' },
-  stillOwed: { 'en-IN': 'Everything customers still owe', 'hi-IN': 'Customers se jo kuch lena baaki hai' },
-  gstCollected: { 'en-IN': 'GST you collected', 'hi-IN': 'Aapne jo GST liya' },
-  gstPaid: { 'en-IN': 'GST you had already paid', 'hi-IN': 'Aap pehle hi jo GST de chuke the' },
+  earned: { 'en-IN': 'Everything you earned', 'hi-IN': 'जो कुछ कमाया' },
+  spent: { 'en-IN': 'Everything you spent', 'hi-IN': 'जो कुछ ख़र्च हुआ' },
+  owningSide: { 'en-IN': 'Everything put on the owning side', 'hi-IN': 'अपनी तरफ़ जो कुछ डाला गया' },
+  owingSide: { 'en-IN': 'Everything put on the owing side', 'hi-IN': 'देने की तरफ़ जो कुछ डाला गया' },
+  everyBill: { 'en-IN': 'Total of every bill', 'hi-IN': 'हर बिल का कुल' },
+  goodsWorth: { 'en-IN': 'What the goods are worth', 'hi-IN': 'माल की कीमत' },
+  stillOwed: { 'en-IN': 'Everything customers still owe', 'hi-IN': 'ग्राहकों से जो कुछ लेना बाक़ी है' },
+  gstCollected: { 'en-IN': 'GST you collected', 'hi-IN': 'आपने जो GST लिया' },
+  gstPaid: { 'en-IN': 'GST you had already paid', 'hi-IN': 'आप पहले ही जो GST दे चुके थे' },
 } as const;
 
 /** A total, and underneath it the records that made it, folded away until someone asks. */

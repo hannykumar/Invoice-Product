@@ -111,7 +111,7 @@ const readStateCode = (value: string): string | null => {
 const buildParty = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): CustomerRow | null => {
   const name = cells.one('name');
   if (name === '') {
-    notes.blocking('NAME_MISSING', cells.headerOf('name'), '', 'This row has no name, so there is nobody to add.', 'Is row mein naam nahin hai, isliye kisi ko jodha nahin ja sakta.');
+    notes.blocking('NAME_MISSING', cells.headerOf('name'), '', 'This row has no name, so there is nobody to add.', 'इस रो में नाम नहीं है, इसलिए किसी को जोड़ा नहीं जा सकता।');
     return null;
   }
 
@@ -124,7 +124,7 @@ const buildParty = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Cu
       notes.warn(
         'GSTIN_UNUSABLE', cells.headerOf('gstin'), gstinCell,
         `The GST number "${gstinCell}" does not match the rest of it, so a digit was probably mistyped. ${name} will be brought in without it.`,
-        `GST number "${gstinCell}" ke ank aapas mein mel nahin khaate, shaayad koi ank galat type hua hai. ${name} ko iske bina joda jaayega.`,
+        `GST नंबर "${gstinCell}" के अंक आपस में मेल नहीं खाते, शायद कोई अंक ग़लत टाइप हुआ है। ${name} को इसके बिना जोड़ा जाएगा।`,
       );
     }
   }
@@ -133,26 +133,26 @@ const buildParty = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Cu
   const panCell = cells.one('pan');
   if (panCell !== '') {
     if (validatePan(panCell).ok) pan = panCell.toUpperCase();
-    else notes.warn('PAN_UNUSABLE', cells.headerOf('pan'), panCell, `"${panCell}" is not a PAN we can use, so it will be left blank.`, `"${panCell}" sahi PAN nahin hai, ise khaali chhoda jaayega.`);
+    else notes.warn('PAN_UNUSABLE', cells.headerOf('pan'), panCell, `"${panCell}" is not a PAN we can use, so it will be left blank.`, `"${panCell}" सही PAN नहीं है, इसे ख़ाली छोड़ा जाएगा।`);
   }
 
   const phones = cells.many('phone').map((phone) => normalisePhone(phone)).filter((phone): phone is string => phone !== null);
   if (cells.many('phone').length > phones.length) {
-    notes.warn('PHONE_UNUSABLE', cells.headerOf('phone'), cells.one('phone'), 'One phone number could not be read and was left out.', 'Ek phone number padha nahin ja saka aur chhod diya gaya.');
+    notes.warn('PHONE_UNUSABLE', cells.headerOf('phone'), cells.one('phone'), 'One phone number could not be read and was left out.', 'एक फ़ोन नंबर पढ़ा नहीं जा सका और छोड़ दिया गया।');
   }
 
   let stateCode: string | null = null;
   const stateCell = cells.one('state_code');
   if (stateCell !== '') {
     stateCode = readStateCode(stateCell);
-    if (stateCode === null) notes.warn('STATE_UNKNOWN', cells.headerOf('state_code'), stateCell, `We do not recognise the state "${stateCell}".`, `"${stateCell}" raajya pehchaana nahin gaya.`);
+    if (stateCode === null) notes.warn('STATE_UNKNOWN', cells.headerOf('state_code'), stateCell, `We do not recognise the state "${stateCell}".`, `"${stateCell}" राज्य पहचाना नहीं गया।`);
   }
   if (stateCode === null && gstin !== null) stateCode = gstin.slice(0, 2);
 
   const pincodeCell = cells.one('pincode');
   const pincode = pincodeCell === '' || !validatePincode(pincodeCell).ok ? null : pincodeCell.trim();
   if (pincodeCell !== '' && pincode === null) {
-    notes.warn('PINCODE_UNUSABLE', cells.headerOf('pincode'), pincodeCell, `"${pincodeCell}" is not a PIN code, so it will be left blank.`, `"${pincodeCell}" PIN code nahin hai, ise khaali chhoda jaayega.`);
+    notes.warn('PINCODE_UNUSABLE', cells.headerOf('pincode'), pincodeCell, `"${pincodeCell}" is not a PIN code, so it will be left blank.`, `"${pincodeCell}" PIN कोड नहीं है, इसे ख़ाली छोड़ा जाएगा।`);
   }
   // Issue #224 — a PIN from another state is a wrong address, not a missing one. Leaving it blank
   // would quietly drop the address; importing it would print it. The row waits to be corrected.
@@ -160,7 +160,7 @@ const buildParty = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Cu
     const inState = validatePincodeForState(pincode, stateCode);
     if (!inState.ok) {
       const stateName = GST_STATE_CODES[stateCode]?.name ?? stateCode;
-      notes.blocking('PINCODE_STATE_MISMATCH', cells.headerOf('pincode'), pincodeCell, `${inState.problems[0]?.message ?? `PIN code ${pincode} is not in ${stateName}.`} Correct the PIN code or the state in the file.`, `PIN code ${pincode} ${stateName} ka nahin hai. File mein PIN code ya rajya sahi karen.`);
+      notes.blocking('PINCODE_STATE_MISMATCH', cells.headerOf('pincode'), pincodeCell, `${inState.problems[0]?.message ?? `PIN code ${pincode} is not in ${stateName}.`} Correct the PIN code or the state in the file.`, `PIN कोड ${pincode} ${stateName} का नहीं है। फ़ाइल में PIN कोड या राज्य सही करें।`);
     }
   }
 
@@ -192,8 +192,8 @@ const buildParty = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Cu
             ? `"${openingCell}" was taken to mean ${name} owes the business this much. Add a Dr/Cr column if that is the wrong way round.`
             : `"${openingCell}" was taken to mean the business owes ${name} this much. Add a Dr/Cr column if that is the wrong way round.`,
           openingSide === 'DEBIT'
-            ? `"${openingCell}" ka matlab liya gaya ki ${name} se itna lena hai. Ulta ho to Dr/Cr column jodein.`
-            : `"${openingCell}" ka matlab liya gaya ki ${name} ko itna dena hai. Ulta ho to Dr/Cr column jodein.`,
+            ? `"${openingCell}" का मतलब लिया गया कि ${name} से इतना लेना है। उल्टा हो तो Dr/Cr कॉलम जोड़िए।`
+            : `"${openingCell}" का मतलब लिया गया कि ${name} को इतना देना है। उल्टा हो तो Dr/Cr कॉलम जोड़िए।`,
         );
       }
     }
@@ -224,7 +224,7 @@ const SERVICE_WORDS = /(service|labour|labor|job work|sac|consult)/i;
 const buildItem = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): ItemRow | null => {
   const name = cells.one('name');
   if (name === '') {
-    notes.blocking('NAME_MISSING', cells.headerOf('name'), '', 'This row has no item name.', 'Is row mein saman ka naam nahin hai.');
+    notes.blocking('NAME_MISSING', cells.headerOf('name'), '', 'This row has no item name.', 'इस रो में सामान का नाम नहीं है।');
     return null;
   }
 
@@ -236,7 +236,7 @@ const buildItem = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Ite
     notes.blocking(
       'HSN_MISSING', cells.headerOf('hsn_sac'), '',
       `"${name}" has no HSN code. Every item needs one before it can go on a GST bill, so add it to the file and bring this row in again.`,
-      `"${name}" ka HSN code nahin hai. GST bill ke liye har saman ko HSN chahiye; file mein jodkar is row ko dobara laayein.`,
+      `"${name}" का HSN कोड नहीं है। GST बिल के लिए हर सामान को HSN चाहिए; फ़ाइल में जोड़कर इस रो को दोबारा लाइए।`,
     );
     return null;
   }
@@ -245,7 +245,7 @@ const buildItem = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Ite
     notes.blocking(
       'HSN_UNUSABLE', cells.headerOf('hsn_sac'), hsnCell,
       `"${hsnCell}" is not an HSN code we can use for "${name}". ${hsnVerdict.problems.map((problem) => problem.message).join(' ')}`,
-      `"${hsnCell}" ko "${name}" ke liye HSN code ke roop mein nahin liya ja sakta.`,
+      `"${hsnCell}" को "${name}" के लिए HSN कोड के रूप में नहीं लिया जा सकता।`,
     );
     return null;
   }
@@ -256,7 +256,7 @@ const buildItem = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Ite
     notes.warn(
       'UNIT_ASSUMED', cells.headerOf('base_unit'), '',
       `"${name}" does not say what it is counted in, so it will be kept in ${baseUnit}.`,
-      `"${name}" kis unit mein ginaa jaata hai, file mein nahin likha; ise ${baseUnit} mein rakha jaayega.`,
+      `"${name}" किस यूनिट में गिना जाता है, फ़ाइल में नहीं लिखा; इसे ${baseUnit} में रखा जाएगा।`,
     );
   }
 
@@ -283,7 +283,7 @@ const buildItem = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Ite
 const buildStock = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): OpeningStockRow | null => {
   const itemRef = cells.one('item_ref');
   if (itemRef === '') {
-    notes.blocking('ITEM_MISSING', cells.headerOf('item_ref'), '', 'This row does not say which item the stock is of.', 'Is row mein nahin likha ki yeh stock kis saman ka hai.');
+    notes.blocking('ITEM_MISSING', cells.headerOf('item_ref'), '', 'This row does not say which item the stock is of.', 'इस रो में नहीं लिखा कि यह स्टॉक किस सामान का है।');
     return null;
   }
   const quantityCell = cells.one('quantity');
@@ -293,7 +293,7 @@ const buildStock = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Op
     notes.blocking(
       'STOCK_NEGATIVE', cells.headerOf('quantity'), quantityCell,
       `"${itemRef}" is shown as ${quantityCell}, which is less than nothing. Opening stock cannot start below zero, so check the old system's figure.`,
-      `"${itemRef}" ki maatra ${quantityCell} hai, jo shoonya se kam hai. Shuruaati stock shoonya se kam nahin ho sakta.`,
+      `"${itemRef}" की मात्रा ${quantityCell} है, जो शून्य से कम है। शुरुआती स्टॉक शून्य से कम नहीं हो सकता।`,
     );
     return null;
   }
@@ -313,14 +313,14 @@ const buildStock = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): Op
       notes.warn(
         'VALUE_ROUNDED', cells.headerOf('rate'), rateCell,
         `The rate times the quantity does not come to a whole number of paise, so the value was rounded to the nearest paisa. The stock count itself is exact.`,
-        `Dar aur maatra ka guna poore paise mein nahin aata, isliye keemat nazdeeki paise tak li gayi hai. Maatra bilkul theek hai.`,
+        `दर और मात्रा का गुणा पूरे पैसे में नहीं आता, इसलिए कीमत नज़दीकी पैसे तक ली गई है। मात्रा बिल्कुल ठीक है।`,
       );
     }
   } else {
     notes.warn(
       'VALUE_MISSING', null, '',
       `The file does not say what "${itemRef}" is worth, so the stock will be brought in with no value against it.`,
-      `File mein "${itemRef}" ki keemat nahin di gayi, isliye stock bina keemat ke laaya jaayega.`,
+      `फ़ाइल में "${itemRef}" की कीमत नहीं दी गई, इसलिए स्टॉक बिना कीमत के लाया जाएगा।`,
     );
   }
 
@@ -345,7 +345,7 @@ const buildBalance = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): 
   const partyRef = cells.one('party_ref');
   const accountCode = cells.one('account_code');
   if (partyRef === '' && accountCode === '') {
-    notes.blocking('TARGET_MISSING', null, '', 'This row does not say which account or which customer it belongs to.', 'Is row mein nahin likha ki yeh kis khaate ya kis party ka hai.');
+    notes.blocking('TARGET_MISSING', null, '', 'This row does not say which account or which customer it belongs to.', 'इस रो में नहीं लिखा कि यह किस खाते या किस पार्टी का है।');
     return null;
   }
 
@@ -367,7 +367,7 @@ const buildBalance = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): 
   } else {
     const amountCell = cells.one('amount');
     if (amountCell === '') {
-      notes.blocking('AMOUNT_MISSING', cells.headerOf('amount'), '', 'This row has no amount.', 'Is row mein rakam nahin hai.');
+      notes.blocking('AMOUNT_MISSING', cells.headerOf('amount'), '', 'This row has no amount.', 'इस रो में रक़म नहीं है।');
       return null;
     }
     const read = notes.fromRead(readMoney(amountCell), 'BLOCKING', cells.headerOf('amount'), amountCell);
@@ -379,7 +379,7 @@ const buildBalance = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): 
       notes.blocking(
         'SIDE_MISSING', cells.headerOf('amount'), amountCell,
         `"${amountCell}" does not say whether it is a debit or a credit, and an opening balance cannot be guessed. Add a Dr/Cr column.`,
-        `"${amountCell}" ke saath Dr ya Cr nahin likha, aur shuruaati baaki ka andaaza nahin lagaya ja sakta. Dr/Cr column jodein.`,
+        `"${amountCell}" के साथ Dr या Cr नहीं लिखा, और शुरुआती बाक़ी का अंदाज़ा नहीं लगाया जा सकता। Dr/Cr कॉलम जोड़िए।`,
       );
       return null;
     }
@@ -391,13 +391,13 @@ const buildBalance = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): 
   }
 
   if (debit.minor === 0n && credit.minor === 0n) {
-    notes.warn('ZERO_BALANCE', null, '', 'This row is zero on both sides, so nothing will be recorded for it.', 'Is row mein dono taraf shoonya hai, isliye kuch darj nahin hoga.');
+    notes.warn('ZERO_BALANCE', null, '', 'This row is zero on both sides, so nothing will be recorded for it.', 'इस रो में दोनों तरफ़ शून्य है, इसलिए कुछ दर्ज नहीं होगा।');
   }
   if (debit.minor !== 0n && credit.minor !== 0n) {
     notes.blocking(
       'BOTH_SIDES', null, `${debitCell} / ${creditCell}`,
       'This row has an amount on both sides. An opening balance belongs on one side only.',
-      'Is row mein dono taraf rakam hai. Shuruaati baaki sirf ek taraf hoti hai.',
+      'इस रो में दोनों तरफ़ रक़म है। शुरुआती बाक़ी सिर्फ़ एक तरफ़ होती है।',
     );
     return null;
   }
@@ -419,8 +419,8 @@ const buildBalance = (cells: Cells, notes: RowNotes, options: ReadRowsOptions): 
         ? `"${partyRef}" was taken to be a customer, because the business is owed this money.`
         : `"${partyRef}" was taken to be a supplier, because the business owes this money.`,
       partyKind === 'CUSTOMER'
-        ? `"${partyRef}" ko customer maana gaya, kyunki yeh rakam lena hai.`
-        : `"${partyRef}" ko supplier maana gaya, kyunki yeh rakam dena hai.`,
+        ? `"${partyRef}" को ग्राहक माना गया, क्योंकि यह रक़म लेना है।`
+        : `"${partyRef}" को सप्लायर माना गया, क्योंकि यह रक़म देना है।`,
     );
   }
 

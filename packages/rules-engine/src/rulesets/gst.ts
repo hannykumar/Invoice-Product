@@ -41,7 +41,7 @@ export const placeOfSupplyGoods: Rule = {
   reviewState: 'DRAFT',
   explanation: {
     'en-IN': 'The goods are delivered to state {deliveryState}, so this sale counts in state {placeOfSupply}.',
-    'hi-IN': 'Maal rajya {deliveryState} mein ja raha hai, isliye yeh bikri rajya {placeOfSupply} ki maani jayegi.',
+    'hi-IN': 'माल राज्य {deliveryState} में जा रहा है, इसलिए यह बिक्री राज्य {placeOfSupply} की मानी जाएगी.',
   },
   evaluate: (facts): RuleOutcome => {
     if (facts.value('supply.type') !== 'GOODS') {
@@ -77,7 +77,7 @@ export const taxSplit: Rule = {
   reviewState: 'DRAFT',
   explanation: {
     'en-IN': 'You are in state {supplierState} and this sale counts in state {placeOfSupply}, so {splitPlain}.',
-    'hi-IN': 'Aap rajya {supplierState} mein hain aur yeh bikri rajya {placeOfSupply} ki hai, isliye {splitPlain}.',
+    'hi-IN': 'आप राज्य {supplierState} में हैं और यह बिक्री राज्य {placeOfSupply} की है, इसलिए {splitPlain}.',
   },
   evaluate: (facts): RuleOutcome => {
     const supplier = String(facts.value('supply.supplierStateCode'));
@@ -116,7 +116,7 @@ const ewayFor = (
   reviewState: 'DRAFT',
   explanation: {
     'en-IN': 'The goods are worth {value} and the limit for this kind of movement is {threshold}, so a permit is {verdict}.',
-    'hi-IN': 'Maal ki keemat {value} hai aur is tarah ke movement ki seema {threshold} hai, isliye permit {verdict}.',
+    'hi-IN': 'माल की कीमत {value} है और इस तरह के movement की सीमा {threshold} है, इसलिए permit {verdict}.',
   },
   evaluate: (facts): RuleOutcome => {
     const value = asMoney(facts, 'consignment.value');
@@ -170,7 +170,7 @@ export const taxSplitWithUnionTerritories: Rule = {
   requires: ['supply.supplierStateCode', 'supply.placeOfSupplyStateCode'],
   explanation: {
     'en-IN': 'You are in state {supplierState} and this sale counts in state {placeOfSupply}, so {splitPlain}.',
-    'hi-IN': 'Aap rajya {supplierState} mein hain aur yeh bikri rajya {placeOfSupply} ki hai, isliye {splitPlain}.',
+    'hi-IN': 'आप राज्य {supplierState} में हैं और यह बिक्री राज्य {placeOfSupply} की है, इसलिए {splitPlain}.',
   },
   evaluate: (facts): RuleOutcome => {
     const supplier = String(facts.value('supply.supplierStateCode'));
@@ -213,7 +213,7 @@ export const compositionCharging: Rule = {
   reviewState: 'DRAFT',
   explanation: {
     'en-IN': 'Your business is registered as {registration}, so GST {verdict} be charged on this bill.',
-    'hi-IN': 'Aapka business {registration} ke roop mein registered hai, isliye is bill par GST {verdict}.',
+    'hi-IN': 'आपका बिज़नेस {registration} के रूप में registered है, इसलिए इस बिल पर GST {verdict}.',
   },
   evaluate: (facts): RuleOutcome => {
     const registration = String(facts.value('supply.supplierRegistration'));

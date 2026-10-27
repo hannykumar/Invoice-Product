@@ -53,15 +53,15 @@ export interface ReportServiceDeps {
 }
 
 const TITLES: Record<ReportId, Bilingual> = {
-  trial_balance: { 'en-IN': 'Do the books hold together?', 'hi-IN': 'Kya books ka hisaab mil raha hai?' },
-  profit_and_loss: { 'en-IN': 'What you earned and what you spent', 'hi-IN': 'Kitna kamaya aur kitna kharch hua' },
-  balance_sheet: { 'en-IN': 'What the business owns and owes', 'hi-IN': 'Business ke paas kya hai aur kya dena hai' },
-  sales_register: { 'en-IN': 'Every bill you gave out', 'hi-IN': 'Aapke diye hue saare bill' },
-  purchase_register: { 'en-IN': 'Every bill you received', 'hi-IN': 'Aapko mile hue saare bill' },
-  stock: { 'en-IN': 'What is left in the godown', 'hi-IN': 'Godown mein kya bacha hai' },
-  ageing: { 'en-IN': 'Who owes money, and for how long', 'hi-IN': 'Kiska paisa baaki hai, aur kab se' },
-  gst_summary: { 'en-IN': 'GST you collected and GST you paid', 'hi-IN': 'Aapne jo GST liya aur jo diya' },
-  exceptions: { 'en-IN': 'Things worth a second look', 'hi-IN': 'Dobara dekhne layak cheezein' },
+  trial_balance: { 'en-IN': 'Do the books hold together?', 'hi-IN': 'क्या बुक्स का हिसाब मिल रहा है?' },
+  profit_and_loss: { 'en-IN': 'What you earned and what you spent', 'hi-IN': 'कितना कमाया और कितना ख़र्च हुआ' },
+  balance_sheet: { 'en-IN': 'What the business owns and owes', 'hi-IN': 'बिज़नेस के पास क्या है और क्या देना है' },
+  sales_register: { 'en-IN': 'Every bill you gave out', 'hi-IN': 'आपके दिए हुए सारे बिल' },
+  purchase_register: { 'en-IN': 'Every bill you received', 'hi-IN': 'आपको मिले हुए सारे बिल' },
+  stock: { 'en-IN': 'What is left in the godown', 'hi-IN': 'गोदाम में क्या बचा है' },
+  ageing: { 'en-IN': 'Who owes money, and for how long', 'hi-IN': 'किसका पैसा बाक़ी है, और कब से' },
+  gst_summary: { 'en-IN': 'GST you collected and GST you paid', 'hi-IN': 'आपने जो GST लिया और जो दिया' },
+  exceptions: { 'en-IN': 'Things worth a second look', 'hi-IN': 'दोबारा देखने लायक़ चीज़ें' },
 };
 
 /** Everything an owner opens at once: the whole month, on one screen. */
@@ -144,7 +144,7 @@ export class ReportService {
       : [
           {
             'en-IN': 'The two sides do not add up to the same figure. Nothing else in this pack can be relied on until that is sorted out.',
-            'hi-IN': 'Dono taraf ka jod barabar nahin hai. Jab tak yeh theek nahin hota, is pack ki koi cheez bharose layak nahin.',
+            'hi-IN': 'दोनों तरफ़ का जोड़ बराबर नहीं है। जब तक यह ठीक नहीं होता, इस पैक की कोई चीज़ भरोसे लायक़ नहीं।',
           },
         ];
     return { header: this.#header('trial_balance', actor, filter, notes, asAt), body };
@@ -157,7 +157,7 @@ export class ReportService {
       header: this.#header('profit_and_loss', actor, filter, [
         {
           'en-IN': 'The cost of goods sold is counted only as far as it has been written into the books. Goods bought but not yet recorded are listed under things worth a second look.',
-          'hi-IN': 'Beche gaye maal ki lagat utni hi gini gayi hai jitni books mein likhi hai. Jo maal aaya par darj nahin hua, wo dobara dekhne wali cheezon mein hai.',
+          'hi-IN': 'बेचे माल की लागत वही गिनी गई जो बुक्स में लिखी है। बिना दर्ज आया माल दोबारा देखने वालों में है।',
         },
       ], asAt),
       body,
@@ -171,7 +171,7 @@ export class ReportService {
       header: this.#header('balance_sheet', actor, filter, [
         {
           'en-IN': 'What you earned less what you spent is shown on its own line, because no entry has moved it into the owner’s money yet.',
-          'hi-IN': 'Kamai mein se kharch nikaal kar bacha paisa alag line mein hai, kyunki abhi koi entry use malik ke paise mein nahin le gayi.',
+          'hi-IN': 'कमाई में से ख़र्च निकाल कर बचा पैसा अलग लाइन में है, क्योंकि अभी कोई एंट्री उसे मालिक के पैसे में नहीं ले गई।',
         },
       ], asAt),
       body,
@@ -192,7 +192,7 @@ export class ReportService {
       : [
           {
             'en-IN': 'Bills from your suppliers are not recorded in this product yet, so this page is empty on purpose rather than because you bought nothing.',
-            'hi-IN': 'Supplier ke bill abhi is product mein darj nahin hote, isliye yeh panna jaan-boojh kar khaali hai, na ki isliye ki kharid hui hi nahin.',
+            'hi-IN': 'सप्लायर के बिल अभी इस प्रोडक्ट में दर्ज नहीं होते, इसलिए यह पन्ना जान-बूझ कर ख़ाली है, ना कि इसलिए कि ख़रीद हुई ही नहीं।',
           },
         ];
     return { header: this.#header('purchase_register', actor, filter, notes, asAt), body };
@@ -205,7 +205,7 @@ export class ReportService {
       header: this.#header('stock', actor, filter, [
         {
           'en-IN': 'Goods are counted per item and godown, and valued at what they cost on average. This value is not yet written into the books.',
-          'hi-IN': 'Maal har item aur godown ke hisaab se gina gaya hai, aur ausat lagat par laga hai. Yeh keemat abhi books mein nahin likhi jaati.',
+          'hi-IN': 'माल हर आइटम और गोदाम के हिसाब से गिना गया है, और औसत लागत पर लगा है। यह कीमत अभी बुक्स में नहीं लिखी जाती।',
         },
       ], asAt),
       body,

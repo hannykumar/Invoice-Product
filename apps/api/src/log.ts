@@ -14,8 +14,8 @@ import { SecureLogger, type SafeLogEvent } from '../../../ops/security/src/loggi
 export type LogLevel = SafeLogEvent['level'];
 const RANK: Readonly<Record<LogLevel, number>> = { debug: 10, info: 20, warn: 30, error: 40 };
 
-/** What every line of one request carries: its id, then its route, company and user as they become known. */
-interface Scope { readonly request_id: string; route?: string; company_id?: string; user_id?: string }
+/** What every line of one request carries: its id, then its route, company, user and answer language as they become known. */
+interface Scope { readonly request_id: string; route?: string; company_id?: string; user_id?: string; locale?: 'en-IN' | 'hi-IN' }
 const scope = new AsyncLocalStorage<Scope>();
 
 /**
@@ -26,7 +26,7 @@ export const inRequest = <T>(requestId: string, work: () => T): T =>
   scope.getStore()?.request_id === requestId ? work() : scope.run({ request_id: requestId }, work);
 
 /** Adds what has become known about the request (its route; who is calling) to its remaining lines. */
-export const annotate = (known: { readonly route?: string; readonly company_id?: string; readonly user_id?: string }): void => {
+export const annotate = (known: { readonly route?: string; readonly company_id?: string; readonly user_id?: string; readonly locale?: 'en-IN' | 'hi-IN' }): void => {
   const current = scope.getStore();
   if (current !== undefined) Object.assign(current, known);
 };

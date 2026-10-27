@@ -64,7 +64,7 @@ export const buildStatement = (
         reference: document.number,
         description: {
           'en-IN': isNote ? `Return note ${document.number}` : `Bill ${document.number}`,
-          'hi-IN': isNote ? `Wapsi note ${document.number}` : `Bill ${document.number}`,
+          'hi-IN': isNote ? `वापसी नोट ${document.number}` : `बिल ${document.number}`,
         },
         charged: document.value.minor >= 0n ? document.value : nil(),
         paid: document.value.minor < 0n ? { currency: 'INR', minor: -document.value.minor } : nil(),
@@ -86,14 +86,14 @@ export const buildStatement = (
         reference: payment.reference ?? payment.cheque?.number ?? '',
         description: {
           'en-IN': `Received by ${payment.mode.toLowerCase().replace(/_/g, ' ')}`,
-          'hi-IN': `${payment.mode.toLowerCase().replace(/_/g, ' ')} se mila`,
+          'hi-IN': `${payment.mode.toLowerCase().replace(/_/g, ' ')} से मिला`,
         },
         charged: payment.state === 'REVERSED' ? payment.amount : nil(),
         paid: payment.state === 'REVERSED' ? nil() : payment.amount,
         note: pending
-          ? { 'en-IN': 'Cheque not cleared yet', 'hi-IN': 'Cheque abhi clear nahin hua' }
+          ? { 'en-IN': 'Cheque not cleared yet', 'hi-IN': 'चेक अभी क्लियर नहीं हुआ' }
           : bounced
-            ? { 'en-IN': 'Cheque did not clear, so this is owed again', 'hi-IN': 'Cheque clear nahin hua, isliye phir se dena hai' }
+            ? { 'en-IN': 'Cheque did not clear, so this is owed again', 'hi-IN': 'चेक क्लियर नहीं हुआ, इसलिए फिर से देना है' }
             : null,
       },
     });
@@ -124,10 +124,10 @@ export const buildStatement = (
           ? `${partyName} owes you nothing as on ${formatDate(range.to)}.`
           : `You are holding ${formatINR({ currency: 'INR', minor: -closingBalance.minor })} of ${partyName}'s money as on ${formatDate(range.to)}.`,
       'hi-IN': owed
-        ? `${formatDate(range.to)} tak ${partyName} se ${formatINR(closingBalance)} lena baaki hai.`
+        ? `${formatDate(range.to)} तक ${partyName} से ${formatINR(closingBalance)} लेना बाक़ी है।`
         : closingBalance.minor === 0n
-          ? `${formatDate(range.to)} tak ${partyName} se kuch lena baaki nahin.`
-          : `${formatDate(range.to)} tak ${partyName} ka ${formatINR({ currency: 'INR', minor: -closingBalance.minor })} aapke paas hai.`,
+          ? `${formatDate(range.to)} तक ${partyName} से कुछ लेना बाक़ी नहीं।`
+          : `${formatDate(range.to)} तक ${partyName} का ${formatINR({ currency: 'INR', minor: -closingBalance.minor })} आपके पास है।`,
     },
   };
 };

@@ -86,13 +86,13 @@ const within = (a: Money, b: Money, tolerance: bigint): boolean => {
 // ---------------------------------------------------------------------------- evidence
 
 const FIELD_LABELS: Readonly<Record<EvidenceField, Bilingual>> = Object.freeze({
-  SUPPLIER_GSTIN: { 'en-IN': "Supplier's GST number", 'hi-IN': 'Supplier ka GST number' },
-  INVOICE_NUMBER: { 'en-IN': 'Bill number', 'hi-IN': 'Bill number' },
-  INVOICE_DATE: { 'en-IN': 'Bill date', 'hi-IN': 'Bill ki tareekh' },
-  TAXABLE_VALUE: { 'en-IN': 'Value before GST', 'hi-IN': 'GST se pehle rakam' },
-  TOTAL_TAX: { 'en-IN': 'GST on the bill', 'hi-IN': 'Bill par GST' },
-  TAX_TYPE: { 'en-IN': 'Kind of GST', 'hi-IN': 'GST ki kism' },
-  DOCUMENT_KIND: { 'en-IN': 'Kind of document', 'hi-IN': 'Kis tarah ka document' },
+  SUPPLIER_GSTIN: { 'en-IN': "Supplier's GST number", 'hi-IN': 'सप्लायर का GST नंबर' },
+  INVOICE_NUMBER: { 'en-IN': 'Bill number', 'hi-IN': 'बिल नंबर' },
+  INVOICE_DATE: { 'en-IN': 'Bill date', 'hi-IN': 'बिल की तारीख़' },
+  TAXABLE_VALUE: { 'en-IN': 'Value before GST', 'hi-IN': 'GST से पहले रक़म' },
+  TOTAL_TAX: { 'en-IN': 'GST on the bill', 'hi-IN': 'बिल पर GST' },
+  TAX_TYPE: { 'en-IN': 'Kind of GST', 'hi-IN': 'GST की किस्म' },
+  DOCUMENT_KIND: { 'en-IN': 'Kind of document', 'hi-IN': 'किस तरह का दस्तावेज़' },
 });
 
 const KIND_PLAIN: Readonly<Record<DocumentKind, string>> = Object.freeze({
@@ -368,12 +368,12 @@ const sortKeyOf = (pair: MatchPair): string => {
 
 const DUPLICATE_BOOKS_NOTE: Bilingual = {
   'en-IN': 'This bill number is in your books more than once for this supplier. Credit can only be taken once.',
-  'hi-IN': 'Yeh bill number is supplier ke liye aapki books mein ek se zyada baar hai. Credit sirf ek baar milta hai.',
+  'hi-IN': 'यह बिल नंबर इस सप्लायर के लिए आपकी बुक्स में एक से ज़्यादा बार है. क्रेडिट सिर्फ़ एक बार मिलता है.',
 };
 
 const DUPLICATE_PORTAL_NOTE: Bilingual = {
   'en-IN': 'The portal carries this bill number more than once for this supplier.',
-  'hi-IN': 'Portal par is supplier ka yeh bill number ek se zyada baar hai.',
+  'hi-IN': 'पोर्टल पर इस सप्लायर का यह बिल नंबर एक से ज़्यादा बार है.',
 };
 
 const pairOf = (
@@ -409,11 +409,11 @@ const noteFor = (status: MatchStatus, evidence: readonly MatchEvidence[], fuzzy:
     return fuzzy
       ? {
         'en-IN': 'Matched on the supplier and the bill number written slightly differently. Every figure agrees.',
-        'hi-IN': 'Supplier aur thoda alag likhe bill number se mila. Saare figure milte hain.',
+        'hi-IN': 'सप्लायर और थोड़ा अलग लिखे बिल नंबर से मिला. सारे आँकड़े मिलते हैं.',
       }
       : {
         'en-IN': 'The supplier, the bill number, the date and every figure agree.',
-        'hi-IN': 'Supplier, bill number, tareekh aur har figure milta hai.',
+        'hi-IN': 'सप्लायर, बिल नंबर, तारीख़ और हर आँकड़ा मिलता है.',
       };
   }
   if (status === 'CLOSE') {
@@ -421,7 +421,7 @@ const noteFor = (status: MatchStatus, evidence: readonly MatchEvidence[], fuzzy:
     const differingHindi = disagreements(evidence).map((row) => row.label['hi-IN']);
     return {
       'en-IN': `Almost certainly the same bill, but ${differing.join(' and ')} ${differing.length === 1 ? 'does' : 'do'} not agree.`,
-      'hi-IN': `Bill wahi lagta hai, par ${differingHindi.join(' aur ')} nahin milta.`,
+      'hi-IN': `बिल वही लगता है, पर ${differingHindi.join(' और ')} नहीं मिलता.`,
     };
   }
   return MATCH_STATUS_PLAIN[status];

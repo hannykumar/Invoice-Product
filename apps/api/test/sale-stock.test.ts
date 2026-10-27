@@ -155,7 +155,7 @@ test('#262: a short sale is refused with the way through, and after the purchase
   assert.equal(refused.status, 409, JSON.stringify(refused.body));
   assert.equal(refused.body.code, 'SALES_STOCK_NOT_ENOUGH');
   assert.equal(refused.body.message, `You have ${before} KGS of TMT Steel Bar 12mm in Bengaluru · Peenya godown. This bill asks for ${wanted} KGS. If the goods have arrived, enter their purchase bill first, then make this sale.`);
-  assert.equal(refused.body.details['hi-IN'], `Bengaluru · Peenya godown mein TMT Steel Bar 12mm ke ${before} KGS hain. Yeh bill ${wanted} KGS maangta hai. Agar maal aa gaya hai, to pehle uska purchase bill darj karen, phir yeh bikri karen.`);
+  assert.equal(refused.body.details['hi-IN'], `Bengaluru · Peenya godown में TMT Steel Bar 12mm के ${before} KGS हैं। यह बिल ${wanted} KGS माँगता है। अगर माल आ गया है, तो पहले उसका ख़रीद बिल दर्ज कीजिए, फिर यह बिक्री कीजिए।`);
   const short = JSON.parse(refused.body.details.shortStock);
   assert.equal(short.length, 1);
   assert.equal(short[0].warehouseId, 'wh-main');

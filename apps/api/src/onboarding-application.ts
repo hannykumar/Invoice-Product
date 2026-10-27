@@ -9,7 +9,14 @@
  *
  * Each setup builds its own fresh company, so one person's half-finished setup never touches
  * another's, exactly as tenancy requires.
+ *
+ * Issue #366 (lane: GPT 2, #49) — on PostgreSQL a finished setup is kept: the books, the setup and
+ * its audit trail go to the database, like the rest of the app (#427's `pick`). The new company has
+ * no id in the session, so its writes run in a unit of work opened for the new company's own id,
+ * outside the request's one for the session's company: `app.company_id` is the new id, which is
+ * what every row-level policy checks. No policy is bypassed. A preview saves nothing anywhere.
  */
+import { randomUUID } from 'node:crypto';
 import { asId, isoDate, rupees, type CompanyId } from '@invoice/kernel';
 import { appClock, currentFinancialYear } from './app-clock.ts';
 import {
@@ -18,6 +25,7 @@ import {
   InMemoryAuditPort,
   InMemoryLedgerStore,
   LedgerService,
+  PostgresLedgerStore,
   permissionPortFromActor,
   trialBalance as ledgerTrialBalance,
   type ActorContext,
@@ -32,7 +40,13 @@ import {
   type Registration,
   type StepId,
 } from '@invoice/onboarding';
+import { PostgresOnboardingRepository } from '../../../packages/onboarding/src/postgres-repository.ts';
+import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
+import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { recordTurnoverAnswer, rememberBusinessPrefill } from './business-details-application.ts';
+import { say } from './language.ts';
+import { durableDatabase } from './durable.ts';
+import { stableUuid } from './persistence.ts';
 
 const ONBOARDING_PERMISSIONS = ['ledger.setup', 'ledger.post.opening_balance', 'onboarding.run', 'onboarding.finish'];
 
@@ -57,7 +71,7 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[]): T | und
 
 interface SetupCompany {
   readonly service: OnboardingService;
-  readonly store: InMemoryLedgerStore;
+  readonly store: InMemoryLedgerStore | PostgresLedgerStore;
   readonly declaredRates: InMemoryDeclaredRates;
   readonly actor: ActorContext;
   readonly companyId: CompanyId;
@@ -65,29 +79,39 @@ interface SetupCompany {
 
 let counter = 0;
 
-/** A brand-new company with an initialised chart of accounts, ready to be set up. */
-const freshCompany = async (): Promise<SetupCompany> => {
-  counter += 1;
-  const companyId = asId<'Company'>(`setup-${counter}-${Date.now()}`);
-  const store = new InMemoryLedgerStore();
-  const repository = new InMemoryOnboardingRepository();
-  store.join(repository);
-  const audit = new InMemoryAuditPort();
+/**
+ * A brand-new company with an initialised chart of accounts, ready to be set up. In memory with
+ * `db` null; on PostgreSQL inside the unit of work already open for `companyId`.
+ */
+const freshCompany = async (db: TransactionalExecutor | null, companyId: CompanyId, userId: string, legalName: string): Promise<SetupCompany> => {
+  const pick = <M, P>(memory: () => M, postgres: (db: TransactionalExecutor) => P): M | P => db === null ? memory() : postgres(db);
+  const store = pick(() => new InMemoryLedgerStore(), (db) => new PostgresLedgerStore(db));
+  const repository = pick(() => new InMemoryOnboardingRepository(), (db) => new PostgresOnboardingRepository(db));
+  if (store instanceof InMemoryLedgerStore) store.join(repository as InMemoryOnboardingRepository);
+  const audit = pick(() => new InMemoryAuditPort(), (db) => new PostgresAuditLog(db));
   const clock = appClock;
   let n = 0;
-  const idFactory = () => `setup-${counter}-${String((n += 1)).padStart(5, '0')}`;
+  const idFactory = db === null ? () => `setup-${counter}-${String((n += 1)).padStart(5, '0')}` : () => randomUUID();
+  const accountIds = db === null ? defaultChartIdFactory(companyId) : (code: string) => asId<'Account'>(stableUuid(companyId, 'account', code));
+  // The company's own row, which its audit trail and setup refer to. `companies` holds no books and
+  // has no row-level policy; the application role may add a row and change only its name (#368).
+  if (db !== null) await db.requireUnitOfWork(companyId).sql.query('INSERT INTO companies (id, legal_name) VALUES ($1, $2)', [companyId, legalName]);
+  const actor: ActorContext = { companyId, branchId: asId<'Branch'>('main'), userId: asId<'User'>(userId), permissions: ONBOARDING_PERMISSIONS };
 
   const ledger = new LedgerService({ store, permissions: permissionPortFromActor, audit, clock, idFactory });
-  await ledger.initialiseCompany(
-    { companyId, branchId: asId<'Branch'>('main'), userId: asId<'User'>('setup-owner'), permissions: ONBOARDING_PERMISSIONS },
-    { booksStartDate: isoDate('2017-07-01'), accounts: buildDefaultChart(companyId, defaultChartIdFactory(companyId)) },
-  );
+  await ledger.initialiseCompany(actor, { booksStartDate: isoDate('2017-07-01'), accounts: buildDefaultChart(companyId, accountIds) });
 
+  // ponytail: declared rates stay in memory — `@invoice/gst-calc` (GPT 1) has no table for them yet.
   const declaredRates = new InMemoryDeclaredRates();
   const service = new OnboardingService({ store, ledger, repository, permissions: permissionPortFromActor, audit, clock, declaredRates, idFactory });
-  const actor: ActorContext = { companyId, branchId: asId<'Branch'>('main'), userId: asId<'User'>('setup-owner'), permissions: ONBOARDING_PERMISSIONS };
   return { service, store, declaredRates, actor, companyId };
 };
+
+/** Carries a setup with problems out of its unit of work, so nothing of it is saved. */
+class NotSaved {
+  readonly result: RunResult;
+  constructor(result: RunResult) { this.result = result; }
+}
 
 /** Turns the flat form into the step patches, so the service sees real, typed answers. */
 const answersFrom = (input: Record<string, unknown>): { patches: Partial<Record<StepId, Partial<OnboardingAnswers>>>; openingProvided: boolean; rateProvided: boolean } => {
@@ -182,8 +206,7 @@ interface RunResult {
   };
 }
 
-const runSetup = async (input: Record<string, unknown>, finish: boolean, companyId?: string): Promise<RunResult> => {
-  const { patches, openingProvided, rateProvided } = answersFrom(input);
+const runSetup = async (input: Record<string, unknown>, finish: boolean, companyId?: string, actorId?: string): Promise<RunResult> => {
   // Issue #180 — whatever was typed here is offered back on the Business details screen. It is a
   // suggestion, not a saved record: nothing prints until somebody saves it there.
   if (companyId !== undefined && str(input.legalName) !== '') {
@@ -198,7 +221,36 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean, company
       pincode: str(input.pincode),
     });
   }
-  const company = await freshCompany();
+  counter += 1;
+  // A preview saves nothing, wherever the app keeps its books.
+  const db = finish ? durableDatabase() : null;
+  const newCompanyId = asId<'Company'>(db === null ? `setup-${counter}-${Date.now()}` : randomUUID());
+  let result: RunResult;
+  if (db === null) result = await setUp(null, newCompanyId, input, finish, actorId);
+  else {
+    try {
+      result = await outsideUnitOfWork(() => db.unitOfWork(newCompanyId, async () => {
+        const done = await setUp(db, newCompanyId, input, finish, actorId);
+        if (!done.ok) throw new NotSaved(done);
+        return done;
+      }));
+    } catch (error) {
+      if (!(error instanceof NotSaved)) throw error;
+      result = error.result;
+    }
+  }
+  // Issue #187 — the turnover question is asked here, in the tax step, and kept for this year once
+  // the setup is actually finished. A preview saves nothing. It belongs to the session's company,
+  // so it is written in the request's own unit of work, not the new company's.
+  if (finish && result.result !== undefined && companyId !== undefined) recordTurnoverAnswer(companyId, { band: input.turnoverBand, above5Crore: input.turnoverAbove5Crore });
+  return result;
+};
+
+const setUp = async (
+  db: TransactionalExecutor | null, newCompanyId: CompanyId, input: Record<string, unknown>, finish: boolean, actorId?: string,
+): Promise<RunResult> => {
+  const { patches, openingProvided, rateProvided } = answersFrom(input);
+  const company = await freshCompany(db, newCompanyId, actorId ?? 'setup-owner', str(input.legalName));
   const { service, actor } = company;
 
   let session = await service.start(actor, { idempotencyKey: `web-setup-${Date.now()}-${counter}` });
@@ -214,7 +266,7 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean, company
   else session = await service.skipStep(actor, session.id, 'opening_balances', 'The business will add opening balances later.');
 
   const problems = (Object.keys(session.steps) as StepId[]).flatMap((step) =>
-    session.steps[step].problems.map((problem) => ({ step, field: problem.field ?? null, message: problem.message['en-IN'] })),
+    session.steps[step].problems.map((problem) => ({ step, field: problem.field ?? null, message: say(problem.message) })),
   );
 
   const checklist = checklistFor(session, 'en-IN');
@@ -234,9 +286,6 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean, company
   if (!finish) return { ok: true, problems: [], summary };
 
   const finished = await service.finish(actor, session.id, { idempotencyKey: `web-setup-finish-${session.id}` });
-  // Issue #187 — the turnover question is asked here, in the tax step, and kept for this year once
-  // the setup is actually finished. A preview saves nothing.
-  if (companyId !== undefined) recordTurnoverAnswer(companyId, { band: input.turnoverBand, above5Crore: input.turnoverAbove5Crore });
   const tb = await ledgerTrialBalance(company.store.read(), company.companyId);
   const rows = tb.rows.map((row) => ({
     name: row.account.name,
@@ -266,5 +315,5 @@ const runSetup = async (input: Record<string, unknown>, finish: boolean, company
   };
 };
 
-export const previewOnboarding = (input: Record<string, unknown>, companyId?: string): Promise<RunResult> => runSetup(input, false, companyId);
-export const finishOnboarding = (input: Record<string, unknown>, companyId?: string): Promise<RunResult> => runSetup(input, true, companyId);
+export const previewOnboarding = (input: Record<string, unknown>, companyId?: string, actorId?: string): Promise<RunResult> => runSetup(input, false, companyId, actorId);
+export const finishOnboarding = (input: Record<string, unknown>, companyId?: string, actorId?: string): Promise<RunResult> => runSetup(input, true, companyId, actorId);

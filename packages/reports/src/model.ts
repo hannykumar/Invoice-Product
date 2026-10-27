@@ -127,12 +127,12 @@ export const snapshotIdOf = (reportId: ReportId, filter: ReportFilter, asAt: str
 export const describeFilter = (filter: ReportFilter, branchName: string | null): Bilingual => {
   const where =
     filter.branchId === undefined
-      ? { en: 'the whole business', hi: 'poore business' }
+      ? { en: 'the whole business', hi: 'पूरे बिज़नेस' }
       : filter.branchId === null
-        ? { en: 'entries not tied to any shop', hi: 'kisi shop se na jude entries' }
-        : { en: branchName ?? 'one shop', hi: branchName ?? 'ek shop' };
+        ? { en: 'entries not tied to any shop', hi: 'किसी दुकान से न जुड़ी एंट्रियाँ' }
+        : { en: branchName ?? 'one shop', hi: branchName ?? 'एक दुकान' };
   return {
     'en-IN': `${formatDate(filter.from)} to ${formatDate(filter.to)}, for ${where.en}`,
-    'hi-IN': `${formatDate(filter.from)} se ${formatDate(filter.to)} tak, ${where.hi} ke liye`,
+    'hi-IN': `${formatDate(filter.from)} से ${formatDate(filter.to)} तक, ${where.hi} के लिए`,
   };
 };

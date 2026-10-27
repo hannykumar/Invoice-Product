@@ -32,22 +32,22 @@ export interface GstSummaryBody {
 
 const HEADS: readonly { label: Bilingual; output: SystemAccountRole; input: SystemAccountRole }[] = [
   {
-    label: { 'en-IN': 'Central GST', 'hi-IN': 'Central GST' },
+    label: { 'en-IN': 'Central GST', 'hi-IN': 'सेंट्रल GST' },
     output: 'OUTPUT_CGST',
     input: 'INPUT_CGST',
   },
   {
-    label: { 'en-IN': 'State or union territory GST', 'hi-IN': 'State ya union territory GST' },
+    label: { 'en-IN': 'State or union territory GST', 'hi-IN': 'स्टेट या यूनियन टैरिटरी GST' },
     output: 'OUTPUT_SGST',
     input: 'INPUT_SGST',
   },
   {
-    label: { 'en-IN': 'GST on sales outside your state', 'hi-IN': 'Doosre state ki bikri par GST' },
+    label: { 'en-IN': 'GST on sales outside your state', 'hi-IN': 'दूसरे स्टेट की बिक्री पर GST' },
     output: 'OUTPUT_IGST',
     input: 'INPUT_IGST',
   },
   {
-    label: { 'en-IN': 'Extra charge on some goods', 'hi-IN': 'Kuch cheezon par extra charge' },
+    label: { 'en-IN': 'Extra charge on some goods', 'hi-IN': 'कुछ चीज़ों पर एक्स्ट्रा चार्ज' },
     output: 'OUTPUT_CESS',
     input: 'INPUT_CESS',
   },
@@ -80,13 +80,13 @@ export const gstSummaryBody = (books: LoadedBooks): GstSummaryBody => {
     difference,
     sentence: {
       'en-IN': `You collected ${formatINR(totalCollected.amount)} of GST on your bills and had already paid ${formatINR(totalAlreadyPaid.amount)} on your purchases.`,
-      'hi-IN': `Aapne bill par ${formatINR(totalCollected.amount)} GST liya, aur kharid par ${formatINR(totalAlreadyPaid.amount)} pehle hi de chuke the.`,
+      'hi-IN': `आपने बिल पर ${formatINR(totalCollected.amount)} GST लिया, और ख़रीद पर ${formatINR(totalAlreadyPaid.amount)} पहले ही दे चुके थे।`,
     },
     caution: {
       'en-IN':
         'This is what your books show. How much you actually pay is worked out when the return is prepared. The order in which these are adjusted is fixed by the rules.',
       'hi-IN':
-        'Yeh aapki books ka hisaab hai. Asli bharna kitna hai, yeh return banate waqt tay hota hai. Adjust karne ka kram niyam se bandha hua hai.',
+        'यह आपकी बुक्स का हिसाब है। असली भरना रिटर्न बनाते वक़्त तय होता है। एडजस्ट का क्रम नियम से बँधा है।',
     },
   };
 };

@@ -50,7 +50,7 @@ describe('planning who gets reminded', () => {
     const candidate = candidateFor(plan, 'INV/2026/0050');
     assert.equal(candidate.decision, 'SKIP');
     assert.equal(candidate.reason, 'NOT_YET_DUE');
-    assert.match(String((candidate.explanation as Record<string, string>)['hi-IN']), /samay abhi nahi aaya/);
+    assert.match(String((candidate.explanation as Record<string, string>)['hi-IN']), /समय अभी नहीं आया/);
   });
 
   it('sends the advance note three days before the due date, and no earlier', async () => {

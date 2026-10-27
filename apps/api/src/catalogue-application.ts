@@ -58,6 +58,7 @@ import { masterData, mastersContext } from './master-data.ts';
 import { businessDetailsOf, currentStates, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { DurableMap } from './durable.ts';
+import { both, say, type Bilingual } from './language.ts';
 
 const str = (value: unknown): string => String(value ?? '').trim();
 
@@ -546,8 +547,8 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
 
   return {
     state: 'recorded' as const,
-    title: 'Customer added',
-    message: `${created.record.legalName} is in your customer list. Bills to them will carry this name, address${gstin === '' ? '' : ' and GST number'}.`,
+    title: both('Customer added', 'ग्राहक जुड़ा'),
+    message: both(`${created.record.legalName} is in your customer list. Bills to them will carry this name, address${gstin === '' ? '' : ' and GST number'}.`, `${created.record.legalName} आपकी ग्राहक सूची में है। उनके बिलों पर यही नाम, पता${gstin === '' ? '' : ' और GST नंबर'} छपेगा।`),
     customer: viewOf(companyId, created.record),
     addressId: address.record.id,
   };
@@ -605,8 +606,8 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
     const updated = service.updateParty(ctx, holder.id, { role: 'both' }, { idempotencyKey: `supplier-role:${String(companyId)}:${holder.id}` });
     return {
       state: 'recorded' as const,
-      title: 'Supplier added',
-      message: `${updated.record.legalName} is already your customer with GST number ${gstin}, and is now in your supplier list as well.`,
+      title: both('Supplier added', 'सप्लायर जुड़ा'),
+      message: both(`${updated.record.legalName} is already your customer with GST number ${gstin}, and is now in your supplier list as well.`, `${updated.record.legalName} पहले से आपका ग्राहक है, GST नंबर ${gstin} के साथ, और अब आपकी सप्लायर सूची में भी है।`),
       supplier: viewOf(companyId, updated.record),
     };
   }
@@ -635,18 +636,18 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   );
   return {
     state: 'recorded' as const,
-    title: 'Supplier added',
+    title: both('Supplier added', 'सप्लायर जुड़ा'),
     message: registration === 'composition'
-      ? `${created.record.legalName} is in your supplier list as a composition dealer, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}). A composition dealer may not charge GST (CGST s.10(4)), so their bills carry none and no GST credit comes from them.`
-      : `${created.record.legalName} is in your supplier list, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) as their GST number says.`,
+      ? both(`${created.record.legalName} is in your supplier list as a composition dealer, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}). A composition dealer may not charge GST (CGST s.10(4)), so their bills carry none and no GST credit comes from them.`, `${created.record.legalName} आपकी सप्लायर सूची में कंपोज़िशन डीलर के रूप में है, ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) में। कंपोज़िशन डीलर GST नहीं ले सकता (CGST s.10(4)), इसलिए उनके बिलों पर कोई GST नहीं और न ही GST क्रेडिट मिलता।`)
+      : both(`${created.record.legalName} is in your supplier list, in ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) as their GST number says.`, `${created.record.legalName} आपकी सप्लायर सूची में है, ${STATE_NAMES[stateCode] ?? stateCode} (${stateCode}) में, जैसे उनका GST नंबर कहता है।`),
     supplier: viewOf(companyId, created.record),
   };
 };
 
-const UNREGISTERED_BASES: Readonly<Record<string, { readonly basis: UnregisteredBasis; readonly words: string }>> = {
-  BELOW_THRESHOLD: { basis: 'BELOW_THRESHOLD', words: 'their turnover is below the limit for registration (CGST s.22)' },
-  AGRICULTURIST: { basis: 'AGRICULTURIST', words: 'they are a farmer selling their own produce (CGST s.23(1)(b))' },
-  EXEMPT_ONLY: { basis: 'EXEMPT_ONLY', words: 'they sell only goods or services that are exempt from GST (CGST s.23(1)(a))' },
+const UNREGISTERED_BASES: Readonly<Record<string, { readonly basis: UnregisteredBasis; readonly words: Bilingual }>> = {
+  BELOW_THRESHOLD: { basis: 'BELOW_THRESHOLD', words: { 'en-IN': 'their turnover is below the limit for registration (CGST s.22)', 'hi-IN': 'उनका टर्नओवर रजिस्ट्रेशन की सीमा से कम है (CGST s.22)' } },
+  AGRICULTURIST: { basis: 'AGRICULTURIST', words: { 'en-IN': 'they are a farmer selling their own produce (CGST s.23(1)(b))', 'hi-IN': 'वे अपनी उपज बेचने वाले किसान हैं (CGST s.23(1)(b))' } },
+  EXEMPT_ONLY: { basis: 'EXEMPT_ONLY', words: { 'en-IN': 'they sell only goods or services that are exempt from GST (CGST s.23(1)(a))', 'hi-IN': 'वे सिर्फ़ ऐसा सामान या सेवाएँ बेचते हैं जिन पर GST नहीं है (CGST s.23(1)(a))' } },
 };
 
 /**
@@ -693,13 +694,14 @@ const createUnregisteredSupplier = (companyId: CompanyId | string, input: Record
   );
   return {
     state: 'recorded' as const,
-    title: 'Supplier added',
-    message: `${created.record.legalName} is in your supplier list with no GST number, because ${ground.words}. Their bills carry no GST (CGST s.32(1)) and give no GST credit (s.16(2)(a)).`,
+    title: both('Supplier added', 'सप्लायर जुड़ा'),
+    message: both(`${created.record.legalName} is in your supplier list with no GST number, because ${say(ground.words)}. Their bills carry no GST (CGST s.32(1)) and give no GST credit (s.16(2)(a)).`, `${created.record.legalName} आपकी सप्लायर सूची में है, बिना GST नंबर के, क्योंकि ${say(ground.words)}। उनके बिलों पर कोई GST नहीं होगा (CGST s.32(1)) और न ही GST क्रेडिट मिलेगा (s.16(2)(a)).`),
     supplier: viewOf(companyId, created.record),
   };
 };
 
 const percentOf = (rate: bigint | null): string => rate === null ? 'no GST' : `${Number(rate) / 100}%`;
+const percentOfHi = (rate: bigint | null): string => rate === null ? 'कोई GST नहीं' : `${Number(rate) / 100}% GST`;
 
 /**
  * Issue #281 — the other items under the same code that are charged a different rate. Nothing
@@ -710,7 +712,9 @@ const sameCodeRates = (companyId: CompanyId | string, itemId: string, hsnSac: st
     .filter((other) => other.id !== itemId && other.hsnSac === hsnSac)
     .flatMap((other) => {
       const theirs = itemTaxes.get(taxKey(companyId, other.id))?.ratePercentTimes100 ?? null;
-      return theirs === rate ? [] : [`${other.name}, with the same code, is charged ${percentOf(theirs)}. This item will be charged ${percentOf(rate)}. Both stay as they are.`];
+      return theirs === rate ? [] : [both(
+        `${other.name}, with the same code, is charged ${percentOf(theirs)}. This item will be charged ${percentOf(rate)}. Both stay as they are.`,
+        `${other.name}, जिसका कोड यही है, पर ${percentOfHi(theirs)} लगता है। इस सामान पर ${percentOfHi(rate)} लगेगा। दोनों जैसे हैं वैसे रहेंगे।`)];
     });
 
 /**
@@ -796,8 +800,8 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
 
   return {
     state: 'recorded' as const,
-    title: 'Item added',
-    message: `${created.record.name} is in your item list, counted in ${unit}${ratePercentTimes100 === null ? ', with no GST on it' : ` and charged at ${Number(ratePercentTimes100) / 100}%`}.${[...created.warnings.map((warning) => warning.message), ...alongside].map((warning) => ` ${warning}`).join('')}`,
+    title: both('Item added', 'सामान जुड़ा'),
+    message: both(`${created.record.name} is in your item list, counted in ${unit}${ratePercentTimes100 === null ? ', with no GST on it' : ` and charged at ${Number(ratePercentTimes100) / 100}%`}.${[...created.warnings.map((warning) => warning.message), ...alongside].map((warning) => ` ${warning}`).join('')}`, `${created.record.name} आपकी सामान सूची में है, ${unit} में गिना जाएगा${ratePercentTimes100 === null ? ', जिस पर कोई GST नहीं' : ` और ${Number(ratePercentTimes100) / 100}% GST लगेगा`}.${[...created.warnings.map((warning) => warning.message), ...alongside].map((warning) => ` ${warning}`).join('')}`),
     warnings: [...created.warnings.map((warning) => warning.message), ...alongside],
     item: itemViewOf(companyId, created.record),
   };
@@ -848,8 +852,8 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
   const warnings = [...updated.warnings.map((warning) => warning.message), ...sameCodeRates(companyId, current.id, hsnSac, tax?.ratePercentTimes100 ?? null)];
   return {
     state: 'recorded' as const,
-    title: 'Item code changed',
-    message: `${updated.record.name} now carries the code ${hsnSac}.${warnings.map((warning) => ` ${warning}`).join('')}`,
+    title: both('Item code changed', 'सामान का कोड बदला'),
+    message: both(`${updated.record.name} now carries the code ${hsnSac}.${warnings.map((warning) => ` ${warning}`).join('')}`, `${updated.record.name} पर अब कोड ${hsnSac} है।${warnings.map((warning) => ` ${warning}`).join('')}`),
     warnings,
     item: itemViewOf(companyId, updated.record),
   };
@@ -882,8 +886,8 @@ export const editItem = (companyId: CompanyId | string, body: unknown, declaredB
   const item = itemView(companyId, current.id);
   return {
     state: 'recorded' as const,
-    title: 'Item saved',
-    message: `${item.name} is saved.${warnings.map((warning) => ` ${warning}`).join('')}`,
+    title: both('Item saved', 'सामान सहेजा'),
+    message: both(`${item.name} is saved.${warnings.map((warning) => ` ${warning}`).join('')}`, `${item.name} सहेजा गया।${warnings.map((warning) => ` ${warning}`).join('')}`),
     warnings,
     item,
   };

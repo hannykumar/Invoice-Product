@@ -55,9 +55,11 @@ const TECHNICAL_LEAKS = [
 
 const MAX_WORDS_PER_SENTENCE = 25;
 
+// Sentence ends: Latin stops plus the Devanagari danda — hi-IN is written in Devanagari (#298,
+// owner decision 26 Oct 2026), and '।' is the full stop there.
 const sentences = (text: string): string[] =>
   text
-    .split(/(?<=[.!?…])\s+/)
+    .split(/(?<=[.!?…।॥])\s+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 

@@ -114,7 +114,9 @@ Two states are worded with unusual care because they are easy to misread:
 - Quantities always carry their unit: `30 boxes`, never `30`.
 - A total is never shown without its parts being reachable in one tap.
 - Dates are written as `15 April 2026`, never `15/04/26`, because the ambiguity is a real risk.
-- English and Hindi (Latin script, the way people actually type and read on phones) ship together.
+- English and Hindi ship together. Hindi is written in Devanagari — the owner's decision of
+  26 Oct 2026 (#298): it is what "Hindi" means to most readers, and the selector says "हिन्दी".
+  Amounts, GSTINs, invoice numbers, HSN/SAC codes and section numbers stay in Latin script.
   Every message in the catalogue exists in both, and a test asserts that both carry the same
   placeholders, so a translation cannot quietly drop the amount.
 - Adding a language means adding a locale to the catalogue. No sentence lives in a screen, so no
