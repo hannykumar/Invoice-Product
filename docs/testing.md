@@ -65,6 +65,51 @@ books earn — not implementation details.
   on the same routes.
 - **A `.skip` carries its reason in words** — where it is blocked, and what unskips it.
 
+## Testing the web app: assert behaviour, not source text
+
+**Issue #495.** The page (`apps/web`: `app.js`, `index.html`, `styles.css`) is tested by loading it
+in a browser and using it. A test that reads `app.js` and matches `/api/returns\/preview/` proves a
+string exists; it passes while the button is dead, the handler never runs or the screen is hidden.
+So:
+
+- **Load the real page from the real server.** `apps/web/test/page-harness.ts` starts the web
+  server on an ephemeral port (demo company, in-memory books — no database needed), launches
+  Chromium through Puppeteer (the driver `npm test` already uses; Playwright in `tests/browser`
+  is the PostgreSQL suite, #494) and refuses every request that is not to that server.
+- **Drive it like a person** — click, type, press keys, follow the address — and assert **what
+  they see** (text, what is shown or hidden, focus, computed layout) and **what the page sends**
+  (`harness.sent`: method, path, body, headers). Both, where both matter: a request nobody can
+  trigger from the screen is as wrong as a screen that sends nothing.
+- **Make the server say something particular** with `harness.respond(path, reply)` (a figure the
+  page could not have worked out itself, a 404, a 503); **slow it down** with `harness.hold(path)`
+  (to see the busy states); **wait on a condition** with `harness.requested(path)` or
+  `page.waitForFunction` — never a fixed sleep.
+- **Pick selectors that survive new screens:** `#ids`, `[name]`, `[data-view]`, roles and visible
+  text. Other work adds screens to this page all the time.
+- **Prove a new test has teeth.** Break the feature on purpose (rename the handler, remove the
+  button, drop a check), see the test go red, put it back. The PR says which mutations were tried.
+- **Pure functions** that run without a DOM (`done-screen.js`) are imported and tested directly
+  (`locale-copy.test.ts`); the `copy` table of English and Hindi sentences is evaluated as
+  *data* there. That is the one place a test reads `app.js`, and it never searches its text.
+
+`apps/web/test/web-test-conventions.test.ts` enforces it: it fails when a test file reads
+`app.js`, `index.html`, `styles.css` or the other page files from disk, unless the file is on a
+short written list of older exceptions (each with its reason; the list may only get shorter).
+
+| File | What it drives |
+| --- | --- |
+| `web-screens.test.ts` | Every screen from its address, the five tabs, + Bill / F2 / Alt+N, Hindi, Home, Items, phone and desktop layout, focus and reduced motion, sign-out and the session cookie |
+| `web-money.test.ts` | Money received and paid, the review dialog, "Record once" and its request key, busy states, refusals |
+| `web-drafts.test.ts` | Forms left half done: returning on another day, and when the lists arrive late |
+| `web-sale.test.ts` | The sale: the short-stock refusal and the purchase hand-off, the six ways to pay, the done screen and WhatsApp message, the server's own estimate, cancelling a bill |
+| `web-actions.test.ts` | GST return, quotations and proformas, bank return, returns, reminders, service health, vehicles, purchase check, challans, PIN codes, Ask |
+| `web-signin.test.ts` | The sign-in dialog, the automatic tester, an invitation link, the connection banner |
+| `web.test.ts` | The web server's own behaviour: what it serves, how files are named and cached |
+
+They run in `npm test` (so in `npm run verify` and CI). Locally Puppeteer needs a Chromium: point
+`PUPPETEER_EXECUTABLE_PATH` at one if its own download is blocked, and use `GITHUB_ACTIONS=true`
+to add `--no-sandbox` where the sandbox is not available.
+
 ## What a test must do
 
 - Cover the failure paths a shopkeeper can hit: wrong input, permission denied, another
