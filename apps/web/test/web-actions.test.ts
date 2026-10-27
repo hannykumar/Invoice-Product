@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import type { Page } from 'puppeteer';
 import { BANK_RETURN_PATH } from '../../../packages/bank-feeds/src/index.ts';
-import { isShown, startPageHarness, textOf, type PageHarness } from './page-harness.ts';
+import { isShown, startPageHarness, textOf, until, type PageHarness } from './page-harness.ts';
 
 let harness: PageHarness;
 let page: Page;
@@ -192,6 +192,8 @@ test('Returns: a whole-bill credit note and a price correction are different cho
   assert.equal(await page.$eval('#return-price', (box) => (box as HTMLFieldSetElement).disabled), true);
   await page.select('#return-line', '__whole__');
   await page.type('#return-form [name="reference"]', 'CN-REF-1');
+  await page.$eval('#return-form [name="reason"]', (box) => { (box as HTMLTextAreaElement).value = ''; });
+  await page.type('#return-form [name="reason"]', 'Customer returned the whole bill');
   await page.click('#return-form button[type="submit"]');
   const preview = await harness.requested('/api/returns/preview', mark);
   assert.equal(JSON.parse(preview.body!).lineId, '__whole__');
@@ -199,4 +201,69 @@ test('Returns: a whole-bill credit note and a price correction are different cho
   await page.waitForFunction(() => document.querySelector('#review-dialog')!.getAttribute('aria-busy') === 'false');
   assert.ok(!calls(mark).includes('POST /api/returns/record'), 'a preview records nothing');
   await page.keyboard.press('Escape');
+});
+
+test('Reminders: "send all" says what it sent, or why it left every bill alone', async () => {
+  await open('reminders');
+  const mark = harness.sent.length;
+  await page.click('#reminders-send-all');
+  await harness.requested('/api/reminders/send-all', mark);
+  await dialogOpen();
+  await page.waitForFunction(() => document.querySelector('#review-dialog')!.getAttribute('aria-busy') === 'false');
+  assert.equal(await textOf(page, '#review-title'), 'Nothing needed sending');
+  assert.equal(await textOf(page, '#review-body'), 'Every open bill was deliberately left alone today. The reasons are on this screen.');
+  await page.keyboard.press('Escape');
+});
+
+test('Service health shows the checks, the recurring jobs and the safe retry, and a retry goes to its own route', async () => {
+  const mark = harness.sent.length;
+  await open('operations');
+  await harness.requested('/api/operations', mark);
+  await waitForText('operations', 'All checks are working');
+  const recurring = await page.$$eval('#operations-recurring li, #operations-recurring .activity-row', (rows) => rows.map((row) => (row as HTMLElement).innerText));
+  assert.ok(recurring.length >= 4, `recurring work is listed: ${recurring.join(' / ')}`);
+  assert.match(recurring.join('\n'), /Daily collection reminders/);
+  assert.match(await screenText('operations'), /Customer data stays private\./);
+  const retry = await page.$$eval('#view-operations button', (buttons) => buttons.map((button) => (button as HTMLElement).innerText));
+  assert.ok(retry.includes('Retry safely'), retry.join(' | '));
+  const before = harness.sent.length;
+  await page.evaluate(() => ([...document.querySelectorAll('#view-operations button')].find((button) => (button as HTMLElement).innerText === 'Retry safely') as HTMLElement).click());
+  await until(() => harness.sent.slice(before).some((request) => request.method === 'POST'), 'the retry to be sent');
+  assert.ok(calls(before).some((call) => /^POST \/api\/operations/.test(call)), calls(before).join(', '));
+});
+
+test('Vehicle check: the vehicle number and the bill go to the server, and the answer is in plain words', async () => {
+  await open('vehicle');
+  const mark = harness.sent.length;
+  await page.click('#vehicle-form button[type="submit"]');
+  const checked = await harness.requested('/api/vehicles/check', mark);
+  const sentBody = JSON.parse(checked.body!) as Record<string, string>;
+  assert.match(sentBody.vehicle!, /^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$/);
+  assert.ok(sentBody.invoice);
+  await page.waitForFunction(() => /cannot carry this consignment/.test((document.querySelector('#vehicle-held') as HTMLElement).innerText));
+  const held = await textOf(page, '#vehicle-held');
+  assert.match(held, /KA05MN9012 · block: This consignment on KA05MN9012 cannot go out as it stands: a two-wheeler cannot carry this consignment\./);
+  // A finding that can be answered may be overridden on the owner's authority, with a reason; one that cannot, is not even listed.
+  assert.equal(await isShown(page, '#vehicle-override-form'), true);
+  const codes = await page.$$eval('#vehicle-override-codes option', (all) => all.map((option) => option.textContent!.trim()));
+  assert.deepEqual(codes, ['Nobody has said what this weighs'], 'a two-wheeler that cannot carry the load is not offered');
+  assert.match(await screenText('vehicle'), /A vehicle that physically cannot carry the load is not one of them\./);
+  assert.match(await screenText('vehicle'), /It changes no weight, no capacity and no government record\./);
+  assert.deepEqual(harness.problems, []);
+});
+
+test('Purchase check: comparing a month sends the month; a typed row needs the supplier\'s GST number, bill number and value', async () => {
+  await open('itc');
+  const mark = harness.sent.length;
+  await page.click('#itc-form button[type="submit"]');
+  const checked = await harness.requested('/api/itc', mark);
+  assert.match(JSON.parse(checked.body!).period, /^\d{4}-\d{2}$/);
+  await waitForText('itc', 'nothing is claimed, sent or filed|Nothing is claimed, sent or filed');
+  assert.match(await screenText('itc'), /This only compares\. Nothing is claimed, sent or filed from this screen\./);
+  // The typed row cannot be sent half filled in.
+  const beforeTyped = harness.sent.length;
+  await page.click('#itc-typed-form button[type="submit"]');
+  assert.ok(!calls(beforeTyped).includes('POST /api/itc/typed'));
+  const missing = await page.$$eval('#itc-typed-form :invalid', (fields) => fields.map((field) => (field as HTMLInputElement).name));
+  for (const name of ['gstin', 'number', 'taxableValue']) assert.ok(missing.includes(name), `${name} is required (missing: ${missing.join(', ')})`);
 });

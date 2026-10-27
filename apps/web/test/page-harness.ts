@@ -126,3 +126,12 @@ export async function startPageHarness(): Promise<PageHarness> {
 export const textOf = (page: Page, selector: string) => page.$eval(selector, (element) => (element as HTMLElement).innerText.trim());
 /** True when an element exists and is not hidden or inside a closed dialog. */
 export const isShown = (page: Page, selector: string) => page.$eval(selector, (element) => { const box = element as HTMLElement; return !box.hidden && box.getClientRects().length > 0; }).catch(() => false);
+
+/** Waits (polling, never a fixed pause) until `condition` holds; fails with `what` after `timeoutMs`. */
+export async function until(condition: () => boolean, what: string, timeoutMs = 15_000): Promise<void> {
+  const started = Date.now();
+  while (!condition()) {
+    if (Date.now() - started > timeoutMs) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
