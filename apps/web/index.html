@@ -1186,7 +1186,8 @@
                 <div class="field-grid">
                   <label><span data-i18n="orderNumber"></span><input name="orderNumber" value="PO/2026/0117" required /></label>
                   <label><span data-i18n="orderDate"></span><input name="date" type="date" required /></label>
-                  <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                  <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select></label>
+                  <label><span data-i18n="whatYouBought"></span><select name="item" data-item-picker required></select></label>
                   <label><span data-i18n="orderedQty"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
                   <label><span data-i18n="agreedRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" required /></span></label>
                   <label><span data-i18n="gstRate"></span><select name="gst"><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option></select></label>
@@ -1204,7 +1205,8 @@
                   <label><span data-i18n="receiptNumber"></span><input name="receiptNumber" value="GRN/2026/0304" required /></label>
                   <label><span data-i18n="deliveryDate"></span><input name="date" type="date" required /></label>
                   <label><span data-i18n="againstOrder"></span><input name="orderNumber" value="PO/2026/0117" /><small data-i18n="againstOrderHelp"></small></label>
-                  <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                  <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select></label>
+                  <label><span data-i18n="whatYouBought"></span><select name="item" data-item-picker required></select></label>
                   <label><span data-i18n="arrivedQty"></span><input name="received" type="number" min="0.001" step="0.001" value="100" required /></label>
                   <label><span data-i18n="keptQty"></span><input name="accepted" type="number" min="0" step="0.001" value="90" required /><small data-i18n="keptQtyHelp"></small></label>
                   <label><span data-i18n="rateIfNoOrder"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" /></span></label>
@@ -1224,7 +1226,8 @@
                 <label><span data-i18n="supplierBill"></span><input name="reference" value="SRS/2026/0088" required /></label>
                 <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="againstOrder"></span><input name="orderNumber" value="PO/2026/0117" /></label>
-                <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select></label>
+                <label><span data-i18n="whatYouBought"></span><select name="item" data-item-picker required></select></label>
                 <label><span data-i18n="billedQty"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
                 <label><span data-i18n="billedRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" required /></span></label>
                 <label><span data-i18n="gstRate"></span><select name="gst"><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option></select></label>

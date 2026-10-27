@@ -5442,9 +5442,36 @@ export class DemoApplication {
     FRT: { description: 'Inward freight', hsnSac: '996511', unit: 'NOS', kind: 'SERVICES' },
   };
 
-  private catalogueItem(id: unknown) {
-    const key = String(id ?? 'SOAP');
-    return { id: key, ...(DemoApplication.CATALOGUE[key] ?? DemoApplication.CATALOGUE.SOAP!) };
+  /**
+   * Issue #366 — the item an order, a delivery or a bill check names. On a developer's machine the
+   * three built-in short ids still work; everywhere else, and for any other id or name, it is one of
+   * the business's own items (master data), so the stock it moves points at a real record and the
+   * delivery survives a restart. An item that is not on the list is refused with the plain sentence
+   * every other screen gives.
+   */
+  private catalogueItem(companyId: CompanyId | string, id: unknown) {
+    const key = String(id ?? '').trim();
+    const builtIn = DemoApplication.CATALOGUE[key === '' ? 'SOAP' : key];
+    if (this.shop.persistence.kind === 'memory' && builtIn !== undefined) return { id: key === '' ? 'SOAP' : key, ...builtIn };
+    const item = resolveItem(companyId, key);
+    return {
+      id: item.id, description: item.name, hsnSac: item.hsnSac, unit: item.baseUnit,
+      kind: item.kind === 'goods' ? 'GOODS' as const : 'SERVICES' as const, batchId: undefined as string | undefined,
+    };
+  }
+
+  /**
+   * Issue #366 — who an order or a delivery is from: a supplier on the business's own list. The demo
+   * supplier stands in only in memory and only when none was named, because on PostgreSQL a delivery
+   * must point at a real supplier record.
+   */
+  private orderSupplier(companyId: CompanyId | string, input: Record<string, unknown>): { readonly id: string; readonly name: string } {
+    const named = String(input.supplierId ?? '').trim();
+    if (named === '' && this.shop.persistence.kind === 'memory') {
+      return { id: this.config.supplierId, name: String(input.party || this.config.supplierName) };
+    }
+    const supplier = resolveSupplier(companyId, named || String(input.party ?? ''));
+    return { id: supplier.id, name: supplier.legalName };
   }
 
   /** Reads a typed quantity into micro-units without letting a float near it. */
@@ -5456,7 +5483,7 @@ export class DemoApplication {
 
   /** How much of an item is actually on the shelf, which is the figure #18 has to get right. */
   private async stockOf(actor: ActorContext, itemId: string) {
-    const item = this.catalogueItem(itemId);
+    const item = this.catalogueItem(this.companyOf(actor), itemId);
     const balance = await this.shop.inventoryService.balance(actor, {
       itemId: item.id, warehouseId: this.shop.warehouseId, batchId: item.batchId ?? null,
     });
@@ -5504,11 +5531,12 @@ export class DemoApplication {
   async recordOrder(actor: ActorContext, input: Record<string, unknown>) {
     const number = String(input.orderNumber ?? '').trim();
     if (!number) throw invalid('API_ORDER_NUMBER_REQUIRED', 'Enter an order number, for example PO/2026/0117.');
-    const item = this.catalogueItem(input.item);
+    const item = this.catalogueItem(this.companyOf(actor), input.item);
+    const supplier = this.orderSupplier(this.companyOf(actor), input);
     const created = await this.shop.matching.createOrder(actor, {
       orderNumber: number,
-      supplierPartyId: this.config.supplierId,
-      supplierName: String(input.party || this.config.supplierName),
+      supplierPartyId: supplier.id,
+      supplierName: supplier.name,
       orderDate: String(input.date ?? ''),
       lines: [{
         lineNumber: 1, itemId: item.id, description: item.description, hsnSac: item.hsnSac,
@@ -5534,9 +5562,11 @@ export class DemoApplication {
   async recordReceipt(actor: ActorContext, input: Record<string, unknown>) {
     const number = String(input.receiptNumber ?? '').trim();
     if (!number) throw invalid('API_RECEIPT_NUMBER_REQUIRED', 'Enter a delivery number, for example GRN/2026/0304.');
-    const item = this.catalogueItem(input.item);
+    const item = this.catalogueItem(this.companyOf(actor), input.item);
     const orderNumber = String(input.orderNumber ?? '').trim();
     const order = orderNumber === '' ? null : await this.orderNumbered(actor, orderNumber);
+    // A delivery against an order is from the order's own supplier.
+    const supplier = order === null ? this.orderSupplier(this.companyOf(actor), input) : { id: order.supplierPartyId, name: order.supplierName };
 
     const received = this.typedQuantity(input.received, item.unit);
     const accepted = this.typedQuantity(input.accepted, item.unit);
@@ -5545,8 +5575,8 @@ export class DemoApplication {
 
     const details = {
       receiptNumber: number,
-      supplierPartyId: this.config.supplierId,
-      supplierName: String(input.party || order?.supplierName || this.config.supplierName),
+      supplierPartyId: supplier.id,
+      supplierName: supplier.name,
       receiptDate: String(input.date ?? ''),
       ...(input.deliveryNote ? { deliveryNote: String(input.deliveryNote) } : {}),
       lines: [{
@@ -5587,21 +5617,22 @@ export class DemoApplication {
    * recorded and no stock moves, which is what lets a person look before deciding.
    */
   async matchPurchaseBill(actor: ActorContext, input: Record<string, unknown>) {
-    const item = this.catalogueItem(input.item);
+    const item = this.catalogueItem(this.companyOf(actor), input.item);
     const invoiceNumber = String(input.reference ?? '').trim();
     if (!invoiceNumber) throw invalid('API_REFERENCE_REQUIRED', 'Enter the supplier bill number.');
     const orderNumber = String(input.orderNumber ?? '').trim();
     const order = orderNumber === '' ? null : await this.orderNumbered(actor, orderNumber);
+    const supplier = order === null ? this.orderSupplier(this.companyOf(actor), input) : { id: order.supplierPartyId, name: order.supplierName };
 
     // With no order, every confirmed delivery from this supplier is what the bill is checked on.
     const receipts = order === null
-      ? (await this.shop.matching.receiptsForParty(actor, this.config.supplierId)).filter((receipt) => receipt.state === 'CONFIRMED')
+      ? (await this.shop.matching.receiptsForParty(actor, supplier.id)).filter((receipt) => receipt.state === 'CONFIRMED')
       : [];
 
     const match = await this.shop.matching.matchForInvoice(actor, {
       purchaseId: `web-purchase:${invoiceNumber}`,
       invoiceNumber,
-      supplierPartyId: this.config.supplierId,
+      supplierPartyId: supplier.id,
       lines: [{
         lineNumber: 1, itemId: item.id, description: item.description,
         quantity: this.typedQuantity(input.quantity, item.unit), ratePaise: paise(input.rate),
