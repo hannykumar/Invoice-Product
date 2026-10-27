@@ -13,7 +13,9 @@ import { ROLES } from '../../../packages/platform/src/roles.ts';
 import { tokenFrom } from './sign-in-helper.ts';
 
 test('on a developer\'s machine the button is offered, and one click signs in as the demo owner of Sampoorna Traders', async () => {
-  assert.equal((await handleApi('GET', '/api/auth/tester')).status, 200);
+  const offered = await handleApi('GET', '/api/auth/tester');
+  assert.equal(offered.status, 200);
+  assert.equal(JSON.parse(String(offered.body)).automatic, false, 'under NODE_ENV=test the dialog stays, so the browser tests still test it');
   const opened = await handleApi('POST', '/api/auth/tester', {});
   assert.equal(opened.status, 200, String(opened.body));
   assert.match(opened.headers['set-cookie']!, /^__Host-karobar_session=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Lax/);
@@ -40,4 +42,28 @@ test('outside development the endpoint is 404, word for word like a route that d
   }
   const unknown = JSON.parse(String((await handleApi('GET', '/api/auth/no-such-route')).body));
   assert.deepEqual({ ...unknown, requestId: 'req-tester' }, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.', requestId: 'req-tester' }, 'the same reply as a route that does not exist');
+});
+
+/** The tester route's GET, answered by a runtime built from `env`, as a server started with it would. */
+const offeredWith = async (env: Record<string, string>) => {
+  const saved = { ...process.env };
+  for (const key of ['NODE_ENV', 'DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_ANON_KEY']) delete process.env[key];
+  Object.assign(process.env, env);
+  try {
+    const runtime = new ApiRuntime(MEMORY);
+    const route = ROUTES.find((candidate) => candidate.method === 'GET' && candidate.path === '/api/auth/tester')!;
+    return await (route.handle as (call: unknown) => Promise<unknown>)({ input: {}, params: {}, runtime, requestId: 'req-auto', delivery: undefined });
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+};
+
+test('the sign-in step is skipped only with NODE_ENV=development — never in production, never with no NODE_ENV and a database', async () => {
+  assert.deepEqual(await offeredWith({ NODE_ENV: 'development' }), { available: true, automatic: true }, 'the owner\'s own machine: straight in');
+  assert.deepEqual(await offeredWith({ NODE_ENV: 'test' }), { available: true, automatic: false }, 'tests: the dialog stays and is tested');
+  const production = await offeredWith({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://invoice:invoice@localhost:5432/invoice', SUPABASE_URL: 'https://synthetic-project.supabase.co', SUPABASE_ANON_KEY: 'synthetic-anon-key', KAROBAR_RATE_LIMIT_SECRET: 'p'.repeat(32) });
+  assert.ok(production instanceof Reply);
+  assert.equal((production.result as { status: number }).status, 404, 'production: no tester at all, so the normal sign-in shows');
+  await assert.rejects(offeredWith({ DATABASE_URL: 'postgresql://invoice:invoice@localhost:55460/invoice' }), /NODE_ENV is not set, but a database is/, 'no NODE_ENV with a database: the server does not start, so nothing signs anyone in');
 });
