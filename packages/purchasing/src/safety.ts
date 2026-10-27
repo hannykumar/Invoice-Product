@@ -20,6 +20,7 @@
 
 import { inflateSync } from "node:zlib";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { canDecode, decodeAscii85, decodeAsciiHex, decodePdfNames, isAsciiHex, isFlate, listPdfStreams, streamFilters } from "./pdf-streams.ts";
 import type { Attachment, QuarantineReason } from "./inbox-types.ts";
 
 export type ScanVerdict = "clean" | "infected" | "unscanned";
@@ -105,8 +106,10 @@ export async function screenAttachment(attachment: Attachment, bytes: Uint8Array
  */
 async function screenPdf(bytes: Uint8Array): Promise<ScreeningResult> {
   const raw = Buffer.from(bytes).toString("latin1");
-  if (ENCRYPT_TOKEN.test(raw)) return { ok: false, reason: "PASSWORD_PROTECTED", message: "This PDF is password protected. Please ask the supplier for an unlocked copy." };
-  if (ACTIVE_CONTENT_TOKEN.test(raw)) return { ok: false, reason: "ACTIVE_CONTENT", message: "This PDF contains an embedded script or file, which invoices do not need, so it has been held." };
+  // Every PDF reader decodes #xx in names, so `/L#61unch` is `/Launch`: scan the decoded form.
+  const named = decodePdfNames(raw);
+  if (ENCRYPT_TOKEN.test(named)) return { ok: false, reason: "PASSWORD_PROTECTED", message: "This PDF is password protected. Please ask the supplier for an unlocked copy." };
+  if (ACTIVE_CONTENT_TOKEN.test(named)) return { ok: false, reason: "ACTIVE_CONTENT", message: "This PDF contains an embedded script or file, which invoices do not need, so it has been held." };
   if ((raw.match(/\d+\s+\d+\s+obj\b/g)?.length ?? 0) > MAX_PDF_OBJECTS) return tooLarge(`This PDF has more than ${MAX_PDF_OBJECTS.toLocaleString("en-IN")} objects, far more than a bill needs. It has been held.`);
 
   const deadline = Date.now() + PDF_PARSE_LIMIT_MS;
@@ -117,43 +120,49 @@ async function screenPdf(bytes: Uint8Array): Promise<ScreeningResult> {
 }
 
 /**
- * Inflates every FlateDecode stream under one shared byte budget and scans the
- * unpacked text for the same tokens — a key hidden inside a compressed object stream
- * is as dangerous as one in the clear. The budget is the defence against a
- * decompression bomb: the first stream that would push the total past
- * MAX_PDF_INFLATED_BYTES holds the file. A stream that is not really zlib data is
- * left for the parser to judge.
+ * Finds every stream by reading the file as PDF syntax, unpacks each one screening can
+ * decode — Flate, ASCIIHex and ASCII85, alone or chained — under one shared byte budget,
+ * and scans the unpacked text for the same tokens: a key hidden inside a compressed
+ * object stream is as dangerous as one in the clear. The budget is the defence against
+ * a decompression bomb.
+ *
+ * An object stream (a stream with /First) can hold whole dictionaries — an /OpenAction,
+ * a /Launch — that pdfjs will read but no raw scan can see. So an object stream that
+ * screening cannot fully unpack is held, never skipped: a filter named by reference
+ * (`/Filter 6 0 R`), an unknown filter, or decode parameters such as a predictor that
+ * would scramble the unpacked text (#401 follow-up). Image data is not unpacked.
  */
 function scanPdfStreams(raw: string, bytes: Uint8Array, deadline: number): { readonly ok: true } | { readonly ok: false; readonly result: ScreeningResult } {
+  const listing = listPdfStreams(raw);
+  if (!listing.ok) return { ok: false, result: uncheckable() };
   let inflated = 0;
-  let position = 0;
-  while (position < raw.length) {
-    const at = raw.indexOf("stream", position);
-    if (at === -1) return { ok: true };
-    // "endstream" contains "stream"; a stream keyword never follows a letter.
-    if (at > 0 && /[a-zA-Z]/.test(raw[at - 1] as string)) { position = at + 6; continue; }
-    let body = at + 6;
-    if (raw[body] === "\r") body += 1;
-    if (raw[body] === "\n") body += 1;
-    const end = raw.indexOf("endstream", body);
-    if (end === -1) return { ok: true }; // truncated file; the parser will say so
-    position = end + 9;
+  for (const stream of listing.streams) {
+    const dictionary = decodePdfNames(stream.dictionary);
+    const filters = streamFilters(dictionary);
+    const holdsObjects = /\/First\b/.test(dictionary);
+    const decodable = !filters.unresolved && canDecode(filters.names);
+    if (holdsObjects && (!decodable || filters.hasParams)) return { ok: false, result: uncheckable() };
+    if (!decodable) continue;
 
-    const objectStart = Math.max(raw.lastIndexOf("obj", at), raw.lastIndexOf("endobj", at));
-    const dictionary = raw.slice(objectStart === -1 ? Math.max(0, at - 4096) : objectStart, at);
-    if (!/\/FlateDecode\b|\/Fl\b/.test(dictionary)) continue;
-
-    let unpacked: Uint8Array;
+    let unpacked: Uint8Array = bytes.subarray(stream.dataStart, stream.dataEnd);
     try {
-      unpacked = inflateSync(bytes.subarray(body, end), { maxOutputLength: MAX_PDF_INFLATED_BYTES - inflated });
+      for (const name of filters.names) {
+        const room = MAX_PDF_INFLATED_BYTES - inflated;
+        unpacked = isFlate(name) ? inflateSync(unpacked, { maxOutputLength: room })
+          : isAsciiHex(name) ? decodeAsciiHex(unpacked)
+          : decodeAscii85(unpacked, room);
+      }
     } catch (error) {
       if ((error as { code?: string }).code === "ERR_BUFFER_TOO_LARGE") {
         return { ok: false, result: tooLarge(`This PDF unpacks to far more than its size, which a bill never needs. It has been held.`) };
       }
-      continue; // not really flate data — the real parser decides whether the file is readable
+      // A stream that will not unpack: an object stream must, anything else is the parser's to judge.
+      if (holdsObjects) return { ok: false, result: uncheckable() };
+      continue;
     }
-    inflated += unpacked.length;
-    const text = Buffer.from(unpacked).toString("latin1");
+    if (filters.names.length > 0) inflated += unpacked.length;
+    if (inflated > MAX_PDF_INFLATED_BYTES) return { ok: false, result: tooLarge(`This PDF unpacks to far more than its size, which a bill never needs. It has been held.`) };
+    const text = decodePdfNames(Buffer.from(unpacked).toString("latin1"));
     if (ACTIVE_CONTENT_TOKEN.test(text)) {
       return { ok: false, result: { ok: false, reason: "ACTIVE_CONTENT", message: "This PDF contains an embedded script or file, which invoices do not need, so it has been held." } };
     }
@@ -163,6 +172,8 @@ function scanPdfStreams(raw: string, bytes: Uint8Array, deadline: number): { rea
   }
   return { ok: true };
 }
+
+const uncheckable = (): ScreeningResult => unreadable("This PDF is packed in an unusual way that cannot be checked safely, so it has been held. Please ask the supplier to save it again as a normal PDF.");
 
 /**
  * The real parse. pdfjs rebuilds the object tree — including objects living inside
