@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { handleApi } from '../src/server.ts';
 import { appToday, useFixedAppClock } from '../src/app-clock.ts';
-import { SAMPOORNA_OWNER, SAMPOORNA_VIEWER, signIn } from './sign-in-helper.ts';
+import { KONKAN_OWNER, SAMPOORNA_OWNER, SAMPOORNA_VIEWER, signIn } from './sign-in-helper.ts';
 
 useFixedAppClock('2026-10-20T10:00:00.000Z');
 
@@ -113,4 +113,29 @@ test('the rate hint answers for a known code and refuses an empty ask', async ()
     assert.ok(hint.body.ratePercentTimes100 >= 100, 'a suggestion carries basis points, not percent');
     assert.ok(hint.body.reason?.['en-IN'], 'a suggestion carries its reason in words');
   }
+});
+
+// ------------------------------------------------------------------ reconcile with real imported lines
+
+test('synthetic bank lines, once synced, reach the reconcile run — and only for their own company', async () => {
+  const KONKAN = '00000000-0000-4000-8000-000000000011';
+  const konkan = await signIn(KONKAN_OWNER, KONKAN);
+  const started = await request('POST', '/api/bank-feeds/consent', { provider: 'sandbox-aa' }, konkan);
+  assert.equal(started.status, 200, JSON.stringify(started.body));
+  const connectionId = started.body.connection.id as string;
+  const done = await request('POST', '/api/bank-feeds/consent/complete', { connectionId, authorizationCode: 'sandbox-approved', consentState: started.body.consentState }, konkan);
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+  const synced = await request('POST', '/api/bank-feeds/sync', { connectionId, idempotencyKey: 'wired-297-sync' }, konkan);
+  assert.ok(synced.body.imported > 0, 'the synthetic feed brings in lines');
+
+  const run = await request('POST', '/api/bank-feeds/reconcile', {}, konkan);
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  const seen = run.body.candidates.length + run.body.exceptions.length + run.body.suggestedPayments.length;
+  assert.ok(seen > 0, 'imported lines are either matched, queried, or offered as a payment to record');
+
+  // Another company's reconcile run never sees these lines.
+  const other = await request('POST', '/api/bank-feeds/reconcile', {}, await owner());
+  assert.equal(other.status, 200);
+  assert.ok(!JSON.stringify(other.body).includes(connectionId), 'company A cannot see company B\'s bank lines');
+  assert.equal(other.body.candidates.length + other.body.exceptions.length + other.body.suggestedPayments.length, 0);
 });
