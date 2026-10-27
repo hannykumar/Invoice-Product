@@ -13,7 +13,9 @@ import { ROLES } from '../../../packages/platform/src/roles.ts';
 import { tokenFrom } from './sign-in-helper.ts';
 
 test('on a developer\'s machine the button is offered, and one click signs in as the demo owner of Sampoorna Traders', async () => {
-  assert.equal((await handleApi('GET', '/api/auth/tester')).status, 200);
+  const offered = await handleApi('GET', '/api/auth/tester');
+  assert.equal(offered.status, 200);
+  assert.equal(JSON.parse(String(offered.body)).automatic, false, 'under NODE_ENV=test the dialog stays, so the browser tests still test it');
   const opened = await handleApi('POST', '/api/auth/tester', {});
   assert.equal(opened.status, 200, String(opened.body));
   assert.match(opened.headers['set-cookie']!, /^__Host-karobar_session=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Lax/);

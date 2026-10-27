@@ -96,7 +96,9 @@ export const CORE_ROUTES: readonly Route[] = [
   // The owner's request (27 Oct): "Sign in as tester", on a developer's machine only. Anywhere else
   // both answer exactly as a route that does not exist (404), and the page shows no button.
   get('/api/auth/tester', { access: publicRoute('whether "Sign in as tester" exists here; 404 outside development'), input: nothing },
-    ({ runtime, requestId }) => runtime.signIn.provider === 'mock' ? { available: true } : notThere(requestId)),
+    // `automatic`: NODE_ENV=development skips the sign-in step altogether (the owner's request); under
+    // NODE_ENV=test the dialog stays, so the browser tests still see and test it.
+    ({ runtime, requestId }) => runtime.signIn.provider === 'mock' ? { available: true, automatic: process.env.NODE_ENV?.trim().toLowerCase() === 'development' } : notThere(requestId)),
   post('/api/auth/tester', { access: publicRoute('signing in as the demo owner, on a developer\'s machine only; 404 outside development'), input: nothing },
     async ({ runtime, authorization, requestId }) => {
       const opened = await runtime.signIn.signInAsTester();

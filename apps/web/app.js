@@ -1254,8 +1254,11 @@ async function signInOrAsk() {
   const dialog = document.querySelector("#login-dialog");
   if (!dialog.open) {
     try {
-      const reply = await fetch("/api/auth/tester", { method: "POST", credentials: "same-origin" });
-      if (reply.ok) { await afterSignIn(); return; }
+      const offered = await fetch("/api/auth/tester", { credentials: "same-origin" });
+      if (offered.ok && (await offered.json()).automatic === true) {
+        const reply = await fetch("/api/auth/tester", { method: "POST", credentials: "same-origin" });
+        if (reply.ok) { await afterSignIn(); return; }
+      }
     } catch { /* not reachable: ask */ }
   }
   if (!dialog.open) dialog.showModal();
