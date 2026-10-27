@@ -63,7 +63,7 @@ const copy = {
     reportsTitle: "Reports",
     reportsHelp: "Every figure below comes from this shop's own books: the ledger, sales, stock and money owed. Nothing is typed in.",
     reportsLoading: "Getting your reports…",
-    signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Type your mobile number or email. We will send you a code.", signInAddress: "Mobile number or email", signInCode: "Code", sendCode: "Send me a code", signIn: "Sign in", codeSent: "We sent a code. Type it here.", changeAddress: "Use another number or email", switchCompany: "Business",
+    signOut: "Sign out", loginTitle: "Sign in to Karobar", loginHelp: "Type your mobile number or email. We will send you a code.", signInAddress: "Mobile number or email", signInCode: "Code", sendCode: "Send me a code", signIn: "Sign in", signInAsTester: "Sign in as tester", codeSent: "We sent a code. Type it here.", changeAddress: "Use another number or email", switchCompany: "Business",
     salesFromModule: "From today's bills", openSalesInvoices: "From bills not yet paid", postedSupplierBills: "From supplier bills", calculatedLive: "Things waiting for you", loadingActivity: "Loading recorded activity…", loadingStock: "Loading stock…", readingInventory: "Checking your stock…", loadingSupplier: "Loading supplier balance…", readingReceivables: "Checking what you owe suppliers…",
     // Issue #132 — the bill itself: shown after a sale is recorded, and printed from the browser.
     // Issue #182 — where the goods go, who carries them, and what the bill refers back to.
@@ -423,7 +423,7 @@ const copy = {
     reportsTitle: "रिपोर्ट",
     reportsHelp: "नीचे का हर आँकड़ा इस कंपनी के लेजर, बिक्री, स्टॉक और लेना-देना से अभी निकाला गया है। कुछ भी लिख कर नहीं डाला गया।",
     reportsLoading: "आपकी रिपोर्ट आ रही है…",
-    signOut: "साइन आउट कीजिए", loginTitle: "कारोबार में साइन इन कीजिए", loginHelp: "अपना मोबाइल नंबर या ईमेल लिखिए। हम आपको कोड भेजेंगे।", signInAddress: "मोबाइल नंबर या ईमेल", signInCode: "कोड", sendCode: "मुझे कोड भेजिए", signIn: "साइन इन", codeSent: "हमने कोड भेजा है। उसे यहाँ लिखिए।", changeAddress: "दूसरा नंबर या ईमेल", switchCompany: "बिज़नेस",
+    signOut: "साइन आउट कीजिए", loginTitle: "कारोबार में साइन इन कीजिए", loginHelp: "अपना मोबाइल नंबर या ईमेल लिखिए। हम आपको कोड भेजेंगे।", signInAddress: "मोबाइल नंबर या ईमेल", signInCode: "कोड", sendCode: "मुझे कोड भेजिए", signIn: "साइन इन", signInAsTester: "टेस्टर के रूप में साइन इन करें", codeSent: "हमने कोड भेजा है। उसे यहाँ लिखिए।", changeAddress: "दूसरा नंबर या ईमेल", switchCompany: "बिज़नेस",
     salesFromModule: "आज के बिलों से", openSalesInvoices: "जिन बिलों का पैसा नहीं आया", postedSupplierBills: "सप्लायर के बिलों से", calculatedLive: "आपके लिए बाक़ी काम", loadingActivity: "दर्ज काम लोड हो रहा है…", loadingStock: "स्टॉक लोड हो रहा है…", readingInventory: "स्टॉक देख रहे हैं…", loadingSupplier: "सप्लायर बैलेंस लोड हो रहा है…", readingReceivables: "सप्लायर का बाक़ी देख रहे हैं…",
     exportSection: "एक्सपोर्ट या SEZ सप्लाई", exportKindOverseas: "ये ग्राहक भारत के बाहर है, इसलिए ये बिल एक्सपोर्ट है।", exportKindSez: "ये ग्राहक SEZ में है। बिल पर यही लिखा जाएगा, SEZ वाली घोषणा के साथ।", exportKindDeemed: "ये ग्राहक डीम्ड एक्सपोर्ट में ख़रीदता है। GST हमेशा की तरह लगेगा और बिल पर ये लिखा होगा।",
     underLutLabel: "ये एक्सपोर्ट कैसे हो रहा है?", underLutYes: "LUT या बॉन्ड पर — GST नहीं लगेगा", underLutNo: "IGST भरकर", exportCountryLabel: "माल किस देश जा रहा है", exportCountryHelp: "दो अक्षर: UAE के लिए AE, अमेरिका के लिए US।", exportCurrencyLabel: "बिक्री किस करेंसी में", exportCurrencyHelp: "ग्राहक रुपये में दे रहा हो तो खाली छोड़िए।", exchangeRateLabel: "उस करेंसी की एक यूनिट कितने रुपये",
@@ -1242,7 +1242,43 @@ async function apiList(path, key) {
 function showLogin() {
   const dialog = document.querySelector("#login-dialog");
   if (!dialog.open) dialog.showModal();
+  showTesterButton();
 }
+
+/** What every sign-in does once the session cookie is set: close the dialog and read this business afresh. */
+async function afterSignIn() {
+  state.signedIn = true;
+  storage?.setItem("karobar.signedIn", "1");
+  document.querySelector("#login-dialog").close("signed-in");
+  resetLoginForm();
+  loadSession();
+  await loadDashboard();
+  loadCatalogue();
+  loadSupplierChoices();
+  loadIssuedInvoices();
+  loadReturnDocuments();
+  loadEwayRoad();
+  loadEwayStates();
+  loadVehicleChoices();
+  loadVehiclesHeld();
+  loadSetupStates();
+  loadReminders();
+}
+
+/** The owner's request: "Sign in as tester", only where the server says it exists (a developer's machine); 404 anywhere else hides it. */
+async function showTesterButton() {
+  const button = document.querySelector("#login-tester");
+  if (!button) return;
+  try { button.hidden = !(await fetch("/api/auth/tester", { credentials: "same-origin" })).ok; } catch { button.hidden = true; }
+}
+document.querySelector("#login-tester")?.addEventListener("click", async () => {
+  const error = document.querySelector("#login-error");
+  error.textContent = "";
+  try {
+    await api("/api/auth/tester", { method: "POST" });
+    await afterSignIn();
+  } catch (failure) { error.textContent = failure.message || copy[state.locale].requestFailed; }
+});
 
 function activityRow(item) {
   const row = document.createElement("div");
@@ -3756,22 +3792,7 @@ document.querySelector("#login-form").addEventListener("submit", async (event) =
       return;
     }
     await api("/api/auth/sign-in", { method: "POST", body: JSON.stringify({ address, code: form.querySelector('[name="code"]').value, ...(invitationToken === null ? {} : { invitation: invitationToken }) }) });
-    state.signedIn = true;
-    storage?.setItem("karobar.signedIn", "1");
-    document.querySelector("#login-dialog").close("signed-in");
-    resetLoginForm();
-    loadSession();
-    await loadDashboard();
-    loadCatalogue();
-    loadSupplierChoices();
-    loadIssuedInvoices();
-    loadReturnDocuments();
-    loadEwayRoad();
-    loadEwayStates();
-    loadVehicleChoices();
-    loadVehiclesHeld();
-    loadSetupStates();
-    loadReminders();
+    await afterSignIn();
   } catch (failure) { error.textContent = failure.message || copy[state.locale].requestFailed; }
   finally {
     button.disabled = false;

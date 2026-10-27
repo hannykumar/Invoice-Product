@@ -130,7 +130,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (193)
+## Routes (195)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
@@ -139,6 +139,8 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `GET /api/files/:file/link` | `purchases.view` or `business.settings.read` or `branding.write` or `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/auth/code` | nobody signed in: asking for a sign-in code: there is no session yet | — | — | — | — | — |
 | `POST /api/auth/sign-in` | nobody signed in: signing in: there is no session yet to hold a permission | — | — | — | — | — |
+| `GET /api/auth/tester` | nobody signed in: whether "Sign in as tester" exists here; 404 outside development | — | — | — | — | — |
+| `POST /api/auth/tester` | nobody signed in: signing in as the demo owner, on a developer's machine only; 404 outside development | — | — | — | — | — |
 | `POST /api/auth/sign-out` | any member: anyone signed in may end their own session | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `POST /api/session/company` | any member: switching to another business the person belongs to; checked against their memberships | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `GET /api/status` | nobody signed in: the health check a load balancer reads; says nothing about any company | — | — | — | — | — |

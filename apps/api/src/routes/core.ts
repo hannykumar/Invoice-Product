@@ -50,6 +50,9 @@ const sessionView = async (runtime: ApiRuntime, context: RequestContext) => ({
  */
 const ADD_FILE = needAny('add a file', 'ledger.post.purchase', 'branding.write');
 
+/** The reply of a route that does not exist, word for word (server.ts): what the tester route says outside development. */
+const notThere = (requestId: string) => replyJson(404, { state: 'failed', title: 'Not found', message: 'That API route does not exist. Nothing was saved.', requestId });
+
 export const CORE_ROUTES: readonly Route[] = [
   // Issue #341 — private file storage: an address to upload to, the screening when it has arrived, a short-lived address to open it.
   post('/api/files/uploads', { access: ADD_FILE, input: fields({ purpose: text, fileName: text, contentType: text, sizeBytes: anything }) },
@@ -87,6 +90,17 @@ export const CORE_ROUTES: readonly Route[] = [
         throw error;
       }
       for (const [limit, key] of counters) await runtime.limits.giveBack(limit, key);
+      await runtime.signIn.replaceSession(/^Bearer\s+(\S+)$/i.exec(authorization ?? '')?.[1]);
+      return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
+    }),
+  // The owner's request (27 Oct): "Sign in as tester", on a developer's machine only. Anywhere else
+  // both answer exactly as a route that does not exist (404), and the page shows no button.
+  get('/api/auth/tester', { access: publicRoute('whether "Sign in as tester" exists here; 404 outside development'), input: nothing },
+    ({ runtime, requestId }) => runtime.signIn.provider === 'mock' ? { available: true } : notThere(requestId)),
+  post('/api/auth/tester', { access: publicRoute('signing in as the demo owner, on a developer\'s machine only; 404 outside development'), input: nothing },
+    async ({ runtime, authorization, requestId }) => {
+      const opened = await runtime.signIn.signInAsTester();
+      if (opened === null) return notThere(requestId);
       await runtime.signIn.replaceSession(/^Bearer\s+(\S+)$/i.exec(authorization ?? '')?.[1]);
       return replyWithCookie({ company: runtime.companySummary(opened.companyId), expiresAt: opened.expiresAt }, sessionCookie(opened.token));
     }),
