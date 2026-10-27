@@ -255,7 +255,7 @@ The pen test (D11, ≈ ₹1.5–4 lakh) is a one-time cost and not included.
 | `pg` | dependency | Postgres driver (`packages/platform/src/database.ts`). |
 | `pdfjs-dist` | dependency | Reads PDF bank statements (`packages/platform/src/banking.ts`). |
 | `read-excel-file` | dependency | Reads XLSX bank statements and Tally/BUSY/Vyapar exports (`packages/migration`). |
-| `puppeteer` | dependency | Headless Chromium rendering bill, note and e-way PDFs (`packages/invoice-templates/src/pdf.ts`: one shared browser, bounded pages, JavaScript off, #398); also a browser test. |
+| `puppeteer` | dependency | Headless Chromium rendering bill, note and e-way PDFs (`packages/invoice-templates/src/pdf.ts`: one shared browser, bounded pages, JavaScript off, #398). Not a browser-test driver: tests use Playwright (ADR 0496). |
 | `fflate` | dependency | **Only a test uses it** (`packages/platform/test/banking.test.ts`). Should move to `devDependencies` — flagged, not changed here. |
 | `@tabler/icons` | dev | Source for the icon library built by `npm run marks:build`. |
 | `typescript` | dev | Type checking only (`tsc --noEmit`); Node runs `.ts` directly. |

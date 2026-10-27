@@ -28,6 +28,12 @@ const itc = fields({
   period: text, content: text, fileName: text, decision: text, lineKey: text, reason: text, reference: text, requestId: text,
   gstin: text, supplierName: text, kind: text, number: text, date: text, taxableValue: text, cgst: text, sgst: text, igst: text, invoiceValue: text, itcAvailable: text,
 });
+/** Issue #296 — the composition scheme: the setting, the quarterly statement and the yearly return. */
+const scheme = fields({
+  scheme: text, effectiveFrom: text, category: text, ratePercent: text, rateConfirmed: anything, newlyRegistered: anything,
+  withinLimit: anything, noInterState: anything, noEcommerce: anything, note: text, requestId: text, token: text,
+});
+const statement = fields({ quarter: text, token: text, reference: text, filedOn: text, financialYear: text });
 const gstReturn = fields({ period: text, reference: text, note: text, reason: text, returnType: text });
 
 export const GST_ROUTES: readonly Route[] = [
@@ -74,6 +80,15 @@ export const GST_ROUTES: readonly Route[] = [
   post('/api/itc/import', { access: ITC_IMPORT, input: itc }, ({ app, actor, input }) => app.importItcFile(actor, input)),
   post('/api/itc/typed', { access: ITC_IMPORT, input: itc }, ({ app, actor, input }) => app.addTypedItcRecord(actor, input)),
   post('/api/itc/decide', { access: need('decide on purchase tax credit', 'itc.decide'), input: itc }, ({ app, actor, input }) => app.decideItcLine(actor, input)),
+  // Issue #296 — a business on the composition scheme: Bill of Supply, CMP-08 every quarter, GSTR-4 every year.
+  get('/api/composition/scheme', { access: need('see your GST scheme', 'business.settings.read'), input: nothing }, ({ app, actor }) => app.composition.scheme(actor)),
+  post('/api/composition/scheme/preview', { access: need('change your GST scheme', 'business.settings.write'), input: scheme }, ({ app, actor, input }) => app.composition.previewScheme(actor, input)),
+  post('/api/composition/scheme', { access: need('change your GST scheme', 'business.settings.write'), input: scheme }, ({ app, actor, input }) => app.composition.applyScheme(actor, input)),
+  post('/api/composition/statements', { access: need('see GST returns', 'gst_returns.view'), input: nothing }, ({ app, actor }) => app.composition.statements(actor)),
+  post('/api/composition/statement', { access: need('see GST returns', 'gst_returns.view'), input: statement }, ({ app, actor, input }) => app.composition.statement(actor, input)),
+  post('/api/composition/approve', { access: need('approve GST returns', 'gst_returns.approve'), input: statement }, ({ app, actor, input }) => app.composition.approveStatement(actor, input)),
+  post('/api/composition/filed', { access: need('record a filed GST return', 'gst_returns.approve'), input: statement }, ({ app, actor, input }) => app.composition.markFiled(actor, input)),
+  post('/api/composition/yearly', { access: need('see GST returns', 'gst_returns.view'), input: statement }, ({ app, actor, input }) => app.composition.yearly(actor, input)),
   // Issue #30 — the month's GST returns: what they say, what stops them, and the file to upload.
   post('/api/gst-returns', { access: need('see GST returns', 'gst_returns.view'), input: gstReturn }, ({ app, actor, input }) => app.gstReturnWorkspace(actor, input)),
   post('/api/gst-returns/prepare', { access: need('prepare GST returns', 'gst_returns.prepare'), input: gstReturn }, ({ app, actor, input }) => app.prepareGstReturn(actor, input)),

@@ -108,6 +108,20 @@ Each of the four repositories has an in-memory store (`adapters.ts`) and a Postg
 (`postgres-repository.ts`: `PostgresPortalRecords`, `PostgresImportBatches`, `PostgresItcDecisions`,
 `PostgresItcClaims`). One suite, `test/itc-repository-contract.ts`, runs on both.
 
+- **The books port has no table of its own, on purpose.** `PurchaseBookPort` (our purchases, up to a
+  period) is derived on every call by `RegisterPurchaseBooks` (`register-books.ts`) from the posted
+  purchase bills (`purchase_bills`), the purchase return notes (`return_notes`) and the reverse-charge
+  register, which are PostgreSQL, forced-RLS and immutable once posted. A copy of them kept for this
+  module would be a second set of books that could disagree with the first, and credit claimed
+  against the wrong one is credit the department can disallow (CGST Act s.16, s.41; Rule 36(4)). So
+  the comparison survives a restart and is shared by every API process because the bills are.
+  `InMemoryPurchaseBooks` remains only a hand-fed double for tests and the demo. The supplier's GST
+  number and registration kind come from the supplier master through `SupplierRegistrationSource`
+  (sync or async, so the master-data conversion plugs in without a change here); a supplier with no
+  number travels as `null`. Contract suite: `test/register-books-contract.ts`, on the in-memory bill
+  store and on PostgreSQL as the application role. Nothing here decides eligibility: **a bill the
+  portal does not carry is never credit** is `service.ts`'s rule and the PostgreSQL end-to-end test
+  asserts it.
 - **Writes need the action's unit of work** ([`unit-of-work-v1`](./unit-of-work-v1.md)). Outside one
   they throw `NO_UNIT_OF_WORK`. `importFile`, `addTypedRecord`, `decide` and `claimPeriod` must
   each be wrapped in `db.unitOfWork(companyId, …)` by the caller (#340). `fetchFromPortal` calls

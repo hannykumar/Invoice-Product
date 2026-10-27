@@ -4,7 +4,7 @@
  * Persistence is in-memory for the local app, but company and actor always come from the session.
  */
 import { BooksDesk } from './books-entry-application.ts';
-import { asId, conflict, DomainError, financialYearOf as financialYearName, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
+import { asId, conflict, DomainError, financialYearOf as financialYearName, financialYearRange, forbidden, formatDate, formatINR, invalid, notAllowed, indiaDateOf, isoDate, money, mulDiv, notFound, quantityFromString, sum, type CompanyId, type PartyId } from '@invoice/kernel';
 import { appClock, appToday, currentFinancialYear, previousMonthOfToday } from './app-clock.ts';
 import { InMemoryAuditPort, InMemoryLedgerStore, permissionPortFromActor, trialBalance, type ActorContext, type TransactionParticipant } from '@invoice/ledger';
 import { GstCalculator, RateTable, foldChargesIntoGoods, type ComputedTaxLine, type Discount } from '@invoice/gst-calc';
@@ -81,6 +81,9 @@ import {
   isWalkIn,
   walkInCustomer,
 } from './catalogue-application.ts';
+import { COMPOSITION_LEGEND } from '@invoice/gst-returns';
+import { CompositionDesk, filedCalendarQuarters } from './composition-application.ts';
+import { COMPOSITION_NO_CREDIT_CLAUSE, schemeDuring, schemeOn } from './composition-scheme.ts';
 import { businessDetailsOf, currentStates, dispatchFrom, eInvoiceExemptionOf, readBusinessDetails, requireIssuable, saveBusinessDetails, sellerPrint, turnoverAnswersOf, turnoverBandFor, writeOffLimitOf } from './business-details-application.ts';
 import { approvalChallanTask, eInvoiceTask, ewayTask, doneReturnMonths, gstReturnTasks, lateCustomersTask, moneyCardFigures, recentBillRow, stockTask, turnoverTask, type HomeTask } from './home-application.ts';
 import { turnoverAnswerOn, turnoverBandOn } from '../../../packages/masters/src/hsn-digits.ts';
@@ -1003,6 +1006,8 @@ export class DemoApplication {
    * dated into a month whose return is already approved or filed.
    */
   private returnMonths: ReturnPreparationRepository = new InMemoryReturnPreparations();
+  /** Issue #296 — the composition scheme: the setting, CMP-08 and GSTR-4. Set once the shop is built. */
+  composition!: CompositionDesk;
   /**
    * Issue #143 — the export or SEZ particulars of a sale, kept against the draft and then the bill
    * (they share an id). The printed bill, the e-invoice and GSTR-1 all read this one entry.
@@ -1772,6 +1777,8 @@ export class DemoApplication {
       repository: gstPreparations,
       audit: shop.audit,
       clock: appClock,
+      // Issue #296 — a composition business files CMP-08 and GSTR-4, not these.
+      scheme: { async during(companyId, from, to) { return schemeDuring(companyId, from, to); } },
     });
 
     // Issue #141. Challans share the store, so a number is allocated in the same transaction that
@@ -1916,6 +1923,24 @@ export class DemoApplication {
     // Issue #290 — a challan holds its goods in the godown's stock, and is judged for an e-way bill.
     challans.hooks = app.challanHooks();
     app.returnMonths = gstPreparations;
+    // Issue #296 — the composition scheme reads the same bills, notes and ledger as everything else.
+    app.composition = new CompositionDesk({
+      companyId: config.companyId, gstin: config.gstin, store: shop.store, ledger: shop.ledger, audit: shop.audit,
+      invoices: salesRepository, notes: returnNotes,
+      goodsItemCount: (companyId) => catalogueItems(companyId).filter((item) => item.kind !== 'service').length,
+      purchases: async (companyId, financialYear) => {
+        const range = financialYearRange(financialYear);
+        let registeredPaise = 0n;
+        let unregisteredPaise = 0n;
+        for (const bill of await shop.bills.list(companyId)) {
+          if (bill.state !== 'POSTED' || bill.invoiceDate < range.from || bill.invoiceDate > range.to) continue;
+          const taxable = bill.lines.reduce((sum, line) => sum + BigInt(line.taxableValuePaise), 0n);
+          const gstin = billingAddressOf(companyId, bill.supplierPartyId)?.gstin ?? (bill.supplierPartyId === config.supplierId ? config.supplierGstin : undefined);
+          if (gstin === undefined || gstin === null || gstin === '') unregisteredPaise += taxable; else registeredPaise += taxable;
+        }
+        return { registeredPaise, unregisteredPaise };
+      },
+    });
     if (demo) await app.seed();
     return app;
   }
@@ -2136,7 +2161,8 @@ export class DemoApplication {
     const doneMonths = may('gst_returns.view') ? doneReturnMonths(await this.gstReturns.list(actor)) : new Set<string>();
     if (may('gst_returns.view')) {
       const booksStart = (await this.shop.store.read().settings.get(companyId))?.booksStartDate ?? currentFinancialYear().from;
-      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneMonths, may('gst_returns.prepare')));
+      tasks.push(...await gstReturnTasks(actor, { id: companyId, name: this.config.name, gstin: this.config.gstin, booksStart }, doneMonths, may('gst_returns.prepare'),
+        { onScheme: schemeOn(companyId, appToday()) === 'COMPOSITION', filedQuarters: filedCalendarQuarters(String(companyId)) }));
     }
     // Customers more than 30 days late, while the reminder plan still has something to send them.
     const late = read.receivables.rows.filter((row) => row.oldestDaysOverdue > 30);
@@ -3111,9 +3137,15 @@ export class DemoApplication {
       // Issue #288 — money taken at the counter is recorded with the bill, so the review says so
       // instead of "the customer balance will increase".
       const paidNow = this.paidNowOn(input, draft, customer.legalName);
+      // Issue #296 — a composition business issues a Bill of Supply: said first, so nobody expects GST on it.
+      const billOfSupply = draft.pricing?.supplierRegistration === 'COMPOSITION';
+      const effects = paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect));
       return {
         ...checked,
-        effects: paidNow === null ? checked.effects : checked.effects.map((effect) => (effect === say(BALANCE_WILL_INCREASE) ? say(paidNow.sentence) : effect)),
+        billKind: billOfSupply ? 'BILL_OF_SUPPLY' as const : 'TAX_INVOICE' as const,
+        effects: billOfSupply
+          ? [both('This will be a Bill of Supply, not a tax invoice. Your business is on the composition scheme, so no GST is added and the bill says "composition taxable person, not eligible to collect tax on supplies".', 'यह टैक्स इनवॉइस नहीं, Bill of Supply होगा। आपका बिज़नेस कम्पोज़िशन स्कीम में है, इसलिए GST नहीं जुड़ता और बिल पर "composition taxable person, not eligible to collect tax on supplies" लिखा रहता है।'), ...effects]
+          : effects,
         paidNow: paidNow === null ? null : { mode: paidNow.mode, amount: jsonAmount(paidNow.amount), due: jsonAmount(paidNow.due) },
         dateNotice,
         placeOfSupply: draft.supplyKind === 'SERVICES'
@@ -3408,7 +3440,7 @@ export class DemoApplication {
         ...(delivery === null || delivery.deliverTo === null ? {} : { shipTo: delivery.deliverTo }),
         documents: [{
           documentId: draft.id,
-          documentType: 'TAX_INVOICE',
+          documentType: pricing.supplierRegistration === 'COMPOSITION' ? 'BILL_OF_SUPPLY' : 'TAX_INVOICE',
           documentNumber: draft.number ?? draft.id,
           documentDate: draft.documentDate,
           lines: consignmentLinesOf(pricing.lines),
@@ -4098,7 +4130,10 @@ export class DemoApplication {
     const upiId = upiIdOf(invoice.companyId);
     this.invoicePrints.set(invoice.id, {
       document: { ...toInvoiceDocument(invoice, {
-        title: 'TAX_INVOICE',
+        // Issue #296 — a composition dealer issues a bill of supply (CGST Rule 49) headed by the
+        // words Rule 5 requires, with no tax on it (s.10(4)).
+        title: invoice.pricing?.supplierRegistration === 'COMPOSITION' ? 'BILL_OF_SUPPLY' : 'TAX_INVOICE',
+        ...(invoice.pricing?.supplierRegistration === 'COMPOSITION' ? { compositionLegend: COMPOSITION_LEGEND } : {}),
         seller: us.seller,
         bank: us.bank,
         declaration: us.declaration,
@@ -6267,12 +6302,14 @@ export class DemoApplication {
     });
   }
 
-  private applicabilityOf(bill: { readonly documentType?: EInvoiceDocument['documentType'] | undefined; readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null }) {
+  private applicabilityOf(bill: { readonly documentType?: EInvoiceDocument['documentType'] | undefined; readonly documentDate: string; readonly recipientKind: EInvoiceDocument['recipientKind']; readonly recipientGstin: string | null; readonly billOfSupply?: boolean }) {
     const exemption = eInvoiceExemptionOf(this.config.companyId);
     return {
       documentType: bill.documentType ?? 'INVOICE' as const,
       documentDate: bill.documentDate,
       recipientKind: bill.recipientKind,
+      // Issue #296 — a composition dealer's bill of supply carries no tax and is never reported.
+      ...(bill.billOfSupply === true ? { isBillOfSupply: true } : {}),
       ...(bill.recipientGstin === null || bill.recipientGstin === '' || bill.recipientGstin === 'URP' ? {} : { recipientGstin: bill.recipientGstin }),
       supplier: {
         gstin: this.config.gstin,
@@ -6291,7 +6328,7 @@ export class DemoApplication {
    * answer is "we don't know yet" with a pointer to Business details — never a guess either way.
    * It never stops a bill being issued (#210 part 3).
    */
-  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined; readonly documentType?: EInvoiceDocument['documentType'] }): {
+  private eInvoiceDecisionFor(bill: { readonly id: string; readonly partyId: string; readonly customerType: 'B2B' | 'B2C'; readonly documentDate: string; readonly exportKind?: ExportParticulars['kind'] | undefined; readonly documentType?: EInvoiceDocument['documentType']; readonly pricing?: { readonly supplierRegistration?: string } | null }): {
     readonly needed: 'YES' | 'NO' | 'UNKNOWN';
     readonly message: { readonly 'en-IN': string; readonly 'hi-IN': string };
     readonly askTurnover: boolean;
@@ -6303,7 +6340,7 @@ export class DemoApplication {
     // A party that is no longer a customer (merged, or a supplier's note) has no GSTIN to read here.
     try { gstin = customerView(this.config.companyId, bill.partyId).gstin; } catch (error) { reportUnexpected('api.einvoiceRecipient', error); gstin = null; }
     const recipientKind = bill.exportKind ?? this.exportSales.get(bill.id)?.kind ?? (bill.customerType === 'B2B' ? 'B2B' as const : 'B2C' as const);
-    const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin }));
+    const decision = decideApplicability(this.applicabilityOf({ documentType: bill.documentType, documentDate: bill.documentDate, recipientKind, recipientGstin: gstin, billOfSupply: bill.pricing?.supplierRegistration === 'COMPOSITION' }));
     const NOT_NEEDED = 'This bill does not need an e-invoice number';
     const NOT_NEEDED_HI = 'इस बिल को ई-इनवॉइस नंबर की ज़रूरत नहीं';
     if (decision.outcome === 'APPLICABLE') {
@@ -6567,7 +6604,7 @@ export class DemoApplication {
     const lines = consignmentLinesOf(pricing.lines);
     const document: ConsignmentDocument = {
       documentId: invoice.id,
-      documentType: 'TAX_INVOICE',
+      documentType: pricing.supplierRegistration === 'COMPOSITION' ? 'BILL_OF_SUPPLY' : 'TAX_INVOICE',
       documentNumber: invoice.number,
       documentDate: invoice.documentDate,
       lines,
@@ -7525,9 +7562,16 @@ export class DemoApplication {
     }
     // Issue #289, part 3 — a line with no GST at all (unregistered seller, exempt freight) has no
     // credit to block. Checked on the final rates, after reverse charge has set the law's rate.
+    // Issue #296 — CGST Act s.10(4): a composition dealer is not entitled to any input tax credit,
+    // so on a bill dated while the business is on the scheme every line's GST goes into cost, the
+    // same way credit blocked by s.17(5) does. The liability under reverse charge is unaffected.
+    const onComposition = schemeOn(companyId, date) === 'COMPOSITION';
     const finalLines = lines.map((line, index) => {
       const decided = reverseCharge.lines[index];
-      return decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+      const priced = decided?.kind === 'REVERSE_CHARGE' ? { ...line, gstRateBasisPoints: decided.rateBasisPoints } : line;
+      return onComposition && priced.gstRateBasisPoints > 0 && priced.itcEligibility === 'ELIGIBLE'
+        ? { ...priced, itcEligibility: 'INELIGIBLE' as const, blockedCreditClause: COMPOSITION_NO_CREDIT_CLAUSE }
+        : priced;
     });
     const untaxedBlocked = finalLines.find((line) => line.itcEligibility === 'INELIGIBLE' && line.gstRateBasisPoints === 0);
     if (untaxedBlocked !== undefined) {
@@ -7679,6 +7723,9 @@ export class DemoApplication {
       const tax = taxOn(line.taxableValuePaise, line.gstRateBasisPoints);
       const reason = BLOCKED_CREDIT_REASONS.find((candidate) => candidate.clause === line.blockedCreditClause);
       const owed = approved.taxLiability === 'REVERSE_CHARGE' ? ' You still pay this GST to the government under reverse charge; only the credit is lost.' : '';
+      if (line.blockedCreditClause === COMPOSITION_NO_CREDIT_CLAUSE) {
+        return `${line.description}: credit not available — your business is on the composition scheme, which does not allow claiming GST back (CGST s.10(4)). Its ${formatPaise(taxOn(line.taxableValuePaise, line.gstRateBasisPoints))} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you.${owed}`;
+      }
       return `${line.description}: credit not available — ${reason?.label.toLowerCase() ?? 'blocked'} (CGST s.${line.blockedCreditClause ?? '17(5)'}). Its ${formatPaise(tax)} of ${intraState ? 'CGST + SGST' : 'IGST'} is added to what it cost you, not to the GST you claim back.${owed}`;
     });
   }

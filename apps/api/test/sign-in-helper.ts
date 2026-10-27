@@ -38,14 +38,3 @@ export const signInOverHttp = async (base: string, address = SAMPOORNA_OWNER, co
   assert.ok(token, 'signing in sets the session cookie');
   return `${SESSION_COOKIE}=${token}`;
 };
-
-/** In a Puppeteer page showing the sign-in dialog: type the address, ask for the code, type it, sign in. */
-export const signInInBrowser = async (page: { waitForSelector(selector: string, options?: object): Promise<unknown>; type(selector: string, text: string): Promise<void>; click(selector: string): Promise<void>; waitForFunction(fn: () => boolean): Promise<unknown> }, address = SAMPOORNA_OWNER): Promise<void> => {
-  await page.waitForSelector('#login-form [name="address"]', { visible: true });
-  await page.type('#login-form [name="address"]', address);
-  await page.click('#login-form button[type="submit"]');
-  await page.waitForSelector('#login-form [name="code"]', { visible: true });
-  await page.type('#login-form [name="code"]', DEMO_SIGN_IN_CODE);
-  await page.click('#login-form button[type="submit"]');
-  await page.waitForFunction(() => !(document.querySelector('#login-dialog') as HTMLDialogElement).open);
-};

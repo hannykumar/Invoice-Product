@@ -47,7 +47,7 @@ import {
   type SalesInvoiceLineInput,
 } from './model.ts';
 import { formatNumber, seriesScope, validateSeries } from './numbering.ts';
-import { DEFAULT_SALES_POLICY, dueDateFor, needsApproval, withinCancellationWindow, type SalesPolicy } from './policy.ts';
+import { DEFAULT_BILL_OF_SUPPLY_SERIES, DEFAULT_SALES_POLICY, dueDateFor, needsApproval, withinCancellationWindow, type SalesPolicy } from './policy.ts';
 import { noCancellationGuard, type CancellationGuardPort, type ComplianceHookPort, type InventoryPort, type ReservationRequest, type SalesRepository, type StockShortfall } from './ports.ts';
 
 const nil = (): Money => zero('INR');
@@ -158,6 +158,7 @@ export class SalesService {
     this.#clock = deps.clock;
     this.#policy = deps.policy ?? DEFAULT_SALES_POLICY;
     validateSeries(this.#policy.series);
+    if (this.#policy.billOfSupplySeries !== undefined) validateSeries(this.#policy.billOfSupplySeries);
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
     this.#guard = deps.cancellationGuard ?? noCancellationGuard;
   }
@@ -334,6 +335,7 @@ export class SalesService {
               placeOfSupplyStateCode: result.placeOfSupplyStateCode,
               split: result.split,
               mayChargeGst: result.mayChargeGst,
+              supplierRegistration: result.supplierRegistration,
               lines: result.lines,
               totals: result.totals,
               explanation: result.explanation,
@@ -614,8 +616,10 @@ export class SalesService {
     let outcome;
     try {
       outcome = await this.#store.transaction(actor.companyId, async (uow) => {
-        const sequence = await uow.sequences.next(actor.companyId, seriesScope(this.#policy.series, priced.documentDate));
-        const number = formatNumber(this.#policy.series, priced.documentDate, sequence);
+        // Issue #296 — a composition business issues a bill of supply (Rule 49), numbered apart.
+        const series = pricing.supplierRegistration === 'COMPOSITION' ? (this.#policy.billOfSupplySeries ?? DEFAULT_BILL_OF_SUPPLY_SERIES) : this.#policy.series;
+        const sequence = await uow.sequences.next(actor.companyId, seriesScope(series, priced.documentDate));
+        const number = formatNumber(series, priced.documentDate, sequence);
 
         const lines = await buildSalePosting(uow.accounts, actor.companyId, priced.partyId, priced.supplyKind, pricing);
         const posted = await this.#ledger.postVoucherIn(uow, actor, {

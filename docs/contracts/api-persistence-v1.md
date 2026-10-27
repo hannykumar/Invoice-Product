@@ -61,7 +61,7 @@ Migration `20261016T064205274Z_api_4b8da552ccf1_durable_app_records` (`packages/
 Kinds today: `business_details`, `business_prefill`, `turnover_answers`, `einvoice_exemption`,
 `branding`, `upi_id`, `item_tax`, `item_price`, `declared_rate` (frozen, append-only),
 `invoice_print`, `note_print`, `challan_print`, `presale_print` (frozen), `eway_movement`,
-`sale_delivery`, `export_sale`. A module that grows its own table moves its kind's rows there.
+`sale_delivery`, `export_sale`, `composition_scheme`, `composition_statements` (#296). A module that grows its own table moves its kind's rows there.
 
 Frozen rows written before #352 are plaintext until the owner runs `npm run db:seal-frozen`
 (preview by default; `--apply --approved-by "<name>"` to seal; see decision D500). New frozen

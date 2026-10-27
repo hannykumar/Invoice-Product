@@ -102,6 +102,7 @@
           <nav class="more-groups" aria-labelledby="more-title">
             <section class="panel more-group" aria-labelledby="more-gst"><h2 id="more-gst" data-i18n="navGroupGst"></h2><ul class="more-list">
               <li><button type="button" class="more-link" data-view="gst-returns"><span aria-hidden="true">▦</span><span data-i18n="navGstReturns"></span></button></li>
+              <li><button type="button" class="more-link" data-view="composition"><span aria-hidden="true">%</span><span data-i18n="navComposition"></span></button></li>
               <li><button type="button" class="more-link" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button></li>
               <li><button type="button" class="more-link" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button></li>
               <li><button type="button" class="more-link" data-view="itc"><span aria-hidden="true">⚖</span><span data-i18n="navItc"></span></button></li>
@@ -984,6 +985,18 @@
             <p id="gst-action-result"></p>
             <pre id="gst-file" hidden></pre>
           </article>
+        </section>
+
+        <!-- Issue #296 — the composition scheme: the setting, CMP-08 every quarter and GSTR-4 every year. Filled by composition.js. -->
+        <section class="view" id="view-composition" aria-labelledby="composition-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="composition-title" tabindex="-1" data-i18n="compositionTitle"></h1>
+              <p data-i18n="compositionHelp"></p>
+            </div>
+          </div>
+          <div id="composition-root"></div>
         </section>
 
         <section class="view" id="view-vehicle" aria-labelledby="vehicle-title">

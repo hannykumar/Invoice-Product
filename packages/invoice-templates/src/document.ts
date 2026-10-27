@@ -255,6 +255,12 @@ export interface InvoiceDocument {
    * and GSTR-1 classify the sale with. Absent on every ordinary bill.
    */
   readonly exportSupply?: PrintedExportSupply | null;
+  /**
+   * Issue #296 — the words CGST Rule 5 requires at the top of a composition dealer's bill of supply.
+   * Set only on a `BILL_OF_SUPPLY` from a business on the composition scheme; a bill of supply
+   * carries no tax columns, no tax rows and no tax summary, because no tax may be collected (s.10(4)).
+   */
+  readonly compositionLegend?: string | null;
 }
 
 /**

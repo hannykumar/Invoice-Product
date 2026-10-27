@@ -139,7 +139,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (211)
+## Routes (219)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
@@ -274,6 +274,14 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/itc/import` | `itc.import` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/itc/typed` | `itc.import` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/itc/decide` | `itc.decide` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/composition/scheme` | `business.settings.read` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/composition/scheme/preview` | `business.settings.write` | ✓ | ✓ |  |  |  |
+| `POST /api/composition/scheme` | `business.settings.write` | ✓ | ✓ |  |  |  |
+| `POST /api/composition/statements` | `gst_returns.view` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/composition/statement` | `gst_returns.view` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/composition/approve` | `gst_returns.approve` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/composition/filed` | `gst_returns.approve` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/composition/yearly` | `gst_returns.view` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/gst-returns` | `gst_returns.view` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/gst-returns/prepare` | `gst_returns.prepare` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/gst-returns/approve` | `gst_returns.approve` | ✓ | ✓ | ✓ |  |  |

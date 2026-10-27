@@ -105,7 +105,8 @@ jobs:
     # Issue #355 — the flows that must never break, in a real browser against the real app on
     # real PostgreSQL: sign-up and sign-in (stand-in code), make a bill, record a purchase,
     # prepare a GST return, upgrade plan, invite a teammate, and (#494) a bill surviving a server
-    # restart and one company never seeing another's bill. Make this job a required check.
+    # restart and one company never seeing another's bill, plus the sale in slides and the page's security
+    # headers and sandbox (#496: Playwright is the one browser driver). Make this job a required check.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:

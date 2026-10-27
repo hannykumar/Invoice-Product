@@ -545,6 +545,7 @@ export class PreSaleService {
           placeOfSupplyStateCode: result.placeOfSupplyStateCode,
           split: result.split,
           mayChargeGst: result.mayChargeGst,
+              supplierRegistration: result.supplierRegistration,
           lines: result.lines,
           totals: result.totals,
           explanation: result.explanation,

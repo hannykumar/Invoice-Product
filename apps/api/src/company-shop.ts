@@ -54,9 +54,9 @@ import {
 } from '../../../packages/purchasing/src/supplier-risk-adapters.ts';
 import { ConnectorGateway, NoWebhooksVerifier } from '../../../packages/platform/src/connectors.ts';
 import { ItcReconciliationService } from '../../../packages/itc/src/service.ts';
+import { RegisterPurchaseBooks } from '../../../packages/itc/src/register-books.ts';
 import {
   InMemoryImportBatches, InMemoryItcClaims, InMemoryItcDecisions, InMemoryPortalRecords, gstr2bSignalPort,
-  purchaseBillToBookDocument, purchaseReturnToBookDocument,
 } from '../../../packages/itc/src/adapters.ts';
 import { InMemoryReturnNoteRepository } from '../../../packages/returns/src/repository.ts';
 import type { BookPurchaseDocument, TaxPeriod } from '../../../packages/itc/src/types.ts';
@@ -370,61 +370,19 @@ export async function createCompanyShop(seed: CompanySeed, persistence: Persiste
   /** When a reverse-charge bill's GST falls due (CGST s.12(3) / s.13(3)), or `null` for any other bill. */
   const taxPointOf = async (companyId: CompanyId, billId: string) =>
     reverseCharge.timeOfSupply(companyId, billId, await paidOnOf(companyId, billId));
-  const itc = new ItcReconciliationService({
-    books: {
-      async documentsFor(companyId: CompanyId, period: TaxPeriod): Promise<readonly BookPurchaseDocument[]> {
-        const posted = await bills.list(companyId);
-        // Issue #289, part 2b — a reverse-charge bill's tax belongs to the month of its time of
-        // supply, which can be before the bill's own month (paid in advance) or after it (a service
-        // unpaid for 60 days). It is handed over from whichever month comes first.
-        const taxPoints = new Map<string, IsoDate>();
-        for (const bill of posted) {
-          if (!bill.tax.reverseCharge) continue;
-          const point = await taxPointOf(companyId, bill.id);
-          if (point !== null) taxPoints.set(bill.id, point.date);
-        }
-        const firstMonth = (bill: (typeof posted)[number]) => {
-          const point = taxPoints.get(bill.id);
-          return point !== undefined && point.slice(0, 7) < bill.invoiceDate.slice(0, 7) ? point.slice(0, 7) : bill.invoiceDate.slice(0, 7);
-        };
-        const fromBills = posted
-          .filter((bill) => firstMonth(bill) <= period)
-          .map((bill) => purchaseBillToBookDocument(
-            {
-              id: bill.id, companyId: bill.companyId, supplierPartyId: bill.supplierPartyId,
-              supplierName: bill.supplierName, invoiceNumber: bill.invoiceNumber,
-              invoiceDate: bill.invoiceDate, totalPaise: bill.totalPaise, state: bill.state,
-              voucherId: bill.voucherId,
-              tax: {
-                taxableValuePaise: bill.tax.taxableValuePaise, cgstPaise: bill.tax.cgstPaise,
-                sgstPaise: bill.tax.sgstPaise, igstPaise: bill.tax.igstPaise, cessPaise: bill.tax.cessPaise,
-                ineligibleItcPaise: bill.tax.ineligibleItcPaise, reverseCharge: bill.tax.reverseCharge,
-                ...(bill.tax.ineligibleHeads === undefined ? {} : { ineligibleHeads: bill.tax.ineligibleHeads }),
-              },
-            },
-            // Issue #289 — a seller who is not registered sells taxable goods without GST; that is not
-            // a Table 5 supply (composition, exempt, nil-rated or non-GST).
-            {
-              gstin: gstinOfParty(bill.supplierPartyId),
-              ...(registrationOfParty(bill.supplierPartyId) === 'unregistered' ? { inTable5: false } : {}),
-              ...(['unregistered', 'exempt_only', 'composition'].includes(registrationOfParty(bill.supplierPartyId) ?? '') ? { outsideGstr2b: true as const } : {}),
-              ...(taxPoints.has(bill.id) ? { taxPointDate: taxPoints.get(bill.id) as string } : {}),
-            },
-          ));
-        // Issue #249 — every return of goods to a supplier, as a credit note linked to its bill, from
-        // the month of the return. It used to be left out, so the credit stayed at the full bill.
-        const returned = await Promise.all((await returnNotes.list(companyId))
-          .filter((note) => note.kind === 'PURCHASE_RETURN' && note.documentDate.slice(0, 7) <= period)
-          .map(async (note) => {
-            const bill = await bills.findById(companyId, note.originalDocument.id);
-            return purchaseReturnToBookDocument({ ...note, kind: 'PURCHASE_RETURN' as const }, {
-              gstin: gstinOfParty(String(note.partyId)),
-              name: bill?.supplierName ?? String(note.partyId),
-            });
-          }));
-        return [...fromBills, ...returned];
-      },
+  // Issue #366 — derived from the posted bills, return notes and reverse-charge register, which are
+  // themselves PostgreSQL when there is a database; there is no second copy of the books to lose.
+  const itcBooks = new RegisterPurchaseBooks({
+    bills,
+    returns: returnNotes,
+    suppliers: {
+      gstinOf: (_companyId, partyId) => gstinOfParty(partyId),
+      registrationOf: (_companyId, partyId) => registrationOfParty(partyId),
     },
+    taxPointOf: async (companyId, billId) => (await taxPointOf(companyId, billId))?.date ?? null,
+  });
+  const itc = new ItcReconciliationService({
+    books: itcBooks,
     records: itcRecords,
     batches: itcBatches,
     decisions: itcDecisions,

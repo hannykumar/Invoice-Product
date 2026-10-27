@@ -483,3 +483,46 @@ test('issue #143 — under bond or LUT the rate stays on every line and no tax i
   })));
   assert.equal(toDecimalString(inclusive.totals.taxableValue), '1180.00');
 });
+
+// ---------------------------------------------------------------- issue #296 — the composition scheme
+
+test('a composition business cannot sell to a customer in another state, and is told why in plain words', () => {
+  const { calculator } = makeCalculator({ registration: 'COMPOSITION' });
+  const result = refused(calculator.compute(crateSale({ partyId: 'gurugram-fresh' })));
+  assert.deepEqual(result.reasons.map((r) => r.code), ['COMPOSITION_INTERSTATE_SUPPLY']);
+  assert.match(result.reasons[0]!.message['en-IN'], /composition scheme/);
+  assert.match(result.reasons[0]!.message['en-IN'], /another state/);
+});
+
+test('an export or SEZ supply (inter-State by IGST Act s.7(5)) is refused for a composition business too', () => {
+  const { calculator } = makeCalculator({ registration: 'COMPOSITION' });
+  const result = refused(calculator.compute(crateSale({ zeroRated: 'WITHOUT_TAX' })));
+  assert.deepEqual(result.reasons.map((r) => r.code), ['COMPOSITION_INTERSTATE_SUPPLY']);
+});
+
+test('a composition business may still sell inside its own state, with no GST on the bill', () => {
+  const { calculator } = makeCalculator({ registration: 'COMPOSITION' });
+  const result = computed(calculator.compute(crateSale()));
+  assert.equal(result.split, 'CGST_SGST');
+  assert.equal(result.mayChargeGst, false);
+  assert.ok(result.lines.every((line) => line.totalTax.minor === 0n));
+});
+
+test('an ordinary business is not stopped from selling to another state', () => {
+  const { calculator } = makeCalculator();
+  assert.equal(calculator.compute(crateSale({ partyId: 'gurugram-fresh' })).status, 'COMPUTED');
+});
+
+test('the scheme in force on the bill date decides, not today’s: a bill before the change is taxed as it was', () => {
+  const { calculator, masterData } = makeCalculator();
+  const company = masterData.company(SHARMA)!;
+  // Regular until 30 June, composition from 1 July.
+  masterData.putCompany({ ...company, registration: 'COMPOSITION', registrationHistory: [{ from: '2026-01-01', registration: 'REGULAR' }, { from: '2026-07-01', registration: 'COMPOSITION' }] });
+  const before = computed(calculator.compute(crateSale({ documentDate: on('2026-06-30'), partyId: 'gurugram-fresh' })));
+  assert.equal(before.mayChargeGst, true);
+  assert.equal(before.split, 'IGST');
+  const after = calculator.compute(crateSale({ documentDate: on('2026-07-01'), partyId: 'gurugram-fresh' }));
+  assert.equal(after.status, 'CANNOT_COMPUTE');
+  const afterLocal = computed(calculator.compute(crateSale({ documentDate: on('2026-07-01') })));
+  assert.equal(afterLocal.mayChargeGst, false);
+});

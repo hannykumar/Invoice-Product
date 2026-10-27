@@ -20,7 +20,7 @@
  * deliberate act by a person who has seen the numbers.
  */
 import { createHash } from 'node:crypto';
-import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId } from '@invoice/kernel';
+import { conflict, forbidden, invalid, notFound, type Clock, type CompanyId, type IsoDate } from '@invoice/kernel';
 import type { ActorContext, AuditPort } from '@invoice/ledger';
 import { buildGstr1, sourcesOfSection, type Gstr1BuildResult } from './gstr1.ts';
 import { buildGstr3b } from './gstr3b.ts';
@@ -40,6 +40,7 @@ import {
   type ReturnPolicyPort,
   type ReturnPreparationRepository,
 } from './ports.ts';
+import { MIXED_MONTH, NOT_FOR_COMPOSITION } from './composition.ts';
 import {
   GST_RETURN_PERMISSIONS,
   RETURN_STATE_PLAIN,
@@ -74,7 +75,17 @@ export interface GstReturnServiceDeps {
   readonly periods?: PeriodLockPort;
   readonly policy?: ReturnPolicyPort;
   readonly thresholds?: B2clThresholdTable;
+  /**
+   * Issue #296 — which scheme the business was under during a period. Absent, every business is
+   * treated as a regular taxpayer, which is what this service always assumed before.
+   */
+  readonly scheme?: SchemePort;
   readonly idFactory?: () => string;
+}
+
+/** Whether the business was on the composition scheme at any point between two dates, inclusive. */
+export interface SchemePort {
+  during(companyId: CompanyId, from: IsoDate, to: IsoDate): Promise<'REGULAR' | 'COMPOSITION' | 'BOTH'>;
 }
 
 export interface WorkspaceInput {
@@ -139,6 +150,7 @@ export class GstReturnService {
   readonly #periods: PeriodLockPort | undefined;
   readonly #policy: ReturnPolicyPort | undefined;
   readonly #thresholds: B2clThresholdTable;
+  readonly #scheme: SchemePort | undefined;
   readonly #newId: () => string;
 
   constructor(deps: GstReturnServiceDeps) {
@@ -153,6 +165,7 @@ export class GstReturnService {
     this.#periods = deps.periods;
     this.#policy = deps.policy;
     this.#thresholds = deps.thresholds ?? new B2clThresholdTable();
+    this.#scheme = deps.scheme;
     this.#newId = deps.idFactory ?? (() => crypto.randomUUID());
   }
 
@@ -166,6 +179,7 @@ export class GstReturnService {
    */
   async workspace(actor: ActorContext, input: WorkspaceInput): Promise<ReturnWorkspace> {
     this.#require(actor, GST_RETURN_PERMISSIONS.view);
+    await this.#refuseComposition(actor, input.period);
     const stored = await this.#repository.find(actor.companyId, input.period, 'GSTR1');
     const policy = await this.#policyFor(actor.companyId, input.period);
 
@@ -207,6 +221,7 @@ export class GstReturnService {
     input: WorkspaceInput & { readonly idempotencyKey: string },
   ): Promise<ReturnWorkspace> {
     this.#require(actor, GST_RETURN_PERMISSIONS.prepare);
+    await this.#refuseComposition(actor, input.period);
     const existingByKey = await this.#repository.findByIdempotencyKey(actor.companyId, input.idempotencyKey);
     if (existingByKey !== null) return this.workspace(actor, input);
 
@@ -266,6 +281,7 @@ export class GstReturnService {
     input: WorkspaceInput & { readonly note?: string },
   ): Promise<ReturnWorkspace> {
     this.#require(actor, GST_RETURN_PERMISSIONS.approve);
+    await this.#refuseComposition(actor, input.period);
     const stored = await this.#mustFind(actor.companyId, input.period);
     if (stored.approval !== null) {
       throw conflict('GST_RETURN_ALREADY_APPROVED', `${formatTaxPeriod(input.period)} was already approved on ${stored.approval.approvedAt}.`);
@@ -357,6 +373,7 @@ export class GstReturnService {
     input: WorkspaceInput & { readonly returnType: 'GSTR1' | 'GSTR3B' },
   ): Promise<{ readonly fileName: string; readonly payload: Record<string, unknown>; readonly sentence: Bilingual }> {
     this.#require(actor, GST_RETURN_PERMISSIONS.export);
+    await this.#refuseComposition(actor, input.period);
     const stored = await this.#mustFind(actor.companyId, input.period);
     if (stored.approval === null) {
       throw conflict(
@@ -404,6 +421,7 @@ export class GstReturnService {
    */
   async submit(actor: ActorContext, input: WorkspaceInput & { readonly returnType: 'GSTR1' | 'GSTR3B' }): Promise<ReturnPreparation> {
     this.#require(actor, GST_RETURN_PERMISSIONS.submit);
+    await this.#refuseComposition(actor, input.period);
     if (this.#government === undefined) {
       throw invalid(
         'GST_RETURN_NO_CHANNEL',
@@ -652,6 +670,20 @@ export class GstReturnService {
         'hi-IN': `यह रिटर्न ${approvedAt.slice(0, 10)} को अप्रूव होने के बाद बुक्स बदली हैं: ${partsHi.join(', ')}. नीचे वाले आँकड़े वही हैं जो अप्रूव हुए थे; चुपके से नहीं बदले गए.`,
       },
     };
+  }
+
+  /**
+   * Issue #296 — a composition dealer files CMP-08 and GSTR-4, never GSTR-1 or GSTR-3B (CGST Rule 62
+   * and s.39). Preparing a regular return for such a month would put bills of supply, which carry
+   * no tax, into the regular tables, so the month is refused up front in words the owner can act on.
+   */
+  async #refuseComposition(actor: ActorContext, period: TaxPeriod): Promise<void> {
+    if (this.#scheme === undefined) return;
+    const range = taxPeriodRange(period);
+    const scheme = await this.#scheme.during(actor.companyId, range.from, range.to);
+    if (scheme === 'REGULAR') return;
+    const message = scheme === 'COMPOSITION' ? NOT_FOR_COMPOSITION : MIXED_MONTH;
+    throw invalid(scheme === 'COMPOSITION' ? 'GST_RETURN_NOT_FOR_COMPOSITION' : 'GST_RETURN_MIXED_SCHEME_MONTH', message['en-IN']);
   }
 
   async #policyFor(companyId: CompanyId, period: TaxPeriod): Promise<ReturnPolicy> {

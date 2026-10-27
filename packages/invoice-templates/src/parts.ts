@@ -248,13 +248,17 @@ export const totalQuantityText = (lines: readonly RenderableLine[]): string => {
  * slip are tax invoices like any other. A charge line carries no code of its own (#188), so it
  * simply has none to print.
  */
-export const narrowLine = (line: RenderableLine, locale: Locale): string => `
+export const narrowLine = (line: RenderableLine, locale: Locale, withTax = true): string => `
   <div class="tline">
     <div class="tline-name">${escapeHtml(line.description)}${line.reverseCharge ? ' (RCM)' : ''}</div>
     ${line.hsnOrSac === null ? '' : `<div class="tline-hsn">${escapeHtml(t('hsn', locale))} ${escapeHtml(line.hsnOrSac)}</div>`}
     <div class="tline-detail"><span>${line.kind === 'CHARGE' ? '' : `${escapeHtml(line.quantityText)} × ${money(line.unitPrice)}`}</span><span class="num">${money(line.taxableValue)}</span></div>
-    ${line.ratePercentTimes100 === null ? '' : `<div class="tline-tax"><span>${escapeHtml(t('gstAmount', locale))} ${escapeHtml(percent(line.ratePercentTimes100))}</span><span class="num">${money(line.taxAmount)}</span></div>`}
+    ${!withTax || line.ratePercentTimes100 === null ? '' : `<div class="tline-tax"><span>${escapeHtml(t('gstAmount', locale))} ${escapeHtml(percent(line.ratePercentTimes100))}</span><span class="num">${money(line.taxAmount)}</span></div>`}
   </div>`;
+
+/** Issue #296 — CGST Rule 5: the composition dealer's words go at the top of the bill of supply. */
+export const legendBlock = (doc: Pick<InvoiceDocument, 'compositionLegend'>): string =>
+  doc.compositionLegend == null || doc.compositionLegend === '' ? '' : `<div class="composition-legend"><strong>${escapeHtml(doc.compositionLegend)}</strong></div>`;
 
 /** Issue #143 — an export or SEZ bill carries its own title; every other bill its document type's. */
 export const invoiceTitle = (doc: Pick<InvoiceDocument, 'title' | 'exportSupply'>, locale: Locale): string =>
