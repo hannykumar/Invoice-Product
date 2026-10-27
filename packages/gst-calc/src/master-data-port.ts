@@ -14,12 +14,28 @@ export interface CompanyTaxProfile {
   readonly stateCode: string;
   readonly registration: Registration;
   /**
+   * Issue #296 — when the business changed scheme (composition ↔ regular), oldest first. A bill is
+   * taxed under the scheme the business was in **on the bill's date**, not today's, so a bill dated
+   * before the change still prints as it did. Absent or empty means `registration` has always held.
+   */
+  readonly registrationHistory?: readonly { readonly from: string; readonly registration: Registration }[];
+  /**
    * Issue #187 — whether last financial year's turnover was above ₹5 crore, as the business told
    * us, one answer per financial year. It decides how many HSN digits a bill needs. A year with no
    * answer counts as "not sure" and asks for 6 digits.
    */
   readonly turnoverAbove5Crore?: readonly TurnoverAnswer[] | null;
 }
+
+/** The scheme the business was under on `date` (an ISO date). The last change on or before it wins. */
+export const registrationOn = (company: CompanyTaxProfile, date: string): Registration => {
+  const history = company.registrationHistory ?? [];
+  let found: Registration | undefined;
+  for (const change of history) {
+    if (change.from <= date) found = change.registration;
+  }
+  return found ?? company.registration;
+};
 
 export interface PartyTaxProfile {
   readonly partyId: string;
