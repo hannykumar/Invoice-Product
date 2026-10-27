@@ -163,3 +163,19 @@ test('#350 review: one caller is one address — IPv4 in IPv6 form, and an IPv6 
   assert.notEqual(normaliseAddress('2001:db8:0:1::1'), normaliseAddress('2001:db8:0:2::1'));
   assert.equal(normaliseAddress('::1'), '0:0:0:0::/64');
 });
+
+test('#350 / #298: a refusal answers in Hindi, in Devanagari, when the screen asks for hi-IN', async () => {
+  const address = '+919812388801';
+  let reply = { status: 0, headers: {} as Record<string, string>, body: '' as string | Buffer };
+  for (let i = 0; i < 6; i += 1) reply = await post('/api/auth/sign-in', { address, code: '000000', locale: 'hi-IN' }, '198.51.100.88') as typeof reply;
+  assert.equal(reply.status, 429);
+  const body = parse(reply);
+  assert.equal(body.title, 'थोड़ा रुकें');
+  assert.match(body.message, /^इस नंबर या ईमेल के लिए बहुत बार ग़लत कोड डाला गया। कृपया \d+ मिनट रुककर फिर कोशिश करें।$/);
+  assert.doesNotMatch(body.message, /[A-Za-z]{3,}/, 'no English words left in the Hindi');
+  // Every limit has its Hindi, and every one is Devanagari.
+  const { LIMITS, companyQuota, globalCap, expensiveLimit, PAID_SERVICES } = await import('../../../packages/platform/src/rate-limits.ts');
+  for (const limit of [...Object.values(LIMITS), expensiveLimit('free'), ...PAID_SERVICES.flatMap((service) => [companyQuota(service), globalCap(service)])]) {
+    assert.match(limit.hindi, /[ऀ-ॿ]/, `${limit.name} has a Devanagari sentence`);
+  }
+});

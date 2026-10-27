@@ -17,6 +17,7 @@ import { apiRuntime, AuthenticationError, startRuntime } from './runtime.ts';
 import { SignInUnavailable, sessionTokenFrom } from './sign-in.ts';
 import { expensiveLimit, LIMITS, RateLimited } from '../../../packages/platform/src/rate-limits.ts';
 import { costOf } from './routes/costs.ts';
+import { both } from './language.ts';
 import { spend } from './spending.ts';
 import { openPersistence, securityOf } from './persistence.ts';
 import { sealStoredAppRecords } from './field-encryption.ts';
@@ -113,7 +114,7 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
     });
   }
   if (error instanceof RateLimited) {
-    const refused = failure(429, requestId, { title: 'Please wait a little', code: 'TOO_MANY_REQUESTS', message: error.message });
+    const refused = failure(429, requestId, { title: both('Please wait a little', 'थोड़ा रुकें'), code: 'TOO_MANY_REQUESTS', message: both(error.message, error.hindi) });
     return { ...refused, headers: { ...refused.headers, 'retry-after': String(error.retryAfterSeconds) } };
   }
   if (error instanceof ZodError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: invalidInputMessage(error) });
