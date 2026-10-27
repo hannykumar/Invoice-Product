@@ -83,6 +83,10 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   assert.doesNotMatch(script, /setItem\("karobar\.session"/);
   assert.match(script, /credentials: "same-origin"/);
   assert.match(script, /api\("\/api\/auth\/sign-in"/);
+  // The owner's request: on a developer's machine nobody meets the sign-in step — the page signs in
+  // as the tester first, and opens the dialog only when that route is not there (404 off a developer's machine).
+  assert.match(script, /fetch\("\/api\/auth\/tester", \{ method: "POST", credentials: "same-origin" \}\);\s*if \(reply\.ok\) \{ await afterSignIn\(\); return; \}/);
+  assert.match(script, /if \(!dialog\.open\) dialog\.showModal\(\);\s*showTesterButton\(\);/);
   assert.match(script, /api\("\/api\/auth\/sign-out"/);
   assert.doesNotMatch(html, /type="password"/);
   assert.match(script, /karobar\.session/);
