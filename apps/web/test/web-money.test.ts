@@ -90,6 +90,11 @@ test('choosing a customer reads their open bills; the review asks first, and not
   assert.equal(record.amount, '500');
   assert.match(await textOf(page, '#review-body'), /₹500\.00 received from ABC Traders is in your books as RECEIPT\//);
   assert.ok(sentSince(mark).includes('POST /api/payments/voucher'), 'the receipt voucher is asked for');
+  // After anything is recorded every list that could have changed is read again, so no screen shows yesterday's books.
+  for (const list of ['GET /api/dashboard', 'GET /api/einvoices/invoices', 'GET /api/eway/bills', 'GET /api/challans', 'GET /api/returns/documents', 'GET /api/returns/notes', 'GET /api/reminders']) {
+    await harness.requested(list.replace(/^GET /, ''), mark);
+    assert.ok(sentSince(mark).includes(list), `${list} was read again`);
+  }
   assert.ok(await isShown(page, '[data-draft="payment"] ~ [data-voucher-panel] iframe, #view-payment [data-voucher-panel]'), 'and shown under the form');
   await page.click('#review-cancel, #review-dialog [data-close-dialog]').catch(() => page.keyboard.press('Escape'));
   assert.deepEqual(harness.problems, []);

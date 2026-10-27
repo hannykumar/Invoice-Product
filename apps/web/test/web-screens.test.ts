@@ -168,6 +168,17 @@ test('Home is one money card, the tasks that need the owner, and recent bills wi
   assert.ok(bills.some((bill) => /late/.test(bill.chip) && /days late/.test(bill.text)), 'an overdue bill says how late it is');
 });
 
+test('Home is read again every time it is opened, so a task done elsewhere is gone', async () => {
+  await openByAddress('items');
+  const mark = harness.sent.length;
+  await page.click(tab('dashboard'));
+  await harness.requested('/api/dashboard', mark);
+  await page.click(tab('items'));
+  const again = harness.sent.length;
+  await page.click(tab('dashboard'));
+  await harness.requested('/api/dashboard', again);
+});
+
 test('the Items tab lists every item with what is left, adds one and changes one', async () => {
   await page.click(tab('items'));
   await page.waitForFunction(() => document.querySelectorAll('#items-list li').length >= 2);

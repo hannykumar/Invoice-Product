@@ -8,7 +8,7 @@
  * then shown. Before, `web.test.ts` only looked for the route strings in `app.js`.
  */
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, before, beforeEach, test } from 'node:test';
 import type { Page } from 'puppeteer';
 import { BANK_RETURN_PATH } from '../../../packages/bank-feeds/src/index.ts';
 import { isShown, startPageHarness, textOf, until, type PageHarness } from './page-harness.ts';
@@ -25,6 +25,9 @@ before(async () => {
   page = await harness.signedIn();
 });
 after(async () => { await harness?.close(); });
+
+// Each test starts on a screen of its own: whatever dialog the last one left on show is closed.
+beforeEach(async () => { await page.evaluate(() => document.querySelectorAll('dialog[open]').forEach((dialog) => (dialog as HTMLDialogElement).close())); });
 
 const open = async (view: string) => {
   await page.evaluate((target) => { location.hash = `#${target}`; }, view);
@@ -308,4 +311,29 @@ test('dates fill in as today, except the one that is the business\'s own promise
   const today = (await harness.api('/api/dashboard')).today as string;
   assert.equal(await page.$eval('#presale-form [name="date"]', (input) => (input as HTMLInputElement).value), today);
   assert.equal(await page.$eval('#presale-form [name="validUntil"]', (input) => (input as HTMLInputElement).value), '', 'left empty: no promise is made for the shopkeeper');
+});
+
+test('Ask: the answer names its source, and it is still on screen — in Hindi — when the language is switched', async () => {
+  await open('ask');
+  const mark = harness.sent.length;
+  await page.type('#ask-question', 'Who owes me money?');
+  await page.click('#ask-send');
+  const asked = await harness.requested('/api/assistant/ask', mark);
+  assert.equal(JSON.parse(asked.body!).question, 'Who owes me money?');
+  await waitForText('ask', 'Your customers owe you ₹[\\d,.]+ across 1 customer\\.');
+  assert.match(await screenText('ask'), /Where these figures come from/);
+  assert.match(await screenText('ask'), /3 records behind it/);
+  await page.select('#locale', 'hi-IN');
+  await page.waitForFunction(() => /पूछिए/.test((document.querySelector('#view-ask') as HTMLElement).innerText));
+  assert.match(await screenText('ask'), /Who owes me money\?/, 'the question asked is still shown');
+  assert.match(await screenText('ask'), /मुझे किससे पैसा लेना है\?/, 'the example questions are Hindi');
+  await page.select('#locale', 'en-IN');
+});
+
+test('Setting up a business reads the full list of states from the server, not twelve typed into the page', async () => {
+  await open('setup');
+  await page.waitForFunction(() => document.querySelectorAll('#setup-states option').length > 30);
+  const names = await page.$$eval('#setup-states option', (all) => all.map((option) => option.textContent!));
+  assert.ok(names.some((name) => /Maharashtra/.test(name)) && names.some((name) => /Ladakh/.test(name)) && names.some((name) => /Karnataka/.test(name)));
+  assert.ok(harness.sent.some((request) => request.path === '/api/states'));
 });
