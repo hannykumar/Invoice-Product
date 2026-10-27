@@ -60,7 +60,17 @@ export async function moneyCardFigures(store: LedgerStore, companyId: CompanyId,
 
 const shortDate = (iso: string, locale: 'en-IN' | 'hi-IN') =>
   new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(`${iso}T12:00:00+05:30`));
-const monthName = (key: string, locale: 'en-IN' | 'hi-IN') =>
+const QUARTER_KEY = /^(\d{4})-Q([1-4])$/;
+const monthName = (key: string, locale: 'en-IN' | 'hi-IN') => {
+  // Issue #296 — a CMP-08 period is a quarter ("2026-Q1": the financial year starting in 2026).
+  const quarter = QUARTER_KEY.exec(key);
+  if (quarter !== null) {
+    const [, startYear = '', number = ''] = quarter;
+    return locale === 'hi-IN' ? `${startYear}-${String(Number(startYear) + 1).slice(2)} की तिमाही ${number}` : `quarter ${number} of ${startYear}-${String(Number(startYear) + 1).slice(2)}`;
+  }
+  return calendarMonthName(key, locale);
+};
+const calendarMonthName = (key: string, locale: 'en-IN' | 'hi-IN') =>
   new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'Asia/Kolkata' }).format(new Date(`${key}-15T12:00:00+05:30`));
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
