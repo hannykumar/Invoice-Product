@@ -132,14 +132,19 @@ export async function gstReturnTasks(
   company: { readonly id: CompanyId; readonly name: string; readonly gstin: string; readonly booksStart: IsoDate },
   doneMonths: ReadonlySet<string>,
   canAct: boolean,
+  /** Issue #296 — the scheme the business is under today, and the calendar quarters whose CMP-08 is filed. */
+  composition: { readonly onScheme: boolean; readonly filedQuarters: ReadonlySet<string> } = { onScheme: false, filedQuarters: new Set() },
 ): Promise<HomeTask[]> {
   const profiles = new InMemoryProfiles();
   profiles.set({
     companyId: company.id,
     legalName: company.name,
     gstin: company.gstin,
-    // A registered GST number that issues tax invoices is a regular taxpayer.
-    registrationType: { value: 'REGULAR', basis: 'DERIVED' },
+    // A registered GST number that issues tax invoices is a regular taxpayer — unless the owner said
+    // the business is on the composition scheme (#296), which files CMP-08 and GSTR-4 instead.
+    registrationType: composition.onScheme
+      ? { value: 'COMPOSITION', basis: 'DECLARED' }
+      : { value: 'REGULAR', basis: 'DERIVED' },
     // ponytail: monthly because the GST returns screen prepares one return a month; a quarterly
     // (QRMP) shop needs a Business details answer the app does not ask yet.
     gstFilingFrequency: { value: 'MONTHLY', basis: 'DERIVED', basisNote: 'The GST returns screen prepares one return a month.' },
@@ -159,9 +164,10 @@ export async function gstReturnTasks(
   // the platform's roles have no calendar permission of their own yet.
   const view = await calendar.calendar({ ...actor, permissions: [CALENDAR_PERMISSIONS.view] });
   const tasks: HomeTask[] = [];
-  for (const [code, en, hi] of [['GSTR1', 'GSTR-1 (sales list)', 'GSTR-1 (बिक्री की सूची)'], ['GSTR3B', 'GSTR-3B (tax payment)', 'GSTR-3B (टैक्स भरना)']] as const) {
+  for (const [code, en, hi] of [['GSTR1', 'GSTR-1 (sales list)', 'GSTR-1 (बिक्री की सूची)'], ['GSTR3B', 'GSTR-3B (tax payment)', 'GSTR-3B (टैक्स भरना)'], ['CMP08', 'CMP-08 (quarterly tax)', 'CMP-08 (तिमाही टैक्स)']] as const) {
     const open = view.entries
-      .filter((entry) => entry.occurrence.code === code && ['DUE_SOON', 'DUE_TODAY', 'OVERDUE'].includes(entry.state) && !doneMonths.has(entry.occurrence.period.key))
+      .filter((entry) => entry.occurrence.code === code && ['DUE_SOON', 'DUE_TODAY', 'OVERDUE'].includes(entry.state)
+        && !(code === 'CMP08' ? composition.filedQuarters.has(entry.occurrence.period.key) : doneMonths.has(entry.occurrence.period.key)))
       .sort((a, b) => a.occurrence.dueDate.localeCompare(b.occurrence.dueDate));
     const first = open[0];
     if (first === undefined) continue;
@@ -176,7 +182,7 @@ export async function gstReturnTasks(
         : say(`${en} for ${months('en-IN')} is due ${shortDate(due, 'en-IN')}`, `${hi} ${months('hi-IN')} का ${shortDate(due, 'hi-IN')} तक भरना है`);
     tasks.push({
       id: `gst:${code}:${first.occurrence.period.key}`, kind: 'GST_RETURN', rank: late > 0 ? 30 : 35, title,
-      action: canAct ? { label: say('Check', 'देखिए'), open: { view: 'gst-returns', period: first.occurrence.period.key } } : null,
+      action: canAct ? { label: say('Check', 'देखिए'), open: code === 'CMP08' ? { view: 'composition' } : { view: 'gst-returns', period: first.occurrence.period.key } } : null,
     });
   }
   return tasks;

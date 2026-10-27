@@ -44,6 +44,13 @@ export interface StatementRecord {
 const records = new DurableMap<readonly StatementRecord[]>('composition_statements', (companyId) => companyId);
 
 const recordsOf = (companyId: string): readonly StatementRecord[] => records.get(companyId) ?? [];
+/** The calendar's quarter keys ("2026-Q1": the year the financial year starts) of every filed CMP-08. */
+export const filedCalendarQuarters = (companyId: string): ReadonlySet<string> =>
+  new Set(recordsOf(companyId).filter((entry) => entry.filed !== null).map((entry) => {
+    const [startYear = '', , quarter = ''] = entry.quarterKey.split('-');
+    return `${startYear}-${quarter}`;
+  }));
+
 export const forgetCompositionStatements = (companyId: string): void => { records.delete(companyId); };
 
 export interface CompositionDeskDeps {

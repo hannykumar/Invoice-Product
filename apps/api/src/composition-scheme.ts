@@ -23,6 +23,9 @@ import {
 import { DurableMap } from './durable.ts';
 import { appToday } from './app-clock.ts';
 
+/** CGST Act s.10(4): the clause that takes input tax credit away from a composition dealer. */
+export const COMPOSITION_NO_CREDIT_CLAUSE = '10(4)';
+
 export type Scheme = 'REGULAR' | 'COMPOSITION';
 
 export interface SchemeChange {
