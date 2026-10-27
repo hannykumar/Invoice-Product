@@ -38,6 +38,7 @@ npm run bootstrap    # first run: database up, install, migrate, seed, verify
 npm run dev          # API server
 npm run web          # browser workspace
 npm test             # unit tests, no database needed
+npm run test:browser:pg # browser tests on a fresh PostgreSQL database (needs DATABASE_URL, Chromium)
 npm run verify       # typecheck + tests + integration tests + release gates (what CI runs)
 npm run db:migrate   # apply migrations (needs DATABASE_URL)
 npm run db:seed      # load synthetic demo data
