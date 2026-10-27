@@ -108,3 +108,59 @@ test('Money against a proforma has its own receipt and refund forms, which appea
   await page.waitForFunction(() => (document.querySelector('#presale-advance-form') as HTMLElement).getClientRects().length > 0);
   assert.equal(await isShown(page, '#presale-advance-form'), true);
 });
+
+test('the bank sends the customer back to the app, which finishes the request there — and refuses a reply it did not ask for', async () => {
+  // The page the bank returns to is the app itself, served like any other.
+  const served = await fetch(`${harness.base}${BANK_RETURN_PATH}?code=bank-code&state=bank-state`);
+  assert.equal(served.status, 200);
+  assert.match(served.headers.get('content-type') ?? '', /^text\/html/);
+
+  await page.goto(`${harness.base}/#bank-feeds`);
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('.view.active')?.id === 'view-bank-feeds');
+  const mark = harness.sent.length;
+  await page.click('#bank-feed-connect');
+  await dialogOpen();
+  assert.equal(await textOf(page, '#review-title'), 'Start bank permission');
+  assert.ok(!calls(mark).includes('POST /api/bank-feeds/consent/complete'), 'asking for permission connects nothing yet');
+  await page.click('#review-confirm');
+  await harness.requested('/api/bank-feeds/consent', mark);
+  await page.waitForFunction(() => sessionStorage.getItem('karobar.bankConsent') !== null);
+  const consent = await page.evaluate(() => JSON.parse(sessionStorage.getItem('karobar.bankConsent')!)) as { connectionId: string; consentState: string };
+  assert.ok(consent.connectionId && consent.consentState, 'this tab remembers which request it made, and under which state');
+  await page.keyboard.press('Escape');
+
+  // A reply carrying a state this tab never handed out is not sent on, the code leaves the address bar,
+  // and the remembered request is dropped. (The reply is shown in a dialog; see the note in the PR about its wording.)
+  const refused = harness.sent.length;
+  await page.goto(`${harness.base}${BANK_RETURN_PATH}?code=forged-code&state=not-the-one-we-gave`);
+  await page.waitForFunction(() => document.querySelector('.view.active')?.id === 'view-bank-feeds' && (document.querySelector('#review-dialog') as HTMLDialogElement).open);
+  assert.equal(await page.evaluate(() => location.search), '', 'the code is gone from the address bar');
+  assert.equal(await page.evaluate(() => location.hash), '#bank-feeds');
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('karobar.bankConsent')), null);
+  assert.ok(!calls(refused).includes('POST /api/bank-feeds/consent/complete'), 'a forged return completes nothing');
+});
+
+test('a return with the right state and a code completes the connection exactly once, and the spent code is not left behind', async () => {
+  await page.goto(`${harness.base}/#bank-feeds`);
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('.view.active')?.id === 'view-bank-feeds');
+  const mark = harness.sent.length;
+  await page.click('#bank-feed-connect');
+  await dialogOpen();
+  await page.click('#review-confirm');
+  await harness.requested('/api/bank-feeds/consent', mark);
+  await page.waitForFunction(() => sessionStorage.getItem('karobar.bankConsent') !== null);
+  const consent = await page.evaluate(() => JSON.parse(sessionStorage.getItem('karobar.bankConsent')!)) as { connectionId: string; consentState: string };
+  await page.keyboard.press('Escape');
+
+  // The same tab goes to the bank's page and comes back with the code.
+  const returned = harness.sent.length;
+  await page.goto(`${harness.base}${BANK_RETURN_PATH}?code=sandbox-approved&state=${encodeURIComponent(consent.consentState)}`);
+  const complete = await harness.requested('/api/bank-feeds/consent/complete', returned);
+  const sentBody = JSON.parse(complete.body!) as Record<string, string>;
+  assert.deepEqual([sentBody.connectionId, sentBody.authorizationCode, sentBody.consentState], [consent.connectionId, 'sandbox-approved', consent.consentState]);
+  assert.equal(calls(returned).filter((call) => call === 'POST /api/bank-feeds/consent/complete').length, 1);
+  assert.equal(await page.evaluate(() => location.search), '', 'the spent code is not left in the address bar or the history');
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('karobar.bankConsent')), null);
+});
