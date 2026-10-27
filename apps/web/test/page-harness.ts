@@ -25,6 +25,11 @@ export interface PageHarness {
   newPage(options?: { width?: number; height?: number }): Promise<Page>;
   /** A fresh page signed in through the real dialog (the demo owner), on `#hash`. */
   signedIn(hash?: string, options?: { width?: number; height?: number }): Promise<Page>;
+  /**
+   * Holds every request to `path` (a pathname) until the returned function is called: a slow
+   * network, so a test can look at the page while it waits for an answer.
+   */
+  hold(path: string): () => void;
   /** Server calls made as the demo owner, to arrange records a screen then shows. */
   api(path: string, body?: Record<string, unknown>): Promise<Record<string, any>>;
   close(): Promise<void>;
@@ -37,17 +42,19 @@ export async function startPageHarness(): Promise<PageHarness> {
   const browser = await puppeteer.launch({ headless: true, args: process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : [] });
   const sent: SentRequest[] = [];
   const problems: string[] = [];
+  const holds = new Map<string, Promise<void>>();
 
   const newPage = async (options: { width?: number; height?: number } = {}) => {
     const page = await browser.newPage();
     await page.setViewport({ width: options.width ?? 1280, height: options.height ?? 900 });
     await page.setRequestInterception(true);
-    page.on('request', (request: HTTPRequest) => {
+    page.on('request', async (request: HTTPRequest) => {
       const url = request.url();
       if (!url.startsWith(base) && !url.startsWith('data:') && !url.startsWith('about:')) return void request.abort();
       const { pathname } = new URL(url);
       if (pathname.startsWith('/api/')) sent.push({ method: request.method(), path: pathname, headers: request.headers(), body: request.postData() });
-      void request.continue();
+      await holds.get(pathname);
+      void request.continue().catch(() => undefined);
     });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error instanceof Error ? error.message : String(error)}`));
     page.on('console', (message) => { if (message.type() === 'error' && !/Failed to load resource/.test(message.text())) problems.push(`console: ${message.text()}`); });
@@ -75,6 +82,11 @@ export async function startPageHarness(): Promise<PageHarness> {
 
   return {
     base, browser, sent, problems, newPage, signedIn, api,
+    hold: (path) => {
+      let release = () => {};
+      holds.set(path, new Promise<void>((resolve) => { release = () => { holds.delete(path); resolve(); }; }));
+      return release;
+    },
     close: async () => { await browser.close(); await new Promise<void>((resolve) => webServer.close(() => resolve())); },
   };
 }
