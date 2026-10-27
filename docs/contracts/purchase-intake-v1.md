@@ -43,6 +43,13 @@ received → screening → (quarantined)
      (20,000), `MAX_PDF_INFLATED_BYTES` (64 MB total across Flate streams — a
      decompression bomb) and `PDF_PARSE_LIMIT_MS` (10 s — a file that cannot be
      checked in time is held `UNREADABLE`).
+   - names are read with their `#xx` escapes decoded (`/L#61unch` is `/Launch`), and
+     streams are found by reading the file as PDF syntax, cross-checked against a plain
+     search. Flate, ASCIIHex and ASCII85 streams, alone or chained, are unpacked and
+     scanned. An object stream (any stream with `/First`) that screening cannot fully
+     unpack — a filter named by reference, another filter, or `/DecodeParms` — is held
+     `UNREADABLE`, as is a file whose streams cannot be followed. This changes no type:
+     only which files are held.
 
    `ReceiveInput.head` (the first few kilobytes) and `jsonBody` were replaced by `bytes`,
    the whole file, in 1.2.0: an e-invoice JSON file is its own body, and every other
