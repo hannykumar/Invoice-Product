@@ -83,6 +83,12 @@
               <ul class="task-list" id="home-tasks"></ul>
               <p class="line-ok" id="home-all-clear" hidden><span aria-hidden="true">✓</span><span data-i18n="homeAllClear"></span></p>
             </section>
+            <!-- Issue #297 — the deadlines ahead, from the real compliance calendar. -->
+            <section class="panel home-coming" aria-labelledby="home-coming-title">
+              <h2 id="home-coming-title" data-i18n="homeComingUpTitle"></h2>
+              <ul class="task-list" id="home-coming"></ul>
+              <p class="line-ok" id="home-coming-clear" hidden><span aria-hidden="true">✓</span><span data-i18n="homeComingClear"></span></p>
+            </section>
             <section class="panel home-bills" aria-labelledby="home-bills-title">
               <div class="panel-heading"><h2 id="home-bills-title" data-i18n="homeRecentBills"></h2><button type="button" class="text-button" data-open="activity" data-i18n="viewAll"></button></div>
               <ul class="bill-list" id="home-bills"></ul>
@@ -103,6 +109,7 @@
           <nav class="more-groups" aria-labelledby="more-title">
             <section class="panel more-group" aria-labelledby="more-gst"><h2 id="more-gst" data-i18n="navGroupGst"></h2><ul class="more-list">
               <li><button type="button" class="more-link" data-view="gst-returns"><span aria-hidden="true">▦</span><span data-i18n="navGstReturns"></span></button></li>
+              <li><button type="button" class="more-link" data-view="composition"><span aria-hidden="true">%</span><span data-i18n="navComposition"></span></button></li>
               <li><button type="button" class="more-link" data-view="einvoice"><span aria-hidden="true">✦</span><span data-i18n="navEInvoice"></span></button></li>
               <li><button type="button" class="more-link" data-view="eway"><span aria-hidden="true">▸</span><span data-i18n="navEway"></span></button></li>
               <li><button type="button" class="more-link" data-view="itc"><span aria-hidden="true">⚖</span><span data-i18n="navItc"></span></button></li>
@@ -471,6 +478,11 @@
             </aside>
           </div>
           <article class="panel"><h2 data-i18n="importedBankTransactions"></h2><div class="activity-list" id="bank-feed-transactions" aria-live="polite"><p class="loading-copy" data-i18n="noBankTransactions"></p></div></article>
+          <!-- Issue #297 — the Reconcile tab: match the bank's lines against the books. -->
+          <article class="panel"><h2 data-i18n="reconcileTitle"></h2><p data-i18n="reconcileHelp"></p>
+            <button type="button" class="primary-button wide" id="bank-reconcile-run" data-i18n="checkBank"></button>
+            <div class="activity-list" id="bank-reconcile" aria-live="polite"></div>
+          </article>
         </section>
 
         <section class="view" id="view-returns" data-screen="data" aria-labelledby="returns-title">
@@ -962,6 +974,19 @@
           </article>
         </section>
 
+        <!-- Issue #296 — the composition scheme: the setting, CMP-08 every quarter and GSTR-4 every year. Filled by composition.js. -->
+        <section class="view" id="view-composition" data-screen="data" aria-labelledby="composition-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="composition-title" tabindex="-1" data-i18n="compositionTitle"></h1>
+              <p data-i18n="compositionHelp"></p>
+            </div>
+          </div>
+          <div class="screen-state" id="screen-state-composition" data-state-region></div>
+          <div id="composition-root"></div>
+        </section>
+
         <section class="view" id="view-vehicle" data-screen="data" aria-labelledby="vehicle-title">
           <div class="page-heading">
             <div>
@@ -1206,7 +1231,8 @@
                 <div class="field-grid">
                   <label><span data-i18n="orderNumber"></span><input name="orderNumber" value="PO/2026/0117" required /></label>
                   <label><span data-i18n="orderDate"></span><input name="date" type="date" required /></label>
-                  <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                  <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select></label>
+                  <label><span data-i18n="whatYouBought"></span><select name="item" data-item-picker required></select></label>
                   <label><span data-i18n="orderedQty"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
                   <label><span data-i18n="agreedRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" required /></span></label>
                   <label><span data-i18n="gstRate"></span><select name="gst"><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option></select></label>
@@ -1224,7 +1250,8 @@
                   <label><span data-i18n="receiptNumber"></span><input name="receiptNumber" value="GRN/2026/0304" required /></label>
                   <label><span data-i18n="deliveryDate"></span><input name="date" type="date" required /></label>
                   <label><span data-i18n="againstOrder"></span><input name="orderNumber" value="PO/2026/0117" /><small data-i18n="againstOrderHelp"></small></label>
-                  <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                  <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select></label>
+                  <label><span data-i18n="whatYouBought"></span><select name="item" data-item-picker required></select></label>
                   <label><span data-i18n="arrivedQty"></span><input name="received" type="number" min="0.001" step="0.001" value="100" required /></label>
                   <label><span data-i18n="keptQty"></span><input name="accepted" type="number" min="0" step="0.001" value="90" required /><small data-i18n="keptQtyHelp"></small></label>
                   <label><span data-i18n="rateIfNoOrder"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" /></span></label>
@@ -1244,7 +1271,8 @@
                 <label><span data-i18n="supplierBill"></span><input name="reference" value="SRS/2026/0088" required /></label>
                 <label><span data-i18n="billDate"></span><input name="date" type="date" required /></label>
                 <label><span data-i18n="againstOrder"></span><input name="orderNumber" value="PO/2026/0117" /></label>
-                <label><span data-i18n="whatYouBought"></span><select name="item"><option value="SOAP" data-i18n="itemSoap"></option><option value="TMT12" data-i18n="itemSteel"></option></select></label>
+                <label><span data-i18n="supplier"></span><select name="supplierId" data-supplier-picker required></select></label>
+                <label><span data-i18n="whatYouBought"></span><select name="item" data-item-picker required></select></label>
                 <label><span data-i18n="billedQty"></span><input name="quantity" type="number" min="0.001" step="0.001" value="100" required /></label>
                 <label><span data-i18n="billedRate"></span><span class="input-with-prefix"><span>₹</span><input name="rate" type="number" min="0" step="0.01" value="240" required /></span></label>
                 <label><span data-i18n="gstRate"></span><select name="gst"><option value="500">5%</option><option value="1200">12%</option><option value="1800" selected>18%</option></select></label>
@@ -1786,6 +1814,8 @@
         <label><span data-i18n="itemHsn"></span><input name="hsnSac" inputmode="numeric" required /><small data-i18n="itemHsnHelp"></small></label>
         <label><span data-i18n="itemUnit"></span><select name="unit" id="item-units"></select></label>
         <label><span data-i18n="itemTax"></span><select name="taxChoice" id="item-tax"></select><small data-i18n="itemTaxHelp"></small></label>
+        <!-- Issue #297 — the rate advisor's suggestion. It never fills the rate in on its own. -->
+        <p class="rate-hint" id="item-rate-hint" hidden></p>
         <label id="item-other-rate" hidden><span data-i18n="itemOtherRate"></span><input name="otherRate" type="number" min="0" max="100" step="0.01" /></label>
         <label><span data-i18n="itemBasis"></span><input name="basis" /><small data-i18n="itemBasisHelp"></small></label>
         <label><span data-i18n="itemRateFrom"></span><input name="effectiveFrom" type="date" /><small data-i18n="itemRateFromHelp"></small></label>

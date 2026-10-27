@@ -577,3 +577,11 @@ fieldset, .branding-grid > *, .branding-controls > * { min-width: 0; }
 label, .field-grid > *, .setup-form label { min-width: 0; }
 input, select, textarea { min-width: 0; max-width: 100%; }
 .setup-form label.file-button { color: var(--on-brand); } /* inside a form, the grey label colour was winning over the button's own white: 2.1:1 */
+
+/* Issue #296 — the composition screen: the promises are a short column of ticks, not a grid of fields. */
+.composition-promises { display: grid; gap: .6rem; margin-top: 1rem; }
+.composition-promises .bill-choice input[type="checkbox"] { width: auto; min-height: 0; margin-top: .2rem; flex: none; }
+#composition-root .panel { margin-bottom: 1rem; }
+#composition-root .activity-list, #composition-root .stack { display: grid; gap: .6rem; margin-top: .75rem; }
+#composition-root ul { margin: .4rem 0; padding-left: 1.2rem; }
+.composition-promises .bill-choice { display: flex; align-items: flex-start; gap: .55rem; font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }

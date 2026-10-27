@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 195 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 210 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -284,6 +284,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | GET | `/api/files/:param/link` | service |
 | POST | `/api/branding` | `branding.write` |
 | GET | `/api/business-details` | service |
+| GET | `/api/composition/scheme` | service |
 | POST | `/api/business-details` | `business.settings.write` |
 | GET | `/api/catalogue` | service |
 | POST | `/api/customers` | `masters.party.write` |
@@ -292,6 +293,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/items/code` | `masters.item.write` + `masters.item.rate.declare` |
 | POST | `/api/items/edit` | `masters.item.write` + `masters.item.rate.declare` |
 | POST | `/api/items/selling` | `sales.draft.write` |
+| POST | `/api/items/rate-hint` | `masters.item.write` + `masters.item.rate.declare` |
 | POST | `/api/delivery/choices` | `sales.draft.write` or `challan.issue` |
 | POST | `/api/transporters` | `masters.party.write` |
 | POST | `/api/shipping-addresses` | `masters.party.write` |
@@ -404,6 +406,12 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/bank-feeds/consent/complete` | `bank.feed.manage` |
 | POST | `/api/bank-feeds/sync` | `bank.feed.sync` |
 | POST | `/api/bank-feeds/disconnect` | `bank.feed.manage` |
+| POST | `/api/bank-feeds/reconcile` | `bank.reconcile` |
+| POST | `/api/bank-feeds/reconcile/confirm` | `bank.reconcile.confirm` |
+| POST | `/api/bank-feeds/reconcile/unmatch` | `bank.reconcile.confirm` |
+| POST | `/api/bank-feeds/reconcile/record` | `bank.reconcile.confirm` + `payments.record` |
+| GET | `/api/compliance/calendar` | service |
+| POST | `/api/compliance/calendar/complete` | `compliance.calendar.complete` |
 | POST | `/api/itc` | `itc.view` |
 | POST | `/api/itc/import` | `itc.import` |
 | POST | `/api/itc/typed` | `itc.import` |
@@ -413,6 +421,13 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/gst-returns/approve` | `gst_returns.approve` |
 | POST | `/api/gst-returns/reopen` | `gst_returns.reopen` |
 | POST | `/api/gst-returns/export` | `gst_returns.export` |
+| POST | `/api/composition/scheme/preview` | `business.settings.write` |
+| POST | `/api/composition/scheme` | `business.settings.write` |
+| POST | `/api/composition/statements` | `gst_returns.view` |
+| POST | `/api/composition/statement` | `gst_returns.view` |
+| POST | `/api/composition/approve` | `gst_returns.approve` |
+| POST | `/api/composition/filed` | `gst_returns.approve` |
+| POST | `/api/composition/yearly` | `gst_returns.view` |
 | GET | `/api/returns/documents` | service |
 | POST | `/api/returns/preview` | `returns.create` |
 | POST | `/api/returns/record` | `returns.create` |

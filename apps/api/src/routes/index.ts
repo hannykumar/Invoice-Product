@@ -9,9 +9,10 @@ import { PURCHASING_ROUTES } from './purchasing.ts';
 import { MONEY_ROUTES } from './money.ts';
 import { BOOKS_ROUTES } from './books.ts';
 import { PRIVACY_ROUTES } from './privacy.ts';
+import { COMPLIANCE_ROUTES } from './compliance.ts';
 import type { Route } from './route.ts';
 
-export const ROUTES: readonly Route[] = [...CORE_ROUTES, ...SALES_ROUTES, ...GST_ROUTES, ...PURCHASING_ROUTES, ...MONEY_ROUTES, ...BOOKS_ROUTES, ...PRIVACY_ROUTES];
+export const ROUTES: readonly Route[] = [...CORE_ROUTES, ...SALES_ROUTES, ...GST_ROUTES, ...PURCHASING_ROUTES, ...MONEY_ROUTES, ...BOOKS_ROUTES, ...PRIVACY_ROUTES, ...COMPLIANCE_ROUTES];
 
 /** A route's identity: two routes may not share one, which `matchRoute` relies on. */
 export const routeKey = (route: Pick<Route, 'method' | 'path'>): string => `${route.method} ${route.path}`;

@@ -5,40 +5,59 @@
  */
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { request as httpRequest } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { Agent, request as httpRequest, type IncomingMessage } from 'node:http';
+import { once } from 'node:events';
+import { Readable } from 'node:stream';
+import { connect, type AddressInfo } from 'node:net';
 import { apiServer } from '../src/server.ts';
 import {
-  CONTENT_SECURITY_POLICY, HEADERS_TIMEOUT_MS, isCrossSiteWrite, isSignedCallback, MAX_FILE_BODY_BYTES, MAX_JSON_BODY_BYTES,
+  CONTENT_SECURITY_POLICY, discardRest, HEADERS_TIMEOUT_MS, isCrossSiteWrite, isSignedCallback, MAX_FILE_BODY_BYTES, MAX_JSON_BODY_BYTES,
   REQUEST_TIMEOUT_MS, SECURITY_HEADERS,
 } from '../src/http-hardening.ts';
+
+/*
+ * Writing a test that talks to a raw socket or to a server that refuses uploads (issue #497):
+ *  - Connect to 127.0.0.1 explicitly, never "localhost" (macOS resolves it to ::1 first).
+ *  - Settle on EVERY outcome. An `error` handler that only ignores ECONNRESET/EPIPE leaves the
+ *    promise pending for ever: macOS reports a reset before it hands over the reply the server
+ *    already sent, where Linux hands over the reply first. Here every error rejects, with a message.
+ *  - Bound every wait (`CLIENT_WAIT_MS`) and give every test its own `timeout`, so a stall is a
+ *    failure that names the case, not a stuck `npm test`.
+ *  - Use `agent: false` so no kept-alive socket outlives its test, and tear down with
+ *    `closeAllConnections()` before `close()` so the server never waits on a client.
+ */
+const CLIENT_WAIT_MS = 10_000;
+const TEST_TIMEOUT_MS = 30_000;
 
 let port = 0;
 before(async () => {
   await new Promise<void>((resolve) => apiServer.listen(0, '127.0.0.1', resolve));
   port = (apiServer.address() as AddressInfo).port;
 });
-after(async () => { await new Promise<void>((resolve) => apiServer.close(() => resolve())); });
+after(async () => {
+  await new Promise<void>((resolve) => { apiServer.close(() => resolve()); apiServer.closeAllConnections(); });
+});
 
 interface Reply { readonly status: number; readonly headers: Record<string, string | string[] | undefined>; readonly body: string }
 
-/** One request with full control of its headers (fetch adds and hides some). */
+/** One request with full control of its headers (fetch adds and hides some). Always settles. */
 const send = (method: string, path: string, headers: Record<string, string> = {}, body?: string | Buffer): Promise<Reply> =>
   new Promise((resolve, reject) => {
-    const outgoing = httpRequest({ host: '127.0.0.1', port, method, path, headers }, (incoming) => {
+    const outgoing = httpRequest({ host: '127.0.0.1', port, method, path, headers, agent: new Agent({ keepAlive: false }) }, (incoming) => {
       const chunks: Buffer[] = [];
       incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+      incoming.on('error', reject);
       incoming.on('end', () => resolve({ status: incoming.statusCode ?? 0, headers: incoming.headers, body: Buffer.concat(chunks).toString('utf8') }));
     });
-    // The server may stop reading and close once it has refused a body; that is the point.
-    outgoing.on('error', (error: NodeJS.ErrnoException) => error.code === 'EPIPE' || error.code === 'ECONNRESET' ? undefined : reject(error));
+    outgoing.setTimeout(CLIENT_WAIT_MS, () => outgoing.destroy(new Error(`no complete reply to ${method} ${path} within ${CLIENT_WAIT_MS} ms`)));
+    outgoing.on('error', (error: NodeJS.ErrnoException) => reject(new Error(`${method} ${path} failed before a reply arrived: ${error.code ?? error.message}`)));
     if (body !== undefined) outgoing.write(body);
     outgoing.end();
   });
 
 const host = () => `127.0.0.1:${port}`;
 
-test('every API response carries the security headers, refusals and errors included', async () => {
+test('every API response carries the security headers, refusals and errors included', { timeout: TEST_TIMEOUT_MS }, async () => {
   const replies = [
     await send('GET', '/api/status'),
     await send('HEAD', '/api/status'),
@@ -63,7 +82,7 @@ test('the content policy allows no inline or foreign script and no framing', () 
   assert.equal(SECURITY_HEADERS['x-content-type-options'], 'nosniff');
 });
 
-test('a 10 MB POST is refused with 413 in the usual error shape, and the server keeps answering', async () => {
+test('a 10 MB POST is refused with 413 in the usual error shape, and the server keeps answering', { timeout: TEST_TIMEOUT_MS }, async () => {
   const tenMegabytes = Buffer.alloc(10 * 1024 * 1024, 'a');
   const declared = await send('POST', '/api/sales/preview', { 'content-type': 'application/json', 'content-length': String(tenMegabytes.length) }, tenMegabytes);
   assert.equal(declared.status, 413);
@@ -82,7 +101,7 @@ test('a 10 MB POST is refused with 413 in the usual error shape, and the server 
   assert.equal((await send('GET', '/api/status')).status, 200);
 });
 
-test('a body just under 1 MB is read; the file screens may send up to 5 MB and no more', async () => {
+test('a body just under 1 MB is read; the file screens may send up to 5 MB and no more', { timeout: TEST_TIMEOUT_MS }, async () => {
   const underLimit = JSON.stringify({ padding: 'a'.repeat(MAX_JSON_BODY_BYTES - 100) });
   const ordinary = await send('POST', '/api/sales/preview', { 'content-type': 'application/json' }, underLimit);
   assert.equal(ordinary.status, 401, 'read in full, then refused for want of a sign-in');
@@ -95,7 +114,7 @@ test('a body just under 1 MB is read; the file screens may send up to 5 MB and n
   assert.equal((await send('POST', '/api/migration/analyse', { 'content-type': 'application/json' }, tooBigFile)).status, 413);
 });
 
-test('a write posted from another website is refused before anything is read', async () => {
+test('a write posted from another website is refused before anything is read', { timeout: TEST_TIMEOUT_MS }, async () => {
   const body = JSON.stringify({ address: 'owner@example.invalid' });
   const crossSite = await send('POST', '/api/auth/code', { 'content-type': 'application/json', origin: 'https://evil.example', host: host() }, body);
   assert.equal(crossSite.status, 403);
@@ -117,7 +136,7 @@ test('a write posted from another website is refused before anything is read', a
   assert.equal((await send('GET', '/api/status', { origin: 'https://evil.example' })).status, 200);
 });
 
-test('the signed government callback is the one route another site may post to', async () => {
+test('the signed government callback is the one route another site may post to', { timeout: TEST_TIMEOUT_MS }, async () => {
   const reply = await send('POST', '/api/webhooks/government/irp', { 'content-type': 'application/json', origin: 'https://provider.example', host: host() }, '{}');
   assert.notEqual(JSON.parse(reply.body).code, 'CROSS_SITE_REQUEST');
   assert.equal(reply.status, 401, 'it still has to prove itself with a signature');
@@ -149,4 +168,34 @@ test('slow clients are cut off: request and header time limits are set', () => {
   assert.equal(apiServer.requestTimeout, REQUEST_TIMEOUT_MS);
   assert.equal(apiServer.headersTimeout, HEADERS_TIMEOUT_MS);
   assert.ok(HEADERS_TIMEOUT_MS <= REQUEST_TIMEOUT_MS);
+});
+
+/** Raw socket: writes everything first and only then reads, like a client blocked in write(). */
+const rawUpload = (bytes: number, headerLine: string): Promise<{ head: string; closedBy: string }> => new Promise((resolve, reject) => {
+  const socket = connect(port, '127.0.0.1');
+  let received = '';
+  const timer = setTimeout(() => { socket.destroy(); reject(new Error(`no 413 within ${CLIENT_WAIT_MS} ms (got ${JSON.stringify(received.slice(0, 40))})`)); }, CLIENT_WAIT_MS);
+  const finish = (closedBy: string) => { clearTimeout(timer); socket.destroy(); resolve({ head: received.split('\r\n')[0] ?? '', closedBy }); };
+  socket.on('error', (error: NodeJS.ErrnoException) => { clearTimeout(timer); reject(new Error(`upload failed before the 413 was read: ${error.code ?? error.message}`)); });
+  socket.on('data', (chunk) => { received += chunk.toString('latin1'); if (received.includes('\r\n\r\n')) finish('reply'); });
+  socket.pause();
+  socket.write(`POST /api/sales/preview HTTP/1.1\r\nhost: ${host()}\r\ncontent-type: application/json\r\n${headerLine}\r\n\r\n`);
+  socket.write(Buffer.alloc(bytes, 'a'), () => socket.resume());
+});
+
+test('an oversize upload still gets its 413 when the client finishes sending before it reads (issue #497)', { timeout: TEST_TIMEOUT_MS }, async () => {
+  // Cutting the connection with the body unread resets it; the client then sees EPIPE/ECONNRESET
+  // and never the message. The rest of a refused body is read and dropped instead.
+  const declared = await rawUpload(10 * 1024 * 1024, `content-length: ${10 * 1024 * 1024}`);
+  assert.match(declared.head, /^HTTP\/1\.1 413 /);
+  assert.equal((await send('GET', '/api/status')).status, 200);
+});
+
+test('a refused upload that never stops is cut off after the discard limit (no connection is held for ever)', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const request = new Readable({ read() { /* fed below */ } });
+  discardRest(request as unknown as IncomingMessage, 1024);
+  request.push(Buffer.alloc(600));
+  request.push(Buffer.alloc(600));
+  await once(request, 'close');
+  assert.equal(request.destroyed, true);
 });

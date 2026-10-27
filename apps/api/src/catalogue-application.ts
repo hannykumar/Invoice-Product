@@ -57,6 +57,7 @@ import { STATE_NAMES } from '@invoice/transport';
 import { masterData, mastersContext } from './master-data.ts';
 import { businessDetailsOf, currentStates, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
+import { registrationHistoryOf, schemeOn } from './composition-scheme.ts';
 import { DurableMap } from './durable.ts';
 import { both, say, type Bilingual } from './language.ts';
 
@@ -922,7 +923,9 @@ export const catalogueTaxReader = (company: { readonly companyId: CompanyId | st
       companyId,
       gstin: company.gstin,
       stateCode: gstinStateCode(company.gstin),
-      registration: 'REGULAR',
+      registration: schemeOn(companyId, appToday()),
+      // Issue #296 — a bill is taxed under the scheme in force on its own date.
+      registrationHistory: registrationHistoryOf(companyId),
       // Issue #187 — decides how many HSN digits each bill needs. Read live, like everything here.
       turnoverAbove5Crore: turnoverAnswersOf(companyId),
     };
