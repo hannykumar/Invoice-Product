@@ -505,6 +505,24 @@ test('a filing done on somebody else’s laptop is recorded by hand, and counts'
   assert.equal(run.raised.filter((alert) => alert.occurrenceKey === 'GSTR1:2026-07').length, 0);
 });
 
+test('a filing done for a period behind the shown window still shows as done', async () => {
+  const desk = makeDesk({ withSignals: false });
+  const owner = ownerOf();
+  await desk.service.complete(owner, {
+    key: 'GSTR1:2026-06',
+    evidence: {
+      kind: 'TYPED_CONFIRMATION',
+      reference: '',
+      filedOn: isoDate('2026-08-10'),
+      note: 'Filed on the portal myself.',
+    },
+  });
+  // June's period ends before the window starts; the merge must still find the stored row or the
+  // screen re-opens a return that was already filed.
+  const occurrence = await entryFor(desk, 'GSTR1:2026-06', owner);
+  assert.equal(occurrence.status, 'COMPLETED');
+});
+
 test('marking the same thing done twice is idempotent, and a different answer is a conflict', async () => {
   const desk = makeDesk({ withSignals: false });
   const owner = ownerOf();

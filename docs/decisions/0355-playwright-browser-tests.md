@@ -28,6 +28,10 @@ only external providers are mocked — never the database or the permission chec
   `security-headers.test.ts`) stay where they are for now; consolidating the two drivers is
   tracked in #496, and the in-memory store they run on in #494.
 
+## Update (#494)
+
+The suite now runs on a fresh PostgreSQL database per run (`npm run test:browser:pg`), with the server on a least-privilege login, and the CI job uses it. See `docs/testing.md`.
+
 ## Consequences
 
 - CI gained a `browser` job that installs Chromium each run (uncached, roughly a minute).

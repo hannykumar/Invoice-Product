@@ -253,6 +253,68 @@ export function turnoverTask(financialYear: string, canAct: boolean): HomeTask {
   };
 }
 
+// ---------------------------------------------------------------------------------- coming up
+
+/** One row of Home's "Coming up" list — a deadline ahead, in the words the calendar gives it. */
+export interface ComingUpRow {
+  readonly id: string;
+  readonly code: string;
+  readonly period: string;
+  readonly due: IsoDate;
+  readonly daysLeft: number;
+  readonly state: string;
+  readonly title: Bilingual;
+  readonly warnings: readonly Bilingual[];
+  readonly blocking: boolean;
+  readonly open: { readonly view: string; readonly period: string };
+}
+
+/** Where a deadline's own screen lives. */
+const COMING_UP_VIEW: Readonly<Record<string, string>> = {
+  GSTR1: 'gst-returns', GSTR3B: 'gst-returns', CMP08: 'gst-returns', GSTR9: 'gst-returns',
+  EINVOICE_BACKLOG: 'einvoice', IRN_REPORTING: 'einvoice', EWAY_VALIDITY: 'eway', ITC_REVIEW: 'itc',
+};
+
+const COMING_UP_NAME: Readonly<Record<string, readonly [string, string]>> = {
+  GSTR1: ['GSTR-1 (sales list)', 'GSTR-1 (बिक्री की सूची)'],
+  GSTR3B: ['GSTR-3B (tax payment)', 'GSTR-3B (टैक्स भरना)'],
+  CMP08: ['CMP-08 (composition statement)', 'CMP-08 (कम्पोज़िशन स्टेटमेंट)'],
+  GSTR9: ['GSTR-9 (yearly return)', 'GSTR-9 (सालाना रिटर्न)'],
+  EINVOICE_BACKLOG: ['E-invoices still to send', 'अभी भेजने बाकी ई-इनवॉइस'],
+  IRN_REPORTING: ['E-invoice time limit', 'ई-इनवॉइस की समय-सीमा'],
+  EWAY_VALIDITY: ['E-way bill validity', 'ई-वे बिल की मियाद'],
+  ITC_REVIEW: ['Purchase comparison', 'पर्चेस की जाँच'],
+};
+
+/**
+ * Issue #297 — the deadlines ahead, fed by real return readiness, the IRN backlog and unresolved
+ * purchase mismatches (the calendar's own signals). A month already filed or exported hides.
+ */
+export function comingUpRows(
+  view: { readonly entries: readonly { readonly occurrence: { readonly key: string; readonly code: string; readonly period: { readonly key: string }; readonly dueDate: IsoDate }; readonly daysRemaining: number; readonly state: string; readonly signals: readonly { readonly severity: string; readonly headline: Bilingual }[]; readonly nextAction: Bilingual }[] },
+  doneMonths: ReadonlySet<string>,
+): ComingUpRow[] {
+  return view.entries
+    .filter((entry) => entry.state !== 'DONE' && entry.state !== 'NOT_APPLICABLE')
+    .filter((entry) => !(doneMonths.has(entry.occurrence.period.key) && (entry.occurrence.code === 'GSTR1' || entry.occurrence.code === 'GSTR3B')))
+    .slice(0, 10)
+    .map((entry) => {
+      const [en, hi] = COMING_UP_NAME[entry.occurrence.code] ?? [entry.occurrence.code, entry.occurrence.code];
+      const when = (locale: 'en-IN' | 'hi-IN') => entry.daysRemaining < 0
+        ? (locale === 'en-IN' ? `${-entry.daysRemaining} ${-entry.daysRemaining === 1 ? 'day' : 'days'} late` : `${-entry.daysRemaining} दिन देर`)
+        : entry.daysRemaining === 0 ? (locale === 'en-IN' ? 'due today' : 'आज देय')
+          : (locale === 'en-IN' ? `due ${shortDate(entry.occurrence.dueDate, locale)}` : `${shortDate(entry.occurrence.dueDate, 'hi-IN')} तक`);
+      return {
+        id: entry.occurrence.key, code: entry.occurrence.code, period: entry.occurrence.period.key,
+        due: entry.occurrence.dueDate, daysLeft: entry.daysRemaining, state: entry.state,
+        title: say(`${en} — ${when('en-IN')}`, `${hi} — ${when('hi-IN')}`),
+        warnings: entry.signals.map((signal) => signal.headline),
+        blocking: entry.signals.some((signal) => signal.severity === 'BLOCKING'),
+        open: { view: COMING_UP_VIEW[entry.occurrence.code] ?? 'gst-returns', period: entry.occurrence.period.key },
+      };
+    });
+}
+
 // ---------------------------------------------------------------------------------- recent bills
 
 /** Paid, still due, or late — and how the money came, when it came. `paidBy` null is udhaar. */

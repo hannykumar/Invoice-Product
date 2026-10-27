@@ -10,6 +10,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["apps/**/*.ts", "ops/**/*.ts", "packages/**/*.ts", "tests/browser/**/*.ts", "tools/**/*.ts", "playwright.config.ts"],
+  "include": ["apps/**/*.ts", "ops/**/*.ts", "packages/**/*.ts", "tests/browser/**/*.ts", "tests/e2e/**/*.ts", "tools/**/*.ts", "playwright.config.ts"],
   "exclude": ["node_modules", "**/dist"]
 }

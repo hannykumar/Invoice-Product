@@ -8,7 +8,10 @@ import { defineConfig } from "@playwright/test";
  * can never reach production) and the connector-v1 providers (government, bank, messaging,
  * payments).
  *
- * Migrate and seed the database first: `npm run db:migrate && npm run db:seed`.
+ * `npm run test:browser:pg` (#494) is the way to run it: a fresh, migrated and seeded database for the
+ * run, the server on a least-privilege login so row-level security applies, dropped afterwards.
+ * `npm run test:browser` alone runs against a database you migrated and seeded yourself
+ * (`npm run db:migrate && npm run db:seed`).
  * Run it with NODE_ENV=test and a test database (its name contains "test", or KAROBAR_TEST_DATABASE=1):
  * the setup clears its rate-limit counters (#350) and refuses any other database.
  */
@@ -37,7 +40,8 @@ export default defineConfig({
   webServer: {
     command: "npm run web",
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    // Never on a fresh-database run (#494): a server already on the port would be on some other database.
+    reuseExistingServer: !process.env.CI && !process.env.KAROBAR_FRESH_DATABASE,
     timeout: 120_000,
     env: {
       ...process.env,

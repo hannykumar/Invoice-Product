@@ -43,6 +43,13 @@ received → screening → (quarantined)
      (20,000), `MAX_PDF_INFLATED_BYTES` (64 MB total across Flate streams — a
      decompression bomb) and `PDF_PARSE_LIMIT_MS` (10 s — a file that cannot be
      checked in time is held `UNREADABLE`).
+   - names are read with their `#xx` escapes decoded (`/L#61unch` is `/Launch`), and
+     streams are found by reading the file as PDF syntax, cross-checked against a plain
+     search. Flate, ASCIIHex and ASCII85 streams, alone or chained, are unpacked and
+     scanned. An object stream (any stream with `/First`) that screening cannot fully
+     unpack — a filter named by reference, another filter, or `/DecodeParms` — is held
+     `UNREADABLE`, as is a file whose streams cannot be followed. This changes no type:
+     only which files are held.
 
    `ReceiveInput.head` (the first few kilobytes) and `jsonBody` were replaced by `bytes`,
    the whole file, in 1.2.0: an e-invoice JSON file is its own body, and every other
@@ -211,6 +218,36 @@ All three force row-level security on `app.company_id`; nothing is granted `DELE
   for the company routing chose, and never across the OCR call. Commands that read (`document`,
   `draft`, `inbox`) and `assignCompany` are now `async`; `inbox` takes an optional keyset `page`.
 - A document whose company is not known yet (screening, `AWAITING_SCAN`, an address shared by
-  several companies or by none) is **not stored**: it stays in the service's process until it is
-  routed or claimed, and is lost if the process restarts. Keeping it durably needs a pre-tenant
-  holding table of the kind `government_webhook_events` uses (#345/#389); there is none yet.
+  several companies or by none) is kept in the **pre-tenant holding** (1.3.0, #488), described below.
+
+### The holding (1.3.0, #488)
+
+`PurchaseInboxService(…, { holding, readBytes })`. `InboxHolding` (`inbox-holding.ts`) is in memory
+unless the app passes `PostgresInboxHolding`; one contract suite runs on both.
+
+- **Held:** id, channel, message key, intake key, received time, status and hold reason, the sender,
+  the file's measured name/size/hash and its **storage key**, and the ids of the companies whose
+  channel it arrived on. **Not held:** the file (private object storage; with `readBytes` the
+  service never keeps it in memory either) and anything read from it.
+- **Written first.** A document is put in the holding before it is screened, so a restart cannot
+  lose it. A redelivery of a held message answers with the first document (`duplicate: true`),
+  also after a restart and also when copies arrive at once.
+- **Moves in one unit of work.** Routed (by address, or by `assignCompany`), it is inserted into
+  the company's books and `claim`ed out of the holding in the same transaction, so both happen or
+  neither does. `scanAnswered` reads the document from the holding, so the scanner may answer
+  after a restart; only the first of two answers goes through.
+- **`awaitingAssignment(context)`** is now `async` and reads the holding.
+- **`resumeInterrupted(before)`** carries on with documents a process stopped on mid-screening,
+  re-reading the file from storage (a missing or changed file is held `UNREADABLE`, "send it again").
+- **No bypass of row-level security.** The holding carries no company and has no company policy.
+  Its tables are forced-RLS with one permissive policy for the no-login role
+  `invoice_inbox_holder`, which owns ten `SECURITY DEFINER` functions; `invoice_app` has no table
+  privilege and may only call them (the shape of #477). The three a business uses
+  (`waitingFor`, `peek`, `claim`) read the company from `app.company_id`, set by its session —
+  never from an argument — so another company's session sees nothing and cannot claim.
+- **`channelOwners(id)`** is the narrow lookup: company ids only, every call on the trail
+  (`purchase_inbox_holding_trail`: ids and a verb; it outlives the rows).
+- **Expiry.** `sweepInboxHolding` removes unrouted documents older than `HOLDING_RETENTION_DAYS`
+  (30, **proposed**; D10 has no row for this — see the comment in `inbox-holding.ts`). The worker
+  runs it hourly. `ObjectStore` has no delete yet, so an expired file's key is left on the trail
+  (`expired`) for removal; `discardBytes` takes over once the port has one.

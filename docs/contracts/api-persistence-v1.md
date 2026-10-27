@@ -63,6 +63,12 @@ Kinds today: `business_details`, `business_prefill`, `turnover_answers`, `einvoi
 `invoice_print`, `note_print`, `challan_print`, `presale_print` (frozen), `eway_movement`,
 `sale_delivery`, `export_sale`, `composition_scheme`, `composition_statements` (#296). A module that grows its own table moves its kind's rows there.
 
+Frozen rows written before #352 are plaintext until the owner runs `npm run db:seal-frozen`
+(preview by default; `--apply --approved-by "<name>"` to seal; see decision D500). New frozen
+rows are sealed when written. A removed member's sign-in address is replaced only through the
+SQL function `anonymise_user(company, user, actor, correlation, reason)` (migration
+`20261027T224659375Z_platform_c67212a4f613_anonymise_user_function`), which also writes the audit row.
+
 `DurableMap<V>` (`apps/api/src/durable.ts`) is a `Map` whose `set`/`delete` also write here, and
 whose company is read back on first open after a restart.
 

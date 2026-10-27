@@ -104,7 +104,8 @@ jobs:
   browser:
     # Issue #355 — the flows that must never break, in a real browser against the real app on
     # real PostgreSQL: sign-up and sign-in (stand-in code), make a bill, record a purchase,
-    # prepare a GST return, upgrade plan, and invite a teammate (skipped until #343 lands).
+    # prepare a GST return, upgrade plan, invite a teammate, and (#494) a bill surviving a server
+    # restart and one company never seeing another's bill. Make this job a required check.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -142,9 +143,10 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-playwright-
       - run: npx playwright install --with-deps chromium
-      - run: npm run db:migrate
-      - run: npm run db:seed
-      - run: npm run test:browser
+      # A brand-new database for the run, migrated and seeded, with the server on a login that row-level
+      # security applies to; dropped afterwards (#494). It never runs on the in-memory store: with no
+      # database it stops and says so. Includes the restart-survival and company-isolation tests.
+      - run: npm run test:browser:pg
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

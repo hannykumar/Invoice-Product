@@ -121,8 +121,8 @@ export const julyEInvoiceBacklog: EInvoiceBacklogReader = {
     return {
       count: 2,
       records: [
-        { kind: 'sales_invoice', id: 'SI-1042', label: 'Invoice SI-1042 dated 3 August 2026' },
-        { kind: 'sales_invoice', id: 'SI-1051', label: 'Invoice SI-1051 dated 9 August 2026' },
+        { kind: 'sales_invoice', id: 'SI-1042', label: 'Invoice SI-1042 dated 28 July 2026' },
+        { kind: 'sales_invoice', id: 'SI-1051', label: 'Invoice SI-1051 dated 31 July 2026' },
       ],
     };
   },

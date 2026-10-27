@@ -11,7 +11,7 @@ const supplierCheck = fields({ gstin: text, party: text, stateCode: anything, re
 /** An order, a delivery or a bill against them. `item`, `party` and the quantities are read by the matching service in either shape. */
 const matching = fields({
   orderNumber: text, receiptNumber: text, reference: text, date: text, reason: text,
-  item: anything, party: anything, quantity: anything, received: anything, accepted: anything, rate: anything, gst: text,
+  supplierId: text, item: anything, party: anything, quantity: anything, received: anything, accepted: anything, rate: anything, gst: text,
   deliveryNote: anything, rejectionReason: anything, rejectionNote: anything,
 });
 /** A supplier's bill. `lines` is a list of lines, or one line's fields at the top level. */
