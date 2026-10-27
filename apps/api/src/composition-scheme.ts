@@ -272,11 +272,19 @@ export const applySchemeChange = async (context: SchemeContext, input: Record<st
   const earlier = schemeHistoryOf(context.companyId).find((change) => change.requestId === requestId);
   if (earlier !== undefined) return { change: earlier, deduplicated: true };
   const preview = await previewSchemeChange(context, input);
+  // The preview awaited the bills, so another press of the same button may have applied it meanwhile.
+  const meanwhile = schemeHistoryOf(context.companyId).find((change) => change.requestId === requestId);
+  if (meanwhile !== undefined) return { change: meanwhile, deduplicated: true };
   if (!preview.ok || preview.change === null || preview.token === null) {
     throw invalid('COMPOSITION_NOT_ALLOWED', preview.blockers[0]?.['en-IN'] ?? 'This change cannot be made.', { details: { blockers: preview.blockers.map((blocker) => blocker['en-IN']).join(' | ') } });
   }
   if (text(input.token) === '') throw invalid('COMPOSITION_NOT_PREVIEWED', 'Please look at what the change does first, then confirm it.');
   if (text(input.token) !== preview.token) {
+    throw conflict('COMPOSITION_CHANGED_SINCE_PREVIEW', 'Something changed after you looked at this. Please look at it again before confirming.');
+  }
+  // No await from here to the write: a different change that landed first is a conflict, never a second entry on one date.
+  const latest = schemeHistoryOf(context.companyId).at(-1);
+  if (latest !== undefined && latest.effectiveFrom >= preview.change.effectiveFrom) {
     throw conflict('COMPOSITION_CHANGED_SINCE_PREVIEW', 'Something changed after you looked at this. Please look at it again before confirming.');
   }
   history.set(String(context.companyId), [...schemeHistoryOf(context.companyId), preview.change]);

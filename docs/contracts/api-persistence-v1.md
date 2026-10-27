@@ -61,7 +61,7 @@ Migration `20261016T064205274Z_api_4b8da552ccf1_durable_app_records` (`packages/
 Kinds today: `business_details`, `business_prefill`, `turnover_answers`, `einvoice_exemption`,
 `branding`, `upi_id`, `item_tax`, `item_price`, `declared_rate` (frozen, append-only),
 `invoice_print`, `note_print`, `challan_print`, `presale_print` (frozen), `eway_movement`,
-`sale_delivery`, `export_sale`. A module that grows its own table moves its kind's rows there.
+`sale_delivery`, `export_sale`, `composition_scheme`, `composition_statements` (#296). A module that grows its own table moves its kind's rows there.
 
 `DurableMap<V>` (`apps/api/src/durable.ts`) is a `Map` whose `set`/`delete` also write here, and
 whose company is read back on first open after a restart.

@@ -228,9 +228,18 @@ test('a bill added after approval is shown as a change, and approving again book
   assert.equal(quarter.alreadyBooked, '1000');
   assert.equal(quarter.totalPayable, '2000');
   assert.equal(quarter.stillToBook, '1000');
-  const approved = await request('POST', '/api/composition/approve', { quarter: '2026-27-Q2', token: quarter.fingerprint }, session);
-  assert.equal(approved.body.state, 'BOOKED');
-  assert.equal(approved.body.alreadyBooked, '2000');
+  // Two presses of Approve at the same moment book the difference once.
+  const both = await Promise.all([
+    request('POST', '/api/composition/approve', { quarter: '2026-27-Q2', token: quarter.fingerprint }, session),
+    request('POST', '/api/composition/approve', { quarter: '2026-27-Q2', token: quarter.fingerprint }, session),
+  ]);
+  for (const approved of both) {
+    assert.equal(approved.status, 200, JSON.stringify(approved.body));
+    assert.equal(approved.body.state, 'BOOKED');
+    assert.equal(approved.body.alreadyBooked, '2000');
+  }
+  const after = (await request('POST', '/api/composition/statement', { quarter: '2026-27-Q2' }, session)).body;
+  assert.equal(after.alreadyBooked, '2000', 'booked once, not twice');
 });
 
 test('filing is recorded only after approval, with the portal reference', async () => {
