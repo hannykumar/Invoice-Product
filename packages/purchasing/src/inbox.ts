@@ -34,6 +34,8 @@ import type { OcrReadResult } from "./extraction.ts";
 import type { OcrAdapter } from "./ocr.ts";
 import { InMemoryInboxStore } from "./inbox-store.ts";
 import type { InboxStore } from "./inbox-store.ts";
+import { InMemoryInboxHolding, UNROUTED } from "./inbox-holding.ts";
+import type { HeldRecord, InboxHolding, WaitingItem } from "./inbox-holding.ts";
 import type { Page } from "./paging.ts";
 import type { Attachment, ExtractedField, ExtractionDraft, InboundDocument, InboundSender, InboundStatus, IntakeChannel, LogicalInvoiceKey, QuarantineReason } from "./inbox-types.ts";
 
@@ -93,14 +95,23 @@ export interface PurchaseInboxOptions {
    * never run inside a transaction. Without it the steps simply run.
    */
   readonly unitOfWork?: <T>(companyId: Id, work: () => Promise<T>) => Promise<T>;
+  /**
+   * Where a document is kept while its company is not known yet (#488). In memory unless given;
+   * the app passes `PostgresInboxHolding`, so a message held for a shared address survives a restart.
+   */
+  readonly holding?: InboxHolding;
+  /**
+   * Reads a held file back from private object storage by its key. Given, the service never keeps
+   * a held file's bytes in memory, which is what lets a restart carry on with a file that was
+   * waiting for the virus scanner. Without it the bytes are kept in this process, as before.
+   */
+  readonly readBytes?: (storageKey: string) => Promise<Uint8Array | null>;
 }
 
 /** Below this confidence a field must be looked at before the draft moves on. */
 export const REVIEW_CONFIDENCE = 0.8;
 /** Below this, the document is not worth reviewing at all and is quarantined. */
 export const QUARANTINE_CONFIDENCE = 0.4;
-
-const UNROUTED = "__unrouted__";
 
 /** Claiming a held document, or asking for it to be read again (#400). */
 export const INBOX_MANAGE_PERMISSION: Permission = "purchase.inbox.manage";
@@ -141,20 +152,11 @@ export class PurchaseInboxService {
   /** Routed documents, their drafts, and the company-scoped duplicate keys (#366). */
   readonly #store: InboxStore;
   readonly #unitOfWork: <T>(companyId: Id, work: () => Promise<T>) => Promise<T>;
-  /**
-   * The unrouted holding: documents whose company is not known yet (still screening, waiting for
-   * the virus scanner, or on an address no single company owns). They have no company to be
-   * stored under, so they stay in this process until routed or claimed (#366).
-   */
-  readonly #held = new Map<Id, InboundDocument>();
-  /** Scoped provider message id to a held document's id, so a channel redelivery is not a new document (#406). */
-  readonly #heldByMessage = new Map<string, Id>();
-  /** For an unrouted document, the companies whose channel it arrived on: the only ones who may claim it. */
-  readonly #channelOwners = new Map<Id, readonly Id[]>();
-  /** A held document's intake idempotency key; stored with the document once it is routed. */
-  readonly #intakeKeys = new Map<Id, string>();
-  /** Files held until the virus scanner answers (#401), keyed by document id. */
-  readonly #awaitingScan = new Map<Id, ReceiveInput>();
+  /** The unrouted holding (#488): documents whose company is not known yet, durable where the app gives it a database. */
+  readonly #holding: InboxHolding;
+  readonly #readBytes: ((storageKey: string) => Promise<Uint8Array | null>) | undefined;
+  /** Held files' bytes, only when there is no object store to read them back from. */
+  readonly #heldBytes = new Map<Id, Uint8Array>();
 
   constructor(commands: PlatformCommandService, audit: AuditLog, ocr: OcrAdapter, companies: readonly CompanyRoutingProfile[], options: PurchaseInboxOptions = {}) {
     this.#commands = commands;
@@ -167,6 +169,8 @@ export class PurchaseInboxService {
     this.#signatures = options.irpSignatures ?? NO_IRP_SIGNING_KEY;
     this.#store = options.store ?? new InMemoryInboxStore();
     this.#unitOfWork = options.unitOfWork ?? ((_companyId, work) => work());
+    this.#holding = options.holding ?? new InMemoryInboxHolding();
+    this.#readBytes = options.readBytes;
   }
 
   // ------------------------------------------------------------------ reading
@@ -194,10 +198,8 @@ export class PurchaseInboxService {
    * not choose) and are waiting for someone to claim them. Only the file name, size, channel
    * and time are shown: nothing has been read from them, and no storage key or hash leaves.
    */
-  awaitingAssignment(context: RequestContext): readonly { readonly id: Id; readonly channel: IntakeChannel; readonly receivedAt: string; readonly fileName: string; readonly sizeBytes: number }[] {
-    return [...this.#held.values()]
-      .filter((document) => document.companyId === UNROUTED && document.status === "quarantined" && (this.#channelOwners.get(document.id) ?? []).includes(context.companyId))
-      .map((document) => ({ id: document.id, channel: document.channel, receivedAt: document.receivedAt, fileName: document.attachment.fileName, sizeBytes: document.attachment.sizeBytes }));
+  awaitingAssignment(context: RequestContext): Promise<readonly WaitingItem[]> {
+    return this.#holding.waitingFor(context.companyId);
   }
 
   /** The key #16 will use to spot the same invoice arriving twice through two channels. */
@@ -230,40 +232,36 @@ export class PurchaseInboxService {
       // always one that arrived on this same binding — never another company's document (#406).
       const stored = await this.#storedByMessage(checked, messageKey);
       if (stored) return stored;
-      // Looked up after the await and set below with nothing awaited in between, so two copies
-      // arriving at once in this process still make one document.
-      const held = this.#heldByMessage.get(messageKey);
-      if (held) return { document: this.#held.get(held) as InboundDocument, duplicate: true };
+      const held = await this.#holding.byMessage(messageKey);
+      if (held) return { document: held.document, duplicate: true };
     }
 
     const id = randomUUID();
-    let document: InboundDocument = {
-      id,
-      companyId: UNROUTED,
-      channel: input.channel,
-      sender: input.sender,
-      attachment: measured,
-      receivedAt: new Date().toISOString(),
-      status: "received",
-      attempts: 1,
+    const record: HeldRecord = {
+      // Screening starts at once, so that is where it is kept from the first moment.
+      document: Object.freeze({
+        id,
+        companyId: UNROUTED,
+        channel: input.channel,
+        sender: input.sender,
+        attachment: measured,
+        receivedAt: new Date().toISOString(),
+        status: "screening",
+        attempts: 1,
+      }) as InboundDocument,
+      keys: { messageKey, intakeKey: input.idempotencyKey },
+      delivery: {
+        ...(input.deliveredTo === undefined ? {} : { deliveredTo: input.deliveredTo }),
+        ...(input.scanVerdict === undefined ? {} : { scanVerdict: input.scanVerdict }),
+        ...(input.uploader === undefined ? {} : { uploader: { companyId: input.uploader.companyId, actorId: input.uploader.actorId } }),
+      },
     };
-    this.#held.set(id, document);
-    this.#intakeKeys.set(id, input.idempotencyKey);
-    if (messageKey) this.#heldByMessage.set(messageKey, id);
-
-    // 1. Screening, before anything reads the file.
-    document = this.#set(document, { status: "screening" });
-    const screening = await screenAttachment(measured, input.bytes, input.scanVerdict ?? "unscanned");
-    if (!screening.ok) {
-      // A file waiting on the scanner keeps its delivery so "clean" can release it
-      // back into this same pipeline (#401); every other hold ends here.
-      if (screening.reason === "AWAITING_SCAN") this.#awaitingScan.set(id, checked);
-      return { document: this.#quarantine(document, screening.reason, screening.message), duplicate: false };
-    }
-    if (screening.pageCount !== undefined) {
-      document = this.#set(document, { attachment: { ...document.attachment, pageCount: screening.pageCount } });
-    }
-    return this.#routeAndDraft(document, checked, screening.detectedType);
+    // Written before anything else happens, so a restart cannot lose it. Two copies of one message
+    // arriving at once make one document: the second is told about the first (#406).
+    const put = await this.#holding.put(record, []);
+    if (!put.created) return { document: put.record.document, duplicate: true };
+    if (!this.#readBytes) this.#heldBytes.set(id, input.bytes);
+    return this.#screenAndRoute(record, checked);
   }
 
   /**
@@ -272,27 +270,89 @@ export class PurchaseInboxService {
    * takes — routing, duplicate check, reading — so a held document can never skip a
    * step. An infected verdict holds it for good. Called by the scanner integration,
    * not by a tenant: the document is still unrouted, so no RequestContext exists yet.
+   * The document is read from the holding, so the answer may arrive after a restart (#488).
    */
   async scanAnswered(documentId: Id, verdict: ScanVerdict): Promise<ReceiveResult> {
-    const input = this.#awaitingScan.get(documentId);
-    const document = this.#held.get(documentId);
-    if (!input || !document || document.status !== "quarantined" || document.quarantineReason !== "AWAITING_SCAN") {
+    const record = await this.#holding.get(documentId);
+    const document = record?.document;
+    if (!record || !document || document.status !== "quarantined" || document.quarantineReason !== "AWAITING_SCAN") {
       throw new InboxError("INVALID_STATE", "This document is not waiting for a virus check.");
     }
     if (verdict === "unscanned") throw new InboxError("INVALID_STATE", "A scan answer must be clean or infected.");
-    this.#awaitingScan.delete(documentId);
+    const waiting = { status: "quarantined", quarantineReason: "AWAITING_SCAN" } as const;
     if (verdict === "infected") {
-      return { document: this.#quarantine(document, "MALWARE_SUSPECTED", "This file was flagged as unsafe by the virus scanner, so it has not been opened."), duplicate: false };
+      const held = await this.#saveHeld(record, { status: "quarantined", quarantineReason: "MALWARE_SUSPECTED", statusMessage: "This file was flagged as unsafe by the virus scanner, so it has not been opened." }, [], waiting);
+      if (!held) throw new InboxError("INVALID_STATE", "This document is not waiting for a virus check.");
+      this.#record(held.document, "purchase.inbox.quarantined", { reason: "MALWARE_SUSPECTED", message: held.document.statusMessage ?? "" });
+      return { document: held.document, duplicate: false };
     }
-    // The hold is lifted: its reason and message go, everything else is kept.
+    // The hold is lifted: its reason and message go, everything else is kept. Only the first of
+    // two answers to the same question gets through.
     const { quarantineReason: _hold, statusMessage: _holdMessage, ...fields } = document;
-    let released = this.#set(fields as InboundDocument, { status: "screening" });
-    const screening = await screenAttachment(input.attachment, input.bytes, "clean");
-    if (!screening.ok) return { document: this.#quarantine(released, screening.reason, screening.message), duplicate: false };
-    if (screening.pageCount !== undefined) {
-      released = this.#set(released, { attachment: { ...released.attachment, pageCount: screening.pageCount } });
+    const released = await this.#saveHeld({ ...record, document: fields as InboundDocument }, { status: "screening" }, [], waiting);
+    if (!released) throw new InboxError("INVALID_STATE", "This document is not waiting for a virus check.");
+    const input = await this.#inputFor(released);
+    if (!input) return this.#fileGone(released);
+    return this.#screenAndRoute(released, { ...input, scanVerdict: "clean" });
+  }
+
+  /**
+   * Carries on with documents a process stopped on: still being screened since before `before`.
+   * Each is read back from private object storage and goes through the same screening, routing and
+   * reading as a new arrival. A document whose file cannot be found is held with a plain message.
+   */
+  async resumeInterrupted(before: Date): Promise<number> {
+    let resumed = 0;
+    for (const record of await this.#holding.stalled(before)) {
+      const input = await this.#inputFor(record);
+      if (!input) { await this.#fileGone(record); continue; }
+      try { await this.#screenAndRoute(record, input); resumed += 1; } catch (error) {
+        // Another process got there first, or this one failed: the document stays held and is tried again.
+        if ((error as { code?: string }).code !== "INBOX_DOCUMENT_DUPLICATE") throw error;
+      }
     }
-    return this.#routeAndDraft(released, input, screening.detectedType);
+    return resumed;
+  }
+
+  /** The delivery as it was, rebuilt from the holding and the stored file; null when the file is gone. */
+  async #inputFor(record: HeldRecord): Promise<ReceiveInput | null> {
+    const document = record.document;
+    const bytes = this.#heldBytes.get(document.id) ?? (this.#readBytes ? await this.#readBytes(document.attachment.storageKey) : null);
+    if (!bytes || createHash("sha256").update(bytes).digest("hex") !== document.attachment.sha256) return null;
+    const { deliveredTo, scanVerdict, uploader } = record.delivery;
+    return {
+      channel: document.channel,
+      sender: document.sender,
+      attachment: document.attachment,
+      bytes,
+      idempotencyKey: record.keys.intakeKey,
+      ...(deliveredTo === undefined ? {} : { deliveredTo }),
+      ...(scanVerdict === undefined ? {} : { scanVerdict }),
+      // Only the company and the person survive a restart, which is all routing and the audit trail use.
+      ...(uploader === undefined ? {} : { uploader: { companyId: uploader.companyId, branchId: uploader.companyId, actorId: uploader.actorId, permissions: new Set<Permission>(), sessionId: document.id } }),
+    };
+  }
+
+  async #fileGone(record: HeldRecord): Promise<ReceiveResult> {
+    const held = await this.#saveHeld(record, { status: "quarantined", quarantineReason: "UNREADABLE", statusMessage: "The file for this document could not be found any more, so it could not be checked. Please send it again." }, []);
+    return { document: (held ?? record).document, duplicate: false };
+  }
+
+  /** Screening, then routing and reading: what every held document goes through. */
+  async #screenAndRoute(record: HeldRecord, checked: ReceiveInput): Promise<ReceiveResult> {
+    let held = record;
+    const screening = await screenAttachment(held.document.attachment, checked.bytes, checked.scanVerdict ?? "unscanned");
+    if (!screening.ok) {
+      // A file waiting on the scanner keeps its place in the holding so "clean" can release it
+      // back into this same pipeline (#401), even after a restart; every other hold ends here.
+      const quarantined = await this.#saveHeld(held, { status: "quarantined", quarantineReason: screening.reason, statusMessage: screening.message }, []);
+      this.#record((quarantined ?? held).document, "purchase.inbox.quarantined", { reason: screening.reason, message: screening.message });
+      return { document: (quarantined ?? held).document, duplicate: false };
+    }
+    if (screening.pageCount !== undefined) {
+      held = await this.#saveHeld(held, { attachment: { ...held.document.attachment, pageCount: screening.pageCount } }, []) ?? held;
+    }
+    return this.#routeAndDraft(held, checked, screening.detectedType);
   }
 
   /**
@@ -300,23 +360,31 @@ export class PurchaseInboxService {
    * the company already has, then read and draft. `scanAnswered` releases a held
    * document into exactly this path, so a released file is never read differently.
    */
-  async #routeAndDraft(document: InboundDocument, input: ReceiveInput, detectedType: SupportedType): Promise<ReceiveResult> {
+  async #routeAndDraft(record: HeldRecord, input: ReceiveInput, detectedType: SupportedType): Promise<ReceiveResult> {
+    const document = record.document;
     // 2. Routing, from the uploader's session or the delivery address only. Nothing inside
     //    the file is consulted (#400).
     const routing = this.#route(input);
     if (!routing.ok) {
-      this.#channelOwners.set(document.id, routing.channelOwners);
-      return { document: this.#quarantine(document, routing.reason, routing.message), duplicate: false };
+      // Kept with the companies that may claim it, so it can be found again after a restart.
+      const held = await this.#saveHeld(record, { status: "quarantined", quarantineReason: routing.reason, statusMessage: routing.message }, routing.channelOwners);
+      this.#record((held ?? record).document, "purchase.inbox.quarantined", { reason: routing.reason, message: routing.message });
+      return { document: (held ?? record).document, duplicate: false };
     }
     const companyId = routing.companyId;
     const routed = Object.freeze({ ...document, companyId, routing: routing.decision }) as InboundDocument;
-    const messageKey = providerMessageKey(input);
-    const intakeKey = this.#intakeKeys.get(document.id) ?? document.id;
+    const messageKey = record.keys.messageKey;
+    const intakeKey = record.keys.intakeKey;
+    // The company that routing chose is the one that may take it out of the holding.
+    await this.#saveHeld(record, {}, [companyId]);
 
     // From here the document belongs to a company and is stored in that company's books (#366).
     // 3. Attachment-level duplicate check, scoped to the company that owns the file.
     //    The hash was measured from the bytes at intake (#401), not taken from the sender.
     const outcome = await this.#unitOfWork(companyId, async (): Promise<ReceiveResult | null> => {
+      // Out of the holding and into this company's books in one unit of work (#488): both happen
+      // or neither does. Nothing is left behind in the holding, and nothing is lost.
+      await this.#holding.claim(companyId, document.id);
       // The same delivery, stored by another server while this one was screening it (#406).
       const redelivered = messageKey ? await this.#store.documentByMessageKey(companyId, messageKey) : null;
       if (redelivered) return this.#withDraft(redelivered);
@@ -339,7 +407,7 @@ export class PurchaseInboxService {
       if (!redelivered) throw error;
       return this.#withDraft(redelivered);
     });
-    this.#release(document.id);
+    this.#heldBytes.delete(document.id);
     if (outcome) return outcome;
 
     // 4-6. Reading, cross-checking and drafting.
@@ -375,11 +443,13 @@ export class PurchaseInboxService {
    * address cannot be claimed by anybody, however its id was learned.
    */
   async assignCompany(context: RequestContext, documentId: Id, reason: string): Promise<InboundDocument> {
-    const held = this.#held.get(documentId);
-    const document = held ?? await this.#store.document(context.companyId, documentId);
+    // Held, still unrouted — or already in this company's books (quarantined COMPANY_MISMATCH).
+    const held = await this.#holding.get(documentId);
+    const document = held?.document ?? await this.#store.document(context.companyId, documentId);
     if (!document) throw notFound();
-    const mayClaim = document.companyId === UNROUTED
-      ? (this.#channelOwners.get(document.id) ?? []).includes(context.companyId)
+    // The ids of the companies whose channel it arrived on, from the narrow audited lookup (#488).
+    const mayClaim = held
+      ? (await this.#holding.channelOwners(documentId)).includes(context.companyId)
       : document.companyId === context.companyId;
     if (!mayClaim) throw notFound();
     this.#require(context);
@@ -398,9 +468,10 @@ export class PurchaseInboxService {
     }) as InboundDocument;
     await this.#unitOfWork(context.companyId, async () => {
       if (held) {
-        // Out of the unrouted holding and into this company's books, with the keys it arrived with.
-        const messageKey = [...this.#heldByMessage].find(([, id]) => id === document.id)?.[0] ?? null;
-        await this.#store.insertDocument(assigned, { messageKey, intakeKey: this.#intakeKeys.get(document.id) ?? document.id });
+        // Out of the unrouted holding and into this company's books, with the keys it arrived with,
+        // in one unit of work. If another person took it first there is nothing left to assign.
+        if (!(await this.#holding.claim(context.companyId, documentId))) throw notFound();
+        await this.#store.insertDocument(assigned, held.keys);
       } else {
         await this.#store.updateDocument(assigned);
       }
@@ -408,7 +479,7 @@ export class PurchaseInboxService {
       await this.#store.claimContent(context.companyId, document.attachment.sha256, document.id);
       this.#record(assigned, "purchase.inbox.company_assigned", { reason: reason.trim(), quarantineReason }, context.actorId);
     });
-    if (held) this.#release(document.id);
+    this.#heldBytes.delete(documentId);
     return assigned;
   }
 
@@ -576,19 +647,20 @@ export class PurchaseInboxService {
     return { document, duplicate: true, ...(draft ? { draft } : {}) };
   }
 
-  /** A held document has been stored in its company: it leaves the unrouted holding. */
-  #release(id: Id): void {
-    this.#held.delete(id);
-    this.#intakeKeys.delete(id);
-    this.#channelOwners.delete(id);
-    for (const [key, heldId] of this.#heldByMessage) if (heldId === id) this.#heldByMessage.delete(key);
-  }
-
-  /** A document in the unrouted holding. Once routed, `#update` saves it instead. */
-  #set(document: InboundDocument, changes: Partial<InboundDocument>): InboundDocument {
-    const updated = Object.freeze({ ...document, ...changes }) as InboundDocument;
-    this.#held.set(document.id, updated);
-    return updated;
+  /**
+   * A document in the unrouted holding, with its next state saved before anything else happens.
+   * `owners` are the companies that may claim it. Null when `from` was given and the document had
+   * already moved on, or when it is no longer held.
+   */
+  async #saveHeld(
+    record: HeldRecord,
+    changes: Partial<InboundDocument>,
+    owners: readonly Id[],
+    from?: { readonly status: "quarantined"; readonly quarantineReason: QuarantineReason },
+  ): Promise<HeldRecord | null> {
+    const next: HeldRecord = { ...record, document: Object.freeze({ ...record.document, ...changes }) as InboundDocument };
+    const saved = await this.#holding.save(next, owners, from);
+    return saved ? next : null;
   }
 
   /** A routed document's next step, saved in its company's unit of work. */
@@ -607,12 +679,6 @@ export class PurchaseInboxService {
       this.#record(held, "purchase.inbox.quarantined", { reason, message });
       return held;
     });
-  }
-
-  #quarantine(document: InboundDocument, reason: QuarantineReason, message: string): InboundDocument {
-    const held = this.#set(document, { status: "quarantined", quarantineReason: reason, statusMessage: message });
-    this.#record(held, "purchase.inbox.quarantined", { reason, message });
-    return held;
   }
 
   /** Audit entries are written against the owning company; unrouted ones are not leaked. */
