@@ -52,6 +52,8 @@ const pageFile = /^[a-z0-9][a-z0-9-]*\.(?:html|css|js|svg)$/;
 const notFound: WebAsset = { status: 404, contentType: "text/plain; charset=utf-8", body: Buffer.from("Not found"), cacheControl: "no-store" };
 
 export async function loadWebAsset(pathname: string): Promise<WebAsset> {
+  // Issue #353 — /design is the owner's style page: the same shell, which opens the design screen.
+  if (pathname === "/design") pathname = "/";
   const hashed = HASHED.exec(pathname);
   const requested = hashed ? `${hashed[1]}${hashed[3]}` : pathname;
   const name = requested === "/" ? "index.html" : requested.slice(1);
