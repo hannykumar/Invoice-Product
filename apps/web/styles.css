@@ -536,3 +536,9 @@ button.money-figure:hover { background: rgba(255, 255, 255, .08); }
   .app-tabbar button[aria-current="page"]:not(.tab-main) { background: transparent; }
   .app-tabbar .tab-main > span { margin-top: -28px; }
 }
+
+/* Issue #489 — the supplier bills inbox: a figure to check is marked, and a bill's lines sit in a tidy row. */
+.activity-row.check { border-left: 4px solid var(--due); padding-left: .6rem; }
+.inbox-line { align-items: end; margin-bottom: .6rem; padding-bottom: .6rem; border-bottom: 1px solid var(--line); }
+#inbox-detail { scroll-margin-top: 1rem; }
+#inbox-detail:focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }

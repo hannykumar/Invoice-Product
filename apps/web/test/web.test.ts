@@ -208,8 +208,8 @@ test("transaction screens are semantic, labelled and safe to review", async () =
   // #34's "Ask", #30's GST returns, #31's purchase check, #141's challans, #142's quotations and
   // proformas, #146/#147's bill design and #180's business details and #230's Money paid make twenty-six;
   // #303's owner-only design page makes twenty-seven; #304's Items and More make twenty-nine;
-  // #294's expenses screen makes thirty; #343's team screen makes thirty-one.
-  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 31);
+  // #294's expenses screen makes thirty; #343's team screen makes thirty-one; #489's supplier bills inbox makes thirty-two.
+  assert.equal((html.match(/<h1[^>]+tabindex="-1"/g) ?? []).length, 32);
 });
 
 test("responsive CSS includes phone navigation, reduced motion and visible focus", async () => {
@@ -945,4 +945,22 @@ test("#293: the Sale screen reaches every discount, and a price correction asks 
 test('an invitation link is never taken up by the automatic tester sign-in', async () => {
   const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(app, /if \(!dialog\.open && invitationToken === null\) \{/);
+});
+
+test("#489: the supplier bills inbox is reachable from More, labelled, and announces its states", async () => {
+  const [html, script, module] = await Promise.all([read("index.html"), read("app.js"), read("purchase-inbox.js")]);
+  assert.match(html, /<button type="button" class="more-link" data-view="purchase-inbox">.*data-i18n="navInbox"/);
+  const view = html.slice(html.indexOf('id="view-purchase-inbox"'), html.indexOf('id="view-itc"'));
+  assert.match(view, /aria-labelledby="inbox-title"/);
+  assert.match(view, /<input type="file" id="inbox-file"/);
+  assert.match(view, /id="inbox-add-result" role="status"/);
+  assert.match(view, /id="inbox-counts" role="status"/);
+  assert.match(view, /id="inbox-list" aria-busy="false"/);
+  assert.match(script, /target === "purchase-inbox"[^\n]*purchase-inbox\.js/);
+  // Loading, empty and error states each have words, and the screen draws nothing with innerHTML.
+  for (const key of ["inboxLoading", "inboxEmpty", "inboxLoadFailed"]) assert.match(module, new RegExp(`say\\("${key}"\\)`));
+  assert.doesNotMatch(module, /innerHTML|insertAdjacentHTML|outerHTML/);
+  // Recording is checked first and recorded second, from the same bill as it stands.
+  assert.match(module, /\/preview/);
+  assert.match(module, /\/record/);
 });
