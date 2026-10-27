@@ -259,3 +259,32 @@ test('a part-paid sale is recorded as typed; the done screen says where the mone
   assert.equal(await page.$eval('[data-draft="sale"] [name="party"]', (select) => (select as HTMLSelectElement).selectedOptions[0]!.textContent), 'Walk-in / cash customer', 'a reload does not bring the old customer back');
   assert.notEqual(await page.$eval('#sale-lines [data-line-field="quantity"]', (input) => (input as HTMLInputElement).value), '10', 'nor the old line');
 });
+
+test('the tax and the total on the sale are what the server says, never worked out in the page', async () => {
+  await freshSale();
+  const restore = harness.respond('/api/sales/estimate', { body: { state: 'estimate', ready: true, total: 999.99, totals: { subtotal: 922.22, totalTax: 77.77, total: 999.99, roundOff: 0 }, lines: [], placeOfSupply: null, ewayBill: null, eInvoice: null, dateNotice: null, refusals: [] } });
+  try {
+    await pickItem('TMT');
+    await typeInto('#sale-lines [data-line-field="quantity"]', '3');
+    await typeInto('#sale-lines [data-line-field="rate"]', '100');
+    // The figures on screen are the server's, whatever 3 × ₹100 would come to here.
+    await page.waitForFunction(() => document.querySelector('[data-draft="sale"] [data-calculated="total"]')!.textContent === '₹999.99');
+    assert.equal(await textOf(page, '[data-draft="sale"] [data-calculated="tax"]'), '₹77.77');
+    assert.equal(await textOf(page, '#sale-bill-bar [data-calculated="total"]'), '₹999.99', 'and the bar on every slide');
+  } finally { restore(); }
+  assert.deepEqual(harness.problems, []);
+});
+
+test('when the server cannot price the bill yet, the figures stay as dashes rather than a guess', async () => {
+  await freshSale();
+  const restore = harness.respond('/api/sales/estimate', { body: { state: 'estimate', ready: false, total: null, totals: null, lines: [], refusals: [{ code: 'CUSTOMER_REQUIRED', 'en-IN': 'Choose a customer', 'hi-IN': 'ग्राहक चुनिए' }] } });
+  try {
+    await pickItem('TMT');
+    await typeInto('#sale-lines [data-line-field="quantity"]', '2');
+    await typeInto('#sale-lines [data-line-field="rate"]', '100');
+    await harness.requested('/api/sales/estimate');
+    await page.waitForFunction(() => document.querySelector('[data-draft="sale"] [data-calculated="total"]')!.textContent === '—' && document.querySelector('[data-draft="sale"] [data-calculated="tax"]')!.textContent === '—');
+    // The shown subtotal is only the sum of what was typed (before tax) — the one figure the page may add up.
+    assert.match(await textOf(page, '[data-draft="sale"] [data-calculated="subtotal"]'), /^₹200\.00$/);
+  } finally { restore(); }
+});

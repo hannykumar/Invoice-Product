@@ -28,6 +28,11 @@ export interface PageHarness {
   /** Resolves when the page has sent a request to `path` (after the first `from` requests) and the server has answered it; rejects after `timeoutMs`. */
   requested(path: string, from?: number, timeoutMs?: number): Promise<SentRequest>;
   /**
+   * Answers every request to `path` itself, with `reply`, instead of asking the server: a server that
+   * says something particular, or is down. The returned function puts the real server back.
+   */
+  respond(path: string, reply: { readonly status?: number; readonly body: unknown }): () => void;
+  /**
    * Holds every request to `path` (a pathname) until the returned function is called: a slow
    * network, so a test can look at the page while it waits for an answer.
    */
@@ -45,6 +50,7 @@ export async function startPageHarness(): Promise<PageHarness> {
   const sent: SentRequest[] = [];
   const problems: string[] = [];
   const entries = new WeakMap<HTTPRequest, SentRequest>();
+  const replies = new Map<string, { readonly status?: number; readonly body: unknown }>();
   const holds = new Map<string, Promise<void>>();
 
   const newPage = async (options: { width?: number; height?: number } = {}) => {
@@ -61,6 +67,12 @@ export async function startPageHarness(): Promise<PageHarness> {
         sent.push(entry);
       }
       await holds.get(pathname);
+      const reply = replies.get(pathname);
+      if (reply !== undefined) {
+        const entry = entries.get(request);
+        if (entry) entry.status = reply.status ?? 200;
+        return void request.respond({ status: reply.status ?? 200, contentType: 'application/json', body: JSON.stringify(reply.body) }).catch(() => undefined);
+      }
       void request.continue().catch(() => undefined);
     });
     page.on('response', (response) => { const entry = entries.get(response.request()); if (entry) entry.status = response.status(); });
@@ -100,6 +112,7 @@ export async function startPageHarness(): Promise<PageHarness> {
       };
       look();
     }),
+    respond: (path, reply) => { replies.set(path, reply); return () => { replies.delete(path); }; },
     hold: (path) => {
       let release = () => {};
       holds.set(path, new Promise<void>((resolve) => { release = () => { holds.delete(path); resolve(); }; }));
