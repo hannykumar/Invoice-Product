@@ -50,6 +50,8 @@ export interface PublicCall<I> {
   readonly delivery: WebhookDelivery | undefined;
   /** The session the caller sent, if any (`Bearer …`). Public routes may only end it, never use it. */
   readonly authorization?: string | undefined;
+  /** Issue #350 — the caller's address, for limits per IP; undefined for an in-process call. */
+  readonly clientIp?: string | undefined;
 }
 export interface SessionCall<I> extends PublicCall<I> {
   readonly context: RequestContext;

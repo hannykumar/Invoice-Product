@@ -130,7 +130,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (192)
+## Routes (193)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
@@ -149,6 +149,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/team/remove` | `access.review` | ✓ | ✓ |  |  |  |
 | `POST /api/team/transfer` | `business.transfer` | ✓ |  |  |  |  |
 | `POST /api/team/leave` | any member: anyone may leave a business they belong to; the last owner is refused by the team service | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `GET /api/usage` | `subscription.view` | ✓ | ✓ | ✓ |  |  |
 | `GET /api/session` | any member: who is signed in, where, and their own businesses: every member may see their own | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `GET /api/dashboard` | `dashboard.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `GET /api/reports` | `reports.view.financial` or `reports.view.sales` or `reports.view.purchase` or `reports.view.stock` or `reports.view.dues` or `reports.view.gst` | ✓ | ✓ | ✓ |  |  |

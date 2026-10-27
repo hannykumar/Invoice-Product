@@ -74,7 +74,7 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 192 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 193 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
@@ -96,7 +96,7 @@ Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route
 | H1 | One huge or slow request exhausts memory, before sign-in (A04/A05) | High | High | Nothing: `readBody` buffers without limit; no timeouts set | 1 MB JSON limit → 413; `requestTimeout`, `headersTimeout` | **High** | #349 |
 | H2 | Clickjacking; XSS with no backstop; MIME sniffing (A05) | Medium | High | Server-side escaping | CSP, `frame-ancestors`, nosniff, HSTS, Referrer-Policy, Permissions-Policy | **High** | #349 |
 | H3 | Password guessing on sign-in; unsalted SHA-256; default demo passwords with no environment guard; the owner's demo password prefilled in the sign-in form (`apps/web/index.html:1547`) (A07/A02) | High | High | Constant-time compare | A real identity provider; no built-in users | **High** | #342 |
-| H4 | No rate limits on sign-in, government calls, PDF generation, reminders, the webhook (A04) | High | High | — | Per-user and per-company limits, spending caps | **High** | #350 |
+| H4 | No rate limits on sign-in, government calls, PDF generation, reminders, the webhook (A04) | High | High | #350: wrong codes and code requests per address and per IP, codes per number per day; per user per minute; heavy work per company per minute by plan; paid services per company per day and a daily spending cap per service; signed-out callers per IP — all counted in PostgreSQL | Bot protection on sign-up (Turnstile), per-provider webhook limits | Medium | #350 |
 | H5 | A read-only viewer reads invoice PDFs and previews, notes, purchases, challans, quotations, PAN and bank details through GET routes with no permission check (A01) | Medium | Medium | Tenant check in each service | Permission on every GET | Medium | #327, #343 |
 | H6 | GET routes that write: `/api/catalogue` opens an account; `/api/operations` seeds data before its permission check (A04) | Low | Low | — | GET is read-only | Low | #395 |
 | H7 | Internal error text reaches the client; surprises answer 400, not 500; a JSON body of `null` returns a TypeError message (A05/A09) | Medium | Low | No stack traces; secrets redacted | One error shape, plain 500 | Medium | #344 |
@@ -253,6 +253,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/auth/sign-out` | — |
 | POST | `/api/session/company` | — |
 | GET | `/api/team` | service |
+| GET | `/api/usage` | service |
 | POST | `/api/team/invite` | `access.review` |
 | POST | `/api/team/role` | `access.review` |
 | POST | `/api/team/remove` | `access.review` |

@@ -124,6 +124,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://invoice:invoice@localhost:5432/invoice
       NODE_ENV: test
+      # A throwaway database for this job: the browser suite may clear its rate-limit counters (#350).
+      KAROBAR_TEST_DATABASE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

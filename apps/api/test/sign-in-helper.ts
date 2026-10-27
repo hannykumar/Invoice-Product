@@ -17,10 +17,11 @@ export const SYNTHETIC_CA = 'ca@example.invalid';
 export const tokenFrom = (headers: Readonly<Record<string, string>>): string | undefined =>
   new RegExp(`^${SESSION_COOKIE}=([^;]+)`).exec(headers['set-cookie'] ?? '')?.[1];
 
-/** Signs in in-process and returns the session token, for `handleApi(…, \`Bearer ${token}\`)`. */
+/**
+ * Signs in in-process and returns the session token, for `handleApi(…, \`Bearer ${token}\`)`. The
+ * demo provider needs no code sent first, and asking for one would count against #350's code limits.
+ */
 export const signIn = async (address = SAMPOORNA_OWNER, companyId?: string): Promise<string> => {
-  const sent = await handleApi('POST', '/api/auth/code', { address });
-  assert.equal(sent.status, 200, String(sent.body));
   const opened = await handleApi('POST', '/api/auth/sign-in', { address, code: DEMO_SIGN_IN_CODE, ...(companyId === undefined ? {} : { companyId }) });
   assert.equal(opened.status, 200, String(opened.body));
   const token = tokenFrom(opened.headers);
@@ -31,7 +32,6 @@ export const signIn = async (address = SAMPOORNA_OWNER, companyId?: string): Pro
 /** Over HTTP: signs in against `base` and returns the `Cookie` header value to send back. */
 export const signInOverHttp = async (base: string, address = SAMPOORNA_OWNER, companyId?: string): Promise<string> => {
   const post = (path: string, body: unknown) => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify(body) });
-  assert.equal((await post('/api/auth/code', { address })).status, 200);
   const opened = await post('/api/auth/sign-in', { address, code: DEMO_SIGN_IN_CODE, ...(companyId === undefined ? {} : { companyId }) });
   assert.equal(opened.status, 200);
   const token = tokenFrom({ 'set-cookie': opened.headers.get('set-cookie') ?? '' });

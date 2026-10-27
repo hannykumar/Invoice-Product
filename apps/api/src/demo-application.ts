@@ -4220,6 +4220,9 @@ export class DemoApplication {
     };
   }
 
+  /** Issue #350 — this business's plan, which sets how much heavy work it may ask for a minute. */
+  planId(actor: ActorContext): Promise<string> { return this.subscriptions.planOf(this.companyOf(actor)); }
+
   async subscriptionAccount(actor: ActorContext, input: Record<string, unknown> = {}) {
     this.companyOf(actor);
     const today = appToday();
