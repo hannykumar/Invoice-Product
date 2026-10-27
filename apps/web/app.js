@@ -183,6 +183,9 @@ const copy = {
     itcOurs: "yours", itcTheirs: "portal",
     itcTypedFlag: "typed in by a person",
     navGstReturns: "GST returns",
+    navComposition: "Composition scheme",
+    compositionTitle: "Composition scheme, CMP-08 and GSTR-4",
+    compositionHelp: "If your business pays a small percentage of its sales instead of the usual GST, set it up here. Your bills become Bills of Supply with no GST on them, and this page works out the tax you pay every quarter and the return you file every year.",
     gstReturnsTitle: "Your GST returns for the month",
     gstReturnsHelp: "Every bill you issued in the month, sorted into the parts the government asks for, with the bills behind each figure still there to open. Nothing is guessed: a bill we cannot place is put on a list with the question that would place it.",
     gstWhichMonth: "Which month", gstWhichMonthHelp: "Returns are filed month by month. Pick the month you are filing for.",
@@ -544,6 +547,9 @@ const copy = {
     itcOurs: "आपका", itcTheirs: "पोर्टल",
     itcTypedFlag: "किसी ने हाथ से लिखा",
     navGstReturns: "GST रिटर्न",
+    navComposition: "कम्पोज़िशन स्कीम",
+    compositionTitle: "कम्पोज़िशन स्कीम, CMP-08 और GSTR-4",
+    compositionHelp: "अगर आपका बिज़नेस सामान्य GST की जगह अपनी बिक्री का छोटा प्रतिशत भरता है, तो उसे यहाँ तय कीजिए। आपके बिल बिना GST के Bill of Supply बन जाते हैं, और यह पन्ना हर तिमाही का टैक्स और हर साल का रिटर्न तैयार करता है।",
     gstReturnsTitle: "इस महीने का आपका GST रिटर्न",
     gstReturnsHelp: "महीने के सारे बिल, सरकार जैसे माँगती है वैसे बाँटते हुए, और हर फ़िगर के पीछे के बिल खोल कर देखे जा सकते हैं। कुछ अंदाज़ा नहीं लगाया जाता: जो बिल रखा न जा सके वो सवाल के साथ एक लिस्ट पर चला जाता है।",
     gstWhichMonth: "कौनसा महीना", gstWhichMonthHelp: "रिटर्न हर महीने का अलग होता है। जिस महीने का भर रहे हैं वो चुनिए।",
@@ -954,6 +960,8 @@ function openView(view, section = null) {
   try { if (target === "sale") saleSlidesShown(); } catch { /* not loaded yet */ }
   if (target === "itc") openItc();
   if (target === "gst-returns") openGstReturns();
+  // Issue #296 — the composition scheme: the setting, CMP-08 by quarter and GSTR-4 by year.
+  if (target === "composition") import("/composition.js").then((screen) => screen.openComposition({ api, locale: () => state.locale })).catch((error) => console.error("The composition screen could not open.", error));
   if (target === "bank-feeds") loadBankFeeds();
   if (target === "operations") loadOperations();
   if (target === "ask") loadAskExamples();
@@ -6720,15 +6728,25 @@ async function loadGstReturns() {
   try {
     renderGstWorkspace(await api("/api/gst-returns", { method: "POST", body: JSON.stringify({ period: gstPeriodValue() }) }));
   } catch (error) {
-    showGstProblem(error.message);
+    showGstProblem(error.message, error.code);
   }
 }
 
-function showGstProblem(message) {
+function showGstProblem(message, code = "") {
   document.querySelector("#gst-heading").hidden = false;
   document.querySelector("#gst-title").textContent = t({ "en-IN": "That month could not be prepared", "hi-IN": "वो महीना तैयार नहीं हो पाया" });
   document.querySelector("#gst-summary").textContent = message;
-  document.querySelector("#gst-blockers").replaceChildren();
+  const blockers = document.querySelector("#gst-blockers");
+  blockers.replaceChildren();
+  // Issue #296 — a composition business files CMP-08 and GSTR-4, so the way forward is one tap away.
+  if (code === "GST_RETURN_NOT_FOR_COMPOSITION" || code === "GST_RETURN_MIXED_SCHEME_MONTH") {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "primary-button";
+    open.textContent = t({ "en-IN": "Open the composition returns", "hi-IN": "कम्पोज़िशन रिटर्न खोलिए" });
+    open.addEventListener("click", () => openView("composition"));
+    blockers.append(open);
+  }
 }
 
 function renderGstWorkspace(workspace) {
@@ -6846,7 +6864,7 @@ submitStep("#gst-return-form", async (form) => {
   try {
     renderGstWorkspace(await api("/api/gst-returns/prepare", { method: "POST", body: JSON.stringify(formValues(form)) }));
     document.querySelector("#gst-action-result").textContent = "";
-  } catch (error) { showGstProblem(error.message); }
+  } catch (error) { showGstProblem(error.message, error.code); }
 });
 
 document.querySelector("#gst-approve")?.addEventListener("click", async () => {

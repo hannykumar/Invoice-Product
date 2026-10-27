@@ -101,6 +101,7 @@ reverse.
 | `docs/contracts/purchase-matching-v1.md` | GPT 3 | Order/receipt lifecycles, per-item matching, findings and severities, tolerances, approvals |
 | `docs/contracts/supplier-risk-v1.md` | GPT 3 | Evidence shape, warning codes and levels, wording rules, the optional `Gstr2bPort` for #31 |
 | `docs/contracts/einvoice-v1.md` | GPT 3 | Applicability outcomes and rules, IRN formula and verification, statuses, idempotency, `IrpPort` |
+| `docs/contracts/composition-v1.md` | GPT 1 / GPT 3 | The composition scheme: Bill of Supply, no credit, no other-State sales, CMP-08, GSTR-4, what is and is not verified |
 | `docs/contracts/itc-reconciliation-v1.md` | GPT 3 | Book/portal document shapes, match statuses and evidence, accept/reject/pending, ITC outcomes, the GSTR-3B linkage |
 
 Every GPT 3 write goes through GPT 2's `PlatformCommandService`. Tenant isolation, idempotency
@@ -122,6 +123,7 @@ and audit are theirs — do not write a second implementation of any of them.
 | #31 IMS/GSTR-2B | **Done, tests green** | New `packages/itc`. GSTR-2B/IMS file import (portal JSON and CSV) with a typed-entry path beside it, optional GSP download through the same reader, exact and fuzzy matching across GSTIN, number, date, taxable value and tax, six evidence rows on every line, accept/reject/pending with reasons and an append-only history, duplicates/amendments/withdrawals/blocked credit handled, migration `…_itc_reconciliation`. **A bill the portal does not carry is never credit**: it is held back and can only be claimed by a named person with the `itc.claim_at_risk` permission and a reason, and then only at the lower of the two figures. Feeds GSTR-3B's credit side through #30's own `InwardTaxPort`, and finally answers #19's `Gstr2bPort`. Demonstrable on the web app's Purchase check screen. |
 | #488 inbox holding | **Done, tests green** | `packages/purchasing`. Documents whose company is not known yet (screening, awaiting the virus scan, shared or unowned address) are kept in a pre-tenant PostgreSQL holding and survive a restart; routing moves them into the company's unit of work and removes them from the holding in the same transaction. No RLS bypass: a no-login owner role and narrow audited functions, company taken from the session. 30-day expiry (proposed, owner to confirm) run by the worker. Migration `…_inbox_holding`. The app does not build `PurchaseInboxService` for an inbound channel yet; `apps/api/src/purchase-inbox-holding.ts` is the factory it will use. |
 | #165 advances | **Done, tests green** | `packages/receivables/src/advance.ts`. Money against a proforma gets a receipt voucher (Rule 50, `RV/…`); GST on a services advance is owed at once and held in `GST_ON_ADVANCES`, then set off when #142's `linkInvoice` applies the advance to the bill; unused money goes back on a refund voucher (Rule 51, `RFV/…`) with its tax. Demonstrable on the web app's Quotation / Proforma screen. Not yet fed to GSTR-1's advances tables. |
+| #296 composition | **Done, tests green** | Company setting `Scheme` with effective dates (previewed, then applied with a token; `apps/api/src/composition-scheme.ts`). A composition business issues a **Bill of Supply** (`BOS/…` series, the Rule 5 words on top, no tax columns on any design or paper), `gst-calc` refuses other-State sales, purchase GST goes into cost, GSTR-1/3B refuse its months, and `packages/gst-returns/src/composition.ts` builds **CMP-08** (booked once, a later change books only the difference) and **GSTR-4** (working paper, no portal JSON). Rates are `DRAFT` and the owner confirms them; the primary CBIC sites were unreachable when it was built, so `docs/contracts/composition-v1.md` lists what was not verified. Demonstrable on the web app's Composition scheme screen. |
 | #29 | Next | Authorised vehicle-record verification. |
 | #19, #26–#33, #44, #45, #51, #53 | Later waves | See `docs/gpt3-handbook.md` section 6. |
 
@@ -138,6 +140,7 @@ npm run demo:inbox    # five documents through four channels: routing, duplicate
 npm run demo:matching # ordered 100, received 90, billed 100 — held, explained, then approved
 npm run demo:risk     # four suppliers, four stories, and a GST-department outage
 npm run demo:einvoice # who needs an IRN, sending one, retrying, an outage, and cancelling
+npm run demo:composition # a composition shop's year: CMP-08 each quarter, GSTR-4, the limit watch
 npm run demo:itc      # a month of purchases against the government's record: missing, mismatched, duplicated
 npm run web           # the browser workspace, including the Deliveries screen for #18
 ```

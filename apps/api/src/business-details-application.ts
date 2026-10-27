@@ -46,6 +46,8 @@ import {
 import { STATE_NAMES } from '@invoice/transport';
 import { GST_STATE_CODES } from '../../../packages/masters/src/validation.ts';
 import { masterData, mastersContext } from './master-data.ts';
+import { forgetScheme } from './composition-scheme.ts';
+import { forgetCompositionStatements } from './composition-application.ts';
 import { DurableMap } from './durable.ts';
 
 /**
@@ -497,4 +499,6 @@ export const forgetBusinessDetails = (companyId: CompanyId | string): void => {
   details.delete(String(companyId));
   turnoverAnswers.delete(String(companyId));
   eInvoiceExemptions.delete(String(companyId));
+  forgetScheme(companyId);
+  forgetCompositionStatements(String(companyId));
 };
