@@ -47,6 +47,12 @@ export interface InvoicePricing {
   readonly placeOfSupplyStateCode: string;
   readonly split: TaxSplit;
   readonly mayChargeGst: boolean;
+  /**
+   * Issue #296 — the scheme the business was in on the bill's date. `COMPOSITION` makes the bill a
+   * bill of supply (CGST Rule 49) from its own number series. Absent on a bill priced before this
+   * existed, which was a tax invoice.
+   */
+  readonly supplierRegistration?: 'REGULAR' | 'COMPOSITION' | 'UNREGISTERED';
   readonly lines: readonly ComputedTaxLine[];
   readonly totals: TaxTotals;
   readonly explanation: { readonly 'en-IN': string; readonly 'hi-IN': string };

@@ -43,7 +43,7 @@ import {
 // which is the convention their lane and GPT 2's already use for cross-package imports.
 import { GST_STATE_CODES } from '../../masters/src/validation.ts';
 import { minimumHsnDigitsOnInvoice, turnoverAnswerOn, type TurnoverAbove5Crore } from '../../masters/src/hsn-digits.ts';
-import { registrationOn, type MasterDataReader, type TaxTreatment } from './master-data-port.ts';
+import { registrationOn, type MasterDataReader, type Registration, type TaxTreatment } from './master-data-port.ts';
 import type { RateTable } from './rate-table.ts';
 import type { DeclaredRateReader } from './declared-rates.ts';
 
@@ -200,6 +200,8 @@ export type ComputeResult =
       readonly placeOfSupplyStateCode: string;
       readonly split: TaxSplit;
       readonly mayChargeGst: boolean;
+      /** Issue #296 — the scheme the business was under on the bill's date; a composition bill is a bill of supply. */
+      readonly supplierRegistration: Registration;
       readonly lines: readonly ComputedTaxLine[];
       readonly totals: TaxTotals;
       readonly decisions: readonly Decision[];
@@ -425,6 +427,7 @@ export class GstCalculator {
       placeOfSupplyStateCode: placeOfSupply,
       split,
       mayChargeGst,
+      supplierRegistration: registrationOn(company, input.documentDate),
       lines: computedLines,
       totals,
       decisions,
