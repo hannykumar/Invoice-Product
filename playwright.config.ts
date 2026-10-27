@@ -9,6 +9,8 @@ import { defineConfig } from "@playwright/test";
  * payments).
  *
  * Migrate and seed the database first: `npm run db:migrate && npm run db:seed`.
+ * Run it with NODE_ENV=test and a test database (its name contains "test", or KAROBAR_TEST_DATABASE=1):
+ * the setup clears its rate-limit counters (#350) and refuses any other database.
  */
 const port = Number(process.env.WEB_PORT ?? process.env.PORT ?? 4173);
 const baseURL = `http://127.0.0.1:${port}`;
