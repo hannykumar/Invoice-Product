@@ -183,3 +183,13 @@ test('a regular taxpayer is unaffected', async () => {
   const workspace = await serviceUnder('REGULAR').workspace(actor, input);
   assert.equal(workspace.gstin, SUNRISE_GSTIN);
 });
+
+test('GSTR-4 takes the rate quarter by quarter, and a quarter outside the scheme owes nothing', () => {
+  const docs = [sale('1', '2026-04-10', rupees(100_000)), sale('2', '2026-08-10', rupees(100_000))];
+  const year = buildGstr4({
+    financialYear: '2026-27', documents: docs,
+    rateForQuarter: (quarter) => (quarter.number === 1 ? 100n : quarter.number === 2 ? 600n : 0n),
+  });
+  assert.deepEqual(year.quarters.map((q) => q.levy.totalPaise), [rupees(1_000), rupees(6_000), 0n, 0n]);
+  assert.equal(year.taxPayablePaise, rupees(7_000));
+});

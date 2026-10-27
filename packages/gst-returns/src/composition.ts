@@ -289,7 +289,10 @@ export const buildCmp08 = (input: {
   const inQuarter = input.documents.filter((doc) => compareDates(doc.date, input.quarter.from) >= 0 && compareDates(doc.date, input.quarter.to) <= 0);
   const outward = inQuarter.reduce((sum, doc) => sum + signed(doc), 0n);
   const taxable = inQuarter.filter((doc) => doc.taxable).reduce((sum, doc) => sum + signed(doc), 0n);
-  const levy = levyOn(taxable, input.rateBasisPoints);
+  // Rate 0 means the business was not on the scheme this quarter: the turnover is shown, no levy is due.
+  const levy = input.rateBasisPoints === 0n
+    ? { turnoverPaise: taxable < 0n ? 0n : taxable, rateBasisPoints: 0n, centralPaise: 0n, statePaise: 0n, totalPaise: 0n }
+    : levyOn(taxable, input.rateBasisPoints);
   const rcm = input.reverseChargeTaxPaise ?? 0n;
   const notes: Bilingual[] = [];
   if (taxable < 0n) {
@@ -329,8 +332,10 @@ export interface Gstr4 {
 export const buildGstr4 = (input: {
   readonly financialYear: string;
   readonly documents: readonly CompositionDocument[];
-  /** The rate in force in each quarter, oldest first (a dealer may change category on 1 April only). */
-  readonly rateBasisPoints: bigint;
+  /** The rate for every quarter, when it does not change within the year. */
+  readonly rateBasisPoints?: bigint;
+  /** The rate in force in a quarter (a dealer may change category on 1 April, or leave mid-year). Wins over `rateBasisPoints`. */
+  readonly rateForQuarter?: (quarter: Quarter) => bigint;
   readonly reverseChargeTaxByQuarter?: Readonly<Record<number, bigint>>;
   readonly taxPaidPaise?: bigint | null;
   readonly inward?: { readonly fromRegisteredPaise?: bigint; readonly fromUnregisteredPaise?: bigint; readonly reverseChargePaise?: bigint };
@@ -339,7 +344,8 @@ export const buildGstr4 = (input: {
   const quarters = ([1, 2, 3, 4] as const).map((number) => {
     const first = [`${startYear}-04-01`, `${startYear}-07-01`, `${startYear}-10-01`, `${startYear + 1}-01-01`][number - 1] as IsoDate;
     return buildCmp08({
-      quarter: quarterOf(first), documents: input.documents, rateBasisPoints: input.rateBasisPoints,
+      quarter: quarterOf(first), documents: input.documents,
+      rateBasisPoints: input.rateForQuarter?.(quarterOf(first)) ?? input.rateBasisPoints ?? 0n,
       reverseChargeTaxPaise: input.reverseChargeTaxByQuarter?.[number] ?? 0n,
     });
   });
