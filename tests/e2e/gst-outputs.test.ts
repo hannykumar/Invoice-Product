@@ -49,9 +49,7 @@ const makeReturnDesk = async (shop: Awaited<ReturnType<typeof makeBusiness>>) =>
     repository: preparations,
     audit,
     clock: shop.clock,
-    policy: new StaticReturnPolicy({
-      gstin: COMPANY_GSTIN, stateCode: COMPANY_STATE, requirePeriodLock: false, effectiveFrom: isoDate('2026-04-01'),
-    }),
+    policy: new StaticReturnPolicy({ mode: 'development', requireClosedPeriod: false, requireBooksToAgree: true }),
   });
   return { outward, inward, preparations, audit, service };
 };
@@ -96,7 +94,7 @@ test('the GST return built from a real sale agrees with the ledger that sale pos
   const issued = await sell(shop, 'trace');
 
   desk.outward.add(salesInvoiceToDocument(issued.invoice, counterparty, supplier));
-  const workspace = await desk.service.workspace(actor, { period: PERIOD });
+  const workspace = await desk.service.workspace(actor, { period: PERIOD, gstin: supplier.gstin, supplierStateCode: supplier.stateCode });
 
   // ₹10,000 of goods at 18% inside one state: ₹900 CGST and ₹900 SGST.
   assert.equal(workspace.reconciliation.agrees, true, workspace.reconciliation.sentence['en-IN']);
@@ -117,7 +115,7 @@ test('every figure on the return can be traced back to the bill behind it', asyn
   const issued = await sell(shop, 'drill');
 
   desk.outward.add(salesInvoiceToDocument(issued.invoice, counterparty, supplier));
-  const workspace = await desk.service.workspace(actor, { period: PERIOD });
+  const workspace = await desk.service.workspace(actor, { period: PERIOD, gstin: supplier.gstin, supplierStateCode: supplier.stateCode });
 
   const b2b = workspace.gstr1.sections.find((section) => section.id === 'B2B');
   assert.ok(b2b !== undefined, 'a sale to a registered buyer belongs in the B2B table');
@@ -146,7 +144,7 @@ test('a credit note reaches the return and the reconciliation still agrees', asy
     salesInvoiceToDocument(issued.invoice, counterparty, supplier),
     returnNoteToDocument(posted.note, counterparty, supplier, { original: { placeOfSupplyStateCode: issued.invoice.placeOfSupplyStateCode } }),
   );
-  const workspace = await desk.service.workspace(actor, { period: PERIOD });
+  const workspace = await desk.service.workspace(actor, { period: PERIOD, gstin: supplier.gstin, supplierStateCode: supplier.stateCode });
 
   // The sale put ₹900 of CGST in the books and the credit note took ₹180 of it back out. The
   // return has to show ₹720, and it has to be ₹720 because the ledger says so.
@@ -166,7 +164,7 @@ test('a sale missing from the return is caught rather than filed around', async 
   await sell(shop, 'forgotten');
 
   desk.outward.add(salesInvoiceToDocument(first.invoice, counterparty, supplier));
-  const workspace = await desk.service.workspace(actor, { period: PERIOD });
+  const workspace = await desk.service.workspace(actor, { period: PERIOD, gstin: supplier.gstin, supplierStateCode: supplier.stateCode });
 
   assert.equal(workspace.reconciliation.agrees, false);
   assert.ok(workspace.reconciliation.unexplainedVouchers.length > 0, 'the missing sale must be named, not netted away');
@@ -183,7 +181,7 @@ test('GSTR-3B is prepared from the same period and carries the purchase credit',
   // The purchase in this scenario carried ₹5,760 of GST, split across the two heads.
   desk.inward.set(COMPANY, inwardWithOrdinaryCredit(PERIOD, { igst: 5_760_00n }));
 
-  const workspace = await desk.service.workspace(actor, { period: PERIOD });
+  const workspace = await desk.service.workspace(actor, { period: PERIOD, gstin: supplier.gstin, supplierStateCode: supplier.stateCode });
   assert.equal(workspace.gstr3b.period, PERIOD);
   assert.equal(workspace.reconciliation.agrees, true, workspace.reconciliation.sentence['en-IN']);
 });

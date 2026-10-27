@@ -32,7 +32,8 @@ dependency to go once nothing used it.
 
 ## Consequences
 
-- One command, `npm run test:browser`, runs every browser test; the CI `browser` job runs it. It is
+- One suite, run by `npm run test:browser:pg` (#494: a fresh PostgreSQL database per run; the CI
+  `browser` job runs it) or `npm run test:browser` on a database you seeded, runs every browser test. It is
   not part of `npm run verify`, as before: `verify` runs in a job with no Chromium install.
 - `npm test` no longer needs a Chromium at all.
 - The ported sale test now meets the real PostgreSQL company, not the in-memory demo, and that

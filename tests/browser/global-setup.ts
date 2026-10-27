@@ -24,7 +24,11 @@ export const testDatabaseUrl = (env: Readonly<Record<string, string | undefined>
 };
 
 export default async function globalSetup() {
-  const client = new pg.Client({ connectionString: testDatabaseUrl(process.env) });
+  // `npm run test:browser:pg` (#494) hands the server a login that may not delete rows, and the owner's
+  // address for this; its database is brand new, so there is nothing to clear — but it is still checked.
+  const owner = process.env.KAROBAR_OWNER_DATABASE_URL?.trim();
+  const url = testDatabaseUrl(owner ? { ...process.env, DATABASE_URL: owner } : process.env);
+  const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {
     await client.query("DELETE FROM rate_limit_counters");

@@ -10,7 +10,10 @@ import { PERMITTED_VEHICLE_FIELDS } from "../../packages/transport/src/vehicle-r
 import { testDatabaseUrl } from "./global-setup.ts";
 
 export async function grantVehicleRecordConsent(owner = "owner@sampoorna.example.invalid", business = "Sampoorna Traders") {
-  const client = new pg.Client({ connectionString: testDatabaseUrl(process.env) });
+  // As in global-setup.ts: under `npm run test:browser:pg` the server's own login may not write here, so the
+  // owner's address (of the same fresh test database) is the one to use.
+  const ownerUrl = process.env.KAROBAR_OWNER_DATABASE_URL?.trim();
+  const client = new pg.Client({ connectionString: testDatabaseUrl(ownerUrl ? { ...process.env, DATABASE_URL: ownerUrl } : process.env) });
   await client.connect();
   try {
     await client.query("BEGIN");

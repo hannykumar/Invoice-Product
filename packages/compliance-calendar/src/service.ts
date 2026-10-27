@@ -449,7 +449,11 @@ export class ComplianceCalendarService {
     const to = window.to ?? addDays(today, this.#window.ahead);
     const definitions = await this.#definitions.definitionsFor(companyId);
     const policy = await this.#workingDayPolicy(companyId, addDays(from, -30), addDays(to, 30), profile);
-    const stored = await this.#occurrences.list(companyId, from, to);
+    // The stored rows reach further back than the window shows: `#periodsFor` plans up to two
+    // periods before `from`, and a yearly cadence's two periods are about two years. A completed
+    // occurrence just outside the window must still merge in, or the screen re-opens a filed
+    // return. Eight hundred days covers the longest cadence's padding with room to spare.
+    const stored = await this.#occurrences.list(companyId, addDays(from, -800), to);
     const storedByKey = new Map(stored.map((item) => [item.key, item] as const));
 
     const planned: PlannedOccurrence[] = [];

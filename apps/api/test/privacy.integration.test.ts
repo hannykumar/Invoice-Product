@@ -72,7 +72,7 @@ test('#352: export carries the tenant\'s rows only, a legal hold blocks deletion
   await db.query('INSERT INTO users (id, email, display_name, active) VALUES ($1, $2, $3, true)', [probeUser, `probe-${probeUser}@example.invalid`, 'Probe Owner']);
   await db.query("INSERT INTO memberships (company_id, user_id, permissions, active) VALUES ($1, $2, '[]'::jsonb, true)", [probe, probeUser]);
   await db.query("INSERT INTO app_records (company_id, kind, key, value) VALUES ($1, 'privacy_probe', 'probe', '\"x\"'::jsonb)", [probe]);
-  const probeContext = { companyId: probe, actorId: probeUser, requestId: 'probe-2', permissions: context.permissions } as any;
+  const probeContext = { companyId: probe, actorId: probeUser, sessionId: randomUUID(), requestId: 'probe-2', permissions: context.permissions } as any;
   // Hold: deletion answers blocked, not erased.
   await privacy.placeLegalHold(probeContext, probe, 'assessment under way');
   const heldRequest = await privacy.request(probeContext, probe, 'deletion', `del-${Date.now()}-held`);
@@ -89,4 +89,10 @@ test('#352: export carries the tenant\'s rows only, a legal hold blocks deletion
   assert.equal((alive[0] as { n: number }).n, 0, 'every unfrozen record is tombstoned');
   const { rows: member } = await db.query('SELECT count(*)::int AS n FROM memberships WHERE company_id = $1 AND active = true', [probe]);
   assert.equal((member[0] as { n: number }).n, 0, 'nobody can sign in to the removed account');
+  // #500 — the removed member's sign-in address is gone too, through the audited function.
+  const { rows: gone } = await db.query('SELECT email, active FROM users WHERE id = $1', [probeUser]);
+  assert.equal((gone[0] as { email: string }).email, `removed-${probeUser}@anonymised.invalid`);
+  assert.equal((gone[0] as { active: boolean }).active, false);
+  const { rows: audited } = await db.query("SELECT count(*)::int AS n FROM audit_events WHERE company_id = $1 AND action = 'privacy.sign_in_address_removed'", [probe]);
+  assert.equal((audited[0] as { n: number }).n, 1, 'one audit row names who asked');
 });

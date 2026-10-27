@@ -24,7 +24,7 @@ Postgres for it.
 | --- | --- | --- | --- |
 | Unit | `npm test` | in-memory | Rules: arithmetic, verdicts, numbering, wording, edge cases. Fast, no setup. |
 | Integration | `npm run test:integration` | real PostgreSQL | Every API route: validation, tenancy, permissions, idempotency, immutability, transactions. |
-| Browser | `npm run test:browser` | real PostgreSQL + the real server | The flows below, driven as a shopkeeper drives them. |
+| Browser | `npm run test:browser:pg` | real PostgreSQL + the real server | The flows below, driven as a shopkeeper drives them. |
 | Release gates | `npm run gates` | real modules | The financial invariants in `docs/release/gates.md`, each proven to be able to fail. |
 
 `npm run verify` runs lint, unit, integration and gates — what CI runs on every push. The
@@ -32,7 +32,7 @@ browser suite is a separate CI job, because it needs a Chromium install.
 
 ## The flows that must never break
 
-Nine flows get a real-browser test, in `tests/browser/`, each driven through Chromium against
+Twelve checks get a real-browser test, in `tests/browser/`, each driven through Chromium against
 the real web server on PostgreSQL:
 
 | Flow | Spec | What the test checks |
@@ -44,17 +44,48 @@ the real web server on PostgreSQL:
 | Prepare a GST return | `gst-returns.spec.ts` | A month with real purchases and sales is prepared and approved; the figures are then fixed. |
 | Upgrade plan | `plan.spec.ts` | Choosing a different plan changes the plan shown on the screen. |
 | Invite a teammate | `team.spec.ts` | The Team screen produces an invite link. |
+| The database is really used (#494) | `postgres.spec.ts` | A bill made through the app is a balanced `FINAL` row in the database — so the server is not on the in-memory store. |
+| Restart survival (#494) | `postgres.spec.ts` | The web server process is killed outright and started again on the same database; the page still shows the owner signed in with the bill, its print copy is there, and the next bill number continues. |
+| Company isolation (#494) | `postgres.spec.ts` | Company B signed in through the browser sees nothing of company A's bill on screen, and asking the API for it by id is a 404. |
 | Sale in slides | `sale-slides.spec.ts` | The sale by keyboard (₹50,150 and the e-way bill raised by itself), a three-tap walk-in sale, and the 600 KGS refusal with the purchase hand-off (#305, #311). |
 | Page security | `security-headers.spec.ts` | The page under its content policy, a hostile name staying text, the bill frame's policy and sandbox (#349, #399). |
 
 Browser tests assert what the shopkeeper reads — the bill number, the rupee total, the badge the
 books earn — not implementation details.
 
+## Running the browser tests (#494)
+
+They run on PostgreSQL, never the in-memory store. `npm run test:browser:pg` takes `DATABASE_URL`
+(a login that may create databases — compose's `invoice` login is one), makes a **new database
+beside it for that run**, migrates and seeds it, makes a login that is only a member of
+`invoice_app` (so row-level security applies to the server as in production), runs the suite and
+drops the database and the login afterwards, pass or fail. Two runs never share a row. With no
+`DATABASE_URL` it stops and says how to get one; it does not fall back.
+
+```sh
+docker compose up -d --wait db
+export DATABASE_URL=postgresql://invoice:invoice@localhost:5432/invoice
+npx playwright install chromium            # once
+npm run test:browser:pg                    # all of it
+npm run test:browser:pg -- tests/browser/postgres.spec.ts   # one file
+```
+
+The CI `browser` job runs exactly this against a PostgreSQL 16 service on every pull request.
+`npm run test:browser` alone runs the same specs against a database you migrated and seeded
+yourself (`db:migrate`, `db:seed`); it is for debugging, not for CI.
+
+There are no browser tests outside `tests/browser/` (#496): `npm test` needs no browser. The one check
+from the old in-memory page tests that never needed one — every file carries the security headers —
+stays a unit test, `apps/web/test/security-headers.test.ts`.
+
 ## How a browser test is written here
 
 - **Arrange through the API, drive through the browser.** Goods, suppliers and customers are
   created through the same routes the screens call (`tests/browser/helpers.ts`), so a test needs
   no fixture database and nothing is pre-seeded it did not make itself.
+- **Spend sign-in codes sparingly.** #350 allows five code requests per address per 15 minutes
+  from one place, and the whole run shares them: `auth.spec.ts` walks the dialog; other specs
+  sign in over the API and hand the browser the cookie (`openSession` in `postgres.spec.ts`).
 - **Sign in on `/`, then navigate.** The app loads each screen's data when the screen is opened,
   and `openView` only re-runs on navigation — going to `/#plan` before signing in leaves the
   screen empty forever.
@@ -65,24 +96,27 @@ books earn — not implementation details.
   which is the flag the screen itself sends.
 - **Sales need the caller's `requestId`** (required since #392); purchases and returns need it
   on the same routes.
-- **The demo company is on the Free plan, which covers 50 bills.** The suite makes only a few per
-  run, but dozens of local runs on one database use them up and Make bill answers "Nothing was
-  saved". Re-seed the test database (drop it, then `npm run db:migrate && npm run db:seed`).
+- **The demo company is on the Free plan, which covers 50 bills.** A fresh database per run
+  (`test:browser:pg`) never gets near it; dozens of `test:browser` runs on one database you seeded
+  yourself do, and Make bill then answers "Nothing was saved". Drop it and seed again.
 - **A `.skip` carries its reason in words** — where it is blocked, and what unskips it.
 
 ## One browser driver
 
-Every browser test is a Playwright spec in `tests/browser/`, run by `npm run test:browser` — the
-only browser-test command, and what the CI `browser` job runs. There is no second driver and no
-browser test inside `apps/` or `packages/`; a unit test that needs a browser is a sign it belongs
-here. (`puppeteer` stays in the dependencies for one reason only: it renders the bill PDFs in
-`packages/invoice-templates`, see ADR 0496.) `npm test` and `npm run verify` need no browser.
+Every browser test is a Playwright spec in `tests/browser/`, run by `npm run test:browser:pg` (what
+the CI `browser` job runs; `npm run test:browser` is the same suite on a database you seeded
+yourself). There is no second driver and no browser test inside `apps/` or `packages/`; a unit test
+that needs a browser belongs here. (`puppeteer` stays in the dependencies for one reason only: it
+renders the bill PDFs in `packages/invoice-templates`, see ADR 0496.) `npm test` and
+`npm run verify` need no browser.
 
 Writing one: import `helpers.ts`, arrange through the API, sign in through the dialog, and wait with
 web-first assertions (`expect(locator).toHaveText(…)`, `expect.poll(…)`) — never a fixed sleep.
-`offline.ts` makes a page refuse any host but the local server. Things the API cannot arrange (the
-vehicle-record consent, `db.ts`) are written to the test database that `global-setup.ts` already
-insists is a test one.
+`offline.ts` makes a page refuse any host but the local server. A name that must be new every run
+and not merely different in its last letters (the app treats those as the same item or customer)
+gets a random part, as `sale-slides.spec.ts` does. Things the API cannot arrange (the vehicle-record
+consent, `db.ts`) are written to the test database through the owner's login, which `global-setup.ts`
+already insists is a test one.
 
 ## What a test must do
 
@@ -96,6 +130,28 @@ insists is a test one.
 - Concurrency invariants (numbering under a race, last-item stock, double-submit, allocations —
   #367) are tested against real PostgreSQL; they belong to this suite's contract even though
   they live in `test:integration`.
+
+## Database connections in integration tests (#504)
+
+A flake that says `terminating connection due to administrator command` (57P01) or `Connection
+terminated unexpectedly` is a connection the server ended, reported on whichever test happens to be
+running. Its causes are all fixed in shared code, so a test never has to defend against them:
+
+- **Always get a pool from `createDatabase()`.** It handles the pool's `error` event (an idle
+  connection ended by a restart, failover or `pg_terminate_backend`) and the checked-out client's
+  `error` event (a connection ended mid-action), so neither becomes an uncaught exception.
+  `pool-errors.integration.test.ts` kills connections on purpose, 25 rounds in one process, to keep
+  this true. Never build a bare `new Pool()` in a test or in production code.
+- **A test that runs a migration down and up, or needs a schema of its own, uses
+  `withScratchDatabase(owner, url, prefix, work)`** from `packages/platform/test/scratch-database.ts`.
+  It takes the scratch-database advisory lock so such tests take turns, closes the scratch pool
+  *before* dropping the database, and drops without `WITH (FORCE)`, which would end other
+  connections. Do not hand-roll `CREATE DATABASE` / `DROP DATABASE`.
+- **Close every pool you open** (`await db.close()`, in `finally` or `after`). Only end connections
+  you named yourself (`application_name`), never `pg_terminate_backend` on a role or database other
+  files share.
+- Do not add `retries`, sleeps or a catch-all `uncaughtException` handler to make this go away: find
+  which connection was ended, and by whom.
 
 ## Finding a test that lies
 
@@ -114,3 +170,17 @@ read a changelog to know the suite still means what it says.
 A bug fix starts with the test that fails for the bug, then the change that turns it green —
 the test proves it could have caught the bug. This is the same contract the release gates keep:
 an invariant nobody proved can fail is an invariant nobody trusts.
+
+## Tests that talk to a raw socket or to an upload the server refuses (issue #497)
+
+`apps/api/test/http-hardening.test.ts` once never finished on macOS. A client that is still sending
+when the server closes the connection sees `EPIPE`/`ECONNRESET`: Linux usually still hands over the
+reply the server sent first, macOS reports the reset instead. A helper that ignored those errors left
+its promise pending for ever. The server now reads and drops the rest of a refused upload (so the 413
+arrives), and the test file follows these rules — copy them:
+
+- Connect to `127.0.0.1`, never `localhost` (macOS tries `::1` first).
+- Settle on **every** outcome: an `error` handler must reject, not return quietly.
+- Bound every wait and give every test its own `{ timeout }`, so a stall is a named failure.
+- `agent: false` (or a non-keep-alive agent) per request; in `after`, call `server.close()` and
+  `server.closeAllConnections()` so teardown never waits on a client.

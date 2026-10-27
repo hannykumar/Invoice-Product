@@ -336,8 +336,8 @@ export const eInvoiceBacklogSignals = (reader: EInvoiceBacklogReader): Complianc
           `${pending.count} invoice abhi tak IRN ke liye portal par nahin bheji gayi.`,
         ),
         consequence: bilingual(
-          'After thirty days from the invoice date the portal will not accept them at all, and an invoice without an IRN is not valid.',
-          'Invoice ki date se tees din baad portal inhein leta hi nahin, aur bina IRN ke invoice valid nahin hoti.',
+          'An invoice without an IRN is not valid. At ₹10 crore turnover or more, the portal refuses them after thirty days from the invoice date.',
+          'Bina IRN ke invoice valid nahin hoti. ₹10 crore ya zyada turnover par invoice ki date se tees din baad portal inhein leta bhi nahin.',
         ),
         nextAction: bilingual('Send these invoices to the portal now.', 'Yeh invoices abhi portal par bhejein.'),
         actionCode: 'OPEN_EINVOICE_QUEUE',

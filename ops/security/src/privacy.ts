@@ -14,7 +14,8 @@ export interface SubjectDeletionResult { readonly deletedRecords: number; readon
 
 export interface PrivacyDataStore {
   exportSubject(companyId: Id, subjectId: Id): Promise<Readonly<Record<string, unknown>>>;
-  deleteSubject(companyId: Id, subjectId: Id, retainUntil: string | undefined): Promise<SubjectDeletionResult>;
+  /** `requestedBy` is who asked, so a store that must record an audited act of its own (#500) can name them. */
+  deleteSubject(companyId: Id, subjectId: Id, retainUntil: string | undefined, requestedBy?: { readonly actorId: Id; readonly sessionId: Id }): Promise<SubjectDeletionResult>;
 }
 
 /**
@@ -149,7 +150,7 @@ export class PrivacyService {
         await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "privacy.deletion.blocked", correlationId: request.id, before: { status: request.status }, after: { status: blocked.status, blockers } });
         return { request: blocked };
       }
-      return this.#complete(context, request, () => this.#store.deleteSubject(context.companyId, request.subjectId, retainUntil),
+      return this.#complete(context, request, () => this.#store.deleteSubject(context.companyId, request.subjectId, retainUntil, { actorId: context.actorId, sessionId: context.sessionId }),
         (result) => ({ deletedRecords: result.deletedRecords, retainedRecords: result.retainedRecords }));
     });
   }

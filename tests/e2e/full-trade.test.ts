@@ -75,7 +75,7 @@ const call = async (method: 'GET' | 'POST', path: string, body?: Record<string, 
   const response = await fetch(`${base}${path}`, {
     method,
     headers: { 'content-type': 'application/json', ...(session === '' ? {} : { cookie: `__Host-karobar_session=${session}`, origin: base }) },
-    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+    ...(method === 'GET' ? {} : { body: JSON.stringify(body ?? {}) }),
   });
   return { status: response.status, body: await response.json() as Record<string, any> };
 };

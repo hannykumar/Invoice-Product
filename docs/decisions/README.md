@@ -29,6 +29,7 @@ reason.
 | D11 | [0011](0011-pen-test.md) | External pen test before the first paying customer | #362 gate |
 | D12 | [0012](0012-offline-billing-and-sync.md) | Device ids, a number series per device, stock allowances per device; build later | #365, #367, #317 |
 | D13 | [0013](0013-data-residency.md) | What we store stays in India; a provider that must process a message or document to do its job is allowed with consent and an agreement; other tools get ids only | #352, #55 |
+| D500 | [0500](0500-sealed-frozen-copies-and-sign-in-address-removal.md) | Seal old frozen copies by an owner-approved one-off; remove sign-in addresses through one audited function | #500 |
 
 The unit-of-work decision (one business action = one transaction, transactional outbox) is
 recorded with #363, not here.

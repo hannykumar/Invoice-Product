@@ -128,6 +128,11 @@ export type Permission =
   | "compliance.calendar.snooze"
   | "compliance.calendar.escalate"
   | "compliance.calendar.declare"
+  // Issue #297. Matching the bank's lines to the book's receipts and payments, and saying a match is
+  // right, are two different acts: running the check never moves money, confirming does not either,
+  // but it is the record of who said two records are the same money.
+  | "bank.reconcile"
+  | "bank.reconcile.confirm"
   // Issue #33 [E33]. Connecting a GST number to the government, taking that connection back and
   // replacing its credentials are three different acts. Revoking is deliberately not the same
   // permission as authorising: it is the emergency control, and it must not need the person who

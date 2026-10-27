@@ -6,8 +6,8 @@
 //
 // A document whose company is not known yet — still being screened, held for the virus scanner,
 // or delivered to an address no single company owns — is not here. It has no company to file it
-// under, and row-level security has no company to check, so the service keeps it in its own
-// memory until it is routed or claimed (inbox.ts, "the unrouted holding").
+// under, and row-level security has no company to check, so it is kept in the pre-tenant holding
+// (inbox-holding.ts, #488) until it is routed or claimed.
 
 import { conflict, notFound } from "@invoice/kernel";
 import type { Id } from "../../masters/src/types.ts";
