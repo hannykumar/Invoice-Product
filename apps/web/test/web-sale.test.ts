@@ -157,6 +157,8 @@ async function freshSale() {
   await page.goto(`${harness.base}/#sale`);
   await page.waitForFunction(() => document.querySelectorAll('#sale-lines [data-item-search]').length > 0 && (document.querySelector('[data-draft="sale"] [name="party"]') as HTMLSelectElement).value !== '');
 }
+/** Waits until the Payment slide's own check has settled on what is typed. */
+const settledReview = () => page.waitForFunction(() => !(document.querySelector('#sale-review-ok') as HTMLElement).hidden);
 const sendsOf = (path: string, from: number) => harness.sent.slice(from).filter((request) => request.path === path).map((request) => JSON.parse(request.body!) as Record<string, string>);
 
 test('the payment slide offers six ways to pay: part paid asks for an amount, udhaar for the days, and a cheque is sent to its own screen', async () => {
@@ -204,4 +206,56 @@ test('the payment slide offers six ways to pay: part paid asks for an amount, ud
   await page.click('[data-pay="CASH"]');
   assert.equal(await isShown(page, '#sale-part-paid'), false);
   assert.equal(await page.$eval('[data-draft="sale"] [name="paidAmount"]', (box) => (box as HTMLInputElement).disabled), true);
+});
+
+test('a part-paid sale is recorded as typed; the done screen says where the money went, offers the customer a WhatsApp message with the amount still due, and the form is left fresh', async () => {
+  await freshSale();
+  await pickItem('TMT');
+  await typeInto('#sale-lines [data-line-field="quantity"]', '10');
+  await typeInto('#sale-lines [data-line-field="rate"]', '90');
+  await nextSlide('customer');
+  await page.evaluate(() => ([...document.querySelectorAll('#sale-customer-choices button')].find((button) => (button as HTMLElement).innerText.startsWith('Kavita')) as HTMLElement).click());
+  await nextSlide('payment');
+  await page.click('[data-pay="PART"]');
+  await page.focus('[data-draft="sale"] [name="paidAmount"]');
+  await page.keyboard.type('500');
+  await page.select('[data-draft="sale"] [name="paidBy"]', 'UPI');
+  await page.waitForFunction(() => (document.querySelector('#sale-next') as HTMLElement).innerText === 'Make bill');
+  const mark = harness.sent.length;
+  await settledReview();
+  await page.click('#sale-next');
+  await page.waitForFunction(() => (document.querySelector('[data-slide="done"]') as HTMLElement).hidden === false, { timeout: 15_000 });
+
+  const record = sendsOf('/api/sales/record', mark).at(-1)!;
+  assert.equal(record.paidAmount, '500');
+  assert.equal(record.paidBy, 'UPI');
+  assert.equal(record.terms, 'now');
+  assert.match(record.requestId ?? '', /^[0-9a-f-]{36}$/, 'every sale carries its own key, so pressing twice is one bill');
+  const lines = JSON.parse(record.lines!) as Array<Record<string, string>>;
+  assert.deepEqual(lines.map((line) => [line.quantity, line.rate]), [['10', '90']]);
+
+  const done = await textOf(page, '[data-slide="done"]');
+  assert.match(done, /Bill made/);
+  assert.match(done, /UPI payment of ₹500\.00 received; ₹562\.00 added to Kavita Stores’ khata\. Stock updated\./);
+  // The message the customer gets: the amount still to pay, never the whole bill, and the bill's number.
+  const chat = await page.$eval('[data-slide="done"] a[href^="https://wa.me/"]', (link) => (link as HTMLAnchorElement).href);
+  const link = new URL(chat);
+  assert.equal(`${link.origin}${link.pathname}`, 'https://wa.me/919876543210', "the customer's own number, as WhatsApp wants it");
+  const message = link.searchParams.get('text')!;
+  assert.match(message, /^Hello Kavita Stores, thank you for shopping at Sampoorna Traders\. Bill INV\/26-27\/\d{6}: ₹1,062\.00\.\nStill to pay: ₹562\.00\./);
+
+  // The form after a recorded sale: walk-in chosen, one fresh line, today's date, and no draft to bring the old sale back.
+  await page.evaluate(() => ([...document.querySelectorAll('[data-slide="done"] button')].find((button) => (button as HTMLElement).innerText === 'New bill') as HTMLElement).click());
+  await page.waitForFunction(() => (document.querySelector('#sale-frame [data-slide]:not([hidden])') as HTMLElement).dataset.slide === 'items');
+  assert.equal(await page.$$eval('#sale-lines [data-line-field="item"]', (rows) => rows.length), 1);
+  assert.equal(await page.$eval('#sale-lines [data-line-field="item"]', (input) => (input as HTMLInputElement).value), '', 'no item left on the line');
+  assert.equal(await page.$eval('[data-draft="sale"] [name="party"]', (select) => (select as HTMLSelectElement).selectedOptions[0]!.textContent), 'Walk-in / cash customer');
+  assert.equal(await page.$eval('[data-draft="sale"] [name="date"]', (input) => (input as HTMLInputElement).value), today);
+  assert.equal(await isShown(page, '#sale-draft-date-note'), false);
+  const left = await page.evaluate(() => JSON.parse(localStorage.getItem('karobar.draft.sale') ?? 'null'));
+  assert.ok(left === null || (left.__lines ?? []).every((line: any) => line.quantity !== '10'), 'the saved draft no longer holds the sale just made');
+  await page.reload();
+  await page.waitForFunction(() => (document.querySelector('[data-draft="sale"] [name="party"]') as HTMLSelectElement).value !== '');
+  assert.equal(await page.$eval('[data-draft="sale"] [name="party"]', (select) => (select as HTMLSelectElement).selectedOptions[0]!.textContent), 'Walk-in / cash customer', 'a reload does not bring the old customer back');
+  assert.notEqual(await page.$eval('#sale-lines [data-line-field="quantity"]', (input) => (input as HTMLInputElement).value), '10', 'nor the old line');
 });

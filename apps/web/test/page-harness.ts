@@ -12,7 +12,7 @@ import puppeteer, { type Browser, type HTTPRequest, type Page } from 'puppeteer'
 import { webServer } from '../server.ts';
 import { signInInBrowser, signInOverHttp } from '../../api/test/sign-in-helper.ts';
 
-export interface SentRequest { readonly method: string; readonly path: string; readonly headers: Readonly<Record<string, string>>; readonly body: string | undefined; }
+export interface SentRequest { readonly method: string; readonly path: string; readonly headers: Readonly<Record<string, string>>; readonly body: string | undefined; status?: number; }
 
 export interface PageHarness {
   readonly base: string;
@@ -25,6 +25,8 @@ export interface PageHarness {
   newPage(options?: { width?: number; height?: number }): Promise<Page>;
   /** A fresh page signed in through the real dialog (the demo owner), on `#hash`. */
   signedIn(hash?: string, options?: { width?: number; height?: number }): Promise<Page>;
+  /** Resolves when the page has sent a request to `path` (after the first `from` requests) and the server has answered it; rejects after `timeoutMs`. */
+  requested(path: string, from?: number, timeoutMs?: number): Promise<SentRequest>;
   /**
    * Holds every request to `path` (a pathname) until the returned function is called: a slow
    * network, so a test can look at the page while it waits for an answer.
@@ -42,6 +44,7 @@ export async function startPageHarness(): Promise<PageHarness> {
   const browser = await puppeteer.launch({ headless: true, args: process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : [] });
   const sent: SentRequest[] = [];
   const problems: string[] = [];
+  const entries = new WeakMap<HTTPRequest, SentRequest>();
   const holds = new Map<string, Promise<void>>();
 
   const newPage = async (options: { width?: number; height?: number } = {}) => {
@@ -52,10 +55,15 @@ export async function startPageHarness(): Promise<PageHarness> {
       const url = request.url();
       if (!url.startsWith(base) && !url.startsWith('data:') && !url.startsWith('about:')) return void request.abort();
       const { pathname } = new URL(url);
-      if (pathname.startsWith('/api/')) sent.push({ method: request.method(), path: pathname, headers: request.headers(), body: request.postData() });
+      if (pathname.startsWith('/api/')) {
+        const entry: SentRequest = { method: request.method(), path: pathname, headers: request.headers(), body: request.postData() };
+        entries.set(request, entry);
+        sent.push(entry);
+      }
       await holds.get(pathname);
       void request.continue().catch(() => undefined);
     });
+    page.on('response', (response) => { const entry = entries.get(response.request()); if (entry) entry.status = response.status(); });
     page.on('pageerror', (error) => problems.push(`pageerror: ${error instanceof Error ? error.message : String(error)}`));
     page.on('console', (message) => { if (message.type() === 'error' && !/Failed to load resource/.test(message.text())) problems.push(`console: ${message.text()}`); });
     return page;
@@ -82,6 +90,16 @@ export async function startPageHarness(): Promise<PageHarness> {
 
   return {
     base, browser, sent, problems, newPage, signedIn, api,
+    requested: (path, from = 0, timeoutMs = 15_000) => new Promise<SentRequest>((resolve, reject) => {
+      const started = Date.now();
+      const look = () => {
+        const found = sent.slice(from).find((request) => request.path === path && request.status !== undefined);
+        if (found) resolve(found);
+        else if (Date.now() - started > timeoutMs) reject(new Error(`the page never sent ${path}; it sent ${sent.slice(from).map((request) => request.path).join(', ')}`));
+        else setTimeout(look, 25);
+      };
+      look();
+    }),
     hold: (path) => {
       let release = () => {};
       holds.set(path, new Promise<void>((resolve) => { release = () => { holds.delete(path); resolve(); }; }));
