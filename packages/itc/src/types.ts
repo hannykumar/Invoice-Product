@@ -55,10 +55,10 @@ export type DocumentKind = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
 export type RecordSource = 'GSTR2B_FILE' | 'IMS_FILE' | 'PORTAL_API' | 'TYPED';
 
 export const RECORD_SOURCE_PLAIN: Readonly<Record<RecordSource, Bilingual>> = Object.freeze({
-  GSTR2B_FILE: { 'en-IN': 'from a GSTR-2B file you downloaded', 'hi-IN': 'aapke download kiye GSTR-2B file se' },
-  IMS_FILE: { 'en-IN': 'from an IMS file you downloaded', 'hi-IN': 'aapke download kiye IMS file se' },
-  PORTAL_API: { 'en-IN': 'fetched from the portal', 'hi-IN': 'portal se seedha liya gaya' },
-  TYPED: { 'en-IN': 'typed in by a person from the portal screen', 'hi-IN': 'portal dekh kar kisi ne haath se likha' },
+  GSTR2B_FILE: { 'en-IN': 'from a GSTR-2B file you downloaded', 'hi-IN': 'आपके डाउनलोड की GSTR-2B फ़ाइल से' },
+  IMS_FILE: { 'en-IN': 'from an IMS file you downloaded', 'hi-IN': 'आपके डाउनलोड की IMS फ़ाइल से' },
+  PORTAL_API: { 'en-IN': 'fetched from the portal', 'hi-IN': 'पोर्टल से सीधा लिया गया' },
+  TYPED: { 'en-IN': 'typed in by a person from the portal screen', 'hi-IN': 'पोर्टल देखकर किसी ने हाथ से लिखा' },
 });
 
 /**
@@ -185,12 +185,12 @@ export type MatchStatus =
   | 'DUPLICATE_ON_PORTAL';
 
 export const MATCH_STATUS_PLAIN: Readonly<Record<MatchStatus, Bilingual>> = Object.freeze({
-  EXACT: { 'en-IN': 'Agrees with the portal', 'hi-IN': 'Portal se milta hai' },
-  CLOSE: { 'en-IN': 'Same bill, different figures', 'hi-IN': 'Wahi bill, figure alag' },
-  ONLY_IN_BOOKS: { 'en-IN': 'In your books, not on the portal', 'hi-IN': 'Aapki books mein hai, portal par nahin' },
-  ONLY_ON_PORTAL: { 'en-IN': 'On the portal, not in your books', 'hi-IN': 'Portal par hai, aapki books mein nahin' },
-  DUPLICATE_IN_BOOKS: { 'en-IN': 'Recorded twice in your books', 'hi-IN': 'Aapki books mein do baar' },
-  DUPLICATE_ON_PORTAL: { 'en-IN': 'Reported twice on the portal', 'hi-IN': 'Portal par do baar' },
+  EXACT: { 'en-IN': 'Agrees with the portal', 'hi-IN': 'पोर्टल से मिलता है' },
+  CLOSE: { 'en-IN': 'Same bill, different figures', 'hi-IN': 'वही बिल, आँकड़े अलग' },
+  ONLY_IN_BOOKS: { 'en-IN': 'In your books, not on the portal', 'hi-IN': 'आपकी बुक्स में है, पोर्टल पर नहीं' },
+  ONLY_ON_PORTAL: { 'en-IN': 'On the portal, not in your books', 'hi-IN': 'पोर्टल पर है, आपकी बुक्स में नहीं' },
+  DUPLICATE_IN_BOOKS: { 'en-IN': 'Recorded twice in your books', 'hi-IN': 'आपकी बुक्स में दो बार' },
+  DUPLICATE_ON_PORTAL: { 'en-IN': 'Reported twice on the portal', 'hi-IN': 'पोर्टल पर दो बार' },
 });
 
 /**
@@ -234,9 +234,9 @@ export interface MatchEvidence {
 export type DecisionKind = 'ACCEPT' | 'REJECT' | 'PENDING';
 
 export const DECISION_PLAIN: Readonly<Record<DecisionKind, Bilingual>> = Object.freeze({
-  ACCEPT: { 'en-IN': 'Accepted', 'hi-IN': 'Maan liya' },
-  REJECT: { 'en-IN': 'Rejected', 'hi-IN': 'Mana kiya' },
-  PENDING: { 'en-IN': 'Kept pending', 'hi-IN': 'Abhi rok rakha hai' },
+  ACCEPT: { 'en-IN': 'Accepted', 'hi-IN': 'मान लिया' },
+  REJECT: { 'en-IN': 'Rejected', 'hi-IN': 'मना किया' },
+  PENDING: { 'en-IN': 'Kept pending', 'hi-IN': 'अभी रोक रखा है' },
 });
 
 /**
@@ -303,11 +303,11 @@ export type ItcOutcome =
   | 'TIME_BARRED';
 
 export const OUTCOME_PLAIN: Readonly<Record<ItcOutcome, Bilingual>> = Object.freeze({
-  CLAIM_NOW: { 'en-IN': 'Safe to claim this month', 'hi-IN': 'Is mahine lena theek hai' },
-  CLAIM_AT_RISK: { 'en-IN': 'Claimed on your say-so, with a risk', 'hi-IN': 'Aapke kehne par liya, risk ke saath' },
-  HELD_BACK: { 'en-IN': 'Held back until this is answered', 'hi-IN': 'Jawab milne tak roka gaya' },
-  BLOCKED_IN_BOOKS: { 'en-IN': 'No credit here — the tax was part of the cost', 'hi-IN': 'Yahan credit nahin — tax laagat mein gaya' },
-  TIME_BARRED: { 'en-IN': 'Too late to claim — the last date has gone', 'hi-IN': 'Ab lena mumkin nahin — aakhri tareekh nikal gayi' },
+  CLAIM_NOW: { 'en-IN': 'Safe to claim this month', 'hi-IN': 'इस महीने लेना ठीक है' },
+  CLAIM_AT_RISK: { 'en-IN': 'Claimed on your say-so, with a risk', 'hi-IN': 'आपके कहने पर लिया, जोखिम के साथ' },
+  HELD_BACK: { 'en-IN': 'Held back until this is answered', 'hi-IN': 'जवाब मिलने तक रोका गया' },
+  BLOCKED_IN_BOOKS: { 'en-IN': 'No credit here — the tax was part of the cost', 'hi-IN': 'यहाँ क्रेडिट नहीं — टैक्स लागत में गया' },
+  TIME_BARRED: { 'en-IN': 'Too late to claim — the last date has gone', 'hi-IN': 'अब लेना मुमकिन नहीं — आख़िरी तारीख़ निकल गई' },
 });
 
 export type FindingSeverity = 'BLOCKING' | 'WARNING' | 'INFORMATION';

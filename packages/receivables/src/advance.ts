@@ -173,7 +173,7 @@ export interface AdvanceReceipt {
 /** Printed on a goods voucher where the rate and tax would go. */
 export const GOODS_ADVANCE_NO_TAX = {
   'en-IN': 'No GST is due on an advance for goods (Notification 66/2017-Central Tax). The tax is charged on the invoice.',
-  'hi-IN': 'Saaman ke advance par GST nahin lagta (Notification 66/2017-Central Tax). Tax invoice par lagta hai.',
+  'hi-IN': 'सामान के एडवांस पर GST नहीं लगता (Notification 66/2017-Central Tax)। टैक्स इनवॉइस पर लगता है।',
 } as const;
 
 export const RECEIPT_VOUCHER_PREFIX = 'RV';

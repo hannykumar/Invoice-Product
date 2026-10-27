@@ -165,7 +165,7 @@ export interface LineInput {
 /** Issue #249 — a credit note lowers the credit, so "safe to claim" is the wrong label for it. */
 const CREDIT_NOTE_APPLIED: Bilingual = {
   'en-IN': "Comes off this month's credit",
-  'hi-IN': 'Is mahine ke credit se ghatta hai',
+  'hi-IN': 'इस महीने के क्रेडिट से घटता है',
 };
 
 /** Issue #249 — "SRS-101", "SRS-101 or SRS-099", "SRS-101, SRS-099 or SRS-090". */
@@ -216,10 +216,10 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
   if (decisionStale) {
     findings.push(finding('ITC_DECISION_STALE', 'WARNING', key, {
       'en-IN': `The figures on this bill changed after you marked it ${DECISION_PLAIN[decision.kind]['en-IN'].toLowerCase()} on ${decision.decidedAt.slice(0, 10)}. Your answer has been kept, but it was given about different numbers.`,
-      'hi-IN': `Aapne ${decision.decidedAt.slice(0, 10)} ko ise ${DECISION_PLAIN[decision.kind]['hi-IN']} kaha tha, uske baad is bill ke figure badle hain. Aapka jawab rakha gaya hai, par woh doosre numbers par tha.`,
+      'hi-IN': `आपने ${decision.decidedAt.slice(0, 10)} को इसे ${DECISION_PLAIN[decision.kind]['hi-IN']} कहा था, उसके बाद इस बिल के आँकड़े बदले हैं. आपका जवाब रखा गया है, पर वह दूसरे आँकड़ों पर था.`,
     }, {
       'en-IN': 'Look at the two figures below and answer again. Nothing is claimed on this line until you do.',
-      'hi-IN': 'Neeche dono figure dekh kar dobara jawab dijiye. Tab tak is line par kuch nahin liya jayega.',
+      'hi-IN': 'नीचे दोनों आँकड़े देखकर दोबारा जवाब दीजिए. तब तक इस लाइन पर कुछ नहीं लिया जाएगा.',
     }));
   }
 
@@ -245,20 +245,20 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
       status === 'DUPLICATE_IN_BOOKS'
         ? {
           'en-IN': `Bill ${number} from ${supplier} is in your books more than once. Only the first copy can carry credit.`,
-          'hi-IN': `${supplier} ka bill ${number} aapki books mein ek se zyada baar hai. Credit sirf pehli copy par mil sakta hai.`,
+          'hi-IN': `${supplier} का बिल ${number} आपकी बुक्स में एक से ज़्यादा बार है. क्रेडिट सिर्फ़ पहली कॉपी पर मिल सकता है.`,
         }
         : {
           'en-IN': `The portal reports bill ${number} from ${supplier} more than once.`,
-          'hi-IN': `Portal par ${supplier} ka bill ${number} ek se zyada baar aaya hai.`,
+          'hi-IN': `पोर्टल पर ${supplier} का बिल ${number} एक से ज़्यादा बार आया है.`,
         },
       {
         'en-IN': 'Open both copies. If one of them was entered by mistake, reverse it; a posted bill is corrected by a reversal, never by deleting it.',
-        'hi-IN': 'Dono copy kholiye. Agar ek galti se dali gayi thi to use reverse kijiye; posted bill delete nahin, reverse hota hai.',
+        'hi-IN': 'दोनों कॉपी खोलिए. अगर एक ग़लती से डाली गई थी तो उसे रिवर्स कीजिए; पोस्ट हुआ बिल डिलीट नहीं, रिवर्स होता है.',
       },
     ));
     sentence = {
       'en-IN': `No credit is being taken on this copy of bill ${number}.`,
-      'hi-IN': `Bill ${number} ki is copy par koi credit nahin liya ja raha.`,
+      'hi-IN': `बिल ${number} की इस कॉपी पर कोई क्रेडिट नहीं लिया जा रहा.`,
     };
   } else if (book === null && portal !== null && portal.kind === 'CREDIT_NOTE') {
     // Issue #249 — the supplier says goods came back (or the price came down), and our books hold no
@@ -266,47 +266,47 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     // them are named: that is where the search starts.
     const bills = (input.supplierBills ?? []).slice(0, 3).map((bill) => bill.number);
     const against = bills.length === 0
-      ? { en: 'Your books hold no bill from them either.', hi: 'Aapki books mein unka koi bill bhi nahin hai.' }
+      ? { en: 'Your books hold no bill from them either.', hi: 'आपकी बुक्स में उनका कोई बिल भी नहीं है.' }
       : bills.length === 1
-        ? { en: `It will be against their bill ${bills[0]}.`, hi: `Yeh unke bill ${bills[0]} ke against hoga.` }
-        : { en: `It will be against one of their bills: ${orList(bills, 'or')}.`, hi: `Yeh unke kisi bill ke against hoga: ${orList(bills, 'ya')}.` };
+        ? { en: `It will be against their bill ${bills[0]}.`, hi: `यह उनके बिल ${bills[0]} के अगेंस्ट होगा.` }
+        : { en: `It will be against one of their bills: ${orList(bills, 'or')}.`, hi: `यह उनके किसी बिल के अगेंस्ट होगा: ${orList(bills, 'या')}.` };
     findings.push(finding('ITC_ONLY_ON_PORTAL', 'WARNING', key, {
       'en-IN': `${supplier} has reported credit note ${number} of ${formatINR(portal.invoiceValue)} to the government, and your books have no return against it. ${against.en}`,
-      'hi-IN': `${supplier} ne sarkar ko ${formatINR(portal.invoiceValue)} ka credit note ${number} bataya hai, aur aapki books mein iske against koi wapsi nahin hai. ${against.hi}`,
+      'hi-IN': `${supplier} ने सरकार को ${formatINR(portal.invoiceValue)} का क्रेडिट नोट ${number} बताया है, और आपकी बुक्स में इसके अगेंस्ट कोई वापसी नहीं है. ${against.hi}`,
     }, {
       'en-IN': `If goods did go back${bills.length === 0 ? '' : ` on ${bills.length === 1 ? 'that bill' : 'one of those bills'}`}, record the return on the Returns screen with this note's number, and the credit will come down by its tax. If nothing went back, ask ${supplier} why they issued it.`,
-      'hi-IN': `Agar maal wapas gaya tha${bills.length === 0 ? '' : ` ${bills.length === 1 ? 'us bill par' : 'in mein se kisi bill par'}`}, to Returns screen par is note ke number ke saath wapsi darj kijiye, credit uske tax jitna ghat jayega. Agar kuch wapas nahin gaya, to ${supplier} se poochhiye ki yeh note kyon diya.`,
+      'hi-IN': `अगर माल वापस गया था${bills.length === 0 ? '' : ` ${bills.length === 1 ? 'उस बिल पर' : 'इन में से किसी बिल पर'}`}, तो Returns screen पर इस नोट के नंबर के साथ वापसी दर्ज कीजिए, क्रेडिट उसके टैक्स जितना घट जाएगा. अगर कुछ वापस नहीं गया, तो ${supplier} से पूछिए कि यह नोट क्यों दिया.`,
     }));
     sentence = {
       'en-IN': `${supplier}'s credit note ${number} has no return in your books against it.`,
-      'hi-IN': `${supplier} ke credit note ${number} ke against aapki books mein koi wapsi nahin hai.`,
+      'hi-IN': `${supplier} के क्रेडिट नोट ${number} के अगेंस्ट आपकी बुक्स में कोई वापसी नहीं है.`,
     };
   } else if (book === null && portal !== null) {
     findings.push(finding('ITC_ONLY_ON_PORTAL', 'WARNING', key, {
       'en-IN': `${supplier} has reported bill ${number} of ${formatINR(portal.invoiceValue)} to the government, and there is no such bill in your books.`,
-      'hi-IN': `${supplier} ne sarkar ko ${formatINR(portal.invoiceValue)} ka bill ${number} bataya hai, aur aapki books mein aisa koi bill nahin hai.`,
+      'hi-IN': `${supplier} ने सरकार को ${formatINR(portal.invoiceValue)} का बिल ${number} बताया है, और आपकी बुक्स में ऐसा कोई बिल नहीं है.`,
     }, {
       'en-IN': 'Find the paper. If you did buy this, record the bill and the credit will follow. If you did not, keep it pending and ask the supplier — do not accept it.',
-      'hi-IN': 'Kagaz dhoondhiye. Agar kharida tha to bill darj kijiye, credit apne aap aa jayega. Agar nahin, to pending rakh kar supplier se poochhiye — accept mat kijiye.',
+      'hi-IN': 'काग़ज़ ढूँढिए. अगर ख़रीदा था तो बिल दर्ज कीजिए, क्रेडिट अपने आप आ जाएगा. अगर नहीं, तो pending रखकर सप्लायर से पूछिए — accept मत कीजिए.',
     }));
     sentence = {
       'en-IN': 'Nothing can be claimed until this purchase is in your books.',
-      'hi-IN': 'Jab tak yeh kharid aapki books mein nahin aati, kuch nahin liya ja sakta.',
+      'hi-IN': 'जब तक यह ख़रीद आपकी बुक्स में नहीं आती, कुछ नहीं लिया जा सकता.',
     };
   } else if (book !== null && book.reversed) {
     findings.push(finding('ITC_BILL_REVERSED_IN_BOOKS', 'INFORMATION', key, {
       'en-IN': `Bill ${number} was reversed in your books, so there is no credit left on it.`,
-      'hi-IN': `Bill ${number} aapki books mein reverse ho chuka hai, is par ab koi credit nahin bacha.`,
+      'hi-IN': `बिल ${number} आपकी बुक्स में रिवर्स हो चुका है, इस पर अब कोई क्रेडिट नहीं बचा.`,
     }, {
       'en-IN': 'Nothing to do. It is shown so the portal line beside it has an explanation.',
-      'hi-IN': 'Kuch karna nahin hai. Yeh isliye dikh raha hai taki portal wali line ka matlab samajh aaye.',
+      'hi-IN': 'कुछ करना नहीं है. यह इसलिए दिख रहा है ताकि पोर्टल वाली लाइन का मतलब समझ आए.',
     }));
-    sentence = { 'en-IN': 'Reversed in your books.', 'hi-IN': 'Aapki books mein reverse ho chuka.' };
+    sentence = { 'en-IN': 'Reversed in your books.', 'hi-IN': 'आपकी बुक्स में रिवर्स हो चुका.' };
   } else if (blockedInBooks) {
     outcome = 'BLOCKED_IN_BOOKS';
     sentence = {
       'en-IN': `The GST on bill ${number} was added to what the goods cost, because the law does not allow credit on this purchase. There is nothing to claim and nothing to chase.`,
-      'hi-IN': `Bill ${number} ka GST saaman ki laagat mein joda gaya tha, kyunki is kharid par credit nahin milta. Na kuch lena hai, na kuch poochhna hai.`,
+      'hi-IN': `बिल ${number} का GST सामान की लागत में जोड़ा गया था, क्योंकि इस ख़रीद पर क्रेडिट नहीं मिलता. ना कुछ लेना है, ना कुछ पूछना है.`,
     };
   } else if (timeBarred) {
     // The credit is refused and the purchase is untouched: the bill stays in the books, and the GST
@@ -314,14 +314,14 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     outcome = 'TIME_BARRED';
     findings.push(finding('ITC_TIME_BARRED', 'BLOCKING', key, {
       'en-IN': `Credit on bill ${number} from ${supplier} had to be claimed by ${formatClaimDate(lastClaimDate as IsoDate)}. That date has gone, so the ${formatINR(totalTaxOf(creditable))} of GST on it cannot go on this return.`,
-      'hi-IN': `${supplier} ke bill ${number} ka credit ${formatClaimDate(lastClaimDate as IsoDate)} tak lena zaroori tha. Woh tareekh nikal gayi, isliye is par ka ${formatINR(totalTaxOf(creditable))} GST ab is return par nahin ja sakta.`,
+      'hi-IN': `${supplier} के बिल ${number} का क्रेडिट ${formatClaimDate(lastClaimDate as IsoDate)} तक लेना ज़रूरी था. वह तारीख़ निकल गई, इसलिए इस पर का ${formatINR(totalTaxOf(creditable))} GST अब इस रिटर्न पर नहीं जा सकता.`,
     }, {
       'en-IN': 'Nothing can be done about the credit now. Leave the bill where it is — the GST on it is part of what the goods cost. Section 16(4) allows no extension.',
-      'hi-IN': 'Ab is credit ka kuch nahin ho sakta. Bill wahin rehne dijiye — us par ka GST saaman ki laagat ka hissa hai. Section 16(4) mein koi chhoot nahin hai.',
+      'hi-IN': 'अब इस क्रेडिट का कुछ नहीं हो सकता. बिल वहीं रहने दीजिए — उस पर का GST सामान की लागत का हिस्सा है. Section 16(4) में कोई छूट नहीं है.',
     }));
     sentence = {
       'en-IN': `Credit on this bill had to be claimed by ${formatClaimDate(lastClaimDate as IsoDate)}.`,
-      'hi-IN': `Is bill ka credit ${formatClaimDate(lastClaimDate as IsoDate)} tak lena tha.`,
+      'hi-IN': `इस बिल का क्रेडिट ${formatClaimDate(lastClaimDate as IsoDate)} तक लेना था.`,
     };
   } else if (book !== null && book.imported) {
     // Imports are paid at customs and never appear in GSTR-2B. Holding them back for want of a 2B
@@ -331,11 +331,11 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     sentence = outcome === 'CLAIM_NOW'
       ? {
         'en-IN': `Goods brought in from outside India. The GST was paid at customs, so this credit does not depend on any supplier reporting it.`,
-        'hi-IN': `Bahar se mangaya saaman. GST customs par diya gaya tha, is credit ka kisi supplier ki filing se koi lena-dena nahin.`,
+        'hi-IN': `बाहर से मँगाया सामान. GST customs पर दिया गया था, इस क्रेडिट का किसी सप्लायर की filing से कोई लेना-देना नहीं.`,
       }
       : {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}, so it is not on this month's return.`,
-        'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha, isliye yeh is mahine ke return par nahin hai.`,
+        'hi-IN': `आपने इसे ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} कहा, इसलिए यह इस महीने के रिटर्न पर नहीं है.`,
       };
   } else if (book !== null && book.reverseCharge && book.kind === 'INVOICE' && input.period !== undefined
     && book.taxPointPeriod !== undefined && book.taxPointPeriod > input.period) {
@@ -345,7 +345,7 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     outcome = 'HELD_BACK';
     sentence = {
       'en-IN': `Reverse charge: the GST on bill ${number} falls due in ${formatTaxPeriod(book.taxPointPeriod)}, its time of supply (CGST s.12(3) for goods, s.13(3) for services). You pay it on that month's return, and the credit comes on the same return. Paying ${supplier} sooner brings it forward.`,
-      'hi-IN': `Reverse charge: bill ${number} ka GST ${formatTaxPeriod(book.taxPointPeriod)} mein bharna hai, yahi iska time of supply hai (CGST s.12(3) maal ke liye, s.13(3) sewa ke liye). Use us mahine ke return par bharein, credit usi return par milega. ${supplier} ko pehle paisa dene se yeh pehle aa jayega.`,
+      'hi-IN': `Reverse charge: बिल ${number} का GST ${formatTaxPeriod(book.taxPointPeriod)} में भरना है, यही इसका time of supply है (CGST s.12(3) माल के लिए, s.13(3) सेवा के लिए). इसे उस महीने के रिटर्न पर भरिए, क्रेडिट उसी रिटर्न पर मिलेगा. ${supplier} को पहले पैसा देने से यह पहले आ जाएगा.`,
     };
   } else if (book !== null && book.reverseCharge && book.outsideGstr2b === true && book.kind === 'INVOICE') {
     // Issue #289, part 2 — reverse charge on a purchase from a seller with no GST number. The buyer
@@ -357,11 +357,11 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     sentence = outcome === 'CLAIM_NOW'
       ? {
         'en-IN': `Reverse charge: you pay this ${formatINR(totalTaxOf(creditable))} of GST in cash on this return, and the same amount comes back as credit. ${supplier} has no GST number, so it is never in GSTR-2B.`,
-        'hi-IN': `Reverse charge: yeh ${formatINR(totalTaxOf(creditable))} GST aap is return mein cash se bharenge, aur utna hi credit wapas milega. ${supplier} ka GST number nahin hai, isliye yeh GSTR-2B mein kabhi nahin aata.`,
+        'hi-IN': `Reverse charge: यह ${formatINR(totalTaxOf(creditable))} GST आप इस रिटर्न में नक़द से भरेंगे, और उतना ही क्रेडिट वापस मिलेगा. ${supplier} का GST नंबर नहीं है, इसलिए यह GSTR-2B में कभी नहीं आता.`,
       }
       : {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}, so its credit is not on this month's return. The tax itself is still owed.`,
-        'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha, isliye iska credit is mahine ke return par nahin hai. Tax phir bhi bharna hai.`,
+        'hi-IN': `आपने इसे ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} कहा, इसलिए इसका क्रेडिट इस महीने के रिटर्न पर नहीं है. टैक्स फिर भी भरना है.`,
       };
   } else if (book !== null && book.kind === 'CREDIT_NOTE') {
     // Issue #249 — goods we sent back to the supplier. The credit on them comes down from the month
@@ -373,34 +373,34 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     claimable = creditable;
     const tax = formatINR(totalTaxOf(creditable));
     const goods = book.goodsReturned === undefined || book.goodsReturned === null || book.goodsReturned === ''
-      ? { en: 'goods back', hi: 'maal wapas' }
-      : { en: `${book.goodsReturned} back`, hi: `${book.goodsReturned} wapas` };
+      ? { en: 'goods back', hi: 'माल वापस' }
+      : { en: `${book.goodsReturned} back`, hi: `${book.goodsReturned} वापस` };
     const onBill = book.original === undefined || book.original === null ? { en: '', hi: '' }
-      : { en: ` against bill ${book.original.number}`, hi: ` bill ${book.original.number} ke against` };
+      : { en: ` against bill ${book.original.number}`, hi: ` बिल ${book.original.number} के अगेंस्ट` };
     if (portal === null) {
       const awaiting = book.awaitingSupplierNote === true;
       const message: Bilingual = {
         'en-IN': `You sent ${goods.en} to ${supplier}${onBill.en}. ${tax} of credit comes off this month. ${awaiting ? 'Ask them for their credit note.' : `Their credit note ${number} is not in the government's record yet.`}`,
-        'hi-IN': `Aapne ${supplier} ko${onBill.hi} ${goods.hi} bheja. Is mahine ${tax} credit ghat jata hai. ${awaiting ? 'Unse unka credit note maangiye.' : `Unka credit note ${number} abhi sarkari record mein nahin hai.`}`,
+        'hi-IN': `आपने ${supplier} को${onBill.hi} ${goods.hi} भेजा. इस महीने ${tax} क्रेडिट घट जाता है. ${awaiting ? 'उनसे उनका क्रेडिट नोट मँगाइए.' : `उनका क्रेडिट नोट ${number} अभी सरकारी रिकॉर्ड में नहीं है.`}`,
       };
       findings.push(finding('ITC_SUPPLIER_CREDIT_NOTE_AWAITED', 'INFORMATION', key, message, awaiting
         ? {
           'en-IN': "When their credit note comes, add its number and date to this return on the Returns screen. The credit has already come down, so nothing else changes.",
-          'hi-IN': 'Jab unka credit note aaye, Returns screen par is wapsi mein uska number aur tareekh daal dijiye. Credit pehle hi ghat chuka hai, aur kuch nahin badlega.',
+          'hi-IN': 'जब उनका क्रेडिट नोट आए, Returns screen पर इस वापसी में उसका नंबर और तारीख़ डाल दीजिए. क्रेडिट पहले ही घट चुका है, और कुछ नहीं बदलेगा.',
         }
         : {
           'en-IN': `Ask ${supplier} to file credit note ${number}. The credit has already come down, so nothing else needs doing here.`,
-          'hi-IN': `${supplier} se credit note ${number} file karne ko kahiye. Credit pehle hi ghat chuka hai, yahan aur kuch nahin karna.`,
+          'hi-IN': `${supplier} से क्रेडिट नोट ${number} file करने को कहिए. क्रेडिट पहले ही घट चुका है, यहाँ और कुछ नहीं करना.`,
         }));
       sentence = message;
     } else {
       if (portal.reversed) {
         findings.push(finding('ITC_SUPPLIER_REVERSED', 'WARNING', key, {
           'en-IN': `${supplier} withdrew credit note ${number} from their filing after reporting it.`,
-          'hi-IN': `${supplier} ne credit note ${number} report karne ke baad apni filing se hata diya.`,
+          'hi-IN': `${supplier} ने क्रेडिट नोट ${number} report करने के बाद अपनी filing से हटा दिया.`,
         }, {
           'en-IN': `The goods still went back, so the credit stays down by ${tax}. Ask ${supplier} to file the note again.`,
-          'hi-IN': `Maal to wapas gaya hai, isliye credit ${tax} ghata hi rahega. ${supplier} se note dobara file karwaiye.`,
+          'hi-IN': `माल तो वापस गया है, इसलिए क्रेडिट ${tax} घटा ही रहेगा. ${supplier} से नोट दोबारा file करवाइए.`,
         }));
       }
       const differing = disagreements(evidence);
@@ -411,22 +411,22 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
           key,
           {
             'en-IN': `Credit note ${number}: ${differing.map((row) => `${row.label['en-IN'].toLowerCase()} — yours ${row.ours ?? '—'}, theirs ${row.theirs ?? '—'}`).join('; ')}.`,
-            'hi-IN': `Credit note ${number}: ${differing.map((row) => `${row.label['hi-IN']} — aapka ${row.ours ?? '—'}, unka ${row.theirs ?? '—'}`).join('; ')}.`,
+            'hi-IN': `क्रेडिट नोट ${number}: ${differing.map((row) => `${row.label['hi-IN']} — आपका ${row.ours ?? '—'}, उनका ${row.theirs ?? '—'}`).join('; ')}.`,
           },
           {
             'en-IN': `The credit comes down by ${tax}, the tax on the goods your books show going back. Compare the supplier's note with your return, and ask them to correct it if theirs is wrong.`,
-            'hi-IN': `Credit ${tax} ghatta hai, jitna tax aapki books ke hisaab se wapas gaye maal par tha. Supplier ka note apni wapsi se milaiye, aur unka galat ho to theek karwaiye.`,
+            'hi-IN': `क्रेडिट ${tax} घटता है, जितना टैक्स आपकी बुक्स के हिसाब से वापस गए माल पर था. सप्लायर का नोट अपनी वापसी से मिलाइए, और उनका ग़लत हो तो ठीक करवाइए.`,
           },
         ));
       }
       sentence = status === 'EXACT' && !portal.reversed
         ? {
           'en-IN': `Your return${onBill.en} and ${supplier}'s credit note ${number} agree. ${tax} of GST comes off this month's credit.`,
-          'hi-IN': `Aapki wapsi${onBill.hi} aur ${supplier} ka credit note ${number} milte hain. Is mahine ke credit se ${tax} GST ghat jata hai.`,
+          'hi-IN': `आपकी वापसी${onBill.hi} और ${supplier} का क्रेडिट नोट ${number} मिलते हैं. इस महीने के क्रेडिट से ${tax} GST घट जाता है.`,
         }
         : {
           'en-IN': `${tax} of GST comes off this month's credit for the goods you sent back${onBill.en}. The supplier's note does not fully agree; see below.`,
-          'hi-IN': `${onBill.hi.trim() === '' ? '' : `${onBill.hi.trim()} `}wapas bheje maal ke liye is mahine ke credit se ${tax} GST ghat jata hai. Supplier ka note poori tarah nahin milta; neeche dekhiye.`,
+          'hi-IN': `${onBill.hi.trim() === '' ? '' : `${onBill.hi.trim()} `}वापस भेजे माल के लिए इस महीने के क्रेडिट से ${tax} GST घट जाता है. सप्लायर का नोट पूरी तरह नहीं मिलता; नीचे देखिए.`,
         };
     }
   } else if (book !== null && book.supplierGstin === null) {
@@ -434,39 +434,39 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     // is a question rather than a default — the credit waits for somebody to supply the number.
     findings.push(finding('ITC_SUPPLIER_GSTIN_MISSING', 'WARNING', key, {
       'en-IN': `Bill ${number} from ${supplier} has no GST number for the supplier, so it cannot be looked for in the government's record.`,
-      'hi-IN': `${supplier} ke bill ${number} par supplier ka GST number nahin hai, isliye use sarkari record mein dhoondha hi nahin ja sakta.`,
+      'hi-IN': `${supplier} के बिल ${number} पर सप्लायर का GST नंबर नहीं है, इसलिए इसे सरकारी रिकॉर्ड में ढूँढा ही नहीं जा सकता.`,
     }, {
       'en-IN': 'Add the supplier\'s GST number to their record, then open this month again. The bill will be compared automatically.',
-      'hi-IN': 'Supplier ke record mein unka GST number daaliye, phir yeh mahina dobara kholiye. Bill apne aap mil jayega.',
+      'hi-IN': 'सप्लायर के रिकॉर्ड में उनका GST नंबर डालिए, फिर यह महीना दोबारा खोलिए. बिल अपने आप मिल जाएगा.',
     }));
     sentence = {
       'en-IN': `${formatINR(totalTaxOf(creditable))} of GST is waiting on the supplier's GST number.`,
-      'hi-IN': `${formatINR(totalTaxOf(creditable))} GST supplier ke GST number ka intezaar kar raha hai.`,
+      'hi-IN': `${formatINR(totalTaxOf(creditable))} GST सप्लायर के GST नंबर का इंतज़ार कर रहा है.`,
     };
   } else if (portal === null) {
     // The user's own example from the issue, and the acceptance criterion that matters most.
     findings.push(finding('ITC_MISSING_FROM_PORTAL', 'WARNING', key, {
       'en-IN': `Bill ${number} from ${supplier} is in your books, but the government's record for this month does not show it. The GST of ${formatINR(totalTaxOf(creditable))} on it is not being claimed yet.`,
-      'hi-IN': `${supplier} ka bill ${number} aapki books mein hai, par is mahine ke sarkari record mein nahin dikh raha. Is par ka ${formatINR(totalTaxOf(creditable))} GST abhi nahin liya ja raha.`,
+      'hi-IN': `${supplier} का बिल ${number} आपकी बुक्स में है, पर इस महीने के सरकारी रिकॉर्ड में नहीं दिख रहा. इस पर का ${formatINR(totalTaxOf(creditable))} GST अभी नहीं लिया जा रहा.`,
     }, {
       'en-IN': 'Ask the supplier whether they have filed this bill. It often appears next month. Keep it pending until it does.',
-      'hi-IN': 'Supplier se poochhiye ki unhone yeh bill file kiya hai ya nahin. Aksar agle mahine aa jata hai. Tab tak pending rakhiye.',
+      'hi-IN': 'सप्लायर से पूछिए कि उन्होंने यह बिल file किया है या नहीं. अक्सर अगले महीने आ जाता है. तब तक pending रखिए.',
     }));
     if (accepted && policy.allowClaimWithoutPortal) {
       outcome = 'CLAIM_AT_RISK';
       claimable = creditable;
       findings.push(atRiskFinding(key, decision as ItcDecision, {
         'en-IN': `${formatINR(totalTaxOf(creditable))} is being claimed on a bill the government's record does not carry.`,
-        'hi-IN': `${formatINR(totalTaxOf(creditable))} aise bill par liya ja raha hai jo sarkari record mein nahin hai.`,
+        'hi-IN': `${formatINR(totalTaxOf(creditable))} ऐसे बिल पर लिया जा रहा है जो सरकारी रिकॉर्ड में नहीं है.`,
       }));
       sentence = {
         'en-IN': `Claimed on your instruction, although the portal does not carry this bill yet.`,
-        'hi-IN': `Aapke kehne par liya gaya, halanki portal par yeh bill abhi nahin hai.`,
+        'hi-IN': `आपके कहने पर लिया गया, हालाँकि पोर्टल पर यह बिल अभी नहीं है.`,
       };
     } else {
       sentence = {
         'en-IN': `${formatINR(totalTaxOf(creditable))} of GST is waiting on this supplier's filing.`,
-        'hi-IN': `${formatINR(totalTaxOf(creditable))} GST is supplier ki filing ka intezaar kar raha hai.`,
+        'hi-IN': `${formatINR(totalTaxOf(creditable))} GST इस सप्लायर की filing का इंतज़ार कर रहा है.`,
       };
     }
   } else {
@@ -477,28 +477,28 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     if (portal.reversed) {
       findings.push(finding('ITC_SUPPLIER_REVERSED', 'WARNING', key, {
         'en-IN': `${supplier} withdrew bill ${number} from their filing after reporting it.`,
-        'hi-IN': `${supplier} ne bill ${number} report karne ke baad apni filing se hata diya.`,
+        'hi-IN': `${supplier} ने बिल ${number} report करने के बाद अपनी filing से हटा दिया.`,
       }, {
         'en-IN': 'Ask the supplier what replaced it. Do not claim this credit until there is a document standing behind it.',
-        'hi-IN': 'Supplier se poochhiye ki iske badle kya aaya. Jab tak koi document na ho, yeh credit mat lijiye.',
+        'hi-IN': 'सप्लायर से पूछिए कि इसके बदले क्या आया. जब तक कोई दस्तावेज़ न हो, यह क्रेडिट मत लीजिए.',
       }));
     }
     if (portal.amends !== null) {
       findings.push(finding('ITC_SUPPLIER_AMENDED', 'INFORMATION', key, {
         'en-IN': `This is an amended version of bill ${portal.amends.number}, which ${supplier} first reported in ${portal.amends.period}. The figures below are the amended ones.`,
-        'hi-IN': `Yeh bill ${portal.amends.number} ka badla hua roop hai, jise ${supplier} ne pehle ${portal.amends.period} mein bataya tha. Neeche ke figure naye hain.`,
+        'hi-IN': `यह बिल ${portal.amends.number} का बदला हुआ रूप है, जिसे ${supplier} ने पहले ${portal.amends.period} में बताया था. नीचे के आँकड़े नए हैं.`,
       }, {
         'en-IN': 'Check the new figures against your bill. If they now agree, accept it; if the credit you already took was larger, the difference has to be given back.',
-        'hi-IN': 'Naye figure apne bill se milaiye. Agar ab mil jayein to accept kijiye; agar pehle zyada credit le liya tha to antar wapas karna hoga.',
+        'hi-IN': 'नए आँकड़े अपने बिल से मिलाइए. अगर अब मिल जाएँ तो accept कीजिए; अगर पहले ज़्यादा क्रेडिट ले लिया था तो अंतर वापस करना होगा.',
       }));
     }
     if (portal.itcAvailableOnPortal === false) {
       findings.push(finding('ITC_PORTAL_SAYS_UNAVAILABLE', 'WARNING', key, {
         'en-IN': `The government's own record marks the credit on bill ${number} as not available${portal.itcUnavailableReason === null ? '' : `: ${portal.itcUnavailableReason}`}.`,
-        'hi-IN': `Sarkari record khud kehta hai ki bill ${number} par credit nahin milta${portal.itcUnavailableReason === null ? '' : `: ${portal.itcUnavailableReason}`}.`,
+        'hi-IN': `सरकारी रिकॉर्ड ख़ुद कहता है कि बिल ${number} पर क्रेडिट नहीं मिलता${portal.itcUnavailableReason === null ? '' : `: ${portal.itcUnavailableReason}`}.`,
       }, {
         'en-IN': 'Take this one to whoever does your GST. Claiming against the portal\'s own note is the kind of thing that comes back as a notice.',
-        'hi-IN': 'Ise apne GST wale ko dikhaiye. Portal ke apne note ke khilaf credit lena baad mein notice ban kar aata hai.',
+        'hi-IN': 'इसे अपने GST वाले को दिखाइए. पोर्टल के अपने नोट के ख़िलाफ़ क्रेडिट लेना बाद में नोटिस बनकर आता है.',
       }));
     }
     // Issue #228 — the books and the filing carry different kinds of GST. One of the two is wrong,
@@ -508,10 +508,10 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     if (taxTypeRow !== undefined) {
       findings.push(finding('ITC_TAX_TYPE_DIFFERS', 'BLOCKING', key, {
         'en-IN': `Your books say ${taxTypeRow.ours ?? '—'}; ${supplier} filed ${taxTypeRow.theirs ?? '—'}. One of the two is wrong.`,
-        'hi-IN': `Aapki books mein ${taxTypeRow.ours ?? '—'} hai; ${supplier} ne ${taxTypeRow.theirs ?? '—'} file kiya. Dono mein se ek galat hai.`,
+        'hi-IN': `आपकी बुक्स में ${taxTypeRow.ours ?? '—'} है; ${supplier} ने ${taxTypeRow.theirs ?? '—'} file किया. दोनों में से एक ग़लत है.`,
       }, {
         'en-IN': 'Look at the paper bill. If it shows the other kind of GST, correct the bill in your books; if your books are right, ask the supplier to correct their filing. The credit comes back on the month it is corrected.',
-        'hi-IN': 'Kagaz wala bill dekhiye. Agar us par doosri kism ka GST hai to apni books mein bill theek kijiye; agar books sahi hain to supplier se filing theek karwaiye. Credit usi mahine wapas aayega jab yeh theek hoga.',
+        'hi-IN': 'काग़ज़ वाला बिल देखिए. अगर उस पर दूसरी किस्म का GST है तो अपनी बुक्स में बिल ठीक कीजिए; अगर बुक्स सही हैं तो सप्लायर से filing ठीक करवाइए. क्रेडिट उसी महीने वापस आएगा जब यह ठीक होगा.',
       }));
     }
     const otherDifferences = disagreements(evidence).filter((row) => row.field !== 'TAX_TYPE');
@@ -519,10 +519,10 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
       const fields = otherDifferences;
       findings.push(finding('ITC_FIGURES_DIFFER', 'WARNING', key, {
         'en-IN': `Bill ${number}: ${fields.map((row) => `${row.label['en-IN'].toLowerCase()} — yours ${row.ours ?? '—'}, theirs ${row.theirs ?? '—'}`).join('; ')}.`,
-        'hi-IN': `Bill ${number}: ${fields.map((row) => `${row.label['hi-IN']} — aapka ${row.ours ?? '—'}, unka ${row.theirs ?? '—'}`).join('; ')}.`,
+        'hi-IN': `बिल ${number}: ${fields.map((row) => `${row.label['hi-IN']} — आपका ${row.ours ?? '—'}, उनका ${row.theirs ?? '—'}`).join('; ')}.`,
       }, {
         'en-IN': 'Compare the paper bill with these two figures. If the supplier reported less than the bill says, ask them to correct it before you claim the difference.',
-        'hi-IN': 'Kagaz wala bill in dono figure se milaiye. Agar supplier ne kam bataya hai to antar lene se pehle unse theek karwaiye.',
+        'hi-IN': 'काग़ज़ वाला बिल इन दोनों आँकड़ों से मिलाइए. अगर सप्लायर ने कम बताया है तो अंतर लेने से पहले उनसे ठीक करवाइए.',
       }));
     }
 
@@ -531,12 +531,12 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
     if (taxTypeRow !== undefined) {
       sentence = {
         'en-IN': `Your books say ${taxTypeRow.ours ?? '—'}; the supplier filed ${taxTypeRow.theirs ?? '—'}. One of the two is wrong. ${formatINR(totalTaxOf(creditable))} is held back until the bill or the filing is corrected.`,
-        'hi-IN': `Aapki books mein ${taxTypeRow.ours ?? '—'} hai; supplier ne ${taxTypeRow.theirs ?? '—'} file kiya. Dono mein se ek galat hai. ${formatINR(totalTaxOf(creditable))} tab tak roka gaya hai jab tak bill ya filing theek na ho.`,
+        'hi-IN': `आपकी बुक्स में ${taxTypeRow.ours ?? '—'} है; सप्लायर ने ${taxTypeRow.theirs ?? '—'} file किया. दोनों में से एक ग़लत है. ${formatINR(totalTaxOf(creditable))} तब तक रोका गया है जब तक बिल या filing ठीक ना हो.`,
       };
     } else if (refused) {
       sentence = {
         'en-IN': `You marked this ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['en-IN'].toLowerCase()}${because}. It is not on this month's return.`,
-        'hi-IN': `Aapne ise ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} kaha${because}. Yeh is mahine ke return par nahin hai.`,
+        'hi-IN': `आपने इसे ${DECISION_PLAIN[decision?.kind ?? 'PENDING']['hi-IN']} कहा${because}. यह इस महीने के रिटर्न पर नहीं है.`,
       };
     } else if (clean) {
       outcome = 'CLAIM_NOW';
@@ -546,8 +546,8 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
           ? `Your credit note and ${supplier}'s filing agree. ${formatINR(totalTaxOf(claimable))} of GST comes back off this month's credit.`
           : `Your bill and ${supplier}'s filing agree. ${formatINR(totalTaxOf(claimable))} of GST goes on this month's return.`,
         'hi-IN': isCreditNote
-          ? `Aapka credit note aur ${supplier} ki filing milte hain. ${formatINR(totalTaxOf(claimable))} GST is mahine ke credit se ghat jayega.`
-          : `Aapka bill aur ${supplier} ki filing milte hain. ${formatINR(totalTaxOf(claimable))} GST is mahine ke return par jayega.`,
+          ? `आपका क्रेडिट नोट और ${supplier} की filing मिलते हैं. ${formatINR(totalTaxOf(claimable))} GST इस महीने के क्रेडिट से घट जाएगा.`
+          : `आपका बिल और ${supplier} की filing मिलते हैं. ${formatINR(totalTaxOf(claimable))} GST इस महीने के रिटर्न पर जाएगा.`,
       };
     } else if (accepted) {
       outcome = 'CLAIM_AT_RISK';
@@ -555,21 +555,21 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
       const withheld = subtract(creditable, safeAmount);
       findings.push(atRiskFinding(key, decision as ItcDecision, {
         'en-IN': `${formatINR(totalTaxOf(claimable))} is being claimed on a line that does not fully agree with the portal.`,
-        'hi-IN': `${formatINR(totalTaxOf(claimable))} aisi line par liya ja raha hai jo portal se poori tarah nahin milti.`,
+        'hi-IN': `${formatINR(totalTaxOf(claimable))} ऐसी लाइन पर लिया जा रहा है जो पोर्टल से पूरी तरह नहीं मिलती.`,
       }));
       sentence = totalTaxOf(withheld).minor > 0n
         ? {
           'en-IN': `Claimed at the lower of the two figures: ${formatINR(totalTaxOf(claimable))}. The remaining ${formatINR(totalTaxOf(withheld))} is not being claimed until the supplier corrects their filing.`,
-          'hi-IN': `Dono mein se chhoti rakam li gayi: ${formatINR(totalTaxOf(claimable))}. Baaki ${formatINR(totalTaxOf(withheld))} tab tak nahin liya jayega jab tak supplier apni filing theek na kare.`,
+          'hi-IN': `दोनों में से छोटी रक़म ली गई: ${formatINR(totalTaxOf(claimable))}. बाक़ी ${formatINR(totalTaxOf(withheld))} तब तक नहीं लिया जाएगा जब तक सप्लायर अपनी filing ठीक ना करे.`,
         }
         : {
           'en-IN': `Claimed on your instruction: ${formatINR(totalTaxOf(claimable))}.`,
-          'hi-IN': `Aapke kehne par liya gaya: ${formatINR(totalTaxOf(claimable))}.`,
+          'hi-IN': `आपके कहने पर लिया गया: ${formatINR(totalTaxOf(claimable))}.`,
         };
     } else {
       sentence = {
         'en-IN': `${formatINR(totalTaxOf(creditable))} of GST is held back until somebody answers the question on this line.`,
-        'hi-IN': `${formatINR(totalTaxOf(creditable))} GST tab tak roka gaya hai jab tak is line ka jawab na mile.`,
+        'hi-IN': `${formatINR(totalTaxOf(creditable))} GST तब तक रोका गया है जब तक इस लाइन का जवाब ना मिले.`,
       };
     }
   }
@@ -601,7 +601,7 @@ export const assessLine = (input: LineInput): ReconciliationLine => {
 const atRiskFinding = (key: string, decision: ItcDecision, message: Bilingual): ItcFinding =>
   finding('ITC_CLAIMED_AT_RISK', 'WARNING', key, message, {
     'en-IN': `${decision.reason === '' ? 'A reason was recorded with this decision.' : `Your reason: ${decision.reason}.`} If the portal never carries this bill, this credit has to be given back with interest, so keep the paperwork.`,
-    'hi-IN': `${decision.reason === '' ? 'Is faisle ke saath ek wajah likhi gayi thi.' : `Aapki wajah: ${decision.reason}.`} Agar portal par yeh bill kabhi nahin aata, to yeh credit byaj ke saath wapas karna padega — kagaz sambhal kar rakhiye.`,
+    'hi-IN': `${decision.reason === '' ? 'इस फ़ैसले के साथ एक वज़ह लिखी गई थी.' : `आपकी वज़ह: ${decision.reason}.`} अगर पोर्टल पर यह बिल कभी नहीं आता, तो यह क्रेडिट ब्याज के साथ वापस करना पड़ेगा — काग़ज़ संभालकर रखिए.`,
   });
 
 /**
@@ -618,24 +618,24 @@ const cautionFor = (held: TaxAmounts, barred: TaxAmounts): Bilingual => {
   if (waiting.minor === 0n && gone.minor === 0n) {
     return {
       'en-IN': 'Every purchase this month is accounted for, so the credit here is the whole of it.',
-      'hi-IN': 'Is mahine ki har kharid ka hisaab hai, isliye yahan poora credit dikh raha hai.',
+      'hi-IN': 'इस महीने की हर ख़रीद का हिसाब है, इसलिए यहाँ पूरा क्रेडिट दिख रहा है.',
     };
   }
   const parts: Bilingual[] = [];
   if (waiting.minor > 0n) {
     parts.push({
       'en-IN': `${formatINR(waiting)} of GST on your purchases is deliberately not in this figure, because those bills are still waiting on the supplier or on you. They are not lost — they come back on the month they are settled.`,
-      'hi-IN': `Aapki kharid ka ${formatINR(waiting)} GST jaan-boojh kar is figure mein nahin hai, kyunki woh bill abhi supplier ya aap par ruke hain. Woh khoye nahin hain — jis mahine tay honge us mahine aa jayenge.`,
+      'hi-IN': `आपकी ख़रीद का ${formatINR(waiting)} GST जान-बूझकर इस आँकड़े में नहीं है, क्योंकि वह बिल अभी सप्लायर या आप पर रुके हैं. वे खोए नहीं हैं — जिस महीने तय होंगे उस महीने आ जाएँगे.`,
     });
   }
   if (gone.minor > 0n) {
     // "A further" only when something was named before it, so the sentence reads on its own when
     // the whole of the missing credit is the barred kind.
     const alsoEn = waiting.minor > 0n ? `A further ${formatINR(gone)} is not in it either, and that part` : `${formatINR(gone)} of GST on your purchases is not in this figure, and it`;
-    const alsoHi = waiting.minor > 0n ? `Iske alawa ${formatINR(gone)} bhi ismein nahin hai, aur woh` : `Aapki kharid ka ${formatINR(gone)} GST is figure mein nahin hai, aur woh`;
+    const alsoHi = waiting.minor > 0n ? `इसके अलावा ${formatINR(gone)} भी इसमें नहीं है, और वह` : `आपकी ख़रीद का ${formatINR(gone)} GST इस आँकड़े में नहीं है, और वह`;
     parts.push({
       'en-IN': `${alsoEn} does not come back on any month: the last date for claiming it has gone by.`,
-      'hi-IN': `${alsoHi} kisi bhi mahine wapas nahin aayega: use lene ki aakhri tareekh nikal chuki hai.`,
+      'hi-IN': `${alsoHi} किसी भी महीने वापस नहीं आएगा: इसे लेने की आख़िरी तारीख़ निकल चुकी है.`,
     });
   }
   return {
@@ -812,18 +812,18 @@ export const settleReturnsAgainstBills = (
     const message: Bilingual = barred
       ? {
         'en-IN': `You sent ${goods} back to ${supplier} against bill ${original.number}. The credit on that bill can no longer be claimed, so there is nothing for this return to take off.`,
-        'hi-IN': `Aapne bill ${original.number} ke against ${supplier} ko ${goods} wapas bheja. Us bill ka credit ab liya nahin ja sakta, isliye is wapsi se ghatane ko kuch nahin hai.`,
+        'hi-IN': `आपने बिल ${original.number} के अगेंस्ट ${supplier} को ${goods} वापस भेजा. उस बिल का क्रेडिट अब लिया नहीं जा सकता, इसलिए इस वापसी से घटाने को कुछ नहीं है.`,
       }
       : {
         'en-IN': `You sent ${goods} back to ${supplier} against bill ${original.number}. ${tax} of credit comes off that bill. Its own credit is still waiting, so nothing comes off this month; when bill ${original.number} is claimed, it is claimed less this ${tax}.`,
-        'hi-IN': `Aapne bill ${original.number} ke against ${supplier} ko ${goods} wapas bheja. Us bill ke credit se ${tax} ghatta hai. Us bill ka apna credit abhi ruka hai, isliye is mahine kuch nahin ghatta; jab bill ${original.number} ka credit liya jayega, ${tax} kam liya jayega.`,
+        'hi-IN': `आपने बिल ${original.number} के अगेंस्ट ${supplier} को ${goods} वापस भेजा. उस बिल के क्रेडिट से ${tax} घटता है. उस बिल का अपना क्रेडिट अभी रुका है, इसलिए इस महीने कुछ नहीं घटता; जब बिल ${original.number} का क्रेडिट लिया जाएगा, ${tax} कम लिया जाएगा.`,
       };
     return {
       ...line,
       outcome: barred ? 'TIME_BARRED' : 'HELD_BACK',
       outcomeLabel: barred ? OUTCOME_PLAIN.TIME_BARRED : {
         'en-IN': `Waits with bill ${original.number}`,
-        'hi-IN': `Bill ${original.number} ke saath ruka hai`,
+        'hi-IN': `बिल ${original.number} के साथ रुका है`,
       },
       claimable: emptyAmounts(),
       // Negative on purpose: it is taken off the credit held back on the bill, so the month's total
@@ -832,10 +832,10 @@ export const settleReturnsAgainstBills = (
       findings: [
         ...line.findings.filter((one) => one.code !== 'ITC_SUPPLIER_CREDIT_NOTE_AWAITED'),
         finding('ITC_RETURN_WAITS_WITH_BILL', 'INFORMATION', line.key, message, barred
-          ? { 'en-IN': 'Nothing to do.', 'hi-IN': 'Kuch karna nahin hai.' }
+          ? { 'en-IN': 'Nothing to do.', 'hi-IN': 'कुछ करना नहीं है.' }
           : {
             'en-IN': `Settle bill ${original.number} first. This return follows it onto the return in the same month.`,
-            'hi-IN': `Pehle bill ${original.number} nipta lijiye. Yeh wapsi usi mahine uske saath return par jayegi.`,
+            'hi-IN': `पहले बिल ${original.number} निपटा लीजिए. यह वापसी उसी महीने उसके साथ रिटर्न पर जाएगी.`,
           }),
       ],
       sentence: message,
@@ -848,13 +848,13 @@ export const accumulate = (total: TaxAmounts, line: TaxAmounts): TaxAmounts => a
 /** Issue #289 — how a self-assessed reverse-charge line is named in place of "not on the portal". */
 const SELF_ASSESSED_LABEL: Bilingual = {
   'en-IN': 'Reverse charge, self-assessed (not in GSTR-2B)',
-  'hi-IN': 'Reverse charge, khud ka hisaab (GSTR-2B mein nahin)',
+  'hi-IN': 'Reverse charge, ख़ुद का हिसाब (GSTR-2B में नहीं)',
 };
 
 /** Issue #289 — the note on a reverse-charge line that is self-assessed rather than matched. */
 export const SELF_ASSESSED_NOTE: Bilingual = {
   'en-IN': 'Reverse charge from a seller with no GST number: self-assessed, never in GSTR-2B.',
-  'hi-IN': 'Bina GST number wale seller se reverse charge: khud ka hisaab, GSTR-2B mein kabhi nahin.',
+  'hi-IN': 'बिना GST नंबर वाले सेलर से reverse charge: ख़ुद का हिसाब, GSTR-2B में कभी नहीं.',
 };
 
 /**

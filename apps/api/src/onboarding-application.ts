@@ -44,6 +44,7 @@ import { PostgresOnboardingRepository } from '../../../packages/onboarding/src/p
 import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
 import { outsideUnitOfWork, type TransactionalExecutor } from '../../../packages/platform/src/database.ts';
 import { recordTurnoverAnswer, rememberBusinessPrefill } from './business-details-application.ts';
+import { say } from './language.ts';
 import { durableDatabase } from './durable.ts';
 import { stableUuid } from './persistence.ts';
 
@@ -265,7 +266,7 @@ const setUp = async (
   else session = await service.skipStep(actor, session.id, 'opening_balances', 'The business will add opening balances later.');
 
   const problems = (Object.keys(session.steps) as StepId[]).flatMap((step) =>
-    session.steps[step].problems.map((problem) => ({ step, field: problem.field ?? null, message: problem.message['en-IN'] })),
+    session.steps[step].problems.map((problem) => ({ step, field: problem.field ?? null, message: say(problem.message) })),
   );
 
   const checklist = checklistFor(session, 'en-IN');

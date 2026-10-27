@@ -187,7 +187,7 @@ test('#312: the sale review shows at most one warning, and only when the owner m
 
   // In Hindi the turnover line is Hindi too.
   const hindi = await review({ eInvoice: { needed: 'UNKNOWN', askTurnover: true, message: TURNOVER }, terms: { credit: { outcome: 'ALLOW' }, lines: [] } }, 'hi-IN');
-  assert.match(hindi.warning, /Business details mein ek baar jawab dein/);
+  assert.match(hindi.warning, /बिज़नेस विवरण में एक बार जवाब दीजिए/);
   assert.equal(hindi.askTurnover, true);
 
   // The page has exactly one place for the warning and one for the green line.

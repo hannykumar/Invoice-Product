@@ -19,7 +19,7 @@ import { openPersistence, securityOf } from './persistence.ts';
 import { sealStoredAppRecords } from './field-encryption.ts';
 import { configureGovernmentWebhooks } from './government-webhooks.ts';
 import { asOneAction, asOneRead } from './durable.ts';
-import { annotate, inRequest, log } from './log.ts';
+import { annotate, inRequest, log, requestScope } from './log.ts';
 import { reportError } from '../../../packages/platform/src/error-reporting.ts';
 import { installErrorReporting } from './error-reporting.ts';
 import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, MAX_STORED_FILE_BODY_BYTES, readLimitedBody, STORED_FILE_ROUTE } from './http-hardening.ts';
@@ -111,10 +111,12 @@ const failureOf = (error: unknown, requestId: string, routeName: string): ApiRes
   if (error instanceof ZodError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: invalidInputMessage(error) });
   if (error instanceof SyntaxError) return failure(400, requestId, { title: 'Nothing was saved', code: 'INVALID_INPUT', message: 'Nothing was saved, because a number or a list that was sent could not be read. Check what was typed and try again.' });
   const known = error as Error;
+  // Issue #298 — a refusal carrying a Hindi sentence in its details answers in the screen's language.
+  const hiMessage = requestScope().locale === 'hi-IN' && error instanceof DomainError && typeof error.details['hi-IN'] === 'string' ? error.details['hi-IN'] : null;
   return failure(status, requestId, {
     title: error instanceof AuthenticationError ? 'Sign in required' : 'Nothing was saved',
     code: error instanceof DomainError || error instanceof PlatformError ? error.code : undefined,
-    message: known.message,
+    message: hiMessage ?? known.message,
     // Issue #262 — the facts behind a refusal (never secrets: errors are logged), for the screen.
     ...(error instanceof DomainError && Object.keys(error.details).length > 0 ? { details: error.details } : {}),
   });
@@ -141,6 +143,10 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
   try {
     const runtime = apiRuntime();
     const raw = method === 'GET' ? { ...(body !== null && typeof body === 'object' ? body : {}), ...Object.fromEntries(url.searchParams) } : body;
+    // Issue #298 — the language this request answers in, asked by the screen as `locale` on any
+    // call. It sits on the request's scope so a bilingual sentence is picked where it is turned
+    // into JSON, not passed down every call. Anything but `hi-IN` is answered in English.
+    if (raw !== null && typeof raw === 'object' && (raw as Record<string, unknown>).locale === 'hi-IN') annotate({ locale: 'hi-IN' });
     let reply: unknown;
     if (isPublic(route)) {
       reply = await route.handle({ input: await route.input.parseAsync(raw), params, runtime, requestId, delivery, authorization });

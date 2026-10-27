@@ -34,6 +34,7 @@ import {
 } from '@invoice/invoice-templates';
 import { STATE_NAMES } from '@invoice/transport';
 import { requireIssuable, sellerPrint } from './business-details-application.ts';
+import { both, say } from './language.ts';
 import { customerPrint, resolveCustomer, resolveItem } from './catalogue-application.ts';
 import { DurableMap } from './durable.ts';
 
@@ -116,13 +117,13 @@ export class PreSaleDesk {
 
   async preview(actor: ActorContext, input: Record<string, unknown>) {
     const kind = this.#kind(input);
-    const label = preSaleKind(kind).label['en-IN'];
+    const label = say(preSaleKind(kind).label);
     const working = await this.#service.preview(actor, kind, this.#input(input));
     if (!working.ok) {
       return {
         state: 'problems' as const,
-        title: `This ${label.toLowerCase()} cannot be issued yet`,
-        message: 'Everything stopping it is listed below. Nothing was saved and no number was used.',
+        title: both(`This ${label.toLowerCase()} cannot be issued yet`, `ये ${label.toLowerCase()} अभी नहीं बन सकता`),
+        message: both('Everything stopping it is listed below. Nothing was saved and no number was used.', 'जो रोक रहा है वो नीचे लिखा है। कुछ सहेजा नहीं गया और कोई नंबर नहीं लगा।',),
         problems: working.problems.map((p) => ({ code: p.code, message: p.message })),
       };
     }
@@ -131,7 +132,7 @@ export class PreSaleDesk {
     return {
       state: 'preview' as const,
       kind,
-      title: `${label} checked`,
+      title: both(`${label} checked`, `${label} जाँचा गया`),
       message: kind === 'QUOTATION'
         ? 'A price offer. Nothing goes into your books, your stock or GST until the customer accepts and you issue the bill.'
         : 'A request for payment before the goods go. It is not a tax invoice: nothing goes into your books, your stock or GST until you issue the tax invoice.',
@@ -170,8 +171,8 @@ export class PreSaleDesk {
         snapshot: captureSnapshot(template, 'en-IN', document.createdAt.slice(0, 10)),
       });
     }
-    const label = preSaleKind(kind).label['en-IN'];
-    return { state: 'recorded' as const, title: `${label} issued`, message: `${document.number} was issued. Nothing was posted to your books.`, document: this.describe(document) };
+    const label = say(preSaleKind(kind).label);
+    return { state: 'recorded' as const, title: both(`${label} issued`, `${label} बना`), message: both(`${document.number} was issued. Nothing was posted to your books.`, `${document.number} बन गया। आपकी बही में कुछ दर्ज नहीं हुआ।`), document: this.describe(document) };
   }
 
   async list(actor: ActorContext) {
@@ -241,7 +242,7 @@ export class PreSaleDesk {
     return {
       state: 'recorded' as const,
       title: differences.length === 0 ? 'Invoice linked' : 'Invoice linked — with differences',
-      message: `${proforma.number} is billed on invoice ${proforma.invoice?.invoiceNumber}.`,
+      message: both(`${proforma.number} is billed on invoice ${proforma.invoice?.invoiceNumber}.`, `${proforma.number} इनवॉइस ${proforma.invoice?.invoiceNumber} पर बिल हुआ।`),
       effects: [...applied, ...differences],
       document: this.describe(proforma),
     };
@@ -273,9 +274,9 @@ export class PreSaleDesk {
     });
     return {
       state: 'recorded' as const,
-      title: `Receipt voucher ${advance.number} issued`,
+      title: both(`Receipt voucher ${advance.number} issued`, `रसीद वाउचर ${advance.number} बना`),
       message: advance.tax === null
-        ? `${formatINR(advance.amount)} received against ${advance.proformaNumber}. ${GOODS_ADVANCE_NO_TAX['en-IN']}`
+        ? `${formatINR(advance.amount)} received against ${advance.proformaNumber}. ${say(GOODS_ADVANCE_NO_TAX)}`
         : `${formatINR(advance.amount)} received against ${advance.proformaNumber}. It includes GST of ${formatINR(advance.tax.totalTax)}, which is due now and is set off when you link the tax invoice.`,
       advance: advanceView(advance),
     };
@@ -293,7 +294,7 @@ export class PreSaleDesk {
     const refund = advance.refund;
     return {
       state: 'recorded' as const,
-      title: `Refund voucher ${refund?.number} issued`,
+      title: both(`Refund voucher ${refund?.number} issued`, `रिफ़ंड वाउचर ${refund?.number} बना`),
       message: `${formatINR(refund?.amount as Money)} of advance ${advance.number} paid back.${
         advance.tax === null ? '' : ` GST of ${formatINR(total(refund?.taxRefunded as TaxHeads))} paid on it is taken back.`
       }`,
@@ -314,7 +315,7 @@ export class PreSaleDesk {
 
   async cancel(actor: ActorContext, input: Record<string, unknown>) {
     const document = await this.#service.cancel(actor, { id: String(input.document ?? ''), reason: String(input.reason ?? '') });
-    return { state: 'recorded' as const, title: `${preSaleKind(document.kind).label['en-IN']} cancelled`, message: `${document.number} is cancelled. Its number stays used, so the series has no gap.`, document: this.describe(document) };
+    return { state: 'recorded' as const, title: both(`${say(preSaleKind(document.kind).label)} cancelled`, `${say(preSaleKind(document.kind).label)} रद्द`), message: both(`${document.number} is cancelled. Its number stays used, so the series has no gap.`, `${document.number} रद्द हो गया। उसका नंबर इस्तेमाल हुआ रहेगा, ताकि सीरीज़ में कोई गैप न हो।`), document: this.describe(document) };
   }
 }
 
@@ -366,7 +367,7 @@ const voucherHtml = (a: AdvanceReceipt, refund: boolean, seller: RenderableParty
   // A refund takes back the tax on the refunded part only, so its rows are scaled to that.
   const scale = (m: Money): Money => (refund && r !== null && a.amount.minor > 0n ? mulDiv(m, r.amount.minor, a.amount.minor) : m);
   const rows = a.tax === null
-    ? `<tr><td colspan="6">${escapeHtml(GOODS_ADVANCE_NO_TAX['en-IN'])}</td></tr>`
+    ? `<tr><td colspan="6">${escapeHtml(say(GOODS_ADVANCE_NO_TAX))}</td></tr>`
     : a.tax.lines.map((l) => `<tr><td>${rateText(l.ratePercentTimes100)}</td><td>${formatINR(scale(l.taxableValue))}</td><td>${formatINR(scale(l.cgst))}</td><td>${formatINR(scale(money(l.sgst.minor + l.utgst.minor)))}</td><td>${formatINR(scale(l.igst))}</td><td>${formatINR(scale(l.cess))}</td></tr>`).join('');
   const taxTotal = a.tax === null ? null : refund && r !== null ? total(r.taxRefunded) : a.tax.totalTax;
   const reverse = a.tax?.lines.some((l) => l.reverseCharge) === true ? 'Yes' : 'No';

@@ -35,7 +35,7 @@ export const fetchReport = async <TBody>(
         kind: 'NOT_ALLOWED',
         withheld: {
           'en-IN': `You are not allowed to see ${what['en-IN']} in this business, so it is left out of this answer. Ask the owner to give you that permission.`,
-          'hi-IN': `Is business mein aapko ${what['hi-IN']} dekhne ki ijazat nahin hai, isliye yeh jawab mein shaamil nahin hai. Malik se ijazat maangein.`,
+          'hi-IN': `इस बिज़नेस में आपको ${what['hi-IN']} देखने की इजाज़त नहीं है, इसलिए यह जवाब में शामिल नहीं है. मालिक से इजाज़त माँगिए.`,
         },
       };
     }
@@ -45,7 +45,7 @@ export const fetchReport = async <TBody>(
         kind: 'NOT_AVAILABLE',
         withheld: {
           'en-IN': `${what['en-IN']} cannot be shown for that period: ${error.message}`,
-          'hi-IN': `Us samay ke liye ${what['hi-IN']} nahin dikhaya ja sakta: ${error.message}`,
+          'hi-IN': `उस समय के लिए ${what['hi-IN']} नहीं दिखाया जा सकता: ${error.message}`,
         },
       };
     }

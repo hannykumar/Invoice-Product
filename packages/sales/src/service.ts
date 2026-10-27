@@ -56,7 +56,7 @@ const nil = (): Money => zero('INR');
 /** Issue #262 — what to do when the goods are short. There is no other way through. */
 export const STOCK_WAY_THROUGH = {
   'en-IN': 'If the goods have arrived, enter their purchase bill first, then make this sale.',
-  'hi-IN': 'Agar maal aa gaya hai, to pehle uska purchase bill darj karen, phir yeh bikri karen.',
+  'hi-IN': 'अगर माल आ गया है, तो पहले उसका ख़रीद बिल दर्ज कीजिए, फिर यह बिक्री कीजिए।',
 } as const;
 
 const plain = (amount: string): string => (amount.includes('.') ? amount.replace(/0+$/, '').replace(/\.$/, '') : amount);
@@ -512,7 +512,7 @@ export class SalesService {
             // Issue #262 — a sale without the goods is always stopped; the one way through is the
             // purchase bill, so the refusal says so.
             'en-IN': `You have ${plain(s.available)} ${s.unit} of ${s.itemName} in ${s.warehouseName}. This bill asks for ${plain(s.required)} ${s.unit}. ${STOCK_WAY_THROUGH['en-IN']}`,
-            'hi-IN': `${s.warehouseName} mein ${s.itemName} ke ${plain(s.available)} ${s.unit} hain. Yeh bill ${plain(s.required)} ${s.unit} maangta hai. ${STOCK_WAY_THROUGH['hi-IN']}`,
+            'hi-IN': `${s.warehouseName} में ${s.itemName} के ${plain(s.available)} ${s.unit} हैं। यह बिल ${plain(s.required)} ${s.unit} माँगता है। ${STOCK_WAY_THROUGH['hi-IN']}`,
           },
           stock: {
             itemId: s.itemId,

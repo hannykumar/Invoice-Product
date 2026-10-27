@@ -143,11 +143,11 @@ const BLOCKED: BlockedDocument = {
       code: 'STOCK_SHORTFALL',
       what: {
         'en-IN': 'You are 6 boxes short: this bill needs 30 apple boxes and 24 are free at the Karol Bagh shop.',
-        'hi-IN': 'Aapke paas 6 box kam hain: is bill ko 30 apple box chahiye aur Karol Bagh par 24 khaali hain.',
+        'hi-IN': 'आपके पास 6 बॉक्स कम हैं: इस बिल को 30 apple बॉक्स चाहिए और Karol Bagh पर 24 ख़ाली हैं.',
       },
       nextStep: {
         'en-IN': 'Bring 6 boxes over from the godown, or change the bill to 24 boxes.',
-        'hi-IN': 'Godown se 6 box laayein, ya bill 24 box ka kar dein.',
+        'hi-IN': 'गोदाम से 6 बॉक्स लाइए, या बिल 24 बॉक्स का कर दीजिए.',
       },
       action: 'inventory:transfer',
     },
@@ -155,11 +155,11 @@ const BLOCKED: BlockedDocument = {
       code: 'RULE_CHECK',
       what: {
         'en-IN': 'The goods are going to Haryana, so which state this sale counts in has to be settled before the bill can go out.',
-        'hi-IN': 'Maal Haryana ja raha hai, isliye bill jaane se pehle tay karna hoga ki yeh bikri kis rajya ki hai.',
+        'hi-IN': 'माल Haryana जा रहा है, इसलिए बिल जाने से पहले तय करना होगा कि यह बिक्री किस राज्य की है.',
       },
       nextStep: {
         'en-IN': 'Check the delivery address on the bill is the Haryana one.',
-        'hi-IN': 'Bill par delivery ka pata Haryana wala hai, yeh dekh lein.',
+        'hi-IN': 'बिल पर डिलीवरी का पता Haryana वाला है, यह देख लीजिए.',
       },
       action: 'sales:INV-00003',
       topic: 'gst.place_of_supply',

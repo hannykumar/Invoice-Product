@@ -496,22 +496,22 @@ const promiseWords = (outcome: PromiseOutcome, promise: PromiseToPay) => {
     case 'KEPT':
       return {
         'en-IN': `Promised ${amount} by ${promise.promisedOn}, and the bill is paid.`,
-        'hi-IN': `${promise.promisedOn} tak ${amount} dene ka vaada tha, aur bill chuk gaya.`,
+        'hi-IN': `${promise.promisedOn} तक ${amount} देने का वादा था, और बिल चुक गया.`,
       };
     case 'BROKEN':
       return {
         'en-IN': `Promised ${amount} by ${promise.promisedOn}. That date has passed and the bill is still open.`,
-        'hi-IN': `${promise.promisedOn} tak ${amount} dene ka vaada tha. Woh tarikh nikal gayi aur bill abhi baaki hai.`,
+        'hi-IN': `${promise.promisedOn} तक ${amount} देने का वादा था. वह तारीख़ निकल गई और बिल अभी बाक़ी है.`,
       };
     case 'CANCELLED':
       return {
         'en-IN': `This promise of ${amount} was cancelled.`,
-        'hi-IN': `${amount} ka yeh vaada radd kar diya gaya tha.`,
+        'hi-IN': `${amount} का यह वादा रद्द कर दिया गया था.`,
       };
     case 'AWAITED':
       return {
         'en-IN': `Promised ${amount} by ${promise.promisedOn}. Reminders are paused until then.`,
-        'hi-IN': `${promise.promisedOn} tak ${amount} dene ka vaada hai. Tab tak reminder ruke rahenge.`,
+        'hi-IN': `${promise.promisedOn} तक ${amount} देने का वादा है. तब तक रिमाइंडर रुके रहेंगे.`,
       };
   }
 };

@@ -124,26 +124,26 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
   }
 
   const outward: Gstr3bLine[] = [
-    line('3.1(a)', 'Ordinary sales you charged GST on', 'Aam bikri jis par aapne GST liya', taxable, taxableSources),
-    line('3.1(b)', 'Sales outside India and to special economic zones', 'India ke bahar aur special economic zone ki bikri', zeroRated, zeroRatedSources),
-    line('3.1(c)', 'Sales that carried no GST (nil-rated or exempt)', 'Bina GST wali bikri (nil ya exempt)', nilExempt, nilExemptSources),
-    line('3.1(d)', 'Purchases where you owe the tax yourself', 'Kharid jis par tax aapko hi bharna hai', input.inward.reverseChargeLiability, input.inward.contributions),
+    line('3.1(a)', 'Ordinary sales you charged GST on', 'आम बिक्री जिस पर आपने GST लिया', taxable, taxableSources),
+    line('3.1(b)', 'Sales outside India and to special economic zones', 'भारत के बाहर और स्पेशल इकोनॉमिक ज़ोन की बिक्री', zeroRated, zeroRatedSources),
+    line('3.1(c)', 'Sales that carried no GST (nil-rated or exempt)', 'बिना GST वाली बिक्री (नील-रेटेड या एग्ज़ेम्प्ट)', nilExempt, nilExemptSources),
+    line('3.1(d)', 'Purchases where you owe the tax yourself', 'ख़रीद जिस पर टैक्स आपको ही भरना है', input.inward.reverseChargeLiability, input.inward.contributions),
     // Issue #286 — 3.1(e) on the form is supplies outside GST altogether. It had been labelled
     // "the buyer pays the tax", which is a different thing with no box of its own in 3.1.
-    line('3.1(e)', 'Sales outside GST altogether', 'GST ke bahar ki bikri', nonGst, nonGstSources),
-    line('RCM-OUT', 'Sales where the buyer pays the tax (for your record: the buyer reports this tax, not you)', 'Bikri jis par tax buyer bharega (aapke record ke liye: yeh tax buyer report karta hai)', reverseChargeOutward, reverseChargeSources),
+    line('3.1(e)', 'Sales outside GST altogether', 'GST के बाहर की बिक्री', nonGst, nonGstSources),
+    line('RCM-OUT', 'Sales where the buyer pays the tax (for your record: the buyer reports this tax, not you)', 'बिक्री जिस पर टैक्स ख़रीदार भरेगा (आपके रिकॉर्ड के लिए: यह टैक्स ख़रीदार रिपोर्ट करता है)', reverseChargeOutward, reverseChargeSources),
   ];
 
   const availableItc = sumAmounts([input.inward.allOtherItc, input.inward.reverseChargeItc, input.inward.importItc]);
   const netItc = addAmounts(availableItc, negateAmounts(input.inward.reversedItc));
 
   const credit: Gstr3bLine[] = [
-    line('4A(3)', 'GST you already paid on purchases where you owe the tax yourself', 'Aisi kharid par diya GST jis ka tax aapko bharna tha', input.inward.reverseChargeItc, input.inward.contributions),
-    line('4A(4)', 'GST you already paid on goods brought in from outside India', 'Bahar se mangaye saaman par diya GST', input.inward.importItc, input.inward.contributions),
-    line('4A(5)', 'GST you already paid on all other purchases', 'Baaki sab kharid par diya GST', input.inward.allOtherItc, input.inward.contributions),
+    line('4A(3)', 'GST you already paid on purchases where you owe the tax yourself', 'ऐसी ख़रीद पर दिया GST जिसका टैक्स आपको भरना था', input.inward.reverseChargeItc, input.inward.contributions),
+    line('4A(4)', 'GST you already paid on goods brought in from outside India', 'बाहर से मँगाए सामान पर दिया GST', input.inward.importItc, input.inward.contributions),
+    line('4A(5)', 'GST you already paid on all other purchases', 'बाक़ी सब ख़रीद पर दिया GST', input.inward.allOtherItc, input.inward.contributions),
     // Issue #289, part 3 — Table 4(B)(1): credit the law does not allow (CGST s.17(5)), taken back out of 4(A).
-    line('4B', 'Credit the law does not allow (CGST s.17(5)), taken back out — Table 4(B)(1)', 'Jo credit kanoon nahin deta (CGST s.17(5)), wapas nikala — Table 4(B)(1)', input.inward.reversedItc, input.inward.contributions),
-    line('4C', 'Credit left with you after that', 'Uske baad bacha hua credit', netItc, input.inward.contributions),
+    line('4B', 'Credit the law does not allow (CGST s.17(5)), taken back out — Table 4(B)(1)', 'जो क्रेडिट क़ानून नहीं देता (CGST s.17(5)), वापस निकाला — Table 4(B)(1)', input.inward.reversedItc, input.inward.contributions),
+    line('4C', 'Credit left with you after that', 'उसके बाद बचा हुआ क्रेडिट', netItc, input.inward.contributions),
   ];
 
   const liability = sumAmounts([taxable, zeroRated, input.inward.reverseChargeLiability]);
@@ -171,13 +171,13 @@ export const buildGstr3b = (input: Gstr3bBuildInput): Gstr3bReturn => {
     heads,
     sentence: {
       'en-IN': `${formatTaxPeriod(input.period)}: you owe ${formatINR(totalLiability)} of GST on your sales, and you have ${formatINR(totalCredit)} of GST already paid on purchases to set against it.`,
-      'hi-IN': `${formatTaxPeriod(input.period)}: bikri par ${formatINR(totalLiability)} GST banta hai, aur kharid par pehle diya hua ${formatINR(totalCredit)} GST uske against hai.`,
+      'hi-IN': `${formatTaxPeriod(input.period)}: बिक्री पर ${formatINR(totalLiability)} GST बनता है, और ख़रीद पर पहले दिया हुआ ${formatINR(totalCredit)} GST उसमें से काटने के लिए है.`,
     },
     caution: {
       'en-IN':
         'These are the two sides, head by head. How much you finally pay in cash depends on the order the credit is used in, and part of that order is your choice — so it is decided when the payment is prepared, not here.',
       'hi-IN':
-        'Yeh dono taraf ka hisaab hai, head ke hisaab se. Aakhir me nakad kitna dena hai, yeh credit lagane ke kram par hai, aur us kram ka kuch hissa aapki marzi hai — isliye woh payment banate waqt tay hoga, yahan nahi.',
+        'यह दोनों तरफ़ का हिसाब है, हेड के हिसाब से. आख़िर में नक़द कितना देना है, यह क्रेडिट लगाने के क्रम पर है, और उस क्रम का कुछ हिस्सा आपकी मर्ज़ी है — इसलिए वह पेमेंट बनाते वक़्त तय होगा, यहाँ नहीं.',
     },
   };
 };
@@ -218,15 +218,15 @@ export const describeHead = (entry: Gstr3bHead): Bilingual => {
   if (entry.difference.minor > 0n) {
     return {
       'en-IN': `${entry.head}: ${formatINR(entry.difference)} more is owed than you have credit for.`,
-      'hi-IN': `${entry.head}: credit se ${formatINR(entry.difference)} zyada dena banta hai.`,
+      'hi-IN': `${entry.head}: क्रेडिट से ${formatINR(entry.difference)} ज़्यादा देना बनता है.`,
     };
   }
   if (entry.difference.minor < 0n) {
     const spare: Money = { currency: 'INR', minor: -entry.difference.minor };
     return {
       'en-IN': `${entry.head}: ${formatINR(spare)} of credit is left over.`,
-      'hi-IN': `${entry.head}: ${formatINR(spare)} ka credit bach gaya.`,
+      'hi-IN': `${entry.head}: ${formatINR(spare)} का क्रेडिट बच गया.`,
     };
   }
-  return { 'en-IN': `${entry.head}: nothing owed and nothing left over.`, 'hi-IN': `${entry.head}: na kuch dena, na kuch bacha.` };
+  return { 'en-IN': `${entry.head}: nothing owed and nothing left over.`, 'hi-IN': `${entry.head}: न कुछ देना, न कुछ बचा.` };
 };

@@ -101,7 +101,7 @@ test('a page asked for in Hindi does not come back half in English', async () =>
   for (const english of ['What is left', 'Came in', 'Kind of GST', 'Everything you earned', 'What it was', 'Still owed']) {
     assert.equal(page.includes(english), false, `"${english}" is left in English on the Hindi page`);
   }
-  assert.ok(page.includes('Godown mein kya bacha hai'));
+  assert.ok(page.includes('गोदाम में क्या बचा है'));
 });
 
 test('no page shows an internal state name where a person can see it', async () => {

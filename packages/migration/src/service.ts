@@ -203,7 +203,7 @@ export class MigrationService {
           details: {
             rows: String(sheet.rows.length),
             limit: String(MAX_ROWS_PER_FILE),
-            'hi-IN': `Is file mein ${sheet.rows.length.toLocaleString('en-IN')} line hain, aur ek file mein zyada se zyada ${MAX_ROWS_PER_FILE.toLocaleString('en-IN')} laayi ja sakti hain. Kuch nahin padha gaya. File ko chhoti files mein baantein (jaise A se M aur N se Z) aur har ek ko alag laayein.`,
+            'hi-IN': `इस फ़ाइल में ${sheet.rows.length.toLocaleString('en-IN')} लाइनें हैं, और एक फ़ाइल में ज़्यादा से ज़्यादा ${MAX_ROWS_PER_FILE.toLocaleString('en-IN')} लाई जा सकती हैं। कुछ नहीं पढ़ा गया। फ़ाइल को छोटी फ़ाइलों में बाँटिए (जैसे A से M और N से Z) और हर एक को अलग लाइए।`,
           },
         },
       );
@@ -371,7 +371,7 @@ export class MigrationService {
       errorFile: hasErrors(outcomes) ? buildErrorFile(sheet.headers, outcomes) : null,
       summary: bilingual(
         `${accepted.length} of ${outcomes.length} rows are ready to bring in. ${rejected.length} need fixing first and ${skipped.length} are already here.`,
-        `${outcomes.length} mein se ${accepted.length} rows laane ke liye taiyaar hain. ${rejected.length} ko pehle theek karna hoga aur ${skipped.length} pehle se maujood hain.`,
+        `${outcomes.length} में से ${accepted.length} रो लाने के लिए तैयार हैं। ${rejected.length} को पहले ठीक करना होगा और ${skipped.length} पहले से मौजूद हैं।`,
       ),
     };
   }
@@ -740,7 +740,7 @@ export class MigrationService {
       stockTotals: null,
       sentence: bilingual(
         `${written.partyIds.length} ${batch.entity === 'suppliers' ? 'suppliers' : 'customers'} were brought in.${carried > 0 ? ` ${carried} of them had a balance in the old system — bring those in as opening balances so your books start with them.` : ''}${refused.length > 0 ? ` ${refused.length} were left out because they are all but identical to somebody you already have: ${refused[0] as string}` : ''}`,
-        `${written.partyIds.length} ${batch.entity === 'suppliers' ? 'supplier' : 'customer'} laaye gaye.${carried > 0 ? ` Inmein se ${carried} ke purane system mein baaki thi — unhe shuruaati baaki ke roop mein laayein.` : ''}${refused.length > 0 ? ` ${refused.length} ko chhod diya gaya kyunki wo pehle se maujood kisi se lagbhag ek jaise hain.` : ''}`,
+        `${written.partyIds.length} ${batch.entity === 'suppliers' ? 'सप्लायर' : 'ग्राहक'} लाए गए।${carried > 0 ? ` इनमें से ${carried} के पुराने सिस्टम में बाक़ी थी — उन्हें शुरुआती बाक़ी के रूप में लाइए।` : ''}${refused.length > 0 ? ` ${refused.length} को छोड़ दिया गया क्योंकि वो पहले से मौजूद किसी से लगभग एक जैसे हैं।` : ''}`,
       ),
     };
   }
@@ -771,7 +771,7 @@ export class MigrationService {
       stockTotals: null,
       sentence: bilingual(
         `${written.itemIds.length} items were brought in.${refused.length > 0 ? ` ${refused.length} were left out because they are all but identical to something you already have: ${refused[0] as string}` : ''} Their counts come next, from your stock summary.`,
-        `${written.itemIds.length} saman laaye gaye.${refused.length > 0 ? ` ${refused.length} ko chhod diya gaya kyunki wo pehle se maujood kisi cheez se lagbhag ek jaise hain.` : ''} Ab inki ginti stock summary se laayein.`,
+        `${written.itemIds.length} सामान लाए गए।${refused.length > 0 ? ` ${refused.length} को छोड़ दिया गया क्योंकि वो पहले से मौजूद किसी चीज़ से लगभग एक जैसे हैं।` : ''} अब इनकी गिनती स्टॉक समरी से लाइए।`,
       ),
     };
   }
@@ -852,11 +852,11 @@ export class MigrationService {
       sentence: matchesFile
         ? bilingual(
             `${lines.length} stock lines were brought in, worth ${formatINR(recordedValue)}, which is exactly what the file said.`,
-            `${lines.length} stock lines laayi gayin, keemat ${formatINR(recordedValue)} — bilkul wahi jo file mein thi.`,
+            `${lines.length} स्टॉक लाइनें लाई गईं, कीमत ${formatINR(recordedValue)} — बिल्कुल वही जो फ़ाइल में थी।`,
           )
         : bilingual(
             `${lines.length} stock lines were brought in. Your stock now shows ${formatINR(recordedValue)} more, and the file said ${formatINR(fileValue)}. Check the difference before you bill anything.`,
-            `${lines.length} stock lines laayi gayin. Aapka stock ab ${formatINR(recordedValue)} zyada dikha raha hai, jabki file mein ${formatINR(fileValue)} tha. Bill banane se pehle antar dekh lein.`,
+            `${lines.length} स्टॉक लाइनें लाई गईं। आपका स्टॉक अब ${formatINR(recordedValue)} ज़्यादा दिखा रहा है, जबकि फ़ाइल में ${formatINR(fileValue)} था। बिल बनाने से पहले अंतर देख लीजिए।`,
           ),
     };
   }
@@ -955,11 +955,11 @@ export class MigrationService {
       sentence: check.balanced
         ? bilingual(
             `Your opening balances are in the books: ${formatINR(postedDebit)} on each side, matching the file exactly.`,
-            `Aapki shuruaati baaki khaaton mein aa gayi hai: dono taraf ${formatINR(postedDebit)}, file se bilkul milti hui.`,
+            `आपकी शुरुआती बाक़ी खातों में आ गई है: दोनों तरफ़ ${formatINR(postedDebit)}, फ़ाइल से बिल्कुल मिलती हुई।`,
           )
         : bilingual(
             `Your opening balances are in the books. The file was out by ${formatINR(subtract(fileDebit, fileCredit))}, and that difference was recorded separately with the reason you gave, so nothing is hidden.`,
-            `Aapki shuruaati baaki khaaton mein aa gayi hai. File mein ${formatINR(subtract(fileDebit, fileCredit))} ka antar tha, jo aapke diye kaaran ke saath alag se darj kiya gaya hai.`,
+            `आपकी शुरुआती बाक़ी खातों में आ गई है। फ़ाइल में ${formatINR(subtract(fileDebit, fileCredit))} का अंतर था, जो आपके दिए कारण के साथ अलग से दर्ज किया गया है।`,
           ),
     };
   }

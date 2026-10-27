@@ -44,6 +44,11 @@ const previousMonth = (today: IsoDate): { year: number; month: number } => {
 
 const described = (en: string, hi: string): Bilingual => ({ 'en-IN': en, 'hi-IN': hi });
 
+/** Hindi month names for the named-month period, by month number (1 = जनवरी). */
+const HI_MONTHS: readonly string[] = [
+  'जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर',
+];
+
 const daysBefore = (today: IsoDate, days: number): IsoDate => {
   const at = Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10)));
   const then = new Date(at - days * 86_400_000);
@@ -64,11 +69,11 @@ export const resolvePeriod = (question: string, today: IsoDate): ResolvedPeriod 
   const month = Number(today.slice(5, 7));
 
   if (/\b(today|aaj)\b/.test(text)) {
-    return { from: today, to: today, described: described('today', 'aaj'), assumed: false };
+    return { from: today, to: today, described: described('today', 'आज'), assumed: false };
   }
   if (/\b(yesterday|kal\s+tak|beeta\s+kal)\b/.test(text)) {
     const then = daysBefore(today, 1);
-    return { from: then, to: then, described: described('yesterday', 'kal'), assumed: false };
+    return { from: then, to: then, described: described('yesterday', 'कल'), assumed: false };
   }
 
   const lastDays = /\b(?:last|past|pichhle|pichle)\s+(\d{1,3})\s+(?:days?|din)\b/.exec(text);
@@ -77,7 +82,7 @@ export const resolvePeriod = (question: string, today: IsoDate): ResolvedPeriod 
     return {
       from: daysBefore(today, days - 1),
       to: today,
-      described: described(`the last ${days} days`, `pichhle ${days} din`),
+      described: described(`the last ${days} days`, `पिछले ${days} दिन`),
       assumed: false,
     };
   }
@@ -85,11 +90,11 @@ export const resolvePeriod = (question: string, today: IsoDate): ResolvedPeriod 
   if (/\b(last month|previous month|pichhle mahine|pichle mahine|pichhle maheene)\b/.test(text)) {
     const previous = previousMonth(today);
     const range = monthRange(monthKey(previous.year, previous.month));
-    return { ...range, described: described('last month', 'pichhle mahine'), assumed: false };
+    return { ...range, described: described('last month', 'पिछले महीने'), assumed: false };
   }
   if (/\b(this month|is mahine|is maheene|current month)\b/.test(text)) {
     const range = monthRange(monthKey(year, month));
-    return { ...range, described: described('this month', 'is mahine'), assumed: false };
+    return { ...range, described: described('this month', 'इस महीने'), assumed: false };
   }
 
   if (/\b(last (?:financial )?year|pichhle saal|pichle saal|previous year)\b/.test(text)) {
@@ -98,7 +103,7 @@ export const resolvePeriod = (question: string, today: IsoDate): ResolvedPeriod 
     const range = financialYearRange(`${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`);
     return {
       ...range,
-      described: described(`last financial year (${startYear}-${String((startYear + 1) % 100).padStart(2, '0')})`, `pichhla saal (${startYear}-${String((startYear + 1) % 100).padStart(2, '0')})`),
+      described: described(`last financial year (${startYear}-${String((startYear + 1) % 100).padStart(2, '0')})`, `पिछला साल (${startYear}-${String((startYear + 1) % 100).padStart(2, '0')})`),
       assumed: false,
     };
   }
@@ -108,7 +113,7 @@ export const resolvePeriod = (question: string, today: IsoDate): ResolvedPeriod 
     return {
       from: range.from,
       to: today,
-      described: described(`this financial year (${financialYear}) up to today`, `is saal (${financialYear}) aaj tak`),
+      described: described(`this financial year (${financialYear}) up to today`, `इस साल (${financialYear}) आज तक`),
       assumed: false,
     };
   }
@@ -122,17 +127,17 @@ export const resolvePeriod = (question: string, today: IsoDate): ResolvedPeriod 
     const range = monthRange(monthKey(namedYear, candidate.month));
     return {
       ...range,
-      described: described(`${candidate.names[0]} ${namedYear}`, `${candidate.names[0]} ${namedYear}`),
+      described: described(`${candidate.names[0]} ${namedYear}`, `${HI_MONTHS[candidate.month - 1]} ${namedYear}`),
       assumed: false,
     };
   }
 
   const range = monthRange(monthKey(year, month));
-  return { ...range, described: described('this month', 'is mahine'), assumed: true };
+  return { ...range, described: described('this month', 'इस महीने'), assumed: true };
 };
 
 /** What the answer says when it had to assume the period. */
 export const ASSUMED_PERIOD_NOTE = (period: ResolvedPeriod): Bilingual => ({
   'en-IN': `You did not say which period, so this is ${period.described['en-IN']}. Ask again with a month or a year if you meant something else.`,
-  'hi-IN': `Aapne samay nahin bataya, isliye yeh ${period.described['hi-IN']} ka hai. Koi aur samay chahiye to mahina ya saal batakar dobara poochein.`,
+  'hi-IN': `आपने समय नहीं बताया, इसलिए यह ${period.described['hi-IN']} का है. कोई और समय चाहिए तो महीना या साल बताकर दोबारा पूछिए.`,
 });

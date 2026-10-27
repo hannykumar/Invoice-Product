@@ -598,7 +598,7 @@ export class ItcReconciliationService {
       rejected: input.rejected,
       sentence: {
         'en-IN': `${documents.length} ${documents.length === 1 ? 'purchase' : 'purchases'} for ${formatTaxPeriod(input.period)} ${RECORD_SOURCE_PLAIN[input.source]['en-IN']}: ${counts.added} new, ${counts.replaced} updated${input.rejected.length === 0 ? '' : `, ${input.rejected.length} could not be read`}.`,
-        'hi-IN': `${formatTaxPeriod(input.period)} ki ${documents.length} kharid ${RECORD_SOURCE_PLAIN[input.source]['hi-IN']}: ${counts.added} nayi, ${counts.replaced} badli${input.rejected.length === 0 ? '' : `, ${input.rejected.length} padhi nahin ja saki`}.`,
+        'hi-IN': `${formatTaxPeriod(input.period)} की ${documents.length} ख़रीद ${RECORD_SOURCE_PLAIN[input.source]['hi-IN']}: ${counts.added} नई, ${counts.replaced} बदली${input.rejected.length === 0 ? '' : `, ${input.rejected.length} पढ़ी नहीं जा सकी`}.`,
       },
     };
     await this.#batches.insert(batch);
@@ -663,11 +663,11 @@ export class ItcReconciliationService {
         lineKey: null,
         message: {
           'en-IN': `Nothing has been brought in from the government's record for ${formatTaxPeriod(period)}, so none of these purchases has been checked against what your suppliers filed.`,
-          'hi-IN': `${formatTaxPeriod(period)} ke liye sarkari record se kuch nahin liya gaya, isliye in kharidon ko supplier ki filing se milaya nahin gaya hai.`,
+          'hi-IN': `${formatTaxPeriod(period)} के लिए सरकारी रिकॉर्ड से कुछ नहीं लिया गया, इसलिए इन ख़रीदों को सप्लायर की filing से मिलाया नहीं गया है.`,
         },
         whatToDo: {
           'en-IN': 'Download the GSTR-2B file for this month from the portal and import it here. If you cannot download it, type the rows in from the portal screen — either way works.',
-          'hi-IN': 'Portal se is mahine ki GSTR-2B file lekar yahan import kijiye. Download na ho paye to portal dekh kar rows haath se likh dijiye — dono chalta hai.',
+          'hi-IN': 'पोर्टल से इस महीने की GSTR-2B फ़ाइल लेकर यहाँ import कीजिए. डाउनलोड न हो पाए तो पोर्टल देखकर rows हाथ से लिख दीजिए — दोनों चलता है.',
         },
       });
     }
@@ -687,11 +687,11 @@ export class ItcReconciliationService {
         lineKey: null,
         message: {
           'en-IN': `${formatINR(totalTaxOf(sumAmounts(expiring.map((line) => line.heldBack))))} of GST on ${expiring.length} ${expiring.length === 1 ? 'bill is' : 'bills is'} still unclaimed, and the last date for ${expiring.length === 1 ? 'it' : 'them'} is ${formatClaimDate(deadline)}: ${expiring.slice(0, 5).map((line) => `${line.book?.number ?? ''} ${formatINR(totalTaxOf(line.heldBack))}`).join(', ')}.`,
-          'hi-IN': `${expiring.length} bill ka ${formatINR(totalTaxOf(sumAmounts(expiring.map((line) => line.heldBack))))} GST abhi tak nahin liya gaya, aur aakhri tareekh ${formatClaimDate(deadline)} hai: ${expiring.slice(0, 5).map((line) => `${line.book?.number ?? ''} ${formatINR(totalTaxOf(line.heldBack))}`).join(', ')}.`,
+          'hi-IN': `${expiring.length} बिल का ${formatINR(totalTaxOf(sumAmounts(expiring.map((line) => line.heldBack))))} GST अभी तक नहीं लिया गया, और आख़िरी तारीख़ ${formatClaimDate(deadline)} है: ${expiring.slice(0, 5).map((line) => `${line.book?.number ?? ''} ${formatINR(totalTaxOf(line.heldBack))}`).join(', ')}.`,
         },
         whatToDo: {
           'en-IN': `Settle these before ${formatClaimDate(deadline)}. After that date the credit is gone for good — section 16(4) allows no extension, and the largest amounts are listed first.`,
-          'hi-IN': `Inhe ${formatClaimDate(deadline)} se pehle nipta lijiye. Us tareekh ke baad credit hamesha ke liye chala jayega — section 16(4) mein koi chhoot nahin. Badi rakam pehle di gayi hai.`,
+          'hi-IN': `इन्हें ${formatClaimDate(deadline)} से पहले निपटा लीजिए. उस तारीख़ के बाद क्रेडिट हमेशा के लिए चला जाएगा — section 16(4) में कोई छूट नहीं. बड़ी रक़म पहले दी गई है.`,
         },
       });
     }
@@ -704,11 +704,11 @@ export class ItcReconciliationService {
         lineKey: null,
         message: {
           'en-IN': `${withoutGstin.length} ${withoutGstin.length === 1 ? 'bill has' : 'bills have'} no GST number for the supplier, so ${withoutGstin.length === 1 ? 'it cannot' : 'they cannot'} be compared with the government's record at all.`,
-          'hi-IN': `${withoutGstin.length} bill par supplier ka GST number nahin hai, isliye unhen sarkari record se milaya hi nahin ja sakta.`,
+          'hi-IN': `${withoutGstin.length} बिल पर सप्लायर का GST नंबर नहीं है, इसलिए उन्हें सरकारी रिकॉर्ड से मिलाया ही नहीं जा सकता.`,
         },
         whatToDo: {
           'en-IN': 'Add the supplier\'s GST number to the supplier record and open this month again. Until then no credit is being taken on those bills.',
-          'hi-IN': 'Supplier ke record mein unka GST number daal kar yeh mahina dobara kholiye. Tab tak un bills par credit nahin liya ja raha.',
+          'hi-IN': 'सप्लायर के रिकॉर्ड में उनका GST नंबर डालकर यह महीना दोबारा खोलिए. तब तक उन बिलों पर क्रेडिट नहीं लिया जा रहा.',
         },
       });
     }
@@ -731,7 +731,7 @@ export class ItcReconciliationService {
       findings,
       sentence: {
         'en-IN': `${formatTaxPeriod(period)}: ${formatINR(claimedTax)} of GST on your purchases is safe to claim this month, and ${formatINR(heldTax)} is being held back${heldTax.minor === 0n || waitingBills === 0 ? '' : ` on ${waitingBills} ${waitingBills === 1 ? 'bill that still needs' : 'bills that still need'} an answer`}.`,
-        'hi-IN': `${formatTaxPeriod(period)}: aapki kharid par ${formatINR(claimedTax)} GST is mahine lena theek hai, aur ${formatINR(heldTax)} roka gaya hai${heldTax.minor === 0n || waitingBills === 0 ? '' : `, ${waitingBills} bill par abhi jawab chahiye`}.`,
+        'hi-IN': `${formatTaxPeriod(period)}: आपकी ख़रीद पर ${formatINR(claimedTax)} GST इस महीने लेना ठीक है, और ${formatINR(heldTax)} रोका गया है${heldTax.minor === 0n || waitingBills === 0 ? '' : `, ${waitingBills} बिल पर अभी जवाब चाहिए`}.`,
       },
       returnLinkage: linkage,
     };
@@ -773,7 +773,7 @@ export const emptyLinkage = (period: TaxPeriod): Gstr3bLinkage => ({
   contributions: [],
   caution: {
     'en-IN': 'No purchases have been reconciled for this month yet.',
-    'hi-IN': 'Is mahine ki koi kharid abhi milayi nahin gayi hai.',
+    'hi-IN': 'इस महीने की कोई ख़रीद अभी मिलाई नहीं गई है.',
   },
 });
 

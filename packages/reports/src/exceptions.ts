@@ -79,11 +79,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       severity: 'BLOCKING',
       what: {
         'en-IN': 'The two sides of your books do not add up to the same figure.',
-        'hi-IN': 'Aapki books ke dono taraf ka jod barabar nahin hai.',
+        'hi-IN': 'आपकी बुक्स के दोनों तरफ़ का जोड़ बराबर नहीं है।',
       },
       why: {
         'en-IN': 'Every entry puts the same amount on both sides. If they differ, something was saved without going through the usual path, and no figure on these pages can be trusted until it is found.',
-        'hi-IN': 'Har entry dono taraf ek hi rakam daalti hai. Farq hai to kuch seedhe raste ke bahar se save hua hai, aur jab tak wo milta nahin, in panno ka koi aankda bharosemand nahin.',
+        'hi-IN': 'हर एंट्री दोनों तरफ़ एक ही रक़म डालती है। फ़र्क़ है तो कुछ सीधे रस्ते के बाहर से सेव हुआ है, और जब तक वो मिलता नहीं, इन पन्नों का कोई आँकड़ा भरोसेमंद नहीं।',
       },
       amount: { currency: 'INR', minor: debits - credits },
       records: [],
@@ -99,11 +99,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       severity: 'NEEDS_A_DECISION',
       what: {
         'en-IN': `Your goods are worth ${formatINR(counted.amount)} by the movements, but the books carry ${formatINR(booked.amount)} for them.`,
-        'hi-IN': `Movements ke hisaab se aapka maal ${formatINR(counted.amount)} ka hai, par books mein uske ${formatINR(booked.amount)} likhe hain.`,
+        'hi-IN': `मूवमेंट के हिसाब से आपका माल ${formatINR(counted.amount)} का है, पर बुक्स में उसके ${formatINR(booked.amount)} लिखे हैं।`,
       },
       why: {
         'en-IN': 'The value of goods is not yet written into the books when they move. Until purchase recording is finished, the balance sheet shows what the books hold and this page shows what the godown holds.',
-        'hi-IN': 'Maal ki keemat abhi movement ke saath books mein nahin likhi jaati. Kharid ka hissa poora hone tak, balance sheet books ka aankda dikhaati hai aur yeh panna godown ka.',
+        'hi-IN': 'माल की कीमत बुक्स में नहीं लिखी जाती। ख़रीद पूरी होने तक बैलेंस शीट बुक्स का आँकड़ा दिखाती है और यह पन्ना गोदाम का।',
       },
       amount: gap,
       records: [...counted.contributors, ...booked.contributors],
@@ -117,11 +117,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       severity: 'NEEDS_A_DECISION',
       what: {
         'en-IN': `${count(unpriced.length, 'bill', 'bills')} went out without a GST rate the product could stand behind.`,
-        'hi-IN': `${count(unpriced.length, 'bill', 'bill')} aise gaye jinka GST rate product khud se pakka nahin kar saka.`,
+        'hi-IN': `${count(unpriced.length, 'बिल', 'बिल')} ऐसे गए जिनका GST रेट प्रोडक्ट ख़ुद से पक्का नहीं कर सका।`,
       },
       why: {
         'en-IN': 'A rate is either taken from the notification it comes from or declared by you, with your reason recorded. It is never picked because it looked likely.',
-        'hi-IN': 'Rate ya to us notification se aata hai jahan se wo nikla hai, ya aap khud batate hain aur kaaran likha jaata hai. Andaaze se kabhi nahin chunaa jaata.',
+        'hi-IN': 'रेट या तो उस नोटिफ़िकेशन से आता है जहाँ से वो निकला है, या आप ख़ुद बताते हैं और कारण लिखा जाता है। अंदाज़े से कभी नहीं चुना जाता।',
       },
       amount: nil(),
       records: unpriced.map((row) => ({
@@ -146,11 +146,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       severity: 'WORTH_KNOWING',
       what: {
         'en-IN': `${count(stuck.length, 'bill is', 'bills are')} waiting and ${stuck.length === 1 ? 'has' : 'have'} not been given to anyone yet.`,
-        'hi-IN': `${count(stuck.length, 'bill', 'bill')} ruke hue hain aur abhi kisi ko diye nahin gaye.`,
+        'hi-IN': `${count(stuck.length, 'बिल', 'बिल')} रुके हुए हैं और अभी किसी को दिए नहीं गए।`,
       },
       why: {
         'en-IN': 'A bill that has not been issued is not a sale, so none of these are counted in what you earned. They are listed so nobody forgets them.',
-        'hi-IN': 'Jo bill diya hi nahin gaya wo bikri nahin hai, isliye kamai mein inhein nahin gina gaya. Yaad rahe, isliye yahan likhe hain.',
+        'hi-IN': 'जो बिल दिया ही नहीं गया वो बिक्री नहीं है, इसलिए कमाई में इन्हें नहीं गिना गया। याद रहे, इसलिए यहाँ लिखे हैं।',
       },
       amount: nil(),
       records: stuck.map((invoice) => ({
@@ -173,11 +173,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       severity: 'NEEDS_A_DECISION',
       what: {
         'en-IN': `${count(onAccount.length, 'person has', 'people have')} money with you that is not against any bill.`,
-        'hi-IN': `${count(onAccount.length, 'aadmi', 'logon')} ka paisa aapke paas hai jo kisi bill ke saamne nahin laga.`,
+        'hi-IN': `${count(onAccount.length, 'आदमी', 'लोगों')} का पैसा आपके पास है जो किसी बिल के सामने नहीं लगा।`,
       },
       why: {
         'en-IN': 'Money is never attached to whichever bill looks closest. It waits here, visible, until someone says which bill it settles.',
-        'hi-IN': 'Paisa apne aap kisi bhi bill par nahin lagta. Jab tak koi batata nahin ki kis bill ka hai, wo yahan saamne pada rehta hai.',
+        'hi-IN': 'पैसा अपने आप किसी भी बिल पर नहीं लगता। जब तक कोई बताता नहीं कि किस बिल का है, वो यहाँ सामने पड़ा रहता है।',
       },
       amount: { currency: 'INR', minor: onAccount.reduce((total, r) => total + r.onAccount.minor, 0n) },
       records: onAccount.map((row) => ({
@@ -200,11 +200,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       severity: 'WORTH_KNOWING',
       what: {
         'en-IN': `Cheques worth ${formatINR({ currency: 'INR', minor: cheques.reduce((t, r) => t + r.chequesNotCleared.minor, 0n) })} have been taken but have not turned into money yet.`,
-        'hi-IN': `${formatINR({ currency: 'INR', minor: cheques.reduce((t, r) => t + r.chequesNotCleared.minor, 0n) })} ke cheque liye to hain, par abhi paise nahin bane.`,
+        'hi-IN': `${formatINR({ currency: 'INR', minor: cheques.reduce((t, r) => t + r.chequesNotCleared.minor, 0n) })} के चेक लिए तो हैं, पर अभी पैसे नहीं बने।`,
       },
       why: {
         'en-IN': 'A cheque is counted as money only when the bank has paid it. Until then it is shown on its own, so a bounced one is not a surprise three weeks later.',
-        'hi-IN': 'Cheque tabhi paisa maana jaata hai jab bank de deta hai. Tab tak wo alag dikhta hai, taaki bounce hone par teen hafte baad chaunkna na pade.',
+        'hi-IN': 'चेक तभी पैसा माना जाता है जब बैंक दे देता है। तब तक वो अलग दिखता है, ताकि बाउंस होने पर तीन हफ़्ते बाद चौंकना न पड़े।',
       },
       amount: { currency: 'INR', minor: cheques.reduce((total, r) => total + r.chequesNotCleared.minor, 0n) },
       records: cheques.map((row) => ({
@@ -228,11 +228,11 @@ export const exceptionsBody = (input: ExceptionsInput): ExceptionsBody => {
       exceptions.length === 0
         ? {
             'en-IN': 'Nothing on these pages needs a second look.',
-            'hi-IN': 'In panno mein kuch bhi dobara dekhne layak nahin hai.',
+            'hi-IN': 'इन पन्नों में कुछ भी दोबारा देखने लायक़ नहीं है।',
           }
         : {
             'en-IN': `${count(exceptions.length, 'thing needs', 'things need')} a look before you rely on these pages.`,
-            'hi-IN': `In panno par bharosa karne se pehle ${count(exceptions.length, 'cheez', 'cheezein')} dekhni chahiye.`,
+            'hi-IN': `इन पन्नों पर भरोसा करने से पहले ${count(exceptions.length, 'चीज़', 'चीज़ें')} देखनी चाहिए।`,
           },
   };
 };

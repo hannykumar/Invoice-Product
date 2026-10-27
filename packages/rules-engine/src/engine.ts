@@ -53,15 +53,15 @@ export interface RulesEngineOptions {
 const CANNOT_DECIDE_TEMPLATES = {
   noRule: {
     'en-IN': 'We do not have a rule for {topic} yet, so we will not put a figure on this.',
-    'hi-IN': '{topic} ke liye abhi hamare paas niyam nahin hai, isliye hum koi aankda nahin lagayenge.',
+    'hi-IN': '{topic} के लिए अभी हमारे पास नियम नहीं है, इसलिए हम कोई आँकड़ा नहीं लगाएँगे.',
   },
   conflict: {
     'en-IN': 'Two rules for {topic} disagree and neither takes precedence, so a person must decide.',
-    'hi-IN': '{topic} ke do niyam alag kehte hain aur koi bhi upar nahin hai, isliye faisla ek vyakti karega.',
+    'hi-IN': '{topic} के दो नियम अलग कहते हैं और कोई भी ऊपर नहीं है, इसलिए फ़ैसला एक व्यक्ति करेगा.',
   },
   missing: {
     'en-IN': 'We cannot decide {topic} yet. We still need: {missing}.',
-    'hi-IN': '{topic} abhi tay nahin ho sakta. Abhi chahiye: {missing}.',
+    'hi-IN': '{topic} अभी तय नहीं हो सकता. अभी चाहिए: {missing}.',
   },
 } as const;
 

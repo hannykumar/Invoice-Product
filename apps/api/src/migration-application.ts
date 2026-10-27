@@ -95,7 +95,7 @@ const makeRoomFor = (owner: RequestContext, at: number): void => {
         details: {
           open: String(company),
           limit: String(WORKSPACES_PER_COMPANY),
-          'hi-IN': `Aapke business ke ${WORKSPACES_PER_COMPANY} import doosri screen par pehle se khule hain. Unmein se ek poora karein, ya ruk jaayein: jis import ko 2 ghante tak kisi ne nahin chhua, wo apne aap band ho jaata hai.`,
+          'hi-IN': `आपके बिज़नेस के ${WORKSPACES_PER_COMPANY} इम्पोर्ट दूसरी स्क्रीन पर पहले से खुले हैं। उनमें से एक पूरा कीजिए, या रुक जाइए: जिस इम्पोर्ट को 2 घंटे तक किसी ने नहीं छुआ, वो अपने आप बंद हो जाता है।`,
         },
       },
     );

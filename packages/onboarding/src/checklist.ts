@@ -13,44 +13,44 @@ export type Locale = 'en-IN' | 'hi-IN';
 
 const STEP_TEXT: Record<StepId, { title: Record<Locale, string>; why: Record<Locale, string> }> = {
   business: {
-    title: { 'en-IN': 'About your business', 'hi-IN': 'Aapke business ke baare mein' },
-    why: { 'en-IN': 'The name and place that go on every bill.', 'hi-IN': 'Naam aur jagah, jo har bill par aate hain.' },
+    title: { 'en-IN': 'About your business', 'hi-IN': 'आपके बिज़नेस के बारे में' },
+    why: { 'en-IN': 'The name and place that go on every bill.', 'hi-IN': 'नाम और जगह, जो हर बिल पर आते हैं।' },
   },
   tax_profile: {
-    title: { 'en-IN': 'GST details', 'hi-IN': 'GST ki jaankari' },
-    why: { 'en-IN': 'Whether you are registered, and from when we keep your books.', 'hi-IN': 'Aap registered hain ya nahin, aur kab se hisaab rakhein.' },
+    title: { 'en-IN': 'GST details', 'hi-IN': 'GST की जानकारी' },
+    why: { 'en-IN': 'Whether you are registered, and from when we keep your books.', 'hi-IN': 'आप रजिस्टर्ड हैं या नहीं, और कब से हिसाब रखें।' },
   },
   branding: {
-    title: { 'en-IN': 'How your bill looks', 'hi-IN': 'Aapka bill kaisa dikhe' },
-    why: { 'en-IN': 'Pick a design and add your logo. You can change this later.', 'hi-IN': 'Design chunein aur logo lagayein. Baad mein badal sakte hain.' },
+    title: { 'en-IN': 'How your bill looks', 'hi-IN': 'आपका बिल कैसा दिखे' },
+    why: { 'en-IN': 'Pick a design and add your logo. You can change this later.', 'hi-IN': 'डिज़ाइन चुनिए और लोगो लगाइए। बाद में बदल सकते हैं।' },
   },
   items: {
-    title: { 'en-IN': 'What you sell', 'hi-IN': 'Aap kya bechte hain' },
-    why: { 'en-IN': 'Add a few things to start with. More can be added any time.', 'hi-IN': 'Shuruaat ke liye kuch cheezein jodein. Aur kabhi bhi jod sakte hain.' },
+    title: { 'en-IN': 'What you sell', 'hi-IN': 'आप क्या बेचते हैं' },
+    why: { 'en-IN': 'Add a few things to start with. More can be added any time.', 'hi-IN': 'शुरुआत के लिए कुछ चीज़ें जोड़िए। और कभी भी जोड़ सकते हैं।' },
   },
   rates: {
-    title: { 'en-IN': 'The GST you charge', 'hi-IN': 'Aap jo GST lagate hain' },
+    title: { 'en-IN': 'The GST you charge', 'hi-IN': 'आप जो GST लगाते हैं' },
     why: {
       'en-IN': 'Tell us the rates you charge today. We record them as yours, and we do not claim to have checked them.',
-      'hi-IN': 'Aaj aap jo rate lagate hain woh batayein. Hum unhe aapke rate ki tarah rakhenge, jaanchne ka daawa nahin karenge.',
+      'hi-IN': 'आज आप जो रेट लगाते हैं वो बताइए। हम उन्हें आपके रेट की तरह रखेंगे, जाँचने का दावा नहीं करेंगे।',
     },
   },
   opening_balances: {
-    title: { 'en-IN': 'What you already had', 'hi-IN': 'Jo pehle se tha' },
-    why: { 'en-IN': 'Cash, bank, who owes you and whom you owe, on the day you start here.', 'hi-IN': 'Nakad, bank, kisse lena aur kisko dena — shuru karne ke din.' },
+    title: { 'en-IN': 'What you already had', 'hi-IN': 'जो पहले से था' },
+    why: { 'en-IN': 'Cash, bank, who owes you and whom you owe, on the day you start here.', 'hi-IN': 'नक़द, बैंक, किससे लेना और किसको देना — शुरू करने के दिन।' },
   },
   ready: {
-    title: { 'en-IN': 'Ready to bill', 'hi-IN': 'Bill banane ke liye taiyaar' },
-    why: { 'en-IN': 'Everything is in place. Make your first bill.', 'hi-IN': 'Sab taiyaar hai. Apna pehla bill banayein.' },
+    title: { 'en-IN': 'Ready to bill', 'hi-IN': 'बिल बनाने के लिए तैयार' },
+    why: { 'en-IN': 'Everything is in place. Make your first bill.', 'hi-IN': 'सब तैयार है। अपना पहला बिल बनाइए।' },
   },
 };
 
 const STATE_TEXT: Record<StepState, Record<Locale, string>> = {
-  NOT_STARTED: { 'en-IN': 'Not started', 'hi-IN': 'Shuru nahin hua' },
-  IN_PROGRESS: { 'en-IN': 'In progress', 'hi-IN': 'Chal raha hai' },
-  NEEDS_ATTENTION: { 'en-IN': 'Needs your attention', 'hi-IN': 'Aapke dhyaan ki zaroorat' },
-  DONE: { 'en-IN': 'Done', 'hi-IN': 'Ho gaya' },
-  SKIPPED: { 'en-IN': 'Skipped for now', 'hi-IN': 'Abhi ke liye chhoda' },
+  NOT_STARTED: { 'en-IN': 'Not started', 'hi-IN': 'शुरू नहीं हुआ' },
+  IN_PROGRESS: { 'en-IN': 'In progress', 'hi-IN': 'चल रहा है' },
+  NEEDS_ATTENTION: { 'en-IN': 'Needs your attention', 'hi-IN': 'आपके ध्यान की ज़रूरत' },
+  DONE: { 'en-IN': 'Done', 'hi-IN': 'हो गया' },
+  SKIPPED: { 'en-IN': 'Skipped for now', 'hi-IN': 'अभी के लिए छोड़ा' },
 };
 
 export interface ChecklistItem {
@@ -94,10 +94,10 @@ export const checklistFor = (session: OnboardingSession, locale: Locale): Checkl
   const summary =
     session.state === 'COMPLETED'
       ? locale === 'hi-IN'
-        ? 'Setup poora ho gaya. Ab bill bana sakte hain.'
+        ? 'सेटअप पूरा हो गया। अब बिल बना सकते हैं।'
         : 'Setup is finished. You can start billing.'
       : locale === 'hi-IN'
-        ? `${doneCount} of ${needed.length} ho gaya.`
+        ? `${needed.length} में से ${doneCount} हो गया।`
         : `${doneCount} of ${needed.length} done.`;
 
   return { items, doneCount, totalCount: needed.length, summary, nextStep, canFinish };
@@ -135,7 +135,7 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
     session.answers.openingBalances.length === 0
       ? ''
       : `<section class="panel">
-          <h2>${escapeHtml(locale === 'hi-IN' ? 'Jo pehle se tha' : 'What you already had')}</h2>
+          <h2>${escapeHtml(locale === 'hi-IN' ? 'जो पहले से था' : 'What you already had')}</h2>
           <table>
             ${session.answers.openingBalances
               .map(
@@ -143,11 +143,11 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
                   `<tr><td>${escapeHtml(e.label)}</td><td class="num">${escapeHtml(e.debit.minor === 0n ? '' : formatINR(e.debit))}</td><td class="num">${escapeHtml(e.credit.minor === 0n ? '' : formatINR(e.credit))}</td></tr>`,
               )
               .join('')}
-            <tr class="total"><td>${escapeHtml(locale === 'hi-IN' ? 'Kul' : 'Total')}</td><td class="num">${escapeHtml(formatINR(opening.totalDebit))}</td><td class="num">${escapeHtml(formatINR(opening.totalCredit))}</td></tr>
+            <tr class="total"><td>${escapeHtml(locale === 'hi-IN' ? 'कुल' : 'Total')}</td><td class="num">${escapeHtml(formatINR(opening.totalDebit))}</td><td class="num">${escapeHtml(formatINR(opening.totalCredit))}</td></tr>
           </table>
           ${
             opening.balanced
-              ? `<p class="ok">${escapeHtml(locale === 'hi-IN' ? 'Dono taraf barabar hain.' : 'Both sides match.')}</p>`
+              ? `<p class="ok">${escapeHtml(locale === 'hi-IN' ? 'दोनों तरफ़ बराबर हैं।' : 'Both sides match.')}</p>`
               : `<p class="warn">${escapeHtml(opening.problems.find((p) => p.code === 'OPENING_UNBALANCED')?.message[locale] ?? '')}</p>`
           }
         </section>`;
@@ -156,7 +156,7 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
     session.answers.rates.length === 0
       ? ''
       : `<section class="panel">
-          <h2>${escapeHtml(locale === 'hi-IN' ? 'Aap jo GST lagate hain' : 'The GST you charge')}</h2>
+          <h2>${escapeHtml(locale === 'hi-IN' ? 'आप जो GST लगाते हैं' : 'The GST you charge')}</h2>
           <table>
             ${session.answers.rates
               .map(
@@ -167,7 +167,7 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
           </table>
           <p class="warn">${escapeHtml(
             locale === 'hi-IN'
-              ? 'Yeh rate aapke bataye hue hain. Humne inhe sarkari notification se nahin jaancha.'
+              ? 'ये रेट आपके बताए हुए हैं। हमने इन्हें सरकारी नोटिफ़िकेशन से नहीं जाँचा।'
               : 'These are the rates you told us. We have not checked them against a government notification.',
           )}</p>
         </section>`;
@@ -177,7 +177,7 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
   return `<!doctype html>
 <html lang="${locale === 'hi-IN' ? 'hi' : 'en'}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(locale === 'hi-IN' ? 'Setup' : 'Setting up')} — ${escapeHtml(business)}</title>
+<title>${escapeHtml(locale === 'hi-IN' ? 'सेटअप' : 'Setting up')} — ${escapeHtml(business)}</title>
 <style>
   :root { color-scheme: light; --ink:#12211c; --muted:#5b6b65; --line:#d8e0dc; --accent:#1f4e40; --warn:#8a5a00; --warnbg:#fff8e5; }
   * { box-sizing: border-box; }
@@ -215,14 +215,14 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
   @media (max-width: 420px) { .state { display:none; } }
 </style></head>
 <body><div class="wrap">
-  <h1>${escapeHtml(locale === 'hi-IN' ? 'Setup' : 'Setting up')} ${escapeHtml(business)}</h1>
+  <h1>${escapeHtml(locale === 'hi-IN' ? 'सेटअप' : 'Setting up')} ${escapeHtml(business)}</h1>
   <p class="sub">${escapeHtml(
     session.state === 'COMPLETED'
       ? locale === 'hi-IN'
-        ? 'Sab taiyaar hai.'
+        ? 'सब तैयार है।'
         : 'Everything is in place.'
       : locale === 'hi-IN'
-        ? 'Jahan chhoda tha wahin se shuru karein. Har jawab turant save hota hai.'
+        ? 'जहाँ छोड़ा था वहीं से शुरू कीजिए। हर जवाब तुरंत सेव होता है।'
         : 'Pick up where you left off. Every answer is saved as you give it.',
   )}</p>
   <div class="bar"><span></span></div>
@@ -232,10 +232,10 @@ export const renderChecklist = (session: OnboardingSession, locale: Locale): str
   ${openingPanel}
   ${
     view.canFinish
-      ? `<a class="cta" href="#">${escapeHtml(locale === 'hi-IN' ? 'Setup poora karein' : 'Finish setting up')}</a>`
+      ? `<a class="cta" href="#">${escapeHtml(locale === 'hi-IN' ? 'सेटअप पूरा कीजिए' : 'Finish setting up')}</a>`
       : view.nextStep === null
         ? ''
-        : `<a class="cta" href="#">${escapeHtml(locale === 'hi-IN' ? 'Aage badhein' : 'Continue')} — ${escapeHtml(STEP_TEXT[view.nextStep].title[locale])}</a>`
+        : `<a class="cta" href="#">${escapeHtml(locale === 'hi-IN' ? 'आगे बढ़िए' : 'Continue')} — ${escapeHtml(STEP_TEXT[view.nextStep].title[locale])}</a>`
   }
 </div></body></html>`;
 };

@@ -98,7 +98,7 @@ export const salesRegister = async (
   const total = sum(rows.map((r) => r.total));
   return bodyOf(rows, 'sales_invoice', true, {
     'en-IN': `You billed ${formatINR(total)} across ${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}.`,
-    'hi-IN': `Aapne ${rows.length} bill banaye, kul ${formatINR(total)} ke.`,
+    'hi-IN': `आपने ${rows.length} बिल बनाए, कुल ${formatINR(total)} के।`,
   });
 };
 
@@ -135,7 +135,7 @@ export const purchaseRegister = async (
       ? `You bought ${formatINR(total)} across ${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}.`
       : 'Purchase bills are not being recorded in this product yet, so this part is empty on purpose.',
     'hi-IN': purchases.available
-      ? `Aapne ${rows.length} bill par kul ${formatINR(total)} ki kharid ki.`
-      : 'Kharid ke bill abhi is product mein darj nahin ho rahe, isliye yeh hissa jaan-boojh kar khaali hai.',
+      ? `आपने ${rows.length} बिल पर कुल ${formatINR(total)} की ख़रीद की।`
+      : 'ख़रीद के बिल अभी इस प्रोडक्ट में दर्ज नहीं हो रहे, इसलिए यह हिस्सा जान-बूझ कर ख़ाली है।',
   });
 };

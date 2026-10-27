@@ -188,7 +188,7 @@ describe('usage is counted once, and exactly once', () => {
     const entitlement = await desk.service.check(desk.actor, 'sales.issue_invoice', TODAY);
     assert.equal(entitlement.outcome, 'ALLOWED');
     assert.match(entitlement.reason['en-IN'], /2 of 50 bills left this month/);
-    assert.match(entitlement.reason['hi-IN'], /baaki hain/);
+    assert.match(entitlement.reason['hi-IN'], /बाक़ी हैं/);
   });
 });
 

@@ -173,7 +173,7 @@ test('the deadline is 30 November after the bill\'s financial year, and the warn
   assert.equal(checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2027-11-30')).late, false);
   assert.equal(checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2027-12-01')).late, true);
   assert.equal(
-    checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2027-11-05')).warning,
+    checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2027-11-05')).warning?.['en-IN'],
     'The last day to issue a credit note that reduces GST for bills of 2026-27 is 30 November 2027.',
   );
   assert.equal(checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2026-09-20')).warning, null);
