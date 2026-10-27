@@ -159,6 +159,7 @@ async function freshSale() {
 }
 /** Waits until the Payment slide's own check has settled on what is typed. */
 const settledReview = () => page.waitForFunction(() => !(document.querySelector('#sale-review-ok') as HTMLElement).hidden);
+const calls = (from: number) => harness.sent.slice(from).map((request) => `${request.method} ${request.path}`);
 const sendsOf = (path: string, from: number) => harness.sent.slice(from).filter((request) => request.path === path).map((request) => JSON.parse(request.body!) as Record<string, string>);
 
 test('the payment slide offers six ways to pay: part paid asks for an amount, udhaar for the days, and a cheque is sent to its own screen', async () => {
@@ -287,4 +288,38 @@ test('when the server cannot price the bill yet, the figures stay as dashes rath
     // The shown subtotal is only the sum of what was typed (before tax) — the one figure the page may add up.
     assert.match(await textOf(page, '[data-draft="sale"] [data-calculated="subtotal"]'), /^₹200\.00$/);
   } finally { restore(); }
+});
+
+test('an issued bill can be cancelled, but only with a reason; what cancelling does is shown first', async () => {
+  await freshSale();
+  await pickItem('TMT');
+  await typeInto('#sale-lines [data-line-field="quantity"]', '1');
+  await typeInto('#sale-lines [data-line-field="rate"]', '100');
+  await nextSlide('customer'); await nextSlide('payment');
+  await settledReview();
+  await page.click('#sale-next');
+  await page.waitForFunction(() => (document.querySelector('[data-slide="done"]') as HTMLElement).hidden === false, { timeout: 15_000 });
+  const number = /INV\/26-27\/\d{6}/.exec(await textOf(page, '[data-slide="done"]'))![0];
+
+  const mark = harness.sent.length;
+  await page.evaluate(() => ([...document.querySelectorAll('[data-slide="done"] button')].find((button) => (button as HTMLElement).innerText === 'Cancel this bill') as HTMLElement).click());
+  await page.waitForFunction(() => (document.querySelector('#cancel-bill-dialog') as HTMLDialogElement).open);
+  await harness.requested('/api/sales/cancel/preview', mark);
+  await page.waitForFunction(() => document.querySelector('#cancel-bill-message')!.textContent!.trim() !== '');
+  assert.equal(await textOf(page, '#cancel-bill-message'), `${number} for ₹118.00 will be cancelled.`);
+  assert.match(await textOf(page, '#cancel-bill-effects'), new RegExp(`The number ${number.replaceAll('/', '\\/')} stays used and the bill stays on record, marked CANCELLED\\. No new bill will ever get this number\\.`));
+  assert.match(await textOf(page, '#cancel-bill-effects'), /1 KGS of TMT Steel Bar 12mm go back into stock\./);
+  assert.ok(!calls(mark).includes('POST /api/sales/cancel'), 'looking at what cancelling does cancels nothing');
+
+  // No reason, no cancellation: the box is required, so nothing is sent.
+  await page.click('#cancel-bill-confirm');
+  assert.ok(!calls(mark).includes('POST /api/sales/cancel'));
+  assert.equal(await page.$eval('#cancel-bill-form [name="reason"]', (box) => (box as HTMLTextAreaElement).validity.valueMissing), true);
+  await page.type('#cancel-bill-form [name="reason"]', 'Customer changed their mind');
+  await page.click('#cancel-bill-confirm');
+  const cancelled = await harness.requested('/api/sales/cancel', mark);
+  assert.equal(JSON.parse(cancelled.body!).reason, 'Customer changed their mind');
+  await page.waitForFunction(() => !(document.querySelector('#cancel-bill-dialog') as HTMLDialogElement).open);
+  // The number stays on record, marked cancelled — it is never reused.
+  await page.waitForFunction((bill) => document.body.innerText.includes(bill) && /cancelled/i.test((document.querySelector('#sale-bill-panel') as HTMLElement).innerText), {}, number);
 });

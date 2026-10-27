@@ -164,3 +164,39 @@ test('a return with the right state and a code completes the connection exactly 
   assert.equal(await page.evaluate(() => location.search), '', 'the spent code is not left in the address bar or the history');
   assert.equal(await page.evaluate(() => sessionStorage.getItem('karobar.bankConsent')), null);
 });
+
+test('Returns: a whole-bill credit note and a price correction are different choices, and a price correction must say why', async () => {
+  await open('returns');
+  await page.waitForFunction(() => document.querySelectorAll('#return-document option').length > 0);
+  const options = await page.$$eval('#return-line option', (all) => all.map((option) => (option as HTMLOptionElement).value));
+  assert.ok(options.includes('__whole__'), 'the whole bill can be credited in one go');
+  assert.equal(await isShown(page, '#return-price'), false, 'the price-correction questions are not asked of a goods return');
+  assert.equal(await page.$eval('#return-price', (box) => (box as HTMLFieldSetElement).disabled), true, 'and are not sent');
+
+  await page.select('#return-form [name="mode"]', 'PRICE');
+  await page.waitForFunction(() => !(document.querySelector('#return-price') as HTMLElement).hidden);
+  assert.equal(await page.$eval('#return-price', (box) => (box as HTMLFieldSetElement).disabled), false);
+  // Nothing is chosen for the shopkeeper: a wrong bill and a discount given afterwards are different things in law.
+  const causes = await page.$$eval('#return-form [name="cause"] option', (all) => all.map((option) => (option as HTMLOptionElement).value));
+  assert.deepEqual(causes, ['', 'INVOICE_ERROR', 'DISCOUNT_AFTER_SALE']);
+  assert.equal(await page.$eval('#return-form [name="cause"]', (select) => (select as HTMLSelectElement).value), '');
+  assert.equal(await page.$eval('#return-form [name="cause"]', (select) => (select as HTMLSelectElement).required), true);
+  const mark = harness.sent.length;
+  await page.type('#return-form [name="reason"]', 'Priced wrongly');
+  await page.click('#return-form button[type="submit"]');
+  assert.ok(!calls(mark).includes('POST /api/returns/preview'), 'without a cause the form is not sent');
+
+  // Back to a goods return: the questions go away again and the whole bill can be previewed.
+  await page.select('#return-form [name="mode"]', '');
+  await page.waitForFunction(() => (document.querySelector('#return-price') as HTMLElement).hidden);
+  assert.equal(await page.$eval('#return-price', (box) => (box as HTMLFieldSetElement).disabled), true);
+  await page.select('#return-line', '__whole__');
+  await page.type('#return-form [name="reference"]', 'CN-REF-1');
+  await page.click('#return-form button[type="submit"]');
+  const preview = await harness.requested('/api/returns/preview', mark);
+  assert.equal(JSON.parse(preview.body!).lineId, '__whole__');
+  await dialogOpen();
+  await page.waitForFunction(() => document.querySelector('#review-dialog')!.getAttribute('aria-busy') === 'false');
+  assert.ok(!calls(mark).includes('POST /api/returns/record'), 'a preview records nothing');
+  await page.keyboard.press('Escape');
+});
