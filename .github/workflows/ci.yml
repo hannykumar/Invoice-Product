@@ -104,7 +104,8 @@ jobs:
   browser:
     # Issue #355 — the flows that must never break, in a real browser against the real app on
     # real PostgreSQL: sign-up and sign-in (stand-in code), make a bill, record a purchase,
-    # prepare a GST return, upgrade plan, and invite a teammate (skipped until #343 lands).
+    # prepare a GST return, upgrade plan, and invite a teammate (skipped until #343 lands), plus the sale
+    # in slides and the page's security headers and sandbox (#496: the one browser driver is Playwright).
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:

@@ -32,7 +32,7 @@ browser suite is a separate CI job, because it needs a Chromium install.
 
 ## The flows that must never break
 
-Seven flows get a real-browser test, in `tests/browser/`, each driven through Chromium against
+Nine flows get a real-browser test, in `tests/browser/`, each driven through Chromium against
 the real web server on PostgreSQL:
 
 | Flow | Spec | What the test checks |
@@ -44,6 +44,8 @@ the real web server on PostgreSQL:
 | Prepare a GST return | `gst-returns.spec.ts` | A month with real purchases and sales is prepared and approved; the figures are then fixed. |
 | Upgrade plan | `plan.spec.ts` | Choosing a different plan changes the plan shown on the screen. |
 | Invite a teammate | `team.spec.ts` | The Team screen produces an invite link. |
+| Sale in slides | `sale-slides.spec.ts` | The sale by keyboard (₹50,150 and the e-way bill raised by itself), a three-tap walk-in sale, and the 600 KGS refusal with the purchase hand-off (#305, #311). |
+| Page security | `security-headers.spec.ts` | The page under its content policy, a hostile name staying text, the bill frame's policy and sandbox (#349, #399). |
 
 Browser tests assert what the shopkeeper reads — the bill number, the rupee total, the badge the
 books earn — not implementation details.
@@ -63,7 +65,24 @@ books earn — not implementation details.
   which is the flag the screen itself sends.
 - **Sales need the caller's `requestId`** (required since #392); purchases and returns need it
   on the same routes.
+- **The demo company is on the Free plan, which covers 50 bills.** The suite makes only a few per
+  run, but dozens of local runs on one database use them up and Make bill answers "Nothing was
+  saved". Re-seed the test database (drop it, then `npm run db:migrate && npm run db:seed`).
 - **A `.skip` carries its reason in words** — where it is blocked, and what unskips it.
+
+## One browser driver
+
+Every browser test is a Playwright spec in `tests/browser/`, run by `npm run test:browser` — the
+only browser-test command, and what the CI `browser` job runs. There is no second driver and no
+browser test inside `apps/` or `packages/`; a unit test that needs a browser is a sign it belongs
+here. (`puppeteer` stays in the dependencies for one reason only: it renders the bill PDFs in
+`packages/invoice-templates`, see ADR 0496.) `npm test` and `npm run verify` need no browser.
+
+Writing one: import `helpers.ts`, arrange through the API, sign in through the dialog, and wait with
+web-first assertions (`expect(locator).toHaveText(…)`, `expect.poll(…)`) — never a fixed sleep.
+`offline.ts` makes a page refuse any host but the local server. Things the API cannot arrange (the
+vehicle-record consent, `db.ts`) are written to the test database that `global-setup.ts` already
+insists is a test one.
 
 ## What a test must do
 
