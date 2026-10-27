@@ -75,7 +75,9 @@ function render(root, context) {
     for (const change of scheme.history) {
       history.append(row(
         `${change.effectiveFrom} · ${change.scheme === "COMPOSITION" ? say("Composition scheme", "कम्पोज़िशन स्कीम") : say("Regular", "रेगुलर")}${change.ratePercent === null ? "" : ` · ${change.ratePercent}%`}`,
-        say(`Set by ${change.declaredBy} on ${change.declaredOn}`, `${change.declaredOn} को ${change.declaredBy} ने तय किया`),
+        change.effectiveFrom > scheme.today
+          ? say(`Coming up: this starts on ${change.effectiveFrom}. Until then your bills stay as they are. Set on ${change.declaredOn}.`, `आने वाला: यह ${change.effectiveFrom} से शुरू होगा। तब तक आपके बिल वैसे ही रहेंगे। ${change.declaredOn} को तय हुआ।`)
+          : say(`Set on ${change.declaredOn}`, `${change.declaredOn} को तय हुआ`),
       ));
     }
     current.append(history);
@@ -135,8 +137,8 @@ function schemeForm({ api, say, locale, scheme }) {
   note.name = "note";
   form.append(grid);
 
-  const boxes = element("div", "", "field-grid");
-  const tick = (name, label) => { const l = element("label"); const c = element("input"); c.type = "checkbox"; c.name = name; l.append(c, document.createTextNode(` ${label}`)); boxes.append(l); return c; };
+  const boxes = element("div", "", "composition-promises");
+  const tick = (name, label) => { const l = element("label", "", "bill-choice"); const c = element("input"); c.type = "checkbox"; c.name = name; l.append(c, element("strong", label)); boxes.append(l); return c; };
   tick("newlyRegistered", say("My GST registration is new and I chose the scheme when I registered", "मेरा GST रजिस्ट्रेशन नया है और मैंने रजिस्ट्रेशन के समय स्कीम चुनी थी"));
   tick("withinLimit", say("My sales last year were within the limit", "पिछले साल की बिक्री सीमा के अंदर थी"));
   tick("noInterState", say("I do not sell to other states or abroad", "मैं दूसरे राज्यों या विदेश में नहीं बेचता"));

@@ -131,6 +131,7 @@ export class CompositionDesk {
     const history = schemeHistoryOf(this.#deps.companyId);
     const inForce = [...history].reverse().find((change) => change.effectiveFrom <= today);
     return {
+      today,
       scheme: current,
       effectiveFrom: inForce?.effectiveFrom ?? null,
       category: inForce?.category ?? null,
