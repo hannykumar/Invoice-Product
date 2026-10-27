@@ -17,6 +17,7 @@ import type { Migration } from "../../platform/src/migration-definitions.ts";
 import { enforceTenant, releaseTenant } from "./tenant-policy.ts";
 
 const TABLES = ["purchase_inbox_documents", "purchase_inbox_contents", "purchase_inbox_drafts"];
+const DECISION_TABLES = ["purchase_inbox_decisions"];
 
 const noTruncate = (table: string): string => `
     CREATE TRIGGER ${table}_no_truncate BEFORE TRUNCATE ON ${table}
@@ -111,5 +112,36 @@ export const purchaseInboxMigrations: readonly Migration[] = Object.freeze([{
     DROP TABLE IF EXISTS purchase_inbox_drafts;
     DROP TABLE IF EXISTS purchase_inbox_contents;
     DROP TABLE IF EXISTS purchase_inbox_documents;
+  `,
+}, {
+  // Issue #489 — what a person decided about a document that is already final (`draft_ready` is
+  // frozen above): "this became bill X" or "this was set aside, and why". One row per document,
+  // written once, never changed.
+  id: "20261027T224823300Z_purchasing_230a407f7be4_inbox_decisions",
+  up: `
+    CREATE TABLE purchase_inbox_decisions (
+      company_id uuid NOT NULL REFERENCES companies(id),
+      document_id uuid NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('billed','rejected')),
+      -- A rejection always says why; a bill names the supplier bill number it was recorded as.
+      reason text,
+      bill_number text,
+      supplier_name text,
+      decided_by text NOT NULL CHECK (decided_by <> ''),
+      decided_at timestamptz NOT NULL,
+      PRIMARY KEY (company_id, document_id),
+      FOREIGN KEY (company_id, document_id) REFERENCES purchase_inbox_documents(company_id, id),
+      CHECK (kind <> 'rejected' OR coalesce(reason, '') <> ''),
+      CHECK (kind <> 'billed' OR coalesce(bill_number, '') <> '')
+    );
+    CREATE TRIGGER purchase_inbox_decisions_frozen BEFORE UPDATE OR DELETE ON purchase_inbox_decisions
+      FOR EACH ROW EXECUTE FUNCTION platform_freeze_posted('', '*', '', '');
+    ${DECISION_TABLES.map(noTruncate).join("")}
+    ${enforceTenant(DECISION_TABLES)}
+    REVOKE UPDATE ON ${DECISION_TABLES.join(", ")} FROM invoice_app;
+  `,
+  down: `
+    ${releaseTenant(DECISION_TABLES)}
+    DROP TABLE IF EXISTS purchase_inbox_decisions;
   `,
 }]);

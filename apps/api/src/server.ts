@@ -74,6 +74,8 @@ const statusOf = (error: unknown): number | undefined => {
     if (error.kind === 'CONFLICT' || error.kind === 'NOT_ALLOWED') return 409;
     return 422;
   }
+  // Issue #489 — a document that is not this company's is "not found" and nothing else, so its id cannot be probed.
+  if (error instanceof InboxError) return error.code === 'INVALID_STATE' ? 409 : 404;
   if (error instanceof PlatformError) {
     if (error.code === 'FORBIDDEN') return 403;
     if (error.code === 'NOT_FOUND' || error.code === 'TENANT_ISOLATION') return 404;
@@ -157,7 +159,7 @@ const countRequest = async (runtime: ReturnType<typeof apiRuntime>, route: Route
 };
 
 /** Public routes never limited per address: the health check, and the provider callback that proves itself by its signature. */
-const UNLIMITED_PUBLIC: ReadonlySet<string> = new Set(['/api/status', '/api/webhooks/government/:kind']);
+const UNLIMITED_PUBLIC: ReadonlySet<string> = new Set(['/api/status', '/api/webhooks/government/:kind', '/api/webhooks/purchase-inbox/:channel']);
 
 async function dispatch(method: string, pathname: string, body: unknown, authorization: string | undefined, delivery: WebhookDelivery | undefined, requestId: string, clientIp?: string): Promise<ApiResult> {
   // A path the URL parser rejects (`//`, a stray space) names nothing that could exist.

@@ -217,3 +217,39 @@ export async function downloadLink(db: TransactionalExecutor | null, actor: Acto
   }
   return { file: publicFile(file), download: await objectStore().presignDownload(file.objectKey, { fileName: file.fileName, expiresInSeconds: DOWNLOAD_SECONDS }) };
 }
+
+/**
+ * Issue #489 — a supplier's bill that was put in storage and passed screening, handed to the
+ * purchase inbox. The company is the signed-in one's, so another company's file id is simply not
+ * found; a file still waiting, or held, is refused with the reason it was held for.
+ */
+export async function availableBill(db: TransactionalExecutor | null, actor: ActorContext, fileId: string): Promise<{ readonly file: StoredFile; readonly bytes: Uint8Array }> {
+  const file = await recordsOf(db).find(String(actor.companyId), fileId);
+  if (file === null || file.purpose !== 'purchase_bill') throw notFound('FILE_NOT_FOUND', 'That file was not found.');
+  if (file.state !== 'available') {
+    throw forbidden('FILE_NOT_AVAILABLE', file.state === 'quarantined' ? `This file was held and cannot be used: ${file.quarantineMessage}` : 'This file has not been checked yet. Press Done after it has been sent.');
+  }
+  const stored = await objectStore().read(file.objectKey, PURPOSES.purchase_bill.maxBytes);
+  if (stored === null) throw invalid('FILE_NOT_UPLOADED', 'The file is no longer there. Send it again.');
+  return { file, bytes: stored.bytes };
+}
+
+/**
+ * Issue #489 — puts bytes that reached the server (an email or WhatsApp delivery) in the private
+ * store, so the reader can fetch them by key like a file the browser put there. The same signed
+ * address a browser would use, taken here by the server itself. A key already holding a file is left
+ * as it is: the key is made from the file's own hash, so it is the same file.
+ */
+export async function putObject(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
+  const signed = await objectStore().presignUpload(key, { contentType, expiresInSeconds: UPLOAD_SECONDS });
+  const local = localObjectStore();
+  if (local !== null) {
+    const token = new URL(signed.url, 'http://local.invalid').searchParams.get('token') ?? '';
+    const written = await local.accept(token, { method: 'PUT', contentType, body: bytes, maxBytes: MAX_STORED_FILE_BYTES });
+    if (written.status === 200) return;
+    if (written.status === 403 && await objectStore().read(key, MAX_STORED_FILE_BYTES) !== null) return;
+    throw new Error('FILE_STORE_REFUSED');
+  }
+  const response = await fetch(signed.url, { method: signed.method, headers: signed.headers, body: bytes as BodyInit });
+  if (!response.ok) throw new Error('FILE_STORE_REFUSED');
+}

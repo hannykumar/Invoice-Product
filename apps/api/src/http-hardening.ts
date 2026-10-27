@@ -56,8 +56,15 @@ const FILE_ROUTES: ReadonlySet<string> = new Set(['/api/migration/analyse', '/ap
 export const STORED_FILE_ROUTE = '/api/files/blob';
 export const MAX_STORED_FILE_BODY_BYTES = 25 * 1024 * 1024;
 
+/**
+ * Issue #489 — an email or WhatsApp delivery carries the bill itself, as text. About 9 MB of file;
+ * a bigger one is for the provider's adapter to refuse before it reaches us (the inbox's own cap is 25 MB).
+ */
+export const MAX_DELIVERY_BODY_BYTES = 12 * 1024 * 1024;
+const DELIVERY_ROUTE = /^\/api\/webhooks\/purchase-inbox\/[^/]+$/;
+
 export const bodyLimitFor = (pathname: string): number =>
-  pathname === STORED_FILE_ROUTE ? MAX_STORED_FILE_BODY_BYTES : FILE_ROUTES.has(pathname) ? MAX_FILE_BODY_BYTES : MAX_JSON_BODY_BYTES;
+  pathname === STORED_FILE_ROUTE ? MAX_STORED_FILE_BODY_BYTES : DELIVERY_ROUTE.test(pathname) ? MAX_DELIVERY_BODY_BYTES : FILE_ROUTES.has(pathname) ? MAX_FILE_BODY_BYTES : MAX_JSON_BODY_BYTES;
 
 export class BodyTooLarge extends Error {
   readonly limit: number;
@@ -97,7 +104,7 @@ export const readLimitedBody = (request: IncomingMessage, limit: number): Promis
  * Routes another server may post to: they prove themselves with a signature over the body, not
  * with a browser's `Origin`. Today only the government callback (#389 tracks its verifier).
  */
-const SIGNED_CALLBACKS: readonly RegExp[] = [/^\/api\/webhooks\/government\/[^/]+$/];
+const SIGNED_CALLBACKS: readonly RegExp[] = [/^\/api\/webhooks\/government\/[^/]+$/, /^\/api\/webhooks\/purchase-inbox\/[^/]+$/];
 export const isSignedCallback = (pathname: string): boolean => SIGNED_CALLBACKS.some((route) => route.test(pathname));
 
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);

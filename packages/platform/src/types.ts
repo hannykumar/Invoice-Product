@@ -20,6 +20,9 @@ export type Permission =
   | "purchase.match.approve"
   // Issue #400. Claiming a held purchase document for this company, or asking for it to be read again.
   | "purchase.inbox.manage"
+  // Issue #489. Seeing the purchase inbox, and putting a supplier's bill into it from the signed-in shop.
+  | "purchase.inbox.view"
+  | "purchase.inbox.upload"
   | "supplier.risk.view"
   | "supplier.risk.acknowledge"
   | "einvoice.view"

@@ -79,7 +79,7 @@ test('#344: garbage JSON sent to any route over HTTP is a clean 400 in the one e
 
 test('#344: a body that is not an object, or a list where one value belongs, is a 400 naming the field', async () => {
   const owner = await signIn(COMPANY_A, 'owner@sampoorna.example.invalid');
-  for (const route of ROUTES.filter((candidate) => candidate.method === 'POST' && candidate.path !== '/api/webhooks/government/:kind')) {
+  for (const route of ROUTES.filter((candidate) => candidate.method === 'POST' && candidate.path !== '/api/webhooks/government/:kind' && candidate.path !== '/api/webhooks/purchase-inbox/:channel')) {
     const result = await handleApi('POST', pathOf(route.path), ['not', 'an', 'object'], route.access.kind === 'public' ? undefined : owner);
     assert.equal(result.status, 400, `${route.path} answered ${result.status} to a list`);
     const body = parse(result);
