@@ -78,6 +78,28 @@ books earn — not implementation details.
   #367) are tested against real PostgreSQL; they belong to this suite's contract even though
   they live in `test:integration`.
 
+## Database connections in integration tests (#504)
+
+A flake that says `terminating connection due to administrator command` (57P01) or `Connection
+terminated unexpectedly` is a connection the server ended, reported on whichever test happens to be
+running. Its causes are all fixed in shared code, so a test never has to defend against them:
+
+- **Always get a pool from `createDatabase()`.** It handles the pool's `error` event (an idle
+  connection ended by a restart, failover or `pg_terminate_backend`) and the checked-out client's
+  `error` event (a connection ended mid-action), so neither becomes an uncaught exception.
+  `pool-errors.integration.test.ts` kills connections on purpose, 25 rounds in one process, to keep
+  this true. Never build a bare `new Pool()` in a test or in production code.
+- **A test that runs a migration down and up, or needs a schema of its own, uses
+  `withScratchDatabase(owner, url, prefix, work)`** from `packages/platform/test/scratch-database.ts`.
+  It takes the scratch-database advisory lock so such tests take turns, closes the scratch pool
+  *before* dropping the database, and drops without `WITH (FORCE)`, which would end other
+  connections. Do not hand-roll `CREATE DATABASE` / `DROP DATABASE`.
+- **Close every pool you open** (`await db.close()`, in `finally` or `after`). Only end connections
+  you named yourself (`application_name`), never `pg_terminate_backend` on a role or database other
+  files share.
+- Do not add `retries`, sleeps or a catch-all `uncaughtException` handler to make this go away: find
+  which connection was ended, and by whom.
+
 ## Finding a test that lies
 
 The suite is reviewed like the code is. The things that get an issue filed, not a quiet fix:
