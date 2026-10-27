@@ -43,7 +43,7 @@ async function ok(method: 'GET' | 'POST', path: string, body?: Record<string, un
   const response = await fetch(`${base}${path}`, {
     method,
     headers: { 'content-type': 'application/json', ...(session === '' ? {} : { cookie: `__Host-karobar_session=${session}`, origin: base }) },
-    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+    ...(method === 'GET' ? {} : { body: JSON.stringify(body ?? {}) }),
   });
   const reply = await response.json() as Record<string, any>;
   assert.equal(response.status, 200, `${method} ${path} → ${response.status}: ${JSON.stringify(reply)}`);
