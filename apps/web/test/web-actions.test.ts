@@ -267,3 +267,45 @@ test('Purchase check: comparing a month sends the month; a typed row needs the s
   const missing = await page.$$eval('#itc-typed-form :invalid', (fields) => fields.map((field) => (field as HTMLInputElement).name));
   for (const name of ['gstin', 'number', 'taxableValue']) assert.ok(missing.includes(name), `${name} is required (missing: ${missing.join(', ')})`);
 });
+
+test('Challan: checked first, then issued with a number, then it appears among the challans issued', async () => {
+  await open('challan');
+  const mark = harness.sent.length;
+  await page.click('#challan-form button[type="submit"]');
+  const checked = await harness.requested('/api/challans/preview', mark);
+  assert.equal(JSON.parse(checked.body!).reason, 'SUPPLY_INVOICE_TO_FOLLOW');
+  await page.waitForFunction(() => (document.querySelector('#challan-issue') as HTMLElement | null)?.getClientRects().length);
+  assert.match(await screenText('challan'), /Checking saves nothing and uses no number\. The number is given only when you issue it\./);
+  assert.match(await screenText('challan'), /Challan checked/);
+  assert.ok(!calls(mark).includes('POST /api/challans/issue'), 'checking issues nothing');
+  assert.match(await screenText('challan'), /No challan has been issued yet\./);
+  await page.click('#challan-issue');
+  await harness.requested('/api/challans/issue', mark);
+  await waitForText('challan', '[A-Z]+/26-27/\\d+');
+  assert.doesNotMatch(await screenText('challan'), /No challan has been issued yet\./);
+});
+
+test('a new customer\'s state is filled in from the PIN code, and can still be chosen by hand', async () => {
+  await open('payment');
+  await page.waitForFunction(() => document.querySelectorAll('[data-draft="payment"] [name="partyId"] option').length > 1);
+  await page.select('[data-draft="payment"] [name="partyId"]', '__add__');
+  await page.waitForFunction(() => (document.querySelector('#customer-dialog') as HTMLDialogElement).open);
+  const mark = harness.sent.length;
+  await page.type('#customer-form [name="pincode"]', '411026');
+  const asked = await harness.requested('/api/pincode/state', mark);
+  assert.equal(JSON.parse(asked.body!).pincode, '411026');
+  await page.waitForFunction(() => (document.querySelector('#customer-states') as HTMLSelectElement).value === '27');
+  // A PIN code that is not six digits is not even asked about.
+  const before = harness.sent.length;
+  await page.$eval('#customer-form [name="pincode"]', (input) => { (input as HTMLInputElement).value = ''; });
+  await page.type('#customer-form [name="pincode"]', '4110');
+  assert.ok(!calls(before).includes('POST /api/pincode/state'));
+  await page.keyboard.press('Escape');
+});
+
+test('dates fill in as today, except the one that is the business\'s own promise: how long a quotation\'s price holds', async () => {
+  await open('presale');
+  const today = (await harness.api('/api/dashboard')).today as string;
+  assert.equal(await page.$eval('#presale-form [name="date"]', (input) => (input as HTMLInputElement).value), today);
+  assert.equal(await page.$eval('#presale-form [name="validUntil"]', (input) => (input as HTMLInputElement).value), '', 'left empty: no promise is made for the shopkeeper');
+});
