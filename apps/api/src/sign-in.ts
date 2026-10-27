@@ -46,6 +46,9 @@ export class SignInUnavailable extends Error {
   constructor() { super('Sign-in is not working just now. Nothing was changed. Please try again in a minute.'); }
 }
 
+/** The tester: the seeded demo owner of Sampoorna Traders (packages/platform/src/seed.ts). */
+const TESTER = SYNTHETIC_PLATFORM_USERS.find((user) => user.email === 'owner@sampoorna.example.invalid')!;
+
 /** One message for a wrong code, an old code and an address nobody uses, so nobody can probe for accounts. */
 export const CODE_NOT_ACCEPTED = 'That code is not right, or it is too old. Ask for a new code and type it in.';
 
@@ -77,6 +80,16 @@ export class SignIn {
   constructor(store: SignInStore, identity: IdentityProvider) { this.#store = store; this.#identity = identity; }
 
   get provider(): IdentityProvider['kind'] { return this.#identity.kind; }
+
+  /**
+   * The owner's request (27 Oct): "Sign in as tester" — the demo owner of Sampoorna Traders, through
+   * the stand-in login, with no address and no code. Only beside the stand-in, which exists only when
+   * NODE_ENV=development or test (#446); `null` anywhere else, and its route answers 404.
+   */
+  async signInAsTester(): Promise<Opened | null> {
+    if (this.provider !== 'mock') return null;
+    return this.checkCode(TESTER.email, DEMO_SIGN_IN_CODE, TESTER.companyId);
+  }
 
   async sendCode(typed: string): Promise<{ sent: true; hint?: string }> {
     const address = this.#address(typed);

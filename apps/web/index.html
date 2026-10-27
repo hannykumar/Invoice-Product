@@ -1648,6 +1648,8 @@
       <div class="dialog-icon" aria-hidden="true">क</div>
       <h2 id="login-title" data-i18n="loginTitle"></h2>
       <p id="login-help" data-i18n="loginHelp"></p>
+      <!-- The owner's request: on a developer's machine only. Shown when GET /api/auth/tester answers; 404 anywhere else keeps it hidden. -->
+      <button class="secondary-button" id="login-tester" type="button" data-i18n="signInAsTester" hidden></button>
       <form id="login-form" class="login-form">
         <label><span data-i18n="signInAddress"></span><input name="address" type="text" inputmode="email" autocomplete="username" required /></label>
         <label id="login-code-field" hidden><span data-i18n="signInCode"></span><input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" /></label>
