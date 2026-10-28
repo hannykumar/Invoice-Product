@@ -35,7 +35,7 @@ export function readsPageSource(source: string): boolean {
  */
 const ALLOWED: Readonly<Record<string, string>> = {
   'apps/web/test/locale-copy.test.ts': 'Reads the `copy` table in app.js and EVALUATES it as data (English and Hindi sentences compared; the done-screen helpers fed real wording). It never searches the source text.',
-  'apps/web/test/bill-frames.test.ts': 'A security lint (#399): every frame app.js fills or prints must be a sandboxed frame. Predates #495; the behavioural half is in security-headers.test.ts.',
+  'apps/web/test/bill-frames.test.ts': 'A security lint (#399): every frame app.js fills or prints must be a sandboxed frame. Predates #495; the behavioural half is tests/browser/security-headers.spec.ts.',
   'apps/web/test/shop-words.test.ts': 'A wording policy (#312): no developer word anywhere a shopkeeper can read, over the language tables and page copy.',
   'apps/web/test/static-files.test.ts': 'Checks the web server hands out the page\'s own files and nothing else (#393): it compares served bytes with the files on disk.',
   'apps/api/test/einvoice-decided.test.ts': 'Checks the E-invoice screen has no field that asks about turnover (#239). Belongs with the E-invoice screen\'s own browser test; owned by the e-invoice work.',

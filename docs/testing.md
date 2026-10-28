@@ -118,6 +118,49 @@ gets a random part, as `sale-slides.spec.ts` does. Things the API cannot arrange
 consent, `db.ts`) are written to the test database through the owner's login, which `global-setup.ts`
 already insists is a test one.
 
+## Testing the web app: assert behaviour, not source text
+
+**Issue #495.** The page (`apps/web`: `app.js`, `index.html`, `styles.css`) is tested by loading it
+in the browser and using it. A test that reads `app.js` and matches `/api\/returns\/preview/` proves a
+string exists; it passes while the button is dead, the handler never runs or the screen is hidden —
+the page can be broken and every such test stays green. So the page's specs (`tests/browser/web-*.spec.ts`)
+load the real page from the real server on PostgreSQL, drive it like a person (click, type, press
+keys, follow an address) and assert both **what the person sees** (text, what is shown or hidden,
+focus, computed layout) and **what the page sends** (method, path, body, headers). A request nobody
+can trigger from the screen is as wrong as a screen that sends nothing.
+
+- **`page-watch.ts`** keeps the log of the page's own API calls (`watchPage`: `mark()`, `calls()`,
+  `bodyOf(path)`, `requested(path)` — which waits for the server's answer — and `problems`, the
+  uncaught errors and console errors). `respondWith` makes one route say something particular (a
+  figure the page could not have worked out itself, a 404, a 503); `holdRequests` keeps one waiting so
+  the busy states can be looked at. Everything else is the real server. Wait on a condition
+  (`expect.poll`, web-first assertions, `watch.requested`) — never a fixed sleep.
+- **`arrange.ts`** makes what a spec looks at through the same API routes the screens call — a
+  supplier, a stocked item, a customer, a recorded sale — all named for the run, so the shared
+  database never changes a result. A spec that restarts after a failure runs its `beforeAll` again:
+  anything that must be unique (a name, a mobile number) is generated, not fixed.
+- **Select by what survives new screens:** `#ids`, `[name]`, `[data-view]`, roles and visible text.
+  Other work adds screens to this page all the time.
+- **Prove a new spec has teeth.** Break the feature on purpose (rename the handler, remove the
+  button, drop a check), see the spec go red, put it back. The PR says which mutations were tried.
+- **Pure functions** that run without a DOM (`done-screen.js`) are imported and tested directly
+  (`apps/web/test/locale-copy.test.ts`, in `npm test`); the `copy` table of English and Hindi
+  sentences is evaluated there as *data*. That is the one place a test reads `app.js`, and it never
+  searches its text.
+
+`apps/web/test/web-test-conventions.test.ts` (in `npm test`) enforces it: it fails when a test file
+reads `app.js`, `index.html`, `styles.css` or the other page files from disk, unless the file is on a
+short written list of older exceptions (each with its reason; the list may only get shorter).
+
+| Spec | What it drives |
+| --- | --- |
+| `web-screens.spec.ts` | Every screen from its address, the five tabs, + Bill / F2 / Alt+N, Hindi, Home, Items, phone and desktop layout, focus and reduced motion, sign-out and the session cookie |
+| `web-money.spec.ts` | Money received and paid, the review dialog, "Record once" and its request key, busy states, refusals |
+| `web-drafts.spec.ts` | Forms left half done: returning on another day, and when the lists arrive late |
+| `web-sale.spec.ts` | The sale: the short-stock refusal and the purchase hand-off, the six ways to pay, the done screen and WhatsApp message, the server's own estimate, cancelling a bill |
+| `web-actions.spec.ts` | GST return, quotations and proformas, the bank's return, returns, reminders, service health, vehicles, purchase check, PIN codes, Ask |
+| `web-signin.spec.ts` | The sign-in dialog, the session cookie, the automatic tester, an invitation link, the connection banner |
+
 ## What a test must do
 
 - Cover the failure paths a shopkeeper can hit: wrong input, permission denied, another
