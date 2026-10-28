@@ -73,9 +73,13 @@ test("add a supplier bill to the inbox, correct it, record it, and a second copy
   expect(JSON.stringify(dashboard.activity)).toContain(corrected);
 });
 
-test("the inbox says plainly when it is empty or cannot be opened (#489)", async ({ page }) => {
+test("the inbox says plainly when it is empty or cannot be opened (#489)", async ({ page, request }) => {
+  // Signed in by the API, not the dialog: each code asked for counts against the suite's 5 per 15 minutes per address (#350),
+  // and the other specs after this one need theirs.
+  const konkan = await apiSignIn(request, "owner@konkan.example.invalid");
+  await page.context().addCookies([{ name: "__Host-karobar_session", value: konkan, domain: "127.0.0.1", path: "/", httpOnly: true, secure: true, sameSite: "Lax" }]);
+  await page.context().addInitScript(() => localStorage.setItem("karobar.signedIn", "1"));
   await page.goto("/");
-  await signIn(page, "owner@konkan.example.invalid");
   await page.goto("/#purchase-inbox");
   const region = page.locator("#screen-state-purchase-inbox");
   await expect(region).toHaveAttribute("data-state", "empty");
