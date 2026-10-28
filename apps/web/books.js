@@ -101,17 +101,30 @@ async function refresh(api, words) {
 
 export async function openBooks({ api, words }) {
   setDates();
-  ready ??= (async () => {
-    const { heads } = await api("/api/books/heads");
-    document.querySelector("[data-books-heads]").replaceChildren(...heads.map((head) => option(head.id, `${head.label} · ${head.hindi}`)));
-    const journal = await api("/api/books/journal/accounts").catch(() => ({ accounts: [] }));
-    document.querySelectorAll("[data-journal-account]").forEach((select) => select.replaceChildren(option("", ""), ...journal.accounts.map((a) => option(a.code, `${a.code} ${a.name}`))));
-    document.querySelectorAll("#view-books form[data-books-kind]").forEach((form) => wire(form, api, words));
-    document.querySelectorAll("[data-books-book]").forEach((button) => button.addEventListener("click", () => {
-      document.querySelectorAll("[data-books-book]").forEach((other) => other.classList.toggle("active", other === button));
-      showBook(api, words, button.dataset.booksBook).catch((error) => { document.querySelector("[data-books-book-summary]").textContent = error.message; });
-    }));
-  })();
-  await ready;
-  await refresh(api, words).catch(() => {});
+  // Issue #353 — the four states: the page was blank when the first read failed, and a failed first
+  // read was remembered forever. Now a failure says so, and Try again starts the setup over.
+  await globalThis.KarobarStates.loadInto(document.querySelector("#screen-state-books"), {
+    words,
+    quiet: true,
+    load: async () => {
+      try {
+        ready ??= setup(api, words);
+        await ready;
+      } catch (error) { ready = undefined; throw error; }
+      await refresh(api, words);
+    },
+    render: () => {},
+  });
+}
+
+async function setup(api, words) {
+  const { heads } = await api("/api/books/heads");
+  document.querySelector("[data-books-heads]").replaceChildren(...heads.map((head) => option(head.id, `${head.label} · ${head.hindi}`)));
+  const journal = await api("/api/books/journal/accounts").catch(() => ({ accounts: [] }));
+  document.querySelectorAll("[data-journal-account]").forEach((select) => select.replaceChildren(option("", ""), ...journal.accounts.map((a) => option(a.code, `${a.code} ${a.name}`))));
+  document.querySelectorAll("#view-books form[data-books-kind]").forEach((form) => wire(form, api, words));
+  document.querySelectorAll("[data-books-book]").forEach((button) => button.addEventListener("click", () => {
+    document.querySelectorAll("[data-books-book]").forEach((other) => other.classList.toggle("active", other === button));
+    showBook(api, words, button.dataset.booksBook).catch((error) => { document.querySelector("[data-books-book-summary]").textContent = error.message; });
+  }));
 }

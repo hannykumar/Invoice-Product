@@ -7,6 +7,7 @@ export * from './itc.ts';
 export * from './ports.ts';
 export * from './service.ts';
 export * from './adapters.ts';
+export * from './register-books.ts';
 export * from './postgres-repository.ts';
 export * from './fixtures.ts';
 export { itcMigrations } from './migrations.ts';
