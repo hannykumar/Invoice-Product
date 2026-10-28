@@ -35,3 +35,21 @@ export async function grantVehicleRecordConsent(owner = "owner@sampoorna.example
     await client.end();
   }
 }
+
+/**
+ * #350's per-person pace (600 requests a minute) is for one person at one screen. The browser suite is
+ * one owner doing every flow back to back, faster than anybody types, and on a quick CI machine it
+ * passed that pace mid-run: every later screen read came back 429. Each flow is a fresh visit, so its
+ * pace starts fresh; the sign-in code limits are left alone. The limit itself is tested in the API
+ * tests (apps/api/test/rate-limits.test.ts and rate-limits.integration.test.ts).
+ */
+export async function resetPace() {
+  const ownerUrl = process.env.KAROBAR_OWNER_DATABASE_URL?.trim();
+  const client = new pg.Client({ connectionString: testDatabaseUrl(ownerUrl ? { ...process.env, DATABASE_URL: ownerUrl } : process.env) });
+  await client.connect();
+  try {
+    await client.query("DELETE FROM rate_limit_counters WHERE bucket LIKE 'user:%'");
+  } finally {
+    await client.end();
+  }
+}
