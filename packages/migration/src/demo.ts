@@ -100,7 +100,7 @@ const build = async () => {
   const masters = new MasterDataService(new PlatformCommandService(platformAudit), platformAudit);
   const options = { branchId: 'main', sessionId: 'demo', permissions: PERMISSIONS };
   const context: RequestContext = { companyId, branchId: 'main', actorId: 'owner', permissions: new Set(), sessionId: 'demo' };
-  masters.createWarehouse(
+  await masters.createWarehouse(
     context,
     { code: 'MAIN', name: 'Main godown', addressLine: 'Sayyaji Rao Road', city: 'Mysuru', stateCode: '29', pincode: '570001' },
     { idempotencyKey: 'demo-warehouse' },
@@ -197,8 +197,8 @@ const main = async (): Promise<void> => {
     line(`  ${row.account.name.padEnd(34)} ${row.side === 'DEBIT' ? formatINR(row.balance).padStart(14) : ''.padStart(14)} ${row.side === 'CREDIT' ? formatINR(row.balance).padStart(14) : ''}`);
   }
   line(`  ${'Do the books balance?'.padEnd(34)} ${tb.balanced ? 'yes' : 'no'}`);
-  for (const item of shop.masters.items(shop.context)) {
-    const balance = await shop.inventory.balance(shop.actor, { itemId: item.id, warehouseId: shop.masters.warehouses(shop.context)[0]?.id ?? '' });
+  for (const item of await shop.masters.items(shop.context)) {
+    const balance = await shop.inventory.balance(shop.actor, { itemId: item.id, warehouseId: (await shop.masters.warehouses(shop.context))[0]?.id ?? '' });
     line(`  ${item.name.padEnd(34)} ${toQuantityString(balance.physical)} ${balance.physical.unit} in the godown`);
   }
 

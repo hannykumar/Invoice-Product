@@ -55,7 +55,7 @@ export class MastersMigrationAdapter implements MasterWriter, ExistingMasters {
   resolveUnit(raw: string): string {
     const code = UNIT_ALIASES[raw.trim().toUpperCase()] ?? raw.trim().toUpperCase();
     try {
-      this.#masters.units.unit(code);
+      this.#masters.syncView().units('').unit(code);
       return code;
     } catch {
       throw invalid(
@@ -69,30 +69,29 @@ export class MastersMigrationAdapter implements MasterWriter, ExistingMasters {
   async parties(companyId: CompanyId, kind: 'CUSTOMER' | 'SUPPLIER'): Promise<readonly ExistingRecord[]> {
     const context = contextFor(companyId, '' as UserId, this.#options);
     const wanted = roleFor(kind);
-    return this.#masters
-      .parties(context)
-      .filter((party: Party) => party.role === wanted || party.role === 'both')
-      .map((party: Party) => {
-        const gstins = this.#masters
-          .addressesOfParty(companyId, party.id)
-          .map((address) => address.gstin)
-          .filter((gstin): gstin is string => Boolean(gstin));
-        return {
-          id: party.id,
-          name: party.legalName,
-          aliases: [party.tradeName, ...party.aliases].filter((alias): alias is string => Boolean(alias)),
-          gstins,
-          ...(party.pan === undefined ? {} : { pan: party.pan }),
-          phones: party.phones,
-          emails: party.emails,
-          ...(party.code === undefined ? {} : { code: party.code }),
-        };
+    const found = await this.#masters.parties(context);
+    const records: ExistingRecord[] = [];
+    for (const party of found.filter((candidate: Party) => candidate.role === wanted || candidate.role === 'both')) {
+      const gstins = (await this.#masters.addressesOfParty(companyId, party.id))
+        .map((address) => address.gstin)
+        .filter((gstin): gstin is string => Boolean(gstin));
+      records.push({
+        id: party.id,
+        name: party.legalName,
+        aliases: [party.tradeName, ...party.aliases].filter((alias): alias is string => Boolean(alias)),
+        gstins,
+        ...(party.pan === undefined ? {} : { pan: party.pan }),
+        phones: party.phones,
+        emails: party.emails,
+        ...(party.code === undefined ? {} : { code: party.code }),
       });
+    }
+    return records;
   }
 
   async items(companyId: CompanyId): Promise<readonly ExistingRecord[]> {
     const context = contextFor(companyId, '' as UserId, this.#options);
-    return this.#masters.items(context).map((item) => ({
+    return (await this.#masters.items(context)).map((item) => ({
       id: item.id,
       name: item.name,
       aliases: [...item.aliases, ...item.barcodes],
@@ -110,7 +109,7 @@ export class MastersMigrationAdapter implements MasterWriter, ExistingMasters {
     const kind = row.kind === 'suppliers' ? 'SUPPLIER' : 'CUSTOMER';
     let written;
     try {
-      written = this.#masters.createParty(
+      written = await this.#masters.createParty(
       context,
       {
         ...(row.externalId === null ? {} : { code: row.externalId }),
@@ -144,7 +143,7 @@ export class MastersMigrationAdapter implements MasterWriter, ExistingMasters {
     // An address is only recorded when the file gave enough of one to be worth keeping. A half
     // address on a bill looks like a mistake the business made, so it is left off instead.
     if (row.addressLine !== null && row.city !== null && row.stateCode !== null && row.pincode !== null) {
-      this.#masters.addAddress(
+      await this.#masters.addAddress(
         context,
         {
           partyId: written.record.id,
@@ -174,7 +173,7 @@ export class MastersMigrationAdapter implements MasterWriter, ExistingMasters {
     const baseUnit = this.resolveUnit(row.baseUnit);
     let written;
     try {
-      written = this.#masters.createItem(
+      written = await this.#masters.createItem(
       context,
       {
         ...(row.externalId === null ? {} : { code: row.externalId }),
@@ -217,7 +216,7 @@ export class MastersMigrationAdapter implements MasterWriter, ExistingMasters {
     options: { readonly idempotencyKey: string; readonly reason: string },
   ): Promise<void> {
     const context = contextFor(companyId, actorId, this.#options);
-    if (kind === 'party') this.#masters.updateParty(context, id, { active: false }, { idempotencyKey: options.idempotencyKey, reason: options.reason });
-    else this.#masters.updateItem(context, id, { active: false }, { idempotencyKey: options.idempotencyKey, reason: options.reason });
+    if (kind === 'party') await this.#masters.updateParty(context, id, { active: false }, { idempotencyKey: options.idempotencyKey, reason: options.reason });
+    else await this.#masters.updateItem(context, id, { active: false }, { idempotencyKey: options.idempotencyKey, reason: options.reason });
   }
 }

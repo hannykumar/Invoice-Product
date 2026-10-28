@@ -7,16 +7,19 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { PlatformError } from "../../platform/src/types.ts";
+import { MasterDataError } from "./errors.ts";
+import { MasterReadModel, itemMatchable, partyMatchable } from "./read-model.ts";
+import type { ReadStores } from "./read-model.ts";
 import type { CommandRecord, RequestContext } from "../../platform/src/types.ts";
-import type { AuditLog, PlatformCommandService } from "../../platform/src/platform.ts";
+import type { AuditLog } from "../../platform/src/platform.ts";
 import { CommandRecordIndex, VersionedStore, today } from "./effective.ts";
-import type { Version } from "./effective.ts";
+import type { CommandRecordStore, Maybe, Version, VersionStore } from "./effective.ts";
 import { snapshotFrom } from "./snapshots.ts";
 import type { MasterSnapshot } from "./snapshots.ts";
 import { checkForDuplicates, findMatches, resolveByName } from "./matching.ts";
 import type { DuplicateVerdict, MatchCandidate, MatchableRecord, ResolveOutcome } from "./matching.ts";
-import { UnitRegistry, createDefaultUnitRegistry } from "./units.ts";
-import type { Quantity } from "./units.ts";
+import { createDefaultUnitRegistry } from "./units.ts";
+import type { Quantity, UnitStore } from "./units.ts";
 import * as validate from "./validation.ts";
 import type { ValidationProblem } from "./validation.ts";
 import { hsnLengthWarning, type TurnoverAbove5Crore } from "./hsn-digits.ts";
@@ -25,17 +28,7 @@ import type {
   PriceList, PriceListEntry, SerialNumber, TaxDefault, Transporter, Vehicle, Warehouse,
 } from "./types.ts";
 
-export class MasterDataError extends Error {
-  public readonly code: "VALIDATION_FAILED" | "DUPLICATE_BLOCKED" | "NOT_FOUND" | "CONFLICT";
-  public readonly problems: readonly ValidationProblem[];
-  public readonly candidates: readonly MatchCandidate<MatchableRecord>[];
-  constructor(code: MasterDataError["code"], message: string, problems: readonly ValidationProblem[] = [], candidates: readonly MatchCandidate<MatchableRecord>[] = []) {
-    super(message);
-    this.code = code;
-    this.problems = problems;
-    this.candidates = candidates;
-  }
-}
+export { MasterDataError } from "./errors.ts";
 
 /**
  * Issue #187 — a code too short for some bills is saved, with a warning. It is never refused: a
@@ -77,19 +70,19 @@ export const MASTER_APPROVAL_POLICIES = Object.freeze([
 ]);
 
 interface Stores {
-  readonly parties: VersionedStore<Party>;
-  readonly addresses: VersionedStore<PartyAddress>;
-  readonly items: VersionedStore<Item>;
-  readonly warehouses: VersionedStore<Warehouse>;
-  readonly batches: VersionedStore<Batch>;
-  readonly serials: VersionedStore<SerialNumber>;
-  readonly openingStock: VersionedStore<OpeningStock>;
-  readonly priceLists: VersionedStore<PriceList>;
-  readonly priceEntries: VersionedStore<PriceListEntry>;
-  readonly taxDefaults: VersionedStore<TaxDefault>;
-  readonly transporters: VersionedStore<Transporter>;
-  readonly vehicles: VersionedStore<Vehicle>;
-  readonly bankAccounts: VersionedStore<BankAccount>;
+  readonly parties: VersionStore<Party>;
+  readonly addresses: VersionStore<PartyAddress>;
+  readonly items: VersionStore<Item>;
+  readonly warehouses: VersionStore<Warehouse>;
+  readonly batches: VersionStore<Batch>;
+  readonly serials: VersionStore<SerialNumber>;
+  readonly openingStock: VersionStore<OpeningStock>;
+  readonly priceLists: VersionStore<PriceList>;
+  readonly priceEntries: VersionStore<PriceListEntry>;
+  readonly taxDefaults: VersionStore<TaxDefault>;
+  readonly transporters: VersionStore<Transporter>;
+  readonly vehicles: VersionStore<Vehicle>;
+  readonly bankAccounts: VersionStore<BankAccount>;
 }
 
 const FAR_FUTURE = "9999-12-31";
@@ -111,24 +104,56 @@ function fingerprintOf(value: unknown): string {
 
 /** The kinds `master_records.kind` allows; one store each. */
 export type MasterStoreKind = MasterKind | "opening_stock" | "price_list_entry";
-export type MasterStoreFactory = <T extends { readonly id: Id; readonly companyId: Id }>(kind: MasterStoreKind) => VersionedStore<T>;
+export type MasterStoreFactory = <T extends { readonly id: Id; readonly companyId: Id }>(kind: MasterStoreKind) => VersionStore<T>;
 
-export class MasterDataService {
-  readonly #commands: PlatformCommandService;
-  readonly #audit: AuditLog;
-  readonly #stores: Stores;
-  /** Command id to the record it wrote, so an idempotent retry can return that record. */
-  readonly #recordByCommand = new CommandRecordIndex();
-  public readonly units: UnitRegistry;
+/** The platform's command service, in memory (`PlatformCommandService`) or on PostgreSQL (`PostgresCommandService`). */
+export interface MasterCommands {
+  create(context: RequestContext, input: Omit<CommandRecord, "id" | "companyId" | "branchId" | "actorId" | "status" | "createdAt">): Maybe<CommandRecord>;
+  transition(context: RequestContext, id: Id, next: CommandRecord["status"], reason?: string): Maybe<CommandRecord>;
+}
 
+/** The audit trail, in memory (`AuditLog`) or on PostgreSQL (`PostgresAuditLog`). */
+export interface MasterAudit { append(event: Parameters<AuditLog["append"]>[0]): Maybe<unknown> }
+
+export interface MasterDataOptions {
+  /** Which record a finished command wrote. Memory by default; `PostgresCommandRecordIndex` on PostgreSQL. */
+  readonly commandIndex?: CommandRecordStore;
   /**
-   * `storeFor` lets the host keep each kind somewhere other than plain memory (issue #340 mirrors
-   * them to PostgreSQL while this service is synchronous). The default is the in-memory store.
+   * Runs one write as a single action for a company. On PostgreSQL this is `db.unitOfWork`: it joins
+   * the request's action, or opens one that takes the company's write lock, so the command, the new
+   * version, the command-to-record row and the audit event commit together or not at all, and a
+   * read-then-write (update a party) cannot interleave with another writer.
    */
-  constructor(commands: PlatformCommandService, audit: AuditLog, units: UnitRegistry = createDefaultUnitRegistry(), storeFor: MasterStoreFactory = () => new VersionedStore()) {
+  readonly atomically?: <T>(companyId: Id, work: () => Promise<T>) => Promise<T>;
+}
+
+/**
+ * Issue #366 — the master-data service is asynchronous. It keeps nothing of its own: every read goes to
+ * its `VersionStore`s, which are in memory (`VersionedStore`, the default for tests and demos) or
+ * PostgreSQL (`PostgresVersionedStore`), so two processes on one database see each other's records at
+ * once. `units` is one registry for the whole process, or a function giving each company its own.
+ */
+export class MasterDataService {
+  readonly #commands: MasterCommands;
+  readonly #audit: MasterAudit;
+  readonly #stores: Stores;
+  readonly #units: UnitStore | ((companyId: Id) => UnitStore);
+  readonly #atomically: NonNullable<MasterDataOptions["atomically"]>;
+  /** Command id to the record it wrote, so an idempotent retry can return that record. */
+  readonly #recordByCommand: CommandRecordStore;
+
+  constructor(
+    commands: MasterCommands,
+    audit: MasterAudit,
+    units: UnitStore | ((companyId: Id) => UnitStore) = createDefaultUnitRegistry(),
+    storeFor: MasterStoreFactory = () => new VersionedStore(),
+    options: MasterDataOptions = {},
+  ) {
     this.#commands = commands;
     this.#audit = audit;
-    this.units = units;
+    this.#units = units;
+    this.#recordByCommand = options.commandIndex ?? new CommandRecordIndex();
+    this.#atomically = options.atomically ?? ((_companyId, work) => work());
     this.#stores = {
       parties: storeFor<Party>("party"), addresses: storeFor<PartyAddress>("party_address"), items: storeFor<Item>("item"),
       warehouses: storeFor<Warehouse>("warehouse"), batches: storeFor<Batch>("batch"), serials: storeFor<SerialNumber>("serial"),
@@ -138,6 +163,22 @@ export class MasterDataService {
     };
   }
 
+  /** The units and conversions this company uses. */
+  unitsFor(companyId: Id): UnitStore { return typeof this.#units === "function" ? this.#units(companyId) : this.#units; }
+
+  /**
+   * The synchronous read side, for the ports that cannot await. Only when this service keeps its records
+   * in memory — a PostgreSQL service has no copy of its own, and the app builds one per request.
+   */
+  syncView(): MasterReadModel {
+    const s = this.#stores;
+    const memory = Object.values(s).every((store) => store instanceof VersionedStore);
+    if (!memory) throw new MasterDataError("CONFLICT", "This master data lives in a database; read it with await.");
+    return new MasterReadModel({ ...s, byKind: (kind: MasterKind) => this.#storeFor(kind) } as unknown as ReadStores, (companyId) => this.unitsFor(companyId) as never);
+  }
+
+  #atomic<T>(companyId: Id, work: () => Promise<T>): Promise<T> { return this.#atomically(companyId, work); }
+
   // ---------------------------------------------------------------- internals
 
   /**
@@ -145,33 +186,33 @@ export class MasterDataService {
    * back, the platform returns the original command and this returns the record id it
    * wrote, so a retry never runs the duplicate checks or appends a second version.
    */
-  #begin(context: RequestContext, action: string, options: WriteOptions, fingerprint: unknown, risk: "low" | "medium" | "high" = "low"): { command: CommandRecord; existingRecordId?: Id } {
-    const command = this.#commands.create(context, {
+  async #begin(context: RequestContext, action: string, options: WriteOptions, fingerprint: unknown, risk: "low" | "medium" | "high" = "low"): Promise<{ command: CommandRecord; existingRecordId?: Id }> {
+    const command = await this.#commands.create(context, {
       action,
       risk,
       idempotencyKey: options.idempotencyKey,
       payload: { effectiveFrom: options.effectiveFrom ?? today(), fingerprint: fingerprintOf(fingerprint) },
     });
-    const existingRecordId = this.#recordByCommand.get(context.companyId, command.id);
+    const existingRecordId = await this.#recordByCommand.get(context.companyId, command.id);
     return existingRecordId === undefined ? { command } : { command, existingRecordId };
   }
 
   /** Moves the command to finalised and appends the new version of the record. */
-  #commit<T extends { readonly id: Id; readonly companyId: Id }>(context: RequestContext, store: VersionedStore<T>, started: { command: CommandRecord }, record: T, options: WriteOptions): { version: Version<T>; command: CommandRecord } {
+  async #commit<T extends { readonly id: Id; readonly companyId: Id }>(context: RequestContext, store: VersionStore<T>, started: { command: CommandRecord }, record: T, options: WriteOptions): Promise<{ version: Version<T>; command: CommandRecord }> {
     // The platform's state machine is draft -> submitted -> approved -> finalised. A
     // master change carries no approval policy by default, so the approval step is a
     // no-op here; adding a policy later makes the same call require an approver.
-    const submitted = this.#commands.transition(context, started.command.id, "submitted");
-    const approved = this.#commands.transition(context, submitted.id, "approved");
-    const finalised = this.#commands.transition(context, approved.id, "finalised", options.reason);
-    const version = store.append(record, options.effectiveFrom ?? today(), context.actorId, options.reason ?? `command:${finalised.id}`);
-    this.#recordByCommand.set(context.companyId, finalised.id, record.id);
+    const submitted = await this.#commands.transition(context, started.command.id, "submitted");
+    const approved = await this.#commands.transition(context, submitted.id, "approved");
+    const finalised = await this.#commands.transition(context, approved.id, "finalised", options.reason);
+    const version = await store.append(record, options.effectiveFrom ?? today(), context.actorId, options.reason ?? `command:${finalised.id}`);
+    await this.#recordByCommand.set(context.companyId, finalised.id, record.id);
     return { version, command: finalised };
   }
 
   /** The result to hand back when a write turns out to be a retry of an earlier one. */
-  #retried<T extends { readonly id: Id; readonly companyId: Id }>(context: RequestContext, store: VersionedStore<T>, started: { command: CommandRecord; existingRecordId?: Id }): WriteResult<T> {
-    const version = store.latest(context.companyId, started.existingRecordId as Id);
+  async #retried<T extends { readonly id: Id; readonly companyId: Id }>(context: RequestContext, store: VersionStore<T>, started: { command: CommandRecord; existingRecordId?: Id }): Promise<WriteResult<T>> {
+    const version = await store.latest(context.companyId, started.existingRecordId as Id);
     if (!version) throw new MasterDataError("NOT_FOUND", "The earlier attempt with this reference number cannot be found.");
     return { record: version.data, version, command: started.command, warnings: [], similar: [] };
   }
@@ -180,43 +221,45 @@ export class MasterDataService {
     if (!result.ok) throw new MasterDataError("VALIDATION_FAILED", result.problems.map((problem) => problem.message).join(" "), result.problems);
   }
 
-  #partyMatchable(party: Party, asOf: IsoDate): MatchableRecord {
-    const gstins = this.addressesOfParty(party.companyId, party.id, asOf).map((address) => address.gstin).filter((value): value is string => Boolean(value));
-    return {
-      name: party.legalName,
-      aliases: [party.tradeName, ...party.aliases].filter((value): value is string => Boolean(value)),
-      gstins,
-      ...(party.pan === undefined ? {} : { pan: party.pan }),
-      phones: party.phones,
-      emails: party.emails,
-      ...(party.code === undefined ? {} : { code: party.code }),
-    };
+  #partyMatchable(party: Party, addresses: readonly PartyAddress[]): MatchableRecord { return partyMatchable(party, addresses); }
+
+  /** Every active party as the duplicate checks read it, with its GST numbers from one read of the addresses. */
+  async #partyMatchables(context: RequestContext, asOf: IsoDate): Promise<MatchableRecord[]> {
+    const [parties, addresses] = [await this.parties(context, asOf), await this.#addressesByParty(context.companyId, asOf)];
+    return parties.map((party) => this.#partyMatchable(party, addresses.get(party.id) ?? []));
   }
 
-  #itemMatchable(item: Item): MatchableRecord {
-    return { name: item.name, aliases: [...item.aliases, ...item.barcodes], ...(item.code === undefined ? {} : { code: item.code }) };
+  async #addressesByParty(companyId: Id, asOf: IsoDate): Promise<Map<Id, PartyAddress[]>> {
+    const byParty = new Map<Id, PartyAddress[]>();
+    for (const address of await this.#stores.addresses.list(companyId, asOf)) {
+      if (address.active) byParty.set(address.partyId, [...(byParty.get(address.partyId) ?? []), address]);
+    }
+    return byParty;
   }
+
+  #itemMatchable(item: Item): MatchableRecord { return itemMatchable(item); }
 
   // ------------------------------------------------------------------ parties
 
-  parties(context: RequestContext, asOf: IsoDate = today()): readonly Party[] {
-    return this.#stores.parties.list(context.companyId, asOf).filter((party) => party.mergedIntoId === undefined);
+  async parties(context: RequestContext, asOf: IsoDate = today()): Promise<readonly Party[]> {
+    return (await this.#stores.parties.list(context.companyId, asOf)).filter((party) => party.mergedIntoId === undefined);
   }
 
-  party(context: RequestContext, id: Id, asOf: IsoDate = today()): Party {
-    const found = this.#stores.parties.current(context.companyId, id, asOf);
+  async party(context: RequestContext, id: Id, asOf: IsoDate = today()): Promise<Party> {
+    const found = await this.#stores.parties.current(context.companyId, id, asOf);
     if (!found) throw new MasterDataError("NOT_FOUND", "That customer or supplier was not found.");
     // Follow a merge pointer so old references keep working.
-    return found.mergedIntoId ? this.party(context, found.mergedIntoId, asOf) : found;
+    return found.mergedIntoId ? await this.party(context, found.mergedIntoId, asOf) : found;
   }
 
-  checkPartyDuplicates(context: RequestContext, subject: MatchableRecord, asOf: IsoDate = today()): DuplicateVerdict<MatchableRecord> {
-    return checkForDuplicates(this.parties(context, asOf).map((party) => this.#partyMatchable(party, asOf)), subject);
+  async checkPartyDuplicates(context: RequestContext, subject: MatchableRecord, asOf: IsoDate = today()): Promise<DuplicateVerdict<MatchableRecord>> {
+    return checkForDuplicates(await this.#partyMatchables(context, asOf), subject);
   }
 
-  createParty(context: RequestContext, input: Omit<Party, "id" | "companyId" | "active" | "aliases" | "phones" | "emails"> & { readonly id?: Id; readonly aliases?: readonly string[]; readonly phones?: readonly string[]; readonly emails?: readonly string[] }, options: WriteOptions): WriteResult<Party> {
-    const started = this.#begin(context, "masters.party.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.parties, started);
+  async createParty(context: RequestContext, input: Omit<Party, "id" | "companyId" | "active" | "aliases" | "phones" | "emails"> & { readonly id?: Id; readonly aliases?: readonly string[]; readonly phones?: readonly string[]; readonly emails?: readonly string[] }, options: WriteOptions): Promise<WriteResult<Party>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.party.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.parties, started);
     const asOf = options.effectiveFrom ?? today();
     const warnings: ValidationProblem[] = [];
     if (input.pan) this.#require(validate.validatePan(input.pan));
@@ -236,7 +279,7 @@ export class MasterDataService {
       emails: (input.emails ?? []).map((email) => email.trim().toLowerCase()),
       active: true,
     };
-    const verdict = this.checkPartyDuplicates(context, this.#partyMatchable(party, asOf), asOf);
+    const verdict = await this.checkPartyDuplicates(context, this.#partyMatchable(party, []), asOf);
     if (verdict.decision === "block") {
       throw new MasterDataError("DUPLICATE_BLOCKED", `This looks like an existing record: ${verdict.candidates.map((candidate) => candidate.reasons[0]?.detail).join(" ")}`, [], verdict.candidates);
     }
@@ -244,28 +287,32 @@ export class MasterDataService {
       if (!options.acknowledgeSimilar) throw new MasterDataError("DUPLICATE_BLOCKED", `A similar name already exists. Confirm it is a different business to continue: ${verdict.candidates.map((candidate) => candidate.record.name).join(", ")}`, [], verdict.candidates);
       warnings.push({ field: "legalName", code: "SIMILAR_NAME_ACKNOWLEDGED", message: `Created even though it is similar to ${verdict.candidates.map((candidate) => candidate.record.name).join(", ")}.` });
     }
-    const { version, command } = this.#commit(context, this.#stores.parties, started, party, options);
+    const { version, command } = await this.#commit(context, this.#stores.parties, started, party, options);
     return { record: version.data, version, command, warnings, similar: verdict.decision === "clear" ? [] : verdict.candidates };
+    });
   }
 
-  updateParty(context: RequestContext, id: Id, changes: Partial<Omit<Party, "id" | "companyId">>, options: WriteOptions): WriteResult<Party> {
-    const started = this.#begin(context, "masters.party.update", options, { id, changes });
-    if (started.existingRecordId) return this.#retried(context, this.#stores.parties, started);
+  async updateParty(context: RequestContext, id: Id, changes: Partial<Omit<Party, "id" | "companyId">>, options: WriteOptions): Promise<WriteResult<Party>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.party.update", options, { id, changes });
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.parties, started);
     const asOf = options.effectiveFrom ?? today();
-    const current = this.party(context, id, asOf);
+    const current = await this.party(context, id, asOf);
     if (changes.pan) this.#require(validate.validatePan(changes.pan));
     const updated: Party = { ...current, ...changes, id: current.id, companyId: current.companyId };
-    const { version, command } = this.#commit(context, this.#stores.parties, started, updated, options);
+    const { version, command } = await this.#commit(context, this.#stores.parties, started, updated, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
   /**
    * Voice and OCR entry point. Returns `ambiguous` rather than picking a winner when
    * two parties are similarly close — the product must ask, not guess.
    */
-  resolveParty(context: RequestContext, spokenName: string, asOf: IsoDate = today()): ResolveOutcome<Party> {
-    const parties = this.parties(context, asOf);
-    const matchables = parties.map((party) => ({ ...this.#partyMatchable(party, asOf), party }));
+  async resolveParty(context: RequestContext, spokenName: string, asOf: IsoDate = today()): Promise<ResolveOutcome<Party>> {
+    const parties = await this.parties(context, asOf);
+    const addressesByParty = await this.#addressesByParty(context.companyId, asOf);
+    const matchables = parties.map((party) => ({ ...this.#partyMatchable(party, addressesByParty.get(party.id) ?? []), party }));
     const outcome = resolveByName(matchables, spokenName);
     if (outcome.status === "resolved") return { status: "resolved", record: outcome.record.party, score: outcome.score, reasons: outcome.reasons };
     if (outcome.status === "ambiguous") return { status: "ambiguous", candidates: outcome.candidates.map((candidate) => ({ record: candidate.record.party, score: candidate.score, reasons: candidate.reasons })) };
@@ -277,15 +324,16 @@ export class MasterDataService {
    * losing record is kept as a redirect: historical documents keep their snapshots and
    * their original party id still resolves.
    */
-  mergeParties(context: RequestContext, winnerId: Id, loserId: Id, options: WriteOptions): { winner: Party; loser: Party; command: CommandRecord } {
+  async mergeParties(context: RequestContext, winnerId: Id, loserId: Id, options: WriteOptions): Promise<{ winner: Party; loser: Party; command: CommandRecord }> {
+    return this.#atomic(context.companyId, async () => {
     if (winnerId === loserId) throw new MasterDataError("CONFLICT", "A record cannot be merged into itself.");
     const asOf = options.effectiveFrom ?? today();
-    const winner = this.party(context, winnerId, asOf);
-    const loser = this.party(context, loserId, asOf);
-    const command = this.#commands.create(context, { action: "masters.party.merge", risk: "high", idempotencyKey: options.idempotencyKey, payload: { winnerId, loserId } });
-    const submitted = this.#commands.transition(context, command.id, "submitted");
-    const approved = this.#commands.transition(context, submitted.id, "approved", options.reason);
-    const finalised = this.#commands.transition(context, approved.id, "finalised", options.reason);
+    const winner = await this.party(context, winnerId, asOf);
+    const loser = await this.party(context, loserId, asOf);
+    const command = await this.#commands.create(context, { action: "masters.party.merge", risk: "high", idempotencyKey: options.idempotencyKey, payload: { winnerId, loserId } });
+    const submitted = await this.#commands.transition(context, command.id, "submitted");
+    const approved = await this.#commands.transition(context, submitted.id, "approved", options.reason);
+    const finalised = await this.#commands.transition(context, approved.id, "finalised", options.reason);
     const mergedLoser: Party = { ...loser, active: false, mergedIntoId: winner.id };
     const enrichedWinner: Party = {
       ...winner,
@@ -293,24 +341,26 @@ export class MasterDataService {
       phones: [...new Set([...winner.phones, ...loser.phones])],
       emails: [...new Set([...winner.emails, ...loser.emails])],
     };
-    this.#stores.parties.append(mergedLoser, asOf, context.actorId, `merged into ${winner.id}`);
-    this.#stores.parties.append(enrichedWinner, asOf, context.actorId, `absorbed ${loser.id}`);
-    this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "masters.party.merged", correlationId: finalised.id, before: { loser: loser.legalName, winner: winner.legalName }, after: { survivingId: winner.id } });
+    await this.#stores.parties.append(mergedLoser, asOf, context.actorId, `merged into ${winner.id}`);
+    await this.#stores.parties.append(enrichedWinner, asOf, context.actorId, `absorbed ${loser.id}`);
+    await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "masters.party.merged", correlationId: finalised.id, before: { loser: loser.legalName, winner: winner.legalName }, after: { survivingId: winner.id } });
     return { winner: enrichedWinner, loser: mergedLoser, command: finalised };
+    });
   }
 
   // ---------------------------------------------------------------- addresses
 
-  addressesOfParty(companyId: Id, partyId: Id, asOf: IsoDate = today()): readonly PartyAddress[] {
-    return this.#stores.addresses.list(companyId, asOf).filter((address) => address.partyId === partyId && address.active);
+  async addressesOfParty(companyId: Id, partyId: Id, asOf: IsoDate = today()): Promise<readonly PartyAddress[]> {
+    return (await this.#stores.addresses.list(companyId, asOf)).filter((address) => address.partyId === partyId && address.active);
   }
 
-  addAddress(context: RequestContext, input: Omit<PartyAddress, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<PartyAddress> {
-    const started = this.#begin(context, "masters.address.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.addresses, started);
+  async addAddress(context: RequestContext, input: Omit<PartyAddress, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<PartyAddress>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.address.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.addresses, started);
     const warnings: ValidationProblem[] = [];
     this.#require(validate.validatePincode(input.pincode));
-    const overseas = input.stateCode === validate.OVERSEAS_STATE_CODE && this.party(context, input.partyId).gstRegistrationType === "overseas";
+    const overseas = input.stateCode === validate.OVERSEAS_STATE_CODE && (await this.party(context, input.partyId)).gstRegistrationType === "overseas";
     if (overseas && (input.gstin || input.pincode !== validate.OVERSEAS_PINCODE)) {
       throw new MasterDataError("VALIDATION_FAILED", `A customer outside India has no GST number, and their address is saved with PIN ${validate.OVERSEAS_PINCODE}.`, [{ field: "pincode", code: "OVERSEAS_ADDRESS", message: "An address outside India has no GST number and uses PIN 999999." }]);
     }
@@ -324,20 +374,21 @@ export class MasterDataService {
         throw new MasterDataError("VALIDATION_FAILED", `This GST number belongs to ${validate.GST_STATE_CODES[gstinState]?.name ?? "another state"} but the address is in ${validate.GST_STATE_CODES[input.stateCode]?.name}. Please check which one is wrong.`, [{ field: "gstin", code: "GSTIN_STATE_MISMATCH", message: "The GST number and the address are in different states." }]);
       }
       const gstin = validate.normaliseIdentifier(input.gstin);
-      const heldBy = this.#stores.addresses.list(context.companyId, options.effectiveFrom ?? today()).find((address) => address.gstin && validate.normaliseIdentifier(address.gstin) === gstin && address.partyId !== input.partyId && address.active);
+      const heldBy = (await this.#stores.addresses.list(context.companyId, options.effectiveFrom ?? today())).find((address) => address.gstin && validate.normaliseIdentifier(address.gstin) === gstin && address.partyId !== input.partyId && address.active);
       if (heldBy) {
-        const owner = this.party(context, heldBy.partyId);
+        const owner = await this.party(context, heldBy.partyId);
         throw new MasterDataError("DUPLICATE_BLOCKED", `GST number ${gstin} is already saved for ${owner.legalName}. If this is the same business, merge the two records instead of creating a second one.`, [{ field: "gstin", code: "GSTIN_ALREADY_USED", message: `GST number ${gstin} is already saved for ${owner.legalName}.` }]);
       }
       if (validate.isRetiredStateCode(gstinState)) warnings.push({ field: "gstin", code: "GSTIN_STATE_RETIRED", message: "This GST number uses a state code that is no longer issued. It is fine for old invoices, but please confirm it for new ones." });
-      const party = this.party(context, input.partyId);
+      const party = await this.party(context, input.partyId);
       if (party.pan && validate.gstinPan(input.gstin) !== party.pan.toUpperCase()) {
         throw new MasterDataError("VALIDATION_FAILED", "The PAN inside this GST number does not match the PAN saved for this business.", [{ field: "gstin", code: "GSTIN_PAN_MISMATCH", message: "The PAN inside this GST number does not match the PAN saved for this business." }]);
       }
     }
     const address: PartyAddress = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.addresses, started, address, options);
+    const { version, command } = await this.#commit(context, this.#stores.addresses, started, address, options);
     return { record: version.data, version, command, warnings, similar: [] };
+    });
   }
 
   /**
@@ -347,10 +398,11 @@ export class MasterDataService {
    * is fixed by their GST number; a party that has really moved state gets a new address. Bills
    * already issued keep the address they were issued with, because they were frozen at the time.
    */
-  correctAddress(context: RequestContext, addressId: Id, changes: { readonly line1?: string; readonly line2?: string; readonly city?: string; readonly pincode?: string }, options: WriteOptions): WriteResult<PartyAddress> {
-    const started = this.#begin(context, "masters.address.correct", options, { addressId, changes });
-    if (started.existingRecordId) return this.#retried(context, this.#stores.addresses, started);
-    const current = this.#stores.addresses.current(context.companyId, addressId, options.effectiveFrom ?? today());
+  async correctAddress(context: RequestContext, addressId: Id, changes: { readonly line1?: string; readonly line2?: string; readonly city?: string; readonly pincode?: string }, options: WriteOptions): Promise<WriteResult<PartyAddress>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.address.correct", options, { addressId, changes });
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.addresses, started);
+    const current = await this.#stores.addresses.current(context.companyId, addressId, options.effectiveFrom ?? today());
     if (!current || !current.active) throw new MasterDataError("NOT_FOUND", "That address was not found.");
     const line1 = (changes.line1 ?? current.line1).trim();
     const city = (changes.city ?? current.city).trim();
@@ -365,48 +417,53 @@ export class MasterDataService {
     const line2 = changes.line2 === undefined ? current.line2 : changes.line2.trim();
     const { line2: _dropped, ...rest } = current;
     const corrected: PartyAddress = { ...rest, line1, city, pincode, ...(line2 === undefined || line2 === "" ? {} : { line2 }) };
-    const { version, command } = this.#commit(context, this.#stores.addresses, started, corrected, options);
-    this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "masters.address.corrected", correlationId: command.id, before: { line1: current.line1, city: current.city, pincode: current.pincode }, after: { line1, city, pincode } });
+    const { version, command } = await this.#commit(context, this.#stores.addresses, started, corrected, options);
+    await this.#audit.append({ companyId: context.companyId, actorId: context.actorId, action: "masters.address.corrected", correlationId: command.id, before: { line1: current.line1, city: current.city, pincode: current.pincode }, after: { line1, city, pincode } });
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
   // -------------------------------------------------------------------- items
 
-  items(context: RequestContext, asOf: IsoDate = today()): readonly Item[] {
-    return this.#stores.items.list(context.companyId, asOf).filter((item) => item.mergedIntoId === undefined);
+  async items(context: RequestContext, asOf: IsoDate = today()): Promise<readonly Item[]> {
+    return (await this.#stores.items.list(context.companyId, asOf)).filter((item) => item.mergedIntoId === undefined);
   }
 
-  item(context: RequestContext, id: Id, asOf: IsoDate = today()): Item {
-    const found = this.#stores.items.current(context.companyId, id, asOf);
+  async item(context: RequestContext, id: Id, asOf: IsoDate = today()): Promise<Item> {
+    const found = await this.#stores.items.current(context.companyId, id, asOf);
     if (!found) throw new MasterDataError("NOT_FOUND", "That item was not found.");
-    return found.mergedIntoId ? this.item(context, found.mergedIntoId, asOf) : found;
+    return found.mergedIntoId ? await this.item(context, found.mergedIntoId, asOf) : found;
   }
 
-  createItem(context: RequestContext, input: Omit<Item, "id" | "companyId" | "active" | "aliases" | "barcodes"> & { readonly id?: Id; readonly aliases?: readonly string[]; readonly barcodes?: readonly string[] }, options: WriteOptions): WriteResult<Item> {
-    const started = this.#begin(context, "masters.item.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.items, started);
+  async createItem(context: RequestContext, input: Omit<Item, "id" | "companyId" | "active" | "aliases" | "barcodes"> & { readonly id?: Id; readonly aliases?: readonly string[]; readonly barcodes?: readonly string[] }, options: WriteOptions): Promise<WriteResult<Item>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.item.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.items, started);
     this.#require(validate.validateHsnOrSac(input.hsnSac, input.kind));
-    this.units.unit(input.baseUnit);
+    await this.unitsFor(context.companyId).unit(input.baseUnit);
     const item: Item = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, aliases: input.aliases ?? [], barcodes: input.barcodes ?? [], active: true };
-    const verdict = checkForDuplicates(this.items(context, options.effectiveFrom ?? today()).map((existing) => this.#itemMatchable(existing)), this.#itemMatchable(item));
+    const verdict = checkForDuplicates((await this.items(context, options.effectiveFrom ?? today())).map((existing) => this.#itemMatchable(existing)), this.#itemMatchable(item));
     if (verdict.decision === "block") throw new MasterDataError("DUPLICATE_BLOCKED", `This item already exists: ${verdict.candidates.map((candidate) => candidate.record.name).join(", ")}`, [], verdict.candidates);
     if (verdict.decision === "warn" && !options.acknowledgeSimilar) throw new MasterDataError("DUPLICATE_BLOCKED", `A similar item already exists. Confirm it is different to continue: ${verdict.candidates.map((candidate) => candidate.record.name).join(", ")}`, [], verdict.candidates);
-    const { version, command } = this.#commit(context, this.#stores.items, started, item, options);
+    const { version, command } = await this.#commit(context, this.#stores.items, started, item, options);
     return { record: version.data, version, command, warnings: hsnWarnings(item, options), similar: verdict.decision === "clear" ? [] : verdict.candidates };
+    });
   }
 
-  updateItem(context: RequestContext, id: Id, changes: Partial<Omit<Item, "id" | "companyId">>, options: WriteOptions): WriteResult<Item> {
-    const started = this.#begin(context, "masters.item.update", options, { id, changes });
-    if (started.existingRecordId) return this.#retried(context, this.#stores.items, started);
-    const current = this.item(context, id, options.effectiveFrom ?? today());
+  async updateItem(context: RequestContext, id: Id, changes: Partial<Omit<Item, "id" | "companyId">>, options: WriteOptions): Promise<WriteResult<Item>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.item.update", options, { id, changes });
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.items, started);
+    const current = await this.item(context, id, options.effectiveFrom ?? today());
     if (changes.hsnSac) this.#require(validate.validateHsnOrSac(changes.hsnSac, changes.kind ?? current.kind));
     const updated: Item = { ...current, ...changes, id: current.id, companyId: current.companyId };
-    const { version, command } = this.#commit(context, this.#stores.items, started, updated, options);
+    const { version, command } = await this.#commit(context, this.#stores.items, started, updated, options);
     return { record: version.data, version, command, warnings: hsnWarnings(updated, options), similar: [] };
+    });
   }
 
-  resolveItem(context: RequestContext, spokenName: string, asOf: IsoDate = today()): ResolveOutcome<Item> {
-    const matchables = this.items(context, asOf).map((item) => ({ ...this.#itemMatchable(item), item }));
+  async resolveItem(context: RequestContext, spokenName: string, asOf: IsoDate = today()): Promise<ResolveOutcome<Item>> {
+    const matchables = (await this.items(context, asOf)).map((item) => ({ ...this.#itemMatchable(item), item }));
     const outcome = resolveByName(matchables, spokenName);
     if (outcome.status === "resolved") return { status: "resolved", record: outcome.record.item, score: outcome.score, reasons: outcome.reasons };
     if (outcome.status === "ambiguous") return { status: "ambiguous", candidates: outcome.candidates.map((candidate) => ({ record: candidate.record.item, score: candidate.score, reasons: candidate.reasons })) };
@@ -414,81 +471,95 @@ export class MasterDataService {
   }
 
   /** Item-specific pack sizes, e.g. one box of this soap is 24 pieces. */
-  registerItemConversion(context: RequestContext, itemId: Id, fromUnit: string, toUnit: string, numerator: bigint, denominator = 1n): void {
-    this.item(context, itemId);
-    this.units.registerConversion({ fromUnit, toUnit, numerator, denominator, itemId });
+  async registerItemConversion(context: RequestContext, itemId: Id, fromUnit: string, toUnit: string, numerator: bigint, denominator = 1n): Promise<void> {
+    return this.#atomic(context.companyId, async () => {
+    await this.item(context, itemId);
+    await this.unitsFor(context.companyId).registerConversion({ fromUnit, toUnit, numerator, denominator, itemId });
+    });
   }
 
   // ------------------------------------------------- warehouses, batches, serials
 
-  createWarehouse(context: RequestContext, input: Omit<Warehouse, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<Warehouse> {
-    const started = this.#begin(context, "masters.warehouse.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.warehouses, started);
+  async createWarehouse(context: RequestContext, input: Omit<Warehouse, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<Warehouse>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.warehouse.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.warehouses, started);
     this.#require(validate.validatePincodeForState(input.pincode, input.stateCode));
     if (input.gstin) this.#require(validate.validateGstin(input.gstin));
     const warehouse: Warehouse = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.warehouses, started, warehouse, options);
+    const { version, command } = await this.#commit(context, this.#stores.warehouses, started, warehouse, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
-  warehouses(context: RequestContext, asOf: IsoDate = today()): readonly Warehouse[] {
-    return this.#stores.warehouses.list(context.companyId, asOf);
+  async warehouses(context: RequestContext, asOf: IsoDate = today()): Promise<readonly Warehouse[]> {
+    return await this.#stores.warehouses.list(context.companyId, asOf);
   }
 
-  createBatch(context: RequestContext, input: Omit<Batch, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<Batch> {
-    const started = this.#begin(context, "masters.batch.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.batches, started);
-    const item = this.item(context, input.itemId);
+  async createBatch(context: RequestContext, input: Omit<Batch, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<Batch>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.batch.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.batches, started);
+    const item = await this.item(context, input.itemId);
     if (!item.trackBatches) throw new MasterDataError("CONFLICT", `${item.name} is not set up to track batches.`);
     if (input.expiresOn && input.manufacturedOn && input.expiresOn < input.manufacturedOn) throw new MasterDataError("VALIDATION_FAILED", "The expiry date is before the manufacturing date.");
     const batch: Batch = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.batches, started, batch, options);
+    const { version, command } = await this.#commit(context, this.#stores.batches, started, batch, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
-  createSerial(context: RequestContext, input: Omit<SerialNumber, "id" | "companyId" | "status"> & { readonly id?: Id }, options: WriteOptions): WriteResult<SerialNumber> {
-    const started = this.#begin(context, "masters.serial.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.serials, started);
-    const item = this.item(context, input.itemId);
+  async createSerial(context: RequestContext, input: Omit<SerialNumber, "id" | "companyId" | "status"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<SerialNumber>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.serial.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.serials, started);
+    const item = await this.item(context, input.itemId);
     if (!item.trackSerials) throw new MasterDataError("CONFLICT", `${item.name} is not set up to track serial numbers.`);
-    const duplicate = this.#stores.serials.list(context.companyId, FAR_FUTURE).find((existing) => existing.itemId === input.itemId && existing.serial === input.serial);
+    const duplicate = (await this.#stores.serials.list(context.companyId, FAR_FUTURE)).find((existing) => existing.itemId === input.itemId && existing.serial === input.serial);
     if (duplicate) throw new MasterDataError("DUPLICATE_BLOCKED", `Serial number ${input.serial} is already recorded for this item.`);
     const serial: SerialNumber = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, status: "in_stock" };
-    const { version, command } = this.#commit(context, this.#stores.serials, started, serial, options);
+    const { version, command } = await this.#commit(context, this.#stores.serials, started, serial, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
   /** Opening stock seeds a balance without pretending a purchase happened. */
-  setOpeningStock(context: RequestContext, input: Omit<OpeningStock, "id" | "companyId"> & { readonly id?: Id }, options: WriteOptions): WriteResult<OpeningStock> {
-    const started = this.#begin(context, "masters.opening_stock.set", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.openingStock, started);
-    const item = this.item(context, input.itemId);
+  async setOpeningStock(context: RequestContext, input: Omit<OpeningStock, "id" | "companyId"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<OpeningStock>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.opening_stock.set", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.openingStock, started);
+    const item = await this.item(context, input.itemId);
     if (input.quantity.scaled < 0n) throw new MasterDataError("VALIDATION_FAILED", "Opening stock cannot be negative.");
     // Stored in the item's base unit so every later movement compares like with like.
-    const inBaseUnit = this.units.convertExact(input.quantity, item.baseUnit, item.id);
+    const inBaseUnit = await this.unitsFor(context.companyId).convertExact(input.quantity, item.baseUnit, item.id);
     const opening: OpeningStock = { ...input, quantity: inBaseUnit, id: input.id ?? randomUUID(), companyId: context.companyId };
-    const { version, command } = this.#commit(context, this.#stores.openingStock, started, opening, options);
+    const { version, command } = await this.#commit(context, this.#stores.openingStock, started, opening, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
   // --------------------------------------------------- prices and tax defaults
 
-  createPriceList(context: RequestContext, input: Omit<PriceList, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<PriceList> {
-    const started = this.#begin(context, "masters.price_list.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.priceLists, started);
+  async createPriceList(context: RequestContext, input: Omit<PriceList, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<PriceList>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.price_list.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.priceLists, started);
     const priceList: PriceList = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.priceLists, started, priceList, options);
+    const { version, command } = await this.#commit(context, this.#stores.priceLists, started, priceList, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
-  setPrice(context: RequestContext, input: Omit<PriceListEntry, "id" | "companyId"> & { readonly id?: Id }, options: WriteOptions): WriteResult<PriceListEntry> {
-    const started = this.#begin(context, "masters.price.set", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.priceEntries, started);
+  async setPrice(context: RequestContext, input: Omit<PriceListEntry, "id" | "companyId"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<PriceListEntry>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.price.set", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.priceEntries, started);
     if (input.ratePaise < 0n) throw new MasterDataError("VALIDATION_FAILED", "A price cannot be negative.");
-    this.units.unit(input.unit);
+    await this.unitsFor(context.companyId).unit(input.unit);
     const entry: PriceListEntry = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId };
-    const { version, command } = this.#commit(context, this.#stores.priceEntries, started, entry, options);
+    const { version, command } = await this.#commit(context, this.#stores.priceEntries, started, entry, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
   /**
@@ -496,44 +567,43 @@ export class MasterDataService {
    * highest minimum quantity that the order still satisfies. Returns null rather than
    * inventing a price when the item is not on the list.
    */
-  priceFor(context: RequestContext, priceListId: Id, itemId: Id, unit: string, orderQuantity: Quantity, asOf: IsoDate = today()): { ratePaise: Paise; unit: string; entryId: Id } | null {
-    const entries = this.#stores.priceEntries.list(context.companyId, asOf).filter((entry) => entry.priceListId === priceListId && entry.itemId === itemId);
-    const applicable = entries.filter((entry) => {
-      if (!entry.minimumQuantity) return true;
-      const threshold = this.units.convert(entry.minimumQuantity, orderQuantity.unit, itemId);
-      return orderQuantity.scaled >= threshold.quantity.scaled;
-    });
+  async priceFor(context: RequestContext, priceListId: Id, itemId: Id, unit: string, orderQuantity: Quantity, asOf: IsoDate = today()): Promise<{ ratePaise: Paise; unit: string; entryId: Id } | null> {
+    const units = this.unitsFor(context.companyId);
+    const entries = (await this.#stores.priceEntries.list(context.companyId, asOf)).filter((entry) => entry.priceListId === priceListId && entry.itemId === itemId);
+    // The smallest order each slab needs, in the unit being ordered.
+    const minimumOf = async (entry: PriceListEntry): Promise<bigint> => entry.minimumQuantity ? (await units.convert(entry.minimumQuantity, orderQuantity.unit, itemId)).quantity.scaled : 0n;
+    const slabs: { entry: PriceListEntry; minimum: bigint }[] = [];
+    for (const entry of entries) slabs.push({ entry, minimum: await minimumOf(entry) });
+    const applicable = slabs.filter((slab) => !slab.entry.minimumQuantity || orderQuantity.scaled >= slab.minimum);
     if (applicable.length === 0) return null;
-    const best = applicable.reduce((winner, candidate) => {
-      const winnerMinimum = winner.minimumQuantity ? this.units.convert(winner.minimumQuantity, orderQuantity.unit, itemId).quantity.scaled : 0n;
-      const candidateMinimum = candidate.minimumQuantity ? this.units.convert(candidate.minimumQuantity, orderQuantity.unit, itemId).quantity.scaled : 0n;
-      return candidateMinimum > winnerMinimum ? candidate : winner;
-    });
-    const converted = this.units.factor(best.unit, unit, itemId);
+    const best = applicable.reduce((winner, candidate) => (candidate.minimum > winner.minimum ? candidate : winner)).entry;
+    const converted = await units.factor(best.unit, unit, itemId);
     if (!converted) return null;
     // Rate per requested unit = rate per priced unit divided by units per priced unit.
     const ratePaise = (best.ratePaise * converted.denominator) / converted.numerator;
     return { ratePaise, unit: unit.toUpperCase(), entryId: best.id };
   }
 
-  setTaxDefault(context: RequestContext, input: Omit<TaxDefault, "id" | "companyId"> & { readonly id?: Id }, options: WriteOptions): WriteResult<TaxDefault> {
-    const started = this.#begin(context, "masters.tax_default.set", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.taxDefaults, started);
+  async setTaxDefault(context: RequestContext, input: Omit<TaxDefault, "id" | "companyId"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<TaxDefault>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.tax_default.set", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.taxDefaults, started);
     if ((input.itemId === undefined) === (input.hsnSac === undefined)) throw new MasterDataError("VALIDATION_FAILED", "A tax default applies either to one item or to an HSN code, not both and not neither.");
     if (input.gstRateBasisPoints < 0 || input.gstRateBasisPoints > 10000) throw new MasterDataError("VALIDATION_FAILED", "A GST rate must be between 0 and 100 percent.");
     if (!input.source.trim()) throw new MasterDataError("VALIDATION_FAILED", "Record where this rate comes from so it can be explained later.");
     const taxDefault: TaxDefault = { ...input, id: input.id ?? randomUUID(), companyId: context.companyId };
-    const { version, command } = this.#commit(context, this.#stores.taxDefaults, started, taxDefault, options);
+    const { version, command } = await this.#commit(context, this.#stores.taxDefaults, started, taxDefault, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
   /**
    * The GST default for an item on a date: an item-level default wins over an HSN-level
    * one. Returns null when nothing is configured, so callers ask instead of assuming 18%.
    */
-  taxDefaultFor(context: RequestContext, itemId: Id, asOf: IsoDate = today()): TaxDefault | null {
-    const item = this.item(context, itemId, asOf);
-    const defaults = this.#stores.taxDefaults.list(context.companyId, asOf);
+  async taxDefaultFor(context: RequestContext, itemId: Id, asOf: IsoDate = today()): Promise<TaxDefault | null> {
+    const item = await this.item(context, itemId, asOf);
+    const defaults = await this.#stores.taxDefaults.list(context.companyId, asOf);
     return defaults.find((entry) => entry.itemId === itemId) ?? defaults.find((entry) => entry.hsnSac === item.hsnSac) ?? null;
   }
 
@@ -549,12 +619,12 @@ export class MasterDataService {
    * Neither the item nor the code has to exist. A line whose item is not in the master list is the
    * ordinary case when a supplier's bill has only just been photographed.
    */
-  taxDefaultCandidates(
+  async taxDefaultCandidates(
     context: RequestContext,
     lookup: { readonly itemId?: Id; readonly hsnSac?: string },
     asOf: IsoDate = today(),
-  ): readonly Version<TaxDefault>[] {
-    const defaults = this.#stores.taxDefaults.list(context.companyId, asOf);
+  ): Promise<readonly Version<TaxDefault>[]> {
+    const defaults = await this.#stores.taxDefaults.list(context.companyId, asOf);
     const code = lookup.hsnSac?.trim();
     const matching = [
       ...(lookup.itemId === undefined ? [] : defaults.filter((entry) => entry.itemId === lookup.itemId)),
@@ -562,55 +632,60 @@ export class MasterDataService {
     ];
     // The version, not just the row: the effective date is half of what makes a rate defensible,
     // and it lives on the version rather than on the record.
-    return matching
-      .map((entry) => this.#stores.taxDefaults.asOf(context.companyId, entry.id, asOf))
-      .filter((version): version is Version<TaxDefault> => version !== null);
+    const versions = matching.map((entry) => this.#stores.taxDefaults.asOf(context.companyId, entry.id, asOf));
+    return (await Promise.all(versions)).filter((version): version is Version<TaxDefault> => version !== null);
   }
 
   // ------------------------------------------------ logistics and bank accounts
 
-  createTransporter(context: RequestContext, input: Omit<Transporter, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<Transporter> {
-    const started = this.#begin(context, "masters.transporter.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.transporters, started);
+  async createTransporter(context: RequestContext, input: Omit<Transporter, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<Transporter>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.transporter.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.transporters, started);
     const identifier = validate.normaliseIdentifier(input.transporterId);
     if (identifier.length !== 15) throw new MasterDataError("VALIDATION_FAILED", "A transporter ID or GST number has 15 characters.");
     const transporter: Transporter = { ...input, transporterId: identifier, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.transporters, started, transporter, options);
+    const { version, command } = await this.#commit(context, this.#stores.transporters, started, transporter, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
-  createVehicle(context: RequestContext, input: Omit<Vehicle, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<Vehicle> {
-    const started = this.#begin(context, "masters.vehicle.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.vehicles, started);
+  async createVehicle(context: RequestContext, input: Omit<Vehicle, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<Vehicle>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.vehicle.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.vehicles, started);
     this.#require(validate.validateVehicleNumber(input.registrationNumber));
     const registrationNumber = validate.normaliseIdentifier(input.registrationNumber);
-    const duplicate = this.#stores.vehicles.list(context.companyId, FAR_FUTURE).find((existing) => existing.registrationNumber === registrationNumber);
+    const duplicate = (await this.#stores.vehicles.list(context.companyId, FAR_FUTURE)).find((existing) => existing.registrationNumber === registrationNumber);
     if (duplicate) throw new MasterDataError("DUPLICATE_BLOCKED", `Vehicle ${registrationNumber} is already saved.`);
     const vehicle: Vehicle = { ...input, registrationNumber, id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.vehicles, started, vehicle, options);
+    const { version, command } = await this.#commit(context, this.#stores.vehicles, started, vehicle, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
-  vehicles(context: RequestContext, asOf: IsoDate = today()): readonly Vehicle[] {
-    return this.#stores.vehicles.list(context.companyId, asOf);
+  async vehicles(context: RequestContext, asOf: IsoDate = today()): Promise<readonly Vehicle[]> {
+    return await this.#stores.vehicles.list(context.companyId, asOf);
   }
 
-  transporters(context: RequestContext, asOf: IsoDate = today()): readonly Transporter[] {
-    return this.#stores.transporters.list(context.companyId, asOf);
+  async transporters(context: RequestContext, asOf: IsoDate = today()): Promise<readonly Transporter[]> {
+    return await this.#stores.transporters.list(context.companyId, asOf);
   }
 
-  createBankAccount(context: RequestContext, input: Omit<BankAccount, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): WriteResult<BankAccount> {
-    const started = this.#begin(context, "masters.bank_account.create", options, input);
-    if (started.existingRecordId) return this.#retried(context, this.#stores.bankAccounts, started);
+  async createBankAccount(context: RequestContext, input: Omit<BankAccount, "id" | "companyId" | "active"> & { readonly id?: Id }, options: WriteOptions): Promise<WriteResult<BankAccount>> {
+    return this.#atomic(context.companyId, async () => {
+    const started = await this.#begin(context, "masters.bank_account.create", options, input);
+    if (started.existingRecordId) return await this.#retried(context, this.#stores.bankAccounts, started);
     this.#require(validate.combine(validate.validateIfsc(input.ifsc), validate.validateBankAccountNumber(input.accountNumber)));
     if (input.ownerType === "party" && !input.partyId) throw new MasterDataError("VALIDATION_FAILED", "Say which supplier or customer this bank account belongs to.");
     const account: BankAccount = { ...input, ifsc: validate.normaliseIdentifier(input.ifsc), accountNumber: input.accountNumber.replace(/\s/g, ""), id: input.id ?? randomUUID(), companyId: context.companyId, active: true };
-    const { version, command } = this.#commit(context, this.#stores.bankAccounts, started, account, options);
+    const { version, command } = await this.#commit(context, this.#stores.bankAccounts, started, account, options);
     return { record: version.data, version, command, warnings: [], similar: [] };
+    });
   }
 
-  bankAccounts(context: RequestContext, asOf: IsoDate = today()): readonly BankAccount[] {
-    return this.#stores.bankAccounts.list(context.companyId, asOf);
+  async bankAccounts(context: RequestContext, asOf: IsoDate = today()): Promise<readonly BankAccount[]> {
+    return await this.#stores.bankAccounts.list(context.companyId, asOf);
   }
 
   // --------------------------------------------------------------- snapshots
@@ -619,31 +694,31 @@ export class MasterDataService {
    * The facts a transaction should copy. Callers pass the document date so the
    * snapshot reflects the master as it stood then, not as it stands now.
    */
-  snapshot(context: RequestContext, kind: MasterKind, id: Id, asOf: IsoDate = today()): MasterSnapshot {
+  async snapshot(context: RequestContext, kind: MasterKind, id: Id, asOf: IsoDate = today()): Promise<MasterSnapshot> {
     const store = this.#storeFor(kind);
-    const version = store.asOf(context.companyId, id, asOf);
+    const version = await store.asOf(context.companyId, id, asOf);
     if (!version) throw new MasterDataError("NOT_FOUND", "That record did not exist on this date.");
     return snapshotFrom(kind, version as Version<object>);
   }
 
-  #storeFor(kind: MasterKind): VersionedStore<{ readonly id: Id; readonly companyId: Id }> {
-    const map: Record<MasterKind, VersionedStore<never>> = {
+  #storeFor(kind: MasterKind): VersionStore<{ readonly id: Id; readonly companyId: Id }> {
+    const map: Record<MasterKind, VersionStore<never>> = {
       party: this.#stores.parties as never, party_address: this.#stores.addresses as never, item: this.#stores.items as never,
       warehouse: this.#stores.warehouses as never, batch: this.#stores.batches as never, serial: this.#stores.serials as never,
       price_list: this.#stores.priceLists as never, tax_default: this.#stores.taxDefaults as never,
       transporter: this.#stores.transporters as never, vehicle: this.#stores.vehicles as never, bank_account: this.#stores.bankAccounts as never,
     };
-    return map[kind] as unknown as VersionedStore<{ readonly id: Id; readonly companyId: Id }>;
+    return map[kind] as unknown as VersionStore<{ readonly id: Id; readonly companyId: Id }>;
   }
 
   /** Full change history for one record, for the "who changed this" screen. */
-  history(context: RequestContext, kind: MasterKind, id: Id): readonly Version<{ readonly id: Id; readonly companyId: Id }>[] {
-    return this.#storeFor(kind).history(context.companyId, id);
+  async history(context: RequestContext, kind: MasterKind, id: Id): Promise<readonly Version<{ readonly id: Id; readonly companyId: Id }>[]> {
+    return await this.#storeFor(kind).history(context.companyId, id);
   }
 
   /** Named export for tests and screens that need the raw duplicate scores. */
-  similarParties(context: RequestContext, subject: MatchableRecord, asOf: IsoDate = today()): readonly MatchCandidate<MatchableRecord>[] {
-    return findMatches(this.parties(context, asOf).map((party) => this.#partyMatchable(party, asOf)), subject);
+  async similarParties(context: RequestContext, subject: MatchableRecord, asOf: IsoDate = today()): Promise<readonly MatchCandidate<MatchableRecord>[]> {
+    return findMatches(await this.#partyMatchables(context, asOf), subject);
   }
 }
 

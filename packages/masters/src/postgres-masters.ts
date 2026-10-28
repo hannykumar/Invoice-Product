@@ -12,11 +12,13 @@
 import { randomUUID } from "node:crypto";
 import type { SqlExecutor, TransactionalExecutor } from "../../platform/src/database.ts";
 import { canonicalJson } from "../../platform/src/platform.ts";
-import { reviveJson } from "../../platform/src/postgres-audit.ts";
+import { PostgresAuditLog, reviveJson } from "../../platform/src/postgres-audit.ts";
+import { PostgresCommandService } from "../../platform/src/postgres-platform.ts";
 import { PlatformError } from "../../platform/src/types.ts";
 import { isIsoDate, pageOf, today } from "./effective.ts";
 import type { CommandRecordStore, Page, Version, VersionStore } from "./effective.ts";
-import { MasterDataError } from "./masters.ts";
+import { MasterDataError } from "./errors.ts";
+import { MASTER_APPROVAL_POLICIES, MasterDataService } from "./masters.ts";
 import type { Id, IsoDate, MasterKind } from "./types.ts";
 import { UnitRegistry, createDefaultUnitRegistry } from "./units.ts";
 import type { Quantity, UnitConversion, UnitOfMeasure, UnitStore } from "./units.ts";
@@ -33,18 +35,31 @@ const VERSION = "v.record_id, v.version, v.company_id, v.effective_from::text AS
 /** The versions of one company's records of one kind. The join is what keeps a party's id from answering as an item. */
 const VERSIONS_OF_KIND = "master_versions v JOIN master_records r ON r.company_id = v.company_id AND r.id = v.record_id WHERE v.company_id = $1 AND r.kind = $2";
 
+/**
+ * What happens to a record on its way into and out of `master_versions.data` (#352: the app seals
+ * everything but the ids). `seal` runs before a version is written, `open` on every row read back.
+ */
+export interface MasterCodec {
+  seal<T extends { readonly id: Id; readonly companyId: Id }>(data: T, kind: StoredMasterKind): Promise<object>;
+  open<T>(stored: unknown, kind: StoredMasterKind, companyId: Id): Promise<T>;
+}
+
+const plain: MasterCodec = { seal: async (data) => data, open: async (stored) => reviveJson(stored) };
+
+const versionOf = async <T>(r: Row, kind: StoredMasterKind, codec: MasterCodec): Promise<Version<T>> =>
+  Object.freeze({
+    recordId: String(r.record_id), companyId: String(r.company_id), version: Number(r.version), effectiveFrom: String(r.effective_from),
+    data: Object.freeze(await codec.open<T>(r.data, kind, String(r.company_id))), recordedAt: (r.recorded_at as Date).toISOString(), recordedBy: String(r.recorded_by),
+    ...(r.reason === null ? {} : { reason: String(r.reason) }),
+  });
+
 export class PostgresVersionedStore<T extends { readonly id: Id; readonly companyId: Id }> implements VersionStore<T> {
   readonly #db: TransactionalExecutor;
   readonly #kind: StoredMasterKind;
-  constructor(db: TransactionalExecutor, kind: StoredMasterKind) { this.#db = db; this.#kind = kind; }
+  readonly #codec: MasterCodec;
+  constructor(db: TransactionalExecutor, kind: StoredMasterKind, codec: MasterCodec = plain) { this.#db = db; this.#kind = kind; this.#codec = codec; }
 
-  #version(r: Row): Version<T> {
-    return Object.freeze({
-      recordId: String(r.record_id), companyId: String(r.company_id), version: Number(r.version), effectiveFrom: String(r.effective_from),
-      data: Object.freeze(reviveJson<T>(r.data)), recordedAt: (r.recorded_at as Date).toISOString(), recordedBy: String(r.recorded_by),
-      ...(r.reason === null ? {} : { reason: String(r.reason) }),
-    });
-  }
+  #version(r: Row): Promise<Version<T>> { return versionOf<T>(r, this.#kind, this.#codec); }
 
   /** Records a new version. Back-dating is allowed and slots into the timeline. */
   async append(data: T, effectiveFrom: IsoDate, recordedBy: Id, reason?: string): Promise<Version<T>> {
@@ -63,9 +78,9 @@ export class PostgresVersionedStore<T extends { readonly id: Id; readonly compan
              FROM master_records r WHERE r.company_id = $1 AND r.id = $3 AND r.kind = $2
            RETURNING record_id, version, company_id, effective_from, data, recorded_by, recorded_at, reason)
          SELECT ${VERSION} FROM v`,
-        [data.companyId, this.#kind, data.id, effectiveFrom, canonicalJson(data), recordedBy, reason ?? null],
+        [data.companyId, this.#kind, data.id, effectiveFrom, canonicalJson(await this.#codec.seal(data, this.#kind)), recordedBy, reason ?? null],
       );
-      if (rows[0] !== undefined) return this.#version(rows[0]);
+      if (rows[0] !== undefined) return await this.#version(rows[0]);
       const other = await sql.query("SELECT kind FROM master_records WHERE company_id = $1 AND id = $2", [data.companyId, data.id]);
       if (other.rows[0] !== undefined) throw new MasterDataError("CONFLICT", "This reference is already used by a different kind of record.");
       // The id exists but this company cannot see it: it is another company's record.
@@ -110,7 +125,7 @@ export class PostgresVersionedStore<T extends { readonly id: Id; readonly compan
         ORDER BY ${page === undefined ? "r.seq" : "r.id"} LIMIT $5`,
       [companyId, this.#kind, asOf, page?.after ?? null, limitOf(page)],
     ));
-    return rows.map((r) => Object.freeze(reviveJson<T>(r.data)));
+    return Promise.all(rows.map(async (r) => Object.freeze(await this.#codec.open<T>(r.data, this.#kind, companyId))));
   }
 
   async size(companyId: Id): Promise<number> {
@@ -123,7 +138,7 @@ export class PostgresVersionedStore<T extends { readonly id: Id; readonly compan
   async #versions(companyId: Id, id: Id, rest: string, values: readonly unknown[]): Promise<Version<T>[]> {
     if (!UUID.test(id)) return [];
     const { rows } = await this.#db.tenantTransaction(companyId, (sql) => sql.query(`SELECT ${VERSION} FROM ${VERSIONS_OF_KIND} AND v.record_id = $3 ${rest}`, [companyId, this.#kind, id, ...values]));
-    return rows.map((r) => this.#version(r));
+    return Promise.all(rows.map((r) => this.#version(r)));
   }
 }
 
@@ -229,4 +244,39 @@ export class PostgresUnitRegistry implements UnitStore {
   async factor(from: string, to: string, itemId?: string): Promise<{ numerator: bigint; denominator: bigint } | null> { return (await this.#load()).factor(from, to, itemId); }
   async convert(value: Quantity, toUnit: string, itemId?: string): Promise<{ quantity: Quantity; exact: boolean }> { return (await this.#load()).convert(value, toUnit, itemId); }
   async convertExact(value: Quantity, toUnit: string, itemId?: string): Promise<Quantity> { return (await this.#load()).convertExact(value, toUnit, itemId); }
+}
+
+/** One version of any kind, with where it sits in the order versions were recorded. */
+export interface SequencedVersion { readonly kind: StoredMasterKind; readonly seq: number; readonly version: Version<{ readonly id: Id; readonly companyId: Id }> }
+
+/**
+ * Issue #366 — every version recorded for a company after `afterSeq`, oldest first, across all kinds.
+ * This is what a process that keeps a copy for its synchronous readers asks once per request: nothing
+ * but the delta, and "no rows" when nothing changed. Joins the open unit of work, so inside an action
+ * it also sees what that action has written.
+ */
+export async function versionsSince(db: TransactionalExecutor, companyId: Id, afterSeq: number, codec: MasterCodec = plain, limit = 500): Promise<readonly SequencedVersion[]> {
+  const { rows } = await db.tenantTransaction(companyId, (sql) => sql.query(
+    `SELECT r.kind, v.seq::bigint::text AS seq, ${VERSION} FROM master_versions v JOIN master_records r ON r.company_id = v.company_id AND r.id = v.record_id
+      WHERE v.company_id = $1 AND v.seq > $2 ORDER BY v.seq LIMIT $3`,
+    [companyId, afterSeq, limit],
+  ));
+  return Promise.all(rows.map(async (r) => ({ kind: r.kind as StoredMasterKind, seq: Number(r.seq), version: await versionOf<{ readonly id: Id; readonly companyId: Id }>(r, r.kind as StoredMasterKind, codec) })));
+}
+
+/**
+ * Issue #366 — the master-data service on PostgreSQL: its records, units, command records, idempotency
+ * keys and audit events are all rows, and each write is one unit of work (joining the request's, or
+ * opening its own under the company's write lock). Nothing is kept in the process, so any number of
+ * processes on one database are the same shop.
+ */
+export function postgresMasterData(db: TransactionalExecutor, codec: MasterCodec = plain): MasterDataService {
+  const audit = new PostgresAuditLog(db);
+  return new MasterDataService(
+    new PostgresCommandService(db, audit, MASTER_APPROVAL_POLICIES),
+    audit,
+    (companyId) => new PostgresUnitRegistry(db, companyId),
+    <T extends { readonly id: Id; readonly companyId: Id }>(kind: StoredMasterKind) => new PostgresVersionedStore<T>(db, kind, codec),
+    { commandIndex: new PostgresCommandRecordIndex(db), atomically: (companyId, work) => db.unitOfWork(companyId, work) },
+  );
 }

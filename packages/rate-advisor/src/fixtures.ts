@@ -39,7 +39,7 @@ export class InMemoryRateAudit implements RateAuditPort {
  * The cement rate changes on 2026-07-01 — 18% before, 28% from — which is what makes the
  * back-dated-document test mean something. A bill from June must still be answered with 18%.
  */
-export const makeShop = (options: { readonly now?: string } = {}) => {
+export const makeShop = async (options: { readonly now?: string } = {}) => {
   const access = new AccessControl();
   access.grant({
     companyId: COMPANY, userId: OWNER, branchIds: new Set(['main']), active: true,
@@ -51,36 +51,36 @@ export const makeShop = (options: { readonly now?: string } = {}) => {
   let counter = 0;
   const key = (label: string) => `rate-${label}-${(counter += 1)}`;
 
-  const steel = masters.createItem(context, {
+  const steel = (await masters.createItem(context, {
     code: 'TMT12', name: 'TMT Steel Bar 12mm', kind: 'goods', hsnSac: '72142090', baseUnit: 'KGS',
-  } as never, { idempotencyKey: key('item-steel'), effectiveFrom: '2026-04-01' }).record.id;
+  } as never, { idempotencyKey: key('item-steel'), effectiveFrom: '2026-04-01' })).record.id;
 
-  const cement = masters.createItem(context, {
+  const cement = (await masters.createItem(context, {
     code: 'CEM', name: 'Portland Cement 50kg', kind: 'goods', hsnSac: '25232930', baseUnit: 'BAG',
-  } as never, { idempotencyKey: key('item-cement'), effectiveFrom: '2026-04-01' }).record.id;
+  } as never, { idempotencyKey: key('item-cement'), effectiveFrom: '2026-04-01' })).record.id;
 
-  const cola = masters.createItem(context, {
+  const cola = (await masters.createItem(context, {
     code: 'COLA', name: 'Aerated drink 300ml', kind: 'goods', hsnSac: '22021010', baseUnit: 'PCS',
-  } as never, { idempotencyKey: key('item-cola'), effectiveFrom: '2026-04-01' }).record.id;
+  } as never, { idempotencyKey: key('item-cola'), effectiveFrom: '2026-04-01' })).record.id;
 
   // An item with nothing said about its tax anywhere. The "we have to ask" case.
-  const mystery = masters.createItem(context, {
+  const mystery = (await masters.createItem(context, {
     code: 'MYST', name: 'Assorted hardware', kind: 'goods', hsnSac: '82055900', baseUnit: 'NOS',
-  } as never, { idempotencyKey: key('item-mystery'), effectiveFrom: '2026-04-01' }).record.id;
+  } as never, { idempotencyKey: key('item-mystery'), effectiveFrom: '2026-04-01' })).record.id;
 
-  masters.setTaxDefault(context, {
+  await masters.setTaxDefault(context, {
     itemId: steel, gstRateBasisPoints: 1800, reverseCharge: false,
     source: `Notification 1/2017-CTR Schedule III entry 224 ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: key('tax-steel'), effectiveFrom: '2026-04-01' });
 
   // Cement is set at the HSN, not the item, which is how a business that sells three brands of the
   // same thing usually sets it up.
-  masters.setTaxDefault(context, {
+  await masters.setTaxDefault(context, {
     hsnSac: '25232930', gstRateBasisPoints: 1800, reverseCharge: false,
     source: `Notification 1/2017-CTR Schedule III ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: key('tax-cement-old'), effectiveFrom: '2026-04-01' });
 
-  masters.setTaxDefault(context, {
+  await masters.setTaxDefault(context, {
     hsnSac: '22021010', gstRateBasisPoints: 2800, cessRateBasisPoints: 1200, reverseCharge: false,
     source: `Notification 1/2017-CTR Schedule IV with compensation cess ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: key('tax-cola'), effectiveFrom: '2026-04-01' });

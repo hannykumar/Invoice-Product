@@ -132,6 +132,16 @@ export class VersionedStore<T extends { readonly id: Id; readonly companyId: Id 
     return page === undefined ? rows : pageOf(rows.sort((left, right) => (left.id < right.id ? -1 : 1)), (row) => row.id, page);
   }
 
+  /** Puts back a version exactly as it was recorded elsewhere (a copy kept from a database), without renumbering it. */
+  restore(version: Version<T>): void {
+    const history = this.#versions.get(version.recordId) ?? [];
+    if (history[0] && history[0].companyId !== version.companyId) throw new PlatformError("TENANT_ISOLATION", "This record belongs to another company.");
+    if (history.some((held) => held.version === version.version)) return;
+    history.push(Object.freeze(version));
+    history.sort((left, right) => left.version - right.version);
+    this.#versions.set(version.recordId, history);
+  }
+
   has(id: Id): boolean {
     return this.#versions.has(id);
   }

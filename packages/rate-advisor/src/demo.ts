@@ -24,7 +24,7 @@ const show = (advice: RateAdvice): void => {
 };
 
 export const runDemo = async (): Promise<void> => {
-  const shop = makeShop();
+  const shop = await makeShop();
 
   heading('1. The tax column on a photographed bill is unreadable');
   line('  The bill names TMT bars. The app offers the rate its own register holds, and says why.');
@@ -46,8 +46,8 @@ export const runDemo = async (): Promise<void> => {
   heading('3. A second bill charges 18% on cement, and the register now says otherwise');
   // A rate change is a new version of the entry that already exists, not a second entry beside it.
   // Two entries would be a register disagreeing with itself, which is a different problem.
-  const cementEntry = shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29')[0];
-  shop.masters.setTaxDefault(shop.context, {
+  const cementEntry = (await shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29'))[0];
+  await shop.masters.setTaxDefault(shop.context, {
     id: cementEntry?.data.id,
     itemId: shop.items.cement, gstRateBasisPoints: 2800, reverseCharge: false,
     source: `Cement revised to 28% from 30 August 2026 ${SYNTHETIC_BASIS}`,
