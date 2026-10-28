@@ -20,7 +20,7 @@
  * synchronous ports owned by other lanes. They read `masterView(companyId)` — in memory the service's
  * own stores, on PostgreSQL a copy of what the database holds that `refreshMasterView` brings up to
  * date at the start of every request (and after every write). Master versions are append-only, so the
- * copy can lag but is never wrong; it is thrown away if an action fails (`forgetMasterView`).
+ * copy can lag but is never wrong; it is rebuilt from the database after an action fails (`forgetMasterView`).
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { CompanyId } from '@invoice/kernel';
@@ -102,28 +102,25 @@ const KINDS: readonly MasterStoreKind[] = ['party', 'party_address', 'item', 'wa
 interface View {
   readonly stores: Map<MasterStoreKind, VersionedStore<Record_>>;
   readonly model: MasterReadModel;
-  /** The last version number brought in, or null before the first read. */
-  seq: number | null;
+  /** The last version number brought in. */
+  seq: number;
+  /** An action failed after this copy may have read its unsaved rows: the next refresh rebuilds it. */
+  stale: boolean;
 }
 
 const views = new Map<string, View>();
 /** Per company, the refresh in progress: a second request waits its turn and then reads again. */
 const refreshing = new Map<string, Promise<void>>();
 
-const viewOf = (companyId: string): View => {
-  let view = views.get(companyId);
-  if (view === undefined) {
-    const stores = new Map<MasterStoreKind, VersionedStore<Record_>>(KINDS.map((kind) => [kind, new VersionedStore<Record_>()]));
-    const of = (kind: MasterStoreKind) => stores.get(kind) as unknown as VersionedStore<never>;
-    const model = new MasterReadModel({
-      parties: of('party'), addresses: of('party_address'), items: of('item'), warehouses: of('warehouse'), taxDefaults: of('tax_default'),
-      transporters: of('transporter'), vehicles: of('vehicle'), bankAccounts: of('bank_account'),
-      byKind: (kind: MasterKind) => stores.get(kind) as VersionedStore<Record_>,
-    } as never, () => { throw new Error('Units are read from the master-data service, not from the copy.'); });
-    view = { stores, model, seq: null };
-    views.set(companyId, view);
-  }
-  return view;
+const newView = (): View => {
+  const stores = new Map<MasterStoreKind, VersionedStore<Record_>>(KINDS.map((kind) => [kind, new VersionedStore<Record_>()]));
+  const of = (kind: MasterStoreKind) => stores.get(kind) as unknown as VersionedStore<never>;
+  const model = new MasterReadModel({
+    parties: of('party'), addresses: of('party_address'), items: of('item'), warehouses: of('warehouse'), taxDefaults: of('tax_default'),
+    transporters: of('transporter'), vehicles: of('vehicle'), bankAccounts: of('bank_account'),
+    byKind: (kind: MasterKind) => stores.get(kind) as VersionedStore<Record_>,
+  } as never, () => { throw new Error('Units are read from the master-data service, not from the copy.'); });
+  return { stores, model, seq: 0, stale: false };
 };
 
 /**
@@ -136,14 +133,18 @@ export const refreshMasterView = (companyId: CompanyId | string): Promise<void> 
   if (db === null) return Promise.resolve();
   const company = String(companyId);
   const run = async (): Promise<void> => {
-    const view = viewOf(company);
+    const current = views.get(company);
+    // A stale or missing copy is rebuilt aside and swapped in whole, so a request already reading the
+    // old one keeps reading it and never finds the company without its master data.
+    const view = current === undefined || current.stale ? newView() : current;
     for (;;) {
-      const batch = await versionsSince(db, company, view.seq ?? 0, codec);
+      const batch = await versionsSince(db, company, view.seq, codec);
       for (const { kind, version } of batch) view.stores.get(kind)?.restore(version);
       const last = batch[batch.length - 1];
-      view.seq = last === undefined ? (view.seq ?? 0) : last.seq;
-      if (batch.length < 500) return;
+      if (last !== undefined) view.seq = last.seq;
+      if (batch.length < 500) break;
     }
+    if (view !== current) views.set(company, view);
   };
   const next = (refreshing.get(company) ?? Promise.resolve()).catch(() => undefined).then(run);
   refreshing.set(company, next);
@@ -151,8 +152,11 @@ export const refreshMasterView = (companyId: CompanyId | string): Promise<void> 
   return next;
 };
 
-/** Throws the copy away; the next `refreshMasterView` reads the database again. After a failed action. */
-export const forgetMasterView = (companyId: CompanyId | string): void => { views.delete(String(companyId)); };
+/** Marks the copy stale; the next `refreshMasterView` reads the database again from the start. After a failed action. */
+export const forgetMasterView = (companyId: CompanyId | string): void => {
+  const view = views.get(String(companyId));
+  if (view !== undefined) view.stale = true;
+};
 
 onActionFailed(forgetMasterView);
 
@@ -163,8 +167,8 @@ onActionFailed(forgetMasterView);
 export const masterView = (companyId: CompanyId | string): MasterReadModel => {
   const { service } = masters();
   if (durableDatabase() === null) return syncViewOf(service);
-  const view = viewOf(String(companyId));
-  if (view.seq === null) throw new Error('This company\'s master data has not been read yet: await refreshMasterView(companyId) first.');
+  const view = views.get(String(companyId));
+  if (view === undefined) throw new Error('This company\'s master data has not been read yet: await refreshMasterView(companyId) first.');
   return view.model;
 };
 

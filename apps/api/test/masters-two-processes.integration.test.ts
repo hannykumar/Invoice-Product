@@ -89,3 +89,19 @@ test('a customer, a supplier and an item saved by one process are on the other o
   assert.ok(kept.suppliers.includes(`Two Process Steels ${run}`));
   assert.ok(kept.items.includes(`Two Process Widget ${run}`));
 });
+
+test('a write that fails while other requests are reading never leaves them without the master data', { skip }, async () => {
+  const run = randomBytes(3).toString('hex');
+  const [a] = [await startOne()];
+  const gstin = syntheticGstin('29', `AABCR${String(Math.floor(Math.random() * 9000) + 1000)}C`);
+  const first = await a.call('POST', '/api/suppliers', { name: `Race Steels ${run}`, registration: 'regular', gstin, pincode: '560058', city: 'Bengaluru', address1: '4 Peenya', acknowledgeSimilar: true }, a.token);
+  assert.equal(first.status, 200, JSON.stringify(first));
+  for (let round = 0; round < 25; round += 1) {
+    // The same GST number again fails inside its action, which throws this process's copy away.
+    const failing = a.call('POST', '/api/suppliers', { name: `Race Other ${run} ${round}`, registration: 'regular', gstin, pincode: '560058', city: 'Bengaluru', address1: '9 Road', acknowledgeSimilar: true }, a.token);
+    const reads = Array.from({ length: 4 }, () => a.call('GET', '/api/catalogue', undefined, a.token));
+    const [refused, ...answers] = await Promise.all([failing, ...reads]);
+    assert.notEqual(refused.status, 200);
+    for (const answer of answers) assert.equal(answer.status, 200, JSON.stringify(answer));
+  }
+});
