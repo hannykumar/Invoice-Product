@@ -14,7 +14,7 @@ import { OutboxRelay } from '../../../packages/platform/src/outbox.ts';
 import { PostgresAuditLog } from '../../../packages/platform/src/postgres-audit.ts';
 import { MEMORY, recordId, securityOf, type Persistence } from './persistence.ts';
 import type { TransactionalExecutor } from '../../../packages/platform/src/database.ts';
-import { recordMasterDataAs } from './master-data.ts';
+import { recordMasterDataAs, refreshMasterView } from './master-data.ts';
 import { asOneAction, enableDurability, loadCompany } from './durable.ts';
 import { AuthenticationError, createSignIn, signInStore, type SignIn } from './sign-in.ts';
 import { Team } from '../../../packages/platform/src/team.ts';
@@ -218,14 +218,14 @@ export class ApiRuntime {
       const seeded = SYNTHETIC_BUSINESS_DETAILS[context.companyId];
       // The made-up address and phone are demo data; a company with a database types its own.
       if (this.#persistence.kind === 'memory' && seeded !== undefined && businessDetailsOf(context.companyId) === null) {
-        saveBusinessDetails(context.companyId, { name: details.name, gstin: details.gstin }, seeded);
+        await saveBusinessDetails(context.companyId, { name: details.name, gstin: details.gstin }, seeded);
       }
-      application = DemoApplication.create({
+      application = refreshMasterView(company.companyId).then(() => DemoApplication.create({
         companyId: asId<'Company'>(company.companyId),
         branchId: asId<'Branch'>(company.branchId),
         setupUserId: asId<'User'>(company.userId),
         ...storedSeed(this.#persistence, company.companyId, details),
-      }, this.#persistence).then(async (created) => {
+      }, this.#persistence)).then(async (created) => {
         // After a restart: this company's customers, items, business details and bill copies.
         await loadCompany(company.companyId);
         return created;
@@ -329,6 +329,8 @@ export class ApiRuntime {
     const company = SYNTHETIC_PLATFORM_COMPANIES.find((candidate) => candidate.companyId === companyId);
     if (company === undefined) return false;
     const app = await this.application({ companyId, branchId: company.branchId, actorId: company.userId, sessionId: `worker:${companyId}`, permissions: new Set<Permission>(['queue.replay']) });
+    // The synchronous readers of master data are brought up to date for this pass of the worker.
+    await refreshMasterView(companyId);
     await this.#relay.drain(companyId, app.outboxHandlers());
     const jobs = this.#jobs.get(companyId);
     const db = this.database!;
@@ -383,7 +385,10 @@ export const startRuntime = (persistence: Persistence): ApiRuntime => {
   if (persistence.kind === 'postgres') {
     // A record written outside anybody's request (the main godown, on first opening) is the owner's.
     enableDurability(persistence.db, securityOf(persistence).encryption);
-    recordMasterDataAs((companyId) => SYNTHETIC_PLATFORM_COMPANIES.find((company) => company.companyId === companyId)?.userId ?? companyId);
+    recordMasterDataAs(
+      (companyId) => SYNTHETIC_PLATFORM_COMPANIES.find((company) => company.companyId === companyId)?.userId ?? companyId,
+      (companyId) => SYNTHETIC_PLATFORM_COMPANIES.find((company) => company.companyId === companyId)?.branchId ?? companyId,
+    );
   }
   return (runtimeInstance = new ApiRuntime(persistence));
 };

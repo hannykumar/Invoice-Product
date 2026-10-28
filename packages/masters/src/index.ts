@@ -5,5 +5,6 @@ export * from "./matching.ts";
 export * from "./effective.ts";
 export * from "./snapshots.ts";
 export * from "./masters.ts";
+export * from "./read-model.ts";
 export * from "./fixtures.ts";
 export * from "./hsn-digits.ts";

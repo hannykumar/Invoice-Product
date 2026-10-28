@@ -39,9 +39,9 @@ test('a bank-account change made by the owner is recorded as made by the owner',
   }, session);
   assert.equal(saved.status, 200, saved.body.message);
 
-  const account = masterData().bankAccounts(mastersContext(COMPANY_A)).find((candidate) => candidate.accountNumber === '39110000391391');
+  const account = (await masterData().bankAccounts(mastersContext(COMPANY_A))).find((candidate) => candidate.accountNumber === '39110000391391');
   assert.ok(account, 'the bank account is in master data');
-  const history = masterData().history(mastersContext(COMPANY_A), 'bank_account', account.id);
+  const history = await masterData().history(mastersContext(COMPANY_A), 'bank_account', account.id);
   assert.ok(history.length > 0);
   for (const version of history) assert.equal(version.recordedBy, SAMPOORNA_OWNER_ID);
 });
@@ -54,20 +54,21 @@ test('a customer added by the accountant is recorded as added by the accountant'
   }, session);
   assert.equal(created.status, 200, created.body.message);
   const id = String(created.body.customer.id);
+  const addresses = await masterData().addressesOfParty(COMPANY_A, id);
   const versions = [
-    ...masterData().history(mastersContext(COMPANY_A), 'party', id),
-    ...masterData().addressesOfParty(COMPANY_A, id).flatMap((address) => masterData().history(mastersContext(COMPANY_A), 'party_address', address.id)),
+    ...(await masterData().history(mastersContext(COMPANY_A), 'party', id)),
+    ...(await Promise.all(addresses.map((address) => masterData().history(mastersContext(COMPANY_A), 'party_address', address.id)))).flat(),
   ];
   assert.ok(versions.length >= 2, 'the customer and its address were both written');
   for (const version of versions) assert.equal(version.recordedBy, SAMPOORNA_ACCOUNTANT_ID);
 });
 
-test('outside a signed-in request the system identity can make no approval, so a merge is refused', () => {
+test('outside a signed-in request the system identity can make no approval, so a merge is refused', async () => {
   const context = mastersContext(COMPANY_A);
   assert.equal(context.permissions.has('approval.decide'), false);
   assert.equal(context.permissions.has('access.review'), false);
   const service = masterData();
-  const a = service.createParty(context, { legalName: 'Merge Left 391', role: 'customer', gstRegistrationType: 'unregistered' }, { idempotencyKey: 'merge-391-a', acknowledgeSimilar: true });
-  const b = service.createParty(context, { legalName: 'Merge Right 391', role: 'customer', gstRegistrationType: 'unregistered' }, { idempotencyKey: 'merge-391-b', acknowledgeSimilar: true });
-  assert.throws(() => service.mergeParties(context, a.record.id, b.record.id, { idempotencyKey: 'merge-391' }), { code: 'FORBIDDEN' });
+  const a = await service.createParty(context, { legalName: 'Merge Left 391', role: 'customer', gstRegistrationType: 'unregistered' }, { idempotencyKey: 'merge-391-a', acknowledgeSimilar: true });
+  const b = await service.createParty(context, { legalName: 'Merge Right 391', role: 'customer', gstRegistrationType: 'unregistered' }, { idempotencyKey: 'merge-391-b', acknowledgeSimilar: true });
+  await assert.rejects(async () => service.mergeParties(context, a.record.id, b.record.id, { idempotencyKey: 'merge-391' }), { code: 'FORBIDDEN' });
 });

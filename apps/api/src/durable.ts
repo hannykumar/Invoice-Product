@@ -13,7 +13,8 @@
  * never keeps what the database refused.
  *
  * ponytail: memory stays the read path, so two API processes would not see each other's writes.
- * One process is the deployment today; the upgrade is a table per store, read directly.
+ * One process is the deployment today; the upgrade is a table per store, read directly. (Master data
+ * has had that upgrade since #366: `master-data.ts`.)
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { canonicalJson } from '../../../packages/platform/src/platform.ts';
@@ -40,7 +41,7 @@ interface Action {
 
 let durability: Durability | null = null;
 const action = new AsyncLocalStorage<Action>();
-/** Reloaders, run for each loaded company after a failed action: master data registers one. */
+/** Reloaders, run for each loaded company after a failed action. */
 const reloaders: ((companyId: string) => Promise<void>)[] = [];
 const forgetters: ((companyId: string) => void)[] = [];
 
@@ -99,6 +100,7 @@ export const asOneAction = async <T>(db: TransactionalExecutor, companyId: strin
       return result;
     }));
   } catch (error) {
+    for (const hook of failedActionHooks) hook(companyId);
     if (current.pending.length > 0) await forgetUnsavedWrites();
     throw error;
   }
@@ -121,6 +123,10 @@ export const asOneRead = async <T>(work: () => Promise<T>): Promise<T> => {
     throw error;
   }
 };
+
+/** Called with the company of any action that failed, whatever it had written: copies kept per request throw their company away. */
+const failedActionHooks: ((companyId: string) => void)[] = [];
+export const onActionFailed = (hook: (companyId: string) => void): void => { failedActionHooks.push(hook); };
 
 /** Registers how a store reads one company back, and how it forgets it. */
 export const onReload = (forget: (companyId: string) => void, reload: (companyId: string) => Promise<void>): void => {

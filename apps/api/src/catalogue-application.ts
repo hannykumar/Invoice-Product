@@ -54,7 +54,7 @@ import {
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
-import { masterData, mastersContext } from './master-data.ts';
+import { masterData, masterView, mastersContext, refreshMasterView } from './master-data.ts';
 import { businessDetailsOf, currentStates, turnoverAnswersOf } from './business-details-application.ts';
 import { turnoverAnswerOn } from '../../../packages/masters/src/hsn-digits.ts';
 import { registrationHistoryOf, schemeOn } from './composition-scheme.ts';
@@ -188,16 +188,16 @@ export const declaredRatesOf = (companyId: CompanyId | string): InMemoryDeclared
 const context = (companyId: CompanyId | string) => mastersContext(companyId);
 
 export const customers = (companyId: CompanyId | string): readonly Party[] =>
-  masterData().parties(context(companyId)).filter((party) => party.role === 'customer' || party.role === 'both');
+  masterView(companyId).parties(String(companyId)).filter((party) => party.role === 'customer' || party.role === 'both');
 
-export const items = (companyId: CompanyId | string): readonly Item[] => masterData().items(context(companyId));
+export const items = (companyId: CompanyId | string): readonly Item[] => masterView(companyId).items(String(companyId));
 
 /** Issue #228 — the businesses this company buys from, as master-data records. */
 export const suppliers = (companyId: CompanyId | string): readonly Party[] =>
-  masterData().parties(context(companyId)).filter((party) => party.role === 'supplier' || party.role === 'both');
+  masterView(companyId).parties(String(companyId)).filter((party) => party.role === 'supplier' || party.role === 'both');
 
 export const addressesOf = (companyId: CompanyId | string, partyId: string): readonly PartyAddress[] =>
-  masterData().addressesOfParty(String(companyId), partyId);
+  masterView(companyId).addressesOfParty(String(companyId), partyId);
 
 /** The billing address to print and to decide the place of supply from. */
 export const billingAddressOf = (companyId: CompanyId | string, partyId: string): PartyAddress | null => {
@@ -238,17 +238,19 @@ export const creditLimitPaiseOf = (value: unknown): bigint | null => {
 };
 
 /** Issue #235 — sets or removes the credit limit on a customer. Bills already issued are not touched. */
-export const setCustomerCreditLimit = (companyId: CompanyId | string, customerId: string, value: unknown): Party => {
+export const setCustomerCreditLimit = async (companyId: CompanyId | string, customerId: string, value: unknown): Promise<Party> => {
   const customer = resolveCustomer(companyId, customerId);
   const paise = creditLimitPaiseOf(value);
   if ((customer.creditLimitPaise ?? null) === paise) return customer;
-  return masterData().updateParty(
+  const written = await masterData().updateParty(
     context(companyId),
     customer.id,
     // Removing a limit clears the field; the record's other fields are kept as they are.
     (paise === null ? { creditLimitPaise: undefined } : { creditLimitPaise: paise }) as Partial<Omit<Party, 'id' | 'companyId'>>,
     { idempotencyKey: `customer-credit-limit:${String(companyId)}:${customer.id}:${crypto.randomUUID()}` },
-  ).record;
+  );
+  await refreshMasterView(companyId);
+  return written.record;
 };
 
 const viewOf = (companyId: CompanyId | string, party: Party): CustomerView => {
@@ -349,27 +351,30 @@ export const isWalkIn = (party: Pick<Party, 'code'>): boolean => party.code === 
  * Made once per company, the first time it is asked for, and kept in step with the town and PIN code
  * in Business details. Needs Business details, because a bill cannot be issued without them anyway.
  */
-export const walkInCustomer = (companyId: CompanyId | string): Party => {
+export const walkInCustomer = async (companyId: CompanyId | string): Promise<Party> => {
   const us = businessDetailsOf(companyId);
   if (us === null) {
     throw invalid('WALK_IN_NEEDS_BUSINESS_ADDRESS', 'Add your shop’s address in Business details first. A counter sale is billed at your shop, so the bill takes its state from there.');
   }
   const service = masterData();
   const ctx = context(companyId);
-  const party = customers(companyId).find(isWalkIn) ?? service.createParty(
+  const party = customers(companyId).find(isWalkIn) ?? (await service.createParty(
     ctx,
     { legalName: WALK_IN_NAME, code: WALK_IN_CODE, role: 'customer', gstRegistrationType: 'unregistered' },
     { idempotencyKey: `walk-in:${String(companyId)}`, acknowledgeSimilar: true },
-  ).record;
+  )).record;
+  await refreshMasterView(companyId);
   const address = billingAddressOf(companyId, party.id);
   if (address === null) {
-    service.addAddress(
+    await service.addAddress(
       ctx,
       { partyId: party.id, label: 'Counter', line1: COUNTER_SALE, city: us.city, stateCode: us.stateCode, pincode: us.pincode, use: 'both', isPrimary: true },
       { idempotencyKey: `walk-in-address:${String(companyId)}` },
     );
+    await refreshMasterView(companyId);
   } else if (address.city !== us.city || address.pincode !== us.pincode) {
-    service.correctAddress(ctx, address.id, { city: us.city, pincode: us.pincode }, { idempotencyKey: `walk-in-address:${String(companyId)}:${us.city}:${us.pincode}` });
+    await service.correctAddress(ctx, address.id, { city: us.city, pincode: us.pincode }, { idempotencyKey: `walk-in-address:${String(companyId)}:${us.city}:${us.pincode}` });
+    await refreshMasterView(companyId);
   }
   return party;
 };
@@ -395,7 +400,7 @@ export const resolveCustomer = (companyId: CompanyId | string, idOrName: string)
   if (wanted === '') throw invalid('CUSTOMER_REQUIRED', 'Choose the customer this bill is for.');
   const byId = customers(companyId).find((party) => party.id === wanted);
   if (byId !== undefined) return byId;
-  const outcome = masterData().resolveParty(context(companyId), wanted);
+  const outcome = masterView(companyId).resolveParty(String(companyId), wanted);
   if (outcome.status === 'resolved') return outcome.record;
   if (outcome.status === 'ambiguous') {
     throw invalid('CUSTOMER_AMBIGUOUS', `More than one customer is called something like "${wanted}": ${outcome.candidates.map((candidate) => candidate.record.legalName).join(', ')}. Pick one from the list.`);
@@ -408,7 +413,7 @@ export const resolveItem = (companyId: CompanyId | string, idOrName: string): It
   if (wanted === '') throw invalid('ITEM_REQUIRED', 'Choose what is being sold.');
   const byId = items(companyId).find((item) => item.id === wanted);
   if (byId !== undefined) return byId;
-  const outcome = masterData().resolveItem(context(companyId), wanted);
+  const outcome = masterView(companyId).resolveItem(String(companyId), wanted);
   if (outcome.status === 'resolved') return outcome.record;
   if (outcome.status === 'ambiguous') {
     throw invalid('ITEM_AMBIGUOUS', `More than one item is called something like "${wanted}": ${outcome.candidates.map((candidate) => candidate.record.name).join(', ')}. Pick one from the list.`);
@@ -427,7 +432,7 @@ export const resolveSupplier = (companyId: CompanyId | string, idOrName: string)
   const list = suppliers(companyId);
   const byId = list.find((party) => party.id === wanted);
   if (byId !== undefined) return byId;
-  const outcome = masterData().resolveParty(context(companyId), wanted);
+  const outcome = masterView(companyId).resolveParty(String(companyId), wanted);
   if (outcome.status === 'resolved' && list.some((party) => party.id === outcome.record.id)) return outcome.record;
   if (outcome.status === 'ambiguous') {
     const candidates = outcome.candidates.filter((candidate) => list.some((party) => party.id === candidate.record.id));
@@ -453,7 +458,7 @@ const WITHOUT_GSTIN: readonly GstRegistrationType[] = ['unregistered', 'overseas
  * the two disagreeing is how a Karnataka GST number ends up printed above a Delhi address, which is
  * exactly the defect this issue exists to remove.
  */
-export const createCustomer = (companyId: CompanyId | string, body: unknown) => {
+export const createCustomer = async (companyId: CompanyId | string, body: unknown) => {
   const input = (body ?? {}) as Record<string, unknown>;
   const legalName = str(input.legalName || input.name);
   if (legalName.length < 2) throw invalid('CUSTOMER_NAME', 'Type the name the customer is billed under.');
@@ -506,7 +511,7 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
   const ctx = context(companyId);
   const reference = str(input.reference) || `${legalName.toLowerCase()}:${gstin || pincode}`;
 
-  const create = (acknowledgeSimilar: boolean) => service.createParty(
+  const create = async (acknowledgeSimilar: boolean) => service.createParty(
     ctx,
     {
       legalName,
@@ -517,19 +522,19 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
     },
     { idempotencyKey: `customer:${String(companyId)}:${reference}`, acknowledgeSimilar },
   );
-  let created: ReturnType<typeof create>;
+  let created: Awaited<ReturnType<typeof create>>;
   try {
-    created = create(input.acknowledgeSimilar === true);
+    created = await create(input.acknowledgeSimilar === true);
   } catch (error) {
     // Issue #288 — a name only like the built-in walk-in customer's ("Walk-in Customer") is somebody's
     // own record, not a second copy of it, so it is not held up by it.
     const onlyWalkIn = error instanceof MasterDataError && error.code === 'DUPLICATE_BLOCKED'
       && error.candidates.length > 0 && error.candidates.every((candidate) => candidate.record.code === WALK_IN_CODE);
     if (!onlyWalkIn) throw error;
-    created = create(true);
+    created = await create(true);
   }
 
-  const address = service.addAddress(
+  const address = await service.addAddress(
     ctx,
     {
       partyId: created.record.id,
@@ -545,6 +550,7 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
     },
     { idempotencyKey: `customer-address:${String(companyId)}:${created.record.id}` },
   );
+  await refreshMasterView(companyId);
 
   return {
     state: 'recorded' as const,
@@ -566,7 +572,7 @@ export const createCustomer = (companyId: CompanyId | string, body: unknown) => 
  * A business we already sell to can also be a supplier: its record is marked as both rather than a
  * second record being made for the same GST number.
  */
-export const createSupplier = (companyId: CompanyId | string, body: unknown) => {
+export const createSupplier = async (companyId: CompanyId | string, body: unknown) => {
   const input = (body ?? {}) as Record<string, unknown>;
   const legalName = str(input.legalName || input.name);
   if (legalName.length < 2) throw invalid('SUPPLIER_NAME', 'Type the name the supplier bills you under.');
@@ -577,7 +583,7 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   if (registration !== 'regular' && registration !== 'composition' && registration !== 'unregistered') {
     throw invalid('SUPPLIER_REGISTRATION', 'Choose whether the supplier is registered for GST, a composition dealer, or not registered.');
   }
-  if (registration === 'unregistered') return createUnregisteredSupplier(companyId, input, legalName);
+  if (registration === 'unregistered') return await createUnregisteredSupplier(companyId, input, legalName);
 
   const gstin = normaliseIdentifier(str(input.gstin));
   if (gstin === '') throw invalid('SUPPLIER_GSTIN_REQUIRED', 'Type the supplier’s GST number. It is on every bill they give you, and it decides which GST you can claim back.');
@@ -598,13 +604,14 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   const phone = str(input.phone);
 
   // The same GST number already on a customer is the same business.
-  const holder = service.parties(ctx).find((party) =>
+  const holder = (await service.parties(ctx)).find((party) =>
     addressesOf(companyId, party.id).some((address) => address.gstin !== undefined && normaliseIdentifier(address.gstin) === gstin));
   if (holder !== undefined) {
     if (holder.role === 'supplier' || holder.role === 'both') {
       throw invalid('SUPPLIER_EXISTS', `${holder.legalName} is already in your supplier list with GST number ${gstin}. Pick them from the list.`);
     }
-    const updated = service.updateParty(ctx, holder.id, { role: 'both' }, { idempotencyKey: `supplier-role:${String(companyId)}:${holder.id}` });
+    const updated = await service.updateParty(ctx, holder.id, { role: 'both' }, { idempotencyKey: `supplier-role:${String(companyId)}:${holder.id}` });
+    await refreshMasterView(companyId);
     return {
       state: 'recorded' as const,
       title: both('Supplier added', 'सप्लायर जुड़ा'),
@@ -614,12 +621,12 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
   }
 
   const reference = str(input.reference) || `${legalName.toLowerCase()}:${gstin}`;
-  const created = service.createParty(
+  const created = await service.createParty(
     ctx,
     { legalName, role: 'supplier', gstRegistrationType: registration, ...(phone === '' ? {} : { phones: [phone] }) },
     { idempotencyKey: `supplier:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
   );
-  service.addAddress(
+  await service.addAddress(
     ctx,
     {
       partyId: created.record.id,
@@ -635,6 +642,7 @@ export const createSupplier = (companyId: CompanyId | string, body: unknown) => 
     },
     { idempotencyKey: `supplier-address:${String(companyId)}:${created.record.id}` },
   );
+  await refreshMasterView(companyId);
   return {
     state: 'recorded' as const,
     title: both('Supplier added', 'सप्लायर जुड़ा'),
@@ -657,7 +665,7 @@ const UNREGISTERED_BASES: Readonly<Record<string, { readonly basis: Unregistered
  * it (s.16(2)(a) needs a tax invoice from a registered supplier). The ground is recorded because the
  * law treats them differently: a farmer's raw cotton, for one, is under reverse charge.
  */
-const createUnregisteredSupplier = (companyId: CompanyId | string, input: Record<string, unknown>, legalName: string) => {
+const createUnregisteredSupplier = async (companyId: CompanyId | string, input: Record<string, unknown>, legalName: string) => {
   if (str(input.gstin) !== '') {
     throw invalid('SUPPLIER_UNREGISTERED_HAS_GSTIN', 'This supplier has a GST number, so they are registered. Choose "Registered" and type the number.');
   }
@@ -679,12 +687,12 @@ const createUnregisteredSupplier = (companyId: CompanyId | string, input: Record
   const ctx = context(companyId);
   const phone = str(input.phone);
   const reference = str(input.reference) || `${legalName.toLowerCase()}:${pincode}:unregistered`;
-  const created = service.createParty(
+  const created = await service.createParty(
     ctx,
     { legalName, role: 'supplier', gstRegistrationType: 'unregistered', unregisteredBasis: ground.basis, ...(phone === '' ? {} : { phones: [phone] }) },
     { idempotencyKey: `supplier:${String(companyId)}:${reference}`, acknowledgeSimilar: input.acknowledgeSimilar === true },
   );
-  service.addAddress(
+  await service.addAddress(
     ctx,
     {
       partyId: created.record.id, label: 'Billing', line1,
@@ -693,6 +701,7 @@ const createUnregisteredSupplier = (companyId: CompanyId | string, input: Record
     },
     { idempotencyKey: `supplier-address:${String(companyId)}:${created.record.id}` },
   );
+  await refreshMasterView(companyId);
   return {
     state: 'recorded' as const,
     title: both('Supplier added', 'सप्लायर जुड़ा'),
@@ -724,7 +733,7 @@ const sameCodeRates = (companyId: CompanyId | string, itemId: string, hsnSac: st
  * The rate is stored as a declaration — whose figure it is, when they set it and where they say it
  * came from — never as a fact about the law. The printed bill carries that notice already.
  */
-export const createItem = (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
+export const createItem = async (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
   const input = (body ?? {}) as Record<string, unknown>;
   const name = str(input.name);
   if (name.length < 2) throw invalid('ITEM_NAME', 'Type what this item is called on the bill.');
@@ -765,7 +774,7 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
   const service = masterData();
   const ctx = context(companyId);
 
-  const created = service.createItem(
+  const created = await service.createItem(
     ctx,
     {
       name, kind, hsnSac, baseUnit: unit, trackBatches: false, trackSerials: false,
@@ -777,6 +786,7 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
       turnoverAbove5Crore: turnoverAnswerOn(turnoverAnswersOf(companyId), appToday()),
     },
   );
+  await refreshMasterView(companyId);
 
   // A retry of the same item returns the record already made, and declares nothing a second time.
   const retried = itemTaxes.has(taxKey(companyId, created.record.id));
@@ -814,7 +824,7 @@ export const createItem = (companyId: CompanyId | string, body: unknown, declare
  * belongs to the item, so it simply goes on applying; an item whose rate was kept before that,
  * against its code alone, has it declared for the item itself, with the same figure and basis.
  */
-export const changeItemCode = (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
+export const changeItemCode = async (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
   const input = (body ?? {}) as Record<string, unknown>;
   const itemId = str(input.itemId);
   const current = items(companyId).find((candidate) => candidate.id === itemId);
@@ -824,10 +834,11 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
   require_(validateHsnOrSac(hsnSac, current.kind), 'ITEM_HSN', 'That is not an HSN or SAC code.');
   const today = appToday();
 
-  const updated = masterData().updateItem(context(companyId), current.id, { hsnSac }, {
+  const updated = await masterData().updateItem(context(companyId), current.id, { hsnSac }, {
     idempotencyKey: `item-code:${String(companyId)}:${current.id}:${hsnSac}`,
     turnoverAbove5Crore: turnoverAnswerOn(turnoverAnswersOf(companyId), today),
   });
+  await refreshMasterView(companyId);
 
   const tax = itemTaxes.get(taxKey(companyId, current.id));
   const taxKind = current.kind === 'service' ? 'SERVICES' : 'GOODS';
@@ -865,7 +876,7 @@ export const changeItemCode = (companyId: CompanyId | string, body: unknown, dec
  * usual selling price and other name. The code goes through `changeItemCode`, so the declared rate
  * follows it exactly as before. Every field is checked before anything is saved.
  */
-export const editItem = (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
+export const editItem = async (companyId: CompanyId | string, body: unknown, declaredBy = 'the business') => {
   const input = (body ?? {}) as Record<string, unknown>;
   const itemId = str(input.itemId);
   const current = items(companyId).find((candidate) => candidate.id === itemId);
@@ -875,12 +886,13 @@ export const editItem = (companyId: CompanyId | string, body: unknown, declaredB
   const otherName = 'otherName' in input ? str(input.otherName) : undefined;
   const hsnSac = normaliseIdentifier(str(input.hsnSac || input.hsn));
   const warnings: string[] = [];
-  if (hsnSac !== '' && hsnSac !== current.hsnSac) warnings.push(...changeItemCode(companyId, { itemId, hsnSac }, declaredBy).warnings);
+  if (hsnSac !== '' && hsnSac !== current.hsnSac) warnings.push(...(await changeItemCode(companyId, { itemId, hsnSac }, declaredBy)).warnings);
   if (barcode !== undefined || otherName !== undefined) {
-    masterData().updateItem(context(companyId), current.id, {
+    await masterData().updateItem(context(companyId), current.id, {
       ...(barcode === undefined ? {} : { barcodes: barcode === null ? [] : [barcode] }),
       ...(otherName === undefined ? {} : { aliases: otherName === '' ? [] : [otherName] }),
     }, { idempotencyKey: `item-edit:${String(companyId)}:${current.id}:${crypto.randomUUID()}` });
+    await refreshMasterView(companyId);
   }
   if (price === null) itemPrices.delete(taxKey(companyId, current.id));
   else if (price !== undefined) itemPrices.set(taxKey(companyId, current.id), price);
@@ -913,8 +925,10 @@ const REGISTRATION_FOR_TAX: Readonly<Record<string, 'REGULAR' | 'COMPOSITION' | 
 
 /**
  * The calculator's view of this company's master data: the company itself, its customers and its
- * items, read live from `packages/masters`. Nothing is copied and nothing is cached, so a customer
- * added a second ago is taxed correctly on the bill issued a second later.
+ * items, read from `packages/masters`. On PostgreSQL the reads are of this process's copy of the
+ * database, refreshed at the start of every request and after each write (`master-data.ts`), so a
+ * customer added a second ago, here or in another process, is taxed correctly on the bill issued a
+ * second later.
  */
 export const catalogueTaxReader = (company: { readonly companyId: CompanyId | string; readonly gstin: string }): MasterDataReader => ({
   company(companyId: string): CompanyTaxProfile | undefined {
@@ -1007,16 +1021,16 @@ export interface CatalogueSeed {
  * more beside them, and nothing anywhere falls back to them. Every name, GST number and address is
  * invented and belongs to nobody.
  */
-export const seedCatalogue = (companyId: CompanyId | string, seed: CatalogueSeed): void => {
+export const seedCatalogue = async (companyId: CompanyId | string, seed: CatalogueSeed): Promise<void> => {
   const service = masterData();
   const ctx = context(companyId);
   if (customers(companyId).find((party) => party.id === seed.customerId) === undefined) {
-    service.createParty(
+    await service.createParty(
       ctx,
       { id: seed.customerId, legalName: seed.customerName, role: 'customer', gstRegistrationType: 'regular' },
       { idempotencyKey: `seed-customer:${String(companyId)}:${seed.customerId}` },
     );
-    service.addAddress(
+    await service.addAddress(
       ctx,
       {
         partyId: seed.customerId,
@@ -1034,12 +1048,12 @@ export const seedCatalogue = (companyId: CompanyId | string, seed: CatalogueSeed
   }
   const supplier = seed.supplier;
   if (supplier !== undefined && suppliers(companyId).find((party) => party.id === supplier.id) === undefined) {
-    service.createParty(
+    await service.createParty(
       ctx,
       { id: supplier.id, legalName: supplier.name, role: 'supplier', gstRegistrationType: 'regular' },
       { idempotencyKey: `seed-supplier:${String(companyId)}:${supplier.id}` },
     );
-    service.addAddress(
+    await service.addAddress(
       ctx,
       {
         partyId: supplier.id,
@@ -1058,7 +1072,7 @@ export const seedCatalogue = (companyId: CompanyId | string, seed: CatalogueSeed
   const known = items(companyId);
   for (const item of seed.items) {
     if (known.find((existing) => existing.id === item.id) !== undefined) continue;
-    service.createItem(
+    await service.createItem(
       ctx,
       { id: item.id, name: item.name, kind: item.kind, hsnSac: item.hsnSac, baseUnit: item.unit, trackBatches: false, trackSerials: false },
       { idempotencyKey: `seed-item:${String(companyId)}:${item.id}` },

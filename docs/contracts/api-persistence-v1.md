@@ -74,11 +74,35 @@ whose company is read back on first open after a restart.
 
 ## Master data (`packages/masters`, additive)
 
-`new MasterDataService(commands, audit, units?, storeFor?)`. `storeFor(kind)` returns the store for
-one of the 13 `master_records` kinds; the default is the in-memory `VersionedStore`. The API passes a
-store that also appends each version to `master_versions` through `PostgresVersionedStore`, inside
-the action. Nothing else about the service changes. The async service that reads PostgreSQL
-directly remains the masters lane's (#366).
+Issue #366 — `MasterDataService` is **asynchronous** and keeps nothing of its own.
+`new MasterDataService(commands, audit, units?, storeFor?, { commandIndex?, atomically? })`:
+`storeFor(kind)` returns the `VersionStore` for one of the 13 `master_records` kinds (default: the
+in-memory `VersionedStore`), `units` is one registry or a function giving each company its own,
+`commandIndex` says which record a finished command wrote, and `atomically(companyId, work)` runs each
+write as one action. On PostgreSQL, `postgresMasterData(db, codec)` (`postgres-masters.ts`) composes
+all of it: `PostgresVersionedStore` over `master_versions`, `PostgresCommandService` and
+`PostgresAuditLog` (command records, idempotency keys, audit), `PostgresCommandRecordIndex`,
+`PostgresUnitRegistry`, and `db.unitOfWork` as `atomically` (joins the request's unit of work, or opens
+one under the company's write lock, so a read-then-write cannot interleave with another process). The
+app seals every version (#352) through a `MasterCodec`. Two API processes on one database therefore
+see each other's customers and items at once, and a restart loses nothing.
+
+**Synchronous readers.** The GST calculator (`MasterDataReader`), the stock module
+(`StockMasterData`) and the bill screens sit behind synchronous ports owned by other lanes, so they
+read `masterView(companyId)` (`apps/api/src/master-data.ts`) — a `MasterReadModel`
+(`packages/masters/src/read-model.ts`), the same rules as the service's reads over `VersionedStore`s.
+In memory those are the service's own stores. On PostgreSQL they are this process's copy of
+`master_versions`, brought up to date by `refreshMasterView(companyId)`: at the start of every
+request, at the start of each worker pass, and after any write whose result later code in the same
+request reads. It asks `versionsSince(db, company, lastSeq)` — one indexed query that returns nothing
+when nothing changed (migration `…_masters_8909da6f2e1d_master_versions_sequence` adds
+`master_versions.seq`). Versions are append-only, so a copy can be behind but never wrong; if an
+action fails after the copy took its uncommitted rows in, `forgetMasterView` drops it and the next
+request reads again. Reading a company that was never refreshed throws rather than answering "empty".
+When those ports become asynchronous the copy goes away; nothing else changes.
+
+The privacy export of master data on PostgreSQL reads the tables (`privacy-application.ts`); the
+in-memory `allMasterRecords` is for the in-memory deployment only.
 
 ## Files (#341)
 
@@ -100,10 +124,12 @@ the facts are in PostgreSQL (`stored_files`, forced row-level security, screened
 
 ## Known limits
 
-- Memory is the read path for master data and `app_records`, so **one API process** only. Two would
-  not see each other's new customers, items or business details.
-- After a failed action that had written master data or app records, every loaded company is read
-  back from the database. A request running at that moment may briefly miss a record.
+- Memory is the read path for `app_records` (business details, branding, declared rates, bill copies),
+  so **one API process** only for those. Master data (customers, suppliers, items, godowns, bank
+  accounts) is shared between processes (#366). A record another process saves *during* a request is
+  seen from the next request, not mid-request.
+- After a failed action that had written `app_records`, every loaded company is read back from the
+  database. A request running at that moment may briefly miss a record.
 - Only the synthetic companies can be opened. A real company needs its identity (name, GSTIN,
   location) in a table, which arrives with #342's sign-up.
 - A `GET` that writes through a module repository (`requireUnitOfWork`) is refused with

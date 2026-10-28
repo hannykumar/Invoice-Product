@@ -29,7 +29,7 @@ import { installErrorReporting } from './error-reporting.ts';
 import { applySecurityHeaders, applyTimeouts, bodyLimitFor, BodyTooLarge, isCrossSiteWrite, isSignedCallback, isUnnamedWrite, MAX_STORED_FILE_BODY_BYTES, readLimitedBody, STORED_FILE_ROUTE } from './http-hardening.ts';
 import { localObjectStore, MAX_STORED_FILE_BYTES } from './files-application.ts';
 import { matchRoute, ROUTES } from './routes/index.ts';
-import { asMasterDataCaller } from './master-data.ts';
+import { asMasterDataCaller, refreshMasterView } from './master-data.ts';
 import { pageOf, Reply, type ApiResult, type Gate, type PublicRoute, type Route, type WebhookDelivery } from './routes/route.ts';
 
 export type { ApiResult, WebhookDelivery } from './routes/route.ts';
@@ -193,7 +193,12 @@ async function dispatch(method: string, pathname: string, body: unknown, authori
       const input = await route.input.parseAsync(raw);
       const app = await runtime.application(context);
       await countRequest(runtime, route, context, app, actor);
-      const handle = async (): Promise<unknown> => asMasterDataCaller(context, () => route.handle({ input, params, runtime, requestId, delivery, context, actor, app }));
+      const handle = async (): Promise<unknown> => asMasterDataCaller(context, async () => {
+        // Issue #366 — this process's copy of the company's customers and items is brought up to what
+        // the database holds before any screen reads it, so a record another process just saved is here.
+        await refreshMasterView(context.companyId);
+        return route.handle({ input, params, runtime, requestId, delivery, context, actor, app });
+      });
       // Issue #340 — one request that changes something is one business action, and so one
       // transaction (#363): the bill, its entry in the books, its stock movement and its audit record
       // are saved together or not at all. Reads need none; their repositories read on their own.

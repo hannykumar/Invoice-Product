@@ -66,14 +66,14 @@ export class InventoryMigrationAdapter implements OpeningStockWriter {
   async resolveItem(companyId: CompanyId, reference: string): Promise<{ itemId: string; name: string; baseUnit: string } | null> {
     const context = this.#context(companyId);
     const wanted = reference.trim();
-    const items = this.#masters.items(context);
+    const items = await this.#masters.items(context);
     const exact =
       items.find((item) => item.code !== undefined && item.code.toLowerCase() === wanted.toLowerCase()) ??
       items.find((item) => item.name.toLowerCase() === wanted.toLowerCase()) ??
       items.find((item) => normaliseName(item.name) === normaliseName(wanted));
     if (exact !== undefined) return { itemId: exact.id, name: exact.name, baseUnit: exact.baseUnit };
 
-    const outcome = this.#masters.resolveItem(context, wanted);
+    const outcome = await this.#masters.resolveItem(context, wanted);
     return outcome.status === 'resolved'
       ? { itemId: outcome.record.id, name: outcome.record.name, baseUnit: outcome.record.baseUnit }
       : null;
@@ -81,7 +81,7 @@ export class InventoryMigrationAdapter implements OpeningStockWriter {
 
   /** The named godown, or the only one there is when the file does not say. */
   async resolveWarehouse(companyId: CompanyId, reference: string | null): Promise<{ warehouseId: string; name: string } | null> {
-    const warehouses = this.#masters.warehouses(this.#context(companyId));
+    const warehouses = await this.#masters.warehouses(this.#context(companyId));
     if (reference === null || reference.trim() === '') {
       const only = warehouses.length === 1 ? warehouses[0] : undefined;
       return only === undefined ? null : { warehouseId: only.id, name: only.name };
@@ -98,7 +98,7 @@ export class InventoryMigrationAdapter implements OpeningStockWriter {
     options: { readonly idempotencyKey: string; readonly asOn: IsoDate; readonly batchId: string | null },
   ): Promise<{ movementId: string }> {
     const actor = this.#actor(companyId, actorId);
-    const item = this.#masters.item(this.#context(companyId), line.itemId);
+    const item = await this.#masters.item(this.#context(companyId), line.itemId);
     let batchId: string | null = null;
     if (item.trackBatches) {
       if (options.batchId === null) {
@@ -108,7 +108,7 @@ export class InventoryMigrationAdapter implements OpeningStockWriter {
           { details: { itemId: line.itemId } },
         );
       }
-      batchId = this.#batchIdFor(companyId, line.itemId, options.batchId, options.asOn);
+      batchId = await this.#batchIdFor(companyId, line.itemId, options.batchId, options.asOn);
     }
 
     // The unit cost is what the file's value comes to per unit; the stock ledger values every
@@ -137,8 +137,8 @@ export class InventoryMigrationAdapter implements OpeningStockWriter {
    * Keyed on the item and the batch number, so the same batch appearing on two rows — or the file
    * being brought in twice — lands on one batch record rather than making a second one.
    */
-  #batchIdFor(companyId: CompanyId, itemId: string, batchNumber: string, asOn: IsoDate): string {
-    const created = this.#masters.createBatch(
+  async #batchIdFor(companyId: CompanyId, itemId: string, batchNumber: string, asOn: IsoDate): Promise<string> {
+    const created = await this.#masters.createBatch(
       this.#context(companyId),
       { itemId, batchNumber },
       { idempotencyKey: `migration:batch:${itemId}:${batchNumber}`, effectiveFrom: asOn },
@@ -221,18 +221,18 @@ export class MastersStockData implements StockMasterData {
   }
 
   item(companyId: CompanyId, itemId: string): StockItem | undefined {
-    const found = this.#masters.items(this.#context(companyId)).find((item) => item.id === itemId);
+    const found = this.#masters.syncView().items(companyId).find((item) => item.id === itemId);
     return found === undefined
       ? undefined
       : { itemId: found.id, name: found.name, baseUnit: found.baseUnit, tracksBatches: found.trackBatches, tracksSerials: found.trackSerials };
   }
 
   warehouse(companyId: CompanyId, warehouseId: string): InventoryWarehouse | undefined {
-    const found = this.#masters.warehouses(this.#context(companyId)).find((warehouse) => warehouse.id === warehouseId);
+    const found = this.#masters.syncView().warehouses(companyId).find((warehouse) => warehouse.id === warehouseId);
     return found === undefined ? undefined : { warehouseId: found.id, name: found.name };
   }
 
-  units(): UnitRegistry {
-    return this.#masters.units;
+  units(companyId: CompanyId): UnitRegistry {
+    return this.#masters.syncView().units(companyId);
   }
 }

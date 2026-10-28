@@ -184,4 +184,17 @@ ${TENANT_TABLES.filter((table) => table !== "master_command_records").map((table
     ALTER TABLE units_of_measure DROP COLUMN IF EXISTS seq;
     ALTER TABLE master_records DROP COLUMN IF EXISTS seq;
   `,
+}, {
+  // Issue #366 — a process that keeps a copy of a company's master data for its synchronous readers
+  // asks "what is new since version number N?" once per request. Writers hold the company's write lock
+  // for the whole action, so numbers are handed out in the order actions commit.
+  id: "20261027T234048262Z_masters_8909da6f2e1d_master_versions_sequence",
+  up: `
+    ALTER TABLE master_versions ADD COLUMN seq bigint GENERATED ALWAYS AS IDENTITY;
+    CREATE UNIQUE INDEX master_versions_company_seq_idx ON master_versions(company_id, seq);
+  `,
+  down: `
+    DROP INDEX IF EXISTS master_versions_company_seq_idx;
+    ALTER TABLE master_versions DROP COLUMN IF EXISTS seq;
+  `,
 }]);

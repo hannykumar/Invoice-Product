@@ -64,6 +64,18 @@ Command actions: `masters.party.create|update|merge`, `masters.address.create`,
 `masters.price.set`, `masters.tax_default.set`, `masters.transporter.create`,
 `masters.vehicle.create`, `masters.bank_account.create`.
 
+## Async service, shared storage (#366)
+
+Every `MasterDataService` method returns a promise. The service holds no records: they live in its
+`VersionStore`s, in memory for tests and demos, in PostgreSQL (`master_versions`, with forced
+row-level security) in the running app. Each write is one action — platform command, new version,
+command-to-record row and audit event commit together or not at all — and two processes on one
+database see each other's records at once. `unitsFor(companyId)` gives a company's unit registry.
+`syncView()` is the synchronous read side for ports that cannot await (in-memory stores only; the app
+keeps a refreshed copy on PostgreSQL — `docs/contracts/api-persistence-v1.md`). Behaviour — validation,
+duplicate control, merges, effective dating, snapshots — is unchanged and is pinned by one contract
+suite (`test/masters-service-contract.ts`) run on both storages.
+
 ## Money, quantity and rate types
 
 - Money is `bigint` paise. There are no floats and no rupee decimals in storage.

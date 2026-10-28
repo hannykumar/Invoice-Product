@@ -130,7 +130,7 @@ const openWorkspace = async (owner: RequestContext): Promise<Workspace> => {
   const masters = new MasterDataService(new PlatformCommandService(platformAudit), platformAudit);
   const options = { branchId: 'main', sessionId: id, permissions: PERMISSIONS };
   const context: RequestContext = { companyId, branchId: 'main', actorId: 'migration-owner', permissions: new Set(), sessionId: id };
-  const warehouse = masters.createWarehouse(
+  const warehouse = await masters.createWarehouse(
     context,
     { code: 'MAIN', name: 'Main godown', addressLine: 'Sayyaji Rao Road', city: 'Mysuru', stateCode: '29', pincode: '570001' },
     { idempotencyKey: `${id}-warehouse` },
@@ -398,13 +398,13 @@ export const previewImport = async (owner: RequestContext, body: Record<string, 
 const booksNow = async (workspace: Workspace) => {
   const tb = await trialBalance(workspace.store.read(), workspace.companyId);
   const stock = [];
-  for (const item of workspace.masters.items(workspace.context)) {
+  for (const item of await workspace.masters.items(workspace.context)) {
     const balance = await workspace.inventory.balance(workspace.actor, { itemId: item.id, warehouseId: workspace.warehouseId });
     stock.push({ name: item.name, quantity: Number(balance.physical.scaled) / 1_000_000, unit: balance.physical.unit });
   }
   return {
-    customers: workspace.masters.parties(workspace.context).filter((party) => party.active).length,
-    items: workspace.masters.items(workspace.context).filter((item) => item.active).length,
+    customers: (await workspace.masters.parties(workspace.context)).filter((party) => party.active).length,
+    items: (await workspace.masters.items(workspace.context)).filter((item) => item.active).length,
     trialBalance: {
       balanced: tb.balanced,
       totalDebits: rupees(tb.totalDebit),

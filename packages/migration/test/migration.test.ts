@@ -30,11 +30,11 @@ describe('bringing in customers', () => {
     assert.equal(analysis.batch.sourceSystem, 'VYAPAR');
     assert.equal(result.created.parties, 3);
 
-    const parties = harness.masters.parties(harness.context);
+    const parties = await harness.masters.parties(harness.context);
     const rajmahal = parties.find((party) => party.legalName === 'Hotel Rajmahal');
     assert.ok(rajmahal, 'the customer must exist in master data, not just in the import result');
     assert.deepEqual(rajmahal.phones, ['9845012345']);
-    const address = harness.masters.addressesOfParty(harness.companyId, rajmahal.id)[0];
+    const address = (await harness.masters.addressesOfParty(harness.companyId, rajmahal.id))[0];
     assert.equal(address?.gstin, GSTIN_HOTEL);
     assert.equal(address?.stateCode, '29');
   });
@@ -99,7 +99,7 @@ describe('bringing in customers', () => {
     assert.equal(again.result.created.parties, 1);
     assert.equal(again.result.reconciliation.skippedAsDuplicate, 1);
 
-    const rajmahal = harness.masters.parties(harness.context).filter((party) => party.legalName === 'Hotel Rajmahal');
+    const rajmahal = (await harness.masters.parties(harness.context)).filter((party) => party.legalName === 'Hotel Rajmahal');
     assert.equal(rajmahal.length, 1, 'the customer must not be duplicated');
     assert.deepEqual(rajmahal[0]?.phones, ['9845012345']);
   });
@@ -120,7 +120,7 @@ describe('bringing in customers', () => {
         return true;
       },
     );
-    assert.equal(harness.masters.parties(harness.context).length, 3, 'nothing was added a second time');
+    assert.equal((await harness.masters.parties(harness.context)).length, 3, 'nothing was added a second time');
   });
 });
 
@@ -132,7 +132,7 @@ describe('approving the mapping', () => {
       () => harness.service.commit(harness.actor, analysis.batch.id, { idempotencyKey: 'k' }),
       (error: DomainError) => error.code === 'MIGRATION_MAPPING_NOT_APPROVED',
     );
-    assert.equal(harness.masters.parties(harness.context).length, 0);
+    assert.equal((await harness.masters.parties(harness.context)).length, 0);
   });
 
   it('refuses an approval whose fingerprint does not match the columns being approved', async () => {
@@ -173,7 +173,7 @@ describe('bringing in items and stock', () => {
     assert.equal(result.created.items, 3);
     assert.equal(result.reconciliation.rejected, 1);
 
-    const items = harness.masters.items(harness.context);
+    const items = await harness.masters.items(harness.context);
     const rice = items.find((item) => item.name === 'Sona Masoori Rice');
     assert.ok(rice);
     assert.equal(rice.hsnSac, '10063020');
@@ -186,7 +186,7 @@ describe('bringing in items and stock', () => {
     const { result } = await bringIn(harness, { ...stockFile, defaultWarehouseRef: 'MAIN' });
 
     assert.equal(result.created.stockLines, 2, 'the negative row is refused, the other two go in');
-    const rice = harness.masters.items(harness.context).find((item) => item.name === 'Sona Masoori Rice');
+    const rice = (await harness.masters.items(harness.context)).find((item) => item.name === 'Sona Masoori Rice');
     const balance = await harness.inventory.balance(harness.actor, { itemId: rice?.id ?? '', warehouseId: harness.warehouseId });
     assert.equal(toQuantityString(balance.physical), '120');
     assert.equal(balance.physical.unit, 'KGS');
@@ -325,10 +325,10 @@ describe('taking an import back out', () => {
     const { analysis } = await bringIn(harness, customersFile);
     await harness.service.rollback(harness.actor, analysis.batch.id, { reason: 'Wrong file' });
 
-    const active = harness.masters.parties(harness.context).filter((party) => party.active);
+    const active = (await harness.masters.parties(harness.context)).filter((party) => party.active);
     assert.equal(active.length, 0);
     // The record and its history survive, so nothing that referred to it is left dangling.
-    assert.equal(harness.masters.parties(harness.context).length, 3);
+    assert.equal((await harness.masters.parties(harness.context)).length, 3);
   });
 
   it('refuses to undo stock that has already been sold, before it moves anything', async () => {
@@ -336,7 +336,7 @@ describe('taking an import back out', () => {
     await bringIn(harness, itemsFile);
     const { analysis } = await bringIn(harness, { ...stockFile, defaultWarehouseRef: 'MAIN' });
 
-    const rice = harness.masters.items(harness.context).find((item) => item.name === 'Sona Masoori Rice');
+    const rice = (await harness.masters.items(harness.context)).find((item) => item.name === 'Sona Masoori Rice');
     await harness.inventory.recordMovement(harness.actor, {
       idempotencyKey: 'sold-some-rice',
       itemId: rice?.id ?? '',
@@ -431,6 +431,6 @@ describe('a file the size a real business sends', () => {
     assert.equal(result.reconciliation.rowsInFile, 500);
     assert.equal(result.reconciliation.rejected, 0);
     assert.equal(result.created.parties, 500);
-    assert.equal(harness.masters.parties(harness.context).length, 500);
+    assert.equal((await harness.masters.parties(harness.context)).length, 500);
   });
 });

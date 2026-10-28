@@ -130,7 +130,7 @@ test('the note reprints as issued, even after the customer moves', async () => {
   const session = await signIn();
   const { customerId, recorded } = await saleAndReturn(session, 'reprint');
   const note = recorded.body.note as { id: string };
-  masterData().addAddress(mastersContext(COMPANY_A), {
+  await masterData().addAddress(mastersContext(COMPANY_A), {
     partyId: customerId, label: 'New shop', line1: '7, New BEL Road', city: 'Bengaluru', stateCode: '29', pincode: '560094',
     gstin: CUSTOMER.gstin, use: 'both', isPrimary: true,
   }, { idempotencyKey: 'cn-186-moved' });
@@ -168,7 +168,7 @@ test('a credit note dated after 30 November of the next year is refused, and one
   assert.deepEqual(soon.body.warnings, ['The last day to issue a credit note that reduces GST for bills of 2026-27 is 30 November 2027.']);
 });
 
-test('the deadline is 30 November after the bill\'s financial year, and the warning names it', () => {
+test('the deadline is 30 November after the bill\'s financial year, and the warning names it', async () => {
   // A bill of 15 September 2026 is in 2026-27, which ends on 31 March 2027; the next 30 November is 2027's.
   assert.equal(checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2027-11-30')).late, false);
   assert.equal(checkCreditNoteDeadline(isoDate('2026-09-15'), isoDate('2027-12-01')).late, true);

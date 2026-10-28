@@ -30,12 +30,12 @@ export const mastersRegistry = (
   contextFor: (companyId: Id) => RequestContext,
 ): TaxDefaultRegistryPort => ({
   async candidates(companyId, lookup, asOf) {
-    const versions = masters.taxDefaultCandidates(contextFor(companyId), lookup, asOf);
+    const versions = await masters.taxDefaultCandidates(contextFor(companyId), lookup, asOf);
     return versions.map((version) => ({ entry: version.data, effectiveFrom: version.effectiveFrom }));
   },
   async item(companyId, itemId, asOf) {
     try {
-      const found = masters.item(contextFor(companyId), itemId, asOf);
+      const found = await masters.item(contextFor(companyId), itemId, asOf);
       return { name: found.name, hsnSac: found.hsnSac ?? null };
     } catch (error) {
       // An item that is not in the list is the ordinary case for a freshly photographed bill, not
@@ -51,7 +51,7 @@ export const mastersLearning = (
   contextFor: (companyId: Id) => RequestContext,
 ): RateLearningPort => ({
   async remember(companyId, input): Promise<ApprovedRate> {
-    const written = masters.setTaxDefault(
+    const written = await masters.setTaxDefault(
       contextFor(companyId),
       {
         itemId: input.itemId,
