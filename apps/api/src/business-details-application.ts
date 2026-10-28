@@ -45,7 +45,7 @@ import {
 } from '../../../packages/masters/src/index.ts';
 import { STATE_NAMES } from '@invoice/transport';
 import { GST_STATE_CODES } from '../../../packages/masters/src/validation.ts';
-import { masterData, mastersContext } from './master-data.ts';
+import { masterData, masterView, mastersContext, refreshMasterView } from './master-data.ts';
 import { forgetScheme } from './composition-scheme.ts';
 import { forgetCompositionStatements } from './composition-application.ts';
 import { DurableMap } from './durable.ts';
@@ -123,7 +123,7 @@ const require_ = (result: ValidationResult, code: string, fallback: string): voi
 
 const bankAccountOf = (companyId: CompanyId | string, accountId: string | null): BankAccount | null => {
   if (accountId === null) return null;
-  return masterData().bankAccounts(mastersContext(companyId)).find((account: BankAccount) => account.id === accountId) ?? null;
+  return masterView(companyId).bankAccounts(String(companyId)).find((account: BankAccount) => account.id === accountId) ?? null;
 };
 
 // ---------------------------------------------------------------------------------- reading them
@@ -264,7 +264,7 @@ const turnoverView = (companyId: CompanyId | string) => {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_SIGNATURE_CHARACTERS = 280_000; // ~200 KB once base64 encoded.
 
-export const saveBusinessDetails = (
+export const saveBusinessDetails = async (
   companyId: CompanyId | string,
   company: { readonly name: string; readonly gstin: string },
   body: unknown,
@@ -332,7 +332,7 @@ export const saveBusinessDetails = (
     writeOffLimitPaise = limit.toString();
   }
 
-  const bankAccountId = saveBankAccount(companyId, legalName, input, clear, current);
+  const bankAccountId = await saveBankAccount(companyId, legalName, input, clear, current);
   recordTurnoverAnswer(companyId, { band: input.turnoverBand, above5Crore: input.turnoverAbove5Crore });
   recordEInvoiceExemption(companyId, input.eInvoiceExemption);
 
@@ -373,13 +373,13 @@ export const writeOffLimitOf = (companyId: CompanyId | string): bigint =>
   BigInt(businessDetailsOf(companyId)?.writeOffLimitPaise ?? WRITE_OFF_LIMIT_DEFAULT.toString());
 
 /** Writes the bank account into `packages/masters`, or leaves the saved one alone. */
-const saveBankAccount = (
+const saveBankAccount = async (
   companyId: CompanyId | string,
   legalName: string,
   input: Record<string, unknown>,
   clear: readonly string[],
   current: BusinessDetails | null,
-): string | null => {
+): Promise<string | null> => {
   if (clear.includes('bank')) return null;
   const bankName = str(input.bankName);
   const accountNumber = str(input.accountNumber);
@@ -392,7 +392,7 @@ const saveBankAccount = (
   require_(validateBankAccountNumber(accountNumber), 'BUSINESS_BANK_ACCOUNT', 'A bank account number has 9 to 18 digits.');
   require_(validateIfsc(ifsc), 'BUSINESS_BANK_IFSC', 'An IFSC has 4 bank letters, a 0, then 6 characters, like HDFC0001234.');
 
-  const created = masterData().createBankAccount(
+  const created = await masterData().createBankAccount(
     mastersContext(companyId),
     {
       ownerType: 'company',
@@ -405,6 +405,7 @@ const saveBankAccount = (
     },
     { idempotencyKey: `business-details-bank:${String(companyId)}:${ifsc}:${accountNumber.replace(/\s/g, '')}` },
   );
+  await refreshMasterView(companyId);
   return created.record.id;
 };
 

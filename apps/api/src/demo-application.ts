@@ -42,7 +42,7 @@ import {
   type TemplateSnapshot,
 } from '@invoice/invoice-templates';
 import { brandingOf, saveUpiId, upiIdOf } from './branding-application.ts';
-import { masterData as masterDataService, mastersContext } from './master-data.ts';
+import { masterData as masterDataService, masterView, mastersContext } from './master-data.ts';
 import {
   addShippingAddress,
   correctCustomerAddress,
@@ -1137,7 +1137,7 @@ export class DemoApplication {
     // Issue #181 — the customers and items this company actually keeps, in `packages/masters`.
     // The screens add to the same records, so a customer added at the counter is a customer the
     // bill can be made out to a moment later. Only the demo company is given any to start with.
-    if (demo) seedCatalogue(config.companyId, config.catalogue);
+    if (demo) await seedCatalogue(config.companyId, config.catalogue);
     const masters = catalogueTaxReader(config);
     // The rates are the ones this business declared (option C, #54), and nothing else. The fixture
     // rate table is gone from this app: it described itself as "not a statement of Indian law", and
@@ -1297,7 +1297,7 @@ export class DemoApplication {
       names: {
         party: (companyId, partyId) => partyId === String(config.supplierId)
           ? config.supplierName
-          : masterDataService().parties(mastersContext(companyId)).find((p) => p.id === partyId)?.legalName,
+          : masterView(companyId).parties(String(companyId)).find((p) => p.id === partyId)?.legalName,
         // Purchases keep their own short item ids, so those fall back to the purchase catalogue.
         item: (companyId, itemId) => catalogueItems(companyId).find((item) => item.id === itemId)?.name
           ?? DemoApplication.CATALOGUE[itemId]?.description,
@@ -2718,7 +2718,7 @@ export class DemoApplication {
   /** Issue #228 — a supplier, with the GST number and address their bills carry, and their account in the books. */
   async addSupplier(actor: ActorContext, input: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
-    const created = createSupplier(companyId, input);
+    const created = await createSupplier(companyId, input);
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, { partyId: created.supplier.id, name: created.supplier.name, kind: 'SUPPLIER' });
     return created;
   }
@@ -2924,14 +2924,14 @@ export class DemoApplication {
    * Issue #395: never from a read.
    */
   private async walkIn(actor: ActorContext, openedBy: ActorContext = this.shop.setupActor) {
-    const party = walkInCustomer(this.companyOf(actor));
+    const party = await walkInCustomer(this.companyOf(actor));
     await this.shop.ledger.openPartyAccount(openedBy, { partyId: party.id, name: party.legalName, kind: 'CUSTOMER' });
     return party;
   }
 
   async addCustomer(actor: ActorContext, input: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
-    const created = createCustomer(companyId, input);
+    const created = await createCustomer(companyId, input);
     await this.shop.ledger.openPartyAccount(this.shop.setupActor, {
       partyId: created.customer.id,
       name: created.customer.name,
@@ -3027,13 +3027,13 @@ export class DemoApplication {
     const describe = (bank: { readonly bankName: string; readonly ifsc: string; readonly accountNumber: string } | null) =>
       bank === null ? null : `${bank.bankName}, ${bank.ifsc}, account ending ${bank.accountNumber.replace(/\s/g, '').slice(-4)}`;
     const before = describe(readBusinessDetails(companyId, company).bank);
-    const saved = saveBusinessDetails(companyId, company, input);
+    const saved = await saveBusinessDetails(companyId, company, input);
     await this.recordPayeeChange(actor, 'bank account', before, describe(saved.bank));
     // Issue #395 — the walk-in customer (#288) needs the shop's address, so it is made, or moved to
     // the new town and PIN code, here, and its account opened as the person saving. Without
     // `ledger.setup` the account waits for the first counter sale.
     if (actor.permissions.includes('ledger.setup')) await this.walkIn(actor, actor);
-    else walkInCustomer(companyId);
+    else await walkInCustomer(companyId);
     return saved;
   }
 
@@ -3059,13 +3059,13 @@ export class DemoApplication {
    * Issue #224 — corrects a customer's saved address: its lines, town or PIN code. Issue #235 — and
    * their credit limit, when the form sends one (an empty box removes it).
    */
-  correctCustomerAddress(actor: ActorContext, input: Record<string, unknown>) {
+  async correctCustomerAddress(actor: ActorContext, input: Record<string, unknown>) {
     const companyId = this.companyOf(actor);
     // The limit is checked first, so a mistyped limit does not leave the address half-saved.
     if ('creditLimit' in input) creditLimitPaiseOf(input.creditLimit);
-    const corrected = correctCustomerAddress(companyId, input);
+    const corrected = await correctCustomerAddress(companyId, input);
     if (!('creditLimit' in input)) return corrected;
-    const customer = setCustomerCreditLimit(companyId, String(input.customerId ?? input.customer ?? ''), input.creditLimit);
+    const customer = await setCustomerCreditLimit(companyId, String(input.customerId ?? input.customer ?? ''), input.creditLimit);
     const limit = customer.creditLimitPaise ?? null;
     return {
       ...corrected,

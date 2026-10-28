@@ -42,7 +42,7 @@ import {
   type Transporter,
   type ValidationResult,
 } from '../../../packages/masters/src/index.ts';
-import { masterData, mastersContext } from './master-data.ts';
+import { masterData, masterView, mastersContext, refreshMasterView } from './master-data.ts';
 import { both, say } from './language.ts';
 import { OUTSIDE_INDIA, addressesOf, billingAddressOf, customerPrint, customerView, resolveCustomer } from './catalogue-application.ts';
 
@@ -58,14 +58,14 @@ const stateName = (code: string): string => code === OVERSEAS_STATE_CODE ? OUTSI
 // ------------------------------------------------------------------------------ the transporters
 
 export const transporters = (companyId: CompanyId | string): readonly Transporter[] =>
-  masterData().transporters(mastersContext(companyId));
+  masterView(companyId).transporters(String(companyId));
 
 /**
  * Adds a transporter. The 15-character identifier is either their GST number or the transporter ID
  * the portal issues to a transporter who is not registered — the e-way bill takes the same field
  * either way, which is why one box holds both.
  */
-export const createTransporter = (companyId: CompanyId | string, body: unknown) => {
+export const createTransporter = async (companyId: CompanyId | string, body: unknown) => {
   const input = (body ?? {}) as Record<string, unknown>;
   const name = str(input.name);
   if (name.length < 2) throw invalid('TRANSPORTER_NAME', 'Type the transporter’s name, as it should print on the bill.');
@@ -79,11 +79,12 @@ export const createTransporter = (companyId: CompanyId | string, body: unknown) 
     require_(validateGstin(transporterId), 'TRANSPORTER_GSTIN', 'That is not a GST number.');
   }
   const phone = str(input.phone);
-  const created = masterData().createTransporter(
+  const created = await masterData().createTransporter(
     mastersContext(companyId),
     { name, transporterId, ...(phone === '' ? {} : { phone }) },
     { idempotencyKey: `transporter:${String(companyId)}:${transporterId}` },
   );
+  await refreshMasterView(companyId);
   return {
     state: 'recorded' as const,
     title: both('Transporter added', 'ट्रांसपोर्टर जुड़ा'),
@@ -95,7 +96,7 @@ export const createTransporter = (companyId: CompanyId | string, body: unknown) 
 // -------------------------------------------------------------- another address of this customer
 
 /** Adds a delivery address to a customer, so a godown they ship to is kept rather than retyped. */
-export const addShippingAddress = (companyId: CompanyId | string, body: unknown) => {
+export const addShippingAddress = async (companyId: CompanyId | string, body: unknown) => {
   const input = (body ?? {}) as Record<string, unknown>;
   const customer = resolveCustomer(companyId, str(input.customerId ?? input.customer));
   const line1 = str(input.line1);
@@ -115,7 +116,7 @@ export const addShippingAddress = (companyId: CompanyId | string, body: unknown)
   const gstin = normaliseIdentifier(str(input.gstin));
   if (gstin !== '') require_(validateGstin(gstin), 'SHIPPING_GSTIN', 'That is not a GST number.');
 
-  const created = masterData().addAddress(
+  const created = await masterData().addAddress(
     mastersContext(companyId),
     {
       partyId: customer.id,
@@ -131,6 +132,7 @@ export const addShippingAddress = (companyId: CompanyId | string, body: unknown)
     },
     { idempotencyKey: `shipping-address:${String(companyId)}:${customer.id}:${line1}:${pincode}` },
   );
+  await refreshMasterView(companyId);
   return {
     state: 'recorded' as const,
     title: both('Delivery address added', 'डिलीवरी का पता जुड़ा'),
@@ -183,7 +185,7 @@ export const requireAddressInState = (
  * The billing address unless another of their addresses is named. Bills already issued keep the
  * address they were issued with.
  */
-export const correctCustomerAddress = (companyId: CompanyId | string, body: unknown) => {
+export const correctCustomerAddress = async (companyId: CompanyId | string, body: unknown) => {
   const input = (body ?? {}) as Record<string, unknown>;
   const customer = resolveCustomer(companyId, str(input.customerId ?? input.customer));
   const addressId = str(input.addressId);
@@ -195,7 +197,7 @@ export const correctCustomerAddress = (companyId: CompanyId | string, body: unkn
   if (pincode !== '' && address.stateCode !== OVERSEAS_STATE_CODE) {
     require_(validatePincodeForState(pincode, address.stateCode), 'ADDRESS_PINCODE_STATE', 'That PIN code is not in the state of this address.');
   }
-  const corrected = masterData().correctAddress(
+  const corrected = await masterData().correctAddress(
     mastersContext(companyId),
     address.id,
     {
@@ -206,6 +208,7 @@ export const correctCustomerAddress = (companyId: CompanyId | string, body: unkn
     },
     { idempotencyKey: `address-correct:${String(companyId)}:${address.id}:${str(input.line1)}:${str(input.city)}:${pincode}` },
   );
+  await refreshMasterView(companyId);
   return {
     state: 'recorded' as const,
     title: both('Address corrected', 'पता ठीक किया'),
