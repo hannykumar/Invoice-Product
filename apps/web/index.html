@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&amp;family=Mukta:wght@400;500;600;700&amp;display=swap" />
     <link rel="stylesheet" href="/styles.css" />
+    <!-- Issue #353 — the four screen states, announcements and action helper, before app.js so every screen mounts the same pieces. -->
+    <script src="/states.js"></script>
     <!-- Issue #305 — the slides of a bill, before app.js like the item picker. -->
     <script type="module" src="/sale-slides.js"></script>
     <!-- Issue #308 — the item picker, before app.js, so every screen mounts the same one. -->
@@ -21,6 +23,9 @@
   </head>
   <body>
     <a class="skip-link" href="#main" data-i18n="skip"></a>
+    <!-- Issue #353 — where "saved", "that did not work" and "loading" are spoken for a screen reader. -->
+    <div class="sr-only" id="announce-polite" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div class="sr-only" id="announce-urgent" role="alert" aria-live="assertive" aria-atomic="true"></div>
     <div class="app-shell">
       <!-- Issue #304 — five tabs instead of 22 menu items: a bottom bar on a phone, a short left rail on
            a desktop. + Bill opens the sheet of bills (also F2 or Alt+N); More holds every other screen. -->
@@ -64,8 +69,9 @@
         </div>
 
         <!-- Issue #310 — Home: one money card, only the jobs that need the owner, the latest bills. -->
-        <section class="view active" id="view-dashboard" aria-labelledby="dashboard-title">
+        <section class="view active" id="view-dashboard" data-screen="data" aria-labelledby="dashboard-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="today"></p><h1 id="dashboard-title" tabindex="-1" data-i18n="welcome"></h1></div></div>
+          <div class="screen-state" id="screen-state-dashboard" data-state-region></div>
           <div class="home-grid">
             <section class="money-card home-money" aria-labelledby="home-money-title">
               <h2 id="home-money-title" class="sr-only" data-i18n="homeMoneyTitle"></h2>
@@ -91,13 +97,14 @@
         </section>
 
         <!-- Issue #304 — the Items tab: every item and what is left of it; add one, change one. -->
-        <section class="view" id="view-items" aria-labelledby="items-title">
+        <section class="view" id="view-items" data-screen="data" aria-labelledby="items-title">
           <div class="page-heading"><div><h1 id="items-title" tabindex="-1" data-i18n="itemsTitle"></h1><p data-i18n="itemsHelp"></p></div><button type="button" class="action-button" id="items-add"><span aria-hidden="true">＋</span> <span data-i18n="itemsAdd"></span></button></div>
+          <div class="screen-state" id="screen-state-items" data-state-region></div>
           <article class="panel"><ul class="item-list" id="items-list"></ul></article>
         </section>
 
         <!-- Issue #304 — More: every other screen, grouped in plain words. Every old address still opens its screen. -->
-        <section class="view" id="view-more" aria-labelledby="more-title">
+        <section class="view" id="view-more" data-screen="static" aria-labelledby="more-title">
           <div class="page-heading"><div><h1 id="more-title" tabindex="-1" data-i18n="moreTitle"></h1><p data-i18n="moreHelp"></p></div></div>
           <nav class="more-groups" aria-labelledby="more-title">
             <section class="panel more-group" aria-labelledby="more-gst"><h2 id="more-gst" data-i18n="navGroupGst"></h2><ul class="more-list">
@@ -136,7 +143,7 @@
           </nav>
         </section>
 
-        <section class="view" id="view-sale" aria-labelledby="sale-title">
+        <section class="view" id="view-sale" data-screen="form" aria-labelledby="sale-title">
           <div class="page-heading compact"><div><h1 id="sale-title" tabindex="-1" data-i18n="saleTitle"></h1><p data-i18n="saleHelp"></p></div><span class="save-state" id="sale-save-state" role="status" data-i18n="savedDevice"></span><button type="button" class="secondary-button" id="other-bills" aria-haspopup="dialog" aria-controls="bill-sheet" data-i18n="otherBills"></button></div>
           <!-- Issue #301 — sales held because their review needed approval, approved here by someone who may. -->
           <section class="panel" id="sale-waiting" aria-labelledby="sale-waiting-title" hidden><h2 id="sale-waiting-title" data-i18n="saleWaitingTitle"></h2><ul id="sale-waiting-list"></ul></section>
@@ -339,7 +346,7 @@
           </div>
         </template>
 
-        <section class="view" id="view-purchase" aria-labelledby="purchase-title">
+        <section class="view" id="view-purchase" data-screen="form" aria-labelledby="purchase-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="purchase-title" tabindex="-1" data-i18n="purchaseTitle"></h1><p data-i18n="purchaseHelp"></p></div><span class="save-state" id="purchase-save-state" role="status" data-i18n="savedDevice"></span></div>
           <!-- Issue #262 — opened from a sale refused for short stock: which goods, which godown, and the way back. -->
           <p class="safety-note" id="purchase-for-sale-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span> <button class="secondary-button" type="button" id="purchase-back-to-sale" data-i18n="backToSale"></button></p>
@@ -379,7 +386,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-payment" aria-labelledby="payment-title">
+        <section class="view" id="view-payment" data-screen="form" aria-labelledby="payment-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="stepOne"></p><h1 id="payment-title" tabindex="-1" data-i18n="paymentTitle"></h1><p data-i18n="paymentHelp"></p></div><span class="save-state" id="payment-save-state" role="status" data-i18n="savedDevice"></span></div>
           <!-- Issue #266 — said when a draft from an earlier day comes back. -->
           <p class="safety-note draft-date-note" id="payment-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
@@ -393,7 +400,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-paid" aria-labelledby="paid-title">
+        <section class="view" id="view-paid" data-screen="form" aria-labelledby="paid-title">
           <div class="page-heading compact"><div><h1 id="paid-title" tabindex="-1" data-i18n="paidTitle"></h1><p data-i18n="paidHelp"></p></div><span class="save-state" id="paid-save-state" role="status" data-i18n="savedDevice"></span></div>
           <!-- Issue #266 — said when a draft from an earlier day comes back. -->
           <p class="safety-note draft-date-note" id="paid-draft-date-note" role="status" hidden><span aria-hidden="true">i</span><span data-note-text></span></p>
@@ -408,8 +415,9 @@
         </section>
 
         <!-- Issue #294 — expenses, contra and journal entries, the owner's money, and the cash and bank books. Filled by books.js. -->
-        <section class="view" id="view-books" aria-labelledby="books-title">
+        <section class="view" id="view-books" data-screen="data" aria-labelledby="books-title">
           <div class="page-heading compact"><div><h1 id="books-title" tabindex="-1" data-i18n="booksTitle"></h1><p data-i18n="booksHelp"></p></div></div>
+          <div class="screen-state" id="screen-state-books" data-state-region></div>
           <div class="dashboard-grid">
             <article class="panel form-panel"><h2 data-i18n="booksExpense"></h2>
               <form data-books-kind="expense"><div class="field-grid">
@@ -454,8 +462,9 @@
           <article class="panel"><h2 data-i18n="booksEntries"></h2><ul data-books-entries></ul></article>
         </section>
 
-        <section class="view" id="view-bank-feeds" aria-labelledby="bank-feeds-title">
+        <section class="view" id="view-bank-feeds" data-screen="data" aria-labelledby="bank-feeds-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="bank-feeds-title" tabindex="-1" data-i18n="bankFeedsTitle"></h1><p data-i18n="bankFeedsHelp"></p></div></div>
+          <div class="screen-state" id="screen-state-bank-feeds" data-state-region></div>
           <div class="dashboard-grid">
             <article class="panel form-panel">
               <h2 data-i18n="connectBank"></h2>
@@ -477,8 +486,9 @@
           </article>
         </section>
 
-        <section class="view" id="view-returns" aria-labelledby="returns-title">
+        <section class="view" id="view-returns" data-screen="data" aria-labelledby="returns-title">
           <div class="page-heading compact"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="returns-title" tabindex="-1" data-i18n="returnsTitle"></h1><p data-i18n="returnsHelp"></p></div></div>
+          <div class="screen-state" id="screen-state-returns" data-state-region></div>
           <form class="transaction-layout" id="return-form">
             <article class="panel form-panel">
               <div class="field-grid">
@@ -532,7 +542,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-einvoice" aria-labelledby="einvoice-title">
+        <section class="view" id="view-einvoice" data-screen="data" aria-labelledby="einvoice-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -540,6 +550,7 @@
               <p data-i18n="einvoiceHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-einvoice" data-state-region></div>
 
           <!-- Issue #239 — the app decides whether each bill needs an e-invoice number, from the
                customer and Business details. This screen lists the answers; it asks nothing. -->
@@ -572,7 +583,7 @@
         </section>
 
 
-        <section class="view" id="view-presale" aria-labelledby="presale-title">
+        <section class="view" id="view-presale" data-screen="data" aria-labelledby="presale-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -580,6 +591,7 @@
               <p data-i18n="presaleHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-presale" data-state-region></div>
 
           <article class="panel form-panel">
             <form id="presale-form">
@@ -668,7 +680,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-challan" aria-labelledby="challan-title">
+        <section class="view" id="view-challan" data-screen="data" aria-labelledby="challan-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -676,6 +688,7 @@
               <p data-i18n="challanHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-challan" data-state-region></div>
 
           <article class="panel form-panel">
             <form id="challan-form">
@@ -745,7 +758,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-eway" aria-labelledby="eway-title">
+        <section class="view" id="view-eway" data-screen="data" aria-labelledby="eway-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -753,6 +766,7 @@
               <p data-i18n="ewayHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-eway" data-state-region></div>
 
           <article class="panel form-panel">
             <form id="eway-form">
@@ -830,7 +844,7 @@
         </section>
 
         <!-- Issue #489 — the supplier bills inbox (#15): bills that arrived by upload, email or WhatsApp, read and waiting for a person. -->
-        <section class="view" id="view-purchase-inbox" aria-labelledby="inbox-title">
+        <section class="view" id="view-purchase-inbox" data-screen="data" aria-labelledby="inbox-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -847,6 +861,7 @@
             <p id="inbox-add-result" role="status" aria-live="polite"></p>
             <p class="safety-note" id="inbox-deliver-to" hidden><span aria-hidden="true">i</span><span data-inbox-deliver></span></p>
           </article>
+          <div class="screen-state" id="screen-state-purchase-inbox" data-state-region></div>
           <article class="panel" id="inbox-list-panel">
             <div class="panel-heading">
               <div><h2 data-i18n="inboxListTitle"></h2><p id="inbox-counts" role="status" aria-live="polite"></p></div>
@@ -857,7 +872,7 @@
           <article class="panel" id="inbox-detail" tabindex="-1" aria-labelledby="inbox-detail-title" hidden></article>
         </section>
 
-        <section class="view" id="view-itc" aria-labelledby="itc-title">
+        <section class="view" id="view-itc" data-screen="data" aria-labelledby="itc-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -865,6 +880,7 @@
               <p data-i18n="itcHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-itc" data-state-region></div>
 
           <article class="panel form-panel">
             <form id="itc-form">
@@ -923,7 +939,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-gst-returns" aria-labelledby="gst-returns-title">
+        <section class="view" id="view-gst-returns" data-screen="data" aria-labelledby="gst-returns-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -931,6 +947,7 @@
               <p data-i18n="gstReturnsHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-gst-returns" data-state-region></div>
 
           <article class="panel form-panel">
             <form id="gst-return-form">
@@ -988,7 +1005,7 @@
         </section>
 
         <!-- Issue #296 — the composition scheme: the setting, CMP-08 every quarter and GSTR-4 every year. Filled by composition.js. -->
-        <section class="view" id="view-composition" aria-labelledby="composition-title">
+        <section class="view" id="view-composition" data-screen="data" aria-labelledby="composition-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -996,10 +1013,11 @@
               <p data-i18n="compositionHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-composition" data-state-region></div>
           <div id="composition-root"></div>
         </section>
 
-        <section class="view" id="view-vehicle" aria-labelledby="vehicle-title">
+        <section class="view" id="view-vehicle" data-screen="data" aria-labelledby="vehicle-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -1007,6 +1025,7 @@
               <p data-i18n="vehicleCheckHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-vehicle" data-state-region></div>
 
           <article class="panel form-panel">
             <div class="panel-heading"><div><h2 data-i18n="recordLookupTitle"></h2><p data-i18n="recordLookupHelp"></p></div></div>
@@ -1068,7 +1087,7 @@
           </article>
         </section>
 
-        <section class="view" id="view-supplier" aria-labelledby="supplier-check-title">
+        <section class="view" id="view-supplier" data-screen="form" aria-labelledby="supplier-check-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -1115,8 +1134,9 @@
         <!-- Issue #42 [E42]: what the plan covers. The screen leads with the promise, because the
              thing a person most needs to know about pricing is what it cannot take away. -->
         <!-- Issue #343 — who can use this business: invite, change a role, remove, hand over, leave. -->
-        <section class="view" id="view-team" aria-labelledby="team-title">
+        <section class="view" id="view-team" data-screen="data" aria-labelledby="team-title">
           <div class="page-heading"><div><h1 id="team-title" tabindex="-1" data-i18n="teamTitle"></h1><p data-i18n="teamHelp"></p></div></div>
+          <div class="screen-state" id="screen-state-team" data-state-region></div>
           <article class="panel">
             <ul class="item-list" id="team-members"></ul>
             <p class="login-error" id="team-error" role="alert"></p>
@@ -1133,7 +1153,7 @@
           <article class="panel"><button type="button" class="secondary-button" id="team-leave" data-i18n="teamLeave"></button></article>
         </section>
 
-        <section class="view" id="view-plan" aria-labelledby="plan-title">
+        <section class="view" id="view-plan" data-screen="data" aria-labelledby="plan-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -1141,6 +1161,7 @@
               <p data-i18n="planHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-plan" data-state-region></div>
 
           <article class="panel">
             <div class="panel-heading">
@@ -1167,7 +1188,7 @@
             <div id="plan-invoices" class="activity-list"></div>
           </article>
         </section>
-        <section class="view" id="view-reminders" aria-labelledby="reminders-title">
+        <section class="view" id="view-reminders" data-screen="data" aria-labelledby="reminders-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -1175,6 +1196,7 @@
               <p data-i18n="remindersHelp"></p>
             </div>
           </div>
+          <div class="screen-state" id="screen-state-reminders" data-state-region></div>
 
           <article class="panel">
             <div class="panel-heading">
@@ -1222,7 +1244,7 @@
             <div id="reminders-outbox" class="activity-list"></div>
           </article>
         </section>
-        <section class="view" id="view-deliveries" aria-labelledby="deliveries-title">
+        <section class="view" id="view-deliveries" data-screen="form" aria-labelledby="deliveries-title">
           <div class="page-heading">
             <div>
               <p class="eyebrow" data-i18n="workspace"></p>
@@ -1311,14 +1333,16 @@
           </article>
         </section>
 
-        <section class="view" id="view-activity" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" tabindex="-1" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy" data-i18n="loadingActivity"></p></div></article></section>
+        <section class="view" id="view-activity" data-screen="data" aria-labelledby="activity-title"><div class="page-heading"><div><p class="eyebrow" data-i18n="workspace"></p><h1 id="activity-title" tabindex="-1" data-i18n="activityTitle"></h1><p data-i18n="activityHelp"></p></div></div>
+          <div class="screen-state" id="screen-state-activity" data-state-region></div><article class="panel"><div class="activity-list" id="all-activity" aria-live="polite"><p class="loading-copy" data-i18n="loadingActivity"></p></div></article></section>
 
-        <section class="view" id="view-reports" aria-labelledby="reports-title">
+        <section class="view" id="view-reports" data-screen="data" aria-labelledby="reports-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="navReports"></p><h1 id="reports-title" tabindex="-1" data-i18n="reportsTitle"></h1><p data-i18n="reportsHelp"></p></div></div>
+          <div class="screen-state" id="screen-state-reports" data-state-region></div>
           <div id="reports-content" aria-live="polite"><p class="loading-copy" data-i18n="reportsLoading"></p></div>
         </section>
 
-        <section class="view" id="view-setup" aria-labelledby="setup-title">
+        <section class="view" id="view-setup" data-screen="form" aria-labelledby="setup-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="navSetup"></p><h1 id="setup-title" tabindex="-1" data-i18n="setupTitle"></h1><p data-i18n="setupHelp"></p></div></div>
           <form id="setup-form" class="panel setup-form" novalidate>
             <fieldset>
@@ -1407,7 +1431,7 @@
         </section>
         <!-- Issue #180 — the business's own particulars. One place holds what every printed document
              says about the seller, and nothing is issued until the address is in it. -->
-        <section class="view" id="view-business" aria-labelledby="business-title">
+        <section class="view" id="view-business" data-screen="form" aria-labelledby="business-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="businessEyebrow"></p><h1 id="business-title" tabindex="-1" data-i18n="businessTitle"></h1><p data-i18n="businessHelp"></p></div></div>
           <form class="panel setup-form" id="business-form" novalidate>
             <fieldset>
@@ -1485,7 +1509,7 @@
           </form>
           <p class="branding-status" id="business-status" role="status"></p>
         </section>
-        <section class="view" id="view-branding" aria-labelledby="branding-title">
+        <section class="view" id="view-branding" data-screen="form" aria-labelledby="branding-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="brandingEyebrow"></p><h1 id="branding-title" tabindex="-1" data-i18n="brandingTitle"></h1><p data-i18n="brandingHelp"></p></div></div>
           <div class="branding-grid">
             <div class="branding-controls">
@@ -1544,10 +1568,11 @@
             </article>
           </div>
         </section>
-        <section class="view" id="view-operations" aria-labelledby="operations-title">
+        <section class="view" id="view-operations" data-screen="data" aria-labelledby="operations-title">
           <div class="page-heading">
             <div><p class="eyebrow" data-i18n="operationsEyebrow"></p><h1 id="operations-title" tabindex="-1" data-i18n="operationsTitle"></h1><p data-i18n="operationsHelp"></p></div>
           </div>
+          <div class="screen-state" id="screen-state-operations" data-state-region></div>
           <div class="safety-note"><strong data-i18n="operationsSafetyTitle"></strong><span data-i18n="operationsSafety"></span></div>
           <div class="dashboard-grid">
             <article class="panel"><h2 data-i18n="operationsHealth"></h2><div id="operations-health" role="status"></div></article>
@@ -1558,7 +1583,7 @@
           </div>
         </section>
 
-        <section class="view" id="view-migration" aria-labelledby="migration-title">
+        <section class="view" id="view-migration" data-screen="form" aria-labelledby="migration-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="navMigration"></p><h1 id="migration-title" tabindex="-1" data-i18n="migrationTitle"></h1><p data-i18n="migrationHelp"></p></div></div>
           <form class="panel setup-form migration-form" id="migration-form" novalidate>
             <fieldset>
@@ -1576,7 +1601,7 @@
           <div id="migration-result" aria-live="polite"></div>
         </section>
 
-        <section class="view" id="view-ask" aria-labelledby="ask-title">
+        <section class="view" id="view-ask" data-screen="form" aria-labelledby="ask-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="navAsk"></p><h1 id="ask-title" tabindex="-1" data-i18n="askTitle"></h1><p data-i18n="askHelp"></p></div></div>
           <form class="panel setup-form" id="ask-form" novalidate>
             <fieldset>
@@ -1624,7 +1649,7 @@
 
         <!-- Issue #303 — the design system on one page, for the owner: every piece a redesigned screen
              is built from, in English and Hindi side by side. Reached at #design; not in the menu. -->
-        <section class="view" id="view-design" aria-labelledby="design-title">
+        <section class="view" id="view-design" data-screen="static" aria-labelledby="design-title">
           <div class="page-heading"><div><p class="eyebrow" data-i18n="designEyebrow"></p><h1 id="design-title" tabindex="-1" data-i18n="designTitle"></h1><p data-i18n="designHelp"></p></div></div>
           <p class="safety-note" id="design-owner-only" hidden><span aria-hidden="true">i</span><span data-i18n="designOwnerOnly"></span></p>
           <div id="design-content" hidden>
@@ -1635,8 +1660,42 @@
               <button type="button" class="chip" data-theme-choice="dark" aria-pressed="false" data-i18n="designThemeDark"></button>
             </div>
             <div class="design-grid" id="design-specimens"></div>
+            <!-- Issue #353 — the four screen states, the shared pieces and the keyboard, drawn by the same code every screen uses. -->
+            <section class="panel design-states" aria-labelledby="design-states-title">
+              <h2 id="design-states-title" data-i18n="designStatesTitle"></h2>
+              <p data-i18n="designStatesHelp"></p>
+              <div class="design-state-grid">
+                <article><h3 data-i18n="designStateLoading"></h3><div id="design-demo-loading" data-state-region></div></article>
+                <article><h3 data-i18n="designStateEmpty"></h3><div id="design-demo-empty" data-state-region></div></article>
+                <article><h3 data-i18n="designStateOffline"></h3><div id="design-demo-offline" data-state-region></div></article>
+                <article><h3 data-i18n="designStateServer"></h3><div id="design-demo-server" data-state-region></div></article>
+                <article><h3 data-i18n="designStateRefused"></h3><div id="design-demo-refused" data-state-region></div></article>
+                <article><h3 data-i18n="designStateReady"></h3><div id="design-demo-ready" data-state-region></div></article>
+              </div>
+              <h3 data-i18n="designFormTitle"></h3>
+              <form class="design-form" id="design-demo-form" novalidate>
+                <label><span data-i18n="designFieldLabel"></span><input name="gstin" id="design-demo-field" aria-describedby="design-demo-field-help" autocomplete="off" /></label>
+                <small id="design-demo-field-help" class="field-help"></small>
+                <div class="design-row">
+                  <button type="submit" class="primary-button" data-i18n="designDemoSave"></button>
+                  <button type="button" class="secondary-button" id="design-demo-fail" data-i18n="designDemoFail"></button>
+                  <button type="button" class="secondary-button" id="design-demo-dialog" aria-haspopup="dialog" data-i18n="designDemoDialog"></button>
+                </div>
+                <p class="action-status" id="design-demo-status"></p>
+              </form>
+              <h3 data-i18n="shortcutsTitle"></h3>
+              <p data-i18n="shortcutsHelp"></p>
+              <ul class="design-keys" id="design-keys"></ul>
+              <h3 data-i18n="designTokens"></h3>
+              <ul class="design-tokens" id="design-tokens"></ul>
+            </section>
           </div>
         </section>
+        <dialog id="design-demo-dialog-box" aria-labelledby="design-demo-dialog-title">
+          <h2 id="design-demo-dialog-title" data-i18n="designDialogTitle"></h2>
+          <p data-i18n="designDialogHelp"></p>
+          <button type="button" class="primary-button" data-close-dialog data-i18n="close"></button>
+        </dialog>
         <template id="design-specimen">
           <article class="panel design-specimen">
             <h2 data-design="dsLanguage"></h2>

@@ -12,17 +12,24 @@ const newRequestId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.no
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 const rupees = (paise) => `₹${(Number(paise) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export async function openComposition({ api, locale }) {
+export async function openComposition({ api, locale, words }) {
   const say = (en, hi) => (locale() === "hi-IN" ? hi : en);
   const root = document.querySelector("#composition-root");
   if (root === null) return;
-  try {
-    const [scheme, statements] = await Promise.all([
-      api("/api/composition/scheme"),
-      api("/api/composition/statements", { method: "POST", body: "{}" }).catch((error) => ({ error })),
-    ]);
-    render(root, { api, say, locale, scheme, statements });
-  } catch (error) { root.replaceChildren(element("p", error.message, "safety-note")); }
+  // Issue #353 — the four states: loading bars, a plain error with Try again, then the screen.
+  await globalThis.KarobarStates.loadInto(document.querySelector("#screen-state-composition"), {
+    words: words(),
+    quiet: true,
+    content: root,
+    load: async () => {
+      const [scheme, statements] = await Promise.all([
+        api("/api/composition/scheme"),
+        api("/api/composition/statements", { method: "POST", body: "{}" }).catch((error) => ({ error })),
+      ]);
+      return { scheme, statements };
+    },
+    render: ({ scheme, statements }) => render(root, { api, say, locale, scheme, statements }),
+  });
 }
 
 function panel(title, help) {

@@ -90,6 +90,13 @@ blockers. For execution, **#19 ships baseline supplier-risk warnings without #31
 supply reconciliation and ITC signals through an optional interface. #31 depends on #19, not the
 reverse.
 
+## UI conventions (apps/web)
+
+Every `apps/web` screen declares `data-screen="data|form|static"` and a `data` screen reads through
+`readScreen` (`apps/web/states.js`): loading, empty, error with Try again, ready. Use the shared
+helpers, never a hand-written spinner or `error.message` dump. `/design` shows all of it, and
+`docs/ui-conventions.md` says what is tested and what is not (WCAG 2.2 AA, no real screen reader).
+
 ## Contracts in play
 
 | Contract | Owner | Purpose |
