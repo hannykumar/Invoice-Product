@@ -4,6 +4,7 @@
  * routes the dialog calls.
  */
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { resetPace } from "./db.ts";
 
 export const OWNER = "owner@sampoorna.example.invalid";
 export const DEMO_CODE = "246810";
@@ -22,6 +23,7 @@ const sessions = new Map<string, Awaited<ReturnType<ReturnType<Page["context"]>[
 
 /** Signs in through the login dialog exactly as the shopkeeper does: address, then the code. */
 export async function signIn(page: Page, address = OWNER) {
+  await resetPace();
   const opened = sessions.get(address);
   if (opened !== undefined) {
     await page.context().addCookies(opened);
