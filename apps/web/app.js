@@ -938,6 +938,17 @@ async function openCompositionScreen() {
   }
 }
 
+// Issue #489 — the supplier bills inbox is its own file too; a failed fetch of it is drawn here, with Try again.
+async function openInboxScreen() {
+  try {
+    const inbox = await import("/purchase-inbox.js");
+    await inbox.openInbox({ api, apiList, words: copy[state.locale], text, locale: state.locale });
+  } catch (error) {
+    console.error("The supplier bills inbox could not open.", error);
+    screenFailed("purchase-inbox", error, openInboxScreen);
+  }
+}
+
 // Issue #353 — the books screen is its own file, fetched when first opened. With no network that fetch
 // fails before the screen's own states exist, so the failure is drawn here, with Try again.
 async function openBooksScreen() {
@@ -997,7 +1008,7 @@ function openView(view, section = null) {
   try { if (target === "sale") saleSlidesShown(); } catch { /* not loaded yet */ }
   if (target === "itc") openItc();
   // Issue #489 — the supplier bills inbox.
-  if (target === "purchase-inbox") import("/purchase-inbox.js").then((inbox) => inbox.openInbox({ api, apiList, words: copy[state.locale], text, locale: state.locale })).catch((error) => console.error("The supplier bills inbox could not open.", error));
+  if (target === "purchase-inbox") openInboxScreen();
   if (target === "gst-returns") openGstReturns();
   // Issue #296 — the composition scheme: the setting, CMP-08 by quarter and GSTR-4 by year.
   if (target === "composition") openCompositionScreen();

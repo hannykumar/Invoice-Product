@@ -29,7 +29,7 @@ async function loadList() {
   await globalThis.KarobarStates.loadInto($("#screen-state-purchase-inbox"), {
     words: context.words,
     quiet: true,
-    content: $("#inbox-list-panel"),
+    content: $("#inbox-list"), // the heading and Refresh stay, so an empty inbox can be read again
     load: async () => {
       const inbox = await context.apiList("/api/purchase-inbox", "items");
       showDeliverTo(inbox); // most useful when the inbox is still empty

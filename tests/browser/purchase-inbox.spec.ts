@@ -77,10 +77,12 @@ test("the inbox says plainly when it is empty or cannot be opened (#489)", async
   await page.goto("/");
   await signIn(page, "owner@konkan.example.invalid");
   await page.goto("/#purchase-inbox");
-  await expect(page.locator("#inbox-list")).toContainText(/Nothing here yet/);
-  // The list's request fails: the screen says so and offers to try again.
+  const region = page.locator("#screen-state-purchase-inbox");
+  await expect(region).toHaveAttribute("data-state", "empty");
+  await expect(region).toContainText(/Nothing here yet/);
+  // The list's request fails: the screen says so and offers to try again (#353's error state).
   await page.route("**/api/purchase-inbox?**", (route) => route.abort());
   await page.locator("#inbox-refresh").click();
-  await expect(page.locator("#inbox-list")).toContainText(/could not be opened/);
-  await expect(page.getByRole("button", { name: /try again/i })).toBeVisible();
+  await expect(region).toHaveAttribute("data-state", "error");
+  await expect(region.getByRole("button", { name: /try again/i })).toBeVisible();
 });

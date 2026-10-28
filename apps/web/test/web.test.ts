@@ -957,7 +957,8 @@ test("#489: the supplier bills inbox is reachable from More, labelled, and annou
   assert.match(view, /id="inbox-add-result" role="status"/);
   assert.match(view, /id="inbox-counts" role="status"/);
   assert.match(view, /id="inbox-list" aria-busy="false"/);
-  assert.match(script, /target === "purchase-inbox"[^\n]*purchase-inbox\.js/);
+  assert.match(script, /target === "purchase-inbox"\) openInboxScreen\(\);/);
+  assert.match(script, /import\("\/purchase-inbox\.js"\)/);
   // Loading, empty and error states each have words, and the screen draws nothing with innerHTML.
   for (const key of ["inboxLoading", "inboxEmpty", "inboxLoadFailed"]) assert.match(module, new RegExp(`say\\("${key}"\\)`));
   assert.doesNotMatch(module, /innerHTML|insertAdjacentHTML|outerHTML/);
