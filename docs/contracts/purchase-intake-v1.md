@@ -251,3 +251,29 @@ unless the app passes `PostgresInboxHolding`; one contract suite runs on both.
   (30, **proposed**; D10 has no row for this — see the comment in `inbox-holding.ts`). The worker
   runs it hourly. `ObjectStore` has no delete yet, so an expired file's key is left on the trail
   (`expired`) for removal; `discardBytes` takes over once the port has one.
+
+
+## In the running app (#489)
+
+The service is built once for the process (`apps/api/src/purchase-inbox-application.ts`), not per
+company, because routing needs every company's address. Its routes open their own short units of work
+(`ownUnitsOfWork`); the OCR read never runs inside one.
+
+| Route | Gate | What it does |
+| --- | --- | --- |
+| `GET /api/purchase-inbox` | `purchase.inbox.view` | The company's documents, newest first, each with a shopkeeper's state (`ready`, `reading`, `held`, `failed`, `duplicate`, `billed`, `rejected`), what to do next, and `sameBillAs` when a second file is the same bill (`logicalKey`). Also the unrouted documents on a shared address, and where suppliers send bills. |
+| `GET /api/purchase-inbox/:id` | `purchase.inbox.view` | One document with every field's value, confidence in words, evidence text and page or JSON path, the essential fields not found, the sums that do not add up, and the form the person corrects (supplier and item *suggested*, never decided). |
+| `POST /api/purchase-inbox/upload` | `purchase.inbox.upload` | `{ fileId }` — a bill already put in private storage and screened by #341 — or `{ einvoiceJson, fileName }`. The company is the session's. Resending the same file is the same document. |
+| `POST /api/purchase-inbox/:id/retry`, `/assign`, `/reject` | `purchase.inbox.manage` | `retry` and `assign` are `PurchaseInboxService.retry` / `assignCompany`. `reject` writes a decision with a reason; the document stays. |
+| `POST /api/purchase-inbox/:id/preview`, `/record` | `purchase.inbox.view` + `ledger.post.purchase` | The Purchase screen's own `previewPurchase` (#16 checks) and `recordPurchase` (#17 posts, receives stock), with the document's id. `record` then notes the decision `billed`. The reply lists what the person changed from what was read. |
+| `POST /api/webhooks/purchase-inbox/:channel` | none — signed | `email` or `whatsapp`. The provider adapter's normal form `{ providerMessageId, from, deliveredTo, fileName, mimeType, contentBase64 }` inside a `ConnectorWebhook`, verified by `HmacWebhookVerifier` (secrets `PURCHASE_INBOX_WEBHOOK_SECRET_EMAIL` / `_WHATSAPP`; refused outright where none is set outside development). The company is `deliveredTo`, as the provider's delivery record reported it. Answers 202 `{ received, duplicate }` and nothing about any company. Body up to 12 MB. |
+
+`purchase_inbox_decisions` (migration `…_purchasing_fbf195a69b87_inbox_decisions`) holds one row per
+document: `billed` with the bill number, or `rejected` with a reason. It is needed because a
+`draft_ready` document is frozen by the database. Written once, never changed or deleted, row-level
+security on `company_id`. `InboxDecisionStore`: `InMemoryInboxDecisionStore`, `PostgresInboxDecisionStore`.
+
+Reading: `DevelopmentOcr` answers in development and tests (a sample bill made by `sampleBillPdf`, or
+what it was told); elsewhere `OcrNotContracted` answers a retryable outage until a vendor is contracted
+(#51). The e-invoice JSON path needs no OCR. The reader fills the header only (supplier, number, date,
+taxable value, tax, total); the person types the bill's lines (e-invoice files carry theirs).

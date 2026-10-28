@@ -41,3 +41,4 @@ export * from "./reverse-charge-postgres.ts";
 export * from "./inbox-store.ts";
 export * from "./inbox-postgres.ts";
 export * from "./inbox-migrations.ts";
+export * from "./inbox-decisions.ts";

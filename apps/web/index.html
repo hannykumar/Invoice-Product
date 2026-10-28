@@ -117,6 +117,7 @@
             </ul></section>
             <section class="panel more-group" aria-labelledby="more-stock"><h2 id="more-stock" data-i18n="navGroupStock"></h2><ul class="more-list">
               <li><button type="button" class="more-link" data-view="reports" data-section="report-stock"><span aria-hidden="true">▦</span><span data-i18n="navStock"></span></button></li>
+              <li><button type="button" class="more-link" data-view="purchase-inbox"><span aria-hidden="true">✉</span><span data-i18n="navInbox"></span></button></li>
               <li><button type="button" class="more-link" data-view="deliveries"><span aria-hidden="true">⇄</span><span data-i18n="navDeliveries"></span></button></li>
               <li><button type="button" class="more-link" data-view="challan"><span aria-hidden="true">⇢</span><span data-i18n="navChallan"></span></button></li>
             </ul></section>
@@ -840,6 +841,35 @@
             <div class="panel-heading"><div><h2 data-i18n="onTheRoad"></h2><p data-i18n="onTheRoadHelp"></p></div></div>
             <div class="activity-list" id="eway-road"></div>
           </article>
+        </section>
+
+        <!-- Issue #489 — the supplier bills inbox (#15): bills that arrived by upload, email or WhatsApp, read and waiting for a person. -->
+        <section class="view" id="view-purchase-inbox" data-screen="data" aria-labelledby="inbox-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow" data-i18n="workspace"></p>
+              <h1 id="inbox-title" tabindex="-1" data-i18n="inboxTitle"></h1>
+              <p data-i18n="inboxHelp"></p>
+            </div>
+          </div>
+          <article class="panel form-panel" id="inbox-add">
+            <h2 data-i18n="inboxAddTitle"></h2>
+            <div class="field-grid">
+              <label class="full-field"><span data-i18n="inboxChooseFile"></span><input type="file" id="inbox-file" accept="application/pdf,image/jpeg,image/png,image/heic,.pdf,.jpg,.jpeg,.png,.heic,.json,application/json" /><small data-i18n="inboxChooseFileHelp"></small></label>
+            </div>
+            <button type="button" class="primary-button" id="inbox-add-button" data-i18n="inboxAddButton"></button>
+            <p id="inbox-add-result" role="status" aria-live="polite"></p>
+            <p class="safety-note" id="inbox-deliver-to" hidden><span aria-hidden="true">i</span><span data-inbox-deliver></span></p>
+          </article>
+          <div class="screen-state" id="screen-state-purchase-inbox" data-state-region></div>
+          <article class="panel" id="inbox-list-panel">
+            <div class="panel-heading">
+              <div><h2 data-i18n="inboxListTitle"></h2><p id="inbox-counts" role="status" aria-live="polite"></p></div>
+              <button type="button" class="secondary-button" id="inbox-refresh" data-i18n="inboxRefresh"></button>
+            </div>
+            <div class="activity-list" id="inbox-list" aria-busy="false"></div>
+          </article>
+          <article class="panel" id="inbox-detail" tabindex="-1" aria-labelledby="inbox-detail-title" hidden></article>
         </section>
 
         <section class="view" id="view-itc" data-screen="data" aria-labelledby="itc-title">

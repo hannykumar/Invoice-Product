@@ -104,6 +104,8 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `proforma.cancel` | ✓ | ✓ | ✓ |  |  |
 | `proforma.issue` | ✓ | ✓ | ✓ | ✓ |  |
 | `purchase.inbox.manage` | ✓ | ✓ | ✓ |  |  |
+| `purchase.inbox.upload` | ✓ | ✓ | ✓ |  |  |
+| `purchase.inbox.view` | ✓ | ✓ | ✓ |  |  |
 | `purchase.match.approve` | ✓ | ✓ | ✓ |  |  |
 | `purchase.order.cancel` | ✓ | ✓ | ✓ |  |  |
 | `purchase.order.write` | ✓ | ✓ | ✓ |  |  |
@@ -137,7 +139,7 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `transport.vehicle.override` | ✓ | ✓ | ✓ |  |  |
 | `transport.vehicle.view` | ✓ | ✓ | ✓ | ✓ |  |
 
-## Routes (210)
+## Routes (219)
 
 | Route | Needs | Owner | Admin | Accountant (or CA) | Staff | Viewer |
 | --- | --- | :---: | :---: | :---: | :---: | :---: |
@@ -285,6 +287,15 @@ A chartered accountant who looks after several businesses is an **Accountant** i
 | `POST /api/gst-returns/approve` | `gst_returns.approve` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/gst-returns/reopen` | `gst_returns.reopen` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/gst-returns/export` | `gst_returns.export` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/purchase-inbox` | `purchase.inbox.view` | ✓ | ✓ | ✓ |  |  |
+| `GET /api/purchase-inbox/:id` | `purchase.inbox.view` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchase-inbox/upload` | `purchase.inbox.upload` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchase-inbox/:id/retry` | `purchase.inbox.manage` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchase-inbox/:id/assign` | `purchase.inbox.manage` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchase-inbox/:id/reject` | `purchase.inbox.manage` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchase-inbox/:id/preview` | `purchase.inbox.view` + `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/purchase-inbox/:id/record` | `purchase.inbox.view` + `ledger.post.purchase` | ✓ | ✓ | ✓ |  |  |
+| `POST /api/webhooks/purchase-inbox/:channel` | nobody signed in: the email or WhatsApp provider proves itself by signing the bytes it sent | — | — | — | — | — |
 | `GET /api/suppliers/choices` | `masters.read` | ✓ | ✓ | ✓ | ✓ |  |
 | `POST /api/suppliers/check` | `supplier.risk.view` | ✓ | ✓ | ✓ |  |  |
 | `POST /api/suppliers/check/acknowledge` | `supplier.risk.acknowledge` | ✓ | ✓ | ✓ |  |  |

@@ -25,6 +25,8 @@ const ALLOWED = new Set([
   '/api/team/leave',
   // The government provider's callback: no session, it proves itself by signing the bytes it sent.
   '/api/webhooks/government/:kind',
+  // Issue #489 — the email and WhatsApp providers' deliveries: the same, a signature over the bytes (purchase-inbox.test.ts).
+  '/api/webhooks/purchase-inbox/:channel',
   // Which state a PIN code is in: a lookup in the public PIN table. Reads nothing of the company, stores nothing.
   '/api/pincode/state',
 ]);
@@ -44,7 +46,7 @@ test('#344: every route declares who may call it, and only the allow-listed POST
     assert.ok(['gate', 'public', 'signedIn'].includes(route.access.kind), `${route.method} ${route.path} declares no access`);
     if (route.access.kind !== 'gate') assert.ok(route.access.reason.length > 10, `${route.method} ${route.path} is open without saying why`);
     // Nothing but asking for a code, signing in, the status check and the signed webhook is open to someone with no session.
-    if (route.access.kind === 'public') assert.ok(['/api/auth/code', '/api/auth/sign-in', '/api/auth/tester', '/api/status', '/api/webhooks/government/:kind'].includes(route.path), `${route.path} needs no session`);
+    if (route.access.kind === 'public') assert.ok(['/api/auth/code', '/api/auth/sign-in', '/api/auth/tester', '/api/status', '/api/webhooks/government/:kind', '/api/webhooks/purchase-inbox/:channel'].includes(route.path), `${route.path} needs no session`);
   }
   const paths = POSTS.map((route) => route.path);
   for (const allowed of ALLOWED) assert.ok(paths.includes(allowed), `${allowed} is allow-listed but is no longer a route`);

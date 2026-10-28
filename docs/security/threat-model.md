@@ -32,7 +32,7 @@ security review (#348, recorded in `docs/security/reviews/`) as #389–#406.
 ```
  browser (owner, staff, viewer) ──HTTP──▶ web server ──in-process──▶ API ──▶ services ──▶ ledger / stores
  government provider (IRP, e-way, GST) ──signed callback──▶ /api/webhooks/government/:kind
- supplier / stranger ──WhatsApp, email, camera, upload──▶ purchase inbox (library, not yet routed)
+ supplier / stranger ──WhatsApp, email, camera, upload──▶ purchase inbox (`/api/purchase-inbox*`, #489; email and WhatsApp arrive by signed delivery at `/api/webhooks/purchase-inbox/:channel`)
  API ──adapters──▶ WhiteBooks sandbox, bank feed, Vahan, messaging (all mocked or sandbox-only)
 ```
 
@@ -74,13 +74,13 @@ XSS and prompt injection), A04 Insecure design, A05 Security misconfiguration, A
 components, A07 Identification and authentication failures, A08 Software and data integrity
 failures, A09 Logging and monitoring failures, A10 SSRF.
 
-### 4.1 HTTP API — 210 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
+### 4.1 HTTP API — 219 routes in `apps/api/src/routes/` (served by `apps/api/src/server.ts`), and the static web server
 
 Every route is listed with its gate in [Appendix A](#appendix-a--every-api-route). The families:
 
 | Family | Routes | Notes |
 | --- | --- | --- |
-| Before authentication | `POST /api/auth/code`, `POST /api/auth/sign-in`, `/api/auth/tester` ("Sign in as tester": only beside the stand-in login on a developer's machine, 404 everywhere else), `GET /api/status`, `POST /api/webhooks/government/:kind` | §4.3 for the webhook; codes are checked by the identity provider (ADR D1), rate limits are #350 |
+| Before authentication | `POST /api/auth/code`, `POST /api/auth/sign-in`, `/api/auth/tester` ("Sign in as tester": only beside the stand-in login on a developer's machine, 404 everywhere else), `GET /api/status`, `POST /api/webhooks/government/:kind`, `POST /api/webhooks/purchase-inbox/:channel` (#489: the email and WhatsApp providers' signed deliveries; same HMAC verifier, company taken from the address delivered to) | §4.3 for the webhook; codes are checked by the identity provider (ADR D1), rate limits are #350 |
 | Session, team, operations, assistant | `/api/session`, `POST /api/session/company`, `POST /api/auth/sign-out`, `/api/team*` (#343), `/api/dashboard`, `/api/reports`, `/api/operations*`, `/api/assistant/*` | |
 | Setup and masters | onboarding, trade marks, branding, business details, catalogue, customers, suppliers, items, transporters, addresses, PIN code, states | Logo and signature uploads (§4.2) |
 | Migration | `/api/migration/*` | §4.5 |
@@ -263,6 +263,7 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/team/leave` | — |
 | GET | `/api/status` | — |
 | POST | `/api/webhooks/government/:param` | — |
+| POST | `/api/webhooks/purchase-inbox/:param` | — |
 | GET | `/api/session` | service |
 | GET | `/api/dashboard` | service |
 | GET | `/api/reports` | service |
@@ -363,6 +364,14 @@ means no permission by design (sign-in, the signed webhook, the public PIN-code 
 | POST | `/api/purchases/match` | `ledger.post.purchase` |
 | POST | `/api/purchases/match/approve` | `purchase.match.approve` |
 | GET | `/api/purchases/:param` | service |
+| GET | `/api/purchase-inbox` | service |
+| GET | `/api/purchase-inbox/:param` | service |
+| POST | `/api/purchase-inbox/upload` | `purchase.inbox.upload` |
+| POST | `/api/purchase-inbox/:param/retry` | `purchase.inbox.manage` |
+| POST | `/api/purchase-inbox/:param/assign` | `purchase.inbox.manage` |
+| POST | `/api/purchase-inbox/:param/reject` | `purchase.inbox.manage` |
+| POST | `/api/purchase-inbox/:param/preview` | `purchase.inbox.view` + `ledger.post.purchase` |
+| POST | `/api/purchase-inbox/:param/record` | `purchase.inbox.view` + `ledger.post.purchase` |
 | POST | `/api/purchases/preview` | `ledger.post.purchase` |
 | POST | `/api/purchases/record` | `ledger.post.purchase` |
 | POST | `/api/purchases/self-invoice` | `ledger.post.purchase` |
