@@ -4,7 +4,6 @@
 // The bill is recorded through the same two calls as a typed one: checked first, recorded second.
 let wired = false;
 let context = null;
-let seen = null;
 let catalogue = null;
 
 const element = (tag, text = "", className = "") => {
@@ -26,34 +25,32 @@ const announce = (message) => { const out = $("#inbox-add-result"); out.textCont
 // ------------------------------------------------------------------------------------- the list
 
 async function loadList() {
-  const list = $("#inbox-list");
-  list.setAttribute("aria-busy", "true");
-  list.replaceChildren(element("p", say("inboxLoading"), "muted"));
-  try {
-    const inbox = await context.apiList("/api/purchase-inbox", "items");
-    renderList(inbox);
-  } catch (error) {
-    const box = element("div", "", "safety-note");
-    box.append(element("span", "!"), element("span", `${say("inboxLoadFailed")} ${error.message ?? ""}`.trim()));
-    const retry = element("button", say("inboxRetryLoad"), "secondary-button");
-    retry.type = "button";
-    retry.addEventListener("click", loadList);
-    list.replaceChildren(box, retry);
-  } finally {
-    list.setAttribute("aria-busy", "false");
-  }
+  // Issue #353 — the four states (loading, empty, error with Try again, ready) in the screen's own region.
+  await globalThis.KarobarStates.loadInto($("#screen-state-purchase-inbox"), {
+    words: context.words,
+    quiet: true,
+    content: $("#inbox-list-panel"),
+    load: async () => {
+      const inbox = await context.apiList("/api/purchase-inbox", "items");
+      showDeliverTo(inbox); // most useful when the inbox is still empty
+      return inbox;
+    },
+    isEmpty: (inbox) => inbox.items.length === 0,
+    empty: { message: say("inboxEmpty") },
+    render: renderList,
+  });
+}
+
+function showDeliverTo(inbox) {
+  const delivery = $("#inbox-deliver-to");
+  delivery.hidden = !inbox.deliverTo;
+  if (inbox.deliverTo) delivery.querySelector("[data-inbox-deliver]").textContent = say("inboxDeliverTo", inbox.deliverTo);
 }
 
 function renderList(inbox) {
   const list = $("#inbox-list");
-  seen = inbox;
   $("#inbox-counts").textContent = say("inboxCounts", inbox.counts ?? { ready: 0, held: 0, failed: 0 });
-  const delivery = $("#inbox-deliver-to");
-  delivery.hidden = !inbox.deliverTo;
-  if (inbox.deliverTo) delivery.querySelector("[data-inbox-deliver]").textContent = say("inboxDeliverTo", inbox.deliverTo);
-  list.replaceChildren();
-  if (inbox.items.length === 0) { list.append(element("p", say("inboxEmpty"), "muted")); return; }
-  for (const entry of inbox.items) list.append(row(entry));
+  list.replaceChildren(...inbox.items.map(row));
 }
 
 function row(entry) {
