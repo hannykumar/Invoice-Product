@@ -29,7 +29,7 @@ const asked = (advice: RateAdvice) => {
 // ------------------------------------------------------------------ suggesting a rate
 
 test('an item with its own default is suggested, with the notification and the date behind it', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const advice = await shop.advisor.suggest(
     COMPANY,
     { index: 0, description: 'TMT bars 12mm', itemId: shop.items.steel },
@@ -52,7 +52,7 @@ test('an item with its own default is suggested, with the notification and the d
 });
 
 test('a line with only an HSN is answered from the HSN default', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const advice = await shop.advisor.suggest(
     COMPANY,
     { index: 0, description: 'Cement bags', hsnSac: '25232930' },
@@ -69,8 +69,8 @@ test('a line with only an HSN is answered from the HSN default', async () => {
 test('an item default beats an HSN default for the same line', async () => {
   // Both exist for cement once an item-level entry is added. The more specific one has to win, or
   // a business that has deliberately set a rate for one brand is overruled by a general entry.
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     itemId: shop.items.cement, gstRateBasisPoints: 2800, reverseCharge: false,
     source: `The rate this business actually charges. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-item'), effectiveFrom: '2026-04-01' });
@@ -86,7 +86,7 @@ test('an item default beats an HSN default for the same line', async () => {
 });
 
 test('cess and reverse charge travel with the rate, so a suggestion never under-bills', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const advice = await shop.advisor.suggest(
     COMPANY,
     { index: 0, description: 'Cola 300ml', hsnSac: '22021010' },
@@ -102,11 +102,11 @@ test('cess and reverse charge travel with the rate, so a suggestion never under-
 test('a nil-rated entry is suggested as 0%, not treated as a missing rate', async () => {
   // Zero is an answer. A product that treats "0%" as "no rate found" sends a shopkeeper hunting for
   // a rate that does not exist, on goods that genuinely carry none.
-  const shop = makeShop();
-  const item = shop.masters.createItem(shop.context, {
+  const shop = await makeShop();
+  const item = (await shop.masters.createItem(shop.context, {
     code: 'MILK', name: 'Fresh milk 500ml', kind: 'goods', hsnSac: '04011000', baseUnit: 'PCS',
-  } as never, { idempotencyKey: shop.key('item-milk'), effectiveFrom: '2026-04-01' }).record.id;
-  shop.masters.setTaxDefault(shop.context, {
+  } as never, { idempotencyKey: shop.key('item-milk'), effectiveFrom: '2026-04-01' })).record.id;
+  await shop.masters.setTaxDefault(shop.context, {
     itemId: item, gstRateBasisPoints: 0, reverseCharge: false,
     source: `Nil-rated under Notification 2/2017-CTR. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-milk'), effectiveFrom: '2026-04-01' });
@@ -117,11 +117,11 @@ test('a nil-rated entry is suggested as 0%, not treated as a missing rate', asyn
 });
 
 test('reverse charge is said out loud in the suggestion', async () => {
-  const shop = makeShop();
-  const item = shop.masters.createItem(shop.context, {
+  const shop = await makeShop();
+  const item = (await shop.masters.createItem(shop.context, {
     code: 'FRT', name: 'Goods transport by road', kind: 'service', hsnSac: '996511', baseUnit: 'NOS',
-  } as never, { idempotencyKey: shop.key('item-frt'), effectiveFrom: '2026-04-01' }).record.id;
-  shop.masters.setTaxDefault(shop.context, {
+  } as never, { idempotencyKey: shop.key('item-frt'), effectiveFrom: '2026-04-01' })).record.id;
+  await shop.masters.setTaxDefault(shop.context, {
     itemId: item, gstRateBasisPoints: 500, reverseCharge: true,
     source: `Reverse charge on goods transport. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-frt'), effectiveFrom: '2026-04-01' });
@@ -136,9 +136,9 @@ test('reverse charge is said out loud in the suggestion', async () => {
 test('a bill from before a rate change keeps the rate that was in force on its own date', async () => {
   // Cement moves from 18% to 28% on 1 July. A bill dated 20 June must still be answered with 18%,
   // whatever today is. This is the criterion a wall-clock default would silently break.
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
-    id: [...shop.masters.taxDefaultCandidates(shop.context, { hsnSac: '25232930' }, '2026-08-29')][0]?.data.id,
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
+    id: [...(await shop.masters.taxDefaultCandidates(shop.context, { hsnSac: '25232930' }, '2026-08-29'))][0]?.data.id,
     hsnSac: '25232930', gstRateBasisPoints: 2800, reverseCharge: false,
     source: `Rate revised from 1 July 2026. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-new'), effectiveFrom: '2026-07-01' });
@@ -155,7 +155,7 @@ test('a bill from before a rate change keeps the rate that was in force on its o
 test('a bill dated before the register entry existed is asked about, not answered from it', async () => {
   // The register starts on 1 April. A bill from 15 March has an item to match on and nothing to
   // match it against, so the honest answer is a question rather than April's rate applied backwards.
-  const shop = makeShop();
+  const shop = await makeShop();
   const question = asked(await shop.advisor.suggest(
     COMPANY,
     { index: 0, description: 'TMT bars', itemId: shop.items.steel },
@@ -168,7 +168,7 @@ test('a bill dated before the register entry existed is asked about, not answere
 // ------------------------------------------------------------------ asking rather than guessing
 
 test('an item with no default anywhere produces a question, not a rate', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const advice = await shop.advisor.suggest(
     COMPANY,
     { index: 0, description: 'Assorted hardware', itemId: shop.items.mystery },
@@ -185,15 +185,15 @@ test('an item with no default anywhere produces a question, not a rate', async (
 test('a line with nothing to match on says so, rather than saying no entry exists', async () => {
   // The two are different problems with different answers: one needs a rate set up, the other needs
   // somebody to say what the goods are.
-  const shop = makeShop();
+  const shop = await makeShop();
   const question = asked(await shop.advisor.suggest(COMPANY, { index: 0, description: 'Item as printed' }, '2026-08-29'));
   assert.equal(question.reason, 'NOTHING_TO_MATCH_ON');
   assert.match(question.whatWouldHelp['en-IN'], /HSN code/);
 });
 
 test('two entries that disagree are both shown and neither is picked', async () => {
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     hsnSac: '25232930', gstRateBasisPoints: 2800, reverseCharge: false,
     source: `A second entry somebody added by mistake. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-dupe'), effectiveFrom: '2026-04-01' });
@@ -206,8 +206,8 @@ test('two entries that disagree are both shown and neither is picked', async () 
 });
 
 test('two entries that agree are not treated as a conflict', async () => {
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     hsnSac: '25232930', gstRateBasisPoints: 1800, reverseCharge: false,
     source: `The same rate, recorded twice. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-same'), effectiveFrom: '2026-04-01' });
@@ -219,8 +219,8 @@ test('two entries that agree are not treated as a conflict', async () => {
 test('entries agreeing on the rate but not on the cess are still a conflict', async () => {
   // The trap: comparing only the headline percentage would call these the same and quietly drop
   // 12% of cess off the bill.
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     hsnSac: '22021010', gstRateBasisPoints: 2800, reverseCharge: false,
     source: `Same rate, no cess recorded. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cola-nocess'), effectiveFrom: '2026-04-01' });
@@ -232,7 +232,7 @@ test('entries agreeing on the rate but not on the cess are still a conflict', as
 // ------------------------------------------------------------------ what a model may propose
 
 test('a model-proposed classification is shown for confirmation before any rate follows from it', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const proposed: ProposedClassification = {
     hsnSac: '25232930',
     proposedBy: 'MODEL',
@@ -253,7 +253,7 @@ test('a model-proposed classification is shown for confirmation before any rate 
 });
 
 test('once the classification is confirmed, the rate follows from the register', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const confirmed: ProposedClassification = {
     hsnSac: '25232930',
     proposedBy: 'MODEL',
@@ -275,7 +275,7 @@ test('once the classification is confirmed, the rate follows from the register',
   assert.equal(suggestion.restingOn?.confirmedBy, OWNER);
 });
 
-test('a model has nowhere to put a rate, by construction', () => {
+test('a model has nowhere to put a rate, by construction', async () => {
   // The second acceptance criterion, made structural rather than remembered. If somebody ever adds
   // a rate field to what a model may propose, this fails.
   const keys = new Set(Object.keys({
@@ -291,8 +291,8 @@ test('a model has nowhere to put a rate, by construction', () => {
 
 test('a printed rate that disagrees with the register raises a material finding', async () => {
   // The issue's own example: a bill charges 18% on cement, the register says 28%.
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     itemId: shop.items.cement, gstRateBasisPoints: 2800, reverseCharge: false,
     source: `Cement at 28%. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-28'), effectiveFrom: '2026-04-01' });
@@ -316,7 +316,7 @@ test('a printed rate that disagrees with the register raises a material finding'
 });
 
 test('a printed rate that matches raises nothing', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const check = await shop.advisor.check(
     COMPANY,
     { index: 0, description: 'TMT bars', itemId: shop.items.steel, printedRateBasisPoints: 1800 },
@@ -327,7 +327,7 @@ test('a printed rate that matches raises nothing', async () => {
 });
 
 test('a rate the register has nothing to say about is reported as unchecked, not as fine', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const check = await shop.advisor.check(
     COMPANY,
     { index: 1, description: 'Assorted hardware', itemId: shop.items.mystery, printedRateBasisPoints: 1800 },
@@ -339,8 +339,8 @@ test('a rate the register has nothing to say about is reported as unchecked, not
 });
 
 test('a register that disagrees with itself cannot be used to check a bill', async () => {
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     hsnSac: '25232930', gstRateBasisPoints: 2800, reverseCharge: false,
     source: `A second, conflicting entry. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-conflict'), effectiveFrom: '2026-04-01' });
@@ -356,14 +356,14 @@ test('a register that disagrees with itself cannot be used to check a bill', asy
 });
 
 test('a line with no printed rate is not cross-checked at all', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const check = await shop.advisor.check(COMPANY, { index: 0, description: 'Cement', hsnSac: '25232930' }, '2026-08-29');
   assert.equal(check, null, 'there is nothing to check when the bill did not state a rate');
 });
 
 test('a printed rate is checked against the rate in force on the bill’s own date', async () => {
-  const shop = makeShop();
-  shop.masters.setTaxDefault(shop.context, {
+  const shop = await makeShop();
+  await shop.masters.setTaxDefault(shop.context, {
     hsnSac: '25232930', gstRateBasisPoints: 2800, reverseCharge: false,
     source: `Revised from 1 July 2026. ${SYNTHETIC_BASIS}`,
   } as never, { idempotencyKey: shop.key('tax-cement-july'), effectiveFrom: '2026-07-01' });
@@ -380,14 +380,14 @@ test('a printed rate is checked against the rate in force on the bill’s own da
 // ------------------------------------------------------------------ approving and remembering
 
 test('nothing is applied until somebody approves, and approving remembers it for next time', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const suggestion = suggested(await shop.advisor.suggest(
     COMPANY,
     { index: 0, description: 'Cement', itemId: shop.items.cement, hsnSac: '25232930' },
     '2026-08-29',
   ));
   // Before approval, the item still has no item-level default of its own.
-  assert.equal(shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29').length, 0);
+  assert.equal((await shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29')).length, 0);
 
   const learned = await shop.advisor.approve({ companyId: COMPANY, actorId: OWNER }, {
     idempotencyKey: 'approve-cement-1',
@@ -406,7 +406,7 @@ test('nothing is applied until somebody approves, and approving remembers it for
 });
 
 test('an approved rate records who approved it and where it came from', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const suggestion = suggested(await shop.advisor.suggest(COMPANY, { index: 0, description: 'Cement', hsnSac: '25232930' }, '2026-08-29'));
   const learned = await shop.advisor.approve({ companyId: COMPANY, actorId: OWNER }, {
     idempotencyKey: 'approve-cement-2',
@@ -429,7 +429,7 @@ test('an approved rate records who approved it and where it came from', async ()
 test('the learned rate takes effect from the approval date, not the bill’s date', async () => {
   // Approving today says what is true from today. Back-dating it to the bill would silently
   // restate every earlier bill for that item.
-  const shop = makeShop();
+  const shop = await makeShop();
   const suggestion = suggested(await shop.advisor.suggest(COMPANY, { index: 0, description: 'Cement', hsnSac: '25232930' }, '2026-05-10'));
   const learned = await shop.advisor.approve({ companyId: COMPANY, actorId: OWNER }, {
     idempotencyKey: 'approve-cement-3',
@@ -439,12 +439,12 @@ test('the learned rate takes effect from the approval date, not the bill’s dat
   });
 
   assert.equal(learned.effectiveFrom, '2026-08-29');
-  assert.equal(shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-05-10').length, 0);
-  assert.equal(shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29').length, 1);
+  assert.equal((await shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-05-10')).length, 0);
+  assert.equal((await shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29')).length, 1);
 });
 
 test('approving twice on a slow connection saves one default, not two', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const suggestion = suggested(await shop.advisor.suggest(COMPANY, { index: 0, description: 'Cement', hsnSac: '25232930' }, '2026-08-29'));
   const command = {
     idempotencyKey: 'approve-cement-retry',
@@ -457,11 +457,11 @@ test('approving twice on a slow connection saves one default, not two', async ()
   const retried = await shop.advisor.approve({ companyId: COMPANY, actorId: OWNER }, command);
 
   assert.equal(retried.gstRateBasisPoints, first.gstRateBasisPoints);
-  assert.equal(shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29').length, 1);
+  assert.equal((await shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.cement }, '2026-08-29')).length, 1);
 });
 
 test('a rate resting on an unconfirmed model reading cannot be approved', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const suggestion = suggested(await shop.advisor.suggest(COMPANY, { index: 0, description: 'TMT', itemId: shop.items.steel }, '2026-08-29'));
 
   await assert.rejects(
@@ -480,7 +480,7 @@ test('a rate resting on an unconfirmed model reading cannot be approved', async 
 });
 
 test('an approval that rested on a confirmed model reading records that it did', async () => {
-  const shop = makeShop();
+  const shop = await makeShop();
   const suggestion = suggested(await shop.advisor.suggest(COMPANY, { index: 0, description: 'TMT', itemId: shop.items.steel }, '2026-08-29'));
   await shop.advisor.approve({ companyId: COMPANY, actorId: OWNER }, {
     idempotencyKey: 'approve-confirmed',
@@ -495,20 +495,20 @@ test('an approval that rested on a confirmed model reading records that it did',
 
   const entry = shop.rateAudit.events.find((event) => event.action === 'rate.suggestion.approved');
   assert.equal(entry?.details?.classificationProposedBy, 'ocr-classifier-2026.8');
-  const saved = shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.steel }, '2026-08-29');
+  const saved = await shop.masters.taxDefaultCandidates(shop.context, { itemId: shop.items.steel }, '2026-08-29');
   assert.ok(saved.some((version) => /confirmed by/.test(version.data.source)));
 });
 
 // ------------------------------------------------------------------ small things worth pinning
 
-test('percentages read the way a person writes them', () => {
+test('percentages read the way a person writes them', async () => {
   assert.equal(percent(1800), '18%');
   assert.equal(percent(0), '0%');
   assert.equal(percent(250), '2.5%');
   assert.equal(percent(2800), '28%');
 });
 
-test('two rates agree only when every figure a bill depends on agrees', () => {
+test('two rates agree only when every figure a bill depends on agrees', async () => {
   const base: RegisterRate = {
     gstRateBasisPoints: 2800, cessRateBasisPoints: 1200, reverseCharge: false, basis: 'HSN_DEFAULT',
     subject: { kind: 'HSN', hsnSac: '22021010', describedAs: null },
@@ -519,7 +519,7 @@ test('two rates agree only when every figure a bill depends on agrees', () => {
   assert.equal(agree(base, { ...base, reverseCharge: true }), false);
 });
 
-test('the resolver never answers from an empty register', () => {
+test('the resolver never answers from an empty register', async () => {
   const advice = resolve({ asOf: '2026-08-29', entries: [], item: null, hadSomethingToMatchOn: true });
   assert.equal(advice.kind, 'ASK');
 });

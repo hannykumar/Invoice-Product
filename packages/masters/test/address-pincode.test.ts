@@ -21,39 +21,39 @@ function setup() {
 let sequence = 0;
 const key = () => `pin-${(sequence += 1)}`;
 
-function caught(work: () => unknown): MasterDataError {
-  try { work(); } catch (error) { return error as MasterDataError; }
+async function caught(work: () => unknown): Promise<MasterDataError> {
+  try { await work(); } catch (error) { return error as MasterDataError; }
   throw new Error("Expected this to be refused, but it was accepted.");
 }
 
-test("an address whose PIN code is in another state is refused", () => {
+test("an address whose PIN code is in another state is refused", async () => {
   const { masters, a } = setup();
-  const party = masters.createParty(a, { legalName: "Uppal Castings", role: "customer", gstRegistrationType: "unregistered" }, { idempotencyKey: key() });
-  const error = caught(() => masters.addAddress(a, { partyId: party.record.id, label: "Works", line1: "Plot 12, IDA Uppal", city: "Hyderabad", stateCode: "36", pincode: "110039", use: "both", isPrimary: true }, { idempotencyKey: key() }));
+  const party = await masters.createParty(a, { legalName: "Uppal Castings", role: "customer", gstRegistrationType: "unregistered" }, { idempotencyKey: key() });
+  const error = await caught(async () => await masters.addAddress(a, { partyId: party.record.id, label: "Works", line1: "Plot 12, IDA Uppal", city: "Hyderabad", stateCode: "36", pincode: "110039", use: "both", isPrimary: true }, { idempotencyKey: key() }));
   assert.equal(error.problems[0]?.code, "PINCODE_STATE_MISMATCH");
   assert.match(error.message, /110039 is not in Telangana/);
 });
 
-test("a godown whose PIN code is in another state is refused", () => {
+test("a godown whose PIN code is in another state is refused", async () => {
   const { masters, a } = setup();
-  const error = caught(() => masters.createWarehouse(a, { code: "HYD", name: "Hyderabad godown", addressLine: "Cherlapally", city: "Hyderabad", stateCode: "36", pincode: "560058" }, { idempotencyKey: key() }));
+  const error = await caught(async () => await masters.createWarehouse(a, { code: "HYD", name: "Hyderabad godown", addressLine: "Cherlapally", city: "Hyderabad", stateCode: "36", pincode: "560058" }, { idempotencyKey: key() }));
   assert.equal(error.problems[0]?.code, "PINCODE_STATE_MISMATCH");
 });
 
-test("a saved address is corrected in place, and a wrong PIN is refused on correction too", () => {
+test("a saved address is corrected in place, and a wrong PIN is refused on correction too", async () => {
   const { masters, a } = setup();
-  const party = masters.createParty(a, { legalName: "Uppal Castings", role: "customer", gstRegistrationType: "unregistered" }, { idempotencyKey: key() });
-  const saved = masters.addAddress(a, { partyId: party.record.id, label: "Works", line1: "Plot 21, IDA Uppal", city: "Hyderabad", stateCode: "36", pincode: "500040", use: "both", isPrimary: true }, { idempotencyKey: key() });
+  const party = await masters.createParty(a, { legalName: "Uppal Castings", role: "customer", gstRegistrationType: "unregistered" }, { idempotencyKey: key() });
+  const saved = await masters.addAddress(a, { partyId: party.record.id, label: "Works", line1: "Plot 21, IDA Uppal", city: "Hyderabad", stateCode: "36", pincode: "500040", use: "both", isPrimary: true }, { idempotencyKey: key() });
 
-  const refused = caught(() => masters.correctAddress(a, saved.record.id, { pincode: "110039" }, { idempotencyKey: key() }));
+  const refused = await caught(async () => await masters.correctAddress(a, saved.record.id, { pincode: "110039" }, { idempotencyKey: key() }));
   assert.equal(refused.problems[0]?.code, "PINCODE_STATE_MISMATCH");
 
-  const corrected = masters.correctAddress(a, saved.record.id, { line1: "Plot 12, IDA Uppal", pincode: "500039" }, { idempotencyKey: key() });
+  const corrected = await masters.correctAddress(a, saved.record.id, { line1: "Plot 12, IDA Uppal", pincode: "500039" }, { idempotencyKey: key() });
   assert.equal(corrected.record.id, saved.record.id, "the same address, not a second one");
   assert.equal(corrected.record.pincode, "500039");
   assert.equal(corrected.record.line1, "Plot 12, IDA Uppal");
   assert.equal(corrected.record.stateCode, "36", "the state is not changed by a correction");
-  const now = masters.addressesOfParty("company-a", party.record.id);
+  const now = await masters.addressesOfParty("company-a", party.record.id);
   assert.equal(now.length, 1);
   assert.equal(now[0]?.pincode, "500039");
 });

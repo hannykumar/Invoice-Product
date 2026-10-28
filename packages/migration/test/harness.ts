@@ -76,7 +76,7 @@ export const buildHarness = async (options: { permissions?: readonly string[] } 
   const adapterOptions = { branchId: 'main', sessionId: `session-${companies}`, permissions: PERMISSIONS };
   const context: RequestContext = { companyId, branchId: 'main', actorId: 'owner', permissions: new Set(), sessionId: `session-${companies}` };
 
-  const warehouse = masters.createWarehouse(
+  const warehouse = await masters.createWarehouse(
     context,
     { code: 'MAIN', name: 'Main godown', addressLine: 'Sayyaji Rao Road', city: 'Mysuru', stateCode: '29', pincode: '570001' },
     { idempotencyKey: `warehouse-${companies}` },

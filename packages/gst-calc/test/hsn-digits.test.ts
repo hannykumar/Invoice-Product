@@ -45,7 +45,7 @@ const UNREGISTERED = 'counter-delhi';
 const tooShort = (result: ReturnType<ReturnType<typeof shop>['compute']>) =>
   result.status === 'CANNOT_COMPUTE' ? result.reasons.find((reason) => reason.code === 'HSN_TOO_SHORT') : undefined;
 
-test('small business, registered customer: 2 digits is refused, 4 digits is issued', () => {
+test('small business, registered customer: 2 digits is refused, 4 digits is issued', async () => {
   const refused = tooShort(shop('39', 'NO').compute(sale(REGISTERED)));
   assert.ok(refused, 'a 2-digit code must hold up a bill to a registered customer');
   assert.equal(
@@ -55,40 +55,40 @@ test('small business, registered customer: 2 digits is refused, 4 digits is issu
   assert.equal(shop('3923', 'NO').compute(sale(REGISTERED)).status, 'COMPUTED');
 });
 
-test('small business, unregistered customer: a 2-digit code is allowed', () => {
+test('small business, unregistered customer: a 2-digit code is allowed', async () => {
   const result = shop('39', 'NO').compute(sale(UNREGISTERED));
   assert.equal(tooShort(result), undefined);
   // It stops only because the fixture has no rate for "39" — not because of its length.
   assert.ok(result.status === 'COMPUTED' || result.reasons.every((reason) => reason.code === 'RATE_NOT_FOUND'));
 });
 
-test('above ₹5 crore, unregistered customer: 4 digits is refused naming 6, 6 digits is issued', () => {
+test('above ₹5 crore, unregistered customer: 4 digits is refused naming 6, 6 digits is issued', async () => {
   const refused = tooShort(shop('3923', 'YES').compute(sale(UNREGISTERED)));
   assert.ok(refused);
   assert.match(refused.message['en-IN'], /\(4 digits\)\. Your turnover last year was above ₹5 crore, so every bill needs at least 6 digits\./);
   assert.equal(shop('392310', 'YES').compute(sale(UNREGISTERED)).status, 'COMPUTED');
 });
 
-test('not sure counts as above ₹5 crore: 4 digits to a registered customer is refused naming 6', () => {
+test('not sure counts as above ₹5 crore: 4 digits to a registered customer is refused naming 6', async () => {
   const refused = tooShort(shop('3923', 'UNKNOWN').compute(sale(REGISTERED)));
   assert.ok(refused);
   assert.match(refused.message['en-IN'], /at least 6 digits until you tell us/);
   assert.ok(refused.message['hi-IN'].includes('6 अंक'), 'the Hindi message names 6 digits too');
 });
 
-test('a year nobody answered for counts as not sure, so 1 April asks again', () => {
+test('a year nobody answered for counts as not sure, so 1 April asks again', async () => {
   const answers = [{ answer: 'NO' as const, forFinancialYear: '2026-27' }];
   assert.equal(turnoverAnswerOn(answers, on('2027-03-31')), 'NO');
   assert.equal(turnoverAnswerOn(answers, on('2027-04-01')), 'UNKNOWN');
   assert.equal(turnoverAnswerOn(undefined, on('2026-09-18')), 'UNKNOWN');
 });
 
-test('freight never produces HSN_TOO_SHORT: it has no code of its own', () => {
+test('freight never produces HSN_TOO_SHORT: it has no code of its own', async () => {
   const result = shop('392310', 'YES').compute(sale(REGISTERED));
   assert.equal(result.status, 'COMPUTED', 'freight is on the bill and the bill still issues');
 });
 
-test('the e-way bill needs 6 digits above ₹5 crore and 4 below, whoever the customer is', () => {
+test('the e-way bill needs 6 digits above ₹5 crore and 4 below, whoever the customer is', async () => {
   const movement = interStateMovement({
     documents: [{ ...interStateMovement().documents[0]!, lines: [steelLine({ hsnCode: '3902' })] }],
   });
@@ -101,13 +101,13 @@ test('the e-way bill needs 6 digits above ₹5 crore and 4 below, whoever the cu
   assert.ok(small.ok || !small.problems.some((problem) => problem.field === 'itemList[0].hsnCode'));
 });
 
-test('saving an item with a short code warns, and never refuses', () => {
+test('saving an item with a short code warns, and never refuses', async () => {
   const access = new AccessControl();
   access.grant({ companyId: 'company-hsn', userId: 'owner-hsn', branchIds: new Set(['branch-hsn']), active: true, permissions: new Set(['approval.decide'] as const) });
   const audit = new AuditLog();
   const masters = new MasterDataService(new PlatformCommandService(audit, MASTER_APPROVAL_POLICIES), audit);
   const context = access.context('company-hsn', 'branch-hsn', 'owner-hsn', 'session-hsn');
-  const created = masters.createItem(context, { name: 'Test granules', kind: 'goods', hsnSac: '39', baseUnit: 'KGS', trackBatches: false, trackSerials: false }, { idempotencyKey: 'hsn-39' });
+  const created = await masters.createItem(context, { name: 'Test granules', kind: 'goods', hsnSac: '39', baseUnit: 'KGS', trackBatches: false, trackSerials: false }, { idempotencyKey: 'hsn-39' });
   assert.equal(created.record.hsnSac, '39');
   assert.deepEqual(created.warnings.map((warning) => warning.message), ['A code shorter than 4 digits cannot be used on bills to GST-registered customers.']);
   assert.equal(hsnLengthWarning('3923', 'goods', 'YES'), 'This code has 4 digits. Your bills need at least 6 digits.');
