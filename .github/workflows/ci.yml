@@ -138,7 +138,7 @@ jobs:
       # The browser download is the slow, network-dependent part; it is cached per
       # @playwright/test version. --with-deps still runs every job: the apt packages it
       # installs are not in the cache and are fast beside it.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
