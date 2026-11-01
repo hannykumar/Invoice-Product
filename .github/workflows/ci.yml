@@ -148,7 +148,7 @@ jobs:
       # security applies to; dropped afterwards (#494). It never runs on the in-memory store: with no
       # database it stops and says so. Includes the restart-survival and company-isolation tests.
       - run: npm run test:browser:pg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
